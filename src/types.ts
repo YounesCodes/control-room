@@ -1,0 +1,125 @@
+export interface SavedConnection {
+  id: string;
+  displayName: string;
+  destination: string;
+  username: string | null;
+  port: number | null;
+  identityFile: string | null;
+  historyEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastConnectedAt: string | null;
+}
+
+export interface SavedConnectionInput {
+  displayName: string;
+  destination: string;
+  username: string | null;
+  port: number | null;
+  identityFile: string | null;
+  historyEnabled: boolean;
+}
+
+export interface HostCapabilities {
+  connectionId: string;
+  hostname: string | null;
+  osId: string | null;
+  osName: string | null;
+  osVersion: string | null;
+  kernel: string | null;
+  architecture: string | null;
+  uptime: string | null;
+  defaultShell: string | null;
+  systemdAvailable: boolean;
+  journaldAvailable: boolean;
+  dockerAvailable: boolean;
+  dockerAccessible: boolean;
+  dockerVersion: string | null;
+  runningServiceCount: number | null;
+  runningContainerCount: number | null;
+  totalContainerCount: number | null;
+  detectedAt: string;
+}
+
+export interface SystemdService {
+  id: string;
+  description: string;
+  loadState: string;
+  activeState: string;
+  subState: string;
+  unitFileState: string | null;
+}
+
+export interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  ports: string;
+  createdAt: string;
+}
+
+export interface HistoryEntry {
+  id: string;
+  connectionId: string;
+  sessionId: string;
+  command: string;
+  cwd: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  exitCode: number | null;
+  shell: string;
+}
+
+export interface HistoryInput {
+  connectionId: string;
+  sessionId: string;
+  command: string;
+  cwd: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  exitCode: number | null;
+  shell: string;
+}
+
+export interface AppSettings {
+  terminalFontFamily: string;
+  terminalFontSize: number;
+  terminalScrollback: number;
+  defaultLogTail: number;
+  globalHistoryEnabled: boolean;
+}
+
+export interface EnvironmentInfo {
+  sshPath: string | null;
+  sshConfigPath: string;
+  sshAgentAvailable: boolean;
+  platformSupported: boolean;
+}
+
+export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
+export type WorkspaceView = "overview" | "terminal" | "services" | "docker" | "logs" | "history";
+
+export interface Workspace {
+  id: string;
+  connectionId: string;
+  sessionId: string | null;
+  state: ConnectionState;
+  reason: string | null;
+  view: WorkspaceView;
+  historyPaused: boolean;
+  reconnectToken: number;
+}
+
+export interface SessionStateEvent {
+  sessionId: string;
+  state: ConnectionState;
+  reason: string | null;
+}
+
+export interface StreamStateEvent {
+  streamId: string;
+  state: "running" | "stopped" | "error";
+  reason: string | null;
+}

@@ -1,0 +1,134 @@
+import { useState, type FormEvent } from "react";
+import { Save } from "lucide-react";
+import { api, errorMessage } from "../lib/api";
+import type { AppSettings, EnvironmentInfo } from "../types";
+
+export function SettingsPane({
+  settings,
+  environment,
+  onSaved,
+}: {
+  settings: AppSettings;
+  environment: EnvironmentInfo;
+  onSaved: (settings: AppSettings) => void;
+}) {
+  const [draft, setDraft] = useState(settings);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.saveSettings(draft);
+      onSaved(draft);
+      setMessage("Settings saved.");
+    } catch (caught) {
+      setMessage(errorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="feature-page settings-page">
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">Application</p>
+          <h2>Settings</h2>
+          <p>Control Room uses one finished dark theme for the MVP.</p>
+        </div>
+      </header>
+      <form className="settings-form" onSubmit={submit}>
+        <fieldset>
+          <legend>Terminal</legend>
+          <label>
+            <span>Font family</span>
+            <input
+              value={draft.terminalFontFamily}
+              onChange={(event) => setDraft({ ...draft, terminalFontFamily: event.target.value })}
+            />
+          </label>
+          <div className="form-row">
+            <label>
+              <span>Font size</span>
+              <input
+                type="number"
+                min="9"
+                max="32"
+                value={draft.terminalFontSize}
+                onChange={(event) =>
+                  setDraft({ ...draft, terminalFontSize: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label>
+              <span>Scrollback lines</span>
+              <input
+                type="number"
+                min="100"
+                max="100000"
+                value={draft.terminalScrollback}
+                onChange={(event) =>
+                  setDraft({ ...draft, terminalScrollback: Number(event.target.value) })
+                }
+              />
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Logs and History</legend>
+          <label>
+            <span>Default log tail</span>
+            <select
+              value={draft.defaultLogTail}
+              onChange={(event) =>
+                setDraft({ ...draft, defaultLogTail: Number(event.target.value) })
+              }
+            >
+              {[50, 100, 200, 500, 1000].map((count) => (
+                <option key={count}>{count}</option>
+              ))}
+            </select>
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={draft.globalHistoryEnabled}
+              onChange={(event) =>
+                setDraft({ ...draft, globalHistoryEnabled: event.target.checked })
+              }
+            />{" "}
+            Enable Enhanced History globally
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>SSH environment</legend>
+          <dl className="detail-list">
+            <div>
+              <dt>ssh.exe</dt>
+              <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
+            </div>
+            <div>
+              <dt>OpenSSH config</dt>
+              <dd className="technical">{environment.sshConfigPath}</dd>
+            </div>
+            <div>
+              <dt>ssh-agent</dt>
+              <dd>
+                {environment.sshAgentAvailable
+                  ? "Available with loaded identities"
+                  : "Unavailable or no loaded identities"}
+              </dd>
+            </div>
+          </dl>
+        </fieldset>
+        {message && <p className="inline-message">{message}</p>}
+        <button className="primary-button settings-save" type="submit" disabled={saving}>
+          <Save size={15} /> {saving ? "Saving…" : "Save settings"}
+        </button>
+      </form>
+    </section>
+  );
+}
