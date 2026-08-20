@@ -1,8 +1,20 @@
-use std::{env, path::PathBuf};
+use std::{env, ffi::OsStr, path::PathBuf, process::Command};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 use regex::Regex;
 
 use crate::models::SavedConnection;
+
+pub fn background_command<S: AsRef<OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
 
 pub fn detect_ssh_path() -> Option<PathBuf> {
     let system = PathBuf::from(r"C:\Windows\System32\OpenSSH\ssh.exe");
@@ -79,6 +91,16 @@ fn validate_remote_identifier<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn noninteractive_processes_use_the_background_command_factory() {
+        let remote = include_str!("remote.rs");
+        let commands = include_str!("commands.rs");
+        assert!(!remote.contains("Command::new("));
+        assert!(!commands.contains("Command::new("));
+        assert!(remote.matches("background_command(").count() >= 2);
+        assert!(commands.contains("background_command("));
+    }
 
     fn saved() -> SavedConnection {
         SavedConnection {

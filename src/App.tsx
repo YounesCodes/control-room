@@ -12,7 +12,6 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react";
-import appIcon from "../assets/app-icon.svg";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { StatusDot } from "./components/StatusDot";
@@ -228,13 +227,6 @@ export function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <header className="brand">
-          <img src={appIcon} alt="" />
-          <div>
-            <strong>Control Room</strong>
-            <small>Local SSH workspace</small>
-          </div>
-        </header>
         <label className="search-field sidebar-search">
           <Search size={14} />
           <input
@@ -246,17 +238,9 @@ export function App() {
           <kbd>Ctrl K</kbd>
         </label>
         <div className="sidebar-heading">
-          <span>Saved Connections</span>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => setDialogConnection("new")}
-            aria-label="Add Saved Connection"
-          >
-            <Plus size={16} />
-          </button>
+          <span>Connections</span>
         </div>
-        <nav className="host-list" aria-label="Saved Connections">
+        <nav className="host-list" aria-label="Saved connections">
           {filteredConnections.map((connection) => (
             <div className="host-row" key={connection.id}>
               <button
@@ -290,7 +274,7 @@ export function App() {
           ))}
           {!filteredConnections.length && (
             <p className="sidebar-empty">
-              {connections.length ? "No matches" : "No Saved Connections yet"}
+              {connections.length ? "No matches" : "No connections yet"}
             </p>
           )}
         </nav>
@@ -437,21 +421,13 @@ export function App() {
         ) : bootError ? (
           <ErrorState message={bootError} />
         ) : (
-          <section className="welcome-screen">
-            <img src={appIcon} alt="" />
-            <p className="eyebrow">Local first</p>
-            <h1>Your Linux systems, one workspace away.</h1>
+          <section className="empty-workspace">
+            <h1>{connections.length ? "Select a connection" : "No connections yet"}</h1>
             <p>
-              Save an SSH destination to open a real terminal and inspect systemd, journald, and
-              Docker without changing the host.
+              {connections.length
+                ? "Choose a saved connection from the sidebar to open it."
+                : "Use Add connection in the sidebar to save an SSH destination."}
             </p>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => setDialogConnection("new")}
-            >
-              <Plus size={16} /> Add your first connection
-            </button>
             {!environment.sshPath && (
               <p className="inline-warning">
                 Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.

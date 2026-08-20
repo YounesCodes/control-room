@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::Arc,
     thread,
     time::Duration,
@@ -20,7 +20,10 @@ use crate::{
         DockerContainer, HostCapabilities, SavedConnection, StreamStarted, StreamStateEvent,
         SystemdService,
     },
-    ssh::{connection_arguments, detect_ssh_path, validate_container_id, validate_service_name},
+    ssh::{
+        background_command, connection_arguments, detect_ssh_path, validate_container_id,
+        validate_service_name,
+    },
 };
 
 const OUTPUT_LIMIT: u64 = 5 * 1024 * 1024;
@@ -147,7 +150,7 @@ fn run_ssh(
         detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
-    let mut child = Command::new(ssh_path)
+    let mut child = background_command(ssh_path)
         .args(arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -363,7 +366,7 @@ impl StreamManager {
             command
         };
         arguments.push(remote_command);
-        let mut child = Command::new(ssh_path)
+        let mut child = background_command(ssh_path)
             .args(arguments)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

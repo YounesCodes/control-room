@@ -18,7 +18,7 @@ Terminal output crosses IPC as ordered byte chunks and enters xterm.js as `Uint8
 React operation request ⇄ typed Tauri command ⇄ RemoteCommandExecutor ⇄ ssh.exe ⇄ Linux tool
 ```
 
-The backend selects a fixed command specification and validates identifiers before constructing remote arguments. Overview, systemd, Docker, journald, and Docker logs share this executor. Interactive terminal authentication is independent; structured requests require noninteractive OpenSSH authentication.
+The backend selects a fixed command specification and validates identifiers before constructing remote arguments. Overview, systemd, Docker, journald, and Docker logs share this executor. On Windows, these non-interactive processes use `CREATE_NO_WINDOW`, so they never open a separate console. Interactive terminal authentication is independent; structured requests require noninteractive OpenSSH authentication.
 
 ## Persistence
 

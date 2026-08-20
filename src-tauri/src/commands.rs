@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
@@ -12,12 +10,12 @@ use crate::{
     },
     remote::{self, LogStreamOptions, StreamManager},
     session::SessionManager,
-    ssh::{detect_ssh_path, ssh_config_path},
+    ssh::{background_command, detect_ssh_path, ssh_config_path},
 };
 
 #[tauri::command]
 pub fn get_environment_info() -> EnvironmentInfo {
-    let agent_available = Command::new("ssh-add")
+    let agent_available = background_command("ssh-add")
         .arg("-l")
         .output()
         .is_ok_and(|output| output.status.success());
