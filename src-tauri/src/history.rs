@@ -6,7 +6,17 @@ integration_file="$integration_dir/shell-integration.bash"
 bashrc="$HOME/.bashrc"
 mkdir -p "$integration_dir"
 chmod 700 "$integration_dir"
-cat > "$integration_file" <<'CONTROL_ROOM_INTEGRATION'
+touch "$bashrc"
+start_count="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"
+end_count="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"
+if { test "$start_count" -ne 0 || test "$end_count" -ne 0; } && { test "$start_count" -ne 1 || test "$end_count" -ne 1; }; then
+  printf 'Control Room markers in .bashrc are incomplete or duplicated; no changes were made\n' >&2
+  exit 2
+fi
+integration_temporary="$(mktemp "$integration_dir/.shell-integration.XXXXXX")"
+bashrc_temporary=""
+trap 'rm -f "$integration_temporary" "$bashrc_temporary"' EXIT
+cat > "$integration_temporary" <<'CONTROL_ROOM_INTEGRATION'
 # Control Room Bash integration. Loaded only by an explicitly enabled Control Room session.
 if [[ $- != *i* || ${CONTROL_ROOM_SHELL_INTEGRATION:-0} != 1 || -n ${__CONTROL_ROOM_LOADED:-} ]]; then
   return
@@ -86,10 +96,13 @@ else
   PROMPT_COMMAND+=(__control_room_prompt_complete)
 fi
 CONTROL_ROOM_INTEGRATION
-chmod 600 "$integration_file"
-touch "$bashrc"
-if ! grep -Fq '# >>> Control Room shell integration >>>' "$bashrc"; then
-  cat >> "$bashrc" <<'CONTROL_ROOM_BASHRC'
+chmod 600 "$integration_temporary"
+mv -f "$integration_temporary" "$integration_file"
+integration_temporary=""
+if test "$start_count" -eq 0; then
+  bashrc_temporary="$(mktemp "$HOME/.bashrc.control-room.XXXXXX")"
+  cp -p "$bashrc" "$bashrc_temporary"
+  cat >> "$bashrc_temporary" <<'CONTROL_ROOM_BASHRC'
 
 # >>> Control Room shell integration >>>
 if [[ $- == *i* && ${CONTROL_ROOM_SHELL_INTEGRATION:-0} == 1 && -r "$HOME/.local/share/control-room/shell-integration.bash" ]]; then
@@ -97,21 +110,34 @@ if [[ $- == *i* && ${CONTROL_ROOM_SHELL_INTEGRATION:-0} == 1 && -r "$HOME/.local
 fi
 # <<< Control Room shell integration <<<
 CONTROL_ROOM_BASHRC
+  mv -f "$bashrc_temporary" "$bashrc"
+  bashrc_temporary=""
 fi
+trap - EXIT
 printf 'installed\n'
 "##;
 
 const UNINSTALL_SCRIPT: &str = r##"set -eu
 bashrc="$HOME/.bashrc"
-if test -f "$bashrc" && grep -Fq '# >>> Control Room shell integration >>>' "$bashrc"; then
-  temporary="$(mktemp)"
+if test -f "$bashrc"; then
+  start_count="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"
+  end_count="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"
+  if { test "$start_count" -ne 0 || test "$end_count" -ne 0; } && { test "$start_count" -ne 1 || test "$end_count" -ne 1; }; then
+    printf 'Control Room markers in .bashrc are incomplete or duplicated; no changes were made\n' >&2
+    exit 2
+  fi
+fi
+if test -f "$bashrc" && test "$start_count" -eq 1; then
+  temporary="$(mktemp "$HOME/.bashrc.control-room.XXXXXX")"
+  trap 'rm -f "$temporary"' EXIT
+  cp -p "$bashrc" "$temporary"
   awk '
     $0 == "# >>> Control Room shell integration >>>" { skipping=1; next }
     $0 == "# <<< Control Room shell integration <<<" { skipping=0; next }
     !skipping { print }
   ' "$bashrc" > "$temporary"
-  cat "$temporary" > "$bashrc"
-  rm -f "$temporary"
+  mv -f "$temporary" "$bashrc"
+  trap - EXIT
 fi
 rm -f "$HOME/.local/share/control-room/shell-integration.bash"
 rmdir "$HOME/.local/share/control-room" 2>/dev/null || true
@@ -121,14 +147,22 @@ printf 'removed\n'
 pub fn integration_status(connection: &SavedConnection) -> Result<bool, String> {
     let output = RemoteCommandExecutor::execute(
         connection,
-        "test -r \"$HOME/.local/share/control-room/shell-integration.bash\" && grep -Fq '# >>> Control Room shell integration >>>' \"$HOME/.bashrc\"",
+        "history_status",
+        r#"bashrc="$HOME/.bashrc"; file=0; test -r "$HOME/.local/share/control-room/shell-integration.bash" && file=1; start=0; end=0; if test -f "$bashrc"; then start="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"; end="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"; fi; if test "$file" -eq 1 && test "$start" -eq 1 && test "$end" -eq 1; then exit 0; fi; if test "$file" -eq 0 && test "$start" -eq 0 && test "$end" -eq 0; then exit 1; fi; exit 2"#,
     )?;
-    Ok(output.exit_code == 0)
+    match output.exit_code {
+        0 => Ok(true),
+        1 => Ok(false),
+        _ => Err(
+            "Enhanced History integration is incomplete or has duplicate .bashrc markers".into(),
+        ),
+    }
 }
 
 pub fn install_integration(connection: &SavedConnection) -> Result<(), String> {
     let output = RemoteCommandExecutor::execute_with_input(
         connection,
+        "history_install",
         "bash -s",
         INSTALL_SCRIPT.as_bytes(),
     )?;
@@ -145,6 +179,7 @@ pub fn install_integration(connection: &SavedConnection) -> Result<(), String> {
 pub fn uninstall_integration(connection: &SavedConnection) -> Result<(), String> {
     let output = RemoteCommandExecutor::execute_with_input(
         connection,
+        "history_uninstall",
         "bash -s",
         UNINSTALL_SCRIPT.as_bytes(),
     )?;
@@ -186,6 +221,10 @@ mod tests {
         assert!(INSTALL_SCRIPT.contains("# >>> Control Room shell integration >>>"));
         assert!(UNINSTALL_SCRIPT.contains("# <<< Control Room shell integration <<<"));
         assert!(!INSTALL_SCRIPT.contains(".bash_history"));
+        assert!(INSTALL_SCRIPT.contains("mktemp \"$HOME/.bashrc.control-room.XXXXXX\""));
+        assert!(INSTALL_SCRIPT.contains("cp -p \"$bashrc\" \"$bashrc_temporary\""));
+        assert!(INSTALL_SCRIPT.contains("incomplete or duplicated"));
+        assert!(UNINSTALL_SCRIPT.contains("incomplete or duplicated"));
     }
 
     #[test]
@@ -197,7 +236,9 @@ mod tests {
 test_root="$(mktemp -d /tmp/control-room-history-test.XXXXXX)"
 trap 'rm -rf "$test_root"' EXIT
 export HOME="$test_root"
+(
 {INSTALL_SCRIPT}
+)
 test -r "$HOME/.local/share/control-room/shell-integration.bash"
 grep -Fq '# >>> Control Room shell integration >>>' "$HOME/.bashrc"
 CONTROL_ROOM_SHELL_INTEGRATION=1 bash --noprofile --rcfile "$HOME/.bashrc" -i <<'CONTROL_ROOM_COMMANDS'
@@ -205,14 +246,20 @@ printf CONTROL_ROOM_HISTORY_OK
 false
 exit 0
 CONTROL_ROOM_COMMANDS
+(
 {UNINSTALL_SCRIPT}
+)
 test ! -e "$HOME/.local/share/control-room/shell-integration.bash"
 ! grep -Fq '# >>> Control Room shell integration >>>' "$HOME/.bashrc"
 "#
         );
-        let output =
-            RemoteCommandExecutor::execute_with_input(&connection, "bash -s", script.as_bytes())
-                .unwrap();
+        let output = RemoteCommandExecutor::execute_with_input(
+            &connection,
+            "history_fixture",
+            "bash -s",
+            script.as_bytes(),
+        )
+        .unwrap();
         assert_eq!(
             output.exit_code,
             0,

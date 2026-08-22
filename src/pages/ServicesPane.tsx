@@ -1,54 +1,80 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileClock, RefreshCw, Search } from "lucide-react";
-import { ErrorState, EmptyState, LoadingState } from "../components/PanelState";
+import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
-import type { SavedConnection, SystemdService } from "../types";
+import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
+import type { CachedList, LogSourceSelection, SavedConnection, SystemdService } from "../types";
 
 export function ServicesPane({
   connection,
+  cache,
+  onCacheChange,
   onViewLogs,
 }: {
   connection: SavedConnection;
-  onViewLogs: () => void;
+  cache: CachedList<SystemdService>;
+  onCacheChange: (cache: CachedList<SystemdService>) => void;
+  onViewLogs: (source: LogSourceSelection) => void;
 }) {
-  const [services, setServices] = useState<SystemdService[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    reconcileSelection(cache.items, null),
+  );
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const cacheRef = useRef(cache);
+  const requestRef = useRef(0);
+  cacheRef.current = cache;
 
-  async function load() {
-    setLoading(true);
-    setError(null);
+  async function load(force = false) {
+    const current = cacheRef.current;
+    if (!force && isCacheFresh(current)) return;
+    const request = ++requestRef.current;
+    onCacheChange({ ...current, loading: true, error: null });
     try {
-      const result = await api.listServices(connection.id);
-      setServices(result);
-      setSelectedId((current) => current ?? result[0]?.id ?? null);
+      const items = await api.listServices(connection.id);
+      if (request !== requestRef.current) return;
+      onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
+      setSelectedId((selected) => reconcileSelection(items, selected));
     } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setLoading(false);
+      if (request !== requestRef.current) return;
+      onCacheChange({
+        ...cacheRef.current,
+        loading: false,
+        error: errorMessage(caught),
+      });
     }
   }
 
   useEffect(() => {
     void load();
+    return () => {
+      requestRef.current += 1;
+    };
   }, [connection.id]);
+
+  useEffect(() => {
+    setSelectedId((selected) => reconcileSelection(cache.items, selected));
+  }, [cache.items]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return services;
-    return services.filter(
+    if (!query) return cache.items;
+    return cache.items.filter(
       (service) =>
         service.id.toLowerCase().includes(query) ||
         service.description.toLowerCase().includes(query),
     );
-  }, [search, services]);
-  const selected = services.find((service) => service.id === selectedId) ?? null;
+  }, [search, cache.items]);
+  const selected = cache.items.find((service) => service.id === selectedId) ?? null;
 
-  if (loading && !services.length) return <LoadingState label="Reading systemd services…" />;
-  if (error && !services.length) {
-    return <ErrorState message={error} action={<button onClick={load}>Retry</button>} />;
+  if (cache.loading && !cache.items.length)
+    return <LoadingState label="Reading systemd services…" />;
+  if (cache.error && !cache.items.length) {
+    return (
+      <ErrorState
+        message={cache.error}
+        action={<button onClick={() => load(true)}>Retry</button>}
+      />
+    );
   }
 
   return (
@@ -56,19 +82,22 @@ export function ServicesPane({
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
-            <p className="eyebrow">systemd</p>
             <h2>Services</h2>
-            <p>{services.length} units</p>
+            <p>{cache.items.length} units</p>
           </div>
           <button
             className="icon-button"
             type="button"
-            onClick={load}
+            onClick={() => load(true)}
             aria-label="Refresh services"
+            disabled={cache.loading}
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
           </button>
         </header>
+        {cache.error && (
+          <p className="inline-warning">Showing saved results. Refresh failed: {cache.error}</p>
+        )}
         <label className="search-field">
           <Search size={15} />
           <input
@@ -93,14 +122,15 @@ export function ServicesPane({
               <span className="row-state">{service.subState}</span>
             </button>
           ))}
-          {!filtered.length && <EmptyState title="No matching services" />}
+          {!filtered.length && (
+            <EmptyState title={cache.items.length ? "No matching services" : "No services found"} />
+          )}
         </div>
       </div>
       <aside className="detail-panel">
         {selected ? (
           <>
             <header>
-              <p className="eyebrow">Service detail</p>
               <h2>{selected.id}</h2>
               <p>{selected.description || "No description"}</p>
             </header>
@@ -120,7 +150,11 @@ export function ServicesPane({
                 <dd>{selected.unitFileState ?? "Unknown"}</dd>
               </div>
             </dl>
-            <button className="secondary-button" type="button" onClick={onViewLogs}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
+            >
               <FileClock size={15} /> View logs
             </button>
             <p className="read-only-note">Control Room inspects services but never changes them.</p>

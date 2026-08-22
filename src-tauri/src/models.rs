@@ -28,7 +28,7 @@ pub struct SavedConnectionInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct HostCapabilities {
     pub connection_id: String,
     pub hostname: Option<String>,
@@ -106,7 +106,7 @@ fn default_shell() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
     pub terminal_font_family: String,
     pub terminal_font_size: u16,
@@ -139,6 +139,7 @@ pub struct SessionStarted {
 pub struct SessionStateEvent {
     pub session_id: String,
     pub state: String,
+    pub category: Option<String>,
     pub reason: Option<String>,
 }
 

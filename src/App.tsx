@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   FileClock,
@@ -15,9 +15,9 @@ import {
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { StatusDot } from "./components/StatusDot";
-import { TerminalPane } from "./components/TerminalPane";
 import { api, errorMessage } from "./lib/api";
 import { connectionTarget } from "./lib/format";
+import { emptyCachedList } from "./lib/workspace-cache";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
@@ -26,9 +26,13 @@ import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   AppSettings,
+  CachedList,
   ConnectionState,
+  DockerContainer,
   EnvironmentInfo,
+  LogSourceSelection,
   SavedConnection,
+  SystemdService,
   Workspace,
   WorkspaceView,
 } from "./types";
@@ -57,6 +61,10 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "history", label: "History", icon: History },
 ];
 
+const TerminalPane = lazy(() =>
+  import("./components/TerminalPane").then((module) => ({ default: module.TerminalPane })),
+);
+
 export function App() {
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -72,14 +80,17 @@ export function App() {
 
   useEffect(() => {
     let current = true;
-    void Promise.all([api.listConnections(), api.settings(), api.environment()])
-      .then(([savedConnections, savedSettings, detectedEnvironment]) => {
+    void Promise.allSettled([api.listConnections(), api.settings(), api.environment()])
+      .then(([connectionsResult, settingsResult, environmentResult]) => {
         if (!current) return;
-        setConnections(savedConnections);
-        setSettings(savedSettings);
-        setEnvironment(detectedEnvironment);
+        if (connectionsResult.status === "fulfilled") {
+          setConnections(connectionsResult.value);
+        } else {
+          setBootError(errorMessage(connectionsResult.reason));
+        }
+        if (settingsResult.status === "fulfilled") setSettings(settingsResult.value);
+        if (environmentResult.status === "fulfilled") setEnvironment(environmentResult.value);
       })
-      .catch((caught) => current && setBootError(errorMessage(caught)))
       .finally(() => current && setLoading(false));
     return () => {
       current = false;
@@ -88,7 +99,8 @@ export function App() {
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
-  const activeConnection = activeWorkspace
+  const activeConnection = activeWorkspace?.connectionSnapshot ?? null;
+  const activeSavedConnection = activeWorkspace
     ? (connections.find((connection) => connection.id === activeWorkspace.connectionId) ?? null)
     : null;
 
@@ -133,6 +145,18 @@ export function App() {
     );
   }
 
+  function updateServicesCache(id: string, servicesCache: CachedList<SystemdService>) {
+    updateWorkspace(id, { servicesCache });
+  }
+
+  function updateContainersCache(id: string, containersCache: CachedList<DockerContainer>) {
+    updateWorkspace(id, { containersCache });
+  }
+
+  function openLogs(id: string, logSource: LogSourceSelection) {
+    updateWorkspace(id, { view: "logs", logSource });
+  }
+
   function openConnection(connection: SavedConnection, forceNew = false) {
     setSettingsOpen(false);
     if (!forceNew) {
@@ -147,12 +171,16 @@ export function App() {
     const workspace: Workspace = {
       id: crypto.randomUUID(),
       connectionId: connection.id,
+      connectionSnapshot: { ...connection },
       sessionId: null,
       state: "connecting",
       reason: null,
       view: "terminal",
       historyPaused: false,
       reconnectToken: 0,
+      servicesCache: emptyCachedList(),
+      containersCache: emptyCachedList(),
+      logSource: null,
     };
     setWorkspaces((current) => [...current, workspace]);
     setActiveWorkspaceId(workspace.id);
@@ -209,11 +237,11 @@ export function App() {
   }
 
   function duplicateLabel(workspace: Workspace) {
-    const connection = connections.find((item) => item.id === workspace.connectionId);
-    if (!connection) return "Unknown";
     const siblings = workspaces.filter((item) => item.connectionId === workspace.connectionId);
     const position = siblings.findIndex((item) => item.id === workspace.id);
-    return position > 0 ? `${connection.displayName} ${position + 1}` : connection.displayName;
+    return position > 0
+      ? `${workspace.connectionSnapshot.displayName} ${position + 1}`
+      : workspace.connectionSnapshot.displayName;
   }
 
   function pasteIntoTerminal(command: string) {
@@ -300,36 +328,44 @@ export function App() {
         {workspaces.length > 0 && (
           <nav className="session-tabs" aria-label="Open Workspaces">
             {workspaces.map((workspace) => (
-              <button
+              <div
                 className={
                   workspace.id === activeWorkspaceId && !settingsOpen
-                    ? "session-tab active"
-                    : "session-tab"
+                    ? "session-tab-wrap active"
+                    : "session-tab-wrap"
                 }
-                type="button"
                 key={workspace.id}
-                onClick={() => {
-                  setActiveWorkspaceId(workspace.id);
-                  setSettingsOpen(false);
-                }}
               >
-                <StatusDot state={workspace.state} />
-                <span>{duplicateLabel(workspace)}</span>
-                <X
-                  size={14}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void closeWorkspace(workspace.id);
+                <button
+                  className="session-tab-main"
+                  type="button"
+                  aria-current={
+                    workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined
+                  }
+                  onClick={() => {
+                    setActiveWorkspaceId(workspace.id);
+                    setSettingsOpen(false);
                   }}
-                />
-              </button>
+                >
+                  <StatusDot state={workspace.state} />
+                  <span>{duplicateLabel(workspace)}</span>
+                </button>
+                <button
+                  className="session-tab-close"
+                  type="button"
+                  onClick={() => void closeWorkspace(workspace.id)}
+                  aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
+                >
+                  <X size={14} />
+                </button>
+              </div>
             ))}
           </nav>
         )}
 
         {settingsOpen ? (
           <SettingsPane settings={settings} environment={environment} onSaved={setSettings} />
-        ) : activeWorkspace && activeConnection ? (
+        ) : activeWorkspace && activeConnection && activeSavedConnection ? (
           <>
             <header className="host-header">
               <div>
@@ -344,14 +380,14 @@ export function App() {
                 <button
                   className="secondary-button"
                   type="button"
-                  onClick={() => setDialogConnection(activeConnection)}
+                  onClick={() => setDialogConnection(activeSavedConnection)}
                 >
                   Edit
                 </button>
                 <button
                   className="danger-button"
                   type="button"
-                  onClick={() => deleteConnection(activeConnection)}
+                  onClick={() => deleteConnection(activeSavedConnection)}
                 >
                   Delete
                 </button>
@@ -363,6 +399,7 @@ export function App() {
                   className={activeWorkspace.view === id ? "active" : ""}
                   type="button"
                   key={id}
+                  aria-current={activeWorkspace.view === id ? "page" : undefined}
                   onClick={() => updateWorkspace(activeWorkspace.id, { view: id })}
                 >
                   <Icon size={15} /> {label}
@@ -370,13 +407,11 @@ export function App() {
               ))}
             </nav>
             <div className="workspace-content">
-              {workspaces.map((workspace) => {
-                const connection = connections.find((item) => item.id === workspace.connectionId);
-                if (!connection) return null;
-                return (
+              <Suspense fallback={<LoadingState label="Opening terminal…" />}>
+                {workspaces.map((workspace) => (
                   <TerminalPane
                     key={workspace.id}
-                    connection={connection}
+                    connection={workspace.connectionSnapshot}
                     workspace={workspace}
                     settings={settings}
                     visible={
@@ -385,34 +420,59 @@ export function App() {
                     onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
                     onState={(state, reason) => updateWorkspace(workspace.id, { state, reason })}
                   />
-                );
-              })}
+                ))}
+              </Suspense>
               {activeWorkspace.view === "overview" && (
                 <OverviewPane connection={activeConnection} />
               )}
               {activeWorkspace.view === "services" && (
                 <ServicesPane
                   connection={activeConnection}
-                  onViewLogs={() => updateWorkspace(activeWorkspace.id, { view: "logs" })}
+                  cache={activeWorkspace.servicesCache}
+                  onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
+                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                 />
               )}
               {activeWorkspace.view === "docker" && (
                 <DockerPane
                   connection={activeConnection}
-                  onViewLogs={() => updateWorkspace(activeWorkspace.id, { view: "logs" })}
+                  cache={activeWorkspace.containersCache}
+                  onCacheChange={(cache) => updateContainersCache(activeWorkspace.id, cache)}
+                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                 />
               )}
               {activeWorkspace.view === "logs" && (
-                <LogsPane connection={activeConnection} settings={settings} />
+                <LogsPane
+                  connection={activeConnection}
+                  settings={settings}
+                  servicesCache={activeWorkspace.servicesCache}
+                  containersCache={activeWorkspace.containersCache}
+                  selectedSource={activeWorkspace.logSource}
+                  onServicesCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
+                  onContainersCacheChange={(cache) =>
+                    updateContainersCache(activeWorkspace.id, cache)
+                  }
+                  onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
+                />
               )}
               {activeWorkspace.view === "history" && (
                 <HistoryPane
                   connection={activeConnection}
                   paused={activeWorkspace.historyPaused}
+                  globalEnabled={settings.globalHistoryEnabled}
                   onPausedChange={(historyPaused) =>
                     updateWorkspace(activeWorkspace.id, { historyPaused })
                   }
-                  onConnectionChanged={saveConnection}
+                  onConnectionChanged={(saved) => {
+                    saveConnection(saved);
+                    updateWorkspace(activeWorkspace.id, {
+                      connectionSnapshot: {
+                        ...activeWorkspace.connectionSnapshot,
+                        historyEnabled: saved.historyEnabled,
+                        updatedAt: saved.updatedAt,
+                      },
+                    });
+                  }}
                   onPaste={pasteIntoTerminal}
                 />
               )}

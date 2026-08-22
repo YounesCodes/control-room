@@ -19,9 +19,14 @@ export const api = {
   updateConnection: (id: string, input: SavedConnectionInput) =>
     invoke<SavedConnection>("update_connection", { id, input }),
   deleteConnection: (id: string) => invoke<void>("delete_connection", { id }),
-  startSession: (connectionId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
+  startSession: (
+    connection: SavedConnection,
+    cols: number,
+    rows: number,
+    output: Channel<ArrayBuffer>,
+  ) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
-      connectionId,
+      connection,
       cols,
       rows,
       output,
@@ -30,6 +35,8 @@ export const api = {
     invoke<void>("write_session", { sessionId, data: Array.from(data) }),
   resizeSession: (sessionId: string, cols: number, rows: number) =>
     invoke<void>("resize_session", { sessionId, cols, rows }),
+  acknowledgeSessionOutput: (sessionId: string, bytes: number) =>
+    invoke<void>("acknowledge_session_output", { sessionId, bytes }),
   closeSession: (sessionId: string) => invoke<void>("close_session", { sessionId }),
   cachedCapabilities: (connectionId: string) =>
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
@@ -79,14 +86,16 @@ export const api = {
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),
   deleteHistory: (id: string) => invoke<void>("delete_history_entry", { id }),
   clearHistory: (connectionId: string) => invoke<void>("clear_history", { connectionId }),
+  setConnectionHistoryEnabled: (connectionId: string, enabled: boolean) =>
+    invoke<SavedConnection>("set_connection_history_enabled", { connectionId, enabled }),
   settings: () => invoke<AppSettings>("get_settings"),
   saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
   historyIntegrationStatus: (connectionId: string) =>
     invoke<boolean>("get_history_integration_status", { connectionId }),
   installHistoryIntegration: (connectionId: string) =>
-    invoke<void>("install_history_integration", { connectionId }),
+    invoke<SavedConnection>("install_history_integration", { connectionId }),
   uninstallHistoryIntegration: (connectionId: string) =>
-    invoke<void>("uninstall_history_integration", { connectionId }),
+    invoke<SavedConnection>("uninstall_history_integration", { connectionId }),
 };
 
 export function errorMessage(error: unknown): string {

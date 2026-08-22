@@ -15,17 +15,20 @@ export function SettingsPane({
   const [draft, setDraft] = useState(settings);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     setMessage(null);
+    setSaveFailed(false);
     try {
       await api.saveSettings(draft);
       onSaved(draft);
       setMessage("Settings saved.");
     } catch (caught) {
       setMessage(errorMessage(caught));
+      setSaveFailed(true);
     } finally {
       setSaving(false);
     }
@@ -35,9 +38,8 @@ export function SettingsPane({
     <section className="feature-page settings-page">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">Application</p>
           <h2>Settings</h2>
-          <p>Control Room uses one finished dark theme for the MVP.</p>
+          <p>Terminal, log, and local History preferences.</p>
         </div>
       </header>
       <form className="settings-form" onSubmit={submit}>
@@ -124,7 +126,11 @@ export function SettingsPane({
             </div>
           </dl>
         </fieldset>
-        {message && <p className="inline-message">{message}</p>}
+        {message && (
+          <p className={saveFailed ? "inline-error" : "inline-message"} role="status">
+            {message}
+          </p>
+        )}
         <button className="primary-button settings-save" type="submit" disabled={saving}>
           <Save size={15} /> {saving ? "Saving…" : "Save settings"}
         </button>

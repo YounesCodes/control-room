@@ -16,4 +16,11 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2024,
+      globals: globals.node,
+    },
+  },
 );

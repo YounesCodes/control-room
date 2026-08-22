@@ -1,8 +1,20 @@
 # Control Room
 
-Control Room is a local Windows desktop application for opening interactive SSH sessions and inspecting Linux hosts. It uses the Windows OpenSSH client, ConPTY, React, Rust, xterm.js, and SQLite.
+Control Room is a local Windows desktop application for opening interactive SSH sessions and inspecting Linux hosts. It uses your Windows OpenSSH setup instead of maintaining a second SSH stack.
 
 The first release targets Windows 11 x64 and Debian or Ubuntu family hosts with systemd, journald, Bash, and optional Docker. Other Linux systems may still work as terminal-only destinations.
+
+## Features
+
+- Multiple simultaneous SSH Workspaces, including several sessions for one Saved Connection
+- Interactive ConPTY and xterm.js terminal with resize, Unicode, copy and paste, scrollback, and reconnect
+- Cached host, systemd, journald, and Docker inspection with explicit refresh
+- Independent, bounded journald and Docker log streams
+- Explicit one-shot sudo retry for read-only structured requests
+- Optional Bash Enhanced History with exact commands, directories, timestamps, and exit codes
+- Local SQLite persistence for connections, settings, capabilities, and opted-in History
+
+Control Room does not store private keys, SSH passwords, sudo passwords, terminal output, or fetched logs. Structured features require noninteractive public-key or agent authentication; the interactive terminal can still show normal OpenSSH prompts.
 
 ## Development
 
@@ -15,39 +27,36 @@ Prerequisites:
 - WebView2 Runtime
 - Windows OpenSSH client
 
-Install and run:
+Install locked dependencies and run the live-reloading desktop build:
 
 ```bash
-npm install
+npm ci
 npm run tauri dev
 ```
 
-Validation:
+Run the complete validation gate:
 
 ```bash
-npm run lint
-npm test
-npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-npm run tauri build
+npm run check
 ```
 
-The ignored fixture tests exercise Windows `ssh.exe` inside ConPTY, structured Debian discovery, and reversible Enhanced History metadata using an isolated temporary remote home. Run them only against an SSH host you control:
+See [testing](docs/TESTING.md) for the live SSH fixture and clean-machine acceptance checklist. Build the unsigned per-user installer with `npm run tauri build`; Windows may show an unrecognized-publisher warning.
 
-```powershell
-$env:CONTROL_ROOM_TEST_HOST = "192.0.2.10"
-$env:CONTROL_ROOM_TEST_USER = "your-user"
-$env:CONTROL_ROOM_TEST_PORT = "22"
-cargo test --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture
-```
+## Releases
 
-The NSIS installer is written under `src-tauri/target/release/bundle/nsis/`.
+CI validates pushes and pull requests on Windows and builds an NSIS artifact. A tag matching the three synchronized project versions, such as `v0.1.0`, runs the same gate and publishes the unsigned installer to a GitHub release.
+
+## Security and privacy
+
+Enhanced History can contain secrets typed on command lines and is stored in the local application database only when enabled. See [SECURITY.md](SECURITY.md) for the complete boundary and private-reporting guidance.
 
 ## Documentation
 
 - [Product specification](docs/PRODUCT_SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Testing](docs/TESTING.md)
 - [Domain language](CONTEXT.md)
 - [Architecture decisions](docs/adr/)
+
+Control Room is licensed under the [MIT License](LICENSE). Contribution guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).

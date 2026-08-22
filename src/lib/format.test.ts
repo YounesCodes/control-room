@@ -9,8 +9,8 @@ describe("connectionTarget", () => {
   });
 
   it("includes explicit user and port overrides", () => {
-    expect(connectionTarget({ destination: "192.168.100.100", username: "younes", port: 22 })).toBe(
-      "younes@192.168.100.100:22",
+    expect(connectionTarget({ destination: "192.0.2.10", username: "test-user", port: 22 })).toBe(
+      "test-user@192.0.2.10:22",
     );
   });
 });

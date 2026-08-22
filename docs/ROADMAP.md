@@ -3,7 +3,8 @@
 ## MVP
 
 - [x] Repository foundation launches as a Tauri application
-- [x] ConPTY terminal proof succeeds locally and over OpenSSH
+- [x] ConPTY terminal proof succeeds locally
+- [x] Live ConPTY and OpenSSH fixture passes against the release candidate
 - [x] Saved Connections persist in SQLite
 - [x] Multiple Workspaces and Terminal Sessions remain independent
 - [x] Host capability discovery and Overview are accurate
@@ -14,12 +15,16 @@
 - [x] Structured sudo retry does not persist credentials
 - [x] Opt-in Bash Enhanced History is reversible and accurate
 - [x] Dark desktop UI covers every loading, empty, unsupported, and error state
-- [x] NSIS installer builds and the acceptance suite passes
+- [x] Automated frontend, Rust, migration, high-output, and accessibility gates pass
+- [x] Windows CI and tagged unsigned release workflows are defined
+- [x] Build the release-candidate NSIS package
+- [ ] Install the package on a clean Windows user profile
+- [ ] Complete the clean-profile manual acceptance checklist
 
 ## After MVP
 
-- Public product naming and repository launch
-- Windows code signing and release automation
+- Public repository launch
+- Windows code signing
 - Automatic updates
 - Imported-key threat model and encrypted storage, if still useful
 - Additional shells and Linux families based on real demand

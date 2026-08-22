@@ -10,6 +10,13 @@ use crate::models::{
     SavedConnectionInput,
 };
 
+const LATEST_SCHEMA_VERSION: i64 = 1;
+const MAX_DISPLAY_NAME_CHARS: usize = 80;
+const MAX_DESTINATION_CHARS: usize = 255;
+const MAX_USERNAME_CHARS: usize = 64;
+const MAX_IDENTITY_PATH_CHARS: usize = 32_767;
+const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
+
 pub struct Database {
     connection: Mutex<Connection>,
 }
@@ -19,54 +26,16 @@ impl Database {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
-        let connection = Connection::open(path).map_err(|error| error.to_string())?;
+        let mut connection = Connection::open(path).map_err(|error| error.to_string())?;
         connection
             .execute_batch(
                 r#"
                 PRAGMA foreign_keys = ON;
                 PRAGMA journal_mode = WAL;
-
-                CREATE TABLE IF NOT EXISTS saved_connections (
-                    id TEXT PRIMARY KEY,
-                    display_name TEXT NOT NULL,
-                    destination TEXT NOT NULL,
-                    username TEXT,
-                    port INTEGER,
-                    identity_file TEXT,
-                    history_enabled INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    last_connected_at TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS host_capabilities (
-                    connection_id TEXT PRIMARY KEY REFERENCES saved_connections(id) ON DELETE CASCADE,
-                    payload TEXT NOT NULL,
-                    detected_at TEXT NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS command_history (
-                    id TEXT PRIMARY KEY,
-                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
-                    session_id TEXT NOT NULL,
-                    command TEXT NOT NULL,
-                    cwd TEXT,
-                    started_at TEXT NOT NULL,
-                    finished_at TEXT,
-                    exit_code INTEGER,
-                    shell TEXT NOT NULL
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_history_connection_started
-                ON command_history(connection_id, started_at DESC);
-
-                CREATE TABLE IF NOT EXISTS application_settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                );
                 "#,
             )
             .map_err(|error| error.to_string())?;
+        migrate(&mut connection)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -205,22 +174,44 @@ impl Database {
     }
 
     pub fn get_capabilities(&self, id: &str) -> Result<Option<HostCapabilities>, String> {
-        let payload: Option<String> = self
+        let cached: Option<(String, String)> = self
             .connection
             .lock()
             .query_row(
-                "SELECT payload FROM host_capabilities WHERE connection_id = ?1",
+                "SELECT payload, detected_at FROM host_capabilities WHERE connection_id = ?1",
                 [id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        payload
-            .map(|value| serde_json::from_str(&value).map_err(|error| error.to_string()))
-            .transpose()
+        let Some((payload, detected_at)) = cached else {
+            return Ok(None);
+        };
+        match serde_json::from_str::<HostCapabilities>(&payload) {
+            Ok(mut capabilities) => {
+                if capabilities.connection_id.is_empty() {
+                    capabilities.connection_id = id.into();
+                }
+                if capabilities.detected_at.is_empty() {
+                    capabilities.detected_at = detected_at;
+                }
+                Ok(Some(capabilities))
+            }
+            Err(_) => {
+                self.connection
+                    .lock()
+                    .execute(
+                        "DELETE FROM host_capabilities WHERE connection_id = ?1",
+                        [id],
+                    )
+                    .map_err(|error| error.to_string())?;
+                Ok(None)
+            }
+        }
     }
 
     pub fn add_history(&self, input: HistoryInput) -> Result<HistoryEntry, String> {
+        validate_history_input(&input)?;
         let command = input.command.trim_end().to_string();
         if command.trim().is_empty() {
             return Err("Cannot save an empty command".into());
@@ -263,7 +254,7 @@ impl Database {
         limit: u32,
     ) -> Result<Vec<HistoryEntry>, String> {
         let connection = self.connection.lock();
-        let search_pattern = format!("%{}%", search.unwrap_or_default());
+        let search_pattern = format!("%{}%", escape_like(search.unwrap_or_default()));
         let mut statement = connection
             .prepare(
                 "SELECT id, connection_id, session_id, command, cwd, started_at, finished_at, exit_code, shell FROM command_history WHERE connection_id = ?1 AND command LIKE ?2 ESCAPE '\\' ORDER BY started_at DESC LIMIT ?3",
@@ -321,10 +312,9 @@ impl Database {
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        payload
-            .map(|value| serde_json::from_str(&value).map_err(|error| error.to_string()))
-            .transpose()
-            .map(|value| value.unwrap_or_default())
+        Ok(payload
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_default())
     }
 
     pub fn save_settings(&self, settings: &AppSettings) -> Result<(), String> {
@@ -337,6 +327,13 @@ impl Database {
         if ![50, 100, 200, 500, 1000].contains(&settings.default_log_tail) {
             return Err("Unsupported default log tail count".into());
         }
+        let font_family = settings.terminal_font_family.trim();
+        if font_family.is_empty()
+            || font_family.chars().count() > 500
+            || font_family.chars().any(char::is_control)
+        {
+            return Err("Terminal font family is invalid".into());
+        }
         let payload = serde_json::to_string(settings).map_err(|error| error.to_string())?;
         self.connection
             .lock()
@@ -347,6 +344,70 @@ impl Database {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+}
+
+fn migrate(connection: &mut Connection) -> Result<(), String> {
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    if version > LATEST_SCHEMA_VERSION {
+        return Err(format!(
+            "Database schema version {version} is newer than this app supports"
+        ));
+    }
+    if version < 1 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS saved_connections (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    destination TEXT NOT NULL,
+                    username TEXT,
+                    port INTEGER,
+                    identity_file TEXT,
+                    history_enabled INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_connected_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS host_capabilities (
+                    connection_id TEXT PRIMARY KEY REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    payload TEXT NOT NULL,
+                    detected_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS command_history (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    session_id TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    cwd TEXT,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    exit_code INTEGER,
+                    shell TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_history_connection_started
+                ON command_history(connection_id, started_at DESC);
+
+                CREATE TABLE IF NOT EXISTS application_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+
+                PRAGMA user_version = 1;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 fn map_connection(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedConnection> {
@@ -371,14 +432,32 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
-fn validate_connection_input(input: &SavedConnectionInput) -> Result<(), String> {
-    if input.display_name.trim().is_empty() {
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+pub(crate) fn validate_connection_input(input: &SavedConnectionInput) -> Result<(), String> {
+    let display_name = input.display_name.trim();
+    if display_name.is_empty() {
         return Err("Display name is required".into());
+    }
+    if display_name.chars().count() > MAX_DISPLAY_NAME_CHARS
+        || display_name.chars().any(char::is_control)
+    {
+        return Err(format!(
+            "Display name must be at most {MAX_DISPLAY_NAME_CHARS} characters"
+        ));
     }
     let destination = input.destination.trim();
     if destination.is_empty()
+        || destination.chars().count() > MAX_DESTINATION_CHARS
         || destination.starts_with('-')
-        || destination.chars().any(char::is_whitespace)
+        || destination
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
     {
         return Err("SSH destination must be one host, address, or OpenSSH alias".into());
     }
@@ -387,12 +466,57 @@ fn validate_connection_input(input: &SavedConnectionInput) -> Result<(), String>
         .as_deref()
         .filter(|value| !value.trim().is_empty())
         .is_some_and(|username| {
-            !username
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
+            username.chars().count() > MAX_USERNAME_CHARS
+                || !username
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
         })
     {
         return Err("Username contains unsupported characters".into());
+    }
+    if input.port == Some(0) {
+        return Err("Port must be between 1 and 65535".into());
+    }
+    if let Some(identity_file) = input
+        .identity_file
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if identity_file.chars().count() > MAX_IDENTITY_PATH_CHARS
+            || identity_file.chars().any(char::is_control)
+        {
+            return Err("Identity-file path is invalid".into());
+        }
+        if !Path::new(identity_file).is_file() {
+            return Err("Identity file does not exist or is not a file".into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_history_input(input: &HistoryInput) -> Result<(), String> {
+    if input.connection_id.is_empty() || input.session_id.is_empty() || input.session_id.len() > 128
+    {
+        return Err("History session identifiers are invalid".into());
+    }
+    if input.command.len() > MAX_HISTORY_COMMAND_BYTES {
+        return Err("History command exceeds the 1 MiB limit".into());
+    }
+    if input.cwd.as_ref().is_some_and(|cwd| cwd.len() > 32_767) {
+        return Err("History working directory is too long".into());
+    }
+    let started = chrono::DateTime::parse_from_rfc3339(&input.started_at)
+        .map_err(|_| "History start time is invalid".to_string())?;
+    if let Some(finished_at) = &input.finished_at {
+        let finished = chrono::DateTime::parse_from_rfc3339(finished_at)
+            .map_err(|_| "History finish time is invalid".to_string())?;
+        if finished < started {
+            return Err("History finish time precedes its start time".into());
+        }
+    }
+    if input.shell != "bash" {
+        return Err("Only Bash Enhanced History is supported".into());
     }
     Ok(())
 }
@@ -424,7 +548,7 @@ mod tests {
                 connection_id: saved.id.clone(),
                 session_id: "session-a".into(),
                 command: "docker ps".into(),
-                cwd: Some("/home/younes".into()),
+                cwd: Some("/home/test-user".into()),
                 started_at: Utc::now().to_rfc3339(),
                 finished_at: None,
                 exit_code: Some(0),
@@ -455,5 +579,141 @@ mod tests {
         assert_eq!(saved.destination, "debian-laptop");
         assert_eq!(saved.port, None);
         assert_eq!(saved.username, None);
+    }
+
+    #[test]
+    fn unversioned_database_is_migrated_without_losing_connections() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE saved_connections (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    destination TEXT NOT NULL,
+                    username TEXT,
+                    port INTEGER,
+                    identity_file TEXT,
+                    history_enabled INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_connected_at TEXT
+                );
+                INSERT INTO saved_connections
+                    (id, display_name, destination, history_enabled, created_at, updated_at)
+                VALUES ('legacy', 'Legacy host', 'legacy-host', 0, 'now', 'now');
+                "#,
+            )
+            .unwrap();
+        drop(connection);
+
+        let database = Database::open(&path).unwrap();
+        assert_eq!(database.list_connections().unwrap()[0].id, "legacy");
+        let version: i64 = database
+            .connection
+            .lock()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
+        drop(database);
+        Database::open(&path).unwrap();
+    }
+
+    #[test]
+    fn stale_capability_json_is_tolerated_and_repaired() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO host_capabilities (connection_id, payload, detected_at) VALUES (?1, ?2, ?3)",
+                params![saved.id, r#"{"hostname":"laptop"}"#, "detected"],
+            )
+            .unwrap();
+        let capabilities = database.get_capabilities(&saved.id).unwrap().unwrap();
+        assert_eq!(capabilities.connection_id, saved.id);
+        assert_eq!(capabilities.hostname.as_deref(), Some("laptop"));
+        assert_eq!(capabilities.detected_at, "detected");
+
+        database
+            .connection
+            .lock()
+            .execute(
+                "UPDATE host_capabilities SET payload = 'not-json' WHERE connection_id = ?1",
+                [&saved.id],
+            )
+            .unwrap();
+        assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+        assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn history_search_treats_like_metacharacters_literally() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        for command in ["echo 100%", "echo 100x", "show_a", "showXa"] {
+            database
+                .add_history(HistoryInput {
+                    connection_id: saved.id.clone(),
+                    session_id: "session-a".into(),
+                    command: command.into(),
+                    cwd: None,
+                    started_at: Utc::now().to_rfc3339(),
+                    finished_at: None,
+                    exit_code: Some(0),
+                    shell: "bash".into(),
+                })
+                .unwrap();
+        }
+        assert_eq!(
+            database.list_history(&saved.id, Some("%"), 100).unwrap()[0].command,
+            "echo 100%"
+        );
+        assert_eq!(
+            database.list_history(&saved.id, Some("_"), 100).unwrap()[0].command,
+            "show_a"
+        );
+    }
+
+    #[test]
+    fn invalid_connection_and_history_inputs_are_rejected() {
+        let mut connection_input = input("Laptop");
+        connection_input.port = Some(0);
+        assert_eq!(
+            validate_connection_input(&connection_input).unwrap_err(),
+            "Port must be between 1 and 65535"
+        );
+        connection_input.port = None;
+        connection_input.identity_file = Some("missing-private-key".into());
+        assert_eq!(
+            validate_connection_input(&connection_input).unwrap_err(),
+            "Identity file does not exist or is not a file"
+        );
+
+        let mut history = HistoryInput {
+            connection_id: "connection".into(),
+            session_id: "session".into(),
+            command: "pwd".into(),
+            cwd: None,
+            started_at: "not-a-time".into(),
+            finished_at: None,
+            exit_code: Some(0),
+            shell: "bash".into(),
+        };
+        assert_eq!(
+            validate_history_input(&history).unwrap_err(),
+            "History start time is invalid"
+        );
+        history.started_at = Utc::now().to_rfc3339();
+        history.shell = "zsh".into();
+        assert_eq!(
+            validate_history_input(&history).unwrap_err(),
+            "Only Bash Enhanced History is supported"
+        );
     }
 }

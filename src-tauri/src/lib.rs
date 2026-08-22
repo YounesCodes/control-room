@@ -7,7 +7,7 @@ mod session;
 mod ssh;
 
 use database::Database;
-use remote::StreamManager;
+use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
 use tauri::Manager;
 
@@ -17,6 +17,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(SessionManager::default())
         .manage(StreamManager::default())
+        .manage(RemoteOperationLimiter::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -32,6 +33,7 @@ pub fn run() {
             commands::start_session,
             commands::write_session,
             commands::resize_session,
+            commands::acknowledge_session_output,
             commands::close_session,
             commands::get_cached_capabilities,
             commands::refresh_capabilities,
@@ -45,6 +47,7 @@ pub fn run() {
             commands::add_history_entry,
             commands::delete_history_entry,
             commands::clear_history,
+            commands::set_connection_history_enabled,
             commands::get_settings,
             commands::save_settings,
             commands::get_history_integration_status,

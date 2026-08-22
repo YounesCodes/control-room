@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Clipboard,
   Eraser,
@@ -16,12 +16,14 @@ import type { HistoryEntry, SavedConnection } from "../types";
 export function HistoryPane({
   connection,
   paused,
+  globalEnabled,
   onPausedChange,
   onConnectionChanged,
   onPaste,
 }: {
   connection: SavedConnection;
   paused: boolean;
+  globalEnabled: boolean;
   onPausedChange: (paused: boolean) => void;
   onConnectionChanged: (connection: SavedConnection) => void;
   onPaste: (command: string) => void;
@@ -32,8 +34,10 @@ export function HistoryPane({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
 
   async function load() {
+    const request = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -41,28 +45,68 @@ export function HistoryPane({
         api.history(connection.id, search),
         api.historyIntegrationStatus(connection.id),
       ]);
-      setEntries(history);
-      setIntegrationInstalled(installed);
+      if (request === loadRequestRef.current) {
+        setEntries(history);
+        setIntegrationInstalled(installed);
+      }
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (request === loadRequestRef.current) setError(errorMessage(caught));
     } finally {
-      setLoading(false);
+      if (request === loadRequestRef.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 180 : 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      loadRequestRef.current += 1;
+    };
   }, [connection.id, search]);
 
-  async function toggleIntegration() {
+  async function installIntegration() {
     setWorking(true);
     setError(null);
     try {
-      if (integrationInstalled) await api.uninstallHistoryIntegration(connection.id);
-      else await api.installHistoryIntegration(connection.id);
-      const updated = { ...connection, historyEnabled: !integrationInstalled };
-      setIntegrationInstalled(!integrationInstalled);
+      const updated = await api.installHistoryIntegration(connection.id);
+      setIntegrationInstalled(true);
+      onConnectionChanged(updated);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function removeIntegration() {
+    if (
+      !window.confirm(
+        "Remove the Control Room Bash integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.",
+      )
+    ) {
+      return;
+    }
+    setWorking(true);
+    setError(null);
+    try {
+      const updated = await api.uninstallHistoryIntegration(connection.id);
+      setIntegrationInstalled(false);
+      onConnectionChanged(updated);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function toggleCapture() {
+    setWorking(true);
+    setError(null);
+    try {
+      const updated = await api.setConnectionHistoryEnabled(
+        connection.id,
+        !connection.historyEnabled,
+      );
       onConnectionChanged(updated);
     } catch (caught) {
       setError(errorMessage(caught));
@@ -72,14 +116,24 @@ export function HistoryPane({
   }
 
   async function remove(entry: HistoryEntry) {
-    await api.deleteHistory(entry.id);
-    setEntries((current) => current.filter((item) => item.id !== entry.id));
+    setError(null);
+    try {
+      await api.deleteHistory(entry.id);
+      setEntries((current) => current.filter((item) => item.id !== entry.id));
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
   }
 
   async function clear() {
     if (!window.confirm(`Clear all Enhanced History for ${connection.displayName}?`)) return;
-    await api.clearHistory(connection.id);
-    setEntries([]);
+    setError(null);
+    try {
+      await api.clearHistory(connection.id);
+      setEntries([]);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
   }
 
   const grouped = useMemo(() => {
@@ -93,14 +147,12 @@ export function HistoryPane({
     return [...groups.entries()];
   }, [entries]);
 
-  if (loading && !entries.length && connection.historyEnabled)
-    return <LoadingState label="Reading Enhanced History…" />;
+  if (loading && !entries.length) return <LoadingState label="Reading Enhanced History…" />;
 
   return (
     <section className="feature-page history-page">
       <header className="page-heading compact-heading">
         <div>
-          <p className="eyebrow">Bash integration</p>
           <h2>Enhanced History</h2>
           <p>{connection.historyEnabled ? "Enabled for this Saved Connection" : "Disabled"}</p>
         </div>
@@ -109,12 +161,12 @@ export function HistoryPane({
             className="toolbar-button"
             type="button"
             onClick={() => onPausedChange(!paused)}
-            disabled={!connection.historyEnabled}
+            disabled={!globalEnabled || !connection.historyEnabled}
           >
             {paused ? <Play size={14} /> : <Pause size={14} />}
             {paused ? "Resume" : "Pause"}
           </button>
-          <button className="toolbar-button" type="button" onClick={load}>
+          <button className="toolbar-button" type="button" onClick={load} disabled={loading}>
             <RefreshCw size={14} /> Refresh
           </button>
           <button
@@ -139,7 +191,7 @@ export function HistoryPane({
           <button
             className="primary-button"
             type="button"
-            onClick={toggleIntegration}
+            onClick={installIntegration}
             disabled={working}
           >
             {working ? "Installing…" : "Enable Enhanced History"}
@@ -159,14 +211,32 @@ export function HistoryPane({
           <button
             className="secondary-button"
             type="button"
-            onClick={toggleIntegration}
+            onClick={toggleCapture}
             disabled={working}
           >
-            {working ? "Removing…" : "Disable integration"}
+            {working ? "Saving…" : connection.historyEnabled ? "Disable capture" : "Enable capture"}
+          </button>
+          <button
+            className="danger-button"
+            type="button"
+            onClick={removeIntegration}
+            disabled={working}
+          >
+            Remove integration
           </button>
         </div>
       )}
-      {paused && (
+      {!globalEnabled && (
+        <p className="inline-warning">
+          Enhanced History is disabled globally. Existing entries remain available.
+        </p>
+      )}
+      {integrationInstalled && !connection.historyEnabled && (
+        <p className="inline-warning">
+          Capture is disabled for this Saved Connection. Existing entries remain available.
+        </p>
+      )}
+      {paused && globalEnabled && connection.historyEnabled && (
         <p className="inline-warning">
           History is paused for this Workspace. Commands will not be saved.
         </p>
@@ -200,7 +270,11 @@ export function HistoryPane({
                 <button
                   className="icon-button"
                   type="button"
-                  onClick={() => navigator.clipboard.writeText(entry.command)}
+                  onClick={() =>
+                    void navigator.clipboard
+                      .writeText(entry.command)
+                      .catch((caught) => setError(`Copy failed: ${errorMessage(caught)}`))
+                  }
                   aria-label="Copy command"
                 >
                   <Clipboard size={15} />

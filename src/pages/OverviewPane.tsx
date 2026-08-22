@@ -87,7 +87,6 @@ export function OverviewPane({ connection }: { connection: SavedConnection }) {
     <section className="feature-page overview-page">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">Host overview</p>
           <h2>{capabilities.hostname ?? connection.displayName}</h2>
           <p>Last inspected {relativeTime(capabilities.detectedAt)}</p>
         </div>

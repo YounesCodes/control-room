@@ -5,106 +5,230 @@ import { Eraser, Pause, Play, Search, Square } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
+import { BoundedLogBuffer } from "../lib/log-buffer";
+import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
 import type {
   AppSettings,
+  CachedList,
   DockerContainer,
+  LogSourceSelection,
+  LogSourceType,
   SavedConnection,
   StreamStateEvent,
   SystemdService,
 } from "../types";
 
-type SourceType = "systemd" | "docker";
+type StreamStatus = "stopped" | "starting" | "running" | "stopping";
 
 export function LogsPane({
   connection,
   settings,
+  servicesCache,
+  containersCache,
+  selectedSource,
+  onServicesCacheChange,
+  onContainersCacheChange,
+  onSourceChange,
 }: {
   connection: SavedConnection;
   settings: AppSettings;
+  servicesCache: CachedList<SystemdService>;
+  containersCache: CachedList<DockerContainer>;
+  selectedSource: LogSourceSelection | null;
+  onServicesCacheChange: (cache: CachedList<SystemdService>) => void;
+  onContainersCacheChange: (cache: CachedList<DockerContainer>) => void;
+  onSourceChange: (source: LogSourceSelection | null) => void;
 }) {
-  const [sourceType, setSourceType] = useState<SourceType>("systemd");
-  const [services, setServices] = useState<SystemdService[]>([]);
-  const [containers, setContainers] = useState<DockerContainer[]>([]);
-  const [sourceId, setSourceId] = useState("");
+  const [sourceType, setSourceType] = useState<LogSourceType>(selectedSource?.type ?? "systemd");
+  const [sourceId, setSourceId] = useState(selectedSource?.id ?? "");
   const [tail, setTail] = useState(settings.defaultLogTail);
   const [follow, setFollow] = useState(true);
-  const [streamId, setStreamId] = useState<string | null>(null);
-  const [streaming, setStreaming] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<StreamStatus>("stopped");
   const [paused, setPaused] = useState(false);
   const [logs, setLogs] = useState("");
   const [search, setSearch] = useState("");
-  const [loadingSources, setLoadingSources] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requestSudo, setRequestSudo] = useState(false);
-  const pausedRef = useRef(false);
-  const pendingRef = useRef("");
+
+  const activeBufferRef = useRef(new BoundedLogBuffer());
+  const pausedBufferRef = useRef(new BoundedLogBuffer());
   const decoderRef = useRef(new TextDecoder());
+  const pausedRef = useRef(false);
   const streamIdRef = useRef<string | null>(null);
+  const streamGenerationRef = useRef(0);
+  const sourceRequestRef = useRef(0);
+  const flushTimerRef = useRef<number | null>(null);
+  const disposedRef = useRef(false);
+  const startingRef = useRef(false);
+  const earlyStateRef = useRef(new Map<string, StreamStateEvent>());
+  const servicesCacheRef = useRef(servicesCache);
+  const containersCacheRef = useRef(containersCache);
+  servicesCacheRef.current = servicesCache;
+  containersCacheRef.current = containersCache;
+
+  function flushNow() {
+    if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = null;
+    setLogs(activeBufferRef.current.snapshot());
+  }
+
+  function scheduleFlush() {
+    if (flushTimerRef.current !== null) return;
+    flushTimerRef.current = window.setTimeout(flushNow, 50);
+  }
+
+  function appendChunk(chunk: string) {
+    if (!chunk) return;
+    if (pausedRef.current) {
+      pausedBufferRef.current.append(chunk);
+    } else {
+      activeBufferRef.current.append(chunk);
+      scheduleFlush();
+    }
+  }
+
+  function finishDecoder() {
+    appendChunk(decoderRef.current.decode());
+    flushNow();
+  }
+
+  function drainPausedBuffer() {
+    if (pausedBufferRef.current.byteCount) {
+      activeBufferRef.current.append(pausedBufferRef.current.snapshot());
+      pausedBufferRef.current.clear();
+    }
+    pausedRef.current = false;
+    setPaused(false);
+    flushNow();
+  }
+
+  function applyStreamState(payload: StreamStateEvent) {
+    if (payload.streamId !== streamIdRef.current) {
+      if (startingRef.current) earlyStateRef.current.set(payload.streamId, payload);
+      return;
+    }
+    if (payload.state === "error") setError(payload.reason ?? "Log stream failed");
+    if (payload.state !== "running") {
+      finishDecoder();
+      drainPausedBuffer();
+      streamIdRef.current = null;
+      startingRef.current = false;
+      setStreamStatus("stopped");
+    }
+  }
+
+  async function loadSources(type: LogSourceType, force = false) {
+    const cache = type === "systemd" ? servicesCacheRef.current : containersCacheRef.current;
+    if (!force && isCacheFresh(cache)) return;
+    const request = ++sourceRequestRef.current;
+    if (type === "systemd") {
+      onServicesCacheChange({ ...servicesCacheRef.current, loading: true, error: null });
+    } else {
+      onContainersCacheChange({ ...containersCacheRef.current, loading: true, error: null });
+    }
+    try {
+      if (type === "systemd") {
+        const items = await api.listServices(connection.id);
+        if (request !== sourceRequestRef.current) return;
+        onServicesCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
+      } else {
+        const items = await api.listContainers(connection.id);
+        if (request !== sourceRequestRef.current) return;
+        onContainersCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
+      }
+    } catch (caught) {
+      if (request !== sourceRequestRef.current) return;
+      const message = errorMessage(caught);
+      if (type === "systemd") {
+        onServicesCacheChange({ ...servicesCacheRef.current, loading: false, error: message });
+      } else {
+        onContainersCacheChange({ ...containersCacheRef.current, loading: false, error: message });
+      }
+    }
+  }
 
   useEffect(() => {
-    streamIdRef.current = streamId;
-  }, [streamId]);
-
-  useEffect(() => {
-    let current = true;
-    setLoadingSources(true);
-    void Promise.allSettled([api.listServices(connection.id), api.listContainers(connection.id)])
-      .then((results) => {
-        if (!current) return;
-        const serviceResult = results[0];
-        const containerResult = results[1];
-        const nextServices = serviceResult.status === "fulfilled" ? serviceResult.value : [];
-        const nextContainers = containerResult.status === "fulfilled" ? containerResult.value : [];
-        setServices(nextServices);
-        setContainers(nextContainers);
-        setSourceType(nextServices.length ? "systemd" : "docker");
-        setSourceId(nextServices[0]?.id ?? nextContainers[0]?.id ?? "");
-      })
-      .finally(() => current && setLoadingSources(false));
+    void loadSources(sourceType);
     return () => {
-      current = false;
-      if (streamIdRef.current) void api.stopLogStream(streamIdRef.current).catch(() => undefined);
+      sourceRequestRef.current += 1;
     };
   }, [connection.id]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    void listen<StreamStateEvent>("stream-state-changed", ({ payload }) => {
-      if (payload.streamId !== streamIdRef.current) return;
-      if (payload.state === "error") setError(payload.reason ?? "Log stream failed");
-      if (payload.state !== "running") {
-        setStreaming(false);
-        setStreamId(null);
-      }
-    }).then((listener) => {
-      unlisten = listener;
+    const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
+    const next = reconcileSelection(items, sourceId) ?? "";
+    if (next === sourceId) return;
+    setSourceId(next);
+    onSourceChange(next ? { type: sourceType, id: next } : null);
+  }, [sourceType, sourceId, servicesCache.items, containersCache.items]);
+
+  useEffect(() => {
+    const unlistenPromise = listen<StreamStateEvent>("stream-state-changed", ({ payload }) => {
+      applyStreamState(payload);
     });
-    return () => unlisten?.();
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten());
+    };
   }, []);
 
-  async function stop() {
-    if (!streamIdRef.current) return;
-    await api.stopLogStream(streamIdRef.current).catch(() => undefined);
-    setStreaming(false);
-    setStreamId(null);
+  useEffect(() => {
+    return () => {
+      disposedRef.current = true;
+      streamGenerationRef.current += 1;
+      if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current);
+      const streamId = streamIdRef.current;
+      streamIdRef.current = null;
+      if (streamId) void api.stopLogStream(streamId).catch(() => undefined);
+    };
+  }, []);
+
+  async function stop(): Promise<boolean> {
+    const streamId = streamIdRef.current;
+    finishDecoder();
+    drainPausedBuffer();
+    streamGenerationRef.current += 1;
+    startingRef.current = false;
+    if (!streamId) {
+      setStreamStatus("stopped");
+      return true;
+    }
+    setStreamStatus("stopping");
+    try {
+      await api.stopLogStream(streamId);
+      if (streamIdRef.current === streamId) streamIdRef.current = null;
+      setStreamStatus("stopped");
+      return true;
+    } catch (caught) {
+      if (streamIdRef.current === streamId) setStreamStatus("running");
+      setError(`Could not stop Log Stream: ${errorMessage(caught)}`);
+      return false;
+    }
   }
 
   async function start(sudoPassword: string | null = null) {
-    if (!sourceId) return;
-    await stop();
+    if (!sourceId || !(await stop())) return;
+    const generation = ++streamGenerationRef.current;
     setError(null);
     setRequestSudo(false);
-    setStreaming(true);
+    setPaused(false);
+    pausedRef.current = false;
+    pausedBufferRef.current.clear();
+    setStreamStatus("starting");
+    startingRef.current = true;
     decoderRef.current = new TextDecoder();
+    const sourceName = sourceOptions.find((source) => source.id === sourceId);
+    const label = sourceName && "name" in sourceName ? sourceName.name : sourceId;
+    activeBufferRef.current.append(
+      `${activeBufferRef.current.byteCount ? "\n" : ""}[${sourceType} ${label}] stream started\n`,
+    );
+    flushNow();
+
     const output = new Channel<ArrayBuffer>();
     output.onmessage = (message) => {
-      const chunk = decoderRef.current.decode(new Uint8Array(message), { stream: true });
-      if (pausedRef.current) {
-        pendingRef.current += chunk;
-        return;
-      }
-      setLogs((current) => trimLogBuffer(current + chunk));
+      if (disposedRef.current || generation !== streamGenerationRef.current) return;
+      appendChunk(decoderRef.current.decode(new Uint8Array(message), { stream: true }));
     };
+
     try {
       const started =
         sourceType === "systemd"
@@ -124,11 +248,24 @@ export function LogsPane({
               sudoPassword,
               output,
             );
-      setStreamId(started.streamId);
+      if (disposedRef.current || generation !== streamGenerationRef.current) {
+        await api.stopLogStream(started.streamId).catch(() => undefined);
+        return;
+      }
+      streamIdRef.current = started.streamId;
+      startingRef.current = false;
+      setStreamStatus("running");
+      const earlyState = earlyStateRef.current.get(started.streamId);
+      if (earlyState) {
+        earlyStateRef.current.delete(started.streamId);
+        applyStreamState(earlyState);
+      }
     } catch (caught) {
+      if (generation !== streamGenerationRef.current) return;
       const message = errorMessage(caught);
+      startingRef.current = false;
       setError(message);
-      setStreaming(false);
+      setStreamStatus("stopped");
       if (message.toLowerCase().includes("permission denied")) setRequestSudo(true);
     }
   }
@@ -137,18 +274,27 @@ export function LogsPane({
     const next = !pausedRef.current;
     pausedRef.current = next;
     setPaused(next);
-    if (!next && pendingRef.current) {
-      const pending = pendingRef.current;
-      pendingRef.current = "";
-      setLogs((current) => trimLogBuffer(current + pending));
+    if (!next && pausedBufferRef.current.byteCount) {
+      activeBufferRef.current.append(pausedBufferRef.current.snapshot());
+      pausedBufferRef.current.clear();
+      scheduleFlush();
     }
   }
 
-  function changeType(next: SourceType) {
-    void stop();
+  async function changeType(next: LogSourceType) {
+    if (!(await stop())) return;
     setSourceType(next);
-    setSourceId(next === "systemd" ? (services[0]?.id ?? "") : (containers[0]?.id ?? ""));
-    setLogs("");
+    const items = next === "systemd" ? servicesCache.items : containersCache.items;
+    const nextId = items[0]?.id ?? "";
+    setSourceId(nextId);
+    onSourceChange(nextId ? { type: next, id: nextId } : null);
+    void loadSources(next);
+  }
+
+  function clearBuffers() {
+    activeBufferRef.current.clear();
+    pausedBufferRef.current.clear();
+    flushNow();
   }
 
   const displayedLogs = useMemo(() => {
@@ -160,23 +306,46 @@ export function LogsPane({
       .join("\n");
   }, [logs, search]);
 
-  if (loadingSources) return <LoadingState label="Finding available log sources…" />;
-  const sourceOptions = sourceType === "systemd" ? services : containers;
+  const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
+  const sourceOptions = sourceCache.items;
+  const controlsLocked = streamStatus !== "stopped";
+  if (sourceCache.loading && !sourceCache.items.length)
+    return <LoadingState label="Finding available log sources…" />;
+  if (sourceCache.error && !sourceCache.items.length) {
+    return (
+      <ErrorState
+        message={sourceCache.error}
+        action={<button onClick={() => loadSources(sourceType, true)}>Retry</button>}
+      />
+    );
+  }
+
+  const statusLabel =
+    streamStatus === "starting"
+      ? "Starting stream"
+      : streamStatus === "stopping"
+        ? "Stopping stream"
+        : streamStatus === "running"
+          ? paused
+            ? "Rendering paused"
+            : "Stream active"
+          : "Stream stopped";
 
   return (
     <section className="feature-page logs-page">
       <header className="page-heading compact-heading">
         <div>
-          <p className="eyebrow">Live output</p>
           <h2>Logs</h2>
-          <p>{streaming ? (paused ? "Rendering paused" : "Stream active") : "Stream stopped"}</p>
+          <p role="status" aria-live="polite">
+            {statusLabel}
+          </p>
         </div>
         <div className="toolbar-actions">
           <button
             className="toolbar-button"
             type="button"
             onClick={() => start()}
-            disabled={!sourceId || streaming}
+            disabled={!sourceId || streamStatus !== "stopped"}
           >
             <Play size={14} /> Start
           </button>
@@ -184,14 +353,19 @@ export function LogsPane({
             className="toolbar-button"
             type="button"
             onClick={togglePause}
-            disabled={!streaming}
+            disabled={streamStatus !== "running"}
           >
             {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? "Resume" : "Pause"}
           </button>
-          <button className="toolbar-button" type="button" onClick={stop} disabled={!streaming}>
+          <button
+            className="toolbar-button"
+            type="button"
+            onClick={() => stop()}
+            disabled={streamStatus === "stopped" || streamStatus === "stopping"}
+          >
             <Square size={13} /> Stop
           </button>
-          <button className="toolbar-button" type="button" onClick={() => setLogs("")}>
+          <button className="toolbar-button" type="button" onClick={clearBuffers}>
             <Eraser size={14} /> Clear view
           </button>
         </div>
@@ -201,7 +375,8 @@ export function LogsPane({
           <span>Source</span>
           <select
             value={sourceType}
-            onChange={(event) => changeType(event.target.value as SourceType)}
+            onChange={(event) => void changeType(event.target.value as LogSourceType)}
+            disabled={controlsLocked}
           >
             <option value="systemd">systemd</option>
             <option value="docker">Docker</option>
@@ -209,7 +384,14 @@ export function LogsPane({
         </label>
         <label className="source-select">
           <span>{sourceType === "systemd" ? "Service" : "Container"}</span>
-          <select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
+          <select
+            value={sourceId}
+            onChange={(event) => {
+              setSourceId(event.target.value);
+              onSourceChange({ type: sourceType, id: event.target.value });
+            }}
+            disabled={controlsLocked}
+          >
             {sourceOptions.map((source) => (
               <option value={source.id} key={source.id}>
                 {"name" in source ? source.name : source.id}
@@ -219,7 +401,11 @@ export function LogsPane({
         </label>
         <label>
           <span>Lines</span>
-          <select value={tail} onChange={(event) => setTail(Number(event.target.value))}>
+          <select
+            value={tail}
+            onChange={(event) => setTail(Number(event.target.value))}
+            disabled={controlsLocked}
+          >
             {[50, 100, 200, 500, 1000].map((count) => (
               <option key={count}>{count}</option>
             ))}
@@ -230,6 +416,7 @@ export function LogsPane({
             type="checkbox"
             checked={follow}
             onChange={(event) => setFollow(event.target.checked)}
+            disabled={controlsLocked}
           />{" "}
           Follow
         </label>
@@ -242,21 +429,20 @@ export function LogsPane({
           />
         </label>
       </div>
+      {sourceCache.error && (
+        <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
+      )}
       {error && (
-        <ErrorState
-          message={error}
-          action={
-            error.toLowerCase().includes("permission denied") ? (
-              <button onClick={() => setRequestSudo(true)}>Retry with sudo</button>
-            ) : undefined
-          }
-        />
+        <div className="inline-error" role="alert">
+          <span>{error}</span>
+          {error.toLowerCase().includes("permission denied") && (
+            <button type="button" onClick={() => setRequestSudo(true)}>
+              Retry with sudo
+            </button>
+          )}
+        </div>
       )}
-      {!error && (
-        <pre className="log-output" aria-live="polite">
-          {displayedLogs || "Choose a source and start the stream."}
-        </pre>
-      )}
+      <pre className="log-output">{displayedLogs || "Choose a source and start the stream."}</pre>
       {requestSudo && (
         <CredentialDialog
           connectionLabel={connection.displayName}
@@ -266,9 +452,4 @@ export function LogsPane({
       )}
     </section>
   );
-}
-
-function trimLogBuffer(value: string): string {
-  const lines = value.split("\n");
-  return lines.length > 10_000 ? lines.slice(-10_000).join("\n") : value;
 }

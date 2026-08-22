@@ -11,6 +11,10 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check:version": "node scripts/check-version.mjs",
+    "check:frontend": "npm run format:check && npm run lint && npm test && npm run build",
+    "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run check:version && npm run check:frontend && npm run check:rust",
     "tauri": "tauri"
   },
   "dependencies": {

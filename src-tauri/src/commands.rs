@@ -1,19 +1,19 @@
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
-    database::Database,
+    database::{Database, validate_connection_input},
     history,
     models::{
         AppSettings, DockerContainer, EnvironmentInfo, HistoryEntry, HistoryInput,
         HostCapabilities, SavedConnection, SavedConnectionInput, SessionStarted, StreamStarted,
         SystemdService,
     },
-    remote::{self, LogStreamOptions, StreamManager},
+    remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{background_command, detect_ssh_path, ssh_config_path},
 };
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_environment_info() -> EnvironmentInfo {
     let agent_available = background_command("ssh-add")
         .arg("-l")
@@ -54,19 +54,30 @@ pub fn delete_connection(database: State<'_, Database>, id: String) -> Result<()
     database.delete_connection(&id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_session(
     app: AppHandle,
     database: State<'_, Database>,
     sessions: State<'_, SessionManager>,
-    connection_id: String,
+    connection: SavedConnection,
     cols: u16,
     rows: u16,
     output: Channel<Response>,
 ) -> Result<SessionStarted, String> {
-    let connection = database.get_connection(&connection_id)?;
+    database.get_connection(&connection.id)?;
+    let mut connection = connection;
+    validate_connection_input(&SavedConnectionInput {
+        display_name: connection.display_name.clone(),
+        destination: connection.destination.clone(),
+        username: connection.username.clone(),
+        port: connection.port,
+        identity_file: connection.identity_file.clone(),
+        history_enabled: connection.history_enabled,
+    })?;
+    if !database.get_settings()?.global_history_enabled {
+        connection.history_enabled = false;
+    }
     let started = sessions.start(app, &connection, cols, rows, output)?;
-    database.mark_connected(&connection_id)?;
     Ok(started)
 }
 
@@ -90,6 +101,15 @@ pub fn resize_session(
 }
 
 #[tauri::command]
+pub fn acknowledge_session_output(
+    sessions: State<'_, SessionManager>,
+    session_id: String,
+    bytes: u32,
+) {
+    sessions.acknowledge_output(&session_id, bytes as usize);
+}
+
+#[tauri::command]
 pub fn close_session(
     sessions: State<'_, SessionManager>,
     session_id: String,
@@ -105,52 +125,61 @@ pub fn get_cached_capabilities(
     database.get_capabilities(&connection_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn refresh_capabilities(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<HostCapabilities, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     let capabilities = remote::discover_capabilities(&connection)?;
     database.save_capabilities(&capabilities)?;
     Ok(capabilities)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_services(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<Vec<SystemdService>, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     remote::list_services(&connection)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_service(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
     service_name: String,
 ) -> Result<SystemdService, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     remote::get_service(&connection, &service_name)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_containers(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
     sudo_password: Option<String>,
 ) -> Result<Vec<DockerContainer>, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     remote::list_containers(&connection, sudo_password)
 }
 
-#[tauri::command]
 #[allow(clippy::too_many_arguments)]
+#[tauri::command(async)]
 pub fn start_journal_stream(
     app: AppHandle,
     database: State<'_, Database>,
     streams: State<'_, StreamManager>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
     service: String,
     lines: u16,
@@ -158,6 +187,7 @@ pub fn start_journal_stream(
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     streams.start_journal(
         app,
@@ -172,12 +202,13 @@ pub fn start_journal_stream(
     )
 }
 
-#[tauri::command]
 #[allow(clippy::too_many_arguments)]
+#[tauri::command(async)]
 pub fn start_docker_log_stream(
     app: AppHandle,
     database: State<'_, Database>,
     streams: State<'_, StreamManager>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
     container: String,
     lines: u16,
@@ -185,6 +216,7 @@ pub fn start_docker_log_stream(
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     streams.start_docker_logs(
         app,
@@ -238,6 +270,16 @@ pub fn clear_history(database: State<'_, Database>, connection_id: String) -> Re
 }
 
 #[tauri::command]
+pub fn set_connection_history_enabled(
+    database: State<'_, Database>,
+    connection_id: String,
+    enabled: bool,
+) -> Result<SavedConnection, String> {
+    database.set_history_enabled(&connection_id, enabled)?;
+    database.get_connection(&connection_id)
+}
+
+#[tauri::command]
 pub fn get_settings(database: State<'_, Database>) -> Result<AppSettings, String> {
     database.get_settings()
 }
@@ -247,31 +289,66 @@ pub fn save_settings(database: State<'_, Database>, settings: AppSettings) -> Re
     database.save_settings(&settings)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_history_integration_status(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<bool, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     history::integration_status(&connection)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn install_history_integration(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
-) -> Result<(), String> {
+) -> Result<SavedConnection, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     history::install_integration(&connection)?;
-    database.set_history_enabled(&connection_id, true)
+    database.set_history_enabled(&connection_id, true)?;
+    database.get_connection(&connection_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn uninstall_history_integration(
     database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
-) -> Result<(), String> {
+) -> Result<SavedConnection, String> {
+    let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     history::uninstall_integration(&connection)?;
-    database.set_history_enabled(&connection_id, false)
+    database.set_history_enabled(&connection_id, false)?;
+    database.get_connection(&connection_id)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ssh_backed_commands_are_dispatched_asynchronously() {
+        let source = include_str!("commands.rs");
+        for command in [
+            "get_environment_info",
+            "start_session",
+            "refresh_capabilities",
+            "list_services",
+            "get_service",
+            "list_containers",
+            "start_journal_stream",
+            "start_docker_log_stream",
+            "get_history_integration_status",
+            "install_history_integration",
+            "uninstall_history_integration",
+        ] {
+            let declaration = format!("#[tauri::command(async)]\npub fn {command}");
+            assert!(
+                source.contains(&declaration),
+                "{command} must stay asynchronous"
+            );
+        }
+    }
 }

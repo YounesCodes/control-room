@@ -2,13 +2,17 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     process::{Child, Stdio},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use chrono::Utc;
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, ipc::Channel, ipc::Response};
 use uuid::Uuid;
@@ -28,6 +32,49 @@ use crate::{
 
 const OUTPUT_LIMIT: u64 = 5 * 1024 * 1024;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
+const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
+
+#[derive(Default)]
+pub struct RemoteOperationLimiter {
+    hosts: Mutex<HashMap<String, Arc<HostOperationLimit>>>,
+}
+
+#[derive(Default)]
+struct HostOperationLimit {
+    active: Mutex<usize>,
+    available: Condvar,
+}
+
+pub struct RemoteOperationPermit {
+    host: Arc<HostOperationLimit>,
+}
+
+impl RemoteOperationLimiter {
+    pub fn acquire(&self, connection_id: &str) -> RemoteOperationPermit {
+        let host = self
+            .hosts
+            .lock()
+            .entry(connection_id.to_owned())
+            .or_default()
+            .clone();
+        let mut active = host.active.lock();
+        while *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
+            host.available.wait(&mut active);
+        }
+        *active += 1;
+        drop(active);
+        RemoteOperationPermit { host }
+    }
+}
+
+impl Drop for RemoteOperationPermit {
+    fn drop(&mut self) {
+        let mut active = self.host.active.lock();
+        *active = active.saturating_sub(1);
+        self.host.available.notify_one();
+    }
+}
 
 #[derive(Debug)]
 pub struct CommandOutput {
@@ -50,33 +97,37 @@ pub struct RemoteCommandExecutor;
 impl RemoteCommandExecutor {
     pub fn execute(
         connection: &SavedConnection,
+        operation: &'static str,
         remote_command: &str,
     ) -> Result<CommandOutput, String> {
-        run_ssh(connection, remote_command, None)
+        run_ssh(connection, operation, remote_command, None)
     }
 
     pub fn execute_with_sudo(
         connection: &SavedConnection,
+        operation: &'static str,
         remote_command: &str,
         password: String,
     ) -> Result<CommandOutput, String> {
         let password = Zeroizing::new(password);
         let elevated = format!("sudo -S -p '[control-room-sudo]' -- {remote_command}");
-        run_ssh(connection, &elevated, Some(password.as_bytes()))
+        run_ssh(connection, operation, &elevated, Some(password.as_bytes()))
     }
 
     pub fn execute_with_input(
         connection: &SavedConnection,
+        operation: &'static str,
         remote_command: &str,
         input: &[u8],
     ) -> Result<CommandOutput, String> {
-        run_ssh(connection, remote_command, Some(input))
+        run_ssh(connection, operation, remote_command, Some(input))
     }
 }
 
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
     let command = r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"; printf 'default_shell=%s\n' "$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#;
-    let text = RemoteCommandExecutor::execute(connection, command)?.success_text()?;
+    let text = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)?
+        .success_text()?;
     let values = parse_key_values(&text);
     Ok(HostCapabilities {
         connection_id: connection.id.clone(),
@@ -105,7 +156,8 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
 
 pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdService>, String> {
     let command = "LC_ALL=C systemctl show --type=service --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState";
-    let text = RemoteCommandExecutor::execute(connection, command)?.success_text()?;
+    let text =
+        RemoteCommandExecutor::execute(connection, "list_services", command)?.success_text()?;
     Ok(parse_services(&text))
 }
 
@@ -117,7 +169,8 @@ pub fn get_service(
     let command = format!(
         "LC_ALL=C systemctl show '{name}' --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState"
     );
-    let text = RemoteCommandExecutor::execute(connection, &command)?.success_text()?;
+    let text =
+        RemoteCommandExecutor::execute(connection, "get_service", &command)?.success_text()?;
     parse_services(&text)
         .into_iter()
         .next()
@@ -130,9 +183,9 @@ pub fn list_containers(
 ) -> Result<Vec<DockerContainer>, String> {
     let command = "docker ps -a --no-trunc --format '{{json .}}'";
     let output = if let Some(password) = sudo_password {
-        RemoteCommandExecutor::execute_with_sudo(connection, command, password)?
+        RemoteCommandExecutor::execute_with_sudo(connection, "list_containers", command, password)?
     } else {
-        RemoteCommandExecutor::execute(connection, command)?
+        RemoteCommandExecutor::execute(connection, "list_containers", command)?
     };
     let text = output.success_text()?;
     text.lines()
@@ -143,9 +196,11 @@ pub fn list_containers(
 
 fn run_ssh(
     connection: &SavedConnection,
+    operation: &'static str,
     remote_command: &str,
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
+    let started_at = Instant::now();
     let ssh_path =
         detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
     let mut arguments = connection_arguments(connection, false);
@@ -157,6 +212,7 @@ fn run_ssh(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("SSH process could not start: {error}"))?;
+    let spawned_at = Instant::now();
 
     if let Some(bytes) = stdin {
         if let Some(mut child_stdin) = child.stdin.take() {
@@ -171,8 +227,10 @@ fn run_ssh(
 
     let stdout = child.stdout.take().expect("stdout was piped");
     let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout_reader = thread::spawn(move || read_limited(stdout));
-    let stderr_reader = thread::spawn(move || read_limited(stderr));
+    let (first_byte_tx, first_byte_rx) = mpsc::channel();
+    let stdout_first_byte = first_byte_tx.clone();
+    let stdout_reader = thread::spawn(move || read_limited(stdout, stdout_first_byte));
+    let stderr_reader = thread::spawn(move || read_limited(stderr, first_byte_tx));
     let status = match child
         .wait_timeout(COMMAND_TIMEOUT)
         .map_err(|error| error.to_string())?
@@ -181,6 +239,7 @@ fn run_ssh(
         None => {
             let _ = child.kill();
             let _ = child.wait();
+            log_operation_timing(operation, started_at, spawned_at, None, "timeout");
             return Err("Remote command timed out after 20 seconds".into());
         }
     };
@@ -190,6 +249,14 @@ fn run_ssh(
     let stderr = stderr_reader
         .join()
         .map_err(|_| "Remote error reader panicked".to_string())??;
+    let first_byte_at = first_byte_rx.try_iter().min();
+    log_operation_timing(
+        operation,
+        started_at,
+        spawned_at,
+        first_byte_at,
+        if status.success() { "ok" } else { "failed" },
+    );
     Ok(CommandOutput {
         stdout,
         stderr,
@@ -197,16 +264,45 @@ fn run_ssh(
     })
 }
 
-fn read_limited(reader: impl Read) -> Result<Vec<u8>, String> {
+fn read_limited(
+    mut reader: impl Read,
+    first_byte: mpsc::Sender<Instant>,
+) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
-    reader
-        .take(OUTPUT_LIMIT + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
-    if bytes.len() as u64 > OUTPUT_LIMIT {
-        return Err("Remote command output exceeded 5 MiB".into());
+    let mut buffer = [0_u8; 16 * 1024];
+    loop {
+        let count = reader
+            .read(&mut buffer)
+            .map_err(|error| error.to_string())?;
+        if count == 0 {
+            break;
+        }
+        if bytes.is_empty() {
+            let _ = first_byte.send(Instant::now());
+        }
+        if bytes.len() + count > OUTPUT_LIMIT as usize {
+            return Err("Remote command output exceeded 5 MiB".into());
+        }
+        bytes.extend_from_slice(&buffer[..count]);
     }
     Ok(bytes)
+}
+
+fn log_operation_timing(
+    operation: &str,
+    started_at: Instant,
+    spawned_at: Instant,
+    first_byte_at: Option<Instant>,
+    outcome: &str,
+) {
+    let first_byte_ms = first_byte_at
+        .map(|value| value.duration_since(started_at).as_millis().to_string())
+        .unwrap_or_else(|| "none".into());
+    eprintln!(
+        "[control-room] remote_operation={operation} spawn_ms={} first_byte_ms={first_byte_ms} total_ms={} outcome={outcome}",
+        spawned_at.duration_since(started_at).as_millis(),
+        started_at.elapsed().as_millis(),
+    );
 }
 
 fn classify_failure(code: i32, stderr: &[u8]) -> String {
@@ -222,6 +318,16 @@ fn classify_failure(code: i32, stderr: &[u8]) -> String {
         "Connection timed out"
     } else if lower.contains("host key verification failed") {
         "Host-key verification failed"
+    } else if lower.contains("command not found")
+        || lower.contains("docker: not found")
+        || lower.contains("journalctl: not found")
+        || lower.contains("systemctl: not found")
+        || (lower.contains("no such file or directory")
+            && (lower.contains("docker")
+                || lower.contains("journalctl")
+                || lower.contains("systemctl")))
+    {
+        "Feature is not installed on this host"
     } else {
         "Remote command failed"
     };
@@ -290,6 +396,8 @@ fn parse_container(line: &str) -> Result<DockerContainer, String> {
 
 struct ManagedStream {
     child: Mutex<Child>,
+    stop_requested: AtomicBool,
+    failure: Mutex<Option<String>>,
 }
 
 pub struct LogStreamOptions {
@@ -320,10 +428,7 @@ impl StreamManager {
         } = options;
         let service = validate_service_name(service)?;
         validate_tail(lines)?;
-        let command = format!(
-            "journalctl -u '{service}' -n {lines} --no-pager -o short-iso-precise{}",
-            if follow { " -f" } else { "" }
-        );
+        let command = journal_command(service, lines, follow);
         self.start(app, connection, command, sudo_password, output)
     }
 
@@ -342,10 +447,7 @@ impl StreamManager {
         } = options;
         let container = validate_container_id(container)?;
         validate_tail(lines)?;
-        let command = format!(
-            "docker logs --tail {lines}{} '{container}'",
-            if follow { " --follow" } else { "" }
-        );
+        let command = docker_log_command(container, lines, follow);
         self.start(app, connection, command, sudo_password, output)
     }
 
@@ -375,11 +477,14 @@ impl StreamManager {
             .map_err(|error| format!("Log stream could not start: {error}"))?;
         if let Some(password) = sudo_password {
             let password = Zeroizing::new(password);
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin
+            if let Some(mut stdin) = child.stdin.take()
+                && let Err(error) = stdin
                     .write_all(password.as_bytes())
                     .and_then(|_| stdin.write_all(b"\n"))
-                    .map_err(|error| error.to_string())?;
+            {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error.to_string());
             }
         } else {
             drop(child.stdin.take());
@@ -389,13 +494,14 @@ impl StreamManager {
         let stream_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedStream {
             child: Mutex::new(child),
+            stop_requested: AtomicBool::new(false),
+            failure: Mutex::new(None),
         });
         self.streams
             .lock()
             .insert(stream_id.clone(), managed.clone());
 
-        let output_id = stream_id.clone();
-        let output_app = app.clone();
+        let output_stream = managed.clone();
         thread::spawn(move || {
             let mut buffer = vec![0_u8; 16 * 1024];
             loop {
@@ -406,47 +512,49 @@ impl StreamManager {
                             .send(Response::new(buffer[..count].to_vec()))
                             .is_err()
                         {
+                            output_stream.stop_requested.store(true, Ordering::SeqCst);
+                            let _ = output_stream.child.lock().kill();
                             break;
                         }
                     }
                     Err(error) => {
-                        emit_stream_state(
-                            &output_app,
-                            &output_id,
-                            "error",
-                            Some(error.to_string()),
-                        );
+                        *output_stream.failure.lock() = Some(error.to_string());
+                        let _ = output_stream.child.lock().kill();
                         break;
                     }
                 }
             }
         });
 
+        let stderr_reader = thread::spawn(move || read_stream_diagnostics(stderr));
         let wait_id = stream_id.clone();
         let wait_app = app;
         let streams = self.streams.clone();
         thread::spawn(move || {
-            let mut error_bytes = Vec::new();
-            let _ = stderr.take(64 * 1024).read_to_end(&mut error_bytes);
             loop {
                 let status = managed.child.lock().try_wait();
                 match status {
                     Ok(Some(status)) => {
                         streams.lock().remove(&wait_id);
-                        if status.success() {
-                            emit_stream_state(&wait_app, &wait_id, "stopped", None);
-                        } else {
-                            emit_stream_state(
-                                &wait_app,
-                                &wait_id,
-                                "error",
-                                Some(classify_failure(status.code().unwrap_or(255), &error_bytes)),
-                            );
-                        }
+                        let error_bytes = stderr_reader.join().unwrap_or_else(|_| {
+                            b"Remote error reader panicked while collecting diagnostics".to_vec()
+                        });
+                        let failure = managed.failure.lock().take();
+                        let (state, reason) = classify_stream_exit(
+                            managed.stop_requested.load(Ordering::SeqCst),
+                            failure,
+                            status.success(),
+                            status.code().unwrap_or(255),
+                            &error_bytes,
+                        );
+                        emit_stream_state(&wait_app, &wait_id, state, reason);
                         break;
                     }
                     Ok(None) => thread::sleep(Duration::from_millis(100)),
                     Err(error) => {
+                        streams.lock().remove(&wait_id);
+                        managed.stop_requested.store(true, Ordering::SeqCst);
+                        let _ = managed.child.lock().kill();
                         emit_stream_state(&wait_app, &wait_id, "error", Some(error.to_string()));
                         break;
                     }
@@ -464,6 +572,7 @@ impl StreamManager {
             .get(stream_id)
             .cloned()
             .ok_or_else(|| "Log Stream is no longer active".to_string())?;
+        stream.stop_requested.store(true, Ordering::SeqCst);
         stream
             .child
             .lock()
@@ -473,9 +582,56 @@ impl StreamManager {
 
     pub fn stop_all(&self) {
         for stream in self.streams.lock().values() {
+            stream.stop_requested.store(true, Ordering::SeqCst);
             let _ = stream.child.lock().kill();
         }
     }
+}
+
+fn journal_command(service: &str, lines: u16, follow: bool) -> String {
+    format!(
+        "env LC_ALL=C journalctl -u '{service}' -n {lines} --no-pager -o short-iso-precise{}",
+        if follow { " -f" } else { "" }
+    )
+}
+
+fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
+    format!(
+        "env LC_ALL=C docker logs --tail {lines}{} '{container}' 2>&1",
+        if follow { " --follow" } else { "" }
+    )
+}
+
+fn read_stream_diagnostics(mut reader: impl Read) -> Vec<u8> {
+    let mut diagnostics = Vec::new();
+    let mut buffer = [0_u8; 16 * 1024];
+    loop {
+        let Ok(count) = reader.read(&mut buffer) else {
+            break;
+        };
+        if count == 0 {
+            break;
+        }
+        let remaining = STREAM_DIAGNOSTIC_LIMIT.saturating_sub(diagnostics.len());
+        diagnostics.extend_from_slice(&buffer[..count.min(remaining)]);
+    }
+    diagnostics
+}
+
+fn classify_stream_exit(
+    stop_requested: bool,
+    failure: Option<String>,
+    success: bool,
+    exit_code: i32,
+    diagnostics: &[u8],
+) -> (&'static str, Option<String>) {
+    if let Some(failure) = failure {
+        return ("error", Some(failure));
+    }
+    if stop_requested || success {
+        return ("stopped", None);
+    }
+    ("error", Some(classify_failure(exit_code, diagnostics)))
 }
 
 fn emit_stream_state(app: &AppHandle, stream_id: &str, state: &str, reason: Option<String>) {
@@ -499,6 +655,12 @@ fn validate_tail(lines: u16) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+    use std::sync::{
+        Barrier,
+        atomic::{AtomicUsize, Ordering},
+    };
+
     use super::*;
 
     fn live_connection() -> SavedConnection {
@@ -543,6 +705,89 @@ mod tests {
     fn classifies_useful_ssh_errors() {
         assert!(classify_failure(255, b"Permission denied (publickey)").starts_with("Permission"));
         assert!(classify_failure(255, b"Connection refused").starts_with("Connection refused"));
+        assert!(
+            classify_failure(127, b"sh: 1: docker: not found")
+                .starts_with("Feature is not installed")
+        );
+    }
+
+    #[test]
+    fn docker_logs_merge_container_stderr_into_the_stream() {
+        assert_eq!(
+            docker_log_command("container-1", 200, true),
+            "env LC_ALL=C docker logs --tail 200 --follow 'container-1' 2>&1"
+        );
+        assert_eq!(
+            journal_command("ssh.service", 50, false),
+            "env LC_ALL=C journalctl -u 'ssh.service' -n 50 --no-pager -o short-iso-precise"
+        );
+    }
+
+    #[test]
+    fn stream_diagnostics_are_capped_but_fully_drained() {
+        struct CountingReader {
+            inner: Cursor<Vec<u8>>,
+            read: Arc<AtomicUsize>,
+        }
+
+        impl Read for CountingReader {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let count = self.inner.read(buffer)?;
+                self.read.fetch_add(count, Ordering::SeqCst);
+                Ok(count)
+            }
+        }
+
+        let total = STREAM_DIAGNOSTIC_LIMIT * 3;
+        let read = Arc::new(AtomicUsize::new(0));
+        let diagnostics = read_stream_diagnostics(CountingReader {
+            inner: Cursor::new(vec![b'x'; total]),
+            read: read.clone(),
+        });
+        assert_eq!(diagnostics.len(), STREAM_DIAGNOSTIC_LIMIT);
+        assert_eq!(read.load(Ordering::SeqCst), total);
+    }
+
+    #[test]
+    fn requested_stream_stop_is_not_reported_as_a_failure() {
+        assert_eq!(
+            classify_stream_exit(true, None, false, 1, b"killed"),
+            ("stopped", None)
+        );
+        assert_eq!(
+            classify_stream_exit(false, Some("pipe failed".into()), false, 1, b""),
+            ("error", Some("pipe failed".into()))
+        );
+    }
+
+    #[test]
+    fn limits_parallel_structured_operations_per_connection() {
+        let limiter = Arc::new(RemoteOperationLimiter::default());
+        let start = Arc::new(Barrier::new(7));
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let mut workers = Vec::new();
+
+        for _ in 0..6 {
+            let limiter = limiter.clone();
+            let start = start.clone();
+            let active = active.clone();
+            let maximum = maximum.clone();
+            workers.push(thread::spawn(move || {
+                start.wait();
+                let _permit = limiter.acquire("connection-a");
+                let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                maximum.fetch_max(current, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(25));
+                active.fetch_sub(1, Ordering::SeqCst);
+            }));
+        }
+
+        start.wait();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), 2);
     }
 
     #[test]

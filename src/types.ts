@@ -101,20 +101,48 @@ export interface EnvironmentInfo {
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView = "overview" | "terminal" | "services" | "docker" | "logs" | "history";
 
+export interface CachedList<T> {
+  items: T[];
+  fetchedAt: number | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export type LogSourceType = "systemd" | "docker";
+
+export interface LogSourceSelection {
+  type: LogSourceType;
+  id: string;
+}
+
 export interface Workspace {
   id: string;
   connectionId: string;
+  connectionSnapshot: SavedConnection;
   sessionId: string | null;
   state: ConnectionState;
   reason: string | null;
   view: WorkspaceView;
   historyPaused: boolean;
   reconnectToken: number;
+  servicesCache: CachedList<SystemdService>;
+  containersCache: CachedList<DockerContainer>;
+  logSource: LogSourceSelection | null;
 }
 
 export interface SessionStateEvent {
   sessionId: string;
   state: ConnectionState;
+  category?:
+    | "authentication"
+    | "host-resolution"
+    | "connection-refused"
+    | "connection-timeout"
+    | "host-key"
+    | "connection-lost"
+    | "process"
+    | "remote-exit"
+    | "user-disconnect";
   reason: string | null;
 }
 

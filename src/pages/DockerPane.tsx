@@ -1,66 +1,87 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileClock, RefreshCw, Search } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
-import type { DockerContainer, SavedConnection } from "../types";
+import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
+import type { CachedList, DockerContainer, LogSourceSelection, SavedConnection } from "../types";
 
 export function DockerPane({
   connection,
+  cache,
+  onCacheChange,
   onViewLogs,
 }: {
   connection: SavedConnection;
-  onViewLogs: () => void;
+  cache: CachedList<DockerContainer>;
+  onCacheChange: (cache: CachedList<DockerContainer>) => void;
+  onViewLogs: (source: LogSourceSelection) => void;
 }) {
-  const [containers, setContainers] = useState<DockerContainer[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    reconcileSelection(cache.items, null),
+  );
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [requestSudo, setRequestSudo] = useState(false);
+  const cacheRef = useRef(cache);
+  const requestRef = useRef(0);
+  cacheRef.current = cache;
 
-  async function load(password: string | null = null) {
-    setLoading(true);
-    setError(null);
+  async function load(password: string | null = null, force = false) {
+    const current = cacheRef.current;
+    if (!force && !password && isCacheFresh(current)) return;
+    const request = ++requestRef.current;
+    onCacheChange({ ...current, loading: true, error: null });
     try {
-      const result = await api.listContainers(connection.id, password);
-      setContainers(result);
-      setSelectedId((current) => current ?? result[0]?.id ?? null);
+      const items = await api.listContainers(connection.id, password);
+      if (request !== requestRef.current) return;
+      onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
+      setSelectedId((selected) => reconcileSelection(items, selected));
       setRequestSudo(false);
     } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setLoading(false);
+      if (request !== requestRef.current) return;
+      onCacheChange({
+        ...cacheRef.current,
+        loading: false,
+        error: errorMessage(caught),
+      });
     }
   }
 
   useEffect(() => {
     void load();
+    return () => {
+      requestRef.current += 1;
+    };
   }, [connection.id]);
+
+  useEffect(() => {
+    setSelectedId((selected) => reconcileSelection(cache.items, selected));
+  }, [cache.items]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return containers;
-    return containers.filter(
+    if (!query) return cache.items;
+    return cache.items.filter(
       (container) =>
         container.name.toLowerCase().includes(query) ||
         container.image.toLowerCase().includes(query),
     );
-  }, [containers, search]);
-  const selected = containers.find((container) => container.id === selectedId) ?? null;
-  const permissionError = error?.toLowerCase().includes("permission denied");
+  }, [cache.items, search]);
+  const selected = cache.items.find((container) => container.id === selectedId) ?? null;
+  const permissionError = cache.error?.toLowerCase().includes("permission denied");
 
-  if (loading && !containers.length) return <LoadingState label="Reading Docker containers…" />;
-  if (error && !containers.length) {
+  if (cache.loading && !cache.items.length)
+    return <LoadingState label="Reading Docker containers…" />;
+  if (cache.error && !cache.items.length) {
     return (
       <>
         <ErrorState
-          message={error}
+          message={cache.error}
           action={
             permissionError ? (
               <button onClick={() => setRequestSudo(true)}>Retry with sudo</button>
             ) : (
-              <button onClick={() => load()}>Retry</button>
+              <button onClick={() => load(null, true)}>Retry</button>
             )
           }
         />
@@ -68,7 +89,7 @@ export function DockerPane({
           <CredentialDialog
             connectionLabel={connection.displayName}
             onClose={() => setRequestSudo(false)}
-            onSubmit={(password) => load(password)}
+            onSubmit={(password) => load(password, true)}
           />
         )}
       </>
@@ -80,22 +101,25 @@ export function DockerPane({
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
-            <p className="eyebrow">Docker</p>
             <h2>Containers</h2>
             <p>
-              {containers.filter((container) => container.state === "running").length} running ·{" "}
-              {containers.length} total
+              {cache.items.filter((container) => container.state === "running").length} running ·{" "}
+              {cache.items.length} total
             </p>
           </div>
           <button
             className="icon-button"
             type="button"
-            onClick={() => load()}
+            onClick={() => load(null, true)}
             aria-label="Refresh containers"
+            disabled={cache.loading}
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
           </button>
         </header>
+        {cache.error && (
+          <p className="inline-warning">Showing saved results. Refresh failed: {cache.error}</p>
+        )}
         <label className="search-field">
           <Search size={15} />
           <input
@@ -121,7 +145,11 @@ export function DockerPane({
             </button>
           ))}
           {!filtered.length && (
-            <EmptyState title="No containers found">Docker is available.</EmptyState>
+            <EmptyState
+              title={cache.items.length ? "No matching containers" : "No containers found"}
+            >
+              Docker returned an empty container list.
+            </EmptyState>
           )}
         </div>
       </div>
@@ -129,7 +157,6 @@ export function DockerPane({
         {selected ? (
           <>
             <header>
-              <p className="eyebrow">Container detail</p>
               <h2>{selected.name}</h2>
               <p>{selected.image}</p>
             </header>
@@ -155,7 +182,11 @@ export function DockerPane({
                 <dd>{selected.createdAt}</dd>
               </div>
             </dl>
-            <button className="secondary-button" type="button" onClick={onViewLogs}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => onViewLogs({ type: "docker", id: selected.id })}
+            >
               <FileClock size={15} /> View logs
             </button>
             <p className="read-only-note">
@@ -166,6 +197,13 @@ export function DockerPane({
           <EmptyState title="Select a container" />
         )}
       </aside>
+      {requestSudo && (
+        <CredentialDialog
+          connectionLabel={connection.displayName}
+          onClose={() => setRequestSudo(false)}
+          onSubmit={(password) => load(password, true)}
+        />
+      )}
     </section>
   );
 }

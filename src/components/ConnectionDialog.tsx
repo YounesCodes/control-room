@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileKey } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { validateConnectionDraft } from "../lib/connection-validation";
 import type { SavedConnection, SavedConnectionInput } from "../types";
 import { Modal } from "./Modal";
 
@@ -21,12 +22,16 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
   const [error, setError] = useState<string | null>(null);
 
   async function chooseIdentity() {
-    const selected = await open({
-      multiple: false,
-      directory: false,
-      title: "Choose an existing SSH private key",
-    });
-    if (typeof selected === "string") setIdentityFile(selected);
+    try {
+      const selected = await open({
+        multiple: false,
+        directory: false,
+        title: "Choose an existing SSH private key",
+      });
+      if (typeof selected === "string") setIdentityFile(selected);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -37,10 +42,16 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
       displayName,
       destination,
       username: username.trim() || null,
-      port: port ? Number(port) : null,
+      port: port.trim() ? Number(port) : null,
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
     };
+    const validationError = validateConnectionDraft(input);
+    if (validationError) {
+      setError(validationError);
+      setSaving(false);
+      return;
+    }
     try {
       const saved = connection
         ? await api.updateConnection(connection.id, input)
@@ -63,6 +74,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="Debian laptop"
+            maxLength={80}
             required
           />
         </label>
@@ -71,7 +83,8 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
           <input
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            placeholder="192.168.100.100 or an OpenSSH alias"
+            placeholder="192.0.2.10 or an OpenSSH alias"
+            maxLength={255}
             required
             spellCheck={false}
           />
@@ -84,6 +97,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               placeholder="Optional"
+              maxLength={64}
               spellCheck={false}
             />
           </label>
