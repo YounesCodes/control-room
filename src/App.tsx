@@ -5,16 +5,19 @@ import {
   Gauge,
   History,
   MoreHorizontal,
+  Pencil,
   Plus,
   Search,
   Server,
   Settings,
   SquareTerminal,
+  Trash2,
   X,
 } from "lucide-react";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { StatusDot } from "./components/StatusDot";
+import { WindowControls } from "./components/WindowControls";
 import { api, errorMessage } from "./lib/api";
 import { connectionTarget } from "./lib/format";
 import { emptyCachedList } from "./lib/workspace-cache";
@@ -73,6 +76,7 @@ export function App() {
   const [environment, setEnvironment] = useState(emptyEnvironment);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hostSearch, setHostSearch] = useState("");
+  const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -137,6 +141,32 @@ export function App() {
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   }, [activeSavedConnection, activeWorkspace]);
+
+  useEffect(() => {
+    if (!hostMenuConnectionId) return;
+
+    function dismissMenu(event: PointerEvent) {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(`[data-host-menu="${hostMenuConnectionId}"]`)
+      ) {
+        return;
+      }
+      setHostMenuConnectionId(null);
+    }
+
+    function dismissMenuWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setHostMenuConnectionId(null);
+    }
+
+    document.addEventListener("pointerdown", dismissMenu);
+    document.addEventListener("keydown", dismissMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("keydown", dismissMenuWithKeyboard);
+    };
+  }, [hostMenuConnectionId]);
 
   const filteredConnections = useMemo(() => {
     const query = hostSearch.trim().toLowerCase();
@@ -263,23 +293,50 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <label className="search-field sidebar-search">
-          <Search size={14} />
+      <header className="app-bar" data-tauri-drag-region>
+        <label className="search-field app-search">
+          <Search size={16} />
           <input
             ref={hostSearchRef}
             value={hostSearch}
             onChange={(event) => setHostSearch(event.target.value)}
-            placeholder="Find a connection"
+            placeholder="Search connections"
           />
-          <kbd>Ctrl K</kbd>
+          <kbd>Ctrl+K</kbd>
         </label>
-        <div className="sidebar-heading">
+        <div className="app-bar-actions">
+          <button
+            className={settingsOpen ? "app-bar-button active" : "app-bar-button"}
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open Settings"
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
+          <span className="window-controls-divider" aria-hidden="true" />
+          <WindowControls />
+        </div>
+      </header>
+
+      <aside className="sidebar">
+        <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span>Connections</span>
+          <span>{connections.length}</span>
         </div>
         <nav className="host-list" aria-label="Saved connections">
           {filteredConnections.map((connection) => (
-            <div className="host-row" key={connection.id}>
+            <div
+              className={[
+                "host-row",
+                activeWorkspace?.connectionId === connection.id && !settingsOpen ? "active" : "",
+                hostMenuConnectionId === connection.id ? "menu-open" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-host-menu={connection.id}
+              key={connection.id}
+            >
               <button
                 className="host-main"
                 type="button"
@@ -294,20 +351,42 @@ export function App() {
               <button
                 className="host-menu"
                 type="button"
-                onClick={() => setDialogConnection(connection)}
-                aria-label={`Edit ${connection.displayName}`}
+                onClick={() =>
+                  setHostMenuConnectionId((current) =>
+                    current === connection.id ? null : connection.id,
+                  )
+                }
+                aria-label={`Open actions for ${connection.displayName}`}
+                aria-haspopup="menu"
+                aria-expanded={hostMenuConnectionId === connection.id}
               >
                 <MoreHorizontal size={16} />
               </button>
-              <button
-                className="new-session-button"
-                type="button"
-                onClick={() => openConnection(connection, true)}
-                aria-label={`Open another terminal for ${connection.displayName}`}
-                title="Open another terminal"
-              >
-                <Plus size={15} />
-              </button>
+              {hostMenuConnectionId === connection.id && (
+                <div className="host-context-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setHostMenuConnectionId(null);
+                      setDialogConnection(connection);
+                    }}
+                  >
+                    <Pencil size={14} /> Edit connection
+                  </button>
+                  <button
+                    className="danger-text"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setHostMenuConnectionId(null);
+                      void deleteConnection(connection);
+                    }}
+                  >
+                    <Trash2 size={14} /> Delete connection
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           {!filteredConnections.length && (
@@ -316,16 +395,33 @@ export function App() {
             </p>
           )}
         </nav>
+        {activeWorkspace && activeConnection && (
+          <div className="workspace-navigation">
+            <div className="sidebar-heading workspace-navigation-heading">
+              <span>{activeConnection.displayName}</span>
+              <StatusDot state={activeWorkspace.state} />
+            </div>
+            <nav className="feature-nav" aria-label="Workspace features">
+              {navigation.map(({ id, label, icon: Icon }) => (
+                <button
+                  className={activeWorkspace.view === id && !settingsOpen ? "active" : ""}
+                  type="button"
+                  key={id}
+                  aria-current={activeWorkspace.view === id && !settingsOpen ? "page" : undefined}
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    updateWorkspace(activeWorkspace.id, { view: id });
+                  }}
+                >
+                  <Icon size={17} strokeWidth={1.8} /> {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
         <div className="sidebar-footer">
           <button
-            className={settingsOpen ? "sidebar-action active" : "sidebar-action"}
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings size={16} /> Settings
-          </button>
-          <button
-            className="sidebar-action"
+            className="sidebar-primary"
             type="button"
             onClick={() => setDialogConnection("new")}
           >
@@ -370,13 +466,23 @@ export function App() {
                 </button>
               </div>
             ))}
+            <button
+              className="session-new-terminal"
+              type="button"
+              onClick={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
+              disabled={!activeSavedConnection}
+              title="Open another terminal in this window (Ctrl+Shift+N)"
+            >
+              <Plus size={15} /> New terminal
+            </button>
           </nav>
         )}
 
-        {settingsOpen ? (
-          <SettingsPane settings={settings} environment={environment} onSaved={setSettings} />
-        ) : activeWorkspace && activeConnection && activeSavedConnection ? (
-          <>
+        {activeWorkspace && activeConnection && activeSavedConnection && (
+          <section
+            className={settingsOpen ? "workspace-view workspace-view-hidden" : "workspace-view"}
+            aria-hidden={settingsOpen || undefined}
+          >
             <header className="host-header">
               <div>
                 <span className="host-title-line">
@@ -386,44 +492,7 @@ export function App() {
                 </span>
                 <p className="technical">{connectionTarget(activeConnection)}</p>
               </div>
-              <div className="host-header-actions">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => openConnection(activeSavedConnection, true)}
-                  title="Open another terminal (Ctrl+Shift+N)"
-                >
-                  <Plus size={14} /> New terminal
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => setDialogConnection(activeSavedConnection)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => deleteConnection(activeSavedConnection)}
-                >
-                  Delete
-                </button>
-              </div>
             </header>
-            <nav className="feature-nav" aria-label="Workspace features">
-              {navigation.map(({ id, label, icon: Icon }) => (
-                <button
-                  className={activeWorkspace.view === id ? "active" : ""}
-                  type="button"
-                  key={id}
-                  aria-current={activeWorkspace.view === id ? "page" : undefined}
-                  onClick={() => updateWorkspace(activeWorkspace.id, { view: id })}
-                >
-                  <Icon size={15} /> {label}
-                </button>
-              ))}
-            </nav>
             <div className="workspace-content">
               <Suspense fallback={<LoadingState label="Opening terminal…" />}>
                 {workspaces.map((workspace) => (
@@ -433,7 +502,9 @@ export function App() {
                     workspace={workspace}
                     settings={settings}
                     visible={
-                      workspace.id === activeWorkspace.id && activeWorkspace.view === "terminal"
+                      !settingsOpen &&
+                      workspace.id === activeWorkspace.id &&
+                      activeWorkspace.view === "terminal"
                     }
                     onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
                     onState={(state, reason) => updateWorkspace(workspace.id, { state, reason })}
@@ -495,8 +566,12 @@ export function App() {
                 />
               )}
             </div>
-          </>
-        ) : bootError ? (
+          </section>
+        )}
+
+        {settingsOpen ? (
+          <SettingsPane settings={settings} environment={environment} onSaved={setSettings} />
+        ) : activeWorkspace && activeConnection && activeSavedConnection ? null : bootError ? (
           <ErrorState message={bootError} />
         ) : (
           <section className="empty-workspace">
@@ -514,6 +589,23 @@ export function App() {
           </section>
         )}
       </main>
+
+      <footer className="status-rail">
+        <span className="status-rail-item">
+          <StatusDot state={activeWorkspace?.state ?? "unknown"} />
+          {activeWorkspace ? duplicateLabel(activeWorkspace) : "No active Workspace"}
+        </span>
+        <span className="status-rail-item status-rail-target">
+          {activeConnection ? connectionTarget(activeConnection) : "Windows OpenSSH"}
+        </span>
+        <span className="status-rail-item">
+          {settingsOpen
+            ? "Settings"
+            : activeWorkspace
+              ? navigation.find(({ id }) => id === activeWorkspace.view)?.label
+              : "Ready"}
+        </span>
+      </footer>
 
       {dialogConnection && (
         <ConnectionDialog

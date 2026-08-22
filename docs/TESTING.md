@@ -9,7 +9,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` verifies version parity, formatting, ESLint, frontend tests, the production web build, Rust formatting, Clippy, and Rust tests. The test suite includes database migrations, stale cache recovery, literal History search, remote-output parsers, process-state classification, terminal backpressure, bounded 15 MiB log input, connection validation, OSC validation, and shared accessibility markup.
+`npm run check` verifies version parity, formatting, ESLint, frontend tests, the production web build, Rust formatting, Clippy, and Rust tests. The test suite includes database migrations, stale cache recovery, literal History search, remote-output parsers, process-state classification, terminal backpressure, bounded 15 MiB log input, connection validation, OSC validation, shared accessibility markup, and a palette regression check that limits UI color to semantic green, amber, and red.
 
 Build the per-user NSIS installer separately:
 
@@ -39,10 +39,11 @@ The fixture requires noninteractive public-key authentication for structured ope
 On a clean Windows 11 x64 user profile:
 
 1. Install the unsigned NSIS package without elevation.
-2. Add three Saved Connections. Use New terminal and Ctrl+Shift+N to open at least two connected Workspaces for one Saved Connection, then verify a failure in one does not close the other.
-3. Exercise interactive prompts, resize, Unicode, control keys, Vim or Nano, top or htop, tmux, copy, paste, disconnect, reconnect, clear, and preserved scrollback.
-4. Verify Overview, Services, journald, Docker, and Docker logs independently.
-5. Verify permission denial and explicit sudo retry without saved credentials.
-6. Install Enhanced History, capture exact commands and exit codes, restart the app, search literal `%` and `_`, pause, disable capture, remove the integration, and verify unrelated `.bashrc` content remains.
-7. Verify authentication, host-key, refused, timeout, unsupported, empty, and connection-loss states.
-8. Uninstall the app and confirm the expected per-user uninstall behavior.
+2. Verify the frameless window opens centered and fully on-screen at 1280×800, with a black-and-white palette and color limited to semantic status, warning, failure, destructive actions, and terminal ANSI output. Connections starts at the top of the full-height sidebar with no separate product wordmark. Drag the window from the application header or Connections heading, exercise minimize, maximize or restore, and close, then resize it down to the supported 960×640 minimum and back up.
+3. Add three Saved Connections. Use New terminal and Ctrl+Shift+N to open at least two connected Workspaces for one Saved Connection, then verify a failure in one does not close the other.
+4. Exercise interactive prompts, resize, Unicode, control keys, Vim or Nano, top or htop, tmux, copy, paste, disconnect, reconnect, clear, and preserved scrollback. Open Settings and return to Terminal, then verify the terminal output and session remain intact.
+5. Verify Overview, Services, journald, Docker, and Docker logs independently.
+6. Verify permission denial and explicit sudo retry without saved credentials.
+7. Install Enhanced History, capture exact commands and exit codes, restart the app, search literal `%` and `_`, pause, disable capture, remove the integration, and verify unrelated `.bashrc` content remains.
+8. Verify authentication, host-key, refused, timeout, unsupported, empty, and connection-loss states.
+9. Uninstall the app and confirm the expected per-user uninstall behavior.

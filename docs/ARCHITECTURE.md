@@ -26,6 +26,8 @@ The backend selects a fixed command specification and validates identifiers befo
 
 At most two structured SSH operations run concurrently per Saved Connection. Workspaces cache service and container lists for 30 seconds and pass exact log selections between panes, avoiding repeated SSH handshakes during normal navigation.
 
+The frontend gives capability, service, and container discovery 25 seconds to return across IPC. If an IPC reply is lost or stalls beyond the backend's 20-second command deadline, the active pane leaves its loading state and presents a retryable error instead of waiting indefinitely. Log-source discovery uses the same bounded service and container requests.
+
 ## Persistence
 
 Rust stores Saved Connections, cached capabilities, History settings, application settings, and Enhanced History in SQLite under the Tauri application-data directory. Terminal output, fetched logs, SSH passwords, and sudo passwords are never persisted.

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Modal } from "./Modal";
 import { ErrorState, LoadingState } from "./PanelState";
+import { WindowControls } from "./WindowControls";
 
 describe("shared accessibility markup", () => {
   it("gives dialogs an accessible name and semantic close button", () => {
@@ -25,5 +26,18 @@ describe("shared accessibility markup", () => {
     );
     expect(errorMarkup).toContain("Connection refused");
     expect(errorMarkup).toContain("Retry");
+  });
+
+  it("labels each custom window control", () => {
+    const windowActions = {
+      close: async () => undefined,
+      minimize: async () => undefined,
+      toggleMaximize: async () => undefined,
+    };
+    const markup = renderToStaticMarkup(<WindowControls windowActions={windowActions} />);
+
+    expect(markup).toContain('aria-label="Minimize window"');
+    expect(markup).toContain('aria-label="Maximize or restore window"');
+    expect(markup).toContain('aria-label="Close window"');
   });
 });

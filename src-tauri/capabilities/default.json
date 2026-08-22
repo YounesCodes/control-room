@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Permissions for the main Control Room window",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "dialog:allow-open"
+  ]
 }

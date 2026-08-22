@@ -7,7 +7,9 @@ The first release targets Windows 11 x64 and Debian or Ubuntu family hosts with 
 ## Features
 
 - Multiple simultaneous SSH Workspaces, with a visible New terminal action and Ctrl+Shift+N for additional sessions on the same Saved Connection
-- Interactive ConPTY and xterm.js terminal with resize, Unicode, copy and paste, scrollback, and reconnect
+- Interactive ConPTY and xterm.js terminal with resize, Unicode, copy and paste, scrollback that survives Settings navigation, and reconnect
+- Black-and-white Docker Desktop-inspired navigation with semantic green, amber, and red states, global connection search, a full-height Saved Connection rail, per-connection overflow actions, in-window terminal tabs, and a compact local status rail
+- A centered 1180×700 frameless window with integrated controls that remains resizable down to the supported 960×640 minimum
 - Cached host, systemd, journald, and Docker inspection with explicit refresh
 - Independent, bounded journald and Docker log streams
 - Explicit one-shot sudo retry for read-only structured requests

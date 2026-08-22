@@ -11,6 +11,28 @@ import type {
   SystemdService,
 } from "../types";
 
+const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
+const REMOTE_INSPECTION_TIMEOUT_MESSAGE = "Remote inspection did not respond after 25 seconds";
+
+function invokeRemoteInspection<T>(command: string, args: Record<string, unknown>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(REMOTE_INSPECTION_TIMEOUT_MESSAGE)),
+      REMOTE_INSPECTION_TIMEOUT_MS,
+    );
+    void invoke<T>(command, args).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export const api = {
   environment: () => invoke<EnvironmentInfo>("get_environment_info"),
   listConnections: () => invoke<SavedConnection[]>("list_connections"),
@@ -41,13 +63,13 @@ export const api = {
   cachedCapabilities: (connectionId: string) =>
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>
-    invoke<HostCapabilities>("refresh_capabilities", { connectionId }),
+    invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
   listServices: (connectionId: string) =>
-    invoke<SystemdService[]>("list_services", { connectionId }),
+    invokeRemoteInspection<SystemdService[]>("list_services", { connectionId }),
   getService: (connectionId: string, serviceName: string) =>
-    invoke<SystemdService>("get_service", { connectionId, serviceName }),
+    invokeRemoteInspection<SystemdService>("get_service", { connectionId, serviceName }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
-    invoke<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
+    invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   startJournalStream: (
     connectionId: string,
     service: string,
