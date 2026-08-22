@@ -16,8 +16,8 @@ Control Room is a local Windows desktop application for managing Linux systems o
 ### Saved Connections and Workspaces
 
 - Add, edit, delete, search, connect, disconnect, and reconnect Saved Connections
-- Store a display name and SSH destination with optional username, port, and existing identity-file overrides
-- Preserve normal OpenSSH resolution when an override is absent
+- Store a display name, SSH destination, and required username, with optional port and existing identity-file overrides
+- Preserve normal OpenSSH resolution for the port and identity when an override is absent
 - Open multiple simultaneous Workspaces, including several for one Saved Connection
 - Open another Terminal Session for the active Saved Connection from the Workspace tab rail or with Ctrl+Shift+N
 - Let OpenSSH and the Remote Host accept or reject each independent session instead of guessing a connection limit

@@ -27,8 +27,9 @@ export function validateConnectionDraft(input: SavedConnectionInput): string | n
     return "SSH destination must be one host, address, or OpenSSH alias";
   }
 
-  const username = input.username?.trim();
-  if (username && ([...username].length > 64 || !USERNAME.test(username))) {
+  const username = input.username.trim();
+  if (!username) return "Username is required";
+  if ([...username].length > 64 || !USERNAME.test(username)) {
     return "Username contains unsupported characters";
   }
   if (

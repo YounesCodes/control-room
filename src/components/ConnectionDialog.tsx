@@ -41,7 +41,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
     const input: SavedConnectionInput = {
       displayName,
       destination,
-      username: username.trim() || null,
+      username: username.trim(),
       port: port.trim() ? Number(port) : null,
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
@@ -92,12 +92,13 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
         </label>
         <div className="form-row">
           <label>
-            <span>Username override</span>
+            <span>Username</span>
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="Optional"
+              placeholder="root"
               maxLength={64}
+              required
               spellCheck={false}
             />
           </label>

@@ -461,16 +461,14 @@ pub(crate) fn validate_connection_input(input: &SavedConnectionInput) -> Result<
     {
         return Err("SSH destination must be one host, address, or OpenSSH alias".into());
     }
-    if input
-        .username
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .is_some_and(|username| {
-            username.chars().count() > MAX_USERNAME_CHARS
-                || !username
-                    .chars()
-                    .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
-        })
+    let username = input.username.as_deref().map(str::trim).unwrap_or_default();
+    if username.is_empty() {
+        return Err("Username is required".into());
+    }
+    if username.chars().count() > MAX_USERNAME_CHARS
+        || !username
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
     {
         return Err("Username contains unsupported characters".into());
     }
@@ -529,7 +527,7 @@ mod tests {
         SavedConnectionInput {
             display_name: name.into(),
             destination: "debian-laptop".into(),
-            username: None,
+            username: Some("test-user".into()),
             port: None,
             identity_file: None,
             history_enabled: true,
@@ -572,13 +570,13 @@ mod tests {
     }
 
     #[test]
-    fn open_ssh_aliases_do_not_receive_fake_defaults() {
+    fn open_ssh_aliases_keep_explicit_username_and_default_port() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
         assert_eq!(saved.destination, "debian-laptop");
         assert_eq!(saved.port, None);
-        assert_eq!(saved.username, None);
+        assert_eq!(saved.username.as_deref(), Some("test-user"));
     }
 
     #[test]
@@ -683,6 +681,12 @@ mod tests {
     #[test]
     fn invalid_connection_and_history_inputs_are_rejected() {
         let mut connection_input = input("Laptop");
+        connection_input.username = None;
+        assert_eq!(
+            validate_connection_input(&connection_input).unwrap_err(),
+            "Username is required"
+        );
+        connection_input.username = Some("test-user".into());
         connection_input.port = Some(0);
         assert_eq!(
             validate_connection_input(&connection_input).unwrap_err(),

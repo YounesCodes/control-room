@@ -31,6 +31,7 @@ describe("validateConnectionDraft", () => {
   });
 
   it("rejects invalid usernames and ports", () => {
+    expect(validateConnectionDraft(input({ username: "" }))).toBe("Username is required");
     expect(validateConnectionDraft(input({ username: "user name" }))).toContain("Username");
     expect(validateConnectionDraft(input({ port: 0 }))).toContain("Port");
   });

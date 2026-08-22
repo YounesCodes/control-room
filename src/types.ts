@@ -14,7 +14,7 @@ export interface SavedConnection {
 export interface SavedConnectionInput {
   displayName: string;
   destination: string;
-  username: string | null;
+  username: string;
   port: number | null;
   identityFile: string | null;
   historyEnabled: boolean;

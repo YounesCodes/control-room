@@ -5,7 +5,7 @@ Control Room is a local Windows desktop tool for opening and inspecting Linux sy
 ## Language
 
 **Saved Connection**:
-A reusable set of details that tells OpenSSH how to reach a remote destination. It contains an SSH destination and may contain explicit user, port, or identity overrides.
+A reusable set of details that tells OpenSSH how to reach a remote destination. It contains an SSH destination and username, and may contain explicit port or identity overrides.
 _Avoid_: Host record, server entry, connection profile
 
 **Remote Host**:
