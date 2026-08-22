@@ -9,7 +9,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` verifies version parity, formatting, ESLint, frontend tests, the production web build, Rust formatting, Clippy, and Rust tests. The test suite includes database migrations, stale cache recovery, literal History search, remote-output parsers, process-state classification, terminal backpressure, bounded 15 MiB log input, connection validation, OSC validation, shared accessibility markup, and a palette regression check that limits UI color to semantic green, amber, and red.
+`npm run check` verifies version parity, formatting, ESLint, frontend tests, the production web build, Rust formatting, Clippy, and Rust tests. The test suite includes database migrations, stale cache and invalid-settings recovery, literal History search, remote-output parsers, child-process cleanup, process-state classification, terminal backpressure, bounded 15 MiB log input, Workspace pane lifecycle isolation, connection validation, OSC validation, shared accessibility markup, and a palette regression check that limits UI color to semantic green, amber, and red.
 
 Build the per-user NSIS installer separately:
 

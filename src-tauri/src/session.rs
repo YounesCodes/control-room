@@ -150,14 +150,22 @@ impl SessionManager {
             .map_err(|error| format!("SSH process could not start: {error}"))?;
         drop(pair.slave);
 
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|error| format!("PTY output could not be opened: {error}"))?;
-        let writer = pair
-            .master
-            .take_writer()
-            .map_err(|error| format!("PTY input could not be opened: {error}"))?;
+        let mut reader = match pair.master.try_clone_reader() {
+            Ok(reader) => reader,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("PTY output could not be opened: {error}"));
+            }
+        };
+        let writer = match pair.master.take_writer() {
+            Ok(writer) => writer,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("PTY input could not be opened: {error}"));
+            }
+        };
         let killer = child.clone_killer();
         let session_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedSession {

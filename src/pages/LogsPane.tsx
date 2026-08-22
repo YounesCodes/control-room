@@ -19,6 +19,7 @@ import type {
 } from "../types";
 
 type StreamStatus = "stopped" | "starting" | "running" | "stopping";
+const MAX_EARLY_STREAM_EVENTS = 16;
 
 export function LogsPane({
   connection,
@@ -104,7 +105,15 @@ export function LogsPane({
 
   function applyStreamState(payload: StreamStateEvent) {
     if (payload.streamId !== streamIdRef.current) {
-      if (startingRef.current) earlyStateRef.current.set(payload.streamId, payload);
+      if (startingRef.current) {
+        const events = earlyStateRef.current;
+        events.set(payload.streamId, payload);
+        while (events.size > MAX_EARLY_STREAM_EVENTS) {
+          const oldest = events.keys().next().value;
+          if (oldest === undefined) break;
+          events.delete(oldest);
+        }
+      }
       return;
     }
     if (payload.state === "error") setError(payload.reason ?? "Log stream failed");
@@ -163,11 +172,21 @@ export function LogsPane({
   }, [sourceType, sourceId, servicesCache.items, containersCache.items]);
 
   useEffect(() => {
-    const unlistenPromise = listen<StreamStateEvent>("stream-state-changed", ({ payload }) => {
+    let listenerDisposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<StreamStateEvent>("stream-state-changed", ({ payload }) => {
       applyStreamState(payload);
-    });
+    })
+      .then((dispose) => {
+        if (listenerDisposed) dispose();
+        else unlisten = dispose;
+      })
+      .catch((caught) => {
+        if (!listenerDisposed) setError(`Log event listener failed: ${errorMessage(caught)}`);
+      });
     return () => {
-      void unlistenPromise.then((unlisten) => unlisten());
+      listenerDisposed = true;
+      unlisten?.();
     };
   }, []);
 
@@ -215,6 +234,7 @@ export function LogsPane({
     pausedBufferRef.current.clear();
     setStreamStatus("starting");
     startingRef.current = true;
+    earlyStateRef.current.clear();
     decoderRef.current = new TextDecoder();
     const sourceName = sourceOptions.find((source) => source.id === sourceId);
     const label = sourceName && "name" in sourceName ? sourceName.name : sourceId;

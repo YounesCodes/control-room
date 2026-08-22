@@ -117,21 +117,6 @@ code,
   background-clip: padding-box;
 }
 
-.boot-screen {
-  display: grid;
-  min-height: 100%;
-  place-content: center;
-  background: var(--app-bg);
-  color: var(--text-muted);
-}
-
-.boot-screen h1 {
-  margin: 8px 0;
-  color: var(--text);
-  font-size: 26px;
-  font-weight: 600;
-}
-
 .app-shell {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -484,7 +469,6 @@ code,
   padding: 9px 15px 12px;
 }
 
-.sidebar-action,
 .sidebar-primary {
   display: flex;
   width: 100%;
@@ -497,18 +481,6 @@ code,
   font-size: 12px;
   font-weight: 600;
   text-align: left;
-}
-
-.sidebar-action {
-  margin-bottom: 7px;
-  background: transparent;
-  color: #c4c4c0;
-}
-
-.sidebar-action:hover,
-.sidebar-action.active {
-  background: #1b1b1b;
-  color: #fff;
 }
 
 .sidebar-primary {
@@ -685,7 +657,6 @@ code,
   text-transform: capitalize;
 }
 
-.host-header-actions,
 .toolbar-actions,
 .modal-actions,
 .history-tools,
@@ -1020,13 +991,6 @@ dd {
   padding: 12px 0;
 }
 
-.read-only-note {
-  max-width: 360px;
-  color: var(--text-faint);
-  font-size: 10px;
-  line-height: 1.55;
-}
-
 .panel-state {
   display: flex;
   height: 100%;
@@ -1321,10 +1285,6 @@ dd {
   border-radius: 5px;
   background: var(--panel-raised);
   box-shadow: 0 20px 60px rgb(0 0 0 / 52%);
-}
-
-.modal-wide {
-  width: min(770px, calc(100vw - 40px));
 }
 
 .modal-header {

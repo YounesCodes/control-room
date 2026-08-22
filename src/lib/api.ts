@@ -66,8 +66,6 @@ export const api = {
     invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdService[]>("list_services", { connectionId }),
-  getService: (connectionId: string, serviceName: string) =>
-    invokeRemoteInspection<SystemdService>("get_service", { connectionId, serviceName }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   startJournalStream: (

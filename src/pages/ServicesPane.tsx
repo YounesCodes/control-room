@@ -157,7 +157,6 @@ export function ServicesPane({
             >
               <FileClock size={15} /> View logs
             </button>
-            <p className="read-only-note">Control Room inspects services but never changes them.</p>
           </>
         ) : (
           <EmptyState title="Select a service" />

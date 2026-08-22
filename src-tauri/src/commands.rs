@@ -10,17 +10,15 @@ use crate::{
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
-    ssh::{background_command, detect_ssh_path, ssh_config_path},
+    ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
 };
 
 #[tauri::command(async)]
 pub fn get_environment_info() -> EnvironmentInfo {
-    let agent_available = background_command("ssh-add")
-        .arg("-l")
-        .output()
-        .is_ok_and(|output| output.status.success());
+    let ssh_path = detect_ssh_path();
+    let agent_available = ssh_agent_available(ssh_path.as_deref());
     EnvironmentInfo {
-        ssh_path: detect_ssh_path().map(|path| path.to_string_lossy().to_string()),
+        ssh_path: ssh_path.map(|path| path.to_string_lossy().to_string()),
         ssh_config_path: ssh_config_path(),
         ssh_agent_available: agent_available,
         platform_supported: cfg!(all(windows, target_arch = "x86_64")),
@@ -147,18 +145,6 @@ pub fn list_services(
     let _permit = limiter.acquire(&connection_id);
     let connection = database.get_connection(&connection_id)?;
     remote::list_services(&connection)
-}
-
-#[tauri::command(async)]
-pub fn get_service(
-    database: State<'_, Database>,
-    limiter: State<'_, RemoteOperationLimiter>,
-    connection_id: String,
-    service_name: String,
-) -> Result<SystemdService, String> {
-    let _permit = limiter.acquire(&connection_id);
-    let connection = database.get_connection(&connection_id)?;
-    remote::get_service(&connection, &service_name)
 }
 
 #[tauri::command(async)]
@@ -336,7 +322,6 @@ mod tests {
             "start_session",
             "refresh_capabilities",
             "list_services",
-            "get_service",
             "list_containers",
             "start_journal_stream",
             "start_docker_log_stream",

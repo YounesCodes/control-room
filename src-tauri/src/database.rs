@@ -312,28 +312,26 @@ impl Database {
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        Ok(payload
-            .and_then(|value| serde_json::from_str(&value).ok())
-            .unwrap_or_default())
+        let Some(payload) = payload else {
+            return Ok(AppSettings::default());
+        };
+        if let Ok(settings) = serde_json::from_str::<AppSettings>(&payload)
+            && validate_settings(&settings).is_ok()
+        {
+            return Ok(settings);
+        }
+        self.connection
+            .lock()
+            .execute(
+                "DELETE FROM application_settings WHERE key = 'settings'",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(AppSettings::default())
     }
 
     pub fn save_settings(&self, settings: &AppSettings) -> Result<(), String> {
-        if !(9..=32).contains(&settings.terminal_font_size) {
-            return Err("Terminal font size must be between 9 and 32".into());
-        }
-        if !(100..=100_000).contains(&settings.terminal_scrollback) {
-            return Err("Terminal scrollback must be between 100 and 100000".into());
-        }
-        if ![50, 100, 200, 500, 1000].contains(&settings.default_log_tail) {
-            return Err("Unsupported default log tail count".into());
-        }
-        let font_family = settings.terminal_font_family.trim();
-        if font_family.is_empty()
-            || font_family.chars().count() > 500
-            || font_family.chars().any(char::is_control)
-        {
-            return Err("Terminal font family is invalid".into());
-        }
+        validate_settings(settings)?;
         let payload = serde_json::to_string(settings).map_err(|error| error.to_string())?;
         self.connection
             .lock()
@@ -344,6 +342,26 @@ impl Database {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+}
+
+fn validate_settings(settings: &AppSettings) -> Result<(), String> {
+    if !(9..=32).contains(&settings.terminal_font_size) {
+        return Err("Terminal font size must be between 9 and 32".into());
+    }
+    if !(100..=100_000).contains(&settings.terminal_scrollback) {
+        return Err("Terminal scrollback must be between 100 and 100000".into());
+    }
+    if ![50, 100, 200, 500, 1000].contains(&settings.default_log_tail) {
+        return Err("Unsupported default log tail count".into());
+    }
+    let font_family = settings.terminal_font_family.trim();
+    if font_family.is_empty()
+        || font_family.chars().count() > 500
+        || font_family.chars().any(char::is_control)
+    {
+        return Err("Terminal font family is invalid".into());
+    }
+    Ok(())
 }
 
 fn migrate(connection: &mut Connection) -> Result<(), String> {
@@ -647,6 +665,36 @@ mod tests {
             .unwrap();
         assert!(database.get_capabilities(&saved.id).unwrap().is_none());
         assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn invalid_settings_are_discarded_before_the_frontend_uses_them() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES ('settings', ?1)",
+                [r#"{"terminalFontSize":0,"terminalScrollback":4294967295}"#],
+            )
+            .unwrap();
+
+        let settings = database.get_settings().unwrap();
+        assert_eq!(
+            settings.terminal_font_size,
+            AppSettings::default().terminal_font_size
+        );
+        let stored: i64 = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT COUNT(*) FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored, 0);
     }
 
     #[test]

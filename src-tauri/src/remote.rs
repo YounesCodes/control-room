@@ -37,7 +37,7 @@ const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
 
 #[derive(Default)]
 pub struct RemoteOperationLimiter {
-    hosts: Mutex<HashMap<String, Arc<HostOperationLimit>>>,
+    hosts: Arc<Mutex<HashMap<String, Arc<HostOperationLimit>>>>,
 }
 
 #[derive(Default)]
@@ -47,15 +47,18 @@ struct HostOperationLimit {
 }
 
 pub struct RemoteOperationPermit {
+    connection_id: String,
     host: Arc<HostOperationLimit>,
+    hosts: Arc<Mutex<HashMap<String, Arc<HostOperationLimit>>>>,
 }
 
 impl RemoteOperationLimiter {
     pub fn acquire(&self, connection_id: &str) -> RemoteOperationPermit {
+        let connection_id = connection_id.to_owned();
         let host = self
             .hosts
             .lock()
-            .entry(connection_id.to_owned())
+            .entry(connection_id.clone())
             .or_default()
             .clone();
         let mut active = host.active.lock();
@@ -64,7 +67,16 @@ impl RemoteOperationLimiter {
         }
         *active += 1;
         drop(active);
-        RemoteOperationPermit { host }
+        RemoteOperationPermit {
+            connection_id,
+            host,
+            hosts: self.hosts.clone(),
+        }
+    }
+
+    #[cfg(test)]
+    fn tracked_connections(&self) -> usize {
+        self.hosts.lock().len()
     }
 }
 
@@ -72,7 +84,19 @@ impl Drop for RemoteOperationPermit {
     fn drop(&mut self) {
         let mut active = self.host.active.lock();
         *active = active.saturating_sub(1);
+        let idle = *active == 0;
         self.host.available.notify_one();
+        drop(active);
+
+        if idle {
+            let mut hosts = self.hosts.lock();
+            let remove = hosts
+                .get(&self.connection_id)
+                .is_some_and(|host| Arc::ptr_eq(host, &self.host) && *host.active.lock() == 0);
+            if remove {
+                hosts.remove(&self.connection_id);
+            }
+        }
     }
 }
 
@@ -161,22 +185,6 @@ pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdService>
     Ok(parse_services(&text))
 }
 
-pub fn get_service(
-    connection: &SavedConnection,
-    service_name: &str,
-) -> Result<SystemdService, String> {
-    let name = validate_service_name(service_name)?;
-    let command = format!(
-        "LC_ALL=C systemctl show '{name}' --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState"
-    );
-    let text =
-        RemoteCommandExecutor::execute(connection, "get_service", &command)?.success_text()?;
-    parse_services(&text)
-        .into_iter()
-        .next()
-        .ok_or_else(|| "Service was not found".into())
-}
-
 pub fn list_containers(
     connection: &SavedConnection,
     sudo_password: Option<String>,
@@ -215,32 +223,47 @@ fn run_ssh(
     let spawned_at = Instant::now();
 
     if let Some(bytes) = stdin {
-        if let Some(mut child_stdin) = child.stdin.take() {
-            child_stdin
-                .write_all(bytes)
-                .and_then(|_| child_stdin.write_all(b"\n"))
-                .map_err(|error| format!("Could not send sudo credential: {error}"))?;
+        let Some(mut child_stdin) = child.stdin.take() else {
+            terminate_child(&mut child);
+            return Err("SSH process stdin was unavailable".into());
+        };
+        if let Err(error) = child_stdin
+            .write_all(bytes)
+            .and_then(|_| child_stdin.write_all(b"\n"))
+        {
+            terminate_child(&mut child);
+            return Err(format!("Could not send process input: {error}"));
         }
     } else {
         drop(child.stdin.take());
     }
 
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stderr = child.stderr.take().expect("stderr was piped");
+    let stdout = child.stdout.take().ok_or_else(|| {
+        terminate_child(&mut child);
+        "SSH process stdout was unavailable".to_string()
+    })?;
+    let stderr = child.stderr.take().ok_or_else(|| {
+        terminate_child(&mut child);
+        "SSH process stderr was unavailable".to_string()
+    })?;
     let (first_byte_tx, first_byte_rx) = mpsc::channel();
     let stdout_first_byte = first_byte_tx.clone();
     let stdout_reader = thread::spawn(move || read_limited(stdout, stdout_first_byte));
     let stderr_reader = thread::spawn(move || read_limited(stderr, first_byte_tx));
-    let status = match child
-        .wait_timeout(COMMAND_TIMEOUT)
-        .map_err(|error| error.to_string())?
-    {
-        Some(status) => status,
-        None => {
-            let _ = child.kill();
-            let _ = child.wait();
+    let status = match child.wait_timeout(COMMAND_TIMEOUT) {
+        Ok(Some(status)) => status,
+        Ok(None) => {
+            terminate_child(&mut child);
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
             log_operation_timing(operation, started_at, spawned_at, None, "timeout");
             return Err("Remote command timed out after 20 seconds".into());
+        }
+        Err(error) => {
+            terminate_child(&mut child);
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
+            return Err(format!("Could not wait for SSH process: {error}"));
         }
     };
     let stdout = stdout_reader
@@ -262,6 +285,11 @@ fn run_ssh(
         stderr,
         exit_code: status.code().unwrap_or(255),
     })
+}
+
+fn terminate_child(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 fn read_limited(
@@ -761,6 +789,17 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
+    fn terminated_remote_children_are_reaped() {
+        let mut child = background_command("powershell.exe")
+            .args(["-NoProfile", "-Command", "Start-Sleep -Seconds 30"])
+            .spawn()
+            .unwrap();
+        terminate_child(&mut child);
+        assert!(child.try_wait().unwrap().is_some());
+    }
+
+    #[test]
     fn limits_parallel_structured_operations_per_connection() {
         let limiter = Arc::new(RemoteOperationLimiter::default());
         let start = Arc::new(Barrier::new(7));
@@ -788,6 +827,7 @@ mod tests {
             worker.join().unwrap();
         }
         assert_eq!(maximum.load(Ordering::SeqCst), 2);
+        assert_eq!(limiter.tracked_connections(), 0);
     }
 
     #[test]

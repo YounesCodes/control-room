@@ -504,10 +504,11 @@ export function App() {
                 ))}
               </Suspense>
               {activeWorkspace.view === "overview" && (
-                <OverviewPane connection={activeConnection} />
+                <OverviewPane key={activeWorkspace.id} connection={activeConnection} />
               )}
               {activeWorkspace.view === "services" && (
                 <ServicesPane
+                  key={activeWorkspace.id}
                   connection={activeConnection}
                   cache={activeWorkspace.servicesCache}
                   onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
@@ -516,6 +517,7 @@ export function App() {
               )}
               {activeWorkspace.view === "docker" && (
                 <DockerPane
+                  key={activeWorkspace.id}
                   connection={activeConnection}
                   cache={activeWorkspace.containersCache}
                   onCacheChange={(cache) => updateContainersCache(activeWorkspace.id, cache)}
@@ -524,6 +526,7 @@ export function App() {
               )}
               {activeWorkspace.view === "logs" && (
                 <LogsPane
+                  key={activeWorkspace.id}
                   connection={activeConnection}
                   settings={settings}
                   servicesCache={activeWorkspace.servicesCache}
@@ -538,6 +541,7 @@ export function App() {
               )}
               {activeWorkspace.view === "history" && (
                 <HistoryPane
+                  key={activeWorkspace.id}
                   connection={activeConnection}
                   paused={activeWorkspace.historyPaused}
                   globalEnabled={settings.globalHistoryEnabled}

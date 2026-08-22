@@ -5,10 +5,9 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   onClose: () => void;
-  width?: "normal" | "wide";
 }
 
-export function Modal({ title, children, onClose, width = "normal" }: ModalProps) {
+export function Modal({ title, children, onClose }: ModalProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const titleId = useId();
   const onCloseRef = useRef(onClose);
@@ -55,7 +54,7 @@ export function Modal({ title, children, onClose, width = "normal" }: ModalProps
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         ref={dialogRef}
-        className={`modal modal-${width}`}
+        className="modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

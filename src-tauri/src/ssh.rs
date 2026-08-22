@@ -1,4 +1,10 @@
-use std::{env, ffi::OsStr, path::PathBuf, process::Command};
+use std::{
+    env,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -6,6 +12,7 @@ use std::os::windows::process::CommandExt;
 use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 use regex::Regex;
+use wait_timeout::ChildExt;
 
 use crate::models::SavedConnection;
 
@@ -26,6 +33,33 @@ pub fn detect_ssh_path() -> Option<PathBuf> {
             .map(|path| path.join("ssh.exe"))
             .find(|path| path.is_file())
     })
+}
+
+pub fn ssh_agent_available(ssh_path: Option<&Path>) -> bool {
+    let Some(ssh_path) = ssh_path else {
+        return false;
+    };
+    let ssh_add = ssh_path.with_file_name("ssh-add.exe");
+    if !ssh_add.is_file() {
+        return false;
+    }
+    let Ok(mut child) = background_command(ssh_add)
+        .arg("-l")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    match child.wait_timeout(Duration::from_secs(2)) {
+        Ok(Some(status)) => status.success(),
+        Ok(None) | Err(_) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            false
+        }
+    }
 }
 
 pub fn ssh_config_path() -> String {
@@ -96,10 +130,16 @@ mod tests {
     fn noninteractive_processes_use_the_background_command_factory() {
         let remote = include_str!("remote.rs");
         let commands = include_str!("commands.rs");
+        let ssh = include_str!("ssh.rs");
         assert!(!remote.contains("Command::new("));
         assert!(!commands.contains("Command::new("));
         assert!(remote.matches("background_command(").count() >= 2);
-        assert!(commands.contains("background_command("));
+        assert!(ssh.contains("background_command(ssh_add)"));
+    }
+
+    #[test]
+    fn missing_ssh_path_cannot_probe_an_unrelated_path_entry() {
+        assert!(!ssh_agent_available(None));
     }
 
     fn saved() -> SavedConnection {

@@ -343,7 +343,6 @@ dependencies = [
 name = "control-room"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "chrono",
  "parking_lot",
  "portable-pty",
@@ -355,7 +354,6 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tempfile",
- "thiserror 2.0.20",
  "uuid",
  "wait-timeout",
  "windows-sys 0.60.2",

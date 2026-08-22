@@ -203,11 +203,14 @@ export function TerminalPane({
       return true;
     });
 
-    const unlistenPromise = listen<SessionStateEvent>("session-state-changed", ({ payload }) => {
+    let listenerDisposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<SessionStateEvent>("session-state-changed", ({ payload }) => {
       if (payload.sessionId === sessionIdRef.current) {
         handleSessionStateRef.current(payload);
         return;
       }
+      if (!acceptingInputRef.current) return;
       const events = earlySessionEventsRef.current;
       events.set(payload.sessionId, payload);
       while (events.size > MAX_EARLY_SESSION_EVENTS) {
@@ -215,7 +218,16 @@ export function TerminalPane({
         if (oldest === undefined) break;
         events.delete(oldest);
       }
-    });
+    })
+      .then((dispose) => {
+        if (listenerDisposed) dispose();
+        else unlisten = dispose;
+      })
+      .catch((error) => {
+        if (!listenerDisposed) {
+          setLocalError(`Terminal event listener failed: ${errorMessage(error)}`);
+        }
+      });
     const observer = new ResizeObserver(() => {
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
@@ -232,12 +244,13 @@ export function TerminalPane({
     observer.observe(container);
 
     return () => {
+      listenerDisposed = true;
+      unlisten?.();
       observer.disconnect();
       window.clearTimeout(resizeTimer);
       dataDisposable.dispose();
       binaryDisposable.dispose();
       oscDisposable.dispose();
-      void unlistenPromise.then((unlisten) => unlisten());
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
@@ -256,6 +269,7 @@ export function TerminalPane({
     acceptingInputRef.current = true;
     pendingInputRef.current.clear();
     pendingHistoryRef.current = null;
+    earlySessionEventsRef.current.clear();
     sessionIdRef.current = null;
     onSessionRef.current(null);
     onStateRef.current("connecting", null);
