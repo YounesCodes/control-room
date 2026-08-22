@@ -14,6 +14,8 @@ Terminal output crosses IPC as ordered byte chunks and enters xterm.js as `Uint8
 
 The frontend acknowledges bytes after xterm.js parses them. Rust stops reading after 512 KiB is unacknowledged and resumes when acknowledgements arrive. Input typed while SSH starts is capped at 64 KiB. Reconnecting replaces the SSH process without replacing the xterm.js instance, so scrollback remains visible.
 
+Opening another terminal creates another Workspace and an independent ConPTY and `ssh.exe` process for the same Saved Connection. Control Room does not infer a client-side maximum. OpenSSH and the Remote Host enforce their configured connection limits, and a rejected session remains isolated in its own error state.
+
 ## Structured path
 
 ```text

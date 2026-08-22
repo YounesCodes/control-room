@@ -6,7 +6,7 @@ The first release targets Windows 11 x64 and Debian or Ubuntu family hosts with 
 
 ## Features
 
-- Multiple simultaneous SSH Workspaces, including several sessions for one Saved Connection
+- Multiple simultaneous SSH Workspaces, with a visible New terminal action and Ctrl+Shift+N for additional sessions on the same Saved Connection
 - Interactive ConPTY and xterm.js terminal with resize, Unicode, copy and paste, scrollback, and reconnect
 - Cached host, systemd, journald, and Docker inspection with explicit refresh
 - Independent, bounded journald and Docker log streams

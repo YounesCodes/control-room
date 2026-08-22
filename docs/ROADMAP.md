@@ -6,7 +6,7 @@
 - [x] ConPTY terminal proof succeeds locally
 - [x] Live ConPTY and OpenSSH fixture passes against the release candidate
 - [x] Saved Connections persist in SQLite
-- [x] Multiple Workspaces and Terminal Sessions remain independent
+- [x] Multiple Workspaces and Terminal Sessions remain independent, including explicit same-connection terminal spawning
 - [x] Host capability discovery and Overview are accurate
 - [x] systemd services are inspectable
 - [x] journald tail and follow streams work

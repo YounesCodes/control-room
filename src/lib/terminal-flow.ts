@@ -6,7 +6,7 @@ export function isControlRoomShortcut(event: TerminalKeyEvent): boolean {
   if (event.type !== "keydown" || !event.ctrlKey) return false;
   const key = event.key.toLowerCase();
   if (!event.shiftKey) return key === "k";
-  return key === "t" || key === "w" || key === "r";
+  return key === "t" || key === "n" || key === "w" || key === "r";
 }
 
 export class BoundedByteQueue {

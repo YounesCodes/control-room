@@ -114,6 +114,15 @@ export function App() {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
       }
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "n" &&
+        activeSavedConnection
+      ) {
+        event.preventDefault();
+        openConnection(activeSavedConnection, true);
+      }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
         event.preventDefault();
         void closeWorkspace(activeWorkspace.id);
@@ -127,7 +136,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeWorkspace]);
+  }, [activeSavedConnection, activeWorkspace]);
 
   const filteredConnections = useMemo(() => {
     const query = hostSearch.trim().toLowerCase();
@@ -294,7 +303,8 @@ export function App() {
                 className="new-session-button"
                 type="button"
                 onClick={() => openConnection(connection, true)}
-                aria-label={`Open another ${connection.displayName} session`}
+                aria-label={`Open another terminal for ${connection.displayName}`}
+                title="Open another terminal"
               >
                 <Plus size={15} />
               </button>
@@ -377,6 +387,14 @@ export function App() {
                 <p className="technical">{connectionTarget(activeConnection)}</p>
               </div>
               <div className="host-header-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => openConnection(activeSavedConnection, true)}
+                  title="Open another terminal (Ctrl+Shift+N)"
+                >
+                  <Plus size={14} /> New terminal
+                </button>
                 <button
                   className="secondary-button"
                   type="button"

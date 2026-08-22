@@ -19,6 +19,8 @@ Control Room is a local Windows desktop application for managing Linux systems o
 - Store a display name and SSH destination with optional username, port, and existing identity-file overrides
 - Preserve normal OpenSSH resolution when an override is absent
 - Open multiple simultaneous Workspaces, including several for one Saved Connection
+- Open another Terminal Session for the active Saved Connection from the host header or with Ctrl+Shift+N
+- Let OpenSSH and the Remote Host accept or reject each independent session instead of guessing a connection limit
 - Confirm before closing a connected Workspace
 - Never reconnect automatically after application restart
 

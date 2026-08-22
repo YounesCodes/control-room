@@ -39,7 +39,7 @@ The fixture requires noninteractive public-key authentication for structured ope
 On a clean Windows 11 x64 user profile:
 
 1. Install the unsigned NSIS package without elevation.
-2. Add three Saved Connections, including two Workspaces for one connection.
+2. Add three Saved Connections. Use New terminal and Ctrl+Shift+N to open at least two connected Workspaces for one Saved Connection, then verify a failure in one does not close the other.
 3. Exercise interactive prompts, resize, Unicode, control keys, Vim or Nano, top or htop, tmux, copy, paste, disconnect, reconnect, clear, and preserved scrollback.
 4. Verify Overview, Services, journald, Docker, and Docker logs independently.
 5. Verify permission denial and explicit sudo retry without saved credentials.
