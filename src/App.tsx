@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Boxes,
   FileClock,
@@ -80,8 +80,6 @@ export function App() {
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
-  const hostSearchRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     let current = true;
     void Promise.allSettled([api.listConnections(), api.settings(), api.environment()])
@@ -110,10 +108,6 @@ export function App() {
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
-      if (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        hostSearchRef.current?.focus();
-      }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
@@ -297,12 +291,10 @@ export function App() {
         <label className="search-field app-search">
           <Search size={16} />
           <input
-            ref={hostSearchRef}
             value={hostSearch}
             onChange={(event) => setHostSearch(event.target.value)}
             placeholder="Search connections"
           />
-          <kbd>Ctrl+K</kbd>
         </label>
         <div className="app-bar-actions">
           <button

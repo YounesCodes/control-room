@@ -41,19 +41,17 @@ describe("isControlRoomShortcut", () => {
     shiftKey,
   });
 
-  it.each([
-    event("k", false),
-    event("T", true),
-    event("n", true),
-    event("w", true),
-    event("r", true),
-  ])("keeps app shortcuts out of the remote terminal", (keyboardEvent) => {
-    expect(isControlRoomShortcut(keyboardEvent)).toBe(true);
-  });
+  it.each([event("T", true), event("n", true), event("w", true), event("r", true)])(
+    "keeps app shortcuts out of the remote terminal",
+    (keyboardEvent) => {
+      expect(isControlRoomShortcut(keyboardEvent)).toBe(true);
+    },
+  );
 
   it("leaves terminal copy, paste, and ordinary keys alone", () => {
     expect(isControlRoomShortcut(event("c", true))).toBe(false);
     expect(isControlRoomShortcut(event("v", true))).toBe(false);
+    expect(isControlRoomShortcut(event("k", false))).toBe(false);
     expect(isControlRoomShortcut(event("k", false, "keyup"))).toBe(false);
     expect(
       isControlRoomShortcut({ type: "keydown", key: "t", ctrlKey: false, shiftKey: true }),

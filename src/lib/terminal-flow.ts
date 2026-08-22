@@ -5,7 +5,7 @@ type TerminalKeyEvent = Pick<KeyboardEvent, "type" | "ctrlKey" | "shiftKey" | "k
 export function isControlRoomShortcut(event: TerminalKeyEvent): boolean {
   if (event.type !== "keydown" || !event.ctrlKey) return false;
   const key = event.key.toLowerCase();
-  if (!event.shiftKey) return key === "k";
+  if (!event.shiftKey) return false;
   return key === "t" || key === "n" || key === "w" || key === "r";
 }
 
