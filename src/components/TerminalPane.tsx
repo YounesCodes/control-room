@@ -274,6 +274,7 @@ export function TerminalPane({
     onSessionRef.current(null);
     onStateRef.current("connecting", null);
     setLocalError(null);
+    terminal.reset();
 
     const flushAcknowledgements = () => {
       window.clearTimeout(acknowledgementTimer);

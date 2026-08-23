@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
-import { StatusDot } from "./components/StatusDot";
+import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
 import { api, errorMessage } from "./lib/api";
 import { connectionTarget } from "./lib/format";
@@ -30,9 +30,9 @@ import { SettingsPane } from "./pages/SettingsPane";
 import type {
   AppSettings,
   CachedList,
-  ConnectionState,
   DockerContainer,
   EnvironmentInfo,
+  HostCapabilities,
   LogSourceSelection,
   SavedConnection,
   SystemdService,
@@ -76,6 +76,7 @@ export function App() {
   const [environment, setEnvironment] = useState(emptyEnvironment);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hostSearch, setHostSearch] = useState("");
+  const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +88,14 @@ export function App() {
         if (!current) return;
         if (connectionsResult.status === "fulfilled") {
           setConnections(connectionsResult.value);
+          for (const connection of connectionsResult.value) {
+            void api
+              .cachedCapabilities(connection.id)
+              .then((capabilities) => {
+                if (current && capabilities) rememberCapabilities(capabilities);
+              })
+              .catch(() => undefined);
+          }
         } else {
           setBootError(errorMessage(connectionsResult.reason));
         }
@@ -186,6 +195,13 @@ export function App() {
     updateWorkspace(id, { containersCache });
   }
 
+  function rememberCapabilities(capabilities: HostCapabilities) {
+    setHostCapabilities((current) => ({
+      ...current,
+      [capabilities.connectionId]: capabilities,
+    }));
+  }
+
   function openLogs(id: string, logSource: LogSourceSelection) {
     updateWorkspace(id, { view: "logs", logSource });
   }
@@ -246,6 +262,11 @@ export function App() {
     }
     await api.deleteConnection(connection.id);
     setConnections((current) => current.filter((item) => item.id !== connection.id));
+    setHostCapabilities((current) => {
+      const next = { ...current };
+      delete next[connection.id];
+      return next;
+    });
     setWorkspaces((current) => current.filter((item) => item.connectionId !== connection.id));
     if (related.some((workspace) => workspace.id === activeWorkspaceId)) setActiveWorkspaceId(null);
   }
@@ -259,14 +280,6 @@ export function App() {
       return next.sort((left, right) => left.displayName.localeCompare(right.displayName));
     });
     setDialogConnection(null);
-  }
-
-  function aggregateState(connectionId: string): ConnectionState | "unknown" {
-    const related = workspaces.filter((workspace) => workspace.connectionId === connectionId);
-    if (related.some((workspace) => workspace.state === "connected")) return "connected";
-    if (related.some((workspace) => workspace.state === "connecting")) return "connecting";
-    if (related.some((workspace) => workspace.state === "error")) return "error";
-    return related.length ? "disconnected" : "unknown";
   }
 
   function duplicateLabel(workspace: Workspace) {
@@ -311,10 +324,10 @@ export function App() {
         </div>
       </header>
 
-      <aside className="sidebar">
+      <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
-          <span>Connections</span>
-          <span>{connections.length}</span>
+          <span data-tauri-drag-region>Connections</span>
+          <span data-tauri-drag-region>{connections.length}</span>
         </div>
         <nav className="host-list" aria-label="Saved connections">
           {filteredConnections.map((connection) => (
@@ -334,7 +347,7 @@ export function App() {
                 type="button"
                 onClick={() => openConnection(connection)}
               >
-                <StatusDot state={aggregateState(connection.id)} />
+                <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
                 <span>
                   <strong>{connection.displayName}</strong>
                   <small>{connectionTarget(connection)}</small>
@@ -389,10 +402,6 @@ export function App() {
         </nav>
         {activeWorkspace && activeConnection && (
           <div className="workspace-navigation">
-            <div className="sidebar-heading workspace-navigation-heading">
-              <span>{activeConnection.displayName}</span>
-              <StatusDot state={activeWorkspace.state} />
-            </div>
             <nav className="feature-nav" aria-label="Workspace features">
               {navigation.map(({ id, label, icon: Icon }) => (
                 <button
@@ -445,7 +454,7 @@ export function App() {
                     setSettingsOpen(false);
                   }}
                 >
-                  <StatusDot state={workspace.state} />
+                  <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
                   <span>{duplicateLabel(workspace)}</span>
                 </button>
                 <button
@@ -475,16 +484,6 @@ export function App() {
             className={settingsOpen ? "workspace-view workspace-view-hidden" : "workspace-view"}
             aria-hidden={settingsOpen || undefined}
           >
-            <header className="host-header">
-              <div>
-                <span className="host-title-line">
-                  <h1>{activeConnection.displayName}</h1>
-                  <StatusDot state={activeWorkspace.state} />
-                  <small>{activeWorkspace.state}</small>
-                </span>
-                <p className="technical">{connectionTarget(activeConnection)}</p>
-              </div>
-            </header>
             <div className="workspace-content">
               <Suspense fallback={<LoadingState label="Opening terminal…" />}>
                 {workspaces.map((workspace) => (
@@ -504,7 +503,11 @@ export function App() {
                 ))}
               </Suspense>
               {activeWorkspace.view === "overview" && (
-                <OverviewPane key={activeWorkspace.id} connection={activeConnection} />
+                <OverviewPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  onCapabilitiesChange={rememberCapabilities}
+                />
               )}
               {activeWorkspace.view === "services" && (
                 <ServicesPane
@@ -585,23 +588,6 @@ export function App() {
           </section>
         )}
       </main>
-
-      <footer className="status-rail">
-        <span className="status-rail-item">
-          <StatusDot state={activeWorkspace?.state ?? "unknown"} />
-          {activeWorkspace ? duplicateLabel(activeWorkspace) : "No active Workspace"}
-        </span>
-        <span className="status-rail-item status-rail-target">
-          {activeConnection ? connectionTarget(activeConnection) : "Windows OpenSSH"}
-        </span>
-        <span className="status-rail-item">
-          {settingsOpen
-            ? "Settings"
-            : activeWorkspace
-              ? navigation.find(({ id }) => id === activeWorkspace.view)?.label
-              : "Ready"}
-        </span>
-      </footer>
 
       {dialogConnection && (
         <ConnectionDialog

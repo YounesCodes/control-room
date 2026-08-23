@@ -14,7 +14,7 @@
 - [x] Docker log streams work
 - [x] Structured sudo retry does not persist credentials
 - [x] Opt-in Bash Enhanced History is reversible and accurate
-- [x] Black-and-white Docker Desktop-inspired application shell reserves color for semantic states and terminal output, with one clear location per action, a full-height connection rail, per-connection overflow menus, in-window terminal tabs, integrated window controls, and centered resizable startup geometry
+- [x] Black-and-white Docker Desktop-inspired application shell uses detected Debian and Ubuntu marks in host navigation, reserves state indicators for the Terminal view, and keeps one clear location per action, a bounded connection list above contextual Workspace navigation, per-connection overflow menus, in-window terminal tabs, integrated window controls, and centered resizable startup geometry
 - [x] Automated frontend, Rust, migration, high-output, and accessibility gates pass
 - [x] Windows CI and tagged unsigned release workflows are defined
 - [x] Build the release-candidate NSIS package
