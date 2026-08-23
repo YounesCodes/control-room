@@ -33,6 +33,12 @@ describe("application hierarchy", () => {
     expect(terminalSource.match(/<StatusDot/g)).toHaveLength(1);
   });
 
+  it("detects a newly connected host without requiring an Overview visit", () => {
+    expect(appSource).toMatch(
+      /state === "connected"[\s\S]*detectConnectionCapabilities\(workspace\.connectionId\)/,
+    );
+  });
+
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
     expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(4);

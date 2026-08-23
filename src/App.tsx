@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   FileClock,
@@ -20,6 +20,7 @@ import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
 import { api, errorMessage } from "./lib/api";
 import { connectionTarget } from "./lib/format";
+import { detectHostCapabilities } from "./lib/host-capabilities";
 import { emptyCachedList } from "./lib/workspace-cache";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
@@ -81,6 +82,7 @@ export function App() {
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
+  const capabilityDetectionsRef = useRef(new Set<string>());
   useEffect(() => {
     let current = true;
     void Promise.allSettled([api.listConnections(), api.settings(), api.environment()])
@@ -200,6 +202,15 @@ export function App() {
       ...current,
       [capabilities.connectionId]: capabilities,
     }));
+  }
+
+  function detectConnectionCapabilities(connectionId: string) {
+    if (capabilityDetectionsRef.current.has(connectionId)) return;
+    capabilityDetectionsRef.current.add(connectionId);
+    void detectHostCapabilities(api, connectionId)
+      .then(rememberCapabilities)
+      .catch(() => undefined)
+      .finally(() => capabilityDetectionsRef.current.delete(connectionId));
   }
 
   function openLogs(id: string, logSource: LogSourceSelection) {
@@ -498,7 +509,12 @@ export function App() {
                       activeWorkspace.view === "terminal"
                     }
                     onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
-                    onState={(state, reason) => updateWorkspace(workspace.id, { state, reason })}
+                    onState={(state, reason) => {
+                      updateWorkspace(workspace.id, { state, reason });
+                      if (state === "connected") {
+                        detectConnectionCapabilities(workspace.connectionId);
+                      }
+                    }}
                   />
                 ))}
               </Suspense>
