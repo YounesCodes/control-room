@@ -973,13 +973,13 @@ code,
   min-height: 0;
   flex: 1;
   background: var(--terminal-bg);
-  padding: 10px 12px;
+  padding: 0;
   user-select: text;
 }
 
-.xterm,
-.xterm-viewport {
+.terminal-container > .xterm {
   height: 100%;
+  padding: 10px 12px;
 }
 
 .feature-page {

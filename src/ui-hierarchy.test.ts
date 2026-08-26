@@ -72,4 +72,12 @@ describe("application hierarchy", () => {
     expect(appSource).toContain("Remove from split");
     expect(stylesSource).toContain(".terminal-pane-layout");
   });
+
+  it("puts terminal padding on the xterm element measured by FitAddon", () => {
+    expect(stylesSource).toMatch(/\.terminal-container\s*\{[^}]*padding:\s*0;/s);
+    expect(stylesSource).toMatch(
+      /\.terminal-container > \.xterm\s*\{[^}]*height:\s*100%;[^}]*padding:\s*10px 12px;/s,
+    );
+    expect(stylesSource).not.toMatch(/\.xterm,\s*\.xterm-viewport\s*\{/s);
+  });
 });
