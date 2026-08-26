@@ -14,7 +14,11 @@ Terminal output crosses IPC as ordered byte chunks and enters xterm.js as `Uint8
 
 The frontend acknowledges bytes after xterm.js parses them. Rust stops reading after 512 KiB is unacknowledged and resumes when acknowledgements arrive. Input typed while SSH starts is capped at 64 KiB. Reconnecting replaces the SSH process without replacing the xterm.js instance, so scrollback remains visible.
 
+The terminal Clear action writes ECMA-48 erase-display, erase-scrollback, and cursor-home sequences into xterm.js locally. It does not send a shell command, reset terminal modes, or modify the Remote Host. Terminal color settings map the configurable foreground and six ANSI categories into xterm.js; Remote Host applications still choose which ANSI category each token uses.
+
 Opening another terminal creates another Workspace and an independent ConPTY and `ssh.exe` process for the same Saved Connection. Control Room does not infer a client-side maximum. OpenSSH and the Remote Host enforce their configured connection limits, and a rejected session remains isolated in its own error state.
+
+Focused terminal splits use a frontend-only binary tree. Each split replaces the focused leaf with a vertical or horizontal pair, matching Windows Terminal pane behavior. The tree calculates bounded percentage rectangles for the existing Workspace components, so nesting panes never moves a terminal off-screen or remounts its xterm.js instance. Choosing a Saved Connection in the split menu creates one new Workspace and Terminal Session; choosing an existing terminal reuses its current Workspace and SSH process.
 
 ## Structured path
 

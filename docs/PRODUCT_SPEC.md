@@ -29,7 +29,10 @@ Control Room is a local Windows desktop application for managing Linux systems o
 - Render a fully interactive OpenSSH shell through ConPTY and xterm.js
 - Preserve terminal bytes, ANSI and VT sequences, Unicode, resizing, scrollback, copy and paste
 - Support control keys, interactive SSH and sudo prompts, Vim, Nano, top or htop, and tmux
-- Preserve scrollback after connection loss and offer reconnect, clear, or close
+- Preserve scrollback after connection loss and offer reconnect, a local full-buffer clear, or close
+- Focus the active Terminal Session with F11 or a tab-strip control, leaving the terminal, open Workspace tabs, and window controls visible
+- Split the focused pane vertically or horizontally with either an existing Terminal Session or a new Terminal Session for any Saved Connection
+- Keep nested panes inside the available terminal area, label every pane, and reuse existing sessions without starting duplicate SSH processes
 
 ### Overview
 
@@ -80,7 +83,7 @@ Control Room is a local Windows desktop application for managing Linux systems o
 
 - One finished black-and-white dark theme with green, amber, and red reserved for status, warning, failure, destructive actions, and terminal ANSI output
 - A frameless Windows window with drag, minimize, maximize or restore, and close controls integrated into the application header
-- Terminal font family, size, and scrollback
+- Terminal font family, size, scrollback, and configurable foreground plus ANSI red, green, yellow, blue, magenta, and cyan colors
 - Default log tail count
 - Detected SSH executable and configuration paths
 - Global History setting

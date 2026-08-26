@@ -1,12 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
+  Columns2,
   FileClock,
   Gauge,
   History,
+  Maximize2,
   MoreHorizontal,
+  Minimize2,
   Pencil,
   Plus,
+  Rows2,
   Search,
   Server,
   Settings,
@@ -21,6 +25,16 @@ import { WindowControls } from "./components/WindowControls";
 import { api, errorMessage } from "./lib/api";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
+import {
+  createTerminalLayout,
+  getTerminalLayoutIds,
+  getTerminalPaneRects,
+  removeTerminalFromLayout,
+  selectTerminalTab,
+  splitTerminalLayout,
+  terminalLayoutContains,
+} from "./lib/terminal-layout";
+import type { TerminalLayout, TerminalSplitDirection } from "./lib/terminal-layout";
 import { emptyCachedList } from "./lib/workspace-cache";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
@@ -45,6 +59,13 @@ const defaultSettings: AppSettings = {
   terminalFontFamily: "Cascadia Mono, Consolas, monospace",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
+  terminalForeground: "#f2f2ee",
+  terminalRed: "#ff6f7d",
+  terminalGreen: "#52cf91",
+  terminalYellow: "#e8c56c",
+  terminalBlue: "#55aef2",
+  terminalMagenta: "#c793ff",
+  terminalCyan: "#65d4d1",
   defaultLogTail: 200,
   globalHistoryEnabled: true,
 };
@@ -80,6 +101,10 @@ export function App() {
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
+  const [terminalFocusMode, setTerminalFocusMode] = useState(false);
+  const [terminalLayout, setTerminalLayout] = useState<TerminalLayout | null>(null);
+  const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const capabilityDetectionsRef = useRef(new Set<string>());
@@ -116,9 +141,31 @@ export function App() {
   const activeSavedConnection = activeWorkspace
     ? (connections.find((connection) => connection.id === activeWorkspace.connectionId) ?? null)
     : null;
+  const focusedTerminalIds = terminalLayout ? getTerminalLayoutIds(terminalLayout) : [];
+  const visibleTerminalIds = terminalFocusMode
+    ? focusedTerminalIds
+    : activeWorkspace
+      ? [activeWorkspace.id]
+      : [];
+  const terminalSplitMode = terminalFocusMode && focusedTerminalIds.length > 1;
+  const terminalPaneRects = terminalLayout ? getTerminalPaneRects(terminalLayout) : {};
+  const existingSplitCandidates = workspaces.filter(
+    (workspace) => !focusedTerminalIds.includes(workspace.id),
+  );
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
+      if (
+        event.key === "F11" &&
+        !event.repeat &&
+        (terminalFocusMode ||
+          (!settingsOpen && activeWorkspace && activeWorkspace.view === "terminal"))
+      ) {
+        event.preventDefault();
+        if (terminalFocusMode) exitTerminalFocus();
+        else enterTerminalFocus();
+        return;
+      }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
@@ -145,7 +192,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeSavedConnection, activeWorkspace]);
+  }, [activeSavedConnection, activeWorkspace, settingsOpen, terminalFocusMode]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -173,6 +220,27 @@ export function App() {
     };
   }, [hostMenuConnectionId]);
 
+  useEffect(() => {
+    if (!splitMenuOpen) return;
+
+    function dismissMenu(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-terminal-split-menu]")) return;
+      setSplitMenuOpen(false);
+    }
+
+    function dismissMenuWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setSplitMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", dismissMenu);
+    document.addEventListener("keydown", dismissMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("keydown", dismissMenuWithKeyboard);
+    };
+  }, [splitMenuOpen]);
+
   const filteredConnections = useMemo(() => {
     const query = hostSearch.trim().toLowerCase();
     if (!query) return connections;
@@ -187,6 +255,61 @@ export function App() {
     setWorkspaces((current) =>
       current.map((workspace) => (workspace.id === id ? { ...workspace, ...patch } : workspace)),
     );
+  }
+
+  function enterTerminalFocus() {
+    if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
+    setTerminalLayout((current) =>
+      current && terminalLayoutContains(current, activeWorkspace.id)
+        ? current
+        : createTerminalLayout(activeWorkspace.id),
+    );
+    setSplitMenuOpen(false);
+    setTerminalFocusMode(true);
+  }
+
+  function exitTerminalFocus() {
+    setSplitMenuOpen(false);
+    setTerminalFocusMode(false);
+  }
+
+  function selectWorkspaceTab(workspace: Workspace) {
+    setActiveWorkspaceId(workspace.id);
+    setSettingsOpen(false);
+    if (!terminalFocusMode) return;
+    updateWorkspace(workspace.id, { view: "terminal" });
+    setTerminalLayout((current) =>
+      current ? selectTerminalTab(current, workspace.id) : createTerminalLayout(workspace.id),
+    );
+  }
+
+  function splitWithExistingTerminal(workspace: Workspace) {
+    if (!activeWorkspace) return;
+    updateWorkspace(workspace.id, { view: "terminal" });
+    setTerminalLayout((current) =>
+      splitTerminalLayout(
+        current && terminalLayoutContains(current, activeWorkspace.id)
+          ? current
+          : createTerminalLayout(activeWorkspace.id),
+        activeWorkspace.id,
+        workspace.id,
+        splitDirection,
+      ),
+    );
+    setActiveWorkspaceId(workspace.id);
+    setSplitMenuOpen(false);
+  }
+
+  function removeTerminalFromSplit(workspaceId: string) {
+    if (!terminalLayout) return;
+    const nextLayout = removeTerminalFromLayout(terminalLayout, workspaceId);
+    if (!nextLayout) return;
+    const remaining = getTerminalLayoutIds(nextLayout);
+    setTerminalLayout(nextLayout);
+    if (activeWorkspaceId === workspaceId) {
+      setActiveWorkspaceId(remaining[0]);
+      updateWorkspace(remaining[0], { view: "terminal" });
+    }
   }
 
   function updateServicesCache(id: string, servicesCache: CachedList<SystemdService>) {
@@ -217,18 +340,8 @@ export function App() {
     updateWorkspace(id, { view: "logs", logSource });
   }
 
-  function openConnection(connection: SavedConnection, forceNew = false) {
-    setSettingsOpen(false);
-    if (!forceNew) {
-      const existing = [...workspaces]
-        .reverse()
-        .find((workspace) => workspace.connectionId === connection.id);
-      if (existing) {
-        setActiveWorkspaceId(existing.id);
-        return;
-      }
-    }
-    const workspace: Workspace = {
+  function createWorkspace(connection: SavedConnection): Workspace {
+    return {
       id: crypto.randomUUID(),
       connectionId: connection.id,
       connectionSnapshot: { ...connection },
@@ -242,8 +355,41 @@ export function App() {
       containersCache: emptyCachedList(),
       logSource: null,
     };
+  }
+
+  function splitWithNewConnection(connection: SavedConnection) {
+    if (!activeWorkspace) return;
+    const workspace = createWorkspace(connection);
+    setWorkspaces((current) => [...current, workspace]);
+    setTerminalLayout((current) =>
+      splitTerminalLayout(
+        current && terminalLayoutContains(current, activeWorkspace.id)
+          ? current
+          : createTerminalLayout(activeWorkspace.id),
+        activeWorkspace.id,
+        workspace.id,
+        splitDirection,
+      ),
+    );
+    setActiveWorkspaceId(workspace.id);
+    setSplitMenuOpen(false);
+  }
+
+  function openConnection(connection: SavedConnection, forceNew = false) {
+    setSettingsOpen(false);
+    if (!forceNew) {
+      const existing = [...workspaces]
+        .reverse()
+        .find((workspace) => workspace.connectionId === connection.id);
+      if (existing) {
+        setActiveWorkspaceId(existing.id);
+        return;
+      }
+    }
+    const workspace = createWorkspace(connection);
     setWorkspaces((current) => [...current, workspace]);
     setActiveWorkspaceId(workspace.id);
+    if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
   }
 
   async function closeWorkspace(id: string) {
@@ -258,10 +404,26 @@ export function App() {
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     const index = workspaces.findIndex((item) => item.id === id);
     const remaining = workspaces.filter((item) => item.id !== id);
-    setWorkspaces(remaining);
-    if (activeWorkspaceId === id) {
-      setActiveWorkspaceId(remaining[Math.min(index, remaining.length - 1)]?.id ?? null);
+    const nextLayout = terminalLayout ? removeTerminalFromLayout(terminalLayout, id) : null;
+    const remainingSplitIds = nextLayout ? getTerminalLayoutIds(nextLayout) : [];
+    const closingActiveWorkspace = activeWorkspaceId === id;
+    const nextActive = closingActiveWorkspace
+      ? ((terminalFocusMode ? remaining.find((item) => item.id === remainingSplitIds[0]) : null) ??
+        remaining[Math.min(index, remaining.length - 1)] ??
+        null)
+      : null;
+    setWorkspaces(
+      terminalFocusMode && nextActive
+        ? remaining.map((item) =>
+            item.id === nextActive.id ? { ...item, view: "terminal" } : item,
+          )
+        : remaining,
+    );
+    if (closingActiveWorkspace) {
+      setActiveWorkspaceId(nextActive?.id ?? null);
     }
+    setTerminalLayout(nextLayout ?? (nextActive ? createTerminalLayout(nextActive.id) : null));
+    if (!remaining.length) exitTerminalFocus();
   }
 
   async function deleteConnection(connection: SavedConnection) {
@@ -279,7 +441,16 @@ export function App() {
       return next;
     });
     setWorkspaces((current) => current.filter((item) => item.connectionId !== connection.id));
-    if (related.some((workspace) => workspace.id === activeWorkspaceId)) setActiveWorkspaceId(null);
+    setTerminalLayout((current) =>
+      related.reduce<TerminalLayout | null>(
+        (layout, workspace) => (layout ? removeTerminalFromLayout(layout, workspace.id) : null),
+        current,
+      ),
+    );
+    if (related.some((workspace) => workspace.id === activeWorkspaceId)) {
+      setActiveWorkspaceId(null);
+      exitTerminalFocus();
+    }
   }
 
   function saveConnection(saved: SavedConnection) {
@@ -310,16 +481,8 @@ export function App() {
   if (loading) return <LoadingState label="Starting Control Room…" />;
 
   return (
-    <div className="app-shell">
+    <div className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}>
       <header className="app-bar" data-tauri-drag-region>
-        <label className="search-field app-search">
-          <Search size={16} />
-          <input
-            value={hostSearch}
-            onChange={(event) => setHostSearch(event.target.value)}
-            placeholder="Search connections"
-          />
-        </label>
         <div className="app-bar-actions">
           <button
             className={settingsOpen ? "app-bar-button active" : "app-bar-button"}
@@ -340,6 +503,15 @@ export function App() {
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
         </div>
+        <label className="search-field sidebar-search">
+          <Search size={14} />
+          <input
+            value={hostSearch}
+            onChange={(event) => setHostSearch(event.target.value)}
+            placeholder="Search connections"
+            aria-label="Search connections"
+          />
+        </label>
         <nav className="host-list" aria-label="Saved connections">
           {filteredConnections.map((connection) => (
             <div
@@ -445,48 +617,152 @@ export function App() {
       <main className="workspace-shell">
         {workspaces.length > 0 && (
           <nav className="session-tabs" aria-label="Open Workspaces">
-            {workspaces.map((workspace) => (
-              <div
-                className={
-                  workspace.id === activeWorkspaceId && !settingsOpen
-                    ? "session-tab-wrap active"
-                    : "session-tab-wrap"
-                }
-                key={workspace.id}
+            <div className="session-tab-list" data-tauri-drag-region>
+              {workspaces.map((workspace) => (
+                <div
+                  className={[
+                    "session-tab-wrap",
+                    workspace.id === activeWorkspaceId && !settingsOpen ? "active" : "",
+                    terminalFocusMode && focusedTerminalIds.includes(workspace.id)
+                      ? "in-layout"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  key={workspace.id}
+                >
+                  <button
+                    className="session-tab-main"
+                    type="button"
+                    aria-current={
+                      workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined
+                    }
+                    onClick={() => selectWorkspaceTab(workspace)}
+                  >
+                    <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                    <span>{duplicateLabel(workspace)}</span>
+                  </button>
+                  <button
+                    className="session-tab-close"
+                    type="button"
+                    onClick={() => void closeWorkspace(workspace.id)}
+                    aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              <button
+                className="session-new-terminal"
+                type="button"
+                onClick={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
+                disabled={!activeSavedConnection}
+                title="Open another terminal in this window (Ctrl+Shift+N)"
               >
-                <button
-                  className="session-tab-main"
-                  type="button"
-                  aria-current={
-                    workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined
-                  }
-                  onClick={() => {
-                    setActiveWorkspaceId(workspace.id);
-                    setSettingsOpen(false);
-                  }}
-                >
-                  <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
-                  <span>{duplicateLabel(workspace)}</span>
-                </button>
-                <button
-                  className="session-tab-close"
-                  type="button"
-                  onClick={() => void closeWorkspace(workspace.id)}
-                  aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
-                >
-                  <X size={14} />
-                </button>
+                <Plus size={15} /> New terminal
+              </button>
+            </div>
+            {!settingsOpen && activeWorkspace?.view === "terminal" && (
+              <div className="session-tab-actions" data-terminal-split-menu>
+                {terminalFocusMode ? (
+                  <>
+                    <button
+                      className="session-strip-button"
+                      type="button"
+                      onClick={() => setSplitMenuOpen((current) => !current)}
+                      disabled={!connections.length && !existingSplitCandidates.length}
+                      aria-label="Split terminal"
+                      aria-haspopup="dialog"
+                      aria-expanded={splitMenuOpen}
+                      title="Split the focused terminal pane"
+                    >
+                      <Columns2 size={15} />
+                    </button>
+                    {splitMenuOpen && (
+                      <div
+                        className="terminal-split-menu"
+                        role="dialog"
+                        aria-label="Split terminal"
+                      >
+                        <div className="terminal-split-directions" aria-label="Split direction">
+                          <button
+                            className={splitDirection === "vertical" ? "active" : ""}
+                            type="button"
+                            onClick={() => setSplitDirection("vertical")}
+                            aria-pressed={splitDirection === "vertical"}
+                          >
+                            <Columns2 size={14} />
+                            <span>
+                              Split vertically
+                              <small>Side by side</small>
+                            </span>
+                          </button>
+                          <button
+                            className={splitDirection === "horizontal" ? "active" : ""}
+                            type="button"
+                            onClick={() => setSplitDirection("horizontal")}
+                            aria-pressed={splitDirection === "horizontal"}
+                          >
+                            <Rows2 size={14} />
+                            <span>
+                              Split horizontally
+                              <small>Top and bottom</small>
+                            </span>
+                          </button>
+                        </div>
+                        {!!existingSplitCandidates.length && (
+                          <>
+                            <strong>Existing terminals</strong>
+                            {existingSplitCandidates.map((workspace) => (
+                              <button
+                                type="button"
+                                key={workspace.id}
+                                onClick={() => splitWithExistingTerminal(workspace)}
+                              >
+                                <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                                <span>{duplicateLabel(workspace)}</span>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        <strong>New from Saved Connections</strong>
+                        {connections.map((connection) => (
+                          <button
+                            type="button"
+                            key={connection.id}
+                            onClick={() => splitWithNewConnection(connection)}
+                          >
+                            <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+                            <span>{connection.displayName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      className="session-strip-button"
+                      type="button"
+                      onClick={exitTerminalFocus}
+                      aria-label="Exit terminal focus"
+                      title="Exit terminal focus (F11)"
+                    >
+                      <Minimize2 size={15} />
+                    </button>
+                    <span className="window-controls-divider" aria-hidden="true" />
+                    <WindowControls />
+                  </>
+                ) : (
+                  <button
+                    className="session-strip-button"
+                    type="button"
+                    onClick={enterTerminalFocus}
+                    aria-label="Focus terminal"
+                    title="Focus terminal (F11)"
+                  >
+                    <Maximize2 size={15} />
+                  </button>
+                )}
               </div>
-            ))}
-            <button
-              className="session-new-terminal"
-              type="button"
-              onClick={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
-              disabled={!activeSavedConnection}
-              title="Open another terminal in this window (Ctrl+Shift+N)"
-            >
-              <Plus size={15} /> New terminal
-            </button>
+            )}
           </nav>
         )}
 
@@ -495,28 +771,80 @@ export function App() {
             className={settingsOpen ? "workspace-view workspace-view-hidden" : "workspace-view"}
             aria-hidden={settingsOpen || undefined}
           >
-            <div className="workspace-content">
+            <div
+              className={
+                terminalSplitMode ? "workspace-content terminal-pane-layout" : "workspace-content"
+              }
+            >
               <Suspense fallback={<LoadingState label="Opening terminal…" />}>
-                {workspaces.map((workspace) => (
-                  <TerminalPane
-                    key={workspace.id}
-                    connection={workspace.connectionSnapshot}
-                    workspace={workspace}
-                    settings={settings}
-                    visible={
-                      !settingsOpen &&
-                      workspace.id === activeWorkspace.id &&
-                      activeWorkspace.view === "terminal"
-                    }
-                    onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
-                    onState={(state, reason) => {
-                      updateWorkspace(workspace.id, { state, reason });
-                      if (state === "connected") {
-                        detectConnectionCapabilities(workspace.connectionId);
+                {workspaces.map((workspace) => {
+                  const terminalVisible =
+                    !settingsOpen &&
+                    activeWorkspace.view === "terminal" &&
+                    visibleTerminalIds.includes(workspace.id);
+                  const label = duplicateLabel(workspace);
+                  const paneRect = terminalPaneRects[workspace.id];
+                  return (
+                    <div
+                      className={[
+                        "terminal-workspace-pane",
+                        terminalVisible ? "terminal-workspace-pane-visible" : "",
+                        workspace.id === activeWorkspace.id ? "active" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      key={workspace.id}
+                      aria-hidden={!terminalVisible || undefined}
+                      style={
+                        terminalSplitMode && terminalVisible && paneRect
+                          ? {
+                              left: `${paneRect.left}%`,
+                              top: `${paneRect.top}%`,
+                              width: `${paneRect.width}%`,
+                              height: `${paneRect.height}%`,
+                            }
+                          : undefined
                       }
-                    }}
-                  />
-                ))}
+                    >
+                      {terminalSplitMode && terminalVisible && (
+                        <header className="terminal-pane-header">
+                          <button
+                            className="terminal-pane-identity"
+                            type="button"
+                            onClick={() => setActiveWorkspaceId(workspace.id)}
+                          >
+                            <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                            <span className="terminal-pane-label">{label}</span>
+                          </button>
+                          <button
+                            className="terminal-pane-remove"
+                            type="button"
+                            onClick={() => removeTerminalFromSplit(workspace.id)}
+                            aria-label={`Remove from split: ${label}`}
+                            title="Remove from split"
+                          >
+                            <X size={13} />
+                          </button>
+                        </header>
+                      )}
+                      <TerminalPane
+                        connection={workspace.connectionSnapshot}
+                        workspace={workspace}
+                        settings={settings}
+                        visible={terminalVisible}
+                        active={terminalVisible && workspace.id === activeWorkspace.id}
+                        onActivate={() => setActiveWorkspaceId(workspace.id)}
+                        onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
+                        onState={(state, reason) => {
+                          updateWorkspace(workspace.id, { state, reason });
+                          if (state === "connected") {
+                            detectConnectionCapabilities(workspace.connectionId);
+                          }
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </Suspense>
               {activeWorkspace.view === "overview" && (
                 <OverviewPane

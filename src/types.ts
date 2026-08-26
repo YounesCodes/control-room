@@ -87,6 +87,13 @@ export interface AppSettings {
   terminalFontFamily: string;
   terminalFontSize: number;
   terminalScrollback: number;
+  terminalForeground: string;
+  terminalRed: string;
+  terminalGreen: string;
+  terminalYellow: string;
+  terminalBlue: string;
+  terminalMagenta: string;
+  terminalCyan: string;
   defaultLogTail: number;
   globalHistoryEnabled: boolean;
 }

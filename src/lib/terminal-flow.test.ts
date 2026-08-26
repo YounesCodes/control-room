@@ -48,6 +48,17 @@ describe("isControlRoomShortcut", () => {
     },
   );
 
+  it("keeps the F11 terminal focus shortcut out of the remote terminal", () => {
+    expect(
+      isControlRoomShortcut({
+        type: "keydown",
+        key: "F11",
+        ctrlKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(true);
+  });
+
   it("leaves terminal copy, paste, and ordinary keys alone", () => {
     expect(isControlRoomShortcut(event("c", true))).toBe(false);
     expect(isControlRoomShortcut(event("v", true))).toBe(false);

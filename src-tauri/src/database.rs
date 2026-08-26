@@ -361,6 +361,24 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     {
         return Err("Terminal font family is invalid".into());
     }
+    for color in [
+        &settings.terminal_foreground,
+        &settings.terminal_red,
+        &settings.terminal_green,
+        &settings.terminal_yellow,
+        &settings.terminal_blue,
+        &settings.terminal_magenta,
+        &settings.terminal_cyan,
+    ] {
+        if color.len() != 7
+            || !color.starts_with('#')
+            || !color[1..]
+                .chars()
+                .all(|character| character.is_ascii_hexdigit())
+        {
+            return Err("Terminal colors must use #RRGGBB format".into());
+        }
+    }
     Ok(())
 }
 
@@ -695,6 +713,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(stored, 0);
+    }
+
+    #[test]
+    fn legacy_settings_receive_default_terminal_colors() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES ('settings', ?1)",
+                [r#"{"terminalFontFamily":"Consolas","terminalFontSize":14,"terminalScrollback":10000,"defaultLogTail":200,"globalHistoryEnabled":true}"#],
+            )
+            .unwrap();
+
+        let settings = database.get_settings().unwrap();
+
+        assert_eq!(settings.terminal_blue, AppSettings::default().terminal_blue);
+        assert_eq!(
+            settings.terminal_green,
+            AppSettings::default().terminal_green
+        );
+    }
+
+    #[test]
+    fn invalid_terminal_colors_are_rejected() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let settings = AppSettings {
+            terminal_blue: "blue".into(),
+            ..AppSettings::default()
+        };
+
+        assert_eq!(
+            database.save_settings(&settings).unwrap_err(),
+            "Terminal colors must use #RRGGBB format"
+        );
     }
 
     #[test]

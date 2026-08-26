@@ -27,8 +27,14 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*padding-bottom: 8px;/s);
   });
 
+  it("keeps connection search in the sidebar and gives the workspace a compact titlebar", () => {
+    expect(appSource).toContain('className="search-field sidebar-search"');
+    expect(appSource).not.toContain('className="search-field app-search"');
+    expect(stylesSource).toMatch(/\.app-shell\s*\{[^}]*grid-template-rows: 42px/s);
+  });
+
   it("uses host OS marks in navigation and keeps status in the Terminal view", () => {
-    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(2);
+    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(5);
     expect(appSource).not.toContain("StatusDot");
     expect(terminalSource.match(/<StatusDot/g)).toHaveLength(1);
   });
@@ -41,6 +47,29 @@ describe("application hierarchy", () => {
 
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
-    expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(4);
+    expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(5);
+  });
+
+  it("keeps only terminal tabs and the active terminal visible in focus mode", () => {
+    expect(appSource).toContain("terminalFocusMode");
+    expect(appSource).toContain('aria-label="Exit terminal focus"');
+    expect(appSource).toContain('aria-label="Focus terminal"');
+    expect(stylesSource).toMatch(
+      /\.terminal-focus-mode \.app-bar,[\s\S]*\.terminal-focus-mode \.sidebar\s*\{[^}]*display: none;/,
+    );
+    expect(stylesSource).toMatch(
+      /\.terminal-focus-mode \.terminal-toolbar\s*\{[^}]*display: none;/,
+    );
+  });
+
+  it("keeps window controls and labeled terminal panes in the focused tab strip", () => {
+    expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
+    expect(appSource).toContain('aria-label="Split terminal"');
+    expect(appSource).toContain("Split vertically");
+    expect(appSource).toContain("Split horizontally");
+    expect(appSource).toContain("New from Saved Connections");
+    expect(appSource).toContain("terminal-pane-label");
+    expect(appSource).toContain("Remove from split");
+    expect(stylesSource).toContain(".terminal-pane-layout");
   });
 });

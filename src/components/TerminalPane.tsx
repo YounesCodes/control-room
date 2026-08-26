@@ -6,7 +6,9 @@ import { Terminal } from "@xterm/xterm";
 import { Eraser, PlugZap, RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { parseHistoryOsc } from "../lib/history-osc";
+import { clearTerminalDisplay } from "../lib/terminal-display";
 import { BoundedByteQueue, isControlRoomShortcut } from "../lib/terminal-flow";
+import { buildTerminalTheme } from "../lib/terminal-theme";
 import type {
   AppSettings,
   ConnectionState,
@@ -21,6 +23,8 @@ interface TerminalPaneProps {
   workspace: Workspace;
   settings: AppSettings;
   visible: boolean;
+  active: boolean;
+  onActivate: () => void;
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
 }
@@ -38,6 +42,8 @@ export function TerminalPane({
   workspace,
   settings,
   visible,
+  active,
+  onActivate,
   onSession,
   onState,
 }: TerminalPaneProps) {
@@ -104,28 +110,7 @@ export function TerminalPane({
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,
       scrollback: settings.terminalScrollback,
-      theme: {
-        background: "#000000",
-        foreground: "#f2f2ee",
-        cursor: "#f2f2ee",
-        selectionBackground: "#393939",
-        black: "#151515",
-        red: "#ff6f7d",
-        green: "#52cf91",
-        yellow: "#e8c56c",
-        blue: "#55aef2",
-        magenta: "#c793ff",
-        cyan: "#65d4d1",
-        white: "#f2f2ee",
-        brightBlack: "#70706d",
-        brightRed: "#ff8f99",
-        brightGreen: "#73dca5",
-        brightYellow: "#f0d58a",
-        brightBlue: "#7bc1f5",
-        brightMagenta: "#d8b2ff",
-        brightCyan: "#8ae0de",
-        brightWhite: "#ffffff",
-      },
+      theme: buildTerminalTheme(settings),
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -357,11 +342,10 @@ export function TerminalPane({
     terminal.options.fontFamily = settings.terminalFontFamily;
     terminal.options.fontSize = settings.terminalFontSize;
     terminal.options.scrollback = settings.terminalScrollback;
-    if (visible) {
-      fitRef.current?.fit();
-      terminal.focus();
-    }
-  }, [settings, visible]);
+    terminal.options.theme = buildTerminalTheme(settings);
+    if (visible) fitRef.current?.fit();
+    if (active) terminal.focus();
+  }, [settings, visible, active]);
 
   async function disconnect() {
     const sessionId = sessionIdRef.current;
@@ -374,7 +358,10 @@ export function TerminalPane({
   }
 
   return (
-    <section className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}>
+    <section
+      className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
+      onPointerDown={onActivate}
+    >
       <header className="terminal-toolbar">
         <span className="toolbar-state">
           <StatusDot state={workspace.state} /> {workspace.state}
@@ -392,7 +379,10 @@ export function TerminalPane({
           <button
             className="toolbar-button"
             type="button"
-            onClick={() => terminalRef.current?.clear()}
+            onClick={() => {
+              const terminal = terminalRef.current;
+              if (terminal) clearTerminalDisplay(terminal);
+            }}
           >
             <Eraser size={14} /> Clear
           </button>

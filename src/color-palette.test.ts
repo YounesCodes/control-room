@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const terminalThemeSource = readFileSync(
-  new URL("./components/TerminalPane.tsx", import.meta.url),
+  new URL("./lib/terminal-theme.ts", import.meta.url),
   "utf8",
 );
 const semanticUiColors = ["#42d17a", "#d6a84a", "#ef5b6b"];
@@ -62,10 +62,10 @@ describe("monochrome application palette", () => {
   });
 
   it("preserves ANSI colors for remote terminal content", () => {
-    expect(terminalThemeSource).toContain('red: "#ff6f7d"');
-    expect(terminalThemeSource).toContain('green: "#52cf91"');
-    expect(terminalThemeSource).toContain('yellow: "#e8c56c"');
-    expect(terminalThemeSource).toContain('blue: "#55aef2"');
+    expect(terminalThemeSource).toContain('terminalRed: "#ff6f7d"');
+    expect(terminalThemeSource).toContain('terminalGreen: "#52cf91"');
+    expect(terminalThemeSource).toContain('terminalYellow: "#e8c56c"');
+    expect(terminalThemeSource).toContain('terminalBlue: "#55aef2"');
   });
 
   it("keeps the main text hierarchy above WCAG AA contrast", () => {

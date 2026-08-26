@@ -3,7 +3,9 @@ export const MAX_PENDING_TERMINAL_INPUT_BYTES = 64 * 1024;
 type TerminalKeyEvent = Pick<KeyboardEvent, "type" | "ctrlKey" | "shiftKey" | "key">;
 
 export function isControlRoomShortcut(event: TerminalKeyEvent): boolean {
-  if (event.type !== "keydown" || !event.ctrlKey) return false;
+  if (event.type !== "keydown") return false;
+  if (event.key === "F11") return true;
+  if (!event.ctrlKey) return false;
   const key = event.key.toLowerCase();
   if (!event.shiftKey) return false;
   return key === "t" || key === "n" || key === "w" || key === "r";

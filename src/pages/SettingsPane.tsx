@@ -1,7 +1,18 @@
 import { useState, type FormEvent } from "react";
-import { Save } from "lucide-react";
+import { RotateCcw, Save } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { DEFAULT_TERMINAL_COLORS } from "../lib/terminal-theme";
 import type { AppSettings, EnvironmentInfo } from "../types";
+
+const terminalColorFields = [
+  ["terminalForeground", "Text and cursor"],
+  ["terminalGreen", "Green and prompts"],
+  ["terminalBlue", "Blue and directories"],
+  ["terminalCyan", "Cyan"],
+  ["terminalYellow", "Yellow"],
+  ["terminalMagenta", "Magenta"],
+  ["terminalRed", "Red and errors"],
+] as const;
 
 export function SettingsPane({
   settings,
@@ -77,6 +88,34 @@ export function SettingsPane({
                 }
               />
             </label>
+          </div>
+          <div className="terminal-color-heading">
+            <div>
+              <strong>ANSI colors</strong>
+              <small>
+                Remote prompts and tools choose the category. These settings choose its color.
+              </small>
+            </div>
+            <button
+              className="secondary-button compact-button"
+              type="button"
+              onClick={() => setDraft({ ...draft, ...DEFAULT_TERMINAL_COLORS })}
+            >
+              <RotateCcw size={13} /> Reset colors
+            </button>
+          </div>
+          <div className="terminal-color-grid">
+            {terminalColorFields.map(([field, label]) => (
+              <label className="terminal-color-control" key={field}>
+                <input
+                  type="color"
+                  value={draft[field]}
+                  onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+                />
+                <span>{label}</span>
+                <code>{draft[field]}</code>
+              </label>
+            ))}
           </div>
         </fieldset>
         <fieldset>
