@@ -6,15 +6,15 @@ The first release targets Windows 11 x64 and Debian or Ubuntu family hosts with 
 
 ## Features
 
-- Multiple simultaneous SSH Workspaces, with a visible New terminal action, Ctrl+Shift+N for additional sessions on the same Saved Connection, local tab labels, and disconnected tab and split restoration after restart
-- Interactive ConPTY and xterm.js terminal with resize, Unicode, copy and paste, reliable local display clearing, configurable ANSI colors, F11 terminal focus mode with nested vertical and horizontal splits from open sessions or Saved Connections, scrollback that survives Settings navigation, and reconnect into a clean terminal buffer
-- Black-and-white Docker Desktop-inspired navigation with Debian and Ubuntu marks detected from cached or newly connected hosts, semantic terminal states, global connection search, a bounded Saved Connection list, contextual Workspace navigation, and in-window terminal tabs
-- A centered 1180×700 frameless window with integrated controls that remains resizable down to the supported 960×640 minimum
-- Cached host, systemd, journald, and Docker inspection with explicit refresh
-- Independent, bounded journald and Docker log streams
-- Explicit one-shot sudo retry for read-only structured requests
-- Optional Bash Enhanced History with exact commands, directories, timestamps, and exit codes
-- Local SQLite persistence for connections, settings, capabilities, and opted-in History
+- Open several independent SSH sessions at the same time, including multiple sessions for one saved connection.
+- Use an interactive terminal with Windows OpenSSH and ConPTY. It supports Unicode, ANSI and VT output, resizing, scrollback, copy and paste, control keys, Vim, Nano, top, htop, and tmux.
+- Reconnect after a dropped session or clear the local terminal buffer without sending a command to the remote host.
+- Inspect host details, systemd services, journald, and Docker through read-only operations with cached results and manual refresh.
+- Search services and containers, then open their journal or Docker logs.
+- Tail and follow journald or Docker logs with separate streams, pause and resume rendering, clear the view, and search loaded lines.
+- Retry read-only inspections with sudo after a permission error. Passwords are never saved.
+- Opt in to Bash Enhanced History to record commands, directories, timestamps, and exit codes from Control Room sessions. Pause, disable, clear, or remove it at any time.
+- Save connections, settings, capabilities, History, and disconnected session layout in a local SQLite database.
 
 Control Room does not store private keys, SSH passwords, sudo passwords, terminal output, or fetched logs. Structured features require noninteractive public-key or agent authentication; the interactive terminal can still show normal OpenSSH prompts.
 
