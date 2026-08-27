@@ -1,7 +1,13 @@
 const encoder = new TextEncoder();
 
-export const DEFAULT_LOG_MAX_LINES = 10_000;
-export const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_LOG_MAX_LINES = 10_000;
+const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024;
+
+export function logRenderDelay(byteCount: number): number {
+  if (byteCount >= 4 * 1024 * 1024) return 500;
+  if (byteCount >= 1024 * 1024) return 250;
+  return 80;
+}
 
 interface BufferedLine {
   value: string;

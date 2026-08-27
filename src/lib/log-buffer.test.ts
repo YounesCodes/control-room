@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BoundedLogBuffer } from "./log-buffer";
+import { BoundedLogBuffer, logRenderDelay } from "./log-buffer";
 
 describe("BoundedLogBuffer", () => {
   it("keeps the newest lines", () => {
@@ -39,5 +39,13 @@ describe("BoundedLogBuffer", () => {
     buffer.clear();
     expect(buffer.snapshot()).toBe("");
     expect(buffer.byteCount).toBe(0);
+  });
+});
+
+describe("logRenderDelay", () => {
+  it("updates large log views less often", () => {
+    expect(logRenderDelay(10_000)).toBe(80);
+    expect(logRenderDelay(1024 * 1024)).toBe(250);
+    expect(logRenderDelay(4 * 1024 * 1024)).toBe(500);
   });
 });

@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileKey } from "lucide-react";
+import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { validateConnectionDraft } from "../lib/connection-validation";
-import type { SavedConnection, SavedConnectionInput } from "../types";
+import type { HostCapabilities, SavedConnection, SavedConnectionInput } from "../types";
 import { Modal } from "./Modal";
 
 interface ConnectionDialogProps {
@@ -19,7 +19,20 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
   const [port, setPort] = useState(connection?.port?.toString() ?? "");
   const [identityFile, setIdentityFile] = useState(connection?.identityFile ?? "");
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<HostCapabilities | null>(null);
+
+  function input(): SavedConnectionInput {
+    return {
+      displayName,
+      destination,
+      username: username.trim(),
+      port: port.trim() ? Number(port) : null,
+      identityFile: identityFile.trim() || null,
+      historyEnabled: connection?.historyEnabled ?? false,
+    };
+  }
 
   async function chooseIdentity() {
     try {
@@ -38,15 +51,8 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
     event.preventDefault();
     setSaving(true);
     setError(null);
-    const input: SavedConnectionInput = {
-      displayName,
-      destination,
-      username: username.trim(),
-      port: port.trim() ? Number(port) : null,
-      identityFile: identityFile.trim() || null,
-      historyEnabled: connection?.historyEnabled ?? false,
-    };
-    const validationError = validateConnectionDraft(input);
+    const draft = input();
+    const validationError = validateConnectionDraft(draft);
     if (validationError) {
       setError(validationError);
       setSaving(false);
@@ -54,13 +60,34 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
     }
     try {
       const saved = connection
-        ? await api.updateConnection(connection.id, input)
-        : await api.createConnection(input);
+        ? await api.updateConnection(connection.id, draft)
+        : await api.createConnection(draft);
       onSaved(saved);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function testStructuredAccess() {
+    const draft = input();
+    const validationError = validateConnectionDraft(draft);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setTesting(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      setTestResult(await api.testConnection(draft));
+    } catch (caught) {
+      setError(
+        `Structured access failed: ${errorMessage(caught)}. An interactive terminal may still work with a password.`,
+      );
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -131,8 +158,24 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             The key stays in its existing location and is never copied into Control Room.
           </small>
         </label>
+        {testResult && (
+          <p className="inline-message" role="status">
+            Noninteractive SSH works. systemd:{" "}
+            {testResult.systemdAvailable ? "available" : "not detected"}; journald:{" "}
+            {testResult.journaldAvailable ? "available" : "not detected"}; Docker:{" "}
+            {testResult.dockerAvailable ? "available" : "not detected"}.
+          </p>
+        )}
         {error && <p className="inline-error">{error}</p>}
         <footer className="modal-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={testStructuredAccess}
+            disabled={saving || testing}
+          >
+            <Stethoscope size={15} /> {testing ? "Testing…" : "Test structured access"}
+          </button>
           <button className="secondary-button" type="button" onClick={onClose}>
             Cancel
           </button>

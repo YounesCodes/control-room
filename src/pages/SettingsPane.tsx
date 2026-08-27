@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
-import { RotateCcw, Save } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowLeft, RotateCcw, Save } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import { DEFAULT_TERMINAL_COLORS } from "../lib/terminal-theme";
+import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo } from "../types";
 
 const terminalColorFields = [
@@ -16,17 +16,29 @@ const terminalColorFields = [
 
 export function SettingsPane({
   settings,
+  defaults,
+  logTailOptions,
   environment,
   onSaved,
+  onClose,
+  onDirtyChange,
 }: {
   settings: AppSettings;
+  defaults: AppSettings;
+  logTailOptions: number[];
   environment: EnvironmentInfo;
   onSaved: (settings: AppSettings) => void;
+  onClose: () => boolean;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [draft, setDraft] = useState(settings);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
+
+  useEffect(() => {
+    onDirtyChange(settingsHaveChanges(settings, draft));
+  }, [draft, onDirtyChange, settings]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -36,6 +48,7 @@ export function SettingsPane({
     try {
       await api.saveSettings(draft);
       onSaved(draft);
+      onDirtyChange(false);
       setMessage("Settings saved.");
     } catch (caught) {
       setMessage(errorMessage(caught));
@@ -52,6 +65,14 @@ export function SettingsPane({
           <h2>Settings</h2>
           <p>Terminal, log, and local History preferences.</p>
         </div>
+        <button
+          className="secondary-button settings-back"
+          type="button"
+          onClick={() => onClose()}
+          aria-label="Back to terminal"
+        >
+          <ArrowLeft size={14} /> Back to terminal
+        </button>
       </header>
       <form className="settings-form" onSubmit={submit}>
         <fieldset>
@@ -99,7 +120,18 @@ export function SettingsPane({
             <button
               className="secondary-button compact-button"
               type="button"
-              onClick={() => setDraft({ ...draft, ...DEFAULT_TERMINAL_COLORS })}
+              onClick={() =>
+                setDraft({
+                  ...draft,
+                  terminalForeground: defaults.terminalForeground,
+                  terminalRed: defaults.terminalRed,
+                  terminalGreen: defaults.terminalGreen,
+                  terminalYellow: defaults.terminalYellow,
+                  terminalBlue: defaults.terminalBlue,
+                  terminalMagenta: defaults.terminalMagenta,
+                  terminalCyan: defaults.terminalCyan,
+                })
+              }
             >
               <RotateCcw size={13} /> Reset colors
             </button>
@@ -128,7 +160,7 @@ export function SettingsPane({
                 setDraft({ ...draft, defaultLogTail: Number(event.target.value) })
               }
             >
-              {[50, 100, 200, 500, 1000].map((count) => (
+              {logTailOptions.map((count) => (
                 <option key={count}>{count}</option>
               ))}
             </select>

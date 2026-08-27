@@ -1,3 +1,4 @@
+use chrono::Utc;
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
@@ -5,8 +6,8 @@ use crate::{
     history,
     models::{
         AppSettings, DockerContainer, EnvironmentInfo, HistoryEntry, HistoryInput,
-        HostCapabilities, SavedConnection, SavedConnectionInput, SessionStarted, StreamStarted,
-        SystemdService,
+        HostCapabilities, LOG_TAIL_OPTIONS, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdService,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -47,6 +48,39 @@ pub fn update_connection(
     database.update_connection(&id, input)
 }
 
+fn validated_test_connection(input: SavedConnectionInput) -> Result<SavedConnection, String> {
+    validate_connection_input(&input)?;
+    let now = Utc::now().to_rfc3339();
+    Ok(SavedConnection {
+        id: "connection-test".into(),
+        display_name: input.display_name.trim().into(),
+        destination: input.destination.trim().into(),
+        username: input
+            .username
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        port: input.port,
+        identity_file: input
+            .identity_file
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        history_enabled: false,
+        created_at: now.clone(),
+        updated_at: now,
+        last_connected_at: None,
+    })
+}
+
+#[tauri::command(async)]
+pub fn test_connection(
+    limiter: State<'_, RemoteOperationLimiter>,
+    input: SavedConnectionInput,
+) -> Result<HostCapabilities, String> {
+    let connection = validated_test_connection(input)?;
+    let _permit = limiter.acquire("connection-test")?;
+    remote::discover_capabilities(&connection)
+}
+
 #[tauri::command]
 pub fn delete_connection(database: State<'_, Database>, id: String) -> Result<(), String> {
     database.delete_connection(&id)
@@ -57,13 +91,12 @@ pub fn start_session(
     app: AppHandle,
     database: State<'_, Database>,
     sessions: State<'_, SessionManager>,
-    connection: SavedConnection,
+    connection_id: String,
     cols: u16,
     rows: u16,
     output: Channel<Response>,
 ) -> Result<SessionStarted, String> {
-    database.get_connection(&connection.id)?;
-    let mut connection = connection;
+    let mut connection = database.get_connection(&connection_id)?;
     validate_connection_input(&SavedConnectionInput {
         display_name: connection.display_name.clone(),
         destination: connection.destination.clone(),
@@ -129,7 +162,7 @@ pub fn refresh_capabilities(
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<HostCapabilities, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     let capabilities = remote::discover_capabilities(&connection)?;
     database.save_capabilities(&capabilities)?;
@@ -142,7 +175,7 @@ pub fn list_services(
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<Vec<SystemdService>, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     remote::list_services(&connection)
 }
@@ -154,7 +187,7 @@ pub fn list_containers(
     connection_id: String,
     sudo_password: Option<String>,
 ) -> Result<Vec<DockerContainer>, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     remote::list_containers(&connection, sudo_password)
 }
@@ -173,7 +206,7 @@ pub fn start_journal_stream(
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     streams.start_journal(
         app,
@@ -202,7 +235,7 @@ pub fn start_docker_log_stream(
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     streams.start_docker_logs(
         app,
@@ -266,13 +299,32 @@ pub fn set_connection_history_enabled(
 }
 
 #[tauri::command]
-pub fn get_settings(database: State<'_, Database>) -> Result<AppSettings, String> {
-    database.get_settings()
+pub fn get_settings_contract(database: State<'_, Database>) -> Result<SettingsContract, String> {
+    Ok(SettingsContract {
+        current: database.get_settings()?,
+        defaults: AppSettings::default(),
+        log_tail_options: LOG_TAIL_OPTIONS.to_vec(),
+    })
 }
 
 #[tauri::command]
 pub fn save_settings(database: State<'_, Database>, settings: AppSettings) -> Result<(), String> {
     database.save_settings(&settings)
+}
+
+#[tauri::command]
+pub fn get_workspace_state(
+    database: State<'_, Database>,
+) -> Result<PersistedWorkspaceState, String> {
+    database.get_workspace_state()
+}
+
+#[tauri::command]
+pub fn save_workspace_state(
+    database: State<'_, Database>,
+    state: PersistedWorkspaceState,
+) -> Result<(), String> {
+    database.save_workspace_state(&state)
 }
 
 #[tauri::command(async)]
@@ -281,7 +333,7 @@ pub fn get_history_integration_status(
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<bool, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     history::integration_status(&connection)
 }
@@ -292,7 +344,7 @@ pub fn install_history_integration(
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<SavedConnection, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     history::install_integration(&connection)?;
     database.set_history_enabled(&connection_id, true)?;
@@ -305,7 +357,7 @@ pub fn uninstall_history_integration(
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
 ) -> Result<SavedConnection, String> {
-    let _permit = limiter.acquire(&connection_id);
+    let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     history::uninstall_integration(&connection)?;
     database.set_history_enabled(&connection_id, false)?;
@@ -314,6 +366,9 @@ pub fn uninstall_history_integration(
 
 #[cfg(test)]
 mod tests {
+    use super::validated_test_connection;
+    use crate::models::SavedConnectionInput;
+
     #[test]
     fn ssh_backed_commands_are_dispatched_asynchronously() {
         let source = include_str!("commands.rs");
@@ -335,5 +390,38 @@ mod tests {
                 "{command} must stay asynchronous"
             );
         }
+    }
+
+    #[test]
+    fn terminal_start_loads_the_saved_connection_by_id() {
+        let source = include_str!("commands.rs");
+        let start = source
+            .split("pub fn start_session")
+            .nth(1)
+            .expect("start_session exists")
+            .split("#[tauri::command]")
+            .next()
+            .expect("start_session body exists");
+        assert!(start.contains("connection_id: String"));
+        assert!(start.contains("database.get_connection(&connection_id)"));
+        assert!(!start.contains("connection: SavedConnection"));
+    }
+
+    #[test]
+    fn structured_access_tests_validate_and_normalize_unsaved_details() {
+        let connection = validated_test_connection(SavedConnectionInput {
+            display_name: " Test host ".into(),
+            destination: " host-alias ".into(),
+            username: Some(" user ".into()),
+            port: Some(22),
+            identity_file: None,
+            history_enabled: true,
+        })
+        .unwrap();
+
+        assert_eq!(connection.display_name, "Test host");
+        assert_eq!(connection.destination, "host-alias");
+        assert_eq!(connection.username.as_deref(), Some("user"));
+        assert!(!connection.history_enabled);
     }
 }

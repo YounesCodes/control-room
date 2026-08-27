@@ -14,7 +14,7 @@ interface TerminalLayoutSplit {
   second: TerminalLayout;
 }
 
-export interface TerminalPaneRect {
+interface TerminalPaneRect {
   left: number;
   top: number;
   width: number;

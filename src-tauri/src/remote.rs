@@ -21,8 +21,8 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        DockerContainer, HostCapabilities, SavedConnection, StreamStarted, StreamStateEvent,
-        SystemdService,
+        DockerContainer, HostCapabilities, LOG_TAIL_OPTIONS, SavedConnection, StreamStarted,
+        StreamStateEvent, SystemdService,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -33,6 +33,7 @@ use crate::{
 const OUTPUT_LIMIT: u64 = 5 * 1024 * 1024;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
+const MAX_STRUCTURED_QUEUE_WAIT: Duration = Duration::from_secs(4);
 const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
 
 #[derive(Default)]
@@ -53,7 +54,15 @@ pub struct RemoteOperationPermit {
 }
 
 impl RemoteOperationLimiter {
-    pub fn acquire(&self, connection_id: &str) -> RemoteOperationPermit {
+    pub fn acquire(&self, connection_id: &str) -> Result<RemoteOperationPermit, String> {
+        self.acquire_for(connection_id, MAX_STRUCTURED_QUEUE_WAIT)
+    }
+
+    fn acquire_for(
+        &self,
+        connection_id: &str,
+        maximum_wait: Duration,
+    ) -> Result<RemoteOperationPermit, String> {
         let connection_id = connection_id.to_owned();
         let host = self
             .hosts
@@ -63,15 +72,30 @@ impl RemoteOperationLimiter {
             .clone();
         let mut active = host.active.lock();
         while *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
-            host.available.wait(&mut active);
+            if host
+                .available
+                .wait_for(&mut active, maximum_wait)
+                .timed_out()
+                && *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
+            {
+                drop(active);
+                let mut hosts = self.hosts.lock();
+                let remove = hosts.get(&connection_id).is_some_and(|tracked| {
+                    Arc::ptr_eq(tracked, &host) && *tracked.active.lock() == 0
+                });
+                if remove {
+                    hosts.remove(&connection_id);
+                }
+                return Err("Remote operation queue was busy for 4 seconds".into());
+            }
         }
         *active += 1;
         drop(active);
-        RemoteOperationPermit {
+        Ok(RemoteOperationPermit {
             connection_id,
             host,
             hosts: self.hosts.clone(),
-        }
+        })
     }
 
     #[cfg(test)]
@@ -674,7 +698,7 @@ fn emit_stream_state(app: &AppHandle, stream_id: &str, state: &str, reason: Opti
 }
 
 fn validate_tail(lines: u16) -> Result<(), String> {
-    if [50, 100, 200, 500, 1000].contains(&lines) {
+    if LOG_TAIL_OPTIONS.contains(&lines) {
         Ok(())
     } else {
         Err("Unsupported log tail count".into())
@@ -814,7 +838,7 @@ mod tests {
             let maximum = maximum.clone();
             workers.push(thread::spawn(move || {
                 start.wait();
-                let _permit = limiter.acquire("connection-a");
+                let _permit = limiter.acquire("connection-a").unwrap();
                 let current = active.fetch_add(1, Ordering::SeqCst) + 1;
                 maximum.fetch_max(current, Ordering::SeqCst);
                 thread::sleep(Duration::from_millis(25));
@@ -827,6 +851,27 @@ mod tests {
             worker.join().unwrap();
         }
         assert_eq!(maximum.load(Ordering::SeqCst), 2);
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    #[test]
+    fn queued_structured_operations_have_a_deadline() {
+        let limiter = RemoteOperationLimiter::default();
+        let first = limiter
+            .acquire_for("connection-a", Duration::from_millis(10))
+            .unwrap();
+        let second = limiter
+            .acquire_for("connection-a", Duration::from_millis(10))
+            .unwrap();
+
+        let error = limiter
+            .acquire_for("connection-a", Duration::from_millis(10))
+            .err()
+            .expect("the third operation should time out");
+
+        assert_eq!(error, "Remote operation queue was busy for 4 seconds");
+        drop(first);
+        drop(second);
         assert_eq!(limiter.tracked_connections(), 0);
     }
 

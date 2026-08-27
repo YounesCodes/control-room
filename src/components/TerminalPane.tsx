@@ -5,7 +5,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { Eraser, PlugZap, RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import { parseHistoryOsc } from "../lib/history-osc";
+import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { clearTerminalDisplay } from "../lib/terminal-display";
 import { BoundedByteQueue, isControlRoomShortcut } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
@@ -27,6 +27,7 @@ interface TerminalPaneProps {
   onActivate: () => void;
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
+  onReconnect: () => void;
 }
 
 interface PendingHistory {
@@ -46,6 +47,7 @@ export function TerminalPane({
   onActivate,
   onSession,
   onState,
+  onReconnect,
 }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -64,7 +66,6 @@ export function TerminalPane({
   const onStateRef = useRef(onState);
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
-  const [reconnectGeneration, setReconnectGeneration] = useState(0);
   const [localError, setLocalError] = useState<string | null>(null);
 
   historyPausedRef.current = workspace.historyPaused;
@@ -145,6 +146,7 @@ export function TerminalPane({
 
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) return false;
+      if (isControlRoomConnectedOsc(data)) return true;
       try {
         const event = parseHistoryOsc(data);
         if (!event) {
@@ -245,6 +247,13 @@ export function TerminalPane({
   useEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
+    if (!workspace.connectRequested) {
+      acceptingInputRef.current = false;
+      pendingInputRef.current.clear();
+      sessionIdRef.current = null;
+      onSessionRef.current(null);
+      return;
+    }
     const generation = ++sessionGenerationRef.current;
     let ownedSessionId: string | null = null;
     let acknowledgedBytes = 0;
@@ -288,7 +297,7 @@ export function TerminalPane({
     };
 
     void api
-      .startSession(connection, terminal.cols, terminal.rows, output)
+      .startSession(connection.id, terminal.cols, terminal.rows, output)
       .then(async ({ sessionId }) => {
         if (disposed || generation !== sessionGenerationRef.current) {
           await api.closeSession(sessionId).catch(() => undefined);
@@ -334,7 +343,7 @@ export function TerminalPane({
       }
       if (ownedSessionId) void api.closeSession(ownedSessionId).catch(() => undefined);
     };
-  }, [connection.id, reconnectGeneration, workspace.reconnectToken]);
+  }, [connection.id, workspace.connectRequested, workspace.reconnectToken]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -368,11 +377,7 @@ export function TerminalPane({
         </span>
         <div className="toolbar-actions">
           {(workspace.state === "disconnected" || workspace.state === "error") && (
-            <button
-              className="toolbar-button"
-              type="button"
-              onClick={() => setReconnectGeneration((value) => value + 1)}
-            >
+            <button className="toolbar-button" type="button" onClick={onReconnect}>
               <RefreshCw size={14} /> Reconnect
             </button>
           )}

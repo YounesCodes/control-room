@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-const terminalThemeSource = readFileSync(
-  new URL("./lib/terminal-theme.ts", import.meta.url),
+const settingsModelSource = readFileSync(
+  new URL("../src-tauri/src/models.rs", import.meta.url),
   "utf8",
 );
 const semanticUiColors = ["#42d17a", "#d6a84a", "#ef5b6b"];
@@ -62,10 +62,10 @@ describe("monochrome application palette", () => {
   });
 
   it("preserves ANSI colors for remote terminal content", () => {
-    expect(terminalThemeSource).toContain('terminalRed: "#ff6f7d"');
-    expect(terminalThemeSource).toContain('terminalGreen: "#52cf91"');
-    expect(terminalThemeSource).toContain('terminalYellow: "#e8c56c"');
-    expect(terminalThemeSource).toContain('terminalBlue: "#55aef2"');
+    expect(settingsModelSource).toContain('terminal_red: "#ff6f7d"');
+    expect(settingsModelSource).toContain('terminal_green: "#52cf91"');
+    expect(settingsModelSource).toContain('terminal_yellow: "#e8c56c"');
+    expect(settingsModelSource).toContain('terminal_blue: "#55aef2"');
   });
 
   it("keeps the main text hierarchy above WCAG AA contrast", () => {

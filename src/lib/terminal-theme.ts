@@ -1,16 +1,6 @@
 import type { ITheme } from "@xterm/xterm";
 import type { AppSettings } from "../types";
 
-export const DEFAULT_TERMINAL_COLORS = {
-  terminalForeground: "#f2f2ee",
-  terminalRed: "#ff6f7d",
-  terminalGreen: "#52cf91",
-  terminalYellow: "#e8c56c",
-  terminalBlue: "#55aef2",
-  terminalMagenta: "#c793ff",
-  terminalCyan: "#65d4d1",
-} as const;
-
 type TerminalColorSettings = Pick<
   AppSettings,
   | "terminalForeground"

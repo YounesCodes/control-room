@@ -7,6 +7,7 @@
 - [x] Live ConPTY and OpenSSH fixture passes against the release candidate
 - [x] Saved Connections persist in SQLite
 - [x] Multiple Workspaces and Terminal Sessions remain independent, including explicit same-connection terminal spawning
+- [x] Workspace tabs, local labels, selected pages, and split layout restore as disconnected after restart
 - [x] Host capability discovery and Overview are accurate
 - [x] systemd services are inspectable
 - [x] journald tail and follow streams work
@@ -17,7 +18,7 @@
 - [x] Black-and-white Docker Desktop-inspired application shell uses detected Debian and Ubuntu marks in host navigation, reserves state indicators for the Terminal view, and keeps one clear location per action, sidebar connection search above a bounded connection list, contextual Workspace navigation, per-connection overflow menus, in-window terminal tabs with an F11 focus mode and nested vertical or horizontal terminal panes, integrated window controls, and centered resizable startup geometry
 - [x] Terminal settings provide live ANSI color customization, and Clear reliably erases the local viewport and scrollback without resetting the SSH session
 - [x] Automated frontend, Rust, migration, high-output, and accessibility gates pass
-- [x] Windows CI and tagged unsigned release workflows are defined
+- [x] Windows CI and tagged unsigned release workflows validate locked dependencies and publish an installer checksum
 - [x] Build the release-candidate NSIS package
 - [ ] Install the package on a clean Windows user profile
 - [ ] Complete the clean-profile manual acceptance checklist

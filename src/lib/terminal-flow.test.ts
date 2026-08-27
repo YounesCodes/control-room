@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BoundedByteQueue,
   isControlRoomShortcut,
+  isWorkspaceShortcutBlocked,
   MAX_PENDING_TERMINAL_INPUT_BYTES,
 } from "./terminal-flow";
 
@@ -67,5 +68,24 @@ describe("isControlRoomShortcut", () => {
     expect(
       isControlRoomShortcut({ type: "keydown", key: "t", ctrlKey: false, shiftKey: true }),
     ).toBe(false);
+  });
+});
+
+describe("isWorkspaceShortcutBlocked", () => {
+  function target(matches: string[]) {
+    return {
+      closest: (selector: string) => matches.some((value) => selector.includes(value)),
+    } as unknown as EventTarget;
+  }
+
+  it("blocks shortcuts in application forms and dialogs", () => {
+    expect(isWorkspaceShortcutBlocked(target(["input"]), false)).toBe(true);
+    expect(isWorkspaceShortcutBlocked(target(["[role='dialog']"]), false)).toBe(true);
+    expect(isWorkspaceShortcutBlocked(null, true)).toBe(true);
+  });
+
+  it("keeps shortcuts available inside xterm and ordinary application controls", () => {
+    expect(isWorkspaceShortcutBlocked(target([".xterm", "textarea"]), false)).toBe(false);
+    expect(isWorkspaceShortcutBlocked(target([]), false)).toBe(false);
   });
 });

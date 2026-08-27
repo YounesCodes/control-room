@@ -98,6 +98,12 @@ export interface AppSettings {
   globalHistoryEnabled: boolean;
 }
 
+export interface SettingsContract {
+  current: AppSettings;
+  defaults: AppSettings;
+  logTailOptions: number[];
+}
+
 export interface EnvironmentInfo {
   sshPath: string | null;
   sshConfigPath: string;
@@ -124,6 +130,7 @@ export interface LogSourceSelection {
 
 export interface Workspace {
   id: string;
+  label: string | null;
   connectionId: string;
   connectionSnapshot: SavedConnection;
   sessionId: string | null;
@@ -132,9 +139,24 @@ export interface Workspace {
   view: WorkspaceView;
   historyPaused: boolean;
   reconnectToken: number;
+  connectRequested: boolean;
   servicesCache: CachedList<SystemdService>;
   containersCache: CachedList<DockerContainer>;
   logSource: LogSourceSelection | null;
+}
+
+interface PersistedWorkspace {
+  id: string;
+  label: string | null;
+  connectionId: string;
+  view: WorkspaceView;
+  historyPaused: boolean;
+}
+
+export interface PersistedWorkspaceState {
+  workspaces: PersistedWorkspace[];
+  activeWorkspaceId: string | null;
+  terminalLayout: import("./lib/terminal-layout").TerminalLayout | null;
 }
 
 export interface SessionStateEvent {

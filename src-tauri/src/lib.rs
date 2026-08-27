@@ -11,7 +11,6 @@ use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
 use tauri::Manager;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -29,6 +28,7 @@ pub fn run() {
             commands::list_connections,
             commands::create_connection,
             commands::update_connection,
+            commands::test_connection,
             commands::delete_connection,
             commands::start_session,
             commands::write_session,
@@ -47,8 +47,10 @@ pub fn run() {
             commands::delete_history_entry,
             commands::clear_history,
             commands::set_connection_history_enabled,
-            commands::get_settings,
+            commands::get_settings_contract,
             commands::save_settings,
+            commands::get_workspace_state,
+            commands::save_workspace_state,
             commands::get_history_integration_status,
             commands::install_history_integration,
             commands::uninstall_history_integration,

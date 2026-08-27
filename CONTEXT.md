@@ -13,7 +13,7 @@ The Linux system reached through a Saved Connection. More than one Saved Connect
 _Avoid_: Saved host, connection
 
 **Workspace**:
-An open view of one Saved Connection that groups a Terminal Session with inspection features for its Remote Host. A Saved Connection may have multiple Workspaces.
+An open view of one Saved Connection that groups a Terminal Session with inspection features for its Remote Host. A Saved Connection may have multiple Workspaces. A Workspace may have its own local label.
 _Avoid_: Host tab, session
 
 **Terminal Session**:

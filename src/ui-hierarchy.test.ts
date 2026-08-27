@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
 const overviewSource = readFileSync(new URL("./pages/OverviewPane.tsx", import.meta.url), "utf8");
+const settingsSource = readFileSync(new URL("./pages/SettingsPane.tsx", import.meta.url), "utf8");
+const historySource = readFileSync(new URL("./pages/HistoryPane.tsx", import.meta.url), "utf8");
+const logsSource = readFileSync(new URL("./pages/LogsPane.tsx", import.meta.url), "utf8");
 const terminalSource = readFileSync(
   new URL("./components/TerminalPane.tsx", import.meta.url),
   "utf8",
@@ -31,6 +34,27 @@ describe("application hierarchy", () => {
     expect(appSource).toContain('className="search-field sidebar-search"');
     expect(appSource).not.toContain('className="search-field app-search"');
     expect(stylesSource).toMatch(/\.app-shell\s*\{[^}]*grid-template-rows: 42px/s);
+  });
+
+  it("gives Settings an explicit way back to the workspace", () => {
+    expect(appSource).toContain("onClose={closeSettings}");
+    expect(appSource).toContain('window.confirm("Discard unsaved Settings changes?")');
+    expect(settingsSource).toContain('aria-label="Back to terminal"');
+  });
+
+  it("keeps local History search separate from the remote integration check", () => {
+    const searchLoader = historySource.slice(
+      historySource.indexOf("async function loadHistory"),
+      historySource.indexOf("useEffect(() =>", historySource.indexOf("async function loadHistory")),
+    );
+    expect(searchLoader).toContain("api.history(connection.id, search)");
+    expect(searchLoader).not.toContain("historyIntegrationStatus");
+  });
+
+  it("offers sudo when Docker log source discovery lacks permission", () => {
+    expect(logsSource).toContain('type SudoPurpose = "sources" | "stream"');
+    expect(logsSource).toContain('setSudoPurpose("sources")');
+    expect(logsSource).toContain('loadSources("docker", true, password)');
   });
 
   it("uses host OS marks in navigation and keeps status in the Terminal view", () => {

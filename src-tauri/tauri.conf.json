@@ -30,6 +30,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
     "shortDescription": "Manage Linux hosts over SSH",
     "longDescription": "A local Windows desktop control room for Linux hosts over SSH.",
     "windows": {

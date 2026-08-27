@@ -56,13 +56,17 @@ enum TerminalFailureHint {
 struct TerminalFailureDetector {
     tail: String,
     hint: Option<TerminalFailureHint>,
+    connected: bool,
 }
+
+const CONNECTED_MARKER: &str = "\u{1b}]633;ControlRoom;connected\u{7}";
 
 impl TerminalFailureDetector {
     fn observe(&mut self, bytes: &[u8]) {
         let chunk = String::from_utf8_lossy(bytes).to_ascii_lowercase();
         let combined = format!("{}{chunk}", self.tail);
         self.hint = detect_terminal_failure(&combined).or(self.hint);
+        self.connected |= combined.contains(&CONNECTED_MARKER.to_ascii_lowercase());
         self.tail = combined
             .chars()
             .rev()
@@ -141,9 +145,7 @@ impl SessionManager {
 
         let mut command = CommandBuilder::new(ssh_path);
         command.args(connection_arguments(connection, true));
-        if connection.history_enabled {
-            command.arg("CONTROL_ROOM_SHELL_INTEGRATION=1 exec bash -i");
-        }
+        command.arg(interactive_shell_command(connection.history_enabled));
         let mut child = pair
             .slave
             .spawn_command(command)
@@ -192,12 +194,13 @@ impl SessionManager {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(count) => {
-                        let startup_failure = {
+                        let (startup_failure, connected) = {
                             let mut detector = output_managed.failure_detector.lock();
                             detector.observe(&buffer[..count]);
-                            detector.hint.is_some()
+                            (detector.hint.is_some(), detector.connected)
                         };
-                        if !startup_failure
+                        if connected
+                            && !startup_failure
                             && !output_managed
                                 .connected_emitted
                                 .swap(true, Ordering::AcqRel)
@@ -322,6 +325,14 @@ impl SessionManager {
     }
 }
 
+fn interactive_shell_command(history_enabled: bool) -> &'static str {
+    if history_enabled {
+        "printf '\\033]633;ControlRoom;connected\\007'; CONTROL_ROOM_SHELL_INTEGRATION=1 exec bash -i"
+    } else {
+        "printf '\\033]633;ControlRoom;connected\\007'; exec \"${SHELL:-/bin/bash}\" -l"
+    }
+}
+
 fn map_pty_kill_result(result: std::io::Result<()>) -> Result<(), String> {
     match result {
         Ok(()) => Ok(()),
@@ -423,7 +434,7 @@ mod tests {
 
     use super::{
         MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, TerminalFailureDetector, TerminalFailureHint,
-        classify_session_exit, map_pty_kill_result,
+        classify_session_exit, interactive_shell_command, map_pty_kill_result,
     };
 
     #[test]
@@ -439,6 +450,24 @@ mod tests {
         detector.observe(b"ssh: connect to host laptop port 22: Connection ref");
         detector.observe(b"used\r\n");
         assert_eq!(detector.hint, Some(TerminalFailureHint::ConnectionRefused));
+    }
+
+    #[test]
+    fn authentication_prompts_do_not_mark_a_terminal_connected() {
+        let mut detector = TerminalFailureDetector::default();
+        detector.observe(b"user@host's password: ");
+        assert!(!detector.connected);
+        detector.observe(b"\x1b]633;ControlRoom;con");
+        assert!(!detector.connected);
+        detector.observe(b"nected\x07");
+        assert!(detector.connected);
+    }
+
+    #[test]
+    fn interactive_shells_emit_the_connection_marker_before_startup() {
+        assert!(interactive_shell_command(false).contains("ControlRoom;connected"));
+        assert!(interactive_shell_command(false).contains("${SHELL:-/bin/bash}"));
+        assert!(interactive_shell_command(true).contains("CONTROL_ROOM_SHELL_INTEGRATION=1"));
     }
 
     #[test]

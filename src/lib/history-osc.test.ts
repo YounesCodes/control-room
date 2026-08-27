@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHistoryOsc } from "./history-osc";
+import { isControlRoomConnectedOsc, parseHistoryOsc } from "./history-osc";
 
 describe("parseHistoryOsc", () => {
   it("parses exact start and finish metadata", () => {
@@ -23,5 +23,12 @@ describe("parseHistoryOsc", () => {
     expect(parseHistoryOsc("ControlRoom;start;bad;;cHdk")).toBeNull();
     expect(parseHistoryOsc("ControlRoom;finish;1704067201000;NaN;L3RtcA==")).toBeNull();
     expect(parseHistoryOsc(`ControlRoom;start;1704067200000;;${"A".repeat(1_500_001)}`)).toBeNull();
+  });
+});
+
+describe("isControlRoomConnectedOsc", () => {
+  it("recognizes only the fixed authenticated-session marker", () => {
+    expect(isControlRoomConnectedOsc("ControlRoom;connected")).toBe(true);
+    expect(isControlRoomConnectedOsc("ControlRoom;connected;extra")).toBe(false);
   });
 });

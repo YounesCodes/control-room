@@ -6,8 +6,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::models::{
-    AppSettings, HistoryEntry, HistoryInput, HostCapabilities, SavedConnection,
-    SavedConnectionInput,
+    AppSettings, HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS,
+    PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
 };
 
 const LATEST_SCHEMA_VERSION: i64 = 1;
@@ -342,6 +342,118 @@ impl Database {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+
+    pub fn get_workspace_state(&self) -> Result<PersistedWorkspaceState, String> {
+        let payload: Option<String> = self
+            .connection
+            .lock()
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'workspace_state'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let Some(payload) = payload else {
+            return Ok(PersistedWorkspaceState::default());
+        };
+        if let Ok(state) = serde_json::from_str::<PersistedWorkspaceState>(&payload)
+            && validate_workspace_state(&state).is_ok()
+        {
+            return Ok(state);
+        }
+        self.connection
+            .lock()
+            .execute(
+                "DELETE FROM application_settings WHERE key = 'workspace_state'",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(PersistedWorkspaceState::default())
+    }
+
+    pub fn save_workspace_state(&self, state: &PersistedWorkspaceState) -> Result<(), String> {
+        validate_workspace_state(state)?;
+        let payload = serde_json::to_string(state).map_err(|error| error.to_string())?;
+        self.connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES ('workspace_state', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [payload],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+}
+
+fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), String> {
+    if state.workspaces.len() > 100 {
+        return Err("Workspace state cannot contain more than 100 Workspaces".into());
+    }
+    let mut ids = std::collections::HashSet::new();
+    for workspace in &state.workspaces {
+        if Uuid::parse_str(&workspace.id).is_err()
+            || Uuid::parse_str(&workspace.connection_id).is_err()
+            || !ids.insert(workspace.id.as_str())
+        {
+            return Err("Workspace state contains invalid identifiers".into());
+        }
+        if workspace
+            .label
+            .as_ref()
+            .is_some_and(|label| label.chars().count() > 80 || label.chars().any(char::is_control))
+        {
+            return Err("Workspace label is invalid".into());
+        }
+        if ![
+            "overview", "terminal", "services", "docker", "logs", "history",
+        ]
+        .contains(&workspace.view.as_str())
+        {
+            return Err("Workspace view is invalid".into());
+        }
+    }
+    if state
+        .active_workspace_id
+        .as_ref()
+        .is_some_and(|id| !ids.contains(id.as_str()))
+    {
+        return Err("Active Workspace is missing from Workspace state".into());
+    }
+    if let Some(layout) = &state.terminal_layout {
+        validate_persisted_layout(layout, &ids, 0)?;
+    }
+    Ok(())
+}
+
+fn validate_persisted_layout(
+    layout: &PersistedTerminalLayout,
+    workspace_ids: &std::collections::HashSet<&str>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > 16 {
+        return Err("Terminal split layout is too deeply nested".into());
+    }
+    match layout {
+        PersistedTerminalLayout::Leaf { workspace_id } => {
+            if workspace_ids.contains(workspace_id.as_str()) {
+                Ok(())
+            } else {
+                Err("Terminal split layout refers to a missing Workspace".into())
+            }
+        }
+        PersistedTerminalLayout::Split {
+            direction,
+            first,
+            second,
+        } => {
+            if direction != "vertical" && direction != "horizontal" {
+                return Err("Terminal split direction is invalid".into());
+            }
+            validate_persisted_layout(first, workspace_ids, depth + 1)?;
+            validate_persisted_layout(second, workspace_ids, depth + 1)
+        }
+    }
 }
 
 fn validate_settings(settings: &AppSettings) -> Result<(), String> {
@@ -351,7 +463,7 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     if !(100..=100_000).contains(&settings.terminal_scrollback) {
         return Err("Terminal scrollback must be between 100 and 100000".into());
     }
-    if ![50, 100, 200, 500, 1000].contains(&settings.default_log_tail) {
+    if !LOG_TAIL_OPTIONS.contains(&settings.default_log_tail) {
         return Err("Unsupported default log tail count".into());
     }
     let font_family = settings.terminal_font_family.trim();
@@ -753,6 +865,31 @@ mod tests {
     }
 
     #[test]
+    fn advertised_log_tail_options_match_settings_validation() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+        for default_log_tail in LOG_TAIL_OPTIONS {
+            database
+                .save_settings(&AppSettings {
+                    default_log_tail,
+                    ..AppSettings::default()
+                })
+                .unwrap();
+        }
+
+        assert_eq!(
+            database
+                .save_settings(&AppSettings {
+                    default_log_tail: 51,
+                    ..AppSettings::default()
+                })
+                .unwrap_err(),
+            "Unsupported default log tail count"
+        );
+    }
+
+    #[test]
     fn history_search_treats_like_metacharacters_literally() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -822,5 +959,28 @@ mod tests {
             validate_history_input(&history).unwrap_err(),
             "Only Bash Enhanced History is supported"
         );
+    }
+
+    #[test]
+    fn disconnected_workspace_state_round_trips_without_session_data() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let workspace_id = Uuid::new_v4().to_string();
+        let state = PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: Some("Deploy".into()),
+                connection_id: saved.id,
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id.clone()),
+            terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
+        };
+
+        database.save_workspace_state(&state).unwrap();
+
+        assert_eq!(database.get_workspace_state().unwrap(), state);
     }
 }

@@ -20,6 +20,7 @@ export function HistoryPane({
   onPausedChange,
   onConnectionChanged,
   onPaste,
+  canPaste,
 }: {
   connection: SavedConnection;
   paused: boolean;
@@ -27,27 +28,25 @@ export function HistoryPane({
   onPausedChange: (paused: boolean) => void;
   onConnectionChanged: (connection: SavedConnection) => void;
   onPaste: (command: string) => void;
+  canPaste: boolean;
 }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [integrationInstalled, setIntegrationInstalled] = useState(false);
+  const [integrationInstalled, setIntegrationInstalled] = useState<boolean | null>(null);
+  const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadRequestRef = useRef(0);
 
-  async function load() {
+  async function loadHistory() {
     const request = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
-      const [history, installed] = await Promise.all([
-        api.history(connection.id, search),
-        api.historyIntegrationStatus(connection.id),
-      ]);
+      const history = await api.history(connection.id, search);
       if (request === loadRequestRef.current) {
         setEntries(history);
-        setIntegrationInstalled(installed);
       }
     } catch (caught) {
       if (request === loadRequestRef.current) setError(errorMessage(caught));
@@ -57,12 +56,38 @@ export function HistoryPane({
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), search ? 180 : 0);
+    const timer = window.setTimeout(() => void loadHistory(), search ? 180 : 0);
     return () => {
       window.clearTimeout(timer);
       loadRequestRef.current += 1;
     };
   }, [connection.id, search]);
+
+  useEffect(() => {
+    let current = true;
+    setIntegrationInstalled(null);
+    setIntegrationError(null);
+    void api
+      .historyIntegrationStatus(connection.id)
+      .then((installed) => {
+        if (current) setIntegrationInstalled(installed);
+      })
+      .catch((caught) => {
+        if (current) setIntegrationError(errorMessage(caught));
+      });
+    return () => {
+      current = false;
+    };
+  }, [connection.id]);
+
+  function refresh() {
+    void loadHistory();
+    setIntegrationError(null);
+    void api
+      .historyIntegrationStatus(connection.id)
+      .then(setIntegrationInstalled)
+      .catch((caught) => setIntegrationError(errorMessage(caught)));
+  }
 
   async function installIntegration() {
     setWorking(true);
@@ -166,7 +191,7 @@ export function HistoryPane({
             {paused ? <Play size={14} /> : <Pause size={14} />}
             {paused ? "Resume" : "Pause"}
           </button>
-          <button className="toolbar-button" type="button" onClick={load} disabled={loading}>
+          <button className="toolbar-button" type="button" onClick={refresh} disabled={loading}>
             <RefreshCw size={14} /> Refresh
           </button>
           <button
@@ -179,7 +204,13 @@ export function HistoryPane({
           </button>
         </div>
       </header>
-      {!integrationInstalled && (
+      {integrationError && (
+        <p className="inline-warning">
+          Saved commands are available, but Control Room could not check the remote Bash
+          integration: {integrationError}
+        </p>
+      )}
+      {integrationInstalled === false && (
         <section className="history-opt-in">
           <h3>Enable exact Bash command history</h3>
           <p>
@@ -198,40 +229,46 @@ export function HistoryPane({
           </button>
         </section>
       )}
-      {integrationInstalled && (
-        <div className="history-tools">
-          <label className="search-field">
-            <Search size={15} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search commands"
-            />
-          </label>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={toggleCapture}
-            disabled={working}
-          >
-            {working ? "Saving…" : connection.historyEnabled ? "Disable capture" : "Enable capture"}
-          </button>
-          <button
-            className="danger-button"
-            type="button"
-            onClick={removeIntegration}
-            disabled={working}
-          >
-            Remove integration
-          </button>
-        </div>
-      )}
+      <div className="history-tools">
+        <label className="search-field">
+          <Search size={15} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search commands"
+          />
+        </label>
+        {integrationInstalled === true && (
+          <>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={toggleCapture}
+              disabled={working}
+            >
+              {working
+                ? "Saving…"
+                : connection.historyEnabled
+                  ? "Disable capture"
+                  : "Enable capture"}
+            </button>
+            <button
+              className="danger-button"
+              type="button"
+              onClick={removeIntegration}
+              disabled={working}
+            >
+              Remove integration
+            </button>
+          </>
+        )}
+      </div>
       {!globalEnabled && (
         <p className="inline-warning">
           Enhanced History is disabled globally. Existing entries remain available.
         </p>
       )}
-      {integrationInstalled && !connection.historyEnabled && (
+      {integrationInstalled === true && !connection.historyEnabled && (
         <p className="inline-warning">
           Capture is disabled for this Saved Connection. Existing entries remain available.
         </p>
@@ -242,7 +279,7 @@ export function HistoryPane({
         </p>
       )}
       {error && <ErrorState message={error} />}
-      {integrationInstalled && !error && !grouped.length && (
+      {integrationInstalled === true && !error && !grouped.length && (
         <EmptyState title="No commands recorded yet">
           Run a command in a new integrated terminal session.
         </EmptyState>
@@ -284,6 +321,8 @@ export function HistoryPane({
                   type="button"
                   onClick={() => onPaste(entry.command)}
                   aria-label="Paste into terminal"
+                  title={canPaste ? "Paste into terminal" : "Reconnect the terminal before pasting"}
+                  disabled={!canPaste}
                 >
                   <TerminalSquare size={15} />
                 </button>

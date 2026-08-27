@@ -22,6 +22,11 @@ jobs:
           components: clippy, rustfmt
       - run: npm ci
       - run: npm run check
+      - name: Check Rust dependencies for known security issues
+        shell: pwsh
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --file src-tauri/Cargo.lock
       - run: npm run tauri build
       - name: Publish unsigned NSIS installer
         shell: pwsh
@@ -30,4 +35,7 @@ jobs:
         run: |
           $installer = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not produced" }
-          gh release create $env:GITHUB_REF_NAME $installer.FullName --generate-notes --verify-tag
+          $checksumPath = "$($installer.FullName).sha256"
+          $checksum = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$checksum  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
+          gh release create $env:GITHUB_REF_NAME $installer.FullName $checksumPath --generate-notes --verify-tag

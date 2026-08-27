@@ -122,6 +122,16 @@ pub struct AppSettings {
     pub global_history_enabled: bool,
 }
 
+pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsContract {
+    pub current: AppSettings,
+    pub defaults: AppSettings,
+    pub log_tail_options: Vec<u16>,
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -178,4 +188,36 @@ pub struct EnvironmentInfo {
     pub ssh_config_path: String,
     pub ssh_agent_available: bool,
     pub platform_supported: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PersistedWorkspaceState {
+    pub workspaces: Vec<PersistedWorkspace>,
+    pub active_workspace_id: Option<String>,
+    pub terminal_layout: Option<PersistedTerminalLayout>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedWorkspace {
+    pub id: String,
+    pub label: Option<String>,
+    pub connection_id: String,
+    pub view: String,
+    pub history_paused: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PersistedTerminalLayout {
+    Leaf {
+        #[serde(rename = "workspaceId")]
+        workspace_id: String,
+    },
+    Split {
+        direction: String,
+        first: Box<PersistedTerminalLayout>,
+        second: Box<PersistedTerminalLayout>,
+    },
 }

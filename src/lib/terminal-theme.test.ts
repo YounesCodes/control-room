@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildTerminalTheme, DEFAULT_TERMINAL_COLORS } from "./terminal-theme";
+import { buildTerminalTheme } from "./terminal-theme";
 
 describe("buildTerminalTheme", () => {
   it("maps configurable ANSI colors used by prompts and directory listings", () => {
     const theme = buildTerminalTheme({
-      ...DEFAULT_TERMINAL_COLORS,
       terminalForeground: "#eeeeee",
+      terminalRed: "#ff6f7d",
       terminalGreen: "#11aa55",
+      terminalYellow: "#e8c56c",
       terminalBlue: "#3366cc",
+      terminalMagenta: "#c793ff",
+      terminalCyan: "#65d4d1",
     });
 
     expect(theme.foreground).toBe("#eeeeee");

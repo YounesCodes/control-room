@@ -7,7 +7,6 @@
   --app-bg: #090909;
   --topbar-bg: #000;
   --sidebar-bg: #050505;
-  --panel-bg: #0d0d0d;
   --panel-raised: #171717;
   --row-selected: #292929;
   --terminal-bg: #000;
@@ -18,7 +17,6 @@
   --text-faint: #7a7a77;
   --accent: #f2f2ee;
   --accent-hover: #fff;
-  --accent-soft: #242424;
   --success: #42d17a;
   --warning: #d6a84a;
   --failure: #ef5b6b;
@@ -489,11 +487,35 @@ code,
 }
 
 .workspace-shell {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   background: var(--app-bg);
+}
+
+.app-action-error {
+  position: absolute;
+  z-index: 30;
+  top: 52px;
+  right: 14px;
+  display: flex;
+  max-width: min(520px, calc(100% - 28px));
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  box-shadow: 0 8px 24px #000a;
+}
+
+.app-action-error button {
+  display: grid;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  place-items: center;
 }
 
 .terminal-focus-mode {
@@ -596,7 +618,8 @@ code,
   color: #fff;
 }
 
-.session-tab-close {
+.session-tab-close,
+.session-tab-rename {
   display: grid;
   width: 28px;
   flex: none;
@@ -605,9 +628,14 @@ code,
   color: #767673;
 }
 
-.session-tab-close:hover {
+.session-tab-close:hover,
+.session-tab-rename:hover {
   background: #252525;
   color: #fff;
+}
+
+.session-tab-rename {
+  width: 24px;
 }
 
 .session-tab-wrap.active {

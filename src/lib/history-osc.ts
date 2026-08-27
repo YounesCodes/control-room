@@ -4,9 +4,13 @@ const MAX_HISTORY_OSC_CHARS = 1_500_000;
 const MAX_HISTORY_COMMAND_BYTES = 1024 * 1024;
 const MAX_HISTORY_CWD_BYTES = 32_767;
 
-export type HistoryOscEvent =
+type HistoryOscEvent =
   | { kind: "start"; startedAt: string; cwd: string | null; command: string }
   | { kind: "finish"; finishedAt: string; exitCode: number; cwd: string | null };
+
+export function isControlRoomConnectedOsc(data: string): boolean {
+  return data === "ControlRoom;connected";
+}
 
 export function parseHistoryOsc(data: string): HistoryOscEvent | null {
   if (!data.startsWith("ControlRoom;") || data.length > MAX_HISTORY_OSC_CHARS) return null;

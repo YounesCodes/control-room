@@ -6,7 +6,7 @@ The first release targets Windows 11 x64 and Debian or Ubuntu family hosts with 
 
 ## Features
 
-- Multiple simultaneous SSH Workspaces, with a visible New terminal action and Ctrl+Shift+N for additional sessions on the same Saved Connection
+- Multiple simultaneous SSH Workspaces, with a visible New terminal action, Ctrl+Shift+N for additional sessions on the same Saved Connection, local tab labels, and disconnected tab and split restoration after restart
 - Interactive ConPTY and xterm.js terminal with resize, Unicode, copy and paste, reliable local display clearing, configurable ANSI colors, F11 terminal focus mode with nested vertical and horizontal splits from open sessions or Saved Connections, scrollback that survives Settings navigation, and reconnect into a clean terminal buffer
 - Black-and-white Docker Desktop-inspired navigation with Debian and Ubuntu marks detected from cached or newly connected hosts, semantic terminal states, global connection search, a bounded Saved Connection list, contextual Workspace navigation, and in-window terminal tabs
 - A centered 1180×700 frameless window with integrated controls that remains resizable down to the supported 960×640 minimum
@@ -46,7 +46,7 @@ See [testing](docs/TESTING.md) for the live SSH fixture and clean-machine accept
 
 ## Releases
 
-CI validates pushes and pull requests on Windows and builds an NSIS artifact. A tag matching the three synchronized project versions, such as `v0.1.0`, runs the same gate and publishes the unsigned installer to a GitHub release.
+CI validates pushes and pull requests on Windows, audits locked Rust dependencies, and builds an NSIS artifact with a SHA-256 checksum. A tag matching the three synchronized project versions, such as `v0.1.0`, runs the same gate and publishes the unsigned installer and checksum to a GitHub release.
 
 ## Security and privacy
 

@@ -6,8 +6,10 @@ import type {
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
+  PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
+  SettingsContract,
   SystemdService,
 } from "../types";
 
@@ -40,15 +42,12 @@ export const api = {
     invoke<SavedConnection>("create_connection", { input }),
   updateConnection: (id: string, input: SavedConnectionInput) =>
     invoke<SavedConnection>("update_connection", { id, input }),
+  testConnection: (input: SavedConnectionInput) =>
+    invokeRemoteInspection<HostCapabilities>("test_connection", { input }),
   deleteConnection: (id: string) => invoke<void>("delete_connection", { id }),
-  startSession: (
-    connection: SavedConnection,
-    cols: number,
-    rows: number,
-    output: Channel<ArrayBuffer>,
-  ) =>
+  startSession: (connectionId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
-      connection,
+      connectionId,
       cols,
       rows,
       output,
@@ -108,8 +107,11 @@ export const api = {
   clearHistory: (connectionId: string) => invoke<void>("clear_history", { connectionId }),
   setConnectionHistoryEnabled: (connectionId: string, enabled: boolean) =>
     invoke<SavedConnection>("set_connection_history_enabled", { connectionId, enabled }),
-  settings: () => invoke<AppSettings>("get_settings"),
+  settingsContract: () => invoke<SettingsContract>("get_settings_contract"),
   saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
+  workspaceState: () => invoke<PersistedWorkspaceState>("get_workspace_state"),
+  saveWorkspaceState: (state: PersistedWorkspaceState) =>
+    invoke<void>("save_workspace_state", { state }),
   historyIntegrationStatus: (connectionId: string) =>
     invoke<boolean>("get_history_integration_status", { connectionId }),
   installHistoryIntegration: (connectionId: string) =>

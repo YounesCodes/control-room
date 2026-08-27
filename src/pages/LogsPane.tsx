@@ -5,7 +5,7 @@ import { Eraser, Pause, Play, Search, Square } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
-import { BoundedLogBuffer } from "../lib/log-buffer";
+import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
 import type {
   AppSettings,
@@ -19,11 +19,13 @@ import type {
 } from "../types";
 
 type StreamStatus = "stopped" | "starting" | "running" | "stopping";
+type SudoPurpose = "sources" | "stream";
 const MAX_EARLY_STREAM_EVENTS = 16;
 
 export function LogsPane({
   connection,
   settings,
+  logTailOptions,
   servicesCache,
   containersCache,
   selectedSource,
@@ -33,6 +35,7 @@ export function LogsPane({
 }: {
   connection: SavedConnection;
   settings: AppSettings;
+  logTailOptions: number[];
   servicesCache: CachedList<SystemdService>;
   containersCache: CachedList<DockerContainer>;
   selectedSource: LogSourceSelection | null;
@@ -48,8 +51,9 @@ export function LogsPane({
   const [paused, setPaused] = useState(false);
   const [logs, setLogs] = useState("");
   const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [requestSudo, setRequestSudo] = useState(false);
+  const [sudoPurpose, setSudoPurpose] = useState<SudoPurpose | null>(null);
 
   const activeBufferRef = useRef(new BoundedLogBuffer());
   const pausedBufferRef = useRef(new BoundedLogBuffer());
@@ -75,7 +79,10 @@ export function LogsPane({
 
   function scheduleFlush() {
     if (flushTimerRef.current !== null) return;
-    flushTimerRef.current = window.setTimeout(flushNow, 50);
+    flushTimerRef.current = window.setTimeout(
+      flushNow,
+      logRenderDelay(activeBufferRef.current.byteCount),
+    );
   }
 
   function appendChunk(chunk: string) {
@@ -126,7 +133,11 @@ export function LogsPane({
     }
   }
 
-  async function loadSources(type: LogSourceType, force = false) {
+  async function loadSources(
+    type: LogSourceType,
+    force = false,
+    sudoPassword: string | null = null,
+  ) {
     const cache = type === "systemd" ? servicesCacheRef.current : containersCacheRef.current;
     if (!force && isCacheFresh(cache)) return;
     const request = ++sourceRequestRef.current;
@@ -141,9 +152,10 @@ export function LogsPane({
         if (request !== sourceRequestRef.current) return;
         onServicesCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
       } else {
-        const items = await api.listContainers(connection.id);
+        const items = await api.listContainers(connection.id, sudoPassword);
         if (request !== sourceRequestRef.current) return;
         onContainersCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
+        setSudoPurpose(null);
       }
     } catch (caught) {
       if (request !== sourceRequestRef.current) return;
@@ -191,6 +203,11 @@ export function LogsPane({
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(search), 180);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     return () => {
       disposedRef.current = true;
       streamGenerationRef.current += 1;
@@ -228,7 +245,7 @@ export function LogsPane({
     if (!sourceId || !(await stop())) return;
     const generation = ++streamGenerationRef.current;
     setError(null);
-    setRequestSudo(false);
+    setSudoPurpose(null);
     setPaused(false);
     pausedRef.current = false;
     pausedBufferRef.current.clear();
@@ -286,7 +303,7 @@ export function LogsPane({
       startingRef.current = false;
       setError(message);
       setStreamStatus("stopped");
-      if (message.toLowerCase().includes("permission denied")) setRequestSudo(true);
+      if (message.toLowerCase().includes("permission denied")) setSudoPurpose("stream");
     }
   }
 
@@ -318,13 +335,13 @@ export function LogsPane({
   }
 
   const displayedLogs = useMemo(() => {
-    if (!search.trim()) return logs;
-    const query = search.toLowerCase();
+    if (!searchQuery.trim()) return logs;
+    const query = searchQuery.toLowerCase();
     return logs
       .split("\n")
       .filter((line) => line.toLowerCase().includes(query))
       .join("\n");
-  }, [logs, search]);
+  }, [logs, searchQuery]);
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
   const sourceOptions = sourceCache.items;
@@ -332,11 +349,28 @@ export function LogsPane({
   if (sourceCache.loading && !sourceCache.items.length)
     return <LoadingState label="Finding available log sources…" />;
   if (sourceCache.error && !sourceCache.items.length) {
+    const dockerPermissionError =
+      sourceType === "docker" && sourceCache.error.toLowerCase().includes("permission denied");
     return (
-      <ErrorState
-        message={sourceCache.error}
-        action={<button onClick={() => loadSources(sourceType, true)}>Retry</button>}
-      />
+      <>
+        <ErrorState
+          message={sourceCache.error}
+          action={
+            dockerPermissionError ? (
+              <button onClick={() => setSudoPurpose("sources")}>Retry with sudo</button>
+            ) : (
+              <button onClick={() => loadSources(sourceType, true)}>Retry</button>
+            )
+          }
+        />
+        {sudoPurpose === "sources" && (
+          <CredentialDialog
+            connectionLabel={connection.displayName}
+            onClose={() => setSudoPurpose(null)}
+            onSubmit={(password) => loadSources("docker", true, password)}
+          />
+        )}
+      </>
     );
   }
 
@@ -426,7 +460,7 @@ export function LogsPane({
             onChange={(event) => setTail(Number(event.target.value))}
             disabled={controlsLocked}
           >
-            {[50, 100, 200, 500, 1000].map((count) => (
+            {logTailOptions.map((count) => (
               <option key={count}>{count}</option>
             ))}
           </select>
@@ -456,18 +490,20 @@ export function LogsPane({
         <div className="inline-error" role="alert">
           <span>{error}</span>
           {error.toLowerCase().includes("permission denied") && (
-            <button type="button" onClick={() => setRequestSudo(true)}>
+            <button type="button" onClick={() => setSudoPurpose("stream")}>
               Retry with sudo
             </button>
           )}
         </div>
       )}
       <pre className="log-output">{displayedLogs || "Choose a source and start the stream."}</pre>
-      {requestSudo && (
+      {sudoPurpose && (
         <CredentialDialog
           connectionLabel={connection.displayName}
-          onClose={() => setRequestSudo(false)}
-          onSubmit={(password) => start(password)}
+          onClose={() => setSudoPurpose(null)}
+          onSubmit={(password) =>
+            sudoPurpose === "sources" ? loadSources("docker", true, password) : start(password)
+          }
         />
       )}
     </section>

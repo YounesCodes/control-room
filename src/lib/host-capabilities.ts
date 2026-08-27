@@ -1,6 +1,6 @@
 import type { HostCapabilities } from "../types";
 
-export interface HostCapabilitiesApi {
+interface HostCapabilitiesApi {
   cachedCapabilities(connectionId: string): Promise<HostCapabilities | null>;
   refreshCapabilities(connectionId: string): Promise<HostCapabilities>;
 }

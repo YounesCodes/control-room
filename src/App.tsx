@@ -22,9 +22,11 @@ import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
+import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
+import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
 import {
   createTerminalLayout,
   getTerminalLayoutIds,
@@ -36,6 +38,12 @@ import {
 } from "./lib/terminal-layout";
 import type { TerminalLayout, TerminalSplitDirection } from "./lib/terminal-layout";
 import { emptyCachedList } from "./lib/workspace-cache";
+import { restoreWorkspaceState } from "./lib/workspace-persistence";
+import {
+  removeConnectionWorkspaces,
+  updateWorkspaceConnectionSnapshots,
+  workspaceDisplayLabel,
+} from "./lib/workspace-lifecycle";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
@@ -43,32 +51,17 @@ import { OverviewPane } from "./pages/OverviewPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
-  AppSettings,
   CachedList,
   DockerContainer,
   EnvironmentInfo,
   HostCapabilities,
   LogSourceSelection,
   SavedConnection,
+  SettingsContract,
   SystemdService,
   Workspace,
   WorkspaceView,
 } from "./types";
-
-const defaultSettings: AppSettings = {
-  terminalFontFamily: "Cascadia Mono, Consolas, monospace",
-  terminalFontSize: 14,
-  terminalScrollback: 10_000,
-  terminalForeground: "#f2f2ee",
-  terminalRed: "#ff6f7d",
-  terminalGreen: "#52cf91",
-  terminalYellow: "#e8c56c",
-  terminalBlue: "#55aef2",
-  terminalMagenta: "#c793ff",
-  terminalCyan: "#65d4d1",
-  defaultLogTail: 200,
-  globalHistoryEnabled: true,
-};
 
 const emptyEnvironment: EnvironmentInfo = {
   sshPath: null,
@@ -94,9 +87,11 @@ export function App() {
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [settings, setSettings] = useState(defaultSettings);
+  const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState(emptyEnvironment);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [hostSearch, setHostSearch] = useState("");
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
@@ -107,14 +102,34 @@ export function App() {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [workspacePersistenceReady, setWorkspacePersistenceReady] = useState(false);
   const capabilityDetectionsRef = useRef(new Set<string>());
   useEffect(() => {
     let current = true;
-    void Promise.allSettled([api.listConnections(), api.settings(), api.environment()])
-      .then(([connectionsResult, settingsResult, environmentResult]) => {
+    void Promise.allSettled([
+      api.listConnections(),
+      api.settingsContract(),
+      api.environment(),
+      api.workspaceState(),
+    ])
+      .then(([connectionsResult, settingsResult, environmentResult, workspaceStateResult]) => {
         if (!current) return;
         if (connectionsResult.status === "fulfilled") {
           setConnections(connectionsResult.value);
+          if (workspaceStateResult.status === "fulfilled") {
+            const restored = restoreWorkspaceState(
+              connectionsResult.value,
+              workspaceStateResult.value,
+            );
+            setWorkspaces(restored.workspaces);
+            setActiveWorkspaceId(restored.activeWorkspaceId);
+            setTerminalLayout(restored.terminalLayout);
+            setWorkspacePersistenceReady(true);
+          } else {
+            setActionError(
+              `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
+            );
+          }
           for (const connection of connectionsResult.value) {
             void api
               .cachedCapabilities(connection.id)
@@ -126,7 +141,11 @@ export function App() {
         } else {
           setBootError(errorMessage(connectionsResult.reason));
         }
-        if (settingsResult.status === "fulfilled") setSettings(settingsResult.value);
+        if (settingsResult.status === "fulfilled") {
+          setSettingsContract(settingsResult.value);
+        } else {
+          setBootError(`Could not load Settings: ${errorMessage(settingsResult.reason)}`);
+        }
         if (environmentResult.status === "fulfilled") setEnvironment(environmentResult.value);
       })
       .finally(() => current && setLoading(false));
@@ -152,9 +171,24 @@ export function App() {
   const existingSplitCandidates = workspaces.filter(
     (workspace) => !focusedTerminalIds.includes(workspace.id),
   );
+  useWorkspacePersistence({
+    ready: workspacePersistenceReady,
+    workspaces,
+    activeWorkspaceId,
+    terminalLayout,
+    onError: setActionError,
+  });
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
+      if (
+        isWorkspaceShortcutBlocked(
+          event.target,
+          settingsOpen || dialogConnection !== null || hostMenuConnectionId !== null,
+        )
+      ) {
+        return;
+      }
       if (
         event.key === "F11" &&
         !event.repeat &&
@@ -186,13 +220,21 @@ export function App() {
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, {
+          connectRequested: true,
           reconnectToken: activeWorkspace.reconnectToken + 1,
         });
       }
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeSavedConnection, activeWorkspace, settingsOpen, terminalFocusMode]);
+  }, [
+    activeSavedConnection,
+    activeWorkspace,
+    dialogConnection,
+    hostMenuConnectionId,
+    settingsOpen,
+    terminalFocusMode,
+  ]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -257,6 +299,15 @@ export function App() {
     );
   }
 
+  function closeSettings(): boolean {
+    if (settingsOpen && settingsDirty && !window.confirm("Discard unsaved Settings changes?")) {
+      return false;
+    }
+    setSettingsDirty(false);
+    setSettingsOpen(false);
+    return true;
+  }
+
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
     setTerminalLayout((current) =>
@@ -274,8 +325,8 @@ export function App() {
   }
 
   function selectWorkspaceTab(workspace: Workspace) {
+    if (!closeSettings()) return;
     setActiveWorkspaceId(workspace.id);
-    setSettingsOpen(false);
     if (!terminalFocusMode) return;
     updateWorkspace(workspace.id, { view: "terminal" });
     setTerminalLayout((current) =>
@@ -343,6 +394,7 @@ export function App() {
   function createWorkspace(connection: SavedConnection): Workspace {
     return {
       id: crypto.randomUUID(),
+      label: null,
       connectionId: connection.id,
       connectionSnapshot: { ...connection },
       sessionId: null,
@@ -351,6 +403,7 @@ export function App() {
       view: "terminal",
       historyPaused: false,
       reconnectToken: 0,
+      connectRequested: true,
       servicesCache: emptyCachedList(),
       containersCache: emptyCachedList(),
       logSource: null,
@@ -376,7 +429,7 @@ export function App() {
   }
 
   function openConnection(connection: SavedConnection, forceNew = false) {
-    setSettingsOpen(false);
+    if (!closeSettings()) return;
     if (!forceNew) {
       const existing = [...workspaces]
         .reverse()
@@ -429,28 +482,32 @@ export function App() {
   async function deleteConnection(connection: SavedConnection) {
     if (!window.confirm(`Delete the Saved Connection “${connection.displayName}” and its History?`))
       return;
-    const related = workspaces.filter((workspace) => workspace.connectionId === connection.id);
-    for (const workspace of related) {
+    setActionError(null);
+    try {
+      await api.deleteConnection(connection.id);
+    } catch (caught) {
+      setActionError(`Could not delete Saved Connection: ${errorMessage(caught)}`);
+      return;
+    }
+    const removal = removeConnectionWorkspaces(
+      workspaces,
+      connection.id,
+      activeWorkspaceId,
+      terminalLayout,
+    );
+    for (const workspace of removal.removed) {
       if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     }
-    await api.deleteConnection(connection.id);
     setConnections((current) => current.filter((item) => item.id !== connection.id));
     setHostCapabilities((current) => {
       const next = { ...current };
       delete next[connection.id];
       return next;
     });
-    setWorkspaces((current) => current.filter((item) => item.connectionId !== connection.id));
-    setTerminalLayout((current) =>
-      related.reduce<TerminalLayout | null>(
-        (layout, workspace) => (layout ? removeTerminalFromLayout(layout, workspace.id) : null),
-        current,
-      ),
-    );
-    if (related.some((workspace) => workspace.id === activeWorkspaceId)) {
-      setActiveWorkspaceId(null);
-      exitTerminalFocus();
-    }
+    setWorkspaces(removal.remaining);
+    setTerminalLayout(removal.nextLayout);
+    setActiveWorkspaceId(removal.nextActiveId);
+    if (!removal.nextActiveId) exitTerminalFocus();
   }
 
   function saveConnection(saved: SavedConnection) {
@@ -461,24 +518,38 @@ export function App() {
         : [...current, saved];
       return next.sort((left, right) => left.displayName.localeCompare(right.displayName));
     });
+    setWorkspaces((current) => updateWorkspaceConnectionSnapshots(current, saved));
     setDialogConnection(null);
   }
 
   function duplicateLabel(workspace: Workspace) {
-    const siblings = workspaces.filter((item) => item.connectionId === workspace.connectionId);
-    const position = siblings.findIndex((item) => item.id === workspace.id);
-    return position > 0
-      ? `${workspace.connectionSnapshot.displayName} ${position + 1}`
-      : workspace.connectionSnapshot.displayName;
+    return workspaceDisplayLabel(workspace, workspaces);
+  }
+
+  function renameWorkspace(workspace: Workspace) {
+    const label = window.prompt(
+      "Workspace label. Leave it empty to use the connection name.",
+      workspace.label ?? duplicateLabel(workspace),
+    );
+    if (label === null) return;
+    updateWorkspace(workspace.id, { label: label.trim() || null });
   }
 
   function pasteIntoTerminal(command: string) {
-    if (!activeWorkspace?.sessionId) return;
-    void api.writeSession(activeWorkspace.sessionId, new TextEncoder().encode(command));
+    if (!activeWorkspace?.sessionId) {
+      setActionError("Reconnect the Terminal Session before pasting a command.");
+      return;
+    }
+    setActionError(null);
+    void api
+      .writeSession(activeWorkspace.sessionId, new TextEncoder().encode(command))
+      .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
     updateWorkspace(activeWorkspace.id, { view: "terminal" });
   }
 
   if (loading) return <LoadingState label="Starting Control Room…" />;
+  if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
+  const settings = settingsContract.current;
 
   return (
     <div className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}>
@@ -593,7 +664,7 @@ export function App() {
                   key={id}
                   aria-current={activeWorkspace.view === id && !settingsOpen ? "page" : undefined}
                   onClick={() => {
-                    setSettingsOpen(false);
+                    if (!closeSettings()) return;
                     updateWorkspace(activeWorkspace.id, { view: id });
                   }}
                 >
@@ -641,6 +712,15 @@ export function App() {
                   >
                     <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
                     <span>{duplicateLabel(workspace)}</span>
+                  </button>
+                  <button
+                    className="session-tab-rename"
+                    type="button"
+                    onClick={() => renameWorkspace(workspace)}
+                    aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
+                    title="Rename Workspace"
+                  >
+                    <Pencil size={12} />
                   </button>
                   <button
                     className="session-tab-close"
@@ -766,6 +846,15 @@ export function App() {
           </nav>
         )}
 
+        {actionError && (
+          <div className="inline-error app-action-error" role="alert">
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss error">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {activeWorkspace && activeConnection && activeSavedConnection && (
           <section
             className={settingsOpen ? "workspace-view workspace-view-hidden" : "workspace-view"}
@@ -836,11 +925,24 @@ export function App() {
                         onActivate={() => setActiveWorkspaceId(workspace.id)}
                         onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
                         onState={(state, reason) => {
-                          updateWorkspace(workspace.id, { state, reason });
+                          updateWorkspace(workspace.id, {
+                            state,
+                            reason,
+                            connectRequested:
+                              state === "disconnected" || state === "error"
+                                ? false
+                                : workspace.connectRequested,
+                          });
                           if (state === "connected") {
                             detectConnectionCapabilities(workspace.connectionId);
                           }
                         }}
+                        onReconnect={() =>
+                          updateWorkspace(workspace.id, {
+                            connectRequested: true,
+                            reconnectToken: workspace.reconnectToken + 1,
+                          })
+                        }
                       />
                     </div>
                   );
@@ -876,6 +978,7 @@ export function App() {
                   key={activeWorkspace.id}
                   connection={activeConnection}
                   settings={settings}
+                  logTailOptions={settingsContract.logTailOptions}
                   servicesCache={activeWorkspace.servicesCache}
                   containersCache={activeWorkspace.containersCache}
                   selectedSource={activeWorkspace.logSource}
@@ -906,6 +1009,7 @@ export function App() {
                     });
                   }}
                   onPaste={pasteIntoTerminal}
+                  canPaste={Boolean(activeWorkspace.sessionId)}
                 />
               )}
             </div>
@@ -913,7 +1017,18 @@ export function App() {
         )}
 
         {settingsOpen ? (
-          <SettingsPane settings={settings} environment={environment} onSaved={setSettings} />
+          <SettingsPane
+            settings={settings}
+            defaults={settingsContract.defaults}
+            logTailOptions={settingsContract.logTailOptions}
+            environment={environment}
+            onSaved={(saved) => {
+              setSettingsContract({ ...settingsContract, current: saved });
+              setSettingsDirty(false);
+            }}
+            onClose={closeSettings}
+            onDirtyChange={setSettingsDirty}
+          />
         ) : activeWorkspace && activeConnection && activeSavedConnection ? null : bootError ? (
           <ErrorState message={bootError} />
         ) : (
