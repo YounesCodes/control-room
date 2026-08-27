@@ -42,23 +42,8 @@ Run the complete validation gate:
 npm run check
 ```
 
-See [testing](docs/TESTING.md) for the live SSH fixture and clean-machine acceptance checklist. Build the unsigned per-user installer with `npm run tauri build`; Windows may show an unrecognized-publisher warning.
+Build the unsigned per-user installer with `npm run tauri build`; Windows may show an unrecognized-publisher warning.
 
 ## Releases
 
 CI validates pushes and pull requests on Windows, audits locked Rust dependencies, and builds an NSIS artifact with a SHA-256 checksum. A tag matching the three synchronized project versions, such as `v0.1.0`, runs the same gate and publishes the unsigned installer and checksum to a GitHub release.
-
-## Security and privacy
-
-Enhanced History can contain secrets typed on command lines and is stored in the local application database only when enabled. See [SECURITY.md](SECURITY.md) for the complete boundary and private-reporting guidance.
-
-## Documentation
-
-- [Product specification](docs/PRODUCT_SPEC.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Testing](docs/TESTING.md)
-- [Domain language](CONTEXT.md)
-- [Architecture decisions](docs/adr/)
-
-Control Room is licensed under the [MIT License](LICENSE). Contribution guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).
