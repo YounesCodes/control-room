@@ -1395,6 +1395,10 @@ dd {
   padding: 0 10px;
 }
 
+.history-opt-in + .history-tools {
+  margin-top: 16px;
+}
+
 .history-group {
   max-width: 980px;
   margin-top: 19px;
