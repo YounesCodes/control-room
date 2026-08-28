@@ -657,10 +657,7 @@ fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
 fn read_stream_diagnostics(mut reader: impl Read) -> Vec<u8> {
     let mut diagnostics = Vec::new();
     let mut buffer = [0_u8; 16 * 1024];
-    loop {
-        let Ok(count) = reader.read(&mut buffer) else {
-            break;
-        };
+    while let Ok(count) = reader.read(&mut buffer) {
         if count == 0 {
             break;
         }
