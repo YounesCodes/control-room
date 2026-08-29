@@ -25,7 +25,7 @@ export function isControlRoomShortcut(event: TerminalKeyEvent): boolean {
   if (!event.ctrlKey) return false;
   const key = event.key.toLowerCase();
   if (!event.shiftKey) return false;
-  return key === "t" || key === "n" || key === "w" || key === "r";
+  return key === "t" || key === "n" || key === "w" || key === "r" || key === "p";
 }
 
 export class BoundedByteQueue {

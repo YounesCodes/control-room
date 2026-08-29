@@ -18,6 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { CommandPalette } from "./components/CommandPalette";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { HostOsIcon } from "./components/HostOsIcon";
@@ -100,6 +101,7 @@ export function App() {
   const [terminalLayout, setTerminalLayout] = useState<TerminalLayout | null>(null);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const [workspacePersistenceReady, setWorkspacePersistenceReady] = useState(false);
@@ -235,6 +237,24 @@ export function App() {
     settingsOpen,
     terminalFocusMode,
   ]);
+
+  useEffect(() => {
+    function keydown(event: KeyboardEvent) {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p" && !event.repeat) {
+        if (paletteOpen) {
+          event.preventDefault();
+          setPaletteOpen(false);
+          return;
+        }
+        // Do not stack the palette on top of a modal dialog (connection or sudo).
+        if (dialogConnection !== null || document.querySelector('[role="dialog"]')) return;
+        event.preventDefault();
+        setPaletteOpen(true);
+      }
+    }
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [paletteOpen, dialogConnection]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -1039,6 +1059,23 @@ export function App() {
                 ? "Choose a saved connection from the sidebar to open it."
                 : "Use Add connection in the sidebar to save an SSH destination."}
             </p>
+            <div className="empty-shortcuts">
+              <span className="empty-shortcut">
+                <kbd>Ctrl</kbd>
+                <kbd>Shift</kbd>
+                <kbd>P</kbd> Command palette
+              </span>
+              {connections.length > 0 && (
+                <span className="empty-shortcut">
+                  <kbd>Ctrl</kbd>
+                  <kbd>Shift</kbd>
+                  <kbd>N</kbd> New terminal
+                </span>
+              )}
+              <span className="empty-shortcut">
+                <kbd>F11</kbd> Focus terminal
+              </span>
+            </div>
             {!environment.sshPath && (
               <p className="inline-warning">
                 Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
@@ -1053,6 +1090,39 @@ export function App() {
           connection={dialogConnection === "new" ? undefined : dialogConnection}
           onClose={() => setDialogConnection(null)}
           onSaved={saveConnection}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          connections={connections}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          activeView={activeWorkspace?.view ?? null}
+          hasActiveConnection={Boolean(activeSavedConnection)}
+          canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
+          views={navigation}
+          hostCapabilities={hostCapabilities}
+          labelForWorkspace={duplicateLabel}
+          onClose={() => setPaletteOpen(false)}
+          onOpenConnection={(connection) => openConnection(connection)}
+          onSelectWorkspace={(workspace) => selectWorkspaceTab(workspace)}
+          onSetView={(view) => {
+            if (!activeWorkspace || !closeSettings()) return;
+            updateWorkspace(activeWorkspace.id, { view });
+          }}
+          onNewTerminal={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
+          onReconnect={() =>
+            activeWorkspace &&
+            updateWorkspace(activeWorkspace.id, {
+              connectRequested: true,
+              reconnectToken: activeWorkspace.reconnectToken + 1,
+            })
+          }
+          onCloseWorkspace={() => activeWorkspace && void closeWorkspace(activeWorkspace.id)}
+          onFocusTerminal={enterTerminalFocus}
+          onAddConnection={() => setDialogConnection("new")}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
     </div>

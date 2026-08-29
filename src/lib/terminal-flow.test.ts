@@ -42,12 +42,15 @@ describe("isControlRoomShortcut", () => {
     shiftKey,
   });
 
-  it.each([event("T", true), event("n", true), event("w", true), event("r", true)])(
-    "keeps app shortcuts out of the remote terminal",
-    (keyboardEvent) => {
-      expect(isControlRoomShortcut(keyboardEvent)).toBe(true);
-    },
-  );
+  it.each([
+    event("T", true),
+    event("n", true),
+    event("w", true),
+    event("r", true),
+    event("P", true),
+  ])("keeps app shortcuts out of the remote terminal", (keyboardEvent) => {
+    expect(isControlRoomShortcut(keyboardEvent)).toBe(true);
+  });
 
   it("keeps the F11 terminal focus shortcut out of the remote terminal", () => {
     expect(

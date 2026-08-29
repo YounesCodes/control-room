@@ -15,8 +15,20 @@ The first release targets Windows 11 x64 and Debian or Ubuntu family hosts with 
 - Retry read-only inspections with sudo after a permission error. Passwords are never saved.
 - Opt in to Bash Enhanced History to record commands, directories, timestamps, and exit codes from Control Room sessions. Pause, disable, clear, or remove it at any time.
 - Save connections, settings, capabilities, History, and disconnected session layout in a local SQLite database.
+- Jump between saved connections, open terminals, workspace views, and actions from a keyboard command palette (`Ctrl+Shift+P`).
 
 Control Room does not store private keys, SSH passwords, sudo passwords, terminal output, or fetched logs. Structured features require noninteractive public-key or agent authentication; the interactive terminal can still show normal OpenSSH prompts.
+
+### Keyboard shortcuts
+
+| Shortcut       | Action                                          |
+| -------------- | ----------------------------------------------- |
+| `Ctrl+Shift+P` | Open the command palette                        |
+| `Ctrl+Shift+N` | Open another terminal for the active connection |
+| `Ctrl+Shift+T` | Switch the active Workspace to its Terminal     |
+| `Ctrl+Shift+R` | Reconnect the active Terminal Session           |
+| `Ctrl+Shift+W` | Close the active Workspace                      |
+| `F11`          | Enter or leave terminal focus mode              |
 
 ## Development
 
