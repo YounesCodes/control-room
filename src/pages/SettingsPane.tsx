@@ -142,21 +142,27 @@ export function SettingsPane({
             aria-hidden="true"
           >
             <div>
-              <span style={{ color: draft.terminalGreen }}>user@host</span>:
-              <span style={{ color: draft.terminalBlue }}>~/projects</span>$ ls --color
+              <span style={{ color: draft.terminalGreen, fontWeight: 700 }}>agent@ubuntu</span>:
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>~</span>$ ls -la /
             </div>
             <div>
-              <span style={{ color: draft.terminalBlue }}>src</span>
-              {"  "}
-              <span style={{ color: draft.terminalCyan }}>docs</span>
-              {"  "}build.log{"  "}README.md
+              <span style={{ color: draft.terminalCyan, fontWeight: 700 }}>bin</span> -&gt;{" "}
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>usr/bin</span>
+              {"   "}
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>boot</span>
+              {"   "}
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>etc</span>
+              {"   "}fstab
             </div>
             <div>
-              <span style={{ color: draft.terminalYellow }}>warning:</span> falling back to defaults
+              <span style={{ color: draft.terminalYellow, fontWeight: 700 }}>warning:</span> low
+              disk space {"  ·  "}
+              <span style={{ color: draft.terminalMagenta, fontWeight: 700 }}>note:</span> using
+              defaults
             </div>
             <div>
-              <span style={{ color: draft.terminalRed }}>error:</span> permission denied ·{" "}
-              <span style={{ color: draft.terminalMagenta }}>hint:</span> retry with sudo
+              <span style={{ color: draft.terminalRed, fontWeight: 700 }}>error:</span> permission
+              denied
             </div>
           </div>
           <div className="terminal-color-grid">

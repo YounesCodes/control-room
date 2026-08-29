@@ -108,6 +108,11 @@ export function TerminalPane({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
+      // Bold text (prompts, directory listings, error lines) is rendered with
+      // weight, not a brighter hue, so a bold `01;34` directory shows the exact
+      // "Blue and directories" color the user picked instead of a lightened
+      // variant. This keeps the terminal matching the Settings color preview.
+      drawBoldTextInBrightColors: false,
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,
       scrollback: settings.terminalScrollback,

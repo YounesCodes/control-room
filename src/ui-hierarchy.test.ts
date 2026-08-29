@@ -67,6 +67,12 @@ describe("application hierarchy", () => {
     expect(terminalSource.match(/<StatusDot/g)).toHaveLength(1);
   });
 
+  it("renders bold terminal text as weight so category colors match what the user picks", () => {
+    // Bold `01;34` directories / `01;32` prompts must use the chosen base color,
+    // not xterm's lightened bright palette, or the Settings color preview lies.
+    expect(terminalSource).toContain("drawBoldTextInBrightColors: false");
+  });
+
   it("detects a newly connected host without requiring an Overview visit", () => {
     expect(appSource).toMatch(
       /state === "connected"[\s\S]*detectConnectionCapabilities\(workspace\.connectionId\)/,
