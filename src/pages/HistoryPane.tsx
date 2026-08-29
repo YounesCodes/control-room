@@ -296,7 +296,12 @@ export function HistoryPane({
                   second: "2-digit",
                 })}
               </time>
-              <span className={entry.exitCode === 0 ? "exit-success" : "exit-failure"}>
+              <span
+                className={
+                  entry.exitCode === 0 ? "exit-code exit-success" : "exit-code exit-failure"
+                }
+                title={`Exit code ${entry.exitCode ?? "unknown"}`}
+              >
                 {entry.exitCode ?? "–"}
               </span>
               <div>

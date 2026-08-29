@@ -490,7 +490,11 @@ export function LogsPane({
         <div className="inline-error" role="alert">
           <span>{error}</span>
           {error.toLowerCase().includes("permission denied") && (
-            <button type="button" onClick={() => setSudoPurpose("stream")}>
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => setSudoPurpose("stream")}
+            >
               Retry with sudo
             </button>
           )}
