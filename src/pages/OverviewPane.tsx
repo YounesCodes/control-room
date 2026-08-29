@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { relativeTime } from "../lib/format";
+import { HostOsIcon } from "../components/HostOsIcon";
 import type { HostCapabilities, SavedConnection } from "../types";
 import { ErrorState, LoadingState } from "../components/PanelState";
+
+type CapabilityTone = "ok" | "warn" | "off";
 
 export function OverviewPane({
   connection,
@@ -62,7 +65,7 @@ export function OverviewPane({
   }
   if (!capabilities) return null;
 
-  const rows = [
+  const systemRows: [string, string][] = [
     ["Hostname", capabilities.hostname ?? "Unavailable"],
     [
       "System",
@@ -70,48 +73,106 @@ export function OverviewPane({
     ],
     ["Kernel", capabilities.kernel ?? "Unavailable"],
     ["Architecture", capabilities.architecture ?? "Unavailable"],
-    ["Uptime", capabilities.uptime ?? "Unavailable"],
     ["Default shell", capabilities.defaultShell ?? "Unavailable"],
-    ["systemd", capabilities.systemdAvailable ? "Available" : "Unavailable"],
-    ["journald", capabilities.journaldAvailable ? "Available" : "Unavailable"],
-    [
-      "Docker",
-      capabilities.dockerAvailable
-        ? capabilities.dockerAccessible
-          ? `Version ${capabilities.dockerVersion ?? "unknown"}`
-          : "Installed, permission required"
-        : "Not detected",
-    ],
-    [
-      "Containers",
-      capabilities.dockerAccessible
-        ? `${capabilities.runningContainerCount ?? 0} running / ${capabilities.totalContainerCount ?? 0} total`
-        : "Unavailable",
-    ],
-    ["Running services", capabilities.runningServiceCount?.toString() ?? "Unavailable"],
+  ];
+
+  const dockerValue = capabilities.dockerAvailable
+    ? capabilities.dockerAccessible
+      ? `Version ${capabilities.dockerVersion ?? "unknown"}`
+      : "Installed — sudo required"
+    : "Not detected";
+  const dockerTone: CapabilityTone = capabilities.dockerAvailable
+    ? capabilities.dockerAccessible
+      ? "ok"
+      : "warn"
+    : "off";
+
+  const capabilityRows: { label: string; value: string; tone: CapabilityTone }[] = [
+    {
+      label: "systemd",
+      value: capabilities.systemdAvailable ? "Available" : "Not detected",
+      tone: capabilities.systemdAvailable ? "ok" : "off",
+    },
+    {
+      label: "journald",
+      value: capabilities.journaldAvailable ? "Available" : "Not detected",
+      tone: capabilities.journaldAvailable ? "ok" : "off",
+    },
+    { label: "Docker", value: dockerValue, tone: dockerTone },
+  ];
+
+  const containersValue = capabilities.dockerAccessible
+    ? `${capabilities.runningContainerCount ?? 0} / ${capabilities.totalContainerCount ?? 0}`
+    : "—";
+  const stats: { label: string; value: string; hint?: string }[] = [
+    { label: "Uptime", value: capabilities.uptime ?? "Unavailable" },
+    {
+      label: "Running services",
+      value: capabilities.runningServiceCount?.toString() ?? "—",
+    },
+    {
+      label: "Containers",
+      value: containersValue,
+      hint: capabilities.dockerAccessible ? "running / total" : "Docker unavailable",
+    },
   ];
 
   return (
     <section className="feature-page overview-page">
       <div className="overview-content">
-        <header className="page-heading">
-          <div>
-            <h2>Overview</h2>
-            <p>Last inspected {relativeTime(capabilities.detectedAt)}</p>
+        <header className="page-heading overview-heading">
+          <div className="overview-identity">
+            <span className="overview-host-mark">
+              <HostOsIcon osId={capabilities.osId} />
+            </span>
+            <div>
+              <h2>Overview</h2>
+              <p>
+                {capabilities.hostname ?? connection.displayName} · Last inspected{" "}
+                {relativeTime(capabilities.detectedAt)}
+              </p>
+            </div>
           </div>
           <button className="secondary-button" type="button" onClick={refresh} disabled={loading}>
             <RefreshCw size={15} className={loading ? "spinning" : ""} /> Refresh
           </button>
         </header>
         {error && <p className="inline-warning">Showing cached data. Refresh failed: {error}</p>}
-        <dl className="definition-grid">
-          {rows.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
+
+        <div className="overview-stats">
+          {stats.map((stat) => (
+            <div className="overview-stat" key={stat.label}>
+              <span className="overview-stat-label">{stat.label}</span>
+              <strong className="overview-stat-value">{stat.value}</strong>
+              {stat.hint && <span className="overview-stat-hint">{stat.hint}</span>}
             </div>
           ))}
-        </dl>
+        </div>
+
+        <section className="overview-section">
+          <h3 className="overview-section-title">System</h3>
+          <dl className="definition-grid">
+            {systemRows.map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="overview-section">
+          <h3 className="overview-section-title">Runtime &amp; capabilities</h3>
+          <ul className="capability-list">
+            {capabilityRows.map((row) => (
+              <li className="capability-row" key={row.label}>
+                <span className={`cap-dot cap-${row.tone}`} aria-hidden="true" />
+                <span className="capability-label">{row.label}</span>
+                <span className="capability-value">{row.value}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </section>
   );

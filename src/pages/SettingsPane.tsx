@@ -136,6 +136,29 @@ export function SettingsPane({
               <RotateCcw size={13} /> Reset colors
             </button>
           </div>
+          <div
+            className="ansi-preview"
+            style={{ color: draft.terminalForeground }}
+            aria-hidden="true"
+          >
+            <div>
+              <span style={{ color: draft.terminalGreen }}>user@host</span>:
+              <span style={{ color: draft.terminalBlue }}>~/projects</span>$ ls --color
+            </div>
+            <div>
+              <span style={{ color: draft.terminalBlue }}>src</span>
+              {"  "}
+              <span style={{ color: draft.terminalCyan }}>docs</span>
+              {"  "}build.log{"  "}README.md
+            </div>
+            <div>
+              <span style={{ color: draft.terminalYellow }}>warning:</span> falling back to defaults
+            </div>
+            <div>
+              <span style={{ color: draft.terminalRed }}>error:</span> permission denied ·{" "}
+              <span style={{ color: draft.terminalMagenta }}>hint:</span> retry with sudo
+            </div>
+          </div>
           <div className="terminal-color-grid">
             {terminalColorFields.map(([field, label]) => (
               <label className="terminal-color-control" key={field}>
@@ -143,6 +166,7 @@ export function SettingsPane({
                   type="color"
                   value={draft[field]}
                   onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+                  aria-label={label}
                 />
                 <span>{label}</span>
                 <code>{draft[field]}</code>

@@ -57,9 +57,13 @@ describe("application hierarchy", () => {
     expect(logsSource).toContain('loadSources("docker", true, password)');
   });
 
-  it("uses host OS marks in navigation and keeps status in the Terminal view", () => {
+  it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
     expect(appSource.match(/<HostOsIcon/g)).toHaveLength(5);
     expect(appSource).not.toContain("StatusDot");
+    // Connection sidebar and Workspace tabs surface live session state as a
+    // presence badge on the OS mark; the labelled status dot stays in Terminal.
+    expect(appSource).toContain("connectionSessionStates");
+    expect(appSource).toContain("className={`presence presence-${workspace.state}`}");
     expect(terminalSource.match(/<StatusDot/g)).toHaveLength(1);
   });
 

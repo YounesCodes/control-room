@@ -53,6 +53,7 @@ import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   CachedList,
+  ConnectionState,
   DockerContainer,
   EnvironmentInfo,
   HostCapabilities,
@@ -312,6 +313,20 @@ export function App() {
         connectionTarget(connection).toLowerCase().includes(query),
     );
   }, [connections, hostSearch]);
+
+  // The most meaningful live session state per saved connection, used to mark
+  // which connections currently have an open Workspace and how it is doing.
+  const connectionSessionStates = useMemo(() => {
+    const priority: ConnectionState[] = ["connected", "connecting", "error", "disconnected"];
+    const map: Record<string, ConnectionState> = {};
+    for (const workspace of workspaces) {
+      const current = map[workspace.connectionId];
+      if (!current || priority.indexOf(workspace.state) < priority.indexOf(current)) {
+        map[workspace.connectionId] = workspace.state;
+      }
+    }
+    return map;
+  }, [workspaces]);
 
   function updateWorkspace(id: string, patch: Partial<Workspace>) {
     setWorkspaces((current) =>
@@ -621,7 +636,15 @@ export function App() {
                 type="button"
                 onClick={() => openConnection(connection)}
               >
-                <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+                <span className="os-badge">
+                  <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+                  {connectionSessionStates[connection.id] && (
+                    <span
+                      className={`presence presence-${connectionSessionStates[connection.id]}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                </span>
                 <span>
                   <strong>{connection.displayName}</strong>
                   <small>{connectionTarget(connection)}</small>
@@ -730,7 +753,10 @@ export function App() {
                     }
                     onClick={() => selectWorkspaceTab(workspace)}
                   >
-                    <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                    <span className="os-badge">
+                      <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                      <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
+                    </span>
                     <span>{duplicateLabel(workspace)}</span>
                   </button>
                   <button

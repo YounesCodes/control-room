@@ -802,6 +802,68 @@ code,
   color: var(--text-strong);
 }
 
+/* Session presence badge overlaid on the host OS mark. The ring color tracks
+   the current row/tab background so the badge reads as cut out of the icon. */
+.os-badge {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.presence {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  box-shadow: 0 0 0 2px var(--badge-ring, var(--sidebar-bg));
+}
+
+.presence-connected {
+  background: var(--success);
+}
+
+.presence-connecting {
+  background: var(--warning);
+}
+
+.presence-error {
+  background: var(--failure);
+  border-radius: 1px;
+}
+
+.presence-disconnected {
+  background: #6a6a6a;
+}
+
+.host-row {
+  --badge-ring: var(--sidebar-bg);
+}
+
+.host-row:hover,
+.host-row.menu-open {
+  --badge-ring: var(--fill-hover);
+}
+
+.host-row.active {
+  --badge-ring: var(--fill-active);
+}
+
+.session-tab-wrap {
+  --badge-ring: var(--surface-chrome);
+}
+
+.session-tab-wrap:hover {
+  --badge-ring: var(--fill-hover);
+}
+
+.session-tab-wrap.active {
+  --badge-ring: var(--surface-raised);
+}
+
 .session-tab-close,
 .session-tab-rename {
   display: grid;
@@ -1320,6 +1382,149 @@ dd {
 }
 
 /* ==========================================================================
+   Overview dashboard
+   ========================================================================== */
+
+.overview-heading {
+  align-items: center;
+}
+
+.overview-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.overview-host-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.overview-host-mark .host-os-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text);
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  margin-bottom: 26px;
+  overflow: hidden;
+}
+
+.overview-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 18px;
+}
+
+.overview-stat + .overview-stat {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.overview-stat-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.overview-stat-value {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-stat-hint {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.overview-section {
+  margin-top: 24px;
+}
+
+.overview-section-title {
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.overview-section .definition-grid {
+  border-top: 0;
+}
+
+.capability-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.capability-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  max-width: 520px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 5px;
+}
+
+.cap-dot {
+  width: 9px;
+  height: 9px;
+  justify-self: center;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.cap-ok {
+  background: var(--success);
+}
+
+.cap-warn {
+  background: var(--warning);
+}
+
+.cap-off {
+  background: transparent;
+  border: 1.5px solid #3a3a3a;
+}
+
+.capability-label {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.capability-value {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* ==========================================================================
    Buttons
    ========================================================================== */
 
@@ -1634,6 +1839,29 @@ dd {
   white-space: pre-wrap;
 }
 
+.log-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  user-select: none;
+}
+
+.log-empty svg {
+  color: var(--text-faint);
+}
+
+.log-empty p {
+  max-width: 340px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: center;
+  font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+}
+
 /* ==========================================================================
    History
    ========================================================================== */
@@ -1849,41 +2077,58 @@ dd {
   white-space: nowrap;
 }
 
+.ansi-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #000;
+  padding: 12px 14px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre;
+  overflow-x: auto;
+}
+
 .terminal-color-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px 20px;
+  gap: 2px 24px;
 }
 
-.settings-form .terminal-color-control {
+/* Higher specificity than `.settings-form label:not(.checkbox-label)` so the
+   swatch/label/hex render as a compact row rather than a vertical stack. */
+.settings-form .terminal-color-grid .terminal-color-control {
   display: grid;
-  grid-template-columns: 27px minmax(0, 1fr) auto;
-  min-height: 34px;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  min-height: 38px;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.settings-form .terminal-color-control input[type="color"] {
-  width: 25px;
-  height: 25px;
+.settings-form .terminal-color-grid .terminal-color-control input[type="color"] {
+  width: 26px;
+  height: 22px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: transparent;
   padding: 2px;
+  cursor: pointer;
 }
 
-.settings-form .terminal-color-control span {
-  color: var(--text-muted);
-  font-size: 10.5px;
-  font-weight: 650;
+.settings-form .terminal-color-grid .terminal-color-control span {
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
 }
 
 .terminal-color-control code {
+  justify-self: end;
   color: var(--text-faint);
-  font-size: 9.5px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .settings-save {
