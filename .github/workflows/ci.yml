@@ -16,15 +16,24 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  validate:
+  frontend:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
+      - run: npm ci
+      - run: npm run check:version
+      - run: npm run check:frontend
+
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -40,8 +49,7 @@ jobs:
         with:
           tool: cargo-audit
           fallback: none
-      - run: npm ci
-      - run: npm run check
+      - run: npm run check:rust
         env:
           SCCACHE_GHA_ENABLED: "true"
           RUSTC_WRAPPER: sccache
