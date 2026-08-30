@@ -38,7 +38,10 @@ describe("application hierarchy", () => {
 
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
-    expect(appSource).toContain('window.confirm("Discard unsaved Settings changes?")');
+    // Unsaved Settings changes are guarded with an in-app confirm dialog rather
+    // than a native window.confirm.
+    expect(appSource).not.toContain("window.confirm");
+    expect(appSource).toContain('message: "Discard unsaved Settings changes?"');
     expect(settingsSource).toContain('aria-label="Back to terminal"');
   });
 

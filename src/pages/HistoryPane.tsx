@@ -9,6 +9,7 @@ import {
   TerminalSquare,
   Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import type { HistoryEntry, SavedConnection } from "../types";
@@ -37,6 +38,12 @@ export function HistoryPane({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
   const loadRequestRef = useRef(0);
 
   async function loadHistory() {
@@ -103,14 +110,17 @@ export function HistoryPane({
     }
   }
 
-  async function removeIntegration() {
-    if (
-      !window.confirm(
+  function removeIntegration() {
+    setConfirmState({
+      title: "Remove integration",
+      message:
         "Remove the Control Room Bash integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.",
-      )
-    ) {
-      return;
-    }
+      confirmLabel: "Remove integration",
+      onConfirm: () => void performRemoveIntegration(),
+    });
+  }
+
+  async function performRemoveIntegration() {
     setWorking(true);
     setError(null);
     try {
@@ -150,8 +160,16 @@ export function HistoryPane({
     }
   }
 
-  async function clear() {
-    if (!window.confirm(`Clear all Enhanced History for ${connection.displayName}?`)) return;
+  function clear() {
+    setConfirmState({
+      title: "Clear history",
+      message: `Clear all Enhanced History for ${connection.displayName}? This cannot be undone.`,
+      confirmLabel: "Clear history",
+      onConfirm: () => void performClear(),
+    });
+  }
+
+  async function performClear() {
     setError(null);
     try {
       await api.clearHistory(connection.id);
@@ -344,6 +362,20 @@ export function HistoryPane({
           ))}
         </section>
       ))}
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          danger
+          onConfirm={() => {
+            const run = confirmState.onConfirm;
+            setConfirmState(null);
+            run();
+          }}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
     </section>
   );
 }
