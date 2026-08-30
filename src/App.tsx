@@ -18,8 +18,11 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { CommandPalette } from "./components/CommandPalette";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
+import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
@@ -52,6 +55,7 @@ import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   CachedList,
+  ConnectionState,
   DockerContainer,
   EnvironmentInfo,
   HostCapabilities,
@@ -100,6 +104,15 @@ export function App() {
   const [terminalLayout, setTerminalLayout] = useState<TerminalLayout | null>(null);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const [workspacePersistenceReady, setWorkspacePersistenceReady] = useState(false);
@@ -189,29 +202,9 @@ export function App() {
       ) {
         return;
       }
-      if (
-        event.key === "F11" &&
-        !event.repeat &&
-        (terminalFocusMode ||
-          (!settingsOpen && activeWorkspace && activeWorkspace.view === "terminal"))
-      ) {
-        event.preventDefault();
-        if (terminalFocusMode) exitTerminalFocus();
-        else enterTerminalFocus();
-        return;
-      }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
-      }
-      if (
-        event.ctrlKey &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "n" &&
-        activeSavedConnection
-      ) {
-        event.preventDefault();
-        openConnection(activeSavedConnection, true);
       }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
         event.preventDefault();
@@ -227,14 +220,25 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [
-    activeSavedConnection,
-    activeWorkspace,
-    dialogConnection,
-    hostMenuConnectionId,
-    settingsOpen,
-    terminalFocusMode,
-  ]);
+  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, settingsOpen]);
+
+  useEffect(() => {
+    function keydown(event: KeyboardEvent) {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p" && !event.repeat) {
+        if (paletteOpen) {
+          event.preventDefault();
+          setPaletteOpen(false);
+          return;
+        }
+        // Do not stack the palette on top of a modal dialog (connection or sudo).
+        if (dialogConnection !== null || document.querySelector('[role="dialog"]')) return;
+        event.preventDefault();
+        setPaletteOpen(true);
+      }
+    }
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [paletteOpen, dialogConnection]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -293,18 +297,47 @@ export function App() {
     );
   }, [connections, hostSearch]);
 
+  // The most meaningful live session state per saved connection, used to mark
+  // which connections currently have an open Workspace and how it is doing.
+  const connectionSessionStates = useMemo(() => {
+    const priority: ConnectionState[] = ["connected", "connecting", "error", "disconnected"];
+    const map: Record<string, ConnectionState> = {};
+    for (const workspace of workspaces) {
+      const current = map[workspace.connectionId];
+      if (!current || priority.indexOf(workspace.state) < priority.indexOf(current)) {
+        map[workspace.connectionId] = workspace.state;
+      }
+    }
+    return map;
+  }, [workspaces]);
+
   function updateWorkspace(id: string, patch: Partial<Workspace>) {
     setWorkspaces((current) =>
       current.map((workspace) => (workspace.id === id ? { ...workspace, ...patch } : workspace)),
     );
   }
 
-  function closeSettings(): boolean {
-    if (settingsOpen && settingsDirty && !window.confirm("Discard unsaved Settings changes?")) {
+  // Closes Settings and then runs `after`. When there are unsaved changes it
+  // asks for confirmation first and defers `after` until the user discards, so
+  // callers pass the navigation they intend instead of a synchronous guard.
+  function closeSettings(after: () => void = () => {}): boolean {
+    if (settingsOpen && settingsDirty) {
+      setConfirmState({
+        title: "Discard changes?",
+        message: "Discard unsaved Settings changes?",
+        confirmLabel: "Discard",
+        danger: true,
+        onConfirm: () => {
+          setSettingsDirty(false);
+          setSettingsOpen(false);
+          after();
+        },
+      });
       return false;
     }
     setSettingsDirty(false);
     setSettingsOpen(false);
+    after();
     return true;
   }
 
@@ -325,13 +358,14 @@ export function App() {
   }
 
   function selectWorkspaceTab(workspace: Workspace) {
-    if (!closeSettings()) return;
-    setActiveWorkspaceId(workspace.id);
-    if (!terminalFocusMode) return;
-    updateWorkspace(workspace.id, { view: "terminal" });
-    setTerminalLayout((current) =>
-      current ? selectTerminalTab(current, workspace.id) : createTerminalLayout(workspace.id),
-    );
+    closeSettings(() => {
+      setActiveWorkspaceId(workspace.id);
+      if (!terminalFocusMode) return;
+      updateWorkspace(workspace.id, { view: "terminal" });
+      setTerminalLayout((current) =>
+        current ? selectTerminalTab(current, workspace.id) : createTerminalLayout(workspace.id),
+      );
+    });
   }
 
   function splitWithExistingTerminal(workspace: Workspace) {
@@ -429,31 +463,42 @@ export function App() {
   }
 
   function openConnection(connection: SavedConnection, forceNew = false) {
-    if (!closeSettings()) return;
-    if (!forceNew) {
-      const existing = [...workspaces]
-        .reverse()
-        .find((workspace) => workspace.connectionId === connection.id);
-      if (existing) {
-        setActiveWorkspaceId(existing.id);
-        return;
+    closeSettings(() => {
+      if (!forceNew) {
+        const existing = [...workspaces]
+          .reverse()
+          .find((workspace) => workspace.connectionId === connection.id);
+        if (existing) {
+          setActiveWorkspaceId(existing.id);
+          return;
+        }
       }
-    }
-    const workspace = createWorkspace(connection);
-    setWorkspaces((current) => [...current, workspace]);
-    setActiveWorkspaceId(workspace.id);
-    if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
+      const workspace = createWorkspace(connection);
+      setWorkspaces((current) => [...current, workspace]);
+      setActiveWorkspaceId(workspace.id);
+      if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
+    });
   }
 
-  async function closeWorkspace(id: string) {
+  function closeWorkspace(id: string) {
     const workspace = workspaces.find((item) => item.id === id);
     if (!workspace) return;
-    if (
-      workspace.sessionId &&
-      !window.confirm("Disconnect the active SSH session and close this Workspace?")
-    ) {
+    if (workspace.sessionId) {
+      setConfirmState({
+        title: "Close workspace",
+        message: "Disconnect the active SSH session and close this Workspace?",
+        confirmLabel: "Disconnect & close",
+        danger: true,
+        onConfirm: () => void performCloseWorkspace(id),
+      });
       return;
     }
+    void performCloseWorkspace(id);
+  }
+
+  async function performCloseWorkspace(id: string) {
+    const workspace = workspaces.find((item) => item.id === id);
+    if (!workspace) return;
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     const index = workspaces.findIndex((item) => item.id === id);
     const remaining = workspaces.filter((item) => item.id !== id);
@@ -479,9 +524,17 @@ export function App() {
     if (!remaining.length) exitTerminalFocus();
   }
 
-  async function deleteConnection(connection: SavedConnection) {
-    if (!window.confirm(`Delete the Saved Connection “${connection.displayName}” and its History?`))
-      return;
+  function deleteConnection(connection: SavedConnection) {
+    setConfirmState({
+      title: "Delete connection",
+      message: `Delete the Saved Connection “${connection.displayName}” and its History? This cannot be undone.`,
+      confirmLabel: "Delete connection",
+      danger: true,
+      onConfirm: () => void performDeleteConnection(connection),
+    });
+  }
+
+  async function performDeleteConnection(connection: SavedConnection) {
     setActionError(null);
     try {
       await api.deleteConnection(connection.id);
@@ -527,12 +580,7 @@ export function App() {
   }
 
   function renameWorkspace(workspace: Workspace) {
-    const label = window.prompt(
-      "Workspace label. Leave it empty to use the connection name.",
-      workspace.label ?? duplicateLabel(workspace),
-    );
-    if (label === null) return;
-    updateWorkspace(workspace.id, { label: label.trim() || null });
+    setRenameTarget(workspace);
   }
 
   function pasteIntoTerminal(command: string) {
@@ -601,7 +649,15 @@ export function App() {
                 type="button"
                 onClick={() => openConnection(connection)}
               >
-                <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+                <span className="os-badge">
+                  <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+                  {connectionSessionStates[connection.id] && (
+                    <span
+                      className={`presence presence-${connectionSessionStates[connection.id]}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                </span>
                 <span>
                   <strong>{connection.displayName}</strong>
                   <small>{connectionTarget(connection)}</small>
@@ -663,10 +719,9 @@ export function App() {
                   type="button"
                   key={id}
                   aria-current={activeWorkspace.view === id && !settingsOpen ? "page" : undefined}
-                  onClick={() => {
-                    if (!closeSettings()) return;
-                    updateWorkspace(activeWorkspace.id, { view: id });
-                  }}
+                  onClick={() =>
+                    closeSettings(() => updateWorkspace(activeWorkspace.id, { view: id }))
+                  }
                 >
                   <Icon size={17} strokeWidth={1.8} /> {label}
                 </button>
@@ -710,7 +765,10 @@ export function App() {
                     }
                     onClick={() => selectWorkspaceTab(workspace)}
                   >
-                    <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                    <span className="os-badge">
+                      <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                      <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
+                    </span>
                     <span>{duplicateLabel(workspace)}</span>
                   </button>
                   <button
@@ -737,7 +795,7 @@ export function App() {
                 type="button"
                 onClick={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
                 disabled={!activeSavedConnection}
-                title="Open another terminal in this window (Ctrl+Shift+N)"
+                title="Open another terminal in this window"
               >
                 <Plus size={15} /> New terminal
               </button>
@@ -823,7 +881,7 @@ export function App() {
                       type="button"
                       onClick={exitTerminalFocus}
                       aria-label="Exit terminal focus"
-                      title="Exit terminal focus (F11)"
+                      title="Exit terminal focus"
                     >
                       <Minimize2 size={15} />
                     </button>
@@ -836,7 +894,7 @@ export function App() {
                     type="button"
                     onClick={enterTerminalFocus}
                     aria-label="Focus terminal"
-                    title="Focus terminal (F11)"
+                    title="Focus terminal"
                   >
                     <Maximize2 size={15} />
                   </button>
@@ -1039,6 +1097,13 @@ export function App() {
                 ? "Choose a saved connection from the sidebar to open it."
                 : "Use Add connection in the sidebar to save an SSH destination."}
             </p>
+            <div className="empty-shortcuts">
+              <span className="empty-shortcut">
+                <kbd>Ctrl</kbd>
+                <kbd>Shift</kbd>
+                <kbd>P</kbd> Command palette
+              </span>
+            </div>
             {!environment.sshPath && (
               <p className="inline-warning">
                 Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
@@ -1053,6 +1118,70 @@ export function App() {
           connection={dialogConnection === "new" ? undefined : dialogConnection}
           onClose={() => setDialogConnection(null)}
           onSaved={saveConnection}
+        />
+      )}
+
+      {renameTarget && (
+        <PromptDialog
+          title="Rename Workspace"
+          label="Workspace label"
+          description="Leave it empty to use the connection name."
+          defaultValue={renameTarget.label ?? duplicateLabel(renameTarget)}
+          placeholder={renameTarget.connectionSnapshot.displayName}
+          submitLabel="Rename"
+          onSubmit={(value) => {
+            updateWorkspace(renameTarget.id, { label: value.trim() || null });
+            setRenameTarget(null);
+          }}
+          onClose={() => setRenameTarget(null)}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          danger={confirmState.danger}
+          onConfirm={() => {
+            const run = confirmState.onConfirm;
+            setConfirmState(null);
+            run();
+          }}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          connections={connections}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          activeView={activeWorkspace?.view ?? null}
+          hasActiveConnection={Boolean(activeSavedConnection)}
+          canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
+          views={navigation}
+          hostCapabilities={hostCapabilities}
+          labelForWorkspace={duplicateLabel}
+          onClose={() => setPaletteOpen(false)}
+          onOpenConnection={(connection) => openConnection(connection)}
+          onSelectWorkspace={(workspace) => selectWorkspaceTab(workspace)}
+          onSetView={(view) => {
+            if (!activeWorkspace) return;
+            closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
+          }}
+          onNewTerminal={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
+          onReconnect={() =>
+            activeWorkspace &&
+            updateWorkspace(activeWorkspace.id, {
+              connectRequested: true,
+              reconnectToken: activeWorkspace.reconnectToken + 1,
+            })
+          }
+          onCloseWorkspace={() => activeWorkspace && void closeWorkspace(activeWorkspace.id)}
+          onFocusTerminal={enterTerminalFocus}
+          onAddConnection={() => setDialogConnection("new")}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
     </div>
