@@ -28,6 +28,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - name: Cache Rust compiler outputs for validation
+        uses: Mozilla-Actions/sccache-action@v0.0.11
       - name: Cache Rust dependencies for validation
         uses: Swatinem/rust-cache@v2.9.2
         with:
@@ -40,6 +42,9 @@ jobs:
           fallback: none
       - run: npm ci
       - run: npm run check
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: sccache
       - name: Check Rust dependencies for known security issues
         shell: pwsh
         run: cargo audit --file src-tauri/Cargo.lock
@@ -54,6 +59,8 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust compiler outputs for installer builds
+        uses: Mozilla-Actions/sccache-action@v0.0.11
       - name: Cache Rust dependencies for installer builds
         uses: Swatinem/rust-cache@v2.9.2
         with:
@@ -61,6 +68,9 @@ jobs:
           cache-bin: false
       - run: npm ci
       - run: npm run tauri build
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: sccache
       - name: Create installer checksum
         shell: pwsh
         run: |
