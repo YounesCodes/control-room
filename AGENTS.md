@@ -1,49 +1,67 @@
 # Control Room agent rules
 
+Control Room is a local Windows desktop tool for opening and inspecting Linux
+systems through SSH. The visual system, tokens, and UI conventions live in
+DESIGN.md.
+
 ## Scope
 
-Control Room is a local Windows desktop tool for opening and inspecting Linux systems through SSH.
-
 - Target Windows 11 x64, the installed Windows OpenSSH client, and ConPTY.
-- Structured inspection targets Debian and Ubuntu family hosts with systemd, journald, Bash, and optional Docker.
-- Other Linux systems are terminal-only, best effort.
-- Do not add file transfer, remote file editing, service or container management, cloud accounts, collaboration, AI features, mobile support, automatic discovery, monitoring, package updates, or private-key storage.
+- Structured inspection targets Debian and Ubuntu family hosts with systemd,
+  journald, Bash, and optional Docker. Other Linux systems are terminal-only,
+  best effort.
+- Do not add file transfer, remote file editing, service or container
+  management, cloud accounts, collaboration, AI features, mobile support, host
+  discovery, background monitoring, package updates, or private-key storage.
 
 ## Architecture and data rules
 
-1. Rust owns native process management, SQLite, SSH argument construction, and remote command construction.
-2. React must never receive arbitrary shell execution.
-3. Keep system OpenSSH and ConPTY. Record an explicit scope decision in this file before replacing either one.
-4. Use IDs for every Saved Connection, Workspace, Terminal Session, Structured Operation, and Log Stream.
-5. Never persist terminal output, fetched logs, SSH passwords, sudo passwords, or imported private keys.
-6. Keep remote operations read-only. A sudo retry is allowed only after permission denial and must not save the password.
+1. Rust owns native process management, SQLite, SSH argument construction, and
+   remote command construction. React never receives arbitrary shell execution.
+2. Keep system OpenSSH and ConPTY. Record a scope decision here before replacing
+   either.
+3. Give every Saved Connection, Workspace, Terminal Session, Structured
+   Operation, and Log Stream an ID.
+4. Never persist terminal output, fetched logs, SSH or sudo passwords, or
+   imported private keys.
+5. Keep remote operations read-only. A sudo retry is allowed only after a
+   permission error and must not save the password.
 
 ## Required behavior
 
-1. Preserve multiple simultaneous Workspaces, including several for one Saved Connection.
-2. Restore saved Workspace layout as disconnected after restart. Never reconnect automatically.
-3. Enhanced History is opt-in, Bash-only, reversible, and limited to commands reported by the installed shell integration. Never infer commands from keystrokes or import remote shell history.
-4. Keep service and container inspection read-only. Keep each Log Stream independent and in memory.
+1. Keep several simultaneous Workspaces, including more than one for a single
+   Saved Connection.
+2. Restore saved Workspace layout as disconnected after restart. Never
+   auto-reconnect.
+3. Enhanced History is opt-in, Bash-only, reversible, and limited to commands the
+   installed shell integration reports. Never infer commands from keystrokes or
+   import the host's shell history.
+4. Keep service and container inspection read-only. Keep each Log Stream
+   independent and in memory.
 5. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-6. Keep the README and this file current when behavior changes. Do not redesign unrelated UI.
+6. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+   redesign unrelated UI.
 7. Do not commit or push unless the user asks.
 
 ## Validation
 
-Run `npm ci` and `npm run check` before handoff. Build the Windows installer with `npm run tauri build`. Live SSH tests are ignored by default and require a host and account the user controls.
+Run `npm ci` and `npm run check` before handoff. Build the installer with
+`npm run tauri build`. Live SSH tests are ignored by default and need a host and
+account you control.
 
 ## Project language
 
-**Saved Connection**: Reusable SSH destination and username, with optional port or existing identity-file overrides.
-
-**Remote Host**: The Linux system reached through a Saved Connection. Multiple Saved Connections may refer to one Remote Host.
-
-**Workspace**: An open view of one Saved Connection that groups a Terminal Session with inspection features. A Saved Connection may have multiple Workspaces.
-
-**Terminal Session**: One interactive SSH shell inside a Workspace. Its state belongs to the session, not the Saved Connection or Remote Host.
-
-**Structured Operation**: A bounded, read-only inspection request that runs independently of Terminal Sessions.
-
-**Log Stream**: A live journald or Docker log reader with its own lifecycle.
-
-**Enhanced History**: A local record of commands reported by Control Room's installed Bash integration. It does not import a Remote Host's existing shell history.
+- **Saved Connection**: a reusable SSH destination and username, with optional
+  port or identity-file overrides.
+- **Remote Host**: the Linux system reached through a connection. Several
+  connections can point at one host.
+- **Workspace**: an open view of one connection that groups a Terminal Session
+  with the inspection views. A connection can have several Workspaces.
+- **Terminal Session**: one interactive SSH shell inside a Workspace. Its state
+  belongs to the session, not the connection.
+- **Structured Operation**: a bounded, read-only inspection request that runs
+  independently of Terminal Sessions.
+- **Log Stream**: a live journald or Docker log reader with its own lifecycle,
+  held in memory.
+- **Enhanced History**: a local record of commands the installed Bash integration
+  reports. It does not import the host's existing shell history.

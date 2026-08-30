@@ -89,17 +89,12 @@ run, and you type those yourself.
 
 ### Domain model
 
-The vocabulary is small, and every entity has an ID.
-
-| Term                     | Meaning                                                                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Saved Connection**     | A reusable SSH destination and username, with optional port or identity-file overrides.                                                                                   |
-| **Remote Host**          | The Linux system reached through a connection. Several connections can point at one host.                                                                                 |
-| **Workspace**            | An open view of one connection that groups a Terminal Session with the inspection views. A connection can have several Workspaces.                                        |
-| **Terminal Session**     | One interactive SSH shell inside a Workspace. Its state belongs to the session, not the connection.                                                                       |
-| **Structured Operation** | A bounded, read-only inspection request (host facts, services, containers) that runs independently of the terminal.                                                       |
-| **Log Stream**           | A live journald or Docker log reader with its own lifecycle, held only in memory.                                                                                         |
-| **Enhanced History**     | An opt-in, Bash-only local record of commands reported by an installed shell integration. It is never inferred from keystrokes or imported from the host's shell history. |
+The vocabulary is small, and every entity has an ID. A Saved Connection (a
+reusable SSH destination) opens one or more Workspaces, each pairing a live
+Terminal Session with read-only inspection views. Structured Operations (host
+facts, services, containers) and Log Streams run independently of the terminal,
+and Enhanced History is an opt-in local record of commands. AGENTS.md carries the
+exact term definitions.
 
 ### Information architecture
 
@@ -140,18 +135,13 @@ Library (jsdom).
 `uuid`, and `windows-sys`. It shells out to the system OpenSSH client and drives
 ConPTY for the interactive terminal.
 
-Data-flow rules that hold everywhere:
-
-- Rust owns native process management, SQLite, SSH argument construction, and
-  remote command construction. React never receives arbitrary shell execution.
-- Every Saved Connection, Workspace, Terminal Session, Structured Operation, and
-  Log Stream is addressed by ID.
-- The app never persists terminal output, fetched logs, SSH or sudo passwords, or
-  imported private keys. SQLite holds connections, settings, capabilities,
-  History, and _disconnected_ Workspace layout.
-- Restored Workspaces come back disconnected. The app never auto-reconnects.
-- Structured features need non-interactive public-key or agent auth. The
-  interactive terminal can still show ordinary OpenSSH prompts.
+The safety model shapes the UI. Remote operations are read-only, and the app
+never persists terminal output, fetched logs, passwords, or private keys. SQLite
+holds only connections, settings, capabilities, History, and _disconnected_
+Workspace layout, so a restored Workspace always comes back disconnected and
+never auto-reconnects. Structured features need non-interactive public-key or
+agent auth, though the terminal still shows ordinary OpenSSH prompts. AGENTS.md
+carries the full architecture and data rules.
 
 One xterm detail worth knowing: xterm draws bold text with weight, not from the
 bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory
@@ -437,10 +427,9 @@ decision, update the guardrail in the same commit and say why.
 
 ## Non-goals and future
 
-To stay a focused inspector, Control Room leaves out file transfer, remote file
-editing, service or container management, cloud accounts, collaboration, AI
-features, mobile support, host discovery, background monitoring, package updates,
-and private-key storage. New work should sharpen the existing features and their
+Control Room stays a focused inspector. The features it leaves out (file
+transfer, container management, cloud sync, AI, and the rest) are the scope
+exclusions in AGENTS.md. New work should sharpen the existing features and their
 contextual actions before it adds another panel.
 
 Worth doing later, still in scope: connection tags or grouping in the rail,
