@@ -1920,6 +1920,30 @@ dd {
   color: #e0e0dc;
 }
 
+.history-opt-in-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 2px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #0d0d0d;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.history-opt-in-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+
+.history-opt-in-note strong {
+  font-weight: 650;
+}
+
 .history-tools {
   justify-content: space-between;
   margin-bottom: 15px;

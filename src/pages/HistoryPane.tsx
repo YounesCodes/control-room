@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Clipboard,
   Eraser,
+  Info,
   Pause,
   Play,
   RefreshCw,
@@ -237,6 +238,14 @@ export function HistoryPane({
             times, and exit codes from integrated Control Room sessions. Command lines may contain
             secrets.
           </p>
+          <p className="history-opt-in-note">
+            <Info size={15} aria-hidden="true" />
+            <span>
+              Capture starts in terminal sessions opened <strong>after</strong> you enable it.
+              Reconnect this connection or open a new terminal — commands in an already-open session
+              are not recorded.
+            </span>
+          </p>
           <button
             className="primary-button"
             type="button"
@@ -299,7 +308,8 @@ export function HistoryPane({
       {error && <ErrorState message={error} />}
       {integrationInstalled === true && !error && !grouped.length && (
         <EmptyState title="No commands recorded yet">
-          Run a command in a new integrated terminal session.
+          Reconnect this connection or open a new terminal, then run a command. Sessions opened
+          before you enabled capture are not integrated.
         </EmptyState>
       )}
       {grouped.map(([date, items]) => (
