@@ -100,7 +100,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             autoFocus
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
-            placeholder="Debian laptop"
+            placeholder="e.g. Production server"
             maxLength={80}
             required
           />
@@ -110,7 +110,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
           <input
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            placeholder="192.0.2.10 or an OpenSSH alias"
+            placeholder="e.g. 192.0.2.10 or my-server"
             maxLength={255}
             required
             spellCheck={false}
@@ -123,7 +123,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="root"
+              placeholder="e.g. root"
               maxLength={64}
               required
               spellCheck={false}
@@ -147,7 +147,7 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             <input
               value={identityFile}
               onChange={(event) => setIdentityFile(event.target.value)}
-              placeholder="Use OpenSSH defaults"
+              placeholder="OpenSSH default"
               spellCheck={false}
             />
             <button className="secondary-button" type="button" onClick={chooseIdentity}>
