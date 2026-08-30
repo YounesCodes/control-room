@@ -1,15 +1,12 @@
-# Control Room — Design
+# Control Room design
 
-This document is the design reference for Control Room: what it is, the
-principles behind it, and the concrete visual, interaction, and architectural
-decisions that make it feel like one deliberate desktop product. It is the
-source of truth for design intent — when code and this document disagree, treat
-the disagreement as a bug in one of them.
+The design reference for Control Room: what it is, the principles behind it, and
+the visual and interaction decisions that hold it together. This is where design
+intent is written down. If the code and this document disagree, one of them is
+wrong.
 
-> Scope note: the design system described here is implemented across the app's
-> UI overhaul. The colour palette and layout invariants below are enforced by
-> automated tests (see [Guardrails](#guardrails)), so they are not just
-> aspirational — they are checked on every commit.
+> The palette and layout rules below are not aspirational. Automated tests check
+> them on every commit (see [Guardrails](#guardrails)).
 
 ---
 
@@ -33,60 +30,58 @@ the disagreement as a bug in one of them.
 
 ## What Control Room is
 
-Control Room is a **local Windows desktop application for opening interactive
-SSH sessions and inspecting Linux hosts**. It drives the machine's own Windows
-OpenSSH client and ConPTY rather than shipping a second SSH stack, so it inherits
-the user's existing keys, `~/.ssh/config`, and agent.
+Control Room is a local Windows desktop app for opening interactive SSH sessions
+and inspecting Linux hosts. It drives the machine's own Windows OpenSSH client
+and ConPTY instead of shipping a second SSH stack, so it reuses your existing
+keys, `~/.ssh/config`, and agent.
 
-The first release targets **Windows 11 x64** connecting to **Debian/Ubuntu-family
-hosts** with systemd, journald, Bash, and optional Docker. Other Linux systems
-still work as terminal-only destinations.
+The first release targets Windows 11 x64 and Debian/Ubuntu-family hosts with
+systemd, journald, Bash, and optional Docker. Other Linux systems still work as
+terminal-only destinations.
 
-**Who it is for.** Developers and operators who keep a handful of Linux servers
-and want a fast, keyboard-driven cockpit: open a shell, glance at host health,
-read services and containers, tail logs, and recall exact commands — without a
-web console, an agent on the host, or a second credential store.
+Who it's for: developers and operators who keep a handful of Linux servers and
+want a fast, keyboard-driven cockpit. Open a shell, glance at host health, read
+services and containers, tail logs, recall exact commands. No web console, no
+agent on the host, no second credential store.
 
-**The core loop.** Pick a saved connection → a Workspace opens with a live
-terminal → jump to Overview / Services / Docker / Logs / History as needed → open
-more sessions, split them, or move on. Everything the app does to a remote host
-is **read-only**; the terminal is the only place arbitrary commands run, and the
-user types those themselves.
+The core loop: pick a saved connection and a Workspace opens with a live
+terminal. From there you jump to Overview, Services, Docker, Logs, or History as
+you need, open more sessions, split them, or move on. Everything the app does to
+a remote host is read-only. The terminal is the only place arbitrary commands
+run, and you type those yourself.
 
 ---
 
 ## Design principles
 
 1. **Instrument, not dashboard.** Control Room is scanned and operated, not read
-   top-to-bottom. Density and legibility beat decoration. No hero banners, no
-   metric-card walls, no gradients — surface the summary, put state into form
-   (a dot, a chip, an accent bar), and let the terminal be the star.
+   top to bottom. Density and legibility beat decoration. No hero banners, no
+   metric-card walls, no gradients. Show the summary first, put state into form
+   (a dot, a chip, an accent bar), and give the terminal the room.
 
-2. **Monochrome with intent.** The interface is a near-black, grayscale control
-   surface. The only non-neutral colours are three semantic status hues
-   (success / warning / failure). Colour therefore always _means_ something;
-   it is never brand decoration. This restraint is the product's identity and is
-   test-enforced.
+2. **Monochrome with intent.** The interface is near-black and greyscale. The
+   only non-neutral colours are three status hues (success, warning, failure).
+   So colour always means something here. It is never decoration. That restraint
+   is the product's identity, and the tests enforce it.
 
 3. **Keyboard-first, desktop-native.** Real window chrome, a command palette,
-   discoverable shortcuts, split panes, focus mode, and native-feeling
-   interactions. Nothing important is mouse-only, and nothing important is a
-   hidden keyboard-only trick.
+   discoverable shortcuts, split panes, focus mode. Nothing important is
+   mouse-only, and nothing important is a hidden keyboard-only trick.
 
 4. **Safe by construction.** Remote operations are read-only. The app never
-   persists terminal output, fetched logs, SSH/sudo passwords, or private keys.
-   A sudo retry is allowed only after a permission error and is never saved.
-   Rust owns process/argument construction; React never receives arbitrary shell
-   execution.
+   persists terminal output, fetched logs, SSH or sudo passwords, or private
+   keys. A sudo retry is allowed only after a permission error, and it is never
+   saved. Rust owns process and argument construction. React never receives
+   arbitrary shell execution.
 
-5. **Honest feedback.** Every asynchronous surface has explicit loading, empty,
-   and error states. Destructive actions are visually distinct and confirmed in
-   the app's own dialogs — never a bare OS `prompt`/`confirm`. Copy says exactly
+5. **Honest feedback.** Every asynchronous view has explicit loading, empty, and
+   error states. Destructive actions look distinct and get confirmed in the
+   app's own dialogs, never a bare OS `prompt` or `confirm`. Copy says exactly
    what will happen.
 
 6. **A system, not a pile of styles.** One token set governs colour, type,
    spacing, radius, elevation, and motion. New UI composes existing tokens and
-   components rather than inventing one-off values.
+   components instead of inventing one-off values.
 
 ---
 
@@ -94,76 +89,74 @@ user types those themselves.
 
 ### Domain model
 
-The app's language is deliberately small and every entity is addressed by ID:
+The vocabulary is small, and every entity has an ID.
 
-| Term                     | Meaning                                                                                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Saved Connection**     | A reusable SSH destination + username, with optional port or identity-file overrides.                                                                                    |
-| **Remote Host**          | The Linux system reached through a connection. Several connections may point at one host.                                                                                |
-| **Workspace**            | An open view of one connection that groups a Terminal Session with the inspection views. A connection can have several Workspaces.                                       |
-| **Terminal Session**     | One interactive SSH shell inside a Workspace. Its state belongs to the session, not the connection.                                                                      |
-| **Structured Operation** | A bounded, read-only inspection request (host facts, services, containers) that runs independently of the terminal.                                                      |
-| **Log Stream**           | A live journald or Docker log reader with its own lifecycle, held only in memory.                                                                                        |
-| **Enhanced History**     | An opt-in, Bash-only local record of commands reported by an installed shell integration — never inferred from keystrokes, never imported from the host's shell history. |
+| Term                     | Meaning                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Saved Connection**     | A reusable SSH destination and username, with optional port or identity-file overrides.                                                                                   |
+| **Remote Host**          | The Linux system reached through a connection. Several connections can point at one host.                                                                                 |
+| **Workspace**            | An open view of one connection that groups a Terminal Session with the inspection views. A connection can have several Workspaces.                                        |
+| **Terminal Session**     | One interactive SSH shell inside a Workspace. Its state belongs to the session, not the connection.                                                                       |
+| **Structured Operation** | A bounded, read-only inspection request (host facts, services, containers) that runs independently of the terminal.                                                       |
+| **Log Stream**           | A live journald or Docker log reader with its own lifecycle, held only in memory.                                                                                         |
+| **Enhanced History**     | An opt-in, Bash-only local record of commands reported by an installed shell integration. It is never inferred from keystrokes or imported from the host's shell history. |
 
 ### Information architecture
 
-Navigation is two-level and never nests deeper:
+Navigation is two levels and never nests deeper.
 
-- **Left rail (persistent):** the connection list (search + saved connections),
-  then — once a Workspace is open — the Workspace's view switcher
-  (Overview · Terminal · Services · Docker · Logs · History), and a primary
-  "Add connection" action pinned at the bottom.
-- **Workspace tab strip (top of the main area):** one tab per open Workspace,
-  plus "New terminal" and the split/focus controls.
-- **Main area:** the active view. Terminal panes persist (mounted but hidden)
-  across view switches so a session is never torn down by navigation.
+- **Left rail.** The connection list (search plus saved connections). Once a
+  Workspace is open, the rail also holds the view switcher (Overview, Terminal,
+  Services, Docker, Logs, History), with "Add connection" pinned at the bottom.
+- **Workspace tab strip.** One tab per open Workspace across the top of the main
+  area, plus "New terminal" and the split and focus controls.
+- **Main area.** The active view. Terminal panes stay mounted but hidden across
+  view switches, so navigation never tears a session down.
 
-Identity is shown once per location and never duplicated into a redundant
-"status rail" — the host OS mark plus a session **presence dot** carry identity
-and liveness in the rail and tabs; the labelled connection status lives in the
-Terminal toolbar.
+Identity shows once per place, never duplicated into a redundant "status rail".
+The host OS mark and a session presence dot carry identity and liveness in the
+rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
 ### Shell layout
 
-A CSS grid: a **42 px custom titlebar row** and a **~244 px sidebar column**.
-The window enforces a **960 × 640 minimum**; below ~1120 px the sidebar and page
-padding tighten. A distraction-free **terminal focus mode** (toggled by button)
-hides the rail and titlebar and can tile multiple sessions as split panes.
+A CSS grid with a 42 px custom titlebar row and a ~244 px sidebar column. The
+window enforces a 960 x 640 minimum, and below ~1120 px the sidebar and page
+padding tighten. A distraction-free terminal focus mode (toggled by button)
+hides the rail and titlebar and can tile several sessions as split panes.
 
 ---
 
 ## Technical foundation
 
-Control Room is a **Tauri 2** application: a Rust core behind a WebView2
-(Windows) frontend.
+Control Room is a Tauri 2 app: a Rust core behind a WebView2 frontend on
+Windows.
 
-**Frontend** — React 19 + TypeScript, built with Vite 8. The terminal is
-`@xterm/xterm` v6 with the fit addon; icons are `lucide-react`. State is local
-React state; there is no global store. Tests run on Vitest + Testing Library
-(jsdom).
+**Frontend.** React 19 and TypeScript, built with Vite 8. The terminal is
+`@xterm/xterm` v6 with the fit addon, and icons come from `lucide-react`. State
+is plain React state, with no global store. Tests run on Vitest and Testing
+Library (jsdom).
 
-**Backend** — Rust (edition 2024) with `rusqlite` (bundled SQLite) for local
-persistence, `chrono`, `uuid`, and `windows-sys`. It shells out to the system
-OpenSSH client and drives ConPTY for the interactive terminal.
+**Backend.** Rust (edition 2024) with `rusqlite` (bundled SQLite), `chrono`,
+`uuid`, and `windows-sys`. It shells out to the system OpenSSH client and drives
+ConPTY for the interactive terminal.
 
-**Data-flow rules (invariants):**
+Data-flow rules that hold everywhere:
 
 - Rust owns native process management, SQLite, SSH argument construction, and
   remote command construction. React never receives arbitrary shell execution.
-- IDs address every Saved Connection, Workspace, Terminal Session, Structured
-  Operation, and Log Stream.
-- The app never persists terminal output, fetched logs, SSH/sudo passwords, or
-  imported private keys. Saved to SQLite: connections, settings, capabilities,
+- Every Saved Connection, Workspace, Terminal Session, Structured Operation, and
+  Log Stream is addressed by ID.
+- The app never persists terminal output, fetched logs, SSH or sudo passwords, or
+  imported private keys. SQLite holds connections, settings, capabilities,
   History, and _disconnected_ Workspace layout.
-- Restored Workspaces come back **disconnected**; the app never auto-reconnects.
-- Structured features require non-interactive public-key/agent auth; the
+- Restored Workspaces come back disconnected. The app never auto-reconnects.
+- Structured features need non-interactive public-key or agent auth. The
   interactive terminal can still show ordinary OpenSSH prompts.
 
-**xterm note.** Bold text is drawn with weight, not the bright palette
-(`drawBoldTextInBrightColors: false`), so a bold `01;34` directory renders in
-exactly the "Blue" the user configured — keeping the terminal consistent with
-the ANSI-colour settings preview.
+One xterm detail worth knowing: xterm draws bold text with weight, not from the
+bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory
+shows exactly the "Blue" you configured, which keeps the terminal and the
+Settings colour preview in agreement.
 
 ---
 
@@ -171,64 +164,64 @@ the ANSI-colour settings preview.
 
 ### Colour
 
-A grayscale system on a near-black ground. Elevation is expressed by making
-surfaces **lighter** as they rise (dark-UI convention), not by heavy shadows.
+A greyscale system on a near-black ground. Depth comes from making surfaces
+lighter as they rise, the standard move for dark UIs, not from heavy shadows.
 
-The **only** non-neutral colours anywhere in the UI are three semantic status
-hues. They are used for meaning — connection/session state, service/container
-state, command exit status, inline messages — never as accents:
+The only non-neutral colours in the whole UI are three status hues. They carry
+meaning (connection and session state, service and container state, command exit
+status, inline messages) and never act as accents.
 
-| Role    | Hex       | Meaning                                        |
-| ------- | --------- | ---------------------------------------------- |
-| Success | `#42d17a` | connected, running, active, exit 0             |
-| Warning | `#d6a84a` | connecting, sudo-required, paused              |
-| Failure | `#ef5b6b` | error, failed/dead, non-zero exit, destructive |
+| Role    | Hex       | Meaning                                           |
+| ------- | --------- | ------------------------------------------------- |
+| Success | `#42d17a` | connected, running, active, exit 0                |
+| Warning | `#d6a84a` | connecting, sudo-required, paused                 |
+| Failure | `#ef5b6b` | error, failed or dead, non-zero exit, destructive |
 
-The accent is **off-white** (`#f2f2ee`) — used for the primary button, the
-"you are here" accent bar/underline, and focus rings. Even error and warning
-_surfaces_ stay neutral gray; the semantic hue appears only in the border and
-text. (This is enforced — see [Guardrails](#guardrails).)
+The accent is off-white (`#f2f2ee`): the primary button, the "you are here" bar
+and underline, and focus rings. Even error and warning surfaces stay neutral
+grey, and the status hue shows only in the border and text. The tests enforce
+this (see [Guardrails](#guardrails)).
 
 ### Typography
 
-Two families, one for chrome and one for anything technical:
+Two families, one for chrome and one for anything technical.
 
-- **Space Grotesk** (bundled variable font, weights 300–700) for all UI chrome.
-  It is a squared grotesque with real character that stays sharp at the dense
-  10–13 px sizes the interface lives at, giving the app an engineered voice
-  instead of the default system look. Bundled as `woff2` so the desktop build
-  works offline with no fallback flash; the system stack is the fallback.
-- **Cascadia Mono → Consolas → monospace** for the terminal, logs, code,
-  service/container names, container IDs, and history commands.
+- **Space Grotesk.** A bundled variable font (weights 300-700) for all UI chrome.
+  It is a squared grotesque that stays sharp at the dense 10-13 px sizes the
+  interface lives at, which gives the app a voice instead of the default system
+  look. It ships as `woff2` so the desktop build works offline with no fallback
+  flash, and the system stack is the fallback.
+- **Cascadia Mono, then Consolas, then monospace** for the terminal, logs, code,
+  service and container names, container IDs, and history commands.
 
-Type roles are a small scale: 20 px section headings, ~17 px stat values,
-12.5 px body, 11.5 px controls, and 10 px uppercase labels with tracking.
-Numeric columns use `tabular-nums`.
+The type scale is small: 20 px section headings, ~17 px stat values, 12.5 px
+body, 11.5 px controls, and 10 px uppercase labels with tracking. Numeric columns
+use `tabular-nums`.
 
 ### Spacing, radius, elevation, motion
 
-- **Spacing** follows a consistent rhythm rather than arbitrary values; layout
-  uses flex/grid `gap`, not per-element margins that collapse.
-- **Radius** is a three-step scale — `4 / 6 / 8 px` (small controls / menus &
-  cards / modals) — replacing the earlier scatter of 2/3/5.
-- **Elevation** is the surface ramp (below) plus two neutral shadow tokens for
+- **Spacing.** A consistent rhythm, not arbitrary values. Layout uses flex or
+  grid `gap`, not per-element margins that collapse.
+- **Radius.** A three-step scale, 4/6/8 px (small controls, then menus and cards,
+  then modals). It replaced an earlier scatter of 2/3/5.
+- **Elevation.** The surface ramp below, plus two neutral shadow tokens for
   popovers and modals.
-- **Motion** is deliberately quiet: ~110 ms interaction transitions and ~160 ms
-  overlay entrances, all disabled under `prefers-reduced-motion`.
+- **Motion.** Quiet on purpose. Roughly 110 ms on interactions, 160 ms on overlay
+  entrances, all off under `prefers-reduced-motion`.
 
 ### Icons
 
-`lucide-react`, sized 13–18 px depending on context, `strokeWidth` ~1.8 for
-nav/marks. Host OS marks use the Debian/Ubuntu logos (Simple Icons, CC0) with a
-generic server glyph fallback, overlaid with the session presence dot.
+`lucide-react`, sized 13-18 px by context, `strokeWidth` ~1.8 for nav and marks.
+Host OS marks use the Debian and Ubuntu logos (Simple Icons, CC0) with a generic
+server glyph as fallback, overlaid with the session presence dot.
 
 ---
 
 ## Design tokens
 
 All values are CSS custom properties on `:root` in `src/styles.css`. Neutral
-tokens must stay neutral (RGB channels within 4 of each other); the three
-semantic hues above are the only exceptions.
+tokens must stay neutral (RGB channels within 4 of each other). The three status
+hues above are the only exceptions.
 
 **Base palette**
 
@@ -245,7 +238,7 @@ semantic hues above are the only exceptions.
 | `--on-accent`                           | `#000`                            |
 | `--success` / `--warning` / `--failure` | `#42d17a` / `#d6a84a` / `#ef5b6b` |
 
-**Surface elevation ramp** (lighter = higher)
+**Surface elevation ramp** (lighter is higher)
 
 | Token               | Value     | Use                                  |
 | ------------------- | --------- | ------------------------------------ |
@@ -255,7 +248,7 @@ semantic hues above are the only exceptions.
 | `--surface-raised`  | `#161616` | hover fills, cards                   |
 | `--surface-overlay` | `#1c1c1c` | menus, modals, the command palette   |
 
-**Interaction fills & borders**
+**Interaction fills and borders**
 
 | Token                                     | Value                 |
 | ----------------------------------------- | --------------------- |
@@ -268,7 +261,7 @@ semantic hues above are the only exceptions.
 | `--border-subtle`                         | `#232323`             |
 | `--border-faint`                          | `#1a1a1a`             |
 
-**Radius / motion**
+**Radius and motion**
 
 | Token                                         | Value                        |
 | --------------------------------------------- | ---------------------------- |
@@ -277,9 +270,8 @@ semantic hues above are the only exceptions.
 | `--ease`                                      | `cubic-bezier(0.2, 0, 0, 1)` |
 | `--shadow-popover` / `--shadow-modal`         | neutral drop shadows         |
 
-**Terminal ANSI defaults** (user-editable in Settings; live-previewed). These
-are the remote-content palette and are intentionally _not_ part of the
-monochrome chrome:
+**Terminal ANSI defaults.** User-editable in Settings and live-previewed. This is
+the remote-content palette, not part of the monochrome chrome.
 
 | Slot                | Default   |
 | ------------------- | --------- |
@@ -295,69 +287,72 @@ monochrome chrome:
 
 ## Interaction and state
 
-**State model per interactive element:** default → hover (`--fill-hover`) →
-active/selected (`--fill-active` / `--fill-selected`) → focus-visible (a 2 px
-accent ring) → disabled (0.4 opacity, `not-allowed`). Selection and "you are
-here" are signalled with a 2 px accent **bar** (rail rows, nav items, list
-rows) or **underline** (active tab), for a single consistent language.
+Every interactive element runs the same states: default, hover (`--fill-hover`),
+active or selected (`--fill-active` / `--fill-selected`), focus-visible (a 2 px
+accent ring), and disabled (0.4 opacity, `not-allowed`). A 2 px accent bar marks
+selection and "you are here" on rail rows, nav items, and list rows. The active
+tab uses an underline instead. Same idea either way.
 
 **Session presence.** Connection rows and Workspace tabs carry a small presence
-dot on the OS mark — green connected, amber connecting, red error, grey
-disconnected — so live sessions read at a glance. The dot's ring colour tracks
-the row/tab background so it reads as cut out of the icon.
+dot on the OS mark: green for connected, amber for connecting, red for error,
+grey for disconnected. Live sessions read at a glance. The dot's ring colour
+matches the row or tab background, so it looks cut out of the icon.
 
-**Panel states.** Every data view distinguishes loading (spinner + label),
-empty (icon + guidance, e.g. the Logs and History empty states), and error
-(icon + message + retry, with a "Retry with sudo" affordance where a permission
-error allows it). Cached lists show stale data with a warning rather than
-blanking.
+**Panel states.** Every data view separates loading (spinner and label), empty
+(icon and guidance, such as the Logs and History empty states), and error (icon,
+message, and retry, with a "Retry with sudo" affordance where a permission error
+allows it). Cached lists show stale data with a warning rather than going blank.
 
-**Dialogs are in-app, never native.** A shared `Modal` backs a `PromptDialog`
-(text input; used for renaming a Workspace) and a `ConfirmDialog` (message +
-confirm/cancel, with a red danger variant for destructive actions). All of
-delete-connection, close-connected-Workspace, discard-Settings, clear-History,
-and remove-integration route through these — no OS `prompt`/`confirm` remain.
+**Dialogs are in-app, never native.** A shared `Modal` backs `PromptDialog` (text
+input, used for renaming a Workspace) and `ConfirmDialog` (message with
+confirm/cancel, and a red danger variant for destructive actions). Deleting a
+connection, closing a connected Workspace, discarding Settings, clearing History,
+and removing the integration all route through these. No native `prompt` or
+`confirm` survives anywhere.
 
-**Command palette.** `Ctrl+Shift+P` opens a palette that searches open
-terminals, connections, workspace views, and contextual actions. It follows the
-combobox/listbox pattern with `aria-activedescendant`, arrow/Home/End/Enter/Esc
-keys, a focus trap, and focus restoration. It is the fastest path through a
-multi-connection workflow and the marquee keyboard surface.
+**Command palette.** `Ctrl+Shift+P` opens a palette that searches open terminals,
+connections, workspace views, and contextual actions. It follows the
+combobox/listbox pattern with `aria-activedescendant`, arrow, Home, End, Enter,
+and Escape keys, a focus trap, and focus restoration. It is the fastest way
+through a multi-connection setup. If I had to keep one keyboard feature, this is
+the one.
 
-**Terminal.** ConPTY-backed xterm with Unicode/ANSI/VT, resize, scrollback,
-copy/paste, and control keys (Vim, top, tmux, etc.). Reconnect after a drop or
-clear the local buffer without sending anything to the host. Multiple sessions
-per connection; split panes and focus mode for tiling.
+**Terminal.** ConPTY-backed xterm with Unicode, ANSI, and VT output, resize,
+scrollback, copy and paste, and control keys (Vim, top, tmux, and the rest).
+Reconnect after a drop, or clear the local buffer without sending anything to the
+host. Several sessions per connection, with split panes and focus mode for
+tiling.
 
 ---
 
 ## Components
 
-Reusable primitives (in `src/components/`) that everything else composes:
+Reusable primitives in `src/components/` that everything else composes.
 
-- **Modal** — accessible dialog shell (labelled, Esc/backdrop close, focus trap
-  and restore); base for ConnectionDialog, CredentialDialog, PromptDialog,
-  ConfirmDialog.
-- **PromptDialog / ConfirmDialog** — the in-app replacements for native dialogs.
-- **CommandPalette** — the keyboard command surface.
-- **PanelState** — `LoadingState` / `EmptyState` / `ErrorState`.
-- **HostOsIcon** — OS mark with presence badge.
-- **StatusDot / WindowControls** — status indicator and custom titlebar buttons.
-- **TerminalPane** — the xterm host and session lifecycle.
+- **Modal.** The accessible dialog shell (labelled, Esc and backdrop close, focus
+  trap and restore). It backs ConnectionDialog, CredentialDialog, PromptDialog,
+  and ConfirmDialog.
+- **PromptDialog and ConfirmDialog.** The in-app replacements for native dialogs.
+- **CommandPalette.** The command palette.
+- **PanelState.** `LoadingState`, `EmptyState`, and `ErrorState`.
+- **HostOsIcon.** The OS mark with its presence badge.
+- **StatusDot and WindowControls.** The status indicator and the custom titlebar
+  buttons.
+- **TerminalPane.** The xterm host and session lifecycle.
 
-Shared surface patterns: the **split page** (dense list + detail panel) used by
-Services and Docker; the **definition grid** and **capability list** on the
-Overview host dashboard; the **dense row** with a leading status indicator; the
-compact **chip** (exit codes, counts).
+Shared patterns: the split page (a dense list beside a detail panel) used by
+Services and Docker; the definition grid and capability list on the Overview host
+dashboard; the dense row with a leading status indicator; and the compact chip
+for exit codes and counts.
 
 ---
 
 ## Keyboard model
 
-Shortcuts exist only where they earn their place, and each is discoverable
-(palette, tooltips, empty-state hints). Browser/WebView-reserved combinations
-(e.g. `Ctrl+Shift+N`, `F11`) are deliberately **not** used, because the WebView
-intercepts them; those actions live on buttons and in the palette instead.
+Shortcuts exist only where they earn their place, and each one is discoverable
+through the palette, tooltips, or empty-state hints. We skip browser and WebView
+combinations like `Ctrl+Shift+N` and `F11`, because the WebView eats them before
+the app sees them. Those actions live on buttons and in the palette instead.
 
 | Shortcut       | Action                                      |
 | -------------- | ------------------------------------------- |
@@ -366,91 +361,88 @@ intercepts them; those actions live on buttons and in the palette instead.
 | `Ctrl+Shift+R` | Reconnect the active Terminal Session       |
 | `Ctrl+Shift+W` | Close the active Workspace                  |
 
-The terminal lets these bubble to the app (and keeps copy/paste as
-`Ctrl+Shift+C/V`); all other keys go to the remote shell.
+The terminal lets these bubble up to the app and keeps copy and paste on
+`Ctrl+Shift+C` and `Ctrl+Shift+V`. Every other key goes to the remote shell.
 
 ---
 
 ## Accessibility
 
-- **Contrast** — the text hierarchy and the three semantic colours meet WCAG AA
-  (main text exceeds AAA), verified in tests against their backgrounds.
-- **Focus** — a consistent 2 px accent focus-visible ring on every interactive
-  element, sized and contrasted to satisfy WCAG 2.2 Focus Appearance, and it
-  never clips inside dense rows.
-- **Semantics** — real buttons/inputs, dialog roles with accessible names, the
-  palette's combobox/listbox roles, `aria-current` for the active view/tab,
-  labelled window controls, and `aria-label`s on icon-only controls.
-- **Not colour alone** — status is shape-coded (dot vs. rotated square vs. ring)
-  and text-labelled, not signalled by hue only.
-- **Motion** — all transitions/animations collapse under
+- **Contrast.** The text hierarchy and the three status colours meet WCAG AA, and
+  the main text clears AAA. Tests check this against the actual backgrounds.
+- **Focus.** A consistent 2 px accent focus-visible ring on every interactive
+  element, sized and contrasted for WCAG 2.2 Focus Appearance, and it never clips
+  inside dense rows.
+- **Semantics.** Real buttons and inputs, dialog roles with accessible names, the
+  palette's combobox and listbox roles, `aria-current` on the active view and
+  tab, labelled window controls, and `aria-label`s on icon-only controls.
+- **Colour is never the only signal.** Status is shape-coded (a dot, a rotated
+  square, a ring) and text-labelled.
+- **Motion.** Every transition and animation collapses under
   `prefers-reduced-motion: reduce`.
-- **Hit targets** — interactive controls meet a comfortable minimum; hover-only
-  affordances (tab close, row actions) remain keyboard-reachable via
+- **Hit targets.** Interactive controls meet a comfortable minimum. Hover-only
+  affordances (a tab close, row actions) stay keyboard-reachable via
   `:focus-within` and are not clickable while hidden.
 
 ---
 
 ## Influences
 
-The design borrows specific, proven patterns rather than cloning any one product:
+The design borrows specific, proven patterns instead of cloning any one product.
 
-- **Session/terminal managers** — [Termius](https://termai.sh/blog/termius-vs-warp/)
-  and [Tabby](https://sourceforge.net/software/product/Tabby.sh/alternatives)
-  for connection lists, per-session state, tab grouping/search; the modern
-  connection-manager expectation that live sessions are visible at a glance.
-- **[Warp](https://docs.warp.dev/terminal/windows/tabs/)** and
-  **[Windows Terminal](https://learn.microsoft.com/windows/terminal/)** — tab
-  strips with hover-revealed controls, split panes, GPU/-fast terminal feel, and
-  session restoration.
-- **[VS Code](https://code.visualstudio.com/)** — the command palette on
+- **Session and terminal managers.**
+  [Termius](https://termai.sh/blog/termius-vs-warp/) and
+  [Tabby](https://sourceforge.net/software/product/Tabby.sh/alternatives) for
+  connection lists, per-session state, and tab grouping and search, plus the
+  modern expectation that live sessions are visible at a glance.
+- **Terminals.** [Warp](https://docs.warp.dev/terminal/windows/tabs/) and
+  [Windows Terminal](https://learn.microsoft.com/windows/terminal/) for tab
+  strips with hover-revealed controls, split panes, a fast terminal, and session
+  restoration.
+- **[VS Code](https://code.visualstudio.com/)** for the command palette on
   `Ctrl+Shift+P` and a dense, calm dark chrome.
-- **Host consoles (Lens, Portainer, Cockpit)** — the Overview as a real host
-  dashboard: a stat strip plus grouped facts and semantic capability status.
-- **Guidance** — WCAG 2.2 (focus appearance, target size, non-text contrast);
-  Refactoring UI and dark-UI elevation practice (depth via lighter surfaces, not
-  shadows); Nielsen Norman Group on feedback, empty/error states, and keyboard
-  navigation.
+- **Host consoles.** Lens, Portainer, and Cockpit for the Overview as a real host
+  dashboard: a stat strip over grouped facts and semantic capability status.
+- **Guidance.** WCAG 2.2 (focus appearance, target size, non-text contrast),
+  Refactoring UI and dark-UI elevation practice (depth from lighter surfaces, not
+  shadows), and Nielsen Norman Group on feedback, empty and error states, and
+  keyboard navigation.
 
-Deliberately **not** adopted: the AI-terminal direction (Warp), mobile/cloud
-sync (Termius), or SaaS-dashboard styling — none fit a local, read-only,
+What we skipped, on purpose: the AI-terminal direction (Warp), mobile and cloud
+sync (Termius), and SaaS-dashboard styling. None of it fits a local, read-only,
 single-user inspector.
 
 ---
 
 ## Guardrails
 
-Two test files encode the non-negotiable design decisions so the system cannot
-silently drift:
+Two test files encode the design decisions that must not drift.
 
-- **`src/color-palette.test.ts`** scans _every_ hex/rgb literal in
+- **`src/color-palette.test.ts`** scans every hex and rgb literal in
   `src/styles.css` and fails unless the only non-neutral colours are exactly
-  `#42d17a`, `#d6a84a`, `#ef5b6b`. It also checks WCAG contrast for the text
-  hierarchy, the accent, and the semantic colours, and pins the terminal ANSI
-  defaults. This is what makes "monochrome with intent" a fact, not a hope.
-- **`src/ui-hierarchy.test.ts`** locks structural invariants: the 42 px
-  titlebar row, the bounded connection list and 980 px content cap, terminal
-  padding on the xterm element, focus-mode rules, session presence in
-  navigation, the in-app (non-native) discard confirm, and the exact counts of
-  host-OS marks / drag regions / window controls in the shell.
+  `#42d17a`, `#d6a84a`, and `#ef5b6b`. It also checks WCAG contrast for the text
+  hierarchy, the accent, and the status colours, and it pins the terminal ANSI
+  defaults. This is what makes "monochrome with intent" a fact instead of a hope.
+- **`src/ui-hierarchy.test.ts`** locks the structure: the 42 px titlebar row, the
+  bounded connection list and 980 px content cap, terminal padding on the xterm
+  element, focus-mode rules, session presence in navigation, the in-app (not
+  native) discard confirm, and the exact counts of host-OS marks, drag regions,
+  and window controls in the shell.
 
-Both, plus the Rust suite, run under `npm run check` (format · lint · test ·
-build) and in CI. **When changing the UI, keep them green** — or, if a change is
-a deliberate evolution of the design, update the guardrail in the same commit
-with a rationale.
+Both, plus the Rust suite, run under `npm run check` (format, lint, test, build)
+and in CI. When you change the UI, keep them green. If a change is a real design
+decision, update the guardrail in the same commit and say why.
 
 ---
 
 ## Non-goals and future
 
-To stay a focused inspector, Control Room deliberately excludes: file transfer,
-remote file editing, service/container _management_, cloud accounts,
-collaboration, AI features, mobile support, automatic host discovery, background
-monitoring, package updates, and private-key storage. New work should prefer
-**clearer prioritisation of existing features and better contextual actions**
-over adding panels or surfaces.
+To stay a focused inspector, Control Room leaves out file transfer, remote file
+editing, service or container management, cloud accounts, collaboration, AI
+features, mobile support, host discovery, background monitoring, package updates,
+and private-key storage. New work should sharpen the existing features and their
+contextual actions before it adds another panel.
 
-Reasonable future directions that stay in scope: richer connection organisation
-(tags/grouping) in the rail, recent/pinned ordering in the palette, and further
-density/responsive tuning — each additive, each measured against the principles
-above.
+Worth doing later, still in scope: connection tags or grouping in the rail,
+recent and pinned ordering in the palette, and more density and responsive
+tuning. Each one additive, each one measured against the principles above.
