@@ -202,29 +202,9 @@ export function App() {
       ) {
         return;
       }
-      if (
-        event.key === "F11" &&
-        !event.repeat &&
-        (terminalFocusMode ||
-          (!settingsOpen && activeWorkspace && activeWorkspace.view === "terminal"))
-      ) {
-        event.preventDefault();
-        if (terminalFocusMode) exitTerminalFocus();
-        else enterTerminalFocus();
-        return;
-      }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
-      }
-      if (
-        event.ctrlKey &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "n" &&
-        activeSavedConnection
-      ) {
-        event.preventDefault();
-        openConnection(activeSavedConnection, true);
       }
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
         event.preventDefault();
@@ -240,14 +220,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [
-    activeSavedConnection,
-    activeWorkspace,
-    dialogConnection,
-    hostMenuConnectionId,
-    settingsOpen,
-    terminalFocusMode,
-  ]);
+  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, settingsOpen]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
@@ -822,7 +795,7 @@ export function App() {
                 type="button"
                 onClick={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
                 disabled={!activeSavedConnection}
-                title="Open another terminal in this window (Ctrl+Shift+N)"
+                title="Open another terminal in this window"
               >
                 <Plus size={15} /> New terminal
               </button>
@@ -908,7 +881,7 @@ export function App() {
                       type="button"
                       onClick={exitTerminalFocus}
                       aria-label="Exit terminal focus"
-                      title="Exit terminal focus (F11)"
+                      title="Exit terminal focus"
                     >
                       <Minimize2 size={15} />
                     </button>
@@ -921,7 +894,7 @@ export function App() {
                     type="button"
                     onClick={enterTerminalFocus}
                     aria-label="Focus terminal"
-                    title="Focus terminal (F11)"
+                    title="Focus terminal"
                   >
                     <Maximize2 size={15} />
                   </button>
@@ -1129,16 +1102,6 @@ export function App() {
                 <kbd>Ctrl</kbd>
                 <kbd>Shift</kbd>
                 <kbd>P</kbd> Command palette
-              </span>
-              {connections.length > 0 && (
-                <span className="empty-shortcut">
-                  <kbd>Ctrl</kbd>
-                  <kbd>Shift</kbd>
-                  <kbd>N</kbd> New terminal
-                </span>
-              )}
-              <span className="empty-shortcut">
-                <kbd>F11</kbd> Focus terminal
               </span>
             </div>
             {!environment.sshPath && (

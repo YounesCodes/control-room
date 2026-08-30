@@ -21,14 +21,12 @@ Control Room does not store private keys, SSH passwords, sudo passwords, termina
 
 ### Keyboard shortcuts
 
-| Shortcut       | Action                                          |
-| -------------- | ----------------------------------------------- |
-| `Ctrl+Shift+P` | Open the command palette                        |
-| `Ctrl+Shift+N` | Open another terminal for the active connection |
-| `Ctrl+Shift+T` | Switch the active Workspace to its Terminal     |
-| `Ctrl+Shift+R` | Reconnect the active Terminal Session           |
-| `Ctrl+Shift+W` | Close the active Workspace                      |
-| `F11`          | Enter or leave terminal focus mode              |
+| Shortcut       | Action                                      |
+| -------------- | ------------------------------------------- |
+| `Ctrl+Shift+P` | Open the command palette                    |
+| `Ctrl+Shift+T` | Switch the active Workspace to its Terminal |
+| `Ctrl+Shift+R` | Reconnect the active Terminal Session       |
+| `Ctrl+Shift+W` | Close the active Workspace                  |
 
 ## Development
 

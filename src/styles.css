@@ -2413,6 +2413,7 @@ kbd {
   flex: 1;
   min-width: 0;
   border: 0;
+  border-radius: 0;
   outline: 0;
   background: transparent;
   padding: 15px 0;
@@ -2420,8 +2421,13 @@ kbd {
   font-size: 14px;
 }
 
+/* The search bar is the palette's obvious focus target, so suppress the shared
+   input focus ring (outline + box-shadow) that otherwise floats awkwardly. */
+.command-palette-search input:focus,
 .command-palette-search input:focus-visible {
   outline: none;
+  border: 0;
+  box-shadow: none;
 }
 
 .command-palette-list {

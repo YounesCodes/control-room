@@ -124,7 +124,6 @@ export function CommandPalette({
         group: "Actions",
         label: "New terminal",
         sublabel: "Another session for this connection",
-        shortcut: "Ctrl+Shift+N",
         run: run(onNewTerminal),
       });
     }
@@ -141,7 +140,6 @@ export function CommandPalette({
           id: "act-focus",
           group: "Actions",
           label: "Focus terminal",
-          shortcut: "F11",
           run: run(onFocusTerminal),
         });
       }
