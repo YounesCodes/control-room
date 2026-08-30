@@ -16,28 +16,48 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  validate:
+  frontend:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
+      - run: npm ci
+      - run: npm run check:version
+      - run: npm run check:frontend
+
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - run: npm ci
-      - run: npm run check
+      - name: Cache Rust compiler outputs for validation
+        uses: Mozilla-Actions/sccache-action@v0.0.11
+      - name: Cache Rust dependencies for validation
+        uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - name: Install cargo-audit from a prebuilt release
+        uses: taiki-e/install-action@v2.87.2
+        with:
+          tool: cargo-audit
+          fallback: none
+      - run: npm run check:rust
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: sccache
       - name: Check Rust dependencies for known security issues
         shell: pwsh
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit --file src-tauri/Cargo.lock
+        run: cargo audit --file src-tauri/Cargo.lock
 
   installer:
-    needs: validate
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
@@ -47,8 +67,18 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust compiler outputs for installer builds
+        uses: Mozilla-Actions/sccache-action@v0.0.11
+      - name: Cache Rust dependencies for installer builds
+        uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
       - run: npm ci
       - run: npm run tauri build
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: sccache
       - name: Create installer checksum
         shell: pwsh
         run: |
