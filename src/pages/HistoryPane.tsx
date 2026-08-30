@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   Clipboard,
   Eraser,
   Info,
@@ -266,7 +267,7 @@ export function HistoryPane({
           />
         </label>
         {integrationInstalled === true && (
-          <>
+          <div className="history-tools-actions">
             <button
               className="secondary-button"
               type="button"
@@ -287,7 +288,7 @@ export function HistoryPane({
             >
               Remove integration
             </button>
-          </>
+          </div>
         )}
       </div>
       {!globalEnabled && (
@@ -324,14 +325,31 @@ export function HistoryPane({
                   second: "2-digit",
                 })}
               </time>
-              <span
-                className={
-                  entry.exitCode === 0 ? "exit-code exit-success" : "exit-code exit-failure"
-                }
-                title={`Exit code ${entry.exitCode ?? "unknown"}`}
-              >
-                {entry.exitCode ?? "–"}
-              </span>
+              {entry.exitCode === 0 ? (
+                <span
+                  className="exit-code exit-success"
+                  title="Command succeeded (exit code 0)"
+                  aria-label="Command succeeded"
+                >
+                  <Check size={13} strokeWidth={3} aria-hidden="true" />
+                </span>
+              ) : entry.exitCode == null ? (
+                <span
+                  className="exit-code"
+                  title="Exit code unknown"
+                  aria-label="Exit code unknown"
+                >
+                  –
+                </span>
+              ) : (
+                <span
+                  className="exit-code exit-failure"
+                  title={`Command failed (exit code ${entry.exitCode})`}
+                  aria-label={`Command failed, exit code ${entry.exitCode}`}
+                >
+                  {entry.exitCode}
+                </span>
+              )}
               <div>
                 <code>{entry.command}</code>
                 <small>{entry.cwd ?? "Directory unavailable"}</small>

@@ -1138,6 +1138,7 @@ code,
 .toolbar-actions,
 .modal-actions,
 .history-tools,
+.history-tools-actions,
 .row-actions {
   display: flex;
   align-items: center;
