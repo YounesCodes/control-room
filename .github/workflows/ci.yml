@@ -40,7 +40,6 @@ jobs:
         run: cargo audit --file src-tauri/Cargo.lock
 
   installer:
-    needs: validate
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
