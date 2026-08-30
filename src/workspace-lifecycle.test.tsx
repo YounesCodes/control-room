@@ -108,7 +108,6 @@ describe("App Workspace behavior", () => {
     const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
     api.listConnections.mockResolvedValue([first, second]);
     api.workspaceState.mockResolvedValue(restoredState([first.id, second.id]));
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<App />);
 
@@ -116,6 +115,8 @@ describe("App Workspace behavior", () => {
     expect(screen.getByTestId("terminal-workspace-1")).toBeTruthy();
     await user.click(screen.getByLabelText("Open actions for Host A"));
     await user.click(screen.getByRole("menuitem", { name: /Delete connection/i }));
+    // Confirm the deletion in the in-app dialog.
+    await user.click(screen.getByRole("button", { name: /Delete connection/i }));
 
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(screen.getByTestId("terminal-workspace-1")).toBeTruthy();
@@ -123,7 +124,6 @@ describe("App Workspace behavior", () => {
 
   it("asks before leaving a dirty Settings page", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<App />);
 
     await user.click(await screen.findByLabelText("Open Settings"));
@@ -131,10 +131,17 @@ describe("App Workspace behavior", () => {
     await user.type(screen.getByLabelText("Font family"), "Cascadia Mono");
     await user.click(screen.getByRole("button", { name: "Back to terminal" }));
 
+    // The in-app confirm dialog appears and Settings stays open.
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
-    expect(confirm).toHaveBeenCalledWith("Discard unsaved Settings changes?");
-    confirm.mockReturnValue(true);
+    expect(screen.getByText("Discard unsaved Settings changes?")).toBeTruthy();
+
+    // Cancel keeps the Settings page.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
+
+    // Discarding leaves Settings.
     await user.click(screen.getByRole("button", { name: "Back to terminal" }));
+    await user.click(screen.getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Settings" })).toBeNull());
   });
 

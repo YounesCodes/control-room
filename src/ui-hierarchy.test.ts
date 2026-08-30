@@ -38,7 +38,10 @@ describe("application hierarchy", () => {
 
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
-    expect(appSource).toContain('window.confirm("Discard unsaved Settings changes?")');
+    // Unsaved Settings changes are guarded with an in-app confirm dialog rather
+    // than a native window.confirm.
+    expect(appSource).not.toContain("window.confirm");
+    expect(appSource).toContain('message: "Discard unsaved Settings changes?"');
     expect(settingsSource).toContain('aria-label="Back to terminal"');
   });
 
@@ -57,10 +60,20 @@ describe("application hierarchy", () => {
     expect(logsSource).toContain('loadSources("docker", true, password)');
   });
 
-  it("uses host OS marks in navigation and keeps status in the Terminal view", () => {
+  it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
     expect(appSource.match(/<HostOsIcon/g)).toHaveLength(5);
     expect(appSource).not.toContain("StatusDot");
+    // Connection sidebar and Workspace tabs surface live session state as a
+    // presence badge on the OS mark; the labelled status dot stays in Terminal.
+    expect(appSource).toContain("connectionSessionStates");
+    expect(appSource).toContain("className={`presence presence-${workspace.state}`}");
     expect(terminalSource.match(/<StatusDot/g)).toHaveLength(1);
+  });
+
+  it("renders bold terminal text as weight so category colors match what the user picks", () => {
+    // Bold `01;34` directories / `01;32` prompts must use the chosen base color,
+    // not xterm's lightened bright palette, or the Settings color preview lies.
+    expect(terminalSource).toContain("drawBoldTextInBrightColors: false");
   });
 
   it("detects a newly connected host without requiring an Overview visit", () => {

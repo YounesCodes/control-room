@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Eraser, Pause, Play, Search, Square } from "lucide-react";
+import { Eraser, FileClock, Pause, Play, Search, Square } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
@@ -490,13 +490,30 @@ export function LogsPane({
         <div className="inline-error" role="alert">
           <span>{error}</span>
           {error.toLowerCase().includes("permission denied") && (
-            <button type="button" onClick={() => setSudoPurpose("stream")}>
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => setSudoPurpose("stream")}
+            >
               Retry with sudo
             </button>
           )}
         </div>
       )}
-      <pre className="log-output">{displayedLogs || "Choose a source and start the stream."}</pre>
+      {displayedLogs ? (
+        <pre className="log-output">{displayedLogs}</pre>
+      ) : (
+        <div className="log-output log-empty">
+          <FileClock size={24} aria-hidden="true" />
+          <p>
+            {searchQuery.trim()
+              ? "No loaded lines match your search."
+              : sourceId
+                ? "Press Start to stream this source's output here."
+                : "Choose a source, then press Start to stream its output here."}
+          </p>
+        </div>
+      )}
       {sudoPurpose && (
         <CredentialDialog
           connectionLabel={connection.displayName}

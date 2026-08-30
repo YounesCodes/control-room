@@ -136,6 +136,35 @@ export function SettingsPane({
               <RotateCcw size={13} /> Reset colors
             </button>
           </div>
+          <div
+            className="ansi-preview"
+            style={{ color: draft.terminalForeground }}
+            aria-hidden="true"
+          >
+            <div>
+              <span style={{ color: draft.terminalGreen, fontWeight: 700 }}>agent@ubuntu</span>:
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>~</span>$ ls -la /
+            </div>
+            <div>
+              <span style={{ color: draft.terminalCyan, fontWeight: 700 }}>bin</span> -&gt;{" "}
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>usr/bin</span>
+              {"   "}
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>boot</span>
+              {"   "}
+              <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>etc</span>
+              {"   "}fstab
+            </div>
+            <div>
+              <span style={{ color: draft.terminalYellow, fontWeight: 700 }}>warning:</span> low
+              disk space {"  ·  "}
+              <span style={{ color: draft.terminalMagenta, fontWeight: 700 }}>note:</span> using
+              defaults
+            </div>
+            <div>
+              <span style={{ color: draft.terminalRed, fontWeight: 700 }}>error:</span> permission
+              denied
+            </div>
+          </div>
           <div className="terminal-color-grid">
             {terminalColorFields.map(([field, label]) => (
               <label className="terminal-color-control" key={field}>
@@ -143,6 +172,7 @@ export function SettingsPane({
                   type="color"
                   value={draft[field]}
                   onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+                  aria-label={label}
                 />
                 <span>{label}</span>
                 <code>{draft[field]}</code>

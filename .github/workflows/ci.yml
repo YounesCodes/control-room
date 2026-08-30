@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+# Only the latest run per branch/PR needs to finish. Superseded runs are
+# cancelled to save CI minutes and give faster feedback — except on main, where
+# every merge is validated to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   validate:
     runs-on: windows-latest

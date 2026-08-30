@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   Clipboard,
   Eraser,
+  Info,
   Pause,
   Play,
   RefreshCw,
@@ -9,6 +11,7 @@ import {
   TerminalSquare,
   Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import type { HistoryEntry, SavedConnection } from "../types";
@@ -37,6 +40,12 @@ export function HistoryPane({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
   const loadRequestRef = useRef(0);
 
   async function loadHistory() {
@@ -103,14 +112,17 @@ export function HistoryPane({
     }
   }
 
-  async function removeIntegration() {
-    if (
-      !window.confirm(
+  function removeIntegration() {
+    setConfirmState({
+      title: "Remove integration",
+      message:
         "Remove the Control Room Bash integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.",
-      )
-    ) {
-      return;
-    }
+      confirmLabel: "Remove integration",
+      onConfirm: () => void performRemoveIntegration(),
+    });
+  }
+
+  async function performRemoveIntegration() {
     setWorking(true);
     setError(null);
     try {
@@ -150,8 +162,16 @@ export function HistoryPane({
     }
   }
 
-  async function clear() {
-    if (!window.confirm(`Clear all Enhanced History for ${connection.displayName}?`)) return;
+  function clear() {
+    setConfirmState({
+      title: "Clear history",
+      message: `Clear all Enhanced History for ${connection.displayName}? This cannot be undone.`,
+      confirmLabel: "Clear history",
+      onConfirm: () => void performClear(),
+    });
+  }
+
+  async function performClear() {
     setError(null);
     try {
       await api.clearHistory(connection.id);
@@ -219,6 +239,14 @@ export function HistoryPane({
             times, and exit codes from integrated Control Room sessions. Command lines may contain
             secrets.
           </p>
+          <p className="history-opt-in-note">
+            <Info size={15} aria-hidden="true" />
+            <span>
+              Capture starts in terminal sessions opened <strong>after</strong> you enable it.
+              Reconnect this connection or open a new terminal — commands in an already-open session
+              are not recorded.
+            </span>
+          </p>
           <button
             className="primary-button"
             type="button"
@@ -239,7 +267,7 @@ export function HistoryPane({
           />
         </label>
         {integrationInstalled === true && (
-          <>
+          <div className="history-tools-actions">
             <button
               className="secondary-button"
               type="button"
@@ -260,7 +288,7 @@ export function HistoryPane({
             >
               Remove integration
             </button>
-          </>
+          </div>
         )}
       </div>
       {!globalEnabled && (
@@ -281,7 +309,8 @@ export function HistoryPane({
       {error && <ErrorState message={error} />}
       {integrationInstalled === true && !error && !grouped.length && (
         <EmptyState title="No commands recorded yet">
-          Run a command in a new integrated terminal session.
+          Reconnect this connection or open a new terminal, then run a command. Sessions opened
+          before you enabled capture are not integrated.
         </EmptyState>
       )}
       {grouped.map(([date, items]) => (
@@ -296,9 +325,31 @@ export function HistoryPane({
                   second: "2-digit",
                 })}
               </time>
-              <span className={entry.exitCode === 0 ? "exit-success" : "exit-failure"}>
-                {entry.exitCode ?? "–"}
-              </span>
+              {entry.exitCode === 0 ? (
+                <span
+                  className="exit-code exit-success"
+                  title="Command succeeded (exit code 0)"
+                  aria-label="Command succeeded"
+                >
+                  <Check size={13} strokeWidth={3} aria-hidden="true" />
+                </span>
+              ) : entry.exitCode == null ? (
+                <span
+                  className="exit-code"
+                  title="Exit code unknown"
+                  aria-label="Exit code unknown"
+                >
+                  –
+                </span>
+              ) : (
+                <span
+                  className="exit-code exit-failure"
+                  title={`Command failed (exit code ${entry.exitCode})`}
+                  aria-label={`Command failed, exit code ${entry.exitCode}`}
+                >
+                  {entry.exitCode}
+                </span>
+              )}
               <div>
                 <code>{entry.command}</code>
                 <small>{entry.cwd ?? "Directory unavailable"}</small>
@@ -339,6 +390,20 @@ export function HistoryPane({
           ))}
         </section>
       ))}
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          danger
+          onConfirm={() => {
+            const run = confirmState.onConfirm;
+            setConfirmState(null);
+            run();
+          }}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
     </section>
   );
 }
