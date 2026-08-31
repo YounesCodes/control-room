@@ -71,6 +71,15 @@ describe("systemd relationships", () => {
     expect([...cyclicSystemdUnits(fixture())].sort()).toEqual(["network.target", "web.service"]);
   });
 
+  it("does not treat the recommended Wants plus After pairing as a cycle", () => {
+    const result = fixture();
+    result.edges = [
+      { source: "web.service", target: "network.target", relationship: "wants" },
+      { source: "web.service", target: "network.target", relationship: "after" },
+    ];
+    expect([...cyclicSystemdUnits(result)]).toEqual([]);
+  });
+
   it("does not turn inverse ordering or symmetric conflict facts into cycles", () => {
     const result = fixture();
     result.edges = [

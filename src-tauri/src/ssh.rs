@@ -98,22 +98,40 @@ pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec
     arguments
 }
 
+/// Unit types the Systemd view and ownership correlation navigate to. Port
+/// owner mapping and journal navigation rely on this staying narrow: a socket
+/// owned by a `.slice` or `.scope` must not be presented as a navigable unit.
+const SYSTEMD_UNIT_SUFFIXES: [&str; 4] = [".service", ".socket", ".mount", ".timer"];
+
+/// The full set of unit types, used only for relationship inspection, where a
+/// unit legitimately references targets, slices, scopes, and devices.
+const SYSTEMD_RELATIONSHIP_UNIT_SUFFIXES: [&str; 11] = [
+    ".service",
+    ".socket",
+    ".target",
+    ".device",
+    ".mount",
+    ".automount",
+    ".swap",
+    ".path",
+    ".timer",
+    ".slice",
+    ".scope",
+];
+
 pub fn validate_systemd_unit_id(value: &str) -> Result<&str, String> {
-    let supported_suffix = [
-        ".service",
-        ".socket",
-        ".target",
-        ".device",
-        ".mount",
-        ".automount",
-        ".swap",
-        ".path",
-        ".timer",
-        ".slice",
-        ".scope",
-    ]
-    .iter()
-    .any(|suffix| value.ends_with(suffix));
+    validate_systemd_unit_with_suffixes(value, &SYSTEMD_UNIT_SUFFIXES)
+}
+
+pub fn validate_systemd_relationship_unit_id(value: &str) -> Result<&str, String> {
+    validate_systemd_unit_with_suffixes(value, &SYSTEMD_RELATIONSHIP_UNIT_SUFFIXES)
+}
+
+fn validate_systemd_unit_with_suffixes<'a>(
+    value: &'a str,
+    suffixes: &[&str],
+) -> Result<&'a str, String> {
+    let supported_suffix = suffixes.iter().any(|suffix| value.ends_with(suffix));
     let bytes = value.as_bytes();
     let mut index = 0;
     while index < bytes.len() {
@@ -227,8 +245,14 @@ mod tests {
         assert!(validate_systemd_unit_id(r"srv-data\x2darchive.mount").is_ok());
         assert!(validate_systemd_unit_id("nginx; reboot.service").is_err());
         assert!(validate_systemd_unit_id(r"broken\xZZ.mount").is_err());
-        assert!(validate_systemd_unit_id("multi-user.target").is_ok());
-        assert!(validate_systemd_unit_id("system.slice").is_ok());
+        // Ownership correlation and journal navigation stay narrow: targets,
+        // slices, and scopes are not navigable units and must be rejected here.
+        assert!(validate_systemd_unit_id("multi-user.target").is_err());
+        assert!(validate_systemd_unit_id("system.slice").is_err());
+        // Relationship inspection accepts the full unit-type set.
+        assert!(validate_systemd_relationship_unit_id("multi-user.target").is_ok());
+        assert!(validate_systemd_relationship_unit_id("system.slice").is_ok());
+        assert!(validate_systemd_relationship_unit_id("nginx; reboot.target").is_err());
         assert!(validate_container_id("npm-plus_1").is_ok());
         assert!(validate_container_id("$(whoami)").is_err());
     }

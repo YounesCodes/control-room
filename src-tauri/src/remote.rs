@@ -29,7 +29,7 @@ use crate::{
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
-        validate_systemd_unit_id,
+        validate_systemd_relationship_unit_id, validate_systemd_unit_id,
     },
 };
 
@@ -222,7 +222,7 @@ pub fn inspect_systemd_relationships(
     connection: &SavedConnection,
     unit: &str,
 ) -> Result<SystemdRelationships, String> {
-    let requested_unit = validate_systemd_unit_id(unit)?.to_string();
+    let requested_unit = validate_systemd_relationship_unit_id(unit)?.to_string();
     let root_text = RemoteCommandExecutor::execute(
         connection,
         "inspect_systemd_relationships",
@@ -583,7 +583,7 @@ fn parse_systemd_relationship_blocks(text: &str) -> Vec<ParsedSystemdRelationshi
     text.split("\n\n")
         .filter_map(|block| {
             let values = parse_key_values(block);
-            let id = validate_systemd_unit_id(values.get("Id")?)
+            let id = validate_systemd_relationship_unit_id(values.get("Id")?)
                 .ok()?
                 .to_string();
             let unit_type = id.rsplit_once('.')?.1.to_string();
@@ -616,7 +616,7 @@ fn parse_systemd_relationship_blocks(text: &str) -> Vec<ParsedSystemdRelationshi
                     .get(property)
                     .into_iter()
                     .flat_map(|value| value.split_ascii_whitespace())
-                    .filter_map(|value| validate_systemd_unit_id(value).ok())
+                    .filter_map(|value| validate_systemd_relationship_unit_id(value).ok())
                 {
                     let (source, target) = if reverse {
                         (related.to_string(), id.clone())

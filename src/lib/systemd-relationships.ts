@@ -45,16 +45,15 @@ export function relationshipsForRoot(result: SystemdRelationships) {
   };
 }
 
-export function cyclicSystemdUnits(result: SystemdRelationships) {
-  const adjacency = new Map<string, string[]>();
-  for (const node of result.nodes) adjacency.set(node.id, []);
-  for (const edge of result.edges) {
-    if (edge.relationship === "conflicts") continue;
-    const [source, target] =
-      edge.relationship === "after" ? [edge.target, edge.source] : [edge.source, edge.target];
-    adjacency.get(source)?.push(target);
-  }
+const requirementTypes: SystemdRelationshipType[] = [
+  "requires",
+  "wants",
+  "requisite",
+  "bindsTo",
+  "partOf",
+];
 
+function nodesOnCycle(adjacency: Map<string, string[]>) {
   const cyclic = new Set<string>();
   for (const start of adjacency.keys()) {
     const pending = [...(adjacency.get(start) ?? [])];
@@ -70,5 +69,33 @@ export function cyclicSystemdUnits(result: SystemdRelationships) {
       pending.push(...(adjacency.get(current) ?? []));
     }
   }
+  return cyclic;
+}
+
+export function cyclicSystemdUnits(result: SystemdRelationships) {
+  // Requirement edges ("I depend on X") and ordering edges ("start me after X")
+  // point in opposite logical directions, and systemd's recommended pattern
+  // pairs `Wants=X` with `After=X`. Merging both into one graph would turn that
+  // pair into a false two-node cycle, so each family gets its own graph and only
+  // genuine cycles are unioned. `conflicts` is not a dependency direction.
+  const ordering = new Map<string, string[]>();
+  const requirement = new Map<string, string[]>();
+  for (const node of result.nodes) {
+    ordering.set(node.id, []);
+    requirement.set(node.id, []);
+  }
+  for (const edge of result.edges) {
+    if (edge.relationship === "before") {
+      ordering.get(edge.source)?.push(edge.target);
+    } else if (edge.relationship === "after") {
+      ordering.get(edge.target)?.push(edge.source);
+    } else if (requirementTypes.includes(edge.relationship)) {
+      requirement.get(edge.source)?.push(edge.target);
+    }
+  }
+
+  const cyclic = new Set<string>();
+  for (const node of nodesOnCycle(ordering)) cyclic.add(node);
+  for (const node of nodesOnCycle(requirement)) cyclic.add(node);
   return cyclic;
 }
