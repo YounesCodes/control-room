@@ -50,6 +50,37 @@ pub struct ConnectionTag {
     pub color: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveSshField {
+    pub value: String,
+    pub origin: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveSshConfiguration {
+    pub connection_id: String,
+    pub ssh_version: Option<String>,
+    pub exit_status: Option<i32>,
+    pub diagnostic: Option<String>,
+    pub hostname: Option<EffectiveSshField>,
+    pub user: Option<EffectiveSshField>,
+    pub port: Option<EffectiveSshField>,
+    pub address_family: Option<EffectiveSshField>,
+    pub identity_files: Vec<EffectiveSshField>,
+    pub identities_only: Option<EffectiveSshField>,
+    pub proxy_jump: Option<EffectiveSshField>,
+    pub proxy_command_configured: bool,
+    pub canonicalize_hostname: Option<EffectiveSshField>,
+    pub server_alive_interval: Option<EffectiveSshField>,
+    pub server_alive_count_max: Option<EffectiveSshField>,
+    pub tcp_keep_alive: Option<EffectiveSshField>,
+    pub connect_timeout: Option<EffectiveSshField>,
+    pub parse_limitations: Vec<String>,
+    pub collected_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HostCapabilities {

@@ -97,6 +97,12 @@ facts, systemd units, listening sockets, containers) and Log Streams run indepen
 and Enhanced History is an opt-in local record of commands. AGENTS.md carries the
 exact term definitions.
 
+The SSH Config view uses the same Saved Connection overrides as a real Terminal
+Session but asks the installed client for effective configuration with `-G`.
+Rust caps and parses the output, preserves IdentityFile ordering, redacts
+ProxyCommand content and raw stderr, and labels only origins it can prove. The
+result is view-local and refreshing does not initiate an SSH connection.
+
 ### Information architecture
 
 Navigation is two levels and never nests deeper.
@@ -348,6 +354,7 @@ Reusable primitives in `src/components/` that everything else composes.
 - **StatusDot and WindowControls.** The status indicator and the custom titlebar
   buttons.
 - **TerminalPane.** The xterm host and session lifecycle.
+- **SshConfigPane.** The typed, local OpenSSH effective-configuration explorer.
 
 Shared patterns: the split page (a dense list beside a detail panel) used by
 Systemd, Ports, and Docker; the definition grid and capability list on the Overview host

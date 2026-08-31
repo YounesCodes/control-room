@@ -61,10 +61,16 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Keep OpenSSH effective-configuration inspection local and in memory. Reuse
+    Saved Connection argument construction, invoke only the installed OpenSSH
+    client with non-connecting inspection flags, cap output, allowlist typed
+    fields, preserve repeatable IdentityFile order, and redact ProxyCommand
+    content and raw diagnostics before React receives them. Never read key
+    contents or claim source-file provenance OpenSSH does not provide.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -100,3 +106,6 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **OpenSSH Inspection**: a bounded local query against the installed Windows
+  OpenSSH client. It returns allowlisted typed configuration facts without
+  connecting to a Remote Host or persisting raw output.

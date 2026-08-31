@@ -1458,6 +1458,7 @@ code,
 .overview-page,
 .settings-page,
 .history-page,
+.ssh-config-page,
 .logs-page,
 .scratchpad-page {
   padding: 26px 30px;
@@ -1571,6 +1572,83 @@ code,
   gap: 3px;
 }
 
+.ssh-config-run-meta {
+  display: flex;
+  max-width: 1080px;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  border-block: 1px solid var(--border-subtle);
+  margin-bottom: 18px;
+  padding: 10px 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.ssh-config-run-meta strong {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-weight: 550;
+}
+
+.ssh-config-sections {
+  display: grid;
+  max-width: 1080px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ssh-config-section {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.ssh-config-section > header {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+  color: var(--text-muted);
+}
+
+.ssh-config-section h3,
+.ssh-config-limitations h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.ssh-config-field {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 9px 14px;
+}
+
+.ssh-config-field:last-child {
+  border-bottom: 0;
+}
+
+.ssh-config-field > span {
+  padding-top: 2px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.ssh-config-field > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .scratchpad-meta strong {
   color: var(--text);
   font-size: 12px;
@@ -1623,6 +1701,47 @@ code,
   display: flex;
   flex: none;
   gap: 7px;
+}
+
+.ssh-config-field code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font:
+    11.5px/1.45 "Cascadia Mono",
+    Consolas,
+    monospace;
+  user-select: text;
+}
+
+.ssh-config-field code.unavailable {
+  color: var(--text-faint);
+  font-family: inherit;
+  font-style: italic;
+}
+
+.ssh-config-field small {
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+
+.ssh-config-limitations {
+  max-width: 1080px;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 15px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.ssh-config-limitations ul {
+  margin: 9px 0;
+  padding-left: 18px;
+}
+
+.ssh-config-limitations p {
+  margin: 8px 0 0;
+  color: var(--text-faint);
 }
 
 .overview-content {
@@ -3384,8 +3503,13 @@ kbd {
   .overview-page,
   .settings-page,
   .history-page,
+  .ssh-config-page,
   .logs-page {
     padding: 22px;
+  }
+
+  .ssh-config-sections {
+    grid-template-columns: 1fr;
   }
 }
 

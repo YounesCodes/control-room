@@ -8,6 +8,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  KeyRound,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -63,6 +64,7 @@ import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { ScratchpadPane } from "./pages/ScratchpadPane";
+import { SshConfigPane } from "./pages/SshConfigPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   CachedList,
@@ -99,6 +101,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
+  { id: "sshConfig", label: "SSH Config", icon: KeyRound },
 ];
 
 const TerminalPane = lazy(() =>
@@ -1280,6 +1283,9 @@ export function App() {
               )}
               {activeWorkspace.view === "scratchpad" && (
                 <ScratchpadPane key={activeWorkspace.id} connection={activeConnection} />
+              )}
+              {activeWorkspace.view === "sshConfig" && (
+                <SshConfigPane key={activeWorkspace.id} connection={activeConnection} />
               )}
             </div>
           </section>

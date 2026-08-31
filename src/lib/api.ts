@@ -5,6 +5,7 @@ import type {
   ConnectionTag,
   DockerContainer,
   DockerContainerDetails,
+  EffectiveSshConfiguration,
   EnvironmentInfo,
   EstablishedConnections,
   FirewallStatus,
@@ -72,6 +73,8 @@ export const api = {
     invoke<void>("set_connection_group_collapsed", { id, collapsed }),
   moveConnectionGroup: (id: string, direction: "up" | "down") =>
     invoke<ConnectionGroup[]>("move_connection_group", { id, direction }),
+  effectiveSshConfiguration: (connectionId: string) =>
+    invoke<EffectiveSshConfiguration>("get_effective_ssh_configuration", { connectionId }),
   startSession: (connectionId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
       connectionId,

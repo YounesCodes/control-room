@@ -830,6 +830,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             "logs",
             "history",
             "scratchpad",
+            "sshConfig",
         ]
         .contains(&workspace.view.as_str())
         {

@@ -40,6 +40,9 @@ The distinction matters. Control Room helps you inspect and move between related
 - Save an SSH destination, required username, and optional port or existing identity-file override as a Saved Connection.
 - Open multiple independent Workspaces and multiple Terminal Sessions for one Saved Connection.
 - Use an interactive terminal backed by the Windows OpenSSH client and ConPTY, with resizing, scrollback, Unicode, ANSI and VT output, copy and paste, and control keys.
+- Inspect the effective HostName, User, Port, IdentityFile order, proxy route, and keepalive values
+  resolved locally by the installed OpenSSH client. ProxyCommand text is redacted, results stay in
+  memory, and refreshing never opens a host connection or reads private-key contents.
 - Reconnect a dropped Terminal Session, clear its local display, or focus and split terminal panes.
 - Restore Workspace tabs and layout after restarting the app. Restored Workspaces start disconnected and never reconnect automatically.
 

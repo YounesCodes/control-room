@@ -37,6 +37,33 @@ export interface ConnectionTag {
   color: string;
 }
 
+export interface EffectiveSshField {
+  value: string;
+  origin: "savedConnectionOverride" | "openSshResolved";
+}
+
+export interface EffectiveSshConfiguration {
+  connectionId: string;
+  sshVersion: string | null;
+  exitStatus: number | null;
+  diagnostic: string | null;
+  hostname: EffectiveSshField | null;
+  user: EffectiveSshField | null;
+  port: EffectiveSshField | null;
+  addressFamily: EffectiveSshField | null;
+  identityFiles: EffectiveSshField[];
+  identitiesOnly: EffectiveSshField | null;
+  proxyJump: EffectiveSshField | null;
+  proxyCommandConfigured: boolean;
+  canonicalizeHostname: EffectiveSshField | null;
+  serverAliveInterval: EffectiveSshField | null;
+  serverAliveCountMax: EffectiveSshField | null;
+  tcpKeepAlive: EffectiveSshField | null;
+  connectTimeout: EffectiveSshField | null;
+  parseLimitations: string[];
+  collectedAt: string;
+}
+
 export interface HostCapabilities {
   connectionId: string;
   hostname: string | null;
@@ -237,7 +264,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "history"
+  | "scratchpad"
+  | "sshConfig";
 
 export interface CachedList<T> {
   items: T[];

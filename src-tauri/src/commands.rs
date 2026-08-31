@@ -6,14 +6,14 @@ use crate::{
     history,
     models::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
-        EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
-        SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        EffectiveSshConfiguration, EnvironmentInfo, EstablishedConnections, FirewallStatus,
+        HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
+        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
-    ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
+    ssh::{detect_ssh_path, inspect_effective_configuration, ssh_agent_available, ssh_config_path},
 };
 
 #[tauri::command(async)]
@@ -172,6 +172,15 @@ pub fn move_connection_group(
     direction: String,
 ) -> Result<Vec<ConnectionGroup>, String> {
     database.move_connection_group(&id, &direction)
+}
+
+#[tauri::command(async)]
+pub fn get_effective_ssh_configuration(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<EffectiveSshConfiguration, String> {
+    let connection = database.get_connection(&connection_id)?;
+    inspect_effective_configuration(&connection)
 }
 
 #[tauri::command(async)]
@@ -645,5 +654,21 @@ mod tests {
             assert!(!body.contains("remote::"));
             assert!(!body.contains("RemoteOperationLimiter"));
         }
+    }
+
+    #[test]
+    fn effective_ssh_configuration_is_local_and_uses_the_saved_connection() {
+        let source = include_str!("commands.rs");
+        let body = source
+            .split("pub fn get_effective_ssh_configuration")
+            .nth(1)
+            .expect("effective SSH command exists")
+            .split("#[tauri::command")
+            .next()
+            .expect("effective SSH command body exists");
+        assert!(body.contains("database.get_connection"));
+        assert!(body.contains("inspect_effective_configuration"));
+        assert!(!body.contains("remote::"));
+        assert!(!body.contains("RemoteOperationLimiter"));
     }
 }

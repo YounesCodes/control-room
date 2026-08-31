@@ -41,6 +41,7 @@ pub fn run() {
             commands::delete_connection_group,
             commands::set_connection_group_collapsed,
             commands::move_connection_group,
+            commands::get_effective_ssh_configuration,
             commands::start_session,
             commands::write_session,
             commands::resize_session,
