@@ -361,6 +361,20 @@ pub struct PersistedWorkspace {
     pub connection_id: String,
     pub view: String,
     pub history_paused: bool,
+    #[serde(default)]
+    pub systemd_selection_id: Option<String>,
+    #[serde(default)]
+    pub container_selection_id: Option<String>,
+    #[serde(default)]
+    pub log_source: Option<PersistedLogSource>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedLogSource {
+    #[serde(rename = "type")]
+    pub source_type: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -395,5 +409,64 @@ pub enum PersistedTerminalLayout {
         direction: String,
         first: Box<PersistedTerminalLayout>,
         second: Box<PersistedTerminalLayout>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePreset {
+    pub id: String,
+    pub name: String,
+    pub schema_version: u16,
+    pub views: Vec<WorkspacePresetView>,
+    pub layout: Option<WorkspacePresetLayout>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePresetInput {
+    pub name: String,
+    pub views: Vec<WorkspacePresetView>,
+    pub layout: Option<WorkspacePresetLayout>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePresetView {
+    pub key: String,
+    pub label: Option<String>,
+    pub view: String,
+    pub selector: Option<WorkspacePresetSelector>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum WorkspacePresetSelector {
+    SystemdUnit {
+        unit: String,
+    },
+    DockerContainer {
+        container: String,
+    },
+    LogSource {
+        #[serde(rename = "sourceType")]
+        source_type: String,
+        id: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum WorkspacePresetLayout {
+    Leaf {
+        #[serde(rename = "viewKey")]
+        view_key: String,
+    },
+    Split {
+        direction: String,
+        first: Box<WorkspacePresetLayout>,
+        second: Box<WorkspacePresetLayout>,
     },
 }

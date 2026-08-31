@@ -33,19 +33,23 @@ DESIGN.md.
    Saved Connection.
 2. Restore saved Workspace layout as disconnected after restart. Never
    auto-reconnect.
-3. Enhanced History is opt-in, Bash-only, reversible, and limited to commands the
+3. Keep Workspace Presets local and schema-versioned. Store only typed view
+   descriptors, exact selectors, and layout; never store sessions, live results,
+   credentials, or command text. Applying a preset must create disconnected
+   Workspaces and perform no remote operation until the user connects.
+4. Enhanced History is opt-in, Bash-only, reversible, and limited to commands the
    installed shell integration reports. Never infer commands from keystrokes or
    import the host's shell history.
-4. Keep systemd unit and container inspection read-only. The Systemd view covers
+5. Keep systemd unit and container inspection read-only. The Systemd view covers
    system-scope services, timers, mounts, and sockets, sorts failures first, and
    never treats zero failures as a complete health result. Keep each Log Stream
    independent and in memory.
-5. Keep Connection Groups, tags, ordering, and collapse state local.
+6. Keep Connection Groups, tags, ordering, and collapse state local.
    A Saved Connection belongs to at most one group. Deleting a group returns its
    connections to the derived Ungrouped section and never contacts a Remote Host.
-6. Derive Docker Compose grouping only from validated project and service labels.
+7. Derive Docker Compose grouping only from validated project and service labels.
    Keep every container instance distinct and retain an Ungrouped fallback.
-7. Keep port inspection to bounded TCP and UDP listener snapshots. Never scan,
+8. Keep port inspection to bounded TCP and UDP listener snapshots. Never scan,
    test reachability, collect full process arguments, or infer owners from names.
    Service navigation requires one unambiguous PID with a validated systemd unit;
    container navigation requires an exact published address, port, and protocol.
@@ -53,18 +57,18 @@ DESIGN.md.
    read-only, live only in Workspace memory, and are never persisted. Report
    binding exposure and firewall policy separately, and never claim a bind means
    Internet reachability.
-8. Inspect one Docker container only by its full stable ID. Collect typed state,
+9. Inspect one Docker container only by its full stable ID. Collect typed state,
    health, lifecycle, restart, port, network, mount, image, and validated Compose
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
-9. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
-   Each Saved Connection has one note, and one global note is shared across all
-   connections and Workspaces. Closing a Workspace deletes neither. Never capture
-   terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
+    Each Saved Connection has one note, and one global note is shared across all
+    connections and Workspaces. Closing a Workspace deletes neither. Never capture
+    terminal or log output automatically.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -84,6 +88,9 @@ account you control.
   connections can point at one host.
 - **Workspace**: an open view of one connection that groups a Terminal Session
   with the inspection views. A connection can have several Workspaces.
+- **Workspace Preset**: a named, local, schema-versioned set of typed view
+  descriptors and optional layout that can create disconnected Workspaces for
+  any Saved Connection. It contains no runtime results or executable actions.
 - **Terminal Session**: one interactive SSH shell inside a Workspace. Its state
   belongs to the session, not the connection.
 - **Structured Operation**: a bounded, read-only inspection request that runs

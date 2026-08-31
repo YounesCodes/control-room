@@ -8,10 +8,12 @@ use uuid::Uuid;
 use crate::models::{
     AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
     LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
-    SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
+    SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, WorkspacePreset,
+    WorkspacePresetInput, WorkspacePresetLayout, WorkspacePresetSelector,
 };
+use crate::ssh::{validate_container_id, validate_systemd_unit_id};
 
-const LATEST_SCHEMA_VERSION: i64 = 5;
+const LATEST_SCHEMA_VERSION: i64 = 6;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -21,6 +23,8 @@ const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
+const WORKSPACE_PRESET_SCHEMA_VERSION: u16 = 1;
+const MAX_WORKSPACE_PRESET_VIEWS: usize = 12;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -627,6 +631,116 @@ impl Database {
         Ok(())
     }
 
+    pub fn list_workspace_presets(&self) -> Result<Vec<WorkspacePreset>, String> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT id, name, schema_version, views_json, layout_json, created_at, updated_at FROM workspace_presets ORDER BY name COLLATE NOCASE",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], map_workspace_preset)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn create_workspace_preset(
+        &self,
+        input: WorkspacePresetInput,
+    ) -> Result<WorkspacePreset, String> {
+        validate_workspace_preset_input(&input)?;
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+        let views = serde_json::to_string(&input.views).map_err(|error| error.to_string())?;
+        let layout = input
+            .layout
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        self.connection
+            .lock()
+            .execute(
+                "INSERT INTO workspace_presets (id, name, schema_version, views_json, layout_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+                params![
+                    id,
+                    input.name.trim(),
+                    WORKSPACE_PRESET_SCHEMA_VERSION,
+                    views,
+                    layout,
+                    now,
+                ],
+            )
+            .map_err(workspace_preset_write_error)?;
+        self.get_workspace_preset(&id)
+    }
+
+    pub fn update_workspace_preset(
+        &self,
+        id: &str,
+        input: WorkspacePresetInput,
+    ) -> Result<WorkspacePreset, String> {
+        if Uuid::parse_str(id).is_err() {
+            return Err("Workspace Preset identifier is invalid".into());
+        }
+        validate_workspace_preset_input(&input)?;
+        let views = serde_json::to_string(&input.views).map_err(|error| error.to_string())?;
+        let layout = input
+            .layout
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        let changed = self
+            .connection
+            .lock()
+            .execute(
+                "UPDATE workspace_presets SET name = ?2, schema_version = ?3, views_json = ?4, layout_json = ?5, updated_at = ?6 WHERE id = ?1",
+                params![
+                    id,
+                    input.name.trim(),
+                    WORKSPACE_PRESET_SCHEMA_VERSION,
+                    views,
+                    layout,
+                    Utc::now().to_rfc3339(),
+                ],
+            )
+            .map_err(workspace_preset_write_error)?;
+        if changed == 0 {
+            return Err("Workspace Preset not found".into());
+        }
+        self.get_workspace_preset(id)
+    }
+
+    pub fn delete_workspace_preset(&self, id: &str) -> Result<(), String> {
+        if Uuid::parse_str(id).is_err() {
+            return Err("Workspace Preset identifier is invalid".into());
+        }
+        let changed = self
+            .connection
+            .lock()
+            .execute("DELETE FROM workspace_presets WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("Workspace Preset not found".into());
+        }
+        Ok(())
+    }
+
+    fn get_workspace_preset(&self, id: &str) -> Result<WorkspacePreset, String> {
+        self.connection
+            .lock()
+            .query_row(
+                "SELECT id, name, schema_version, views_json, layout_json, created_at, updated_at FROM workspace_presets WHERE id = ?1",
+                [id],
+                map_workspace_preset,
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Workspace Preset not found".into())
+    }
+
     pub fn get_workspace_state(&self) -> Result<PersistedWorkspaceState, String> {
         let payload: Option<String> = self
             .connection
@@ -802,6 +916,198 @@ fn validate_scratchpad_input(input: &ScratchpadNoteInput) -> Result<(), String> 
     Ok(())
 }
 
+fn map_workspace_preset(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspacePreset> {
+    use rusqlite::types::Type;
+
+    let views_json: String = row.get(3)?;
+    let layout_json: Option<String> = row.get(4)?;
+    let views = serde_json::from_str(&views_json).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(error))
+    })?;
+    let layout = layout_json
+        .map(|payload| serde_json::from_str(&payload))
+        .transpose()
+        .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(4, Type::Text, Box::new(error))
+        })?;
+    let preset = WorkspacePreset {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        schema_version: row.get(2)?,
+        views,
+        layout,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    };
+    validate_workspace_preset(&preset).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            3,
+            Type::Text,
+            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
+        )
+    })?;
+    Ok(preset)
+}
+
+fn workspace_preset_write_error(error: rusqlite::Error) -> String {
+    if error.to_string().contains("workspace_presets.name") {
+        "A Workspace Preset with this name already exists".into()
+    } else {
+        error.to_string()
+    }
+}
+
+fn validate_workspace_preset(preset: &WorkspacePreset) -> Result<(), String> {
+    if Uuid::parse_str(&preset.id).is_err()
+        || preset.schema_version != WORKSPACE_PRESET_SCHEMA_VERSION
+        || preset.created_at.is_empty()
+        || preset.updated_at.is_empty()
+    {
+        return Err("Workspace Preset metadata is invalid".into());
+    }
+    validate_workspace_preset_input_internal(
+        &WorkspacePresetInput {
+            name: preset.name.clone(),
+            views: preset.views.clone(),
+            layout: preset.layout.clone(),
+        },
+        true,
+    )
+}
+
+fn validate_workspace_preset_input(input: &WorkspacePresetInput) -> Result<(), String> {
+    validate_workspace_preset_input_internal(input, false)
+}
+
+fn validate_workspace_preset_input_internal(
+    input: &WorkspacePresetInput,
+    allow_unsupported_views: bool,
+) -> Result<(), String> {
+    let name = input.name.trim();
+    if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
+        return Err("Workspace Preset name must be between 1 and 80 visible characters".into());
+    }
+    if input.views.is_empty() || input.views.len() > MAX_WORKSPACE_PRESET_VIEWS {
+        return Err(format!(
+            "Workspace Preset must contain between 1 and {MAX_WORKSPACE_PRESET_VIEWS} views"
+        ));
+    }
+    let mut keys = std::collections::HashSet::new();
+    for descriptor in &input.views {
+        if Uuid::parse_str(&descriptor.key).is_err() || !keys.insert(descriptor.key.as_str()) {
+            return Err("Workspace Preset contains invalid view keys".into());
+        }
+        if descriptor
+            .label
+            .as_ref()
+            .is_some_and(|label| label.chars().count() > 80 || label.chars().any(char::is_control))
+        {
+            return Err("Workspace Preset view label is invalid".into());
+        }
+        let supported_view = [
+            "overview",
+            "terminal",
+            "services",
+            "ports",
+            "docker",
+            "logs",
+            "history",
+            "scratchpad",
+        ]
+        .contains(&descriptor.view.as_str());
+        if !supported_view && !allow_unsupported_views {
+            return Err("Workspace Preset view is unsupported".into());
+        }
+        if !supported_view
+            && (descriptor.view.is_empty()
+                || descriptor.view.chars().count() > 64
+                || descriptor.view.chars().any(char::is_control))
+        {
+            return Err("Workspace Preset view type is invalid".into());
+        }
+        if !supported_view {
+            match &descriptor.selector {
+                Some(WorkspacePresetSelector::SystemdUnit { unit }) => {
+                    validate_systemd_unit_id(unit)?;
+                }
+                Some(WorkspacePresetSelector::DockerContainer { container }) => {
+                    validate_container_id(container)?;
+                }
+                Some(WorkspacePresetSelector::LogSource { source_type, id })
+                    if source_type == "systemd" =>
+                {
+                    validate_systemd_unit_id(id)?;
+                }
+                Some(WorkspacePresetSelector::LogSource { source_type, id })
+                    if source_type == "docker" =>
+                {
+                    validate_container_id(id)?;
+                }
+                Some(WorkspacePresetSelector::LogSource { .. }) => {
+                    return Err("Workspace Preset log source is invalid".into());
+                }
+                None => {}
+            }
+            continue;
+        }
+        match (&descriptor.view[..], &descriptor.selector) {
+            ("services", Some(WorkspacePresetSelector::SystemdUnit { unit })) => {
+                validate_systemd_unit_id(unit)?;
+            }
+            ("docker", Some(WorkspacePresetSelector::DockerContainer { container })) => {
+                validate_container_id(container)?;
+            }
+            ("logs", Some(WorkspacePresetSelector::LogSource { source_type, id }))
+                if source_type == "systemd" =>
+            {
+                validate_systemd_unit_id(id)?;
+            }
+            ("logs", Some(WorkspacePresetSelector::LogSource { source_type, id }))
+                if source_type == "docker" =>
+            {
+                validate_container_id(id)?;
+            }
+            ("services" | "docker" | "logs", None) => {}
+            (_, None) => {}
+            _ => return Err("Workspace Preset selector does not match its view".into()),
+        }
+    }
+    if let Some(layout) = &input.layout {
+        validate_workspace_preset_layout(layout, &keys, 0)?;
+    }
+    Ok(())
+}
+
+fn validate_workspace_preset_layout(
+    layout: &WorkspacePresetLayout,
+    view_keys: &std::collections::HashSet<&str>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > 16 {
+        return Err("Workspace Preset layout is too deeply nested".into());
+    }
+    match layout {
+        WorkspacePresetLayout::Leaf { view_key } => {
+            if view_keys.contains(view_key.as_str()) {
+                Ok(())
+            } else {
+                Err("Workspace Preset layout refers to a missing view".into())
+            }
+        }
+        WorkspacePresetLayout::Split {
+            direction,
+            first,
+            second,
+        } => {
+            if direction != "vertical" && direction != "horizontal" {
+                return Err("Workspace Preset split direction is invalid".into());
+            }
+            validate_workspace_preset_layout(first, view_keys, depth + 1)?;
+            validate_workspace_preset_layout(second, view_keys, depth + 1)
+        }
+    }
+}
+
 fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), String> {
     if state.workspaces.len() > 100 {
         return Err("Workspace state cannot contain more than 100 Workspaces".into());
@@ -834,6 +1140,23 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
         .contains(&workspace.view.as_str())
         {
             return Err("Workspace view is invalid".into());
+        }
+        if let Some(unit) = &workspace.systemd_selection_id {
+            validate_systemd_unit_id(unit)?;
+        }
+        if let Some(container) = &workspace.container_selection_id {
+            validate_container_id(container)?;
+        }
+        if let Some(source) = &workspace.log_source {
+            match source.source_type.as_str() {
+                "systemd" => {
+                    validate_systemd_unit_id(&source.id)?;
+                }
+                "docker" => {
+                    validate_container_id(&source.id)?;
+                }
+                _ => return Err("Workspace log source is invalid".into()),
+            }
         }
     }
     if state
@@ -1010,6 +1333,15 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
 
                 CREATE INDEX idx_saved_connections_group ON saved_connections(group_id);
                 CREATE INDEX idx_saved_connection_tags_tag ON saved_connection_tags(tag_id);
+                CREATE TABLE IF NOT EXISTS workspace_presets (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    schema_version INTEGER NOT NULL,
+                    views_json TEXT NOT NULL,
+                    layout_json TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 PRAGMA user_version = 2;
                 "#,
             )
@@ -1100,6 +1432,29 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 ON scratchpad_notes(connection_id);
 
                 PRAGMA user_version = 5;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 6 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS workspace_presets (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    schema_version INTEGER NOT NULL,
+                    views_json TEXT NOT NULL,
+                    layout_json TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                PRAGMA user_version = 6;
                 "#,
             )
             .map_err(|error| error.to_string())?;
@@ -1758,6 +2113,52 @@ mod tests {
     }
 
     #[test]
+    fn version_one_database_adds_workspace_presets_without_losing_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE saved_connections (
+                    id TEXT PRIMARY KEY
+                );
+                CREATE TABLE application_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+                INSERT INTO application_settings (key, value) VALUES ('sentinel', 'preserved');
+                PRAGMA user_version = 1;
+                "#,
+            )
+            .unwrap();
+        drop(connection);
+
+        let database = Database::open(&path).unwrap();
+        let connection = database.connection.lock();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        let sentinel: String = connection
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'sentinel'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let preset_table: String = connection
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'workspace_presets'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
+        assert_eq!(sentinel, "preserved");
+        assert_eq!(preset_table, "workspace_presets");
+    }
+
+    #[test]
     fn stale_capability_json_is_tolerated_and_repaired() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -1964,6 +2365,9 @@ mod tests {
                 connection_id: saved.id,
                 view: "ports".into(),
                 history_paused: false,
+                systemd_selection_id: Some("nginx.service".into()),
+                container_selection_id: None,
+                log_source: None,
             }],
             active_workspace_id: Some(workspace_id.clone()),
             terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
@@ -1972,5 +2376,108 @@ mod tests {
         database.save_workspace_state(&state).unwrap();
 
         assert_eq!(database.get_workspace_state().unwrap(), state);
+    }
+
+    #[test]
+    fn workspace_presets_round_trip_update_and_delete_typed_layouts() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let terminal_key = Uuid::new_v4().to_string();
+        let service_key = Uuid::new_v4().to_string();
+        let input = WorkspacePresetInput {
+            name: "Web troubleshooting".into(),
+            views: vec![
+                crate::models::WorkspacePresetView {
+                    key: terminal_key.clone(),
+                    label: Some("Shell".into()),
+                    view: "terminal".into(),
+                    selector: None,
+                },
+                crate::models::WorkspacePresetView {
+                    key: service_key.clone(),
+                    label: Some("Web service".into()),
+                    view: "services".into(),
+                    selector: Some(WorkspacePresetSelector::SystemdUnit {
+                        unit: "nginx.service".into(),
+                    }),
+                },
+            ],
+            layout: Some(WorkspacePresetLayout::Split {
+                direction: "vertical".into(),
+                first: Box::new(WorkspacePresetLayout::Leaf {
+                    view_key: terminal_key,
+                }),
+                second: Box::new(WorkspacePresetLayout::Leaf {
+                    view_key: service_key,
+                }),
+            }),
+        };
+
+        let created = database.create_workspace_preset(input.clone()).unwrap();
+        assert_eq!(created.schema_version, 1);
+        assert_eq!(
+            database.list_workspace_presets().unwrap(),
+            vec![created.clone()]
+        );
+        assert!(database.create_workspace_preset(input.clone()).is_err());
+
+        let mut renamed = input;
+        renamed.name = "Web investigation".into();
+        let updated = database
+            .update_workspace_preset(&created.id, renamed)
+            .unwrap();
+        assert_eq!(updated.name, "Web investigation");
+        database.delete_workspace_preset(&created.id).unwrap();
+        assert!(database.list_workspace_presets().unwrap().is_empty());
+    }
+
+    #[test]
+    fn workspace_preset_validation_rejects_mismatched_selectors_and_layout_keys() {
+        let view_key = Uuid::new_v4().to_string();
+        let mut input = WorkspacePresetInput {
+            name: "Invalid".into(),
+            views: vec![crate::models::WorkspacePresetView {
+                key: view_key,
+                label: None,
+                view: "overview".into(),
+                selector: Some(WorkspacePresetSelector::DockerContainer {
+                    container: "web".into(),
+                }),
+            }],
+            layout: None,
+        };
+        assert!(validate_workspace_preset_input(&input).is_err());
+        input.views[0].selector = None;
+        input.layout = Some(WorkspacePresetLayout::Leaf {
+            view_key: Uuid::new_v4().to_string(),
+        });
+        assert!(validate_workspace_preset_input(&input).is_err());
+
+        let legacy_key = Uuid::new_v4().to_string();
+        let legacy = WorkspacePreset {
+            id: Uuid::new_v4().to_string(),
+            name: "Older view".into(),
+            schema_version: WORKSPACE_PRESET_SCHEMA_VERSION,
+            views: vec![crate::models::WorkspacePresetView {
+                key: legacy_key.clone(),
+                label: None,
+                view: "removed-view".into(),
+                selector: None,
+            }],
+            layout: Some(WorkspacePresetLayout::Leaf {
+                view_key: legacy_key,
+            }),
+            created_at: "now".into(),
+            updated_at: "now".into(),
+        };
+        assert!(validate_workspace_preset(&legacy).is_ok());
+        assert!(
+            validate_workspace_preset_input(&WorkspacePresetInput {
+                name: legacy.name,
+                views: legacy.views,
+                layout: legacy.layout,
+            })
+            .is_err()
+        );
     }
 }

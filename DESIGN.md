@@ -143,10 +143,20 @@ The safety model shapes the UI. Remote operations are read-only, and the app
 never persists terminal output, fetched logs, passwords, or private keys. SQLite
 holds only connections and their local organization metadata, settings,
 capabilities, History, user-authored Scratchpad notes, and _disconnected_
-Workspace layout, so a restored Workspace always comes back disconnected and
-never auto-reconnects. Structured features need
-non-interactive public-key or agent auth, though the terminal still shows
+Workspace layout, and Workspace Preset descriptors. A restored or preset-created
+Workspace always comes back disconnected and never auto-reconnects. Non-terminal
+views show that disconnected state instead of running their loaders; the user must
+connect the Workspace before its bounded inspector can run. Structured features
+need non-interactive public-key or agent auth, though the terminal still shows
 ordinary OpenSSH prompts. AGENTS.md carries the full architecture and data rules.
+
+Workspace Presets are global, schema-versioned local records with unique names.
+They contain one to twelve typed view descriptors, exact optional systemd,
+container, or log-source selectors, and an optional split layout referencing
+stable descriptor keys. They never contain session IDs, runtime state, results,
+credentials, or command text. The preview separates known unsupported host
+capabilities from unknown support, and one unresolved exact selector does not
+prevent the remaining preset views from opening.
 
 One xterm detail worth knowing: xterm draws bold text with weight, not from the
 bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory

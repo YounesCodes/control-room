@@ -20,6 +20,8 @@ import type {
   ScratchpadScope,
   SettingsContract,
   SystemdUnit,
+  WorkspacePreset,
+  WorkspacePresetInput,
 } from "../types";
 
 const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
@@ -161,6 +163,12 @@ export const api = {
     invoke<ScratchpadNote>("save_scratchpad_note", { input }),
   deleteScratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string | null) =>
     invoke<void>("delete_scratchpad_note", { scope, ownerId, connectionId }),
+  listWorkspacePresets: () => invoke<WorkspacePreset[]>("list_workspace_presets"),
+  createWorkspacePreset: (input: WorkspacePresetInput) =>
+    invoke<WorkspacePreset>("create_workspace_preset", { input }),
+  updateWorkspacePreset: (id: string, input: WorkspacePresetInput) =>
+    invoke<WorkspacePreset>("update_workspace_preset", { id, input }),
+  deleteWorkspacePreset: (id: string) => invoke<void>("delete_workspace_preset", { id }),
   historyIntegrationStatus: (connectionId: string) =>
     invoke<boolean>("get_history_integration_status", { connectionId }),
   installHistoryIntegration: (connectionId: string) =>

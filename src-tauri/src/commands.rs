@@ -9,7 +9,7 @@ use crate::{
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
         HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
         SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        SettingsContract, StreamStarted, SystemdUnit, WorkspacePreset, WorkspacePresetInput,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -491,6 +491,35 @@ pub fn delete_scratchpad_note(
     connection_id: Option<String>,
 ) -> Result<(), String> {
     database.delete_scratchpad_note(&scope, &owner_id, connection_id.as_deref())
+}
+
+#[tauri::command]
+pub fn list_workspace_presets(
+    database: State<'_, Database>,
+) -> Result<Vec<WorkspacePreset>, String> {
+    database.list_workspace_presets()
+}
+
+#[tauri::command]
+pub fn create_workspace_preset(
+    database: State<'_, Database>,
+    input: WorkspacePresetInput,
+) -> Result<WorkspacePreset, String> {
+    database.create_workspace_preset(input)
+}
+
+#[tauri::command]
+pub fn update_workspace_preset(
+    database: State<'_, Database>,
+    id: String,
+    input: WorkspacePresetInput,
+) -> Result<WorkspacePreset, String> {
+    database.update_workspace_preset(&id, input)
+}
+
+#[tauri::command]
+pub fn delete_workspace_preset(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_workspace_preset(&id)
 }
 
 #[tauri::command(async)]

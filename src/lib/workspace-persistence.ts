@@ -32,10 +32,10 @@ export function restoreWorkspaceState(
         servicesCache: emptyCachedList(),
         portsCache: emptyCachedList(),
         containersCache: emptyCachedList(),
-        systemdSelectionId: null,
-        containerSelectionId: null,
+        systemdSelectionId: saved.systemdSelectionId ?? null,
+        containerSelectionId: saved.containerSelectionId ?? null,
         containerDetailsCache: {},
-        logSource: null,
+        logSource: saved.logSource ?? null,
       },
     ];
   });
@@ -64,6 +64,9 @@ export function persistWorkspaceState(
       connectionId: workspace.connectionId,
       view: workspace.view,
       historyPaused: workspace.historyPaused,
+      systemdSelectionId: workspace.systemdSelectionId,
+      containerSelectionId: workspace.containerSelectionId,
+      logSource: workspace.logSource,
     })),
     activeWorkspaceId: workspaceIds.has(activeWorkspaceId ?? "") ? activeWorkspaceId : null,
     terminalLayout: pruneTerminalLayout(terminalLayout, workspaceIds),

@@ -59,7 +59,11 @@ export function DockerPane({
       const items = await api.listContainers(connection.id, password);
       if (request !== requestRef.current) return;
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-      setSelectedId((selected) => reconcileSelection(items, selected));
+      setSelectedId((selected) =>
+        selected && selected === focusId && !items.some((container) => container.id === selected)
+          ? selected
+          : reconcileSelection(items, selected),
+      );
       setSudoPurpose(null);
     } catch (caught) {
       if (request !== requestRef.current) return;
@@ -113,7 +117,13 @@ export function DockerPane({
 
   useEffect(() => {
     if (!cache.items.length) return;
-    setSelectedId((selected) => reconcileSelection(cache.items, selected));
+    setSelectedId((selected) =>
+      selected &&
+      selected === focusId &&
+      !cache.items.some((container) => container.id === selected)
+        ? selected
+        : reconcileSelection(cache.items, selected),
+    );
   }, [cache.items]);
 
   useEffect(() => {
@@ -276,6 +286,11 @@ export function DockerPane({
             onRetryWithSudo={() => setSudoPurpose("details")}
             onViewLogs={() => onViewLogs({ type: "docker", id: selected.id })}
           />
+        ) : selectedId && cache.fetchedAt ? (
+          <EmptyState title={`${selectedId} was not found`}>
+            The exact container saved in this Workspace Preset is not present on this host. Other
+            preset views remain available.
+          </EmptyState>
         ) : (
           <EmptyState title="Select a container" />
         )}

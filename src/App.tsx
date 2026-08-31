@@ -8,6 +8,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  LayoutTemplate,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -31,6 +32,7 @@ import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
+import { WorkspacePresetsDialog } from "./components/WorkspacePresetsDialog";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
 import { organizeConnections } from "./lib/connection-organization";
@@ -51,6 +53,7 @@ import {
 import type { TerminalLayout, TerminalSplitDirection } from "./lib/terminal-layout";
 import { emptyCachedList } from "./lib/workspace-cache";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
+import { applyWorkspacePreset, captureWorkspacePreset } from "./lib/workspace-presets";
 import {
   removeConnectionWorkspaces,
   updateWorkspaceConnectionSnapshots,
@@ -80,6 +83,8 @@ import type {
   SystemdUnit,
   CachedValue,
   Workspace,
+  WorkspacePreset,
+  WorkspacePresetInput,
   WorkspaceView,
 } from "./types";
 
@@ -128,6 +133,8 @@ export function App() {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
+  const [workspacePresets, setWorkspacePresets] = useState<WorkspacePreset[]>([]);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     title: string;
     message: string;
@@ -148,6 +155,7 @@ export function App() {
       api.workspaceState(),
       api.listConnectionGroups(),
       api.listConnectionTags(),
+      api.listWorkspacePresets(),
     ])
       .then(
         ([
@@ -157,6 +165,7 @@ export function App() {
           workspaceStateResult,
           groupsResult,
           tagsResult,
+          presetsResult,
         ]) => {
           if (!current) return;
           if (connectionsResult.status === "fulfilled") {
@@ -199,6 +208,11 @@ export function App() {
             );
           if (tagsResult.status === "fulfilled") setKnownTags(tagsResult.value);
           else setActionError(`Could not load connection tags: ${errorMessage(tagsResult.reason)}`);
+          if (presetsResult.status === "fulfilled") setWorkspacePresets(presetsResult.value);
+          else
+            setActionError(
+              `Could not load Workspace Presets: ${errorMessage(presetsResult.reason)}`,
+            );
         },
       )
       .finally(() => current && setLoading(false));
@@ -237,7 +251,7 @@ export function App() {
       if (
         isWorkspaceShortcutBlocked(
           event.target,
-          settingsOpen || dialogConnection !== null || hostMenuConnectionId !== null,
+          settingsOpen || presetsOpen || dialogConnection !== null || hostMenuConnectionId !== null,
         )
       ) {
         return;
@@ -260,7 +274,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, settingsOpen]);
+  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, presetsOpen, settingsOpen]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
@@ -723,6 +737,52 @@ export function App() {
     setRenameTarget(workspace);
   }
 
+  function sortPresets(presets: WorkspacePreset[]) {
+    return presets.sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async function createWorkspacePreset(input: WorkspacePresetInput) {
+    const created = await api.createWorkspacePreset(input);
+    setWorkspacePresets((current) => sortPresets([...current, created]));
+  }
+
+  async function createWorkspacePresetFromCurrent(name: string) {
+    if (!activeWorkspace) throw new Error("Open a Workspace before saving a preset.");
+    const input = captureWorkspacePreset(
+      name,
+      activeWorkspace.connectionId,
+      workspaces,
+      terminalLayout,
+    );
+    await createWorkspacePreset(input);
+  }
+
+  async function updateWorkspacePreset(id: string, input: WorkspacePresetInput) {
+    const updated = await api.updateWorkspacePreset(id, input);
+    setWorkspacePresets((current) =>
+      sortPresets(current.map((preset) => (preset.id === id ? updated : preset))),
+    );
+  }
+
+  async function deleteWorkspacePreset(id: string) {
+    await api.deleteWorkspacePreset(id);
+    setWorkspacePresets((current) => current.filter((preset) => preset.id !== id));
+  }
+
+  function openWorkspacePreset(preset: WorkspacePreset, connection: SavedConnection) {
+    const applied = applyWorkspacePreset(preset, connection);
+    if (workspaces.length + applied.workspaces.length > 100) {
+      setActionError("Applying this Workspace Preset would exceed the 100-Workspace limit.");
+      setPresetsOpen(false);
+      return;
+    }
+    setWorkspaces((current) => [...current, ...applied.workspaces]);
+    setActiveWorkspaceId(applied.activeWorkspaceId);
+    setTerminalLayout((current) => applied.terminalLayout ?? current);
+    setTerminalFocusMode(false);
+    setPresetsOpen(false);
+  }
+
   function pasteIntoTerminal(command: string) {
     if (!activeWorkspace?.sessionId) {
       setActionError("Reconnect the Terminal Session before pasting a command.");
@@ -828,6 +888,15 @@ export function App() {
     <div className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}>
       <header className="app-bar" data-tauri-drag-region>
         <div className="app-bar-actions">
+          <button
+            className={presetsOpen ? "app-bar-button active" : "app-bar-button"}
+            type="button"
+            onClick={() => closeSettings(() => setPresetsOpen(true))}
+            aria-label="Open Workspace Presets"
+            title="Workspace Presets"
+          >
+            <LayoutTemplate size={18} />
+          </button>
           <button
             className={settingsOpen ? "app-bar-button active" : "app-bar-button"}
             type="button"
@@ -1188,14 +1257,43 @@ export function App() {
                   );
                 })}
               </Suspense>
-              {activeWorkspace.view === "overview" && (
+              {!["terminal", "history"].includes(activeWorkspace.view) &&
+                activeWorkspace.state !== "connected" && (
+                  <section className="disconnected-inspection">
+                    <LayoutTemplate size={24} />
+                    <h2>
+                      {activeWorkspace.state === "connecting"
+                        ? "Connecting…"
+                        : "Workspace disconnected"}
+                    </h2>
+                    <p>
+                      This view will load through its bounded read-only inspector after you connect.
+                      No remote operation runs while the Workspace is disconnected.
+                    </p>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={activeWorkspace.state === "connecting"}
+                      onClick={() =>
+                        updateWorkspace(activeWorkspace.id, {
+                          connectRequested: true,
+                          state: "connecting",
+                          reconnectToken: activeWorkspace.reconnectToken + 1,
+                        })
+                      }
+                    >
+                      Connect Workspace
+                    </button>
+                  </section>
+                )}
+              {activeWorkspace.state === "connected" && activeWorkspace.view === "overview" && (
                 <OverviewPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
                   onCapabilitiesChange={rememberCapabilities}
                 />
               )}
-              {activeWorkspace.view === "services" && (
+              {activeWorkspace.state === "connected" && activeWorkspace.view === "services" && (
                 <ServicesPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
@@ -1205,7 +1303,7 @@ export function App() {
                   focusId={activeWorkspace.systemdSelectionId}
                 />
               )}
-              {activeWorkspace.view === "ports" && (
+              {activeWorkspace.state === "connected" && activeWorkspace.view === "ports" && (
                 <PortsPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
@@ -1225,7 +1323,7 @@ export function App() {
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                 />
               )}
-              {activeWorkspace.view === "docker" && (
+              {activeWorkspace.state === "connected" && activeWorkspace.view === "docker" && (
                 <DockerPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
@@ -1239,7 +1337,7 @@ export function App() {
                   focusId={activeWorkspace.containerSelectionId}
                 />
               )}
-              {activeWorkspace.view === "logs" && (
+              {activeWorkspace.state === "connected" && activeWorkspace.view === "logs" && (
                 <LogsPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
@@ -1360,6 +1458,28 @@ export function App() {
             setRenameTarget(null);
           }}
           onClose={() => setRenameTarget(null)}
+        />
+      )}
+
+      {presetsOpen && (
+        <WorkspacePresetsDialog
+          presets={workspacePresets}
+          connections={connections}
+          currentConnectionId={activeWorkspace?.connectionId ?? null}
+          currentViewCount={
+            activeWorkspace
+              ? workspaces.filter(
+                  (workspace) => workspace.connectionId === activeWorkspace.connectionId,
+                ).length
+              : 0
+          }
+          capabilities={hostCapabilities}
+          onCreateFromCurrent={createWorkspacePresetFromCurrent}
+          onCreate={createWorkspacePreset}
+          onUpdate={updateWorkspacePreset}
+          onDelete={deleteWorkspacePreset}
+          onApply={openWorkspacePreset}
+          onClose={() => setPresetsOpen(false)}
         />
       )}
 

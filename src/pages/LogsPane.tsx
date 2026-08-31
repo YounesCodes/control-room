@@ -177,6 +177,12 @@ export function LogsPane({
 
   useEffect(() => {
     const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
+    const preserveExactPresetSource =
+      selectedSource?.type === sourceType &&
+      selectedSource.id === sourceId &&
+      sourceId.length > 0 &&
+      !items.some((item) => item.id === sourceId);
+    if (preserveExactPresetSource) return;
     const next = reconcileSelection(items, sourceId) ?? "";
     if (next === sourceId) return;
     setSourceId(next);
@@ -345,6 +351,9 @@ export function LogsPane({
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
   const sourceOptions = sourceCache.items;
+  const sourceMissing =
+    Boolean(sourceId && sourceCache.fetchedAt) &&
+    !sourceOptions.some((source) => source.id === sourceId);
   const controlsLocked = streamStatus !== "stopped";
   if (sourceCache.loading && !sourceCache.items.length)
     return <LoadingState label="Finding available log sources…" />;
@@ -399,7 +408,7 @@ export function LogsPane({
             className="toolbar-button"
             type="button"
             onClick={() => start()}
-            disabled={!sourceId || streamStatus !== "stopped"}
+            disabled={!sourceId || sourceMissing || streamStatus !== "stopped"}
           >
             <Play size={14} /> Start
           </button>
@@ -446,6 +455,7 @@ export function LogsPane({
             }}
             disabled={controlsLocked}
           >
+            {sourceMissing && <option value={sourceId}>{sourceId} (not found)</option>}
             {sourceOptions.map((source) => (
               <option value={source.id} key={source.id}>
                 {"name" in source ? source.name : source.id}
@@ -485,6 +495,12 @@ export function LogsPane({
       </div>
       {sourceCache.error && (
         <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
+      )}
+      {sourceMissing && (
+        <p className="inline-warning">
+          The exact {sourceType === "systemd" ? "unit" : "container"} saved in this Workspace Preset
+          is not present on this host. Choose another source or use the other preset views.
+        </p>
       )}
       {error && (
         <div className="inline-error" role="alert">

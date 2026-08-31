@@ -99,4 +99,19 @@ describe("ServicesPane failed units view", () => {
     expect(screen.getByText(/0 failed/)).toBeTruthy();
     expect(screen.getByText(/not a complete host health check/i)).toBeTruthy();
   });
+
+  it("keeps a missing exact preset selector unresolved instead of choosing another unit", () => {
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("web.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+        focusId="missing.service"
+      />,
+    );
+
+    expect(screen.getByText("missing.service was not found")).toBeTruthy();
+    expect(screen.getByText(/Other preset views remain available/i)).toBeTruthy();
+  });
 });

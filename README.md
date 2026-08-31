@@ -42,6 +42,9 @@ The distinction matters. Control Room helps you inspect and move between related
 - Use an interactive terminal backed by the Windows OpenSSH client and ConPTY, with resizing, scrollback, Unicode, ANSI and VT output, copy and paste, and control keys.
 - Reconnect a dropped Terminal Session, clear its local display, or focus and split terminal panes.
 - Restore Workspace tabs and layout after restarting the app. Restored Workspaces start disconnected and never reconnect automatically.
+- Save the current views for one connection as a local Workspace Preset, preview host support,
+  and apply the preset to any Saved Connection. Applied Workspaces stay disconnected until you
+  explicitly connect; exact unit, container, and log selectors resolve independently.
 
 ### Host inspection
 

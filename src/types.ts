@@ -287,6 +287,9 @@ interface PersistedWorkspace {
   connectionId: string;
   view: WorkspaceView;
   historyPaused: boolean;
+  systemdSelectionId?: string | null;
+  containerSelectionId?: string | null;
+  logSource?: LogSourceSelection | null;
 }
 
 export interface PersistedWorkspaceState {
@@ -303,6 +306,40 @@ export interface ScratchpadNote {
   ownerId: string;
   connectionId: string | null;
   text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WorkspacePresetSelector =
+  | { kind: "systemdUnit"; unit: string }
+  | { kind: "dockerContainer"; container: string }
+  | { kind: "logSource"; sourceType: LogSourceType; id: string };
+
+export interface WorkspacePresetView {
+  key: string;
+  label: string | null;
+  view: string;
+  selector: WorkspacePresetSelector | null;
+}
+
+export type WorkspacePresetLayout =
+  | { kind: "leaf"; viewKey: string }
+  | {
+      kind: "split";
+      direction: import("./lib/terminal-layout").TerminalSplitDirection;
+      first: WorkspacePresetLayout;
+      second: WorkspacePresetLayout;
+    };
+
+export interface WorkspacePresetInput {
+  name: string;
+  views: WorkspacePresetView[];
+  layout: WorkspacePresetLayout | null;
+}
+
+export interface WorkspacePreset extends WorkspacePresetInput {
+  id: string;
+  schemaVersion: number;
   createdAt: string;
   updatedAt: string;
 }

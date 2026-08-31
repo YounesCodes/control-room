@@ -3055,6 +3055,253 @@ dd {
   padding: 13px 20px;
 }
 
+.modal:has(.workspace-presets-dialog) {
+  width: min(880px, calc(100vw - 40px));
+}
+
+.workspace-presets-dialog {
+  padding: 18px 20px 20px;
+}
+
+.preset-create {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+.preset-create label,
+.preset-preview > label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-create label > span,
+.preset-preview label > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preset-create small,
+.preset-apply-note {
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.preset-manager {
+  display: grid;
+  min-height: 360px;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(310px, 1.15fr);
+  gap: 18px;
+  margin-top: 17px;
+}
+
+.preset-list {
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  padding-right: 16px;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  margin-bottom: 5px;
+  padding: 3px;
+}
+
+.preset-row:hover,
+.preset-row.selected {
+  border-color: var(--border);
+  background: var(--fill-hover);
+}
+
+.preset-select {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  padding: 7px;
+  text-align: left;
+}
+
+.preset-select > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.preset-select strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-select small,
+.preset-preview header span,
+.preset-view-row small {
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+
+.preset-row-actions {
+  display: flex;
+  flex: none;
+}
+
+.preset-row-actions button {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.preset-row-actions button:hover {
+  background: var(--fill-active);
+  color: var(--text);
+}
+
+.preset-row-actions .confirm-delete {
+  outline: 1px solid var(--failure);
+}
+
+.preset-row form {
+  display: flex;
+  width: 100%;
+  gap: 5px;
+}
+
+.preset-row form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.preset-row form button {
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.preset-preview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.preset-preview > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preset-preview h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.preset-view-list {
+  display: grid;
+  gap: 5px;
+}
+
+.preset-view-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 9px;
+}
+
+.preset-view-row > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.preset-view-row strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.preset-support {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 4px;
+  background: var(--success);
+}
+
+.preset-support-off {
+  background: var(--failure);
+}
+
+.preset-support-unknown {
+  background: var(--warning);
+}
+
+.preset-empty {
+  margin: 16px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.disconnected-inspection {
+  display: grid;
+  max-width: 520px;
+  place-items: center;
+  align-self: center;
+  gap: 9px;
+  margin: auto;
+  padding: 36px;
+  text-align: center;
+}
+
+.disconnected-inspection svg {
+  color: var(--text-faint);
+}
+
+.disconnected-inspection h2,
+.disconnected-inspection p {
+  margin: 0;
+}
+
+.disconnected-inspection h2 {
+  font-size: 16px;
+}
+
+.disconnected-inspection p {
+  max-width: 460px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.disconnected-inspection button {
+  margin-top: 6px;
+}
+
 /* ==========================================================================
    Inline messages
    ========================================================================== */

@@ -37,6 +37,8 @@ describe("Workspace restoration", () => {
           connectionId: "connection-b",
           view: "logs",
           historyPaused: true,
+          systemdSelectionId: "nginx.service",
+          logSource: { type: "systemd", id: "nginx.service" },
         },
       ],
       activeWorkspaceId: "workspace-b",
@@ -65,6 +67,20 @@ describe("Workspace restoration", () => {
       { state: "disconnected", sessionId: null, connectRequested: false },
       { state: "disconnected", sessionId: null, connectRequested: false },
     ]);
+    expect(restored.workspaces[1]).toMatchObject({
+      systemdSelectionId: "nginx.service",
+      logSource: { type: "systemd", id: "nginx.service" },
+    });
+    expect(
+      persistWorkspaceState(
+        restored.workspaces,
+        restored.activeWorkspaceId,
+        restored.terminalLayout,
+      ).workspaces[1],
+    ).toMatchObject({
+      systemdSelectionId: "nginx.service",
+      logSource: { type: "systemd", id: "nginx.service" },
+    });
   });
 
   it("drops Workspaces for deleted connections and prunes their split leaves", () => {

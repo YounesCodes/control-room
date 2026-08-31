@@ -39,7 +39,11 @@ export function ServicesPane({
       const items = await api.listServices(connection.id);
       if (request !== requestRef.current) return;
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-      setSelectedId((selected) => reconcileSelection(items, selected));
+      setSelectedId((selected) =>
+        selected && selected === focusId && !items.some((unit) => unit.id === selected)
+          ? selected
+          : reconcileSelection(items, selected),
+      );
     } catch (caught) {
       if (request !== requestRef.current) return;
       onCacheChange({
@@ -59,7 +63,11 @@ export function ServicesPane({
 
   useEffect(() => {
     if (!cache.items.length) return;
-    setSelectedId((selected) => reconcileSelection(cache.items, selected));
+    setSelectedId((selected) =>
+      selected && selected === focusId && !cache.items.some((unit) => unit.id === selected)
+        ? selected
+        : reconcileSelection(cache.items, selected),
+    );
   }, [cache.items]);
 
   useEffect(() => {
@@ -205,6 +213,11 @@ export function ServicesPane({
               <FileClock size={15} /> View journal
             </button>
           </>
+        ) : selectedId && cache.fetchedAt ? (
+          <EmptyState title={`${selectedId} was not found`}>
+            The exact unit saved in this Workspace Preset is not present on this host. Other preset
+            views remain available.
+          </EmptyState>
         ) : (
           <EmptyState title="Select a unit" />
         )}

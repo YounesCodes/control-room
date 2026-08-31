@@ -18,6 +18,11 @@ const api = vi.hoisted(() => ({
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
   closeSession: vi.fn(),
+  listWorkspacePresets: vi.fn(),
+  createWorkspacePreset: vi.fn(),
+  updateWorkspacePreset: vi.fn(),
+  deleteWorkspacePreset: vi.fn(),
+  listServices: vi.fn(),
 }));
 
 vi.mock("./lib/api", () => ({
@@ -112,6 +117,8 @@ describe("App Workspace behavior", () => {
     api.scratchpadNote.mockResolvedValue(null);
     api.saveScratchpadNote.mockResolvedValue({});
     api.closeSession.mockResolvedValue(undefined);
+    api.listWorkspacePresets.mockResolvedValue([]);
+    api.listServices.mockResolvedValue([]);
   });
 
   it("keeps an unrelated terminal mounted when the active Saved Connection is deleted", async () => {
@@ -184,5 +191,50 @@ describe("App Workspace behavior", () => {
 
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(api.deleteScratchpadNote).not.toHaveBeenCalled();
+  });
+
+  it("applies a preset as disconnected Workspaces without running structured operations", async () => {
+    const user = userEvent.setup();
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    api.listWorkspacePresets.mockResolvedValue([
+      {
+        id: "preset-a",
+        name: "Web investigation",
+        schemaVersion: 1,
+        views: [
+          {
+            key: "11111111-1111-4111-8111-111111111112",
+            label: "nginx",
+            view: "services",
+            selector: { kind: "systemdUnit", unit: "nginx.service" },
+          },
+        ],
+        layout: null,
+        createdAt: "now",
+        updatedAt: "now",
+      },
+    ]);
+
+    render(<App />);
+    await user.click(await screen.findByLabelText("Open Workspace Presets"));
+    await user.click(screen.getByRole("button", { name: "Apply disconnected" }));
+
+    expect(await screen.findByRole("heading", { name: "Workspace disconnected" })).toBeTruthy();
+    expect(screen.getByText(/No remote operation runs/i)).toBeTruthy();
+    expect(api.listServices).not.toHaveBeenCalled();
+  });
+
+  it("restores a structured view disconnected without running its loader", async () => {
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    const state = restoredState([saved.id]);
+    state.workspaces[0].view = "services";
+    api.workspaceState.mockResolvedValue(state);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Workspace disconnected" })).toBeTruthy();
+    expect(api.listServices).not.toHaveBeenCalled();
   });
 });
