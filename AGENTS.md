@@ -36,7 +36,9 @@ DESIGN.md.
 3. Enhanced History is opt-in, Bash-only, reversible, and limited to commands the
    installed shell integration reports. Never infer commands from keystrokes or
    import the host's shell history.
-4. Keep service and container inspection read-only. Keep each Log Stream
+4. Keep systemd unit and container inspection read-only. The Systemd view covers
+   system-scope services, timers, mounts, and sockets, sorts failures first, and
+   never treats zero failures as a complete health result. Keep each Log Stream
    independent and in memory.
 5. Derive Docker Compose grouping only from validated project and service labels.
    Keep every container instance distinct and retain an Ungrouped fallback.
@@ -63,6 +65,8 @@ account you control.
   belongs to the session, not the connection.
 - **Structured Operation**: a bounded, read-only inspection request that runs
   independently of Terminal Sessions.
+- **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
+  returned by the bounded Systemd inspection.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration

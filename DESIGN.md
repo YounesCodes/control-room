@@ -40,12 +40,12 @@ systemd, journald, Bash, and optional Docker. Other Linux systems still work as
 terminal-only destinations.
 
 Who it's for: developers and operators who keep a handful of Linux servers and
-want a fast, keyboard-driven cockpit. Open a shell, glance at host health, read
-services and containers, tail logs, recall exact commands. No web console, no
+want a fast, keyboard-driven cockpit. Open a shell, inspect current unit state, read
+containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Services, Docker, Logs, or History as
+terminal. From there you jump to Overview, Systemd, Docker, Logs, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -92,7 +92,7 @@ run, and you type those yourself.
 The vocabulary is small, and every entity has an ID. A Saved Connection (a
 reusable SSH destination) opens one or more Workspaces, each pairing a live
 Terminal Session with read-only inspection views. Structured Operations (host
-facts, services, containers) and Log Streams run independently of the terminal,
+facts, systemd units, containers) and Log Streams run independently of the terminal,
 and Enhanced History is an opt-in local record of commands. AGENTS.md carries the
 exact term definitions.
 
@@ -102,7 +102,7 @@ Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list (search plus saved connections). Once a
   Workspace is open, the rail also holds the view switcher (Overview, Terminal,
-  Services, Docker, Logs, History), with "Add connection" pinned at the bottom.
+  Systemd, Docker, Logs, History), with "Add connection" pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
@@ -158,7 +158,7 @@ A greyscale system on a near-black ground. Depth comes from making surfaces
 lighter as they rise, the standard move for dark UIs, not from heavy shadows.
 
 The only non-neutral colours in the whole UI are three status hues. They carry
-meaning (connection and session state, service and container state, command exit
+meaning (connection and session state, systemd unit and container state, command exit
 status, inline messages) and never act as accents.
 
 | Role    | Hex       | Meaning                                           |
@@ -182,7 +182,7 @@ Two families, one for chrome and one for anything technical.
   look. It ships as `woff2` so the desktop build works offline with no fallback
   flash, and the system stack is the fallback.
 - **Cascadia Mono, then Consolas, then monospace** for the terminal, logs, code,
-  service and container names, Compose project and service identities, container IDs,
+  systemd unit and container names, Compose project and service identities, container IDs,
   and history commands.
 
 The type scale is small: 20 px section headings, ~17 px stat values, 12.5 px
@@ -332,7 +332,7 @@ Reusable primitives in `src/components/` that everything else composes.
 - **TerminalPane.** The xterm host and session lifecycle.
 
 Shared patterns: the split page (a dense list beside a detail panel) used by
-Services and Docker; the definition grid and capability list on the Overview host
+Systemd and Docker; the definition grid and capability list on the Overview host
 dashboard; the dense row with a leading status indicator; and the compact chip
 for exit codes and counts.
 
@@ -340,6 +340,11 @@ The Docker list derives Compose project groups from the official project and ser
 labels returned by the bounded container listing. It keeps every instance as its own row,
 including replicas and one-off containers, and puts missing or malformed identities in
 Ungrouped. The user can switch to the flat list without changing the cached data.
+
+The Systemd list covers system-scope services, timers, mounts, and sockets through one
+bounded property query. Failed units sort first, while state and type filters keep the full
+list usable. The header reports current active and failed totals without presenting zero
+failures as a complete host health result.
 
 ---
 

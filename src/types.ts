@@ -41,8 +41,9 @@ export interface HostCapabilities {
   detectedAt: string;
 }
 
-export interface SystemdService {
+export interface SystemdUnit {
   id: string;
+  unitType: string;
   description: string;
   loadState: string;
   activeState: string;
@@ -144,7 +145,7 @@ export interface Workspace {
   historyPaused: boolean;
   reconnectToken: number;
   connectRequested: boolean;
-  servicesCache: CachedList<SystemdService>;
+  servicesCache: CachedList<SystemdUnit>;
   containersCache: CachedList<DockerContainer>;
   logSource: LogSourceSelection | null;
 }

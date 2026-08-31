@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FileClock, RefreshCw, Search } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
+import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
+import type { SystemdStateFilter } from "../lib/systemd-units";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
-import type { CachedList, LogSourceSelection, SavedConnection, SystemdService } from "../types";
+import type { CachedList, LogSourceSelection, SavedConnection, SystemdUnit } from "../types";
 
 export function ServicesPane({
   connection,
@@ -12,14 +14,16 @@ export function ServicesPane({
   onViewLogs,
 }: {
   connection: SavedConnection;
-  cache: CachedList<SystemdService>;
-  onCacheChange: (cache: CachedList<SystemdService>) => void;
+  cache: CachedList<SystemdUnit>;
+  onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     reconcileSelection(cache.items, null),
   );
   const [search, setSearch] = useState("");
+  const [stateFilter, setStateFilter] = useState<SystemdStateFilter>("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const cacheRef = useRef(cache);
   const requestRef = useRef(0);
   cacheRef.current = cache;
@@ -55,19 +59,19 @@ export function ServicesPane({
     setSelectedId((selected) => reconcileSelection(cache.items, selected));
   }, [cache.items]);
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return cache.items;
-    return cache.items.filter(
-      (service) =>
-        service.id.toLowerCase().includes(query) ||
-        service.description.toLowerCase().includes(query),
-    );
-  }, [search, cache.items]);
-  const selected = cache.items.find((service) => service.id === selectedId) ?? null;
+  const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
+  const filtered = useMemo(
+    () =>
+      filterSystemdUnits(cache.items, {
+        search,
+        state: stateFilter,
+        unitType: typeFilter,
+      }),
+    [cache.items, search, stateFilter, typeFilter],
+  );
+  const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
 
-  if (cache.loading && !cache.items.length)
-    return <LoadingState label="Reading systemd services…" />;
+  if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
   if (cache.error && !cache.items.length) {
     return (
       <ErrorState
@@ -82,14 +86,20 @@ export function ServicesPane({
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
-            <h2>Services</h2>
-            <p>{cache.items.length} units</p>
+            <h2>Systemd</h2>
+            <p>
+              {counts.active} active ·{" "}
+              <span className={counts.failed ? "failed-count" : ""}>{counts.failed} failed</span>
+            </p>
+            <small className="unit-scope-note">
+              Current system scope only, not a complete host health check
+            </small>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={() => load(true)}
-            aria-label="Refresh services"
+            aria-label="Refresh systemd units"
             disabled={cache.loading}
           >
             <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
@@ -98,32 +108,58 @@ export function ServicesPane({
         {cache.error && (
           <p className="inline-warning">Showing saved results. Refresh failed: {cache.error}</p>
         )}
-        <label className="search-field">
-          <Search size={15} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search services"
-          />
-        </label>
+        <div className="systemd-list-controls">
+          <label className="search-field">
+            <Search size={15} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search units"
+            />
+          </label>
+          <select
+            aria-label="Unit state"
+            value={stateFilter}
+            onChange={(event) => setStateFilter(event.target.value as SystemdStateFilter)}
+          >
+            <option value="all">All states</option>
+            <option value="failed">Failed</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <select
+            aria-label="Unit type"
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+          >
+            <option value="all">All types</option>
+            <option value="service">Services</option>
+            <option value="timer">Timers</option>
+            <option value="mount">Mounts</option>
+            <option value="socket">Sockets</option>
+          </select>
+        </div>
         <div className="dense-list">
-          {filtered.map((service) => (
+          {filtered.map((unit) => (
             <button
-              className={service.id === selectedId ? "dense-row selected-row" : "dense-row"}
+              className={unit.id === selectedId ? "dense-row selected-row" : "dense-row"}
               type="button"
-              key={service.id}
-              onClick={() => setSelectedId(service.id)}
+              key={unit.id}
+              onClick={() => setSelectedId(unit.id)}
             >
-              <span className={`service-indicator service-${service.activeState}`} />
+              <span className={`service-indicator service-${unit.activeState}`} />
               <span className="row-main">
-                <strong>{service.id}</strong>
-                <small>{service.description || "No description"}</small>
+                <strong>{unit.id}</strong>
+                <small>{unit.description || "No description"}</small>
               </span>
-              <span className="row-state">{service.subState}</span>
+              <span className="row-state unit-row-state">
+                <span className="unit-type-label">{unit.unitType}</span>
+                <span>{unit.subState}</span>
+              </span>
             </button>
           ))}
           {!filtered.length && (
-            <EmptyState title={cache.items.length ? "No matching services" : "No services found"} />
+            <EmptyState title={cache.items.length ? "No matching units" : "No units found"} />
           )}
         </div>
       </div>
@@ -135,6 +171,10 @@ export function ServicesPane({
               <p>{selected.description || "No description"}</p>
             </header>
             <dl className="detail-list">
+              <div>
+                <dt>Unit type</dt>
+                <dd>{selected.unitType}</dd>
+              </div>
               <div>
                 <dt>State</dt>
                 <dd>
@@ -155,11 +195,11 @@ export function ServicesPane({
               type="button"
               onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
             >
-              <FileClock size={15} /> View logs
+              <FileClock size={15} /> View journal
             </button>
           </>
         ) : (
-          <EmptyState title="Select a service" />
+          <EmptyState title="Select a unit" />
         )}
       </aside>
     </section>

@@ -15,7 +15,7 @@ import type {
   LogSourceType,
   SavedConnection,
   StreamStateEvent,
-  SystemdService,
+  SystemdUnit,
 } from "../types";
 
 type StreamStatus = "stopped" | "starting" | "running" | "stopping";
@@ -36,10 +36,10 @@ export function LogsPane({
   connection: SavedConnection;
   settings: AppSettings;
   logTailOptions: number[];
-  servicesCache: CachedList<SystemdService>;
+  servicesCache: CachedList<SystemdUnit>;
   containersCache: CachedList<DockerContainer>;
   selectedSource: LogSourceSelection | null;
-  onServicesCacheChange: (cache: CachedList<SystemdService>) => void;
+  onServicesCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onContainersCacheChange: (cache: CachedList<DockerContainer>) => void;
   onSourceChange: (source: LogSourceSelection | null) => void;
 }) {
@@ -437,7 +437,7 @@ export function LogsPane({
           </select>
         </label>
         <label className="source-select">
-          <span>{sourceType === "systemd" ? "Service" : "Container"}</span>
+          <span>{sourceType === "systemd" ? "Unit" : "Container"}</span>
           <select
             value={sourceId}
             onChange={(event) => {
