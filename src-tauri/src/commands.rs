@@ -8,8 +8,8 @@ use crate::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
         HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
-        SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
-        SystemdUnit,
+        SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
+        SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -465,6 +465,34 @@ pub fn save_workspace_state(
     database.save_workspace_state(&state)
 }
 
+#[tauri::command]
+pub fn get_scratchpad_note(
+    database: State<'_, Database>,
+    scope: String,
+    owner_id: String,
+    connection_id: String,
+) -> Result<Option<ScratchpadNote>, String> {
+    database.get_scratchpad_note(&scope, &owner_id, &connection_id)
+}
+
+#[tauri::command]
+pub fn save_scratchpad_note(
+    database: State<'_, Database>,
+    input: ScratchpadNoteInput,
+) -> Result<ScratchpadNote, String> {
+    database.save_scratchpad_note(input)
+}
+
+#[tauri::command]
+pub fn delete_scratchpad_note(
+    database: State<'_, Database>,
+    scope: String,
+    owner_id: String,
+    connection_id: String,
+) -> Result<(), String> {
+    database.delete_scratchpad_note(&scope, &owner_id, &connection_id)
+}
+
 #[tauri::command(async)]
 pub fn get_history_integration_status(
     database: State<'_, Database>,
@@ -595,6 +623,27 @@ mod tests {
             assert!(body.contains("database."));
             assert!(!body.contains("remote::"));
             assert!(!body.contains("SessionManager"));
+        }
+    }
+
+    #[test]
+    fn scratchpad_commands_only_use_local_persistence() {
+        let source = include_str!("commands.rs");
+        for command in [
+            "get_scratchpad_note",
+            "save_scratchpad_note",
+            "delete_scratchpad_note",
+        ] {
+            let body = source
+                .split(&format!("pub fn {command}"))
+                .nth(1)
+                .expect("scratchpad command exists")
+                .split("#[tauri::command")
+                .next()
+                .expect("scratchpad command body exists");
+            assert!(body.contains("database."));
+            assert!(!body.contains("remote::"));
+            assert!(!body.contains("RemoteOperationLimiter"));
         }
     }
 }

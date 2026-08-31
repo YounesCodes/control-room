@@ -8,10 +8,10 @@ use uuid::Uuid;
 use crate::models::{
     AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
     LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
-    SavedConnectionInput,
+    SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 3;
+const LATEST_SCHEMA_VERSION: i64 = 4;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -20,6 +20,7 @@ const MAX_GROUP_NAME_CHARS: usize = 60;
 const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
+const MAX_SCRATCHPAD_CHARS: usize = 16_384;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -667,6 +668,137 @@ impl Database {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+
+    pub fn get_scratchpad_note(
+        &self,
+        scope: &str,
+        owner_id: &str,
+        connection_id: &str,
+    ) -> Result<Option<ScratchpadNote>, String> {
+        validate_scratchpad_owner(scope, owner_id, connection_id)?;
+        self.connection
+            .lock()
+            .query_row(
+                "SELECT id, scope, owner_id, connection_id, text, created_at, updated_at FROM scratchpad_notes WHERE scope = ?1 AND owner_id = ?2 AND connection_id = ?3",
+                params![scope, owner_id, connection_id],
+                map_scratchpad_note,
+            )
+            .optional()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn save_scratchpad_note(
+        &self,
+        input: ScratchpadNoteInput,
+    ) -> Result<ScratchpadNote, String> {
+        validate_scratchpad_input(&input)?;
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let connection_exists: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM saved_connections WHERE id = ?1)",
+                [&input.connection_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        if !connection_exists {
+            return Err("Saved Connection not found".into());
+        }
+        let existing_connection: Option<String> = transaction
+            .query_row(
+                "SELECT connection_id FROM scratchpad_notes WHERE scope = ?1 AND owner_id = ?2",
+                params![input.scope, input.owner_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if existing_connection
+            .as_deref()
+            .is_some_and(|existing| existing != input.connection_id)
+        {
+            return Err("Scratchpad owner belongs to another Saved Connection".into());
+        }
+        let now = Utc::now().to_rfc3339();
+        let id = Uuid::new_v4().to_string();
+        transaction
+            .execute(
+                "INSERT INTO scratchpad_notes (id, scope, owner_id, connection_id, text, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) ON CONFLICT(scope, owner_id) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at",
+                params![id, input.scope, input.owner_id, input.connection_id, input.text, now],
+            )
+            .map_err(|error| error.to_string())?;
+        let note = transaction
+            .query_row(
+                "SELECT id, scope, owner_id, connection_id, text, created_at, updated_at FROM scratchpad_notes WHERE scope = ?1 AND owner_id = ?2",
+                params![input.scope, input.owner_id],
+                map_scratchpad_note,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(note)
+    }
+
+    pub fn delete_scratchpad_note(
+        &self,
+        scope: &str,
+        owner_id: &str,
+        connection_id: &str,
+    ) -> Result<(), String> {
+        validate_scratchpad_owner(scope, owner_id, connection_id)?;
+        self.connection
+            .lock()
+            .execute(
+                "DELETE FROM scratchpad_notes WHERE scope = ?1 AND owner_id = ?2 AND connection_id = ?3",
+                params![scope, owner_id, connection_id],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+}
+
+fn map_scratchpad_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScratchpadNote> {
+    Ok(ScratchpadNote {
+        id: row.get(0)?,
+        scope: row.get(1)?,
+        owner_id: row.get(2)?,
+        connection_id: row.get(3)?,
+        text: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+fn validate_scratchpad_owner(
+    scope: &str,
+    owner_id: &str,
+    connection_id: &str,
+) -> Result<(), String> {
+    if scope != "connection" && scope != "workspace" {
+        return Err("Scratchpad scope is invalid".into());
+    }
+    if Uuid::parse_str(owner_id).is_err() || Uuid::parse_str(connection_id).is_err() {
+        return Err("Scratchpad owner identifiers are invalid".into());
+    }
+    if scope == "connection" && owner_id != connection_id {
+        return Err("Connection scratchpad owner must match its Saved Connection".into());
+    }
+    Ok(())
+}
+
+fn validate_scratchpad_input(input: &ScratchpadNoteInput) -> Result<(), String> {
+    validate_scratchpad_owner(&input.scope, &input.owner_id, &input.connection_id)?;
+    if input.text.chars().count() > MAX_SCRATCHPAD_CHARS
+        || input
+            .text
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return Err(format!(
+            "Scratchpad text must be at most {MAX_SCRATCHPAD_CHARS} characters"
+        ));
+    }
+    Ok(())
 }
 
 fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), String> {
@@ -689,7 +821,14 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             return Err("Workspace label is invalid".into());
         }
         if ![
-            "overview", "terminal", "services", "ports", "docker", "logs", "history",
+            "overview",
+            "terminal",
+            "services",
+            "ports",
+            "docker",
+            "logs",
+            "history",
+            "scratchpad",
         ]
         .contains(&workspace.view.as_str())
         {
@@ -886,6 +1025,33 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 ALTER TABLE connection_tags
                 ADD COLUMN color TEXT NOT NULL DEFAULT '#3a3a3a';
                 PRAGMA user_version = 3;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 4 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE scratchpad_notes (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL CHECK(scope IN ('connection', 'workspace')),
+                    owner_id TEXT NOT NULL,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    text TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(scope, owner_id)
+                );
+
+                CREATE INDEX idx_scratchpad_notes_connection
+                ON scratchpad_notes(connection_id);
+
+                PRAGMA user_version = 4;
                 "#,
             )
             .map_err(|error| error.to_string())?;
@@ -1353,6 +1519,97 @@ mod tests {
     }
 
     #[test]
+    fn scratchpad_notes_round_trip_under_both_scopes() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let workspace_id = Uuid::new_v4().to_string();
+
+        let connection_note = database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "connection".into(),
+                owner_id: saved.id.clone(),
+                connection_id: saved.id.clone(),
+                text: "/srv/api".into(),
+            })
+            .unwrap();
+        let updated = database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "connection".into(),
+                owner_id: saved.id.clone(),
+                connection_id: saved.id.clone(),
+                text: "Redis reminder".into(),
+            })
+            .unwrap();
+        assert_eq!(updated.id, connection_note.id);
+        assert_eq!(updated.created_at, connection_note.created_at);
+        assert_eq!(updated.text, "Redis reminder");
+
+        let workspace_note = database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "workspace".into(),
+                owner_id: workspace_id.clone(),
+                connection_id: saved.id.clone(),
+                text: "Investigation only".into(),
+            })
+            .unwrap();
+        assert_ne!(workspace_note.id, connection_note.id);
+        assert_eq!(
+            database
+                .get_scratchpad_note("workspace", &workspace_id, &saved.id)
+                .unwrap(),
+            Some(workspace_note)
+        );
+
+        database
+            .delete_scratchpad_note("workspace", &workspace_id, &saved.id)
+            .unwrap();
+        assert!(
+            database
+                .get_scratchpad_note("workspace", &workspace_id, &saved.id)
+                .unwrap()
+                .is_none()
+        );
+        database.delete_connection(&saved.id).unwrap();
+        assert!(
+            database
+                .get_scratchpad_note("connection", &saved.id, &saved.id)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn scratchpad_validation_rejects_invalid_owners_and_oversized_text() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let other_id = Uuid::new_v4().to_string();
+        assert_eq!(
+            database
+                .save_scratchpad_note(ScratchpadNoteInput {
+                    scope: "connection".into(),
+                    owner_id: other_id,
+                    connection_id: saved.id.clone(),
+                    text: "wrong owner".into(),
+                })
+                .unwrap_err(),
+            "Connection scratchpad owner must match its Saved Connection"
+        );
+        assert_eq!(
+            database
+                .save_scratchpad_note(ScratchpadNoteInput {
+                    scope: "workspace".into(),
+                    owner_id: Uuid::new_v4().to_string(),
+                    connection_id: saved.id,
+                    text: "x".repeat(MAX_SCRATCHPAD_CHARS + 1),
+                })
+                .unwrap_err(),
+            "Scratchpad text must be at most 16384 characters"
+        );
+    }
+
+    #[test]
     fn unversioned_database_is_migrated_without_losing_connections() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("control-room.db");
@@ -1391,6 +1648,16 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
         assert_eq!(version, LATEST_SCHEMA_VERSION);
+        let scratchpad_table: i64 = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'scratchpad_notes'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(scratchpad_table, 1);
         drop(database);
         Database::open(&path).unwrap();
     }

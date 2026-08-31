@@ -15,6 +15,9 @@ import type {
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
+  ScratchpadNote,
+  ScratchpadNoteInput,
+  ScratchpadScope,
   SettingsContract,
   SystemdUnit,
 } from "../types";
@@ -152,6 +155,12 @@ export const api = {
   workspaceState: () => invoke<PersistedWorkspaceState>("get_workspace_state"),
   saveWorkspaceState: (state: PersistedWorkspaceState) =>
     invoke<void>("save_workspace_state", { state }),
+  scratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string) =>
+    invoke<ScratchpadNote | null>("get_scratchpad_note", { scope, ownerId, connectionId }),
+  saveScratchpadNote: (input: ScratchpadNoteInput) =>
+    invoke<ScratchpadNote>("save_scratchpad_note", { input }),
+  deleteScratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string) =>
+    invoke<void>("delete_scratchpad_note", { scope, ownerId, connectionId }),
   historyIntegrationStatus: (connectionId: string) =>
     invoke<boolean>("get_history_integration_status", { connectionId }),
   installHistoryIntegration: (connectionId: string) =>

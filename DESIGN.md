@@ -105,7 +105,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History), with "Add connection"
+  History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -142,11 +142,11 @@ ConPTY for the interactive terminal.
 The safety model shapes the UI. Remote operations are read-only, and the app
 never persists terminal output, fetched logs, passwords, or private keys. SQLite
 holds only connections and their local organization metadata, settings,
-capabilities, History, and _disconnected_ Workspace layout, so a restored
-Workspace always comes back disconnected and never auto-reconnects. Structured
-features need non-interactive public-key or agent auth, though the terminal still
-shows ordinary OpenSSH prompts. AGENTS.md carries the full architecture and data
-rules.
+capabilities, History, user-authored Scratchpad notes, and _disconnected_
+Workspace layout, so a restored Workspace always comes back disconnected and
+never auto-reconnects. Structured features need
+non-interactive public-key or agent auth, though the terminal still shows
+ordinary OpenSSH prompts. AGENTS.md carries the full architecture and data rules.
 
 One xterm detail worth knowing: xterm draws bold text with weight, not from the
 bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory
@@ -394,6 +394,13 @@ policy are shown separately — a broad bind is never presented as proof of Inte
 Missing or conflicting evidence stays unavailable or ambiguous. Firewall and connection data live in
 Workspace memory only. The view does not include Unix sockets, scan networks, test reachability, or
 collect full process arguments.
+
+Scratchpad is a plain-text local editor with connection and Workspace scopes. It
+autosaves through typed SQLite commands after a short debounce and keeps a
+WebView-local fallback draft until SQLite confirms the same text. It never
+captures terminal or log output, renders Markdown or raw HTML, contacts a Remote
+Host, or claims to protect secrets. Connection notes survive Workspace closure;
+closing a Workspace first quiesces pending writes and deletes its Workspace note.
 
 ---
 

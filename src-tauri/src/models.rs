@@ -364,6 +364,27 @@ pub struct PersistedWorkspace {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScratchpadNote {
+    pub id: String,
+    pub scope: String,
+    pub owner_id: String,
+    pub connection_id: String,
+    pub text: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScratchpadNoteInput {
+    pub scope: String,
+    pub owner_id: String,
+    pub connection_id: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PersistedTerminalLayout {
     Leaf {
