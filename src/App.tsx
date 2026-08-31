@@ -32,6 +32,7 @@ import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
+import { buildActionRegistry, type PaletteSelection } from "./lib/action-registry";
 import { organizeConnections } from "./lib/connection-organization";
 import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
@@ -123,6 +124,7 @@ export function App() {
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteSelection, setPaletteSelection] = useState<PaletteSelection | null>(null);
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   const [confirmState, setConfirmState] = useState<{
     title: string;
@@ -475,6 +477,71 @@ export function App() {
     updateWorkspace(id, { view: "logs", logSource });
   }
 
+  function resolvePaletteSelection(selection: PaletteSelection): PaletteSelection | null {
+    const workspace = workspaces.find(
+      (candidate) =>
+        candidate.id === selection.workspaceId &&
+        candidate.connectionId === selection.connectionId &&
+        candidate.id === activeWorkspaceId,
+    );
+    if (!workspace) return null;
+    if (selection.kind === "systemd-unit") {
+      const item = workspace.servicesCache.items.find((unit) => unit.id === selection.item.id);
+      return item ? { ...selection, item } : null;
+    }
+    const item = workspace.containersCache.items.find(
+      (container) => container.id === selection.item.id,
+    );
+    return item ? { ...selection, item } : null;
+  }
+
+  function openSelectionLogs(selection: PaletteSelection) {
+    const current = resolvePaletteSelection(selection);
+    if (!current) {
+      setActionError("The selected item changed. Select it again before opening logs.");
+      return;
+    }
+    openLogs(current.workspaceId, {
+      type: current.kind === "systemd-unit" ? "systemd" : "docker",
+      id: current.item.id,
+    });
+  }
+
+  function copyText(text: string, failureLabel: string) {
+    void navigator.clipboard
+      .writeText(text)
+      .catch((caught) => setActionError(`${failureLabel}: ${errorMessage(caught)}`));
+  }
+
+  function copySelectionValue(selection: PaletteSelection, value: "identity" | "compose-project") {
+    const current = resolvePaletteSelection(selection);
+    if (!current) {
+      setActionError("The selected item changed. Select it again before copying.");
+      return;
+    }
+    if (value === "compose-project") {
+      const project = current.kind === "docker-container" ? current.item.composeProject : null;
+      if (!project) {
+        setActionError("The selected container has no validated Compose project label.");
+        return;
+      }
+      copyText(project, "Could not copy Compose project");
+      return;
+    }
+    copyText(current.item.id, "Could not copy selected identity");
+  }
+
+  function copyWorkspaceTarget(workspaceId: string) {
+    const workspace = workspaces.find(
+      (candidate) => candidate.id === workspaceId && candidate.id === activeWorkspaceId,
+    );
+    if (!workspace) {
+      setActionError("The active Workspace changed. Open the palette again before copying.");
+      return;
+    }
+    copyText(connectionTarget(workspace.connectionSnapshot), "Could not copy SSH target");
+  }
+
   function createWorkspace(connection: SavedConnection): Workspace {
     return {
       id: crypto.randomUUID(),
@@ -811,6 +878,42 @@ export function App() {
       </div>
     );
   }
+
+  const paletteActions = buildActionRegistry(
+    {
+      connections,
+      workspaces,
+      activeWorkspace,
+      activeView: activeWorkspace?.view ?? null,
+      activeSavedConnection,
+      selection: paletteSelection,
+      views: navigation,
+      hostCapabilities,
+      labelForWorkspace: duplicateLabel,
+    },
+    {
+      openConnection: (connection) => openConnection(connection),
+      selectWorkspace: (workspace) => selectWorkspaceTab(workspace),
+      setView: (view) => {
+        if (!activeWorkspace) return;
+        closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
+      },
+      newTerminal: () => activeSavedConnection && openConnection(activeSavedConnection, true),
+      reconnect: () =>
+        activeWorkspace &&
+        updateWorkspace(activeWorkspace.id, {
+          connectRequested: true,
+          reconnectToken: activeWorkspace.reconnectToken + 1,
+        }),
+      closeWorkspace: () => activeWorkspace && void closeWorkspace(activeWorkspace.id),
+      focusTerminal: enterTerminalFocus,
+      addConnection: () => setDialogConnection("new"),
+      openSettings: () => setSettingsOpen(true),
+      openSelectionLogs,
+      copySelectionValue,
+      copyWorkspaceTarget,
+    },
+  );
 
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
@@ -1195,6 +1298,18 @@ export function App() {
                   onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                   focusId={activeWorkspace.systemdSelectionId}
+                  onSelectionChange={(item) =>
+                    setPaletteSelection(
+                      item
+                        ? {
+                            kind: "systemd-unit",
+                            workspaceId: activeWorkspace.id,
+                            connectionId: activeWorkspace.connectionId,
+                            item,
+                          }
+                        : null,
+                    )
+                  }
                 />
               )}
               {activeWorkspace.view === "ports" && (
@@ -1229,6 +1344,18 @@ export function App() {
                   }
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                   focusId={activeWorkspace.containerSelectionId}
+                  onSelectionChange={(item) =>
+                    setPaletteSelection(
+                      item
+                        ? {
+                            kind: "docker-container",
+                            workspaceId: activeWorkspace.id,
+                            connectionId: activeWorkspace.connectionId,
+                            item,
+                          }
+                        : null,
+                    )
+                  }
                 />
               )}
               {activeWorkspace.view === "logs" && (
@@ -1368,36 +1495,7 @@ export function App() {
       )}
 
       {paletteOpen && (
-        <CommandPalette
-          connections={connections}
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          activeView={activeWorkspace?.view ?? null}
-          hasActiveConnection={Boolean(activeSavedConnection)}
-          canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
-          views={navigation}
-          hostCapabilities={hostCapabilities}
-          labelForWorkspace={duplicateLabel}
-          onClose={() => setPaletteOpen(false)}
-          onOpenConnection={(connection) => openConnection(connection)}
-          onSelectWorkspace={(workspace) => selectWorkspaceTab(workspace)}
-          onSetView={(view) => {
-            if (!activeWorkspace) return;
-            closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
-          }}
-          onNewTerminal={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
-          onReconnect={() =>
-            activeWorkspace &&
-            updateWorkspace(activeWorkspace.id, {
-              connectRequested: true,
-              reconnectToken: activeWorkspace.reconnectToken + 1,
-            })
-          }
-          onCloseWorkspace={() => activeWorkspace && void closeWorkspace(activeWorkspace.id)}
-          onFocusTerminal={enterTerminalFocus}
-          onAddConnection={() => setDialogConnection("new")}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
+        <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />
       )}
     </div>
   );

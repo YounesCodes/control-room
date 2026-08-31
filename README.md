@@ -88,7 +88,9 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 - Organize Saved Connections into collapsible groups, manage reusable color-coded tags beside
   those groups, and assign existing tags from each connection editor. Filter the sidebar by
   connection name, SSH target, group, or tag.
-- Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
+- Use the command palette to open connections, switch views, change Workspaces, reconnect, open
+  Settings, and act on the selected service or container by opening logs or copying its identity
+  or Compose project.
 - Tune terminal font, size, scrollback, colors, log tail defaults, and the global Enhanced History setting.
 
 ## Read-only by design

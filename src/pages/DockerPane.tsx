@@ -28,6 +28,7 @@ export function DockerPane({
   onDetailsCacheChange,
   onViewLogs,
   focusId = null,
+  onSelectionChange,
 }: {
   connection: SavedConnection;
   cache: CachedList<DockerContainer>;
@@ -36,6 +37,7 @@ export function DockerPane({
   onDetailsCacheChange: (containerId: string, cache: CachedValue<DockerContainerDetails>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
   focusId?: string | null;
+  onSelectionChange?: (container: DockerContainer | null) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     () => focusId ?? reconcileSelection(cache.items, null),
@@ -133,6 +135,19 @@ export function DockerPane({
     ? groups.reduce((total, group) => total + group.containers.length, 0)
     : filtered.length;
   const selected = cache.items.find((container) => container.id === selectedId) ?? null;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
+  useEffect(() => {
+    onSelectionChangeRef.current?.(selected);
+  }, [connection.id, selected]);
+
+  useEffect(
+    () => () => {
+      onSelectionChangeRef.current?.(null);
+    },
+    [connection.id],
+  );
   const permissionError = cache.error?.toLowerCase().includes("permission denied");
 
   function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {

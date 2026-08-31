@@ -320,11 +320,17 @@ and removing the integration all route through these. No native `prompt` or
 `confirm` survives anywhere.
 
 **Command palette.** `Ctrl+Shift+P` opens a palette that searches open terminals,
-connections, workspace views, and contextual actions. It follows the
-combobox/listbox pattern with `aria-activedescendant`, arrow, Home, End, Enter,
-and Escape keys, a focus trap, and focus restoration. It is the fastest way
-through a multi-connection setup. If I had to keep one keyboard feature, this is
-the one.
+connections, workspace views, and contextual actions. Its entries come from one
+typed action registry (`src/lib/action-registry.ts`): the selected systemd unit
+or Docker container contributes actions (open journal, copy identity, copy
+Compose project) ranked above workspace and global actions, and actions that do
+not apply show a disabled reason instead of vanishing. Handlers call existing
+typed commands and re-validate the selection when they run, so a stale selection
+cannot act on the wrong object; the palette never carries shell strings. It
+follows the combobox/listbox pattern with `aria-activedescendant`, arrow, Home,
+End, Enter, and Escape keys, a focus trap, and focus restoration. It is the
+fastest way through a multi-connection setup. If I had to keep one keyboard
+feature, this is the one.
 
 **Terminal.** ConPTY-backed xterm with Unicode, ANSI, and VT output, resize,
 scrollback, copy and paste, and control keys (Vim, top, tmux, and the rest).
@@ -342,7 +348,8 @@ Reusable primitives in `src/components/` that everything else composes.
   trap and restore). It backs ConnectionDialog, CredentialDialog, PromptDialog,
   and ConfirmDialog.
 - **PromptDialog and ConfirmDialog.** The in-app replacements for native dialogs.
-- **CommandPalette.** The command palette.
+- **CommandPalette.** The command palette. Renders a typed action registry and
+  owns only search, ranking, and keyboard behavior.
 - **PanelState.** `LoadingState`, `EmptyState`, and `ErrorState`.
 - **HostOsIcon.** The OS mark with its presence badge.
 - **StatusDot and WindowControls.** The status indicator and the custom titlebar

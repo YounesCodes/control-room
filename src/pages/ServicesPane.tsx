@@ -13,12 +13,14 @@ export function ServicesPane({
   onCacheChange,
   onViewLogs,
   focusId = null,
+  onSelectionChange,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
   onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
   focusId?: string | null;
+  onSelectionChange?: (unit: SystemdUnit | null) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     () => focusId ?? reconcileSelection(cache.items, null),
@@ -77,6 +79,19 @@ export function ServicesPane({
     [cache.items, search, stateFilter, typeFilter],
   );
   const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
+  useEffect(() => {
+    onSelectionChangeRef.current?.(selected);
+  }, [connection.id, selected]);
+
+  useEffect(
+    () => () => {
+      onSelectionChangeRef.current?.(null);
+    },
+    [connection.id],
+  );
 
   if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
   if (cache.error && !cache.items.length) {

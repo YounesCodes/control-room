@@ -3143,6 +3143,20 @@ kbd {
   color: var(--text-muted);
 }
 
+.command-item.disabled,
+.command-item.disabled strong {
+  color: var(--text-faint);
+}
+
+.command-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.command-item.disabled.active {
+  background: var(--fill-hover);
+}
+
 .command-palette-empty {
   padding: 30px 16px;
   color: var(--text-faint);
