@@ -7,7 +7,7 @@ use crate::{
     models::{
         AppSettings, DockerContainer, EnvironmentInfo, HistoryEntry, HistoryInput,
         HostCapabilities, LOG_TAIL_OPTIONS, PersistedWorkspaceState, SavedConnection,
-        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdService,
+        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -174,7 +174,7 @@ pub fn list_services(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
-) -> Result<Vec<SystemdService>, String> {
+) -> Result<Vec<SystemdUnit>, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     remote::list_services(&connection)

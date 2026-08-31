@@ -52,8 +52,9 @@ pub struct HostCapabilities {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SystemdService {
+pub struct SystemdUnit {
     pub id: String,
+    pub unit_type: String,
     pub description: String,
     pub load_state: String,
     pub active_state: String,
