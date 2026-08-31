@@ -50,10 +50,15 @@ DESIGN.md.
    read-only, live only in Workspace memory, and are never persisted. Report
    binding exposure and firewall policy separately, and never claim a bind means
    Internet reachability.
-7. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-8. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+7. Keep Pinned Commands local, single-line, and user-authored. Allow global and
+   Saved Connection scopes, reject control characters, require a visible
+   confirmation before terminal insertion, and never append Enter or execute a
+   command automatically. Treat their text as ordinary local data that may
+   contain secrets and never log it through telemetry.
+8. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+9. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.
-9. Do not commit or push unless the user asks.
+10. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -81,3 +86,6 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Pinned Command**: one locally persisted, named line of terminal text scoped
+  globally or to a Saved Connection. Insertion is confirmed, appends no Enter,
+  and remains separate from Structured Operations and Enhanced History.

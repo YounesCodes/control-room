@@ -9,6 +9,8 @@ import type {
   HistoryInput,
   HostCapabilities,
   ListeningSocket,
+  PinnedCommand,
+  PinnedCommandInput,
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
@@ -62,6 +64,15 @@ export const api = {
   acknowledgeSessionOutput: (sessionId: string, bytes: number) =>
     invoke<void>("acknowledge_session_output", { sessionId, bytes }),
   closeSession: (sessionId: string) => invoke<void>("close_session", { sessionId }),
+  pinnedCommands: (connectionId: string) =>
+    invoke<PinnedCommand[]>("list_pinned_commands", { connectionId }),
+  createPinnedCommand: (input: PinnedCommandInput) =>
+    invoke<PinnedCommand>("create_pinned_command", { input }),
+  updatePinnedCommand: (id: string, input: PinnedCommandInput) =>
+    invoke<PinnedCommand>("update_pinned_command", { id, input }),
+  reorderPinnedCommands: (connectionId: string | null, ids: string[]) =>
+    invoke<void>("reorder_pinned_commands", { connectionId, ids }),
+  deletePinnedCommand: (id: string) => invoke<void>("delete_pinned_command", { id }),
   cachedCapabilities: (connectionId: string) =>
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>

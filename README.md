@@ -82,6 +82,9 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 
 - Search Saved Connections from the sidebar.
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
+- Save, rename, reorder, rescope, and delete one-line Pinned Commands globally or for one Saved
+  Connection. Insertion always shows the exact text for confirmation, appends it to a connected
+  Terminal Session, and never presses Enter.
 - Tune terminal font, size, scrollback, colors, log tail defaults, and the global Enhanced History setting.
 
 ## Read-only by design

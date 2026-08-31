@@ -137,11 +137,11 @@ ConPTY for the interactive terminal.
 
 The safety model shapes the UI. Remote operations are read-only, and the app
 never persists terminal output, fetched logs, passwords, or private keys. SQLite
-holds only connections, settings, capabilities, History, and _disconnected_
-Workspace layout, so a restored Workspace always comes back disconnected and
-never auto-reconnects. Structured features need non-interactive public-key or
-agent auth, though the terminal still shows ordinary OpenSSH prompts. AGENTS.md
-carries the full architecture and data rules.
+holds only connections, settings, capabilities, History, Pinned Commands, and
+_disconnected_ Workspace layout, so a restored Workspace always comes back
+disconnected and never auto-reconnects. Structured features need non-interactive
+public-key or agent auth, though the terminal still shows ordinary OpenSSH
+prompts. AGENTS.md carries the full architecture and data rules.
 
 One xterm detail worth knowing: xterm draws bold text with weight, not from the
 bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory
@@ -308,6 +308,14 @@ and Escape keys, a focus trap, and focus restoration. It is the fastest way
 through a multi-connection setup. If I had to keep one keyboard feature, this is
 the one.
 
+**Pinned Commands.** A two-scope list keeps one-line user-authored terminal text
+available globally or for the active Saved Connection. Rows can be renamed,
+rescoped, reordered, or deleted. Insert first opens an exact monospace preview
+that explains the app cannot prove the current prompt is empty; confirmation
+appends the text to a connected Terminal Session without Enter. Disconnected
+sessions disable insertion, and command text never becomes a Structured
+Operation.
+
 **Terminal.** ConPTY-backed xterm with Unicode, ANSI, and VT output, resize,
 scrollback, copy and paste, and control keys (Vim, top, tmux, and the rest).
 Reconnect after a drop, or clear the local buffer without sending anything to the
@@ -330,6 +338,7 @@ Reusable primitives in `src/components/` that everything else composes.
 - **StatusDot and WindowControls.** The status indicator and the custom titlebar
   buttons.
 - **TerminalPane.** The xterm host and session lifecycle.
+- **PinnedCommandDialog.** The local name, one-line command, and scope editor.
 
 Shared patterns: the split page (a dense list beside a detail panel) used by
 Systemd, Ports, and Docker; the definition grid and capability list on the Overview host

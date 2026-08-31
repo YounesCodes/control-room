@@ -10,6 +10,7 @@ import {
   Minimize2,
   Network,
   Pencil,
+  Pin,
   Plus,
   Rows2,
   Search,
@@ -52,6 +53,7 @@ import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
+import { PinnedCommandsPane } from "./pages/PinnedCommandsPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
@@ -85,6 +87,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
+  { id: "commands", label: "Pinned", icon: Pin },
 ];
 
 const TerminalPane = lazy(() =>
@@ -1101,6 +1104,14 @@ export function App() {
                   }}
                   onPaste={pasteIntoTerminal}
                   canPaste={Boolean(activeWorkspace.sessionId)}
+                />
+              )}
+              {activeWorkspace.view === "commands" && (
+                <PinnedCommandsPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  canInsert={Boolean(activeWorkspace.sessionId)}
+                  onInsert={pasteIntoTerminal}
                 />
               )}
             </div>

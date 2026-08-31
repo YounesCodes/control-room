@@ -13,6 +13,12 @@ const api = vi.hoisted(() => ({
   cachedCapabilities: vi.fn(),
   deleteConnection: vi.fn(),
   closeSession: vi.fn(),
+  writeSession: vi.fn(),
+  pinnedCommands: vi.fn(),
+  createPinnedCommand: vi.fn(),
+  updatePinnedCommand: vi.fn(),
+  reorderPinnedCommands: vi.fn(),
+  deletePinnedCommand: vi.fn(),
 }));
 
 vi.mock("./lib/api", () => ({
@@ -25,8 +31,18 @@ vi.mock("./components/WindowControls", () => ({
 }));
 
 vi.mock("./components/TerminalPane", () => ({
-  TerminalPane: ({ workspace }: { workspace: { id: string; reconnectToken: number } }) => (
-    <div data-testid={`terminal-${workspace.id}`} data-reconnect-token={workspace.reconnectToken} />
+  TerminalPane: ({
+    workspace,
+    onSession,
+  }: {
+    workspace: { id: string; reconnectToken: number };
+    onSession: (sessionId: string) => void;
+  }) => (
+    <button
+      data-testid={`terminal-${workspace.id}`}
+      data-reconnect-token={workspace.reconnectToken}
+      onClick={() => onSession(`session-${workspace.id}`)}
+    />
   ),
 }));
 
@@ -100,6 +116,12 @@ describe("App Workspace behavior", () => {
     api.cachedCapabilities.mockResolvedValue(null);
     api.deleteConnection.mockResolvedValue(undefined);
     api.closeSession.mockResolvedValue(undefined);
+    api.writeSession.mockResolvedValue(undefined);
+    api.pinnedCommands.mockResolvedValue([]);
+    api.createPinnedCommand.mockResolvedValue({});
+    api.updatePinnedCommand.mockResolvedValue({});
+    api.reorderPinnedCommands.mockResolvedValue(undefined);
+    api.deletePinnedCommand.mockResolvedValue(undefined);
   });
 
   it("keeps an unrelated terminal mounted when the active Saved Connection is deleted", async () => {
@@ -158,5 +180,35 @@ describe("App Workspace behavior", () => {
     fireEvent.keyDown(displayName, { key: "r", ctrlKey: true, shiftKey: true });
 
     expect(terminal.getAttribute("data-reconnect-token")).toBe("0");
+  });
+
+  it("writes a confirmed pinned command exactly once without Enter", async () => {
+    const user = userEvent.setup();
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    api.workspaceState.mockResolvedValue(restoredState([saved.id]));
+    api.pinnedCommands.mockResolvedValue([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        name: "Disk usage",
+        command: "df -h",
+        connectionId: null,
+        position: 0,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    render(<App />);
+
+    await user.click(await screen.findByTestId("terminal-workspace-0"));
+    await user.click(screen.getByRole("button", { name: "Pinned" }));
+    await user.click(await screen.findByRole("button", { name: "Insert" }));
+    expect(api.writeSession).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Insert without Enter" }));
+
+    await waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
+    const [sessionId, bytes] = api.writeSession.mock.calls[0];
+    expect(sessionId).toBe("session-workspace-0");
+    expect(new TextDecoder().decode(bytes)).toBe("df -h");
   });
 });

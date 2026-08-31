@@ -7,15 +7,18 @@ use uuid::Uuid;
 
 use crate::models::{
     AppSettings, HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS,
-    PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
+    PersistedTerminalLayout, PersistedWorkspaceState, PinnedCommand, PinnedCommandInput,
+    SavedConnection, SavedConnectionInput,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 1;
+const LATEST_SCHEMA_VERSION: i64 = 2;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
 const MAX_IDENTITY_PATH_CHARS: usize = 32_767;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
+const MAX_PINNED_COMMAND_NAME_CHARS: usize = 80;
+const MAX_PINNED_COMMAND_CHARS: usize = 4_096;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -384,6 +387,226 @@ impl Database {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+
+    pub fn list_pinned_commands(&self, connection_id: &str) -> Result<Vec<PinnedCommand>, String> {
+        self.get_connection(connection_id)?;
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT id, name, command, connection_id, position, created_at, updated_at FROM pinned_commands WHERE connection_id IS NULL OR connection_id = ?1 ORDER BY connection_id IS NOT NULL, position, name COLLATE NOCASE",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([connection_id], map_pinned_command)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn create_pinned_command(
+        &self,
+        input: PinnedCommandInput,
+    ) -> Result<PinnedCommand, String> {
+        validate_pinned_command_input(&input)?;
+        if let Some(connection_id) = &input.connection_id {
+            self.get_connection(connection_id)?;
+        }
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let position: i64 = transaction
+            .query_row(
+                "SELECT COALESCE(MAX(position) + 1, 0) FROM pinned_commands WHERE connection_id IS ?1",
+                [&input.connection_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+        transaction
+            .execute(
+                "INSERT INTO pinned_commands (id, name, command, connection_id, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+                params![id, input.name.trim(), input.command, input.connection_id, position, now],
+            )
+            .map_err(|error| error.to_string())?;
+        let command = transaction
+            .query_row(
+                "SELECT id, name, command, connection_id, position, created_at, updated_at FROM pinned_commands WHERE id = ?1",
+                [&id],
+                map_pinned_command,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(command)
+    }
+
+    pub fn update_pinned_command(
+        &self,
+        id: &str,
+        input: PinnedCommandInput,
+    ) -> Result<PinnedCommand, String> {
+        validate_uuid(id, "Pinned command identifier")?;
+        validate_pinned_command_input(&input)?;
+        if let Some(connection_id) = &input.connection_id {
+            self.get_connection(connection_id)?;
+        }
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let previous_scope: Option<Option<String>> = transaction
+            .query_row(
+                "SELECT connection_id FROM pinned_commands WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let Some(previous_scope) = previous_scope else {
+            return Err("Pinned command not found".into());
+        };
+        let position: i64 = if previous_scope == input.connection_id {
+            transaction
+                .query_row(
+                    "SELECT position FROM pinned_commands WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| error.to_string())?
+        } else {
+            transaction
+                .query_row(
+                    "SELECT COALESCE(MAX(position) + 1, 0) FROM pinned_commands WHERE connection_id IS ?1",
+                    [&input.connection_id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| error.to_string())?
+        };
+        transaction
+            .execute(
+                "UPDATE pinned_commands SET name = ?2, command = ?3, connection_id = ?4, position = ?5, updated_at = ?6 WHERE id = ?1",
+                params![id, input.name.trim(), input.command, input.connection_id, position, Utc::now().to_rfc3339()],
+            )
+            .map_err(|error| error.to_string())?;
+        let command = transaction
+            .query_row(
+                "SELECT id, name, command, connection_id, position, created_at, updated_at FROM pinned_commands WHERE id = ?1",
+                [id],
+                map_pinned_command,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(command)
+    }
+
+    pub fn reorder_pinned_commands(
+        &self,
+        connection_id: Option<&str>,
+        ids: &[String],
+    ) -> Result<(), String> {
+        if let Some(connection_id) = connection_id {
+            self.get_connection(connection_id)?;
+        }
+        if ids.len() > 1_000 {
+            return Err("Too many pinned commands to reorder".into());
+        }
+        let mut unique = std::collections::HashSet::new();
+        for id in ids {
+            validate_uuid(id, "Pinned command identifier")?;
+            if !unique.insert(id.as_str()) {
+                return Err("Pinned command reorder contains duplicates".into());
+            }
+        }
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let existing = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT id FROM pinned_commands WHERE connection_id IS ?1 ORDER BY position, name COLLATE NOCASE",
+                )
+                .map_err(|error| error.to_string())?;
+            let rows = statement
+                .query_map([connection_id], |row| row.get::<_, String>(0))
+                .map_err(|error| error.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?
+        };
+        let existing_set = existing
+            .iter()
+            .map(String::as_str)
+            .collect::<std::collections::HashSet<_>>();
+        if existing_set != unique {
+            return Err("Pinned command reorder must contain every command in the scope".into());
+        }
+        for (position, id) in ids.iter().enumerate() {
+            transaction
+                .execute(
+                    "UPDATE pinned_commands SET position = ?2, updated_at = ?3 WHERE id = ?1",
+                    params![id, position as i64, Utc::now().to_rfc3339()],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_pinned_command(&self, id: &str) -> Result<(), String> {
+        validate_uuid(id, "Pinned command identifier")?;
+        let changed = self
+            .connection
+            .lock()
+            .execute("DELETE FROM pinned_commands WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("Pinned command not found".into());
+        }
+        Ok(())
+    }
+}
+
+fn map_pinned_command(row: &rusqlite::Row<'_>) -> rusqlite::Result<PinnedCommand> {
+    Ok(PinnedCommand {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        command: row.get(2)?,
+        connection_id: row.get(3)?,
+        position: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+fn validate_uuid(value: &str, label: &str) -> Result<(), String> {
+    Uuid::parse_str(value)
+        .map(|_| ())
+        .map_err(|_| format!("{label} is invalid"))
+}
+
+fn validate_pinned_command_input(input: &PinnedCommandInput) -> Result<(), String> {
+    let name = input.name.trim();
+    if name.is_empty()
+        || name.chars().count() > MAX_PINNED_COMMAND_NAME_CHARS
+        || name.chars().any(char::is_control)
+    {
+        return Err(format!(
+            "Pinned command name must be between 1 and {MAX_PINNED_COMMAND_NAME_CHARS} characters"
+        ));
+    }
+    if input.command.trim().is_empty()
+        || input.command.chars().count() > MAX_PINNED_COMMAND_CHARS
+        || input.command.chars().any(char::is_control)
+    {
+        return Err(format!(
+            "Pinned command must be one non-empty line of at most {MAX_PINNED_COMMAND_CHARS} characters without control characters"
+        ));
+    }
+    if let Some(connection_id) = &input.connection_id {
+        validate_uuid(connection_id, "Saved Connection identifier")?;
+    }
+    Ok(())
 }
 
 fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), String> {
@@ -406,7 +629,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             return Err("Workspace label is invalid".into());
         }
         if ![
-            "overview", "terminal", "services", "ports", "docker", "logs", "history",
+            "overview", "terminal", "services", "ports", "docker", "logs", "history", "commands",
         ]
         .contains(&workspace.view.as_str())
         {
@@ -550,6 +773,32 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 );
 
                 PRAGMA user_version = 1;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 2 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE pinned_commands (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX idx_pinned_commands_scope_position
+                ON pinned_commands(connection_id, position);
+
+                PRAGMA user_version = 2;
                 "#,
             )
             .map_err(|error| error.to_string())?;
@@ -718,6 +967,99 @@ mod tests {
     }
 
     #[test]
+    fn pinned_commands_round_trip_reorder_and_follow_connection_lifecycle() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let first = database
+            .create_pinned_command(PinnedCommandInput {
+                name: "Disk usage".into(),
+                command: "df -h".into(),
+                connection_id: None,
+            })
+            .unwrap();
+        let second = database
+            .create_pinned_command(PinnedCommandInput {
+                name: "Failed units".into(),
+                command: "systemctl --failed".into(),
+                connection_id: None,
+            })
+            .unwrap();
+        let scoped = database
+            .create_pinned_command(PinnedCommandInput {
+                name: "API logs".into(),
+                command: "journalctl -u api".into(),
+                connection_id: Some(saved.id.clone()),
+            })
+            .unwrap();
+
+        assert_eq!(
+            database
+                .list_pinned_commands(&saved.id)
+                .unwrap()
+                .iter()
+                .map(|command| command.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![first.id.as_str(), second.id.as_str(), scoped.id.as_str()]
+        );
+        database
+            .reorder_pinned_commands(None, &[second.id.clone(), first.id.clone()])
+            .unwrap();
+        let reordered = database.list_pinned_commands(&saved.id).unwrap();
+        assert_eq!(reordered[0].id, second.id);
+        assert_eq!(reordered[1].id, first.id);
+
+        let moved = database
+            .update_pinned_command(
+                &first.id,
+                PinnedCommandInput {
+                    name: "Host disk usage".into(),
+                    command: "df -h".into(),
+                    connection_id: Some(saved.id.clone()),
+                },
+            )
+            .unwrap();
+        assert_eq!(moved.connection_id.as_deref(), Some(saved.id.as_str()));
+        assert_eq!(moved.position, 1);
+
+        database.delete_connection(&saved.id).unwrap();
+        let other = database.create_connection(input("Other")).unwrap();
+        let remaining = database.list_pinned_commands(&other.id).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, second.id);
+    }
+
+    #[test]
+    fn pinned_commands_reject_multiline_control_and_partial_reorders() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let command = database
+            .create_pinned_command(PinnedCommandInput {
+                name: "Disk usage".into(),
+                command: "df -h".into(),
+                connection_id: None,
+            })
+            .unwrap();
+        let error = database
+            .create_pinned_command(PinnedCommandInput {
+                name: "Multiline".into(),
+                command: "pwd\nuname -a".into(),
+                connection_id: Some(saved.id.clone()),
+            })
+            .unwrap_err();
+        assert!(error.contains("one non-empty line"));
+        assert!(
+            database
+                .reorder_pinned_commands(None, &[])
+                .unwrap_err()
+                .contains("every command")
+        );
+        database.delete_pinned_command(&command.id).unwrap();
+        assert!(database.list_pinned_commands(&saved.id).unwrap().is_empty());
+    }
+
+    #[test]
     fn open_ssh_aliases_keep_explicit_username_and_default_port() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -763,6 +1105,16 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
         assert_eq!(version, LATEST_SCHEMA_VERSION);
+        let pinned_table: i64 = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'pinned_commands'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pinned_table, 1);
         drop(database);
         Database::open(&path).unwrap();
     }

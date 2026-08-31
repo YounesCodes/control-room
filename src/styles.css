@@ -2213,6 +2213,122 @@ dd {
   pointer-events: auto;
 }
 
+.pinned-commands-page {
+  padding: 26px 30px;
+}
+
+.pinned-command-groups {
+  display: grid;
+  max-width: 1080px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.pinned-command-group {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.pinned-command-group > header {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+}
+
+.pinned-command-group h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pinned-command-group > header span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pinned-command-group ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pinned-command-group li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 11px 12px;
+}
+
+.pinned-command-group li:last-child {
+  border-bottom: 0;
+}
+
+.pinned-command-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pinned-command-copy strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-command-copy code {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-command-group-empty {
+  margin: 0;
+  padding: 18px 14px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.pinned-insert-confirmation {
+  padding: 20px;
+}
+
+.pinned-insert-confirmation > p {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pinned-insert-confirmation pre {
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--terminal-bg);
+  padding: 13px;
+  color: var(--text-strong);
+  font:
+    12px/1.5 "Cascadia Mono",
+    Consolas,
+    monospace;
+  white-space: pre;
+}
+
 .exit-code {
   display: inline-flex;
   min-width: 26px;
@@ -2794,8 +2910,13 @@ kbd {
   .overview-page,
   .settings-page,
   .history-page,
+  .pinned-commands-page,
   .logs-page {
     padding: 22px;
+  }
+
+  .pinned-command-groups {
+    grid-template-columns: 1fr;
   }
 }
 

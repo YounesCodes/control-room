@@ -284,6 +284,26 @@ pub struct PersistedWorkspace {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PinnedCommand {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    pub connection_id: Option<String>,
+    pub position: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinnedCommandInput {
+    pub name: String,
+    pub command: String,
+    pub connection_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PersistedTerminalLayout {
     Leaf {

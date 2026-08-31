@@ -7,8 +7,8 @@ use crate::{
     models::{
         AppSettings, DockerContainer, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
-        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        PersistedWorkspaceState, PinnedCommand, PinnedCommandInput, SavedConnection,
+        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -363,6 +363,45 @@ pub fn save_workspace_state(
     database.save_workspace_state(&state)
 }
 
+#[tauri::command]
+pub fn list_pinned_commands(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<Vec<PinnedCommand>, String> {
+    database.list_pinned_commands(&connection_id)
+}
+
+#[tauri::command]
+pub fn create_pinned_command(
+    database: State<'_, Database>,
+    input: PinnedCommandInput,
+) -> Result<PinnedCommand, String> {
+    database.create_pinned_command(input)
+}
+
+#[tauri::command]
+pub fn update_pinned_command(
+    database: State<'_, Database>,
+    id: String,
+    input: PinnedCommandInput,
+) -> Result<PinnedCommand, String> {
+    database.update_pinned_command(&id, input)
+}
+
+#[tauri::command]
+pub fn reorder_pinned_commands(
+    database: State<'_, Database>,
+    connection_id: Option<String>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    database.reorder_pinned_commands(connection_id.as_deref(), &ids)
+}
+
+#[tauri::command]
+pub fn delete_pinned_command(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_pinned_command(&id)
+}
+
 #[tauri::command(async)]
 pub fn get_history_integration_status(
     database: State<'_, Database>,
@@ -460,5 +499,28 @@ mod tests {
         assert_eq!(connection.destination, "host-alias");
         assert_eq!(connection.username.as_deref(), Some("user"));
         assert!(!connection.history_enabled);
+    }
+
+    #[test]
+    fn pinned_command_management_only_uses_local_persistence() {
+        let source = include_str!("commands.rs");
+        for command in [
+            "list_pinned_commands",
+            "create_pinned_command",
+            "update_pinned_command",
+            "reorder_pinned_commands",
+            "delete_pinned_command",
+        ] {
+            let body = source
+                .split(&format!("pub fn {command}"))
+                .nth(1)
+                .expect("pinned command exists")
+                .split("#[tauri::command")
+                .next()
+                .expect("pinned command body exists");
+            assert!(body.contains("database."));
+            assert!(!body.contains("remote::"));
+            assert!(!body.contains("RemoteOperationLimiter"));
+        }
     }
 }

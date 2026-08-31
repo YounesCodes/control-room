@@ -141,6 +141,22 @@ export interface HistoryInput {
   shell: string;
 }
 
+export interface PinnedCommand {
+  id: string;
+  name: string;
+  command: string;
+  connectionId: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PinnedCommandInput {
+  name: string;
+  command: string;
+  connectionId: string | null;
+}
+
 export interface AppSettings {
   terminalFontFamily: string;
   terminalFontSize: number;
@@ -171,7 +187,7 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history";
+  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "commands";
 
 export interface CachedList<T> {
   items: T[];
