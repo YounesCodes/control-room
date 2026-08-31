@@ -3,9 +3,12 @@ import type {
   AppSettings,
   DockerContainer,
   EnvironmentInfo,
+  EstablishedConnections,
+  FirewallStatus,
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
+  ListeningSocket,
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
@@ -67,6 +70,12 @@ export const api = {
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
+  listPorts: (connectionId: string, sudoPassword: string | null = null) =>
+    invokeRemoteInspection<ListeningSocket[]>("list_ports", { connectionId, sudoPassword }),
+  inspectFirewall: (connectionId: string, sudoPassword: string | null = null) =>
+    invokeRemoteInspection<FirewallStatus>("inspect_firewall", { connectionId, sudoPassword }),
+  inspectConnections: (connectionId: string) =>
+    invokeRemoteInspection<EstablishedConnections>("inspect_connections", { connectionId }),
   startJournalStream: (
     connectionId: string,
     service: string,

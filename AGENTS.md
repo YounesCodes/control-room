@@ -42,10 +42,18 @@ DESIGN.md.
    independent and in memory.
 5. Derive Docker Compose grouping only from validated project and service labels.
    Keep every container instance distinct and retain an Ungrouped fallback.
-6. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-7. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+6. Keep port inspection to bounded TCP and UDP listener snapshots. Never scan,
+   test reachability, collect full process arguments, or infer owners from names.
+   Service navigation requires one unambiguous PID with a validated systemd unit;
+   container navigation requires an exact published address, port, and protocol.
+   The Ports firewall and established-connection snapshots stay bounded and
+   read-only, live only in Workspace memory, and are never persisted. Report
+   binding exposure and firewall policy separately, and never claim a bind means
+   Internet reachability.
+7. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+8. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.
-8. Do not commit or push unless the user asks.
+9. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -67,6 +75,8 @@ account you control.
   independently of Terminal Sessions.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
   returned by the bounded Systemd inspection.
+- **Listening Socket**: one TCP or UDP listener returned by a manual, bounded
+  host snapshot. Kernel socket facts remain separate from correlated ownership.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration

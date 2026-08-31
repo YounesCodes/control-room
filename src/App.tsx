@@ -8,6 +8,7 @@ import {
   Maximize2,
   MoreHorizontal,
   Minimize2,
+  Network,
   Pencil,
   Plus,
   Rows2,
@@ -51,6 +52,7 @@ import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
+import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
@@ -59,6 +61,7 @@ import type {
   DockerContainer,
   EnvironmentInfo,
   HostCapabilities,
+  ListeningSocket,
   LogSourceSelection,
   SavedConnection,
   SettingsContract,
@@ -78,6 +81,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
+  { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
@@ -405,6 +409,10 @@ export function App() {
     updateWorkspace(id, { containersCache });
   }
 
+  function updatePortsCache(id: string, portsCache: CachedList<ListeningSocket>) {
+    updateWorkspace(id, { portsCache });
+  }
+
   function rememberCapabilities(capabilities: HostCapabilities) {
     setHostCapabilities((current) => ({
       ...current,
@@ -439,7 +447,10 @@ export function App() {
       reconnectToken: 0,
       connectRequested: true,
       servicesCache: emptyCachedList(),
+      portsCache: emptyCachedList(),
       containersCache: emptyCachedList(),
+      systemdSelectionId: null,
+      containerSelectionId: null,
       logSource: null,
     };
   }
@@ -1020,6 +1031,27 @@ export function App() {
                   cache={activeWorkspace.servicesCache}
                   onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                  focusId={activeWorkspace.systemdSelectionId}
+                />
+              )}
+              {activeWorkspace.view === "ports" && (
+                <PortsPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  capabilities={hostCapabilities[activeConnection.id] ?? null}
+                  cache={activeWorkspace.portsCache}
+                  containersCache={activeWorkspace.containersCache}
+                  onCacheChange={(cache) => updatePortsCache(activeWorkspace.id, cache)}
+                  onContainersCacheChange={(cache) =>
+                    updateContainersCache(activeWorkspace.id, cache)
+                  }
+                  onOpenSystemd={(systemdSelectionId) =>
+                    updateWorkspace(activeWorkspace.id, { view: "services", systemdSelectionId })
+                  }
+                  onOpenContainer={(containerSelectionId) =>
+                    updateWorkspace(activeWorkspace.id, { view: "docker", containerSelectionId })
+                  }
+                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                 />
               )}
               {activeWorkspace.view === "docker" && (
@@ -1029,6 +1061,7 @@ export function App() {
                   cache={activeWorkspace.containersCache}
                   onCacheChange={(cache) => updateContainersCache(activeWorkspace.id, cache)}
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                  focusId={activeWorkspace.containerSelectionId}
                 />
               )}
               {activeWorkspace.view === "logs" && (

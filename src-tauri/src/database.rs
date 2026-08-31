@@ -406,7 +406,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             return Err("Workspace label is invalid".into());
         }
         if ![
-            "overview", "terminal", "services", "docker", "logs", "history",
+            "overview", "terminal", "services", "ports", "docker", "logs", "history",
         ]
         .contains(&workspace.view.as_str())
         {
@@ -972,7 +972,7 @@ mod tests {
                 id: workspace_id.clone(),
                 label: Some("Deploy".into()),
                 connection_id: saved.id,
-                view: "terminal".into(),
+                view: "ports".into(),
                 history_paused: false,
             }],
             active_workspace_id: Some(workspace_id.clone()),
