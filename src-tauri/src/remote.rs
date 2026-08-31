@@ -213,7 +213,7 @@ pub fn list_containers(
     connection: &SavedConnection,
     sudo_password: Option<String>,
 ) -> Result<Vec<DockerContainer>, String> {
-    let command = "docker ps -a --no-trunc --format '{{json .}}'";
+    let command = docker_container_list_command();
     let output = if let Some(password) = sudo_password {
         RemoteCommandExecutor::execute_with_sudo(connection, "list_containers", command, password)?
     } else {
@@ -435,6 +435,25 @@ fn parse_container(line: &str) -> Result<DockerContainer, String> {
             .unwrap_or_default()
             .to_string()
     };
+    let compose_project = valid_compose_project(&string("ComposeProject"));
+    let compose_service = valid_compose_service(&string("ComposeService"));
+    let (compose_project, compose_service, compose_container_number, compose_oneoff) =
+        match (compose_project, compose_service) {
+            (Some(project), Some(service)) => (
+                Some(project),
+                Some(service),
+                string("ComposeContainerNumber")
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|number| *number > 0),
+                match string("ComposeOneoff").to_ascii_lowercase().as_str() {
+                    "true" => Some(true),
+                    "false" => Some(false),
+                    _ => None,
+                },
+            ),
+            _ => (None, None, None, None),
+        };
     Ok(DockerContainer {
         id: string("ID"),
         name: string("Names"),
@@ -443,7 +462,45 @@ fn parse_container(line: &str) -> Result<DockerContainer, String> {
         status: string("Status"),
         ports: string("Ports"),
         created_at: string("CreatedAt"),
+        compose_project,
+        compose_service,
+        compose_container_number,
+        compose_oneoff,
     })
+}
+
+fn docker_container_list_command() -> &'static str {
+    r#"docker ps -a --no-trunc --format '{"ID":{{json .ID}},"Names":{{json .Names}},"Image":{{json .Image}},"State":{{json .State}},"Status":{{json .Status}},"Ports":{{json .Ports}},"CreatedAt":{{json .CreatedAt}},"ComposeProject":{{json (.Label "com.docker.compose.project")}},"ComposeService":{{json (.Label "com.docker.compose.service")}},"ComposeContainerNumber":{{json (.Label "com.docker.compose.container-number")}},"ComposeOneoff":{{json (.Label "com.docker.compose.oneoff")}}}'"#
+}
+
+fn valid_compose_project(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 255
+        || !value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_lowercase() || character.is_ascii_digit())
+        || !value.chars().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || "_-".contains(character)
+        })
+    {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn valid_compose_service(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 255
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
+    {
+        return None;
+    }
+    Some(value.to_string())
 }
 
 struct ManagedStream {
@@ -743,11 +800,42 @@ mod tests {
     #[test]
     fn parses_docker_json_lines() {
         let container = parse_container(
-            r#"{"ID":"abc","Names":"npmplus","Image":"docker.io/npmplus","State":"running","Status":"Up","Ports":"80/tcp","CreatedAt":"today"}"#,
+            r#"{"ID":"abc","Names":"npmplus","Image":"docker.io/npmplus","State":"running","Status":"Up","Ports":"80/tcp","CreatedAt":"today","ComposeProject":"proxy","ComposeService":"gateway","ComposeContainerNumber":"2","ComposeOneoff":"False"}"#,
         )
         .unwrap();
         assert_eq!(container.name, "npmplus");
         assert_eq!(container.state, "running");
+        assert_eq!(container.compose_project.as_deref(), Some("proxy"));
+        assert_eq!(container.compose_service.as_deref(), Some("gateway"));
+        assert_eq!(container.compose_container_number, Some(2));
+        assert_eq!(container.compose_oneoff, Some(false));
+    }
+
+    #[test]
+    fn rejects_incomplete_or_malformed_compose_identity() {
+        let missing_service = parse_container(
+            r#"{"ID":"one","ComposeProject":"proxy","ComposeService":"","ComposeContainerNumber":"1","ComposeOneoff":"False"}"#,
+        )
+        .unwrap();
+        let malformed_project = parse_container(
+            r#"{"ID":"two","ComposeProject":"proxy/app","ComposeService":"gateway","ComposeContainerNumber":"1","ComposeOneoff":"True"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(missing_service.compose_project, None);
+        assert_eq!(missing_service.compose_service, None);
+        assert_eq!(malformed_project.compose_project, None);
+        assert_eq!(malformed_project.compose_oneoff, None);
+    }
+
+    #[test]
+    fn container_listing_requests_only_selected_compose_labels() {
+        let command = docker_container_list_command();
+        assert!(command.contains("com.docker.compose.project"));
+        assert!(command.contains("com.docker.compose.service"));
+        assert!(command.contains("com.docker.compose.container-number"));
+        assert!(command.contains("com.docker.compose.oneoff"));
+        assert!(!command.contains(".Labels"));
     }
 
     #[test]
