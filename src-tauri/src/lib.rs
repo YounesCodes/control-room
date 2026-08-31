@@ -38,6 +38,7 @@ pub fn run() {
             commands::get_cached_capabilities,
             commands::refresh_capabilities,
             commands::list_services,
+            commands::inspect_systemd_relationships,
             commands::list_containers,
             commands::list_ports,
             commands::inspect_firewall,

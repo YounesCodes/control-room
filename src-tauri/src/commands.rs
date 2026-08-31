@@ -8,7 +8,7 @@ use crate::{
         AppSettings, DockerContainer, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
         PersistedWorkspaceState, SavedConnection, SavedConnectionInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        SettingsContract, StreamStarted, SystemdRelationships, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -179,6 +179,18 @@ pub fn list_services(
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     remote::list_services(&connection)
+}
+
+#[tauri::command(async)]
+pub fn inspect_systemd_relationships(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+    unit: String,
+) -> Result<SystemdRelationships, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    remote::inspect_systemd_relationships(&connection, &unit)
 }
 
 #[tauri::command(async)]

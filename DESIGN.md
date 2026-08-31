@@ -344,7 +344,12 @@ Ungrouped. The user can switch to the flat list without changing the cached data
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full
 list usable. The header reports current active and failed totals without presenting zero
-failures as a complete host health result.
+failures as a complete host health result. A selected unit can load a separate one-hop
+relationship neighborhood capped at 40 units and 240 typed edges. The grouped list preserves
+incoming and outgoing `Requires`, `Wants`, `Requisite`, `BindsTo`, `PartOf`, `Conflicts`,
+`Before`, and `After` facts, explains ordering separately from activation requirements, and
+shows related unit state. Following a related unit runs a fresh bounded inspection. Truncation
+and collected cycles remain explicit and are never described as causes of failure.
 
 Ports is a manual TCP and UDP snapshot with four tabs: Overview, Connections, Docker, and Table.
 Overview is the default: an architecture diagram on a pan-and-zoom canvas (drag to pan, wheel or the

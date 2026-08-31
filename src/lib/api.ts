@@ -14,6 +14,7 @@ import type {
   SavedConnectionInput,
   SettingsContract,
   SystemdUnit,
+  SystemdRelationships,
 } from "../types";
 
 const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
@@ -68,6 +69,11 @@ export const api = {
     invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
+  inspectSystemdRelationships: (connectionId: string, unit: string) =>
+    invokeRemoteInspection<SystemdRelationships>("inspect_systemd_relationships", {
+      connectionId,
+      unit,
+    }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   listPorts: (connectionId: string, sudoPassword: string | null = null) =>

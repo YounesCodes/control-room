@@ -38,8 +38,9 @@ DESIGN.md.
    import the host's shell history.
 4. Keep systemd unit and container inspection read-only. The Systemd view covers
    system-scope services, timers, mounts, and sockets, sorts failures first, and
-   never treats zero failures as a complete health result. Keep each Log Stream
-   independent and in memory.
+   never treats zero failures as a complete health result. Keep systemd relationship
+   inspection bounded, typed, direction-preserving, and factual; never infer that a
+   relationship caused a failure. Keep each Log Stream independent and in memory.
 5. Derive Docker Compose grouping only from validated project and service labels.
    Keep every container instance distinct and retain an Ungrouped fallback.
 6. Keep port inspection to bounded TCP and UDP listener snapshots. Never scan,
@@ -75,6 +76,8 @@ account you control.
   independently of Terminal Sessions.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
   returned by the bounded Systemd inspection.
+- **Systemd Relationship**: one typed, directed activation or ordering fact from a
+  bounded neighborhood around a selected unit. It is not evidence of failure causality.
 - **Listening Socket**: one TCP or UDP listener returned by a manual, bounded
   host snapshot. Kernel socket facts remain separate from correlated ownership.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,

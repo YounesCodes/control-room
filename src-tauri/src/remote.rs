@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{Read, Write},
     process::{Child, Stdio},
     sync::{
@@ -24,7 +24,8 @@ use crate::{
     models::{
         ConnectionRemote, ConnectionSummary, DockerContainer, EstablishedConnections, FirewallRule,
         FirewallStatus, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
-        StreamStarted, StreamStateEvent, SystemdUnit,
+        StreamStarted, StreamStateEvent, SystemdRelationshipEdge, SystemdRelationshipNode,
+        SystemdRelationships, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -41,6 +42,8 @@ const MAX_FIREWALL_RULES: usize = 200;
 const MAX_CONNECTION_ROWS: usize = 4000;
 const MAX_CONNECTION_GROUPS: usize = 200;
 const MAX_CONNECTION_REMOTES: usize = 20;
+const MAX_SYSTEMD_RELATIONSHIP_NODES: usize = 40;
+const MAX_SYSTEMD_RELATIONSHIP_EDGES: usize = 240;
 
 #[derive(Default)]
 pub struct RemoteOperationLimiter {
@@ -213,6 +216,96 @@ pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdUnit>, S
     let text =
         RemoteCommandExecutor::execute(connection, "list_services", command)?.success_text()?;
     Ok(parse_systemd_units(&text))
+}
+
+pub fn inspect_systemd_relationships(
+    connection: &SavedConnection,
+    unit: &str,
+) -> Result<SystemdRelationships, String> {
+    let requested_unit = validate_systemd_unit_id(unit)?.to_string();
+    let root_text = RemoteCommandExecutor::execute(
+        connection,
+        "inspect_systemd_relationships",
+        &systemd_relationship_command(std::slice::from_ref(&requested_unit)),
+    )?
+    .success_text()?;
+    let mut root_blocks = parse_systemd_relationship_blocks(&root_text);
+    let root_index = root_blocks
+        .iter()
+        .position(|block| block.node.id == requested_unit)
+        .unwrap_or(0);
+    let root = (!root_blocks.is_empty())
+        .then(|| root_blocks.remove(root_index))
+        .ok_or_else(|| "systemd returned no relationship data for this unit".to_string())?;
+    let unit = root.node.id.clone();
+
+    let mut related_ids: Vec<_> = root
+        .edges
+        .iter()
+        .flat_map(|edge| [&edge.source, &edge.target])
+        .filter(|id| *id != &unit)
+        .cloned()
+        .collect();
+    related_ids.sort();
+    related_ids.dedup();
+    let total_related = related_ids.len();
+    related_ids.truncate(MAX_SYSTEMD_RELATIONSHIP_NODES - 1);
+
+    let mut blocks = vec![root];
+    if !related_ids.is_empty() {
+        let related_text = RemoteCommandExecutor::execute(
+            connection,
+            "inspect_systemd_relationships",
+            &systemd_relationship_command(&related_ids),
+        )?
+        .success_text()?;
+        blocks.extend(parse_systemd_relationship_blocks(&related_text));
+    }
+
+    let allowed: HashSet<_> = std::iter::once(unit.clone()).chain(related_ids).collect();
+    let mut nodes: Vec<_> = blocks
+        .iter()
+        .map(|block| block.node.clone())
+        .filter(|node| allowed.contains(&node.id))
+        .collect();
+    nodes.sort_by(|left, right| {
+        (left.id != unit)
+            .cmp(&(right.id != unit))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    nodes.dedup_by(|left, right| left.id == right.id);
+
+    let mut omitted_edge = false;
+    let mut edges: Vec<_> = blocks
+        .into_iter()
+        .flat_map(|block| block.edges)
+        .filter(|edge| {
+            let included = allowed.contains(&edge.source) && allowed.contains(&edge.target);
+            omitted_edge |= !included;
+            included
+        })
+        .collect();
+    edges.sort_by(|left, right| {
+        left.source
+            .cmp(&right.source)
+            .then_with(|| left.target.cmp(&right.target))
+            .then_with(|| left.relationship.cmp(&right.relationship))
+    });
+    edges.dedup();
+    let total_edges = edges.len();
+    edges.truncate(MAX_SYSTEMD_RELATIONSHIP_EDGES);
+
+    Ok(SystemdRelationships {
+        root: unit,
+        nodes,
+        edges,
+        depth_limit: 1,
+        node_limit: MAX_SYSTEMD_RELATIONSHIP_NODES,
+        edge_limit: MAX_SYSTEMD_RELATIONSHIP_EDGES,
+        truncated: total_related >= MAX_SYSTEMD_RELATIONSHIP_NODES
+            || total_edges > MAX_SYSTEMD_RELATIONSHIP_EDGES
+            || omitted_edge,
+    })
 }
 
 pub fn list_containers(
@@ -465,6 +558,81 @@ fn parse_systemd_units(text: &str) -> Vec<SystemdUnit> {
 
 fn systemd_unit_list_command() -> &'static str {
     "LC_ALL=C systemctl show --type=service,timer,mount,socket --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState"
+}
+
+#[derive(Debug)]
+struct ParsedSystemdRelationshipBlock {
+    node: SystemdRelationshipNode,
+    edges: Vec<SystemdRelationshipEdge>,
+}
+
+const SYSTEMD_RELATIONSHIP_PROPERTIES: &str = "Id,Description,LoadState,ActiveState,SubState,Requires,RequiredBy,Wants,WantedBy,Requisite,RequisiteOf,BindsTo,BoundBy,PartOf,ConsistsOf,Conflicts,ConflictedBy,Before,After";
+
+fn systemd_relationship_command(units: &[String]) -> String {
+    let units = units
+        .iter()
+        .map(|unit| format!("'{unit}'"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "LC_ALL=C systemctl show --no-pager --property={SYSTEMD_RELATIONSHIP_PROPERTIES} -- {units}"
+    )
+}
+
+fn parse_systemd_relationship_blocks(text: &str) -> Vec<ParsedSystemdRelationshipBlock> {
+    text.split("\n\n")
+        .filter_map(|block| {
+            let values = parse_key_values(block);
+            let id = validate_systemd_unit_id(values.get("Id")?)
+                .ok()?
+                .to_string();
+            let unit_type = id.rsplit_once('.')?.1.to_string();
+            let node = SystemdRelationshipNode {
+                id: id.clone(),
+                unit_type,
+                description: values.get("Description").cloned().unwrap_or_default(),
+                load_state: values.get("LoadState").cloned().unwrap_or_default(),
+                active_state: values.get("ActiveState").cloned().unwrap_or_default(),
+                sub_state: values.get("SubState").cloned().unwrap_or_default(),
+            };
+            let mut edges = Vec::new();
+            for (property, relationship, reverse) in [
+                ("Requires", "requires", false),
+                ("RequiredBy", "requires", true),
+                ("Wants", "wants", false),
+                ("WantedBy", "wants", true),
+                ("Requisite", "requisite", false),
+                ("RequisiteOf", "requisite", true),
+                ("BindsTo", "bindsTo", false),
+                ("BoundBy", "bindsTo", true),
+                ("PartOf", "partOf", false),
+                ("ConsistsOf", "partOf", true),
+                ("Conflicts", "conflicts", false),
+                ("ConflictedBy", "conflicts", true),
+                ("Before", "before", false),
+                ("After", "after", false),
+            ] {
+                for related in values
+                    .get(property)
+                    .into_iter()
+                    .flat_map(|value| value.split_ascii_whitespace())
+                    .filter_map(|value| validate_systemd_unit_id(value).ok())
+                {
+                    let (source, target) = if reverse {
+                        (related.to_string(), id.clone())
+                    } else {
+                        (id.clone(), related.to_string())
+                    };
+                    edges.push(SystemdRelationshipEdge {
+                        source,
+                        target,
+                        relationship: relationship.into(),
+                    });
+                }
+            }
+            Some(ParsedSystemdRelationshipBlock { node, edges })
+        })
+        .collect()
 }
 
 fn parse_container(line: &str) -> Result<DockerContainer, String> {
@@ -1263,6 +1431,46 @@ mod tests {
             " enable ",
             " disable ",
         ] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn parses_typed_systemd_relationships_in_both_directions() {
+        let blocks = parse_systemd_relationship_blocks(
+            "Id=web.service\nDescription=Web\nLoadState=loaded\nActiveState=active\nSubState=running\nRequires=network.target data.mount\nRequiredBy=app.target\nWants=cache.service\nAfter=network.target\nBefore=app.target\n\nId=network.target\nDescription=Network\nLoadState=loaded\nActiveState=active\nSubState=active\nRequires=web.service\n",
+        );
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].node.unit_type, "service");
+        assert!(blocks[0].edges.contains(&SystemdRelationshipEdge {
+            source: "web.service".into(),
+            target: "network.target".into(),
+            relationship: "requires".into(),
+        }));
+        assert!(blocks[0].edges.contains(&SystemdRelationshipEdge {
+            source: "app.target".into(),
+            target: "web.service".into(),
+            relationship: "requires".into(),
+        }));
+        assert!(blocks[1].edges.contains(&SystemdRelationshipEdge {
+            source: "network.target".into(),
+            target: "web.service".into(),
+            relationship: "requires".into(),
+        }));
+    }
+
+    #[test]
+    fn systemd_relationship_collection_is_bounded_and_read_only() {
+        let command = systemd_relationship_command(&[
+            "web.service".into(),
+            r"srv-data\x2darchive.mount".into(),
+        ]);
+        assert!(command.contains("--property=Id,Description,LoadState,ActiveState,SubState"));
+        assert!(command.contains("'web.service'"));
+        assert!(command.contains(r"'srv-data\x2darchive.mount'"));
+        assert_eq!(MAX_SYSTEMD_RELATIONSHIP_NODES, 40);
+        assert_eq!(MAX_SYSTEMD_RELATIONSHIP_EDGES, 240);
+        for mutation in [" start ", " stop ", " restart ", " enable ", " disable "] {
             assert!(!command.contains(mutation));
         }
     }

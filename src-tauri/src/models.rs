@@ -62,6 +62,37 @@ pub struct SystemdUnit {
     pub unit_file_state: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemdRelationshipNode {
+    pub id: String,
+    pub unit_type: String,
+    pub description: String,
+    pub load_state: String,
+    pub active_state: String,
+    pub sub_state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemdRelationshipEdge {
+    pub source: String,
+    pub target: String,
+    pub relationship: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemdRelationships {
+    pub root: String,
+    pub nodes: Vec<SystemdRelationshipNode>,
+    pub edges: Vec<SystemdRelationshipEdge>,
+    pub depth_limit: u8,
+    pub node_limit: usize,
+    pub edge_limit: usize,
+    pub truncated: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainer {

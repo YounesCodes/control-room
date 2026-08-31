@@ -99,9 +99,21 @@ pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec
 }
 
 pub fn validate_systemd_unit_id(value: &str) -> Result<&str, String> {
-    let supported_suffix = [".service", ".timer", ".mount", ".socket"]
-        .iter()
-        .any(|suffix| value.ends_with(suffix));
+    let supported_suffix = [
+        ".service",
+        ".socket",
+        ".target",
+        ".device",
+        ".mount",
+        ".automount",
+        ".swap",
+        ".path",
+        ".timer",
+        ".slice",
+        ".scope",
+    ]
+    .iter()
+    .any(|suffix| value.ends_with(suffix));
     let bytes = value.as_bytes();
     let mut index = 0;
     while index < bytes.len() {
@@ -215,7 +227,8 @@ mod tests {
         assert!(validate_systemd_unit_id(r"srv-data\x2darchive.mount").is_ok());
         assert!(validate_systemd_unit_id("nginx; reboot.service").is_err());
         assert!(validate_systemd_unit_id(r"broken\xZZ.mount").is_err());
-        assert!(validate_systemd_unit_id("multi-user.target").is_err());
+        assert!(validate_systemd_unit_id("multi-user.target").is_ok());
+        assert!(validate_systemd_unit_id("system.slice").is_ok());
         assert!(validate_container_id("npm-plus_1").is_ok());
         assert!(validate_container_id("$(whoami)").is_err());
     }

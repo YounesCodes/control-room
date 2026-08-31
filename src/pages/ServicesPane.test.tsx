@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   listServices: vi.fn(),
+  inspectSystemdRelationships: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -96,5 +97,62 @@ describe("ServicesPane failed units view", () => {
 
     expect(screen.getByText(/0 failed/)).toBeTruthy();
     expect(screen.getByText(/not a complete host health check/i)).toBeTruthy();
+  });
+
+  it("opens a bounded typed relationship neighborhood and navigates to related units", async () => {
+    const user = userEvent.setup();
+    api.inspectSystemdRelationships.mockImplementation(async (_connectionId, root: string) => ({
+      root,
+      nodes: [
+        {
+          id: root,
+          unitType: root.split(".").at(-1),
+          description: `${root} description`,
+          loadState: "loaded",
+          activeState: "active",
+          subState: "running",
+        },
+        {
+          id: root === "web.service" ? "network.target" : "web.service",
+          unitType: root === "web.service" ? "target" : "service",
+          description: "Related unit",
+          loadState: "loaded",
+          activeState: "active",
+          subState: "active",
+        },
+      ],
+      edges: [
+        {
+          source: root,
+          target: root === "web.service" ? "network.target" : "web.service",
+          relationship: "after",
+        },
+      ],
+      depthLimit: 1,
+      nodeLimit: 40,
+      edgeLimit: 240,
+      truncated: false,
+    }));
+
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("web.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Relationships" }));
+    expect(await screen.findByLabelText("Relationships for web.service")).toBeTruthy();
+    expect(screen.getByText("After")).toBeTruthy();
+    expect(screen.getByText(/ordering only/i)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Inspect network.target" }));
+    expect(api.inspectSystemdRelationships).toHaveBeenLastCalledWith(
+      "connection-a",
+      "network.target",
+    );
+    expect(await screen.findByRole("heading", { name: "network.target" })).toBeTruthy();
   });
 });

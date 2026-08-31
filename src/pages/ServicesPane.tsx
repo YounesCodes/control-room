@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileClock, RefreshCw, Search } from "lucide-react";
+import { FileClock, Network, RefreshCw, Search } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { SystemdRelationshipsPanel } from "../components/systemd/SystemdRelationshipsPanel";
 import { api, errorMessage } from "../lib/api";
 import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
 import type { SystemdStateFilter } from "../lib/systemd-units";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
-import type { CachedList, LogSourceSelection, SavedConnection, SystemdUnit } from "../types";
+import type {
+  CachedList,
+  LogSourceSelection,
+  SavedConnection,
+  SystemdRelationships,
+  SystemdUnit,
+} from "../types";
 
 export function ServicesPane({
   connection,
@@ -26,8 +33,12 @@ export function ServicesPane({
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<SystemdStateFilter>("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [relationships, setRelationships] = useState<SystemdRelationships | null>(null);
+  const [relationshipsLoading, setRelationshipsLoading] = useState(false);
+  const [relationshipsError, setRelationshipsError] = useState<string | null>(null);
   const cacheRef = useRef(cache);
   const requestRef = useRef(0);
+  const relationshipRequestRef = useRef(0);
   cacheRef.current = cache;
 
   async function load(force = false) {
@@ -50,10 +61,28 @@ export function ServicesPane({
     }
   }
 
+  async function loadRelationships(unit: string) {
+    const request = ++relationshipRequestRef.current;
+    setRelationshipsLoading(true);
+    setRelationshipsError(null);
+    try {
+      const result = await api.inspectSystemdRelationships(connection.id, unit);
+      if (request !== relationshipRequestRef.current) return;
+      setRelationships(result);
+      if (result.root !== unit) setSelectedId(result.root);
+    } catch (caught) {
+      if (request !== relationshipRequestRef.current) return;
+      setRelationshipsError(errorMessage(caught));
+    } finally {
+      if (request === relationshipRequestRef.current) setRelationshipsLoading(false);
+    }
+  }
+
   useEffect(() => {
     void load();
     return () => {
       requestRef.current += 1;
+      relationshipRequestRef.current += 1;
     };
   }, [connection.id]);
 
@@ -66,6 +95,10 @@ export function ServicesPane({
     if (focusId) setSelectedId(focusId);
   }, [focusId]);
 
+  useEffect(() => {
+    setRelationshipsError(null);
+  }, [selectedId]);
+
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
   const filtered = useMemo(
     () =>
@@ -76,7 +109,17 @@ export function ServicesPane({
       }),
     [cache.items, search, stateFilter, typeFilter],
   );
-  const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
+  const selected = useMemo(() => {
+    const listed = cache.items.find((unit) => unit.id === selectedId);
+    if (listed) return listed;
+    const related = relationships?.nodes.find((unit) => unit.id === selectedId);
+    return related ? { ...related, unitFileState: null } : null;
+  }, [cache.items, relationships, selectedId]);
+
+  function inspectRelated(unit: string) {
+    setSelectedId(unit);
+    void loadRelationships(unit);
+  }
 
   if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
   if (cache.error && !cache.items.length) {
@@ -197,13 +240,40 @@ export function ServicesPane({
                 <dd>{selected.unitFileState ?? "Unknown"}</dd>
               </div>
             </dl>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
-            >
-              <FileClock size={15} /> View journal
-            </button>
+            <div className="detail-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
+              >
+                <FileClock size={15} /> View journal
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => loadRelationships(selected.id)}
+                disabled={relationshipsLoading}
+              >
+                <Network size={15} />
+                {relationshipsLoading && relationships?.root !== selected.id
+                  ? "Reading relationships…"
+                  : "Relationships"}
+              </button>
+            </div>
+            {relationshipsError && (
+              <div className="relationship-error" role="alert">
+                <p>{relationshipsError}</p>
+                <button type="button" onClick={() => loadRelationships(selected.id)}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {relationshipsLoading && relationships?.root !== selected.id && (
+              <p className="relationship-loading">Reading a bounded relationship neighborhood…</p>
+            )}
+            {relationships?.root === selected.id && (
+              <SystemdRelationshipsPanel result={relationships} onInspect={inspectRelated} />
+            )}
           </>
         ) : (
           <EmptyState title="Select a unit" />

@@ -51,6 +51,34 @@ export interface SystemdUnit {
   unitFileState: string | null;
 }
 
+export interface SystemdRelationshipNode {
+  id: string;
+  unitType: string;
+  description: string;
+  loadState: string;
+  activeState: string;
+  subState: string;
+}
+
+export type SystemdRelationshipType =
+  "requires" | "wants" | "requisite" | "bindsTo" | "partOf" | "conflicts" | "before" | "after";
+
+export interface SystemdRelationshipEdge {
+  source: string;
+  target: string;
+  relationship: SystemdRelationshipType;
+}
+
+export interface SystemdRelationships {
+  root: string;
+  nodes: SystemdRelationshipNode[];
+  edges: SystemdRelationshipEdge[];
+  depthLimit: number;
+  nodeLimit: number;
+  edgeLimit: number;
+  truncated: boolean;
+}
+
 export interface DockerContainer {
   id: string;
   name: string;

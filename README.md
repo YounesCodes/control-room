@@ -48,7 +48,9 @@ The distinction matters. Control Room helps you inspect and move between related
 - View the hostname, operating system, kernel, architecture, uptime, default shell, and detected runtime capabilities.
 - Inspect system-scope systemd services, timers, mounts, and sockets. Failed units sort first,
   active and failed totals remain visible, and state and type filters narrow the list. Each unit
-  keeps its canonical identity and can open its journal.
+  keeps its canonical identity and can open its journal. A unit can also open a bounded, one-hop
+  relationship view that keeps activation requirements and startup ordering distinct, shows the
+  current state of related units, and follows a related unit without changing it.
 - Inspect a timestamped snapshot of listening TCP and UDP sockets across four tabs: a visual
   Overview graph (host to listener to owning service or process, with exposure and UFW firewall
   annotations), Connections (established connections aggregated by listener), Docker (published
