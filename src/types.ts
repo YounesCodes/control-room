@@ -186,6 +186,41 @@ export interface DockerMount {
   destination: string;
   writable: boolean;
   propagation: string | null;
+export interface BootDiagnostics {
+  id: string;
+  collectedAt: string;
+  selectedBootId: string | null;
+  boots: BootSection<BootRecord[]>;
+  timing: BootSection<BootTiming>;
+  slowUnits: BootSection<SlowBootUnit[]>;
+  failedUnits: BootSection<SystemdUnit[]>;
+  journal: BootSection<string[]>;
+}
+
+export interface BootSection<T> {
+  collectedAt: string;
+  data: T | null;
+  error: string | null;
+  permissionRequired: boolean;
+}
+
+export interface BootRecord {
+  index: number;
+  id: string;
+  range: string;
+  current: boolean;
+}
+
+export interface BootTiming {
+  total: string | null;
+  kernel: string | null;
+  userspace: string | null;
+  original: string;
+}
+
+export interface SlowBootUnit {
+  unit: string;
+  duration: string;
 }
 
 export interface HostIdentity {
@@ -376,6 +411,7 @@ export type WorkspaceView =
   | "services"
   | "ports"
   | "docker"
+  | "boot"
   | "logs"
   | "baselines"
   | "history"
@@ -420,6 +456,7 @@ export interface Workspace {
   systemdSelectionId: string | null;
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
+  bootDiagnostics: BootDiagnostics | null;
   logSource: LogSourceSelection | null;
   baselineSelectionId: string | null;
 }

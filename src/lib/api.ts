@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
+  BootDiagnostics,
   ConnectionGroup,
   ConnectionTag,
   DockerContainer,
@@ -115,6 +116,14 @@ export const api = {
     invokeRemoteInspection<DockerContainerDetails>("inspect_container", {
       connectionId,
       containerId,
+  collectBootDiagnostics: (
+    connectionId: string,
+    bootId: string | null,
+    sudoPassword: string | null = null,
+  ) =>
+    invokeRemoteInspection<BootDiagnostics>("collect_boot_diagnostics", {
+      connectionId,
+      bootId,
       sudoPassword,
     }),
   startJournalStream: (

@@ -41,6 +41,7 @@ function workspace(id: string, connectionId: string): Workspace {
     systemdSelectionId: null,
     containerSelectionId: null,
     containerDetailsCache: {},
+    bootDiagnostics: null,
     logSource: null,
     baselineSelectionId: null,
   };

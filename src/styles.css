@@ -1862,6 +1862,7 @@ code,
 .history-page,
 .logs-page,
 .scratchpad-page {
+.boot-page {
   padding: 26px 30px;
 }
 
@@ -2240,6 +2241,242 @@ dd {
   color: var(--text-muted);
   font-size: 12px;
   text-align: right;
+}
+
+/* ==========================================================================
+   Boot diagnostics
+   ========================================================================== */
+
+.boot-page {
+  min-width: 0;
+}
+
+.boot-heading {
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.boot-heading small {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.boot-heading-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.boot-heading-actions label {
+  display: flex;
+  min-width: 320px;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.boot-heading-actions label > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.boot-heading-actions select {
+  min-height: 33px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.boot-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+}
+
+.boot-section {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 18px 0 20px;
+}
+
+.boot-section:not(.boot-section-wide):nth-child(even) {
+  border-right: 1px solid var(--border);
+  padding-right: 24px;
+}
+
+.boot-section:not(.boot-section-wide):nth-child(odd) {
+  padding-left: 24px;
+}
+
+.boot-section-wide {
+  grid-column: 1 / -1;
+}
+
+.boot-source-section {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.boot-source-section p,
+.boot-empty,
+.boot-observation,
+.boot-original,
+.boot-unit-list > p {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.boot-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.boot-section-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.boot-section-heading span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.boot-section-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-left: 2px solid var(--failure);
+  background: var(--surface-raised);
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.boot-section-error svg {
+  flex: none;
+  color: var(--failure);
+}
+
+.boot-section-error span {
+  flex: 1;
+}
+
+.boot-timing-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 12px;
+}
+
+.boot-timing-list > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 1px solid var(--border-subtle);
+  padding: 3px 12px;
+}
+
+.boot-timing-list > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.boot-timing-list dd {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.boot-original {
+  overflow-wrap: anywhere;
+}
+
+.boot-observation {
+  margin-bottom: 10px;
+}
+
+.boot-unit-list {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.boot-unit-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 7px 0;
+}
+
+.boot-unit-list span,
+.boot-failed-list strong {
+  min-width: 0;
+  overflow: hidden;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boot-unit-list strong {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.boot-failed-list {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.boot-failed-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.boot-failed-list > div > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.boot-failed-list small {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boot-journal-sample {
+  max-height: 250px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  padding: 12px;
+  color: var(--text-muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 /* ==========================================================================
@@ -3820,6 +4057,20 @@ kbd {
   .history-page,
   .logs-page {
     padding: 22px;
+  }
+
+  .boot-page {
+    padding: 22px;
+  }
+
+  .boot-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .boot-heading-actions label {
+    min-width: 0;
+    flex: 1;
   }
 }
 

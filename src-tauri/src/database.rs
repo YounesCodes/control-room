@@ -1000,6 +1000,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             "services",
             "ports",
             "docker",
+            "boot",
             "logs",
             "baselines",
             "history",
