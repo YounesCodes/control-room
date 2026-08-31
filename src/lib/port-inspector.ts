@@ -128,6 +128,54 @@ export function socketOwner(
   return { kind: "unknown", label: "Unknown process" };
 }
 
+export interface OwnerGroup {
+  key: string;
+  owner: SocketOwner;
+  container: SocketContainerOwner | null;
+  sockets: ListeningSocket[];
+}
+
+const OWNER_KIND_ORDER: Record<OwnerKind, number> = {
+  container: 0,
+  service: 1,
+  process: 2,
+  unknown: 3,
+};
+
+/**
+ * Group listeners by their owning container, service, or process so the
+ * architecture view shows one boundary per owner (like a service box in an
+ * AWS-style diagram) instead of one scattered node per port.
+ */
+export function groupSocketsByOwner(
+  sockets: ListeningSocket[],
+  containers: DockerContainer[],
+): OwnerGroup[] {
+  const groups = new Map<string, OwnerGroup>();
+  for (const socket of sockets) {
+    const container = resolveSocketContainer(socket, containers);
+    const owner = socketOwner(socket, container);
+    const key =
+      owner.kind === "container"
+        ? `container:${container?.container.id ?? owner.label}`
+        : owner.kind === "unknown"
+          ? "unknown"
+          : `${owner.kind}:${owner.label}`;
+    const existing = groups.get(key);
+    if (existing) existing.sockets.push(socket);
+    else groups.set(key, { key, owner, container, sockets: [socket] });
+  }
+  const ordered = [...groups.values()];
+  for (const group of ordered) {
+    group.sockets.sort((left, right) => left.port - right.port || left.id.localeCompare(right.id));
+  }
+  return ordered.sort(
+    (left, right) =>
+      OWNER_KIND_ORDER[left.owner.kind] - OWNER_KIND_ORDER[right.owner.kind] ||
+      left.owner.label.localeCompare(right.owner.label),
+  );
+}
+
 export type FirewallState =
   | "unavailable"
   | "inactive"

@@ -5,6 +5,7 @@ import {
   exposureLabel,
   filterAndSortSockets,
   firewallForSocket,
+  groupSocketsByOwner,
   resolveSocketContainer,
   socketExposure,
   socketOwner,
@@ -142,6 +143,28 @@ describe("port inspector", () => {
     expect(
       firewallForSocket(allowAnywhere, socket({ addressFamily: "ipv6", localAddress: "::" })).state,
     ).toBe("no-rule");
+  });
+
+  it("groups listeners by owner and orders containers, services, then unknowns", () => {
+    const web80 = socket({ id: "tcp:0.0.0.0:80:0", port: 80, systemdUnit: "nginx.service" });
+    const web443 = socket({ id: "tcp:0.0.0.0:443:1", port: 443, systemdUnit: "nginx.service" });
+    const unknown = socket({
+      id: "udp:127.0.0.1:53:2",
+      protocol: "udp",
+      port: 53,
+      localAddress: "127.0.0.1",
+      processName: null,
+      processId: null,
+      systemdUnit: null,
+      ownership: "unavailable",
+    });
+    // Docker-owned socket (443 tcp on 0.0.0.0 matches the container) sorts first.
+    const groups = groupSocketsByOwner([web443, unknown, web80], [container()]);
+    expect(groups.map((group) => group.owner.kind)).toEqual(["container", "service", "unknown"]);
+    const service = groups.find((group) => group.owner.kind === "service");
+    // Both nginx ports collapse into one service group, sorted by port.
+    expect(service?.sockets.map((entry) => entry.port)).toEqual([80]);
+    expect(groups[2].owner.label).toBe("Unknown process");
   });
 
   it("builds Docker host-to-container port links with target ports", () => {

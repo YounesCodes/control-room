@@ -2890,57 +2890,192 @@ kbd {
   margin-bottom: 12px;
 }
 
-/* Host listener graph */
-.ports-graph {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* Ports architecture canvas (Overview) */
+.arch-view {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(280px, 360px);
+  overflow: hidden;
 }
 
-.graph-host-node {
+.arch-canvas {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.graph-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+}
+
+.graph-toolbar .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.zoom-level {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.arch-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.arch-viewport:active {
+  cursor: grabbing;
+}
+
+.arch-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  padding: 8px;
+  transform-origin: 0 0;
+}
+
+.arch-links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.arch-links path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+
+.arch-root {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
+  width: max-content;
+  margin: 0 auto 24px;
   padding: 10px 16px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
-  text-align: left;
 }
 
-.graph-host-node strong {
+.arch-root strong {
   display: block;
   color: var(--text-strong);
   font-size: 13px;
 }
 
-.graph-host-node small {
+.arch-root small {
   display: block;
   color: var(--text-muted);
   font-size: 10.5px;
 }
 
-.graph-spine {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-}
-
-.graph-branches {
-  display: flex;
-  flex-wrap: wrap;
+.arch-groups {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 20px 24px;
   justify-content: center;
-  gap: 14px;
-  width: 100%;
 }
 
-.graph-branch {
+.arch-group {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  width: 178px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-base);
 }
 
+.arch-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.arch-group.owner-unknown .arch-group-head {
+  color: var(--text-faint);
+}
+
+.arch-group-ports {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.arch-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.arch-chip:hover {
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+}
+
+.arch-chip.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.arch-chip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.arch-chip-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.arch-chip-meta.faint {
+  color: var(--text-faint);
+}
+
+/* Docker published-port topology */
 .graph-node {
   display: flex;
   flex-direction: column;
@@ -2951,56 +3086,8 @@ kbd {
   background: var(--fill-control);
   color: var(--text);
   text-align: left;
-  cursor: pointer;
 }
 
-.graph-node:hover {
-  border-color: var(--border-strong);
-  background: var(--fill-control-hover);
-}
-
-.graph-node.selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.port-node .node-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-strong);
-}
-
-.node-meta {
-  font-size: 10.5px;
-  color: var(--text-muted);
-}
-
-.node-firewall {
-  color: var(--text-faint);
-}
-
-.graph-link {
-  align-self: center;
-  width: 1px;
-  height: 12px;
-  background: var(--border);
-}
-
-.owner-node {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text);
-}
-
-.owner-node.owner-unknown {
-  color: var(--text-faint);
-}
-
-/* Docker published-port topology */
 .docker-graph {
   display: flex;
   flex-direction: column;
