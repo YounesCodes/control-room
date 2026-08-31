@@ -179,6 +179,18 @@ impl CommandOutput {
         }
         String::from_utf8(self.stdout).map_err(|_| "Remote output was not valid UTF-8".into())
     }
+
+    /// Like [`success_text`], but tolerates invalid UTF-8 by replacing the
+    /// offending bytes. Used for multi-section collections where a single
+    /// non-UTF-8 byte (legal in a Linux mount path or process name) must not
+    /// invalidate every independently fallible section. Parsers downstream
+    /// still strip control characters and bound field lengths.
+    fn success_text_lossy(self) -> Result<String, String> {
+        if self.exit_code != 0 {
+            return Err(classify_failure(self.exit_code, &self.stderr));
+        }
+        Ok(String::from_utf8_lossy(&self.stdout).into_owned())
+    }
 }
 
 pub struct RemoteCommandExecutor;
@@ -287,7 +299,7 @@ pub fn collect_resources(
         resource_collection_command(),
         cancelled,
     )?
-    .success_text()?;
+    .success_text_lossy()?;
     let collected_at = Utc::now().to_rfc3339();
     Ok(ResourceSnapshot {
         id: operation_id.into(),
@@ -1111,6 +1123,29 @@ mod tests {
             parse_memory_resources(output).unwrap_err(),
             "Memory data unavailable"
         );
+    }
+
+    #[test]
+    fn resource_collection_tolerates_non_utf8_bytes_without_losing_sections() {
+        // A process name (or mount path) can contain bytes that are not valid
+        // UTF-8. Decoding must degrade the offending field rather than fail the
+        // whole snapshot, keeping every section independently fallible.
+        let mut stdout =
+            b"__CR_CPU__\n2\t0.10\t0.20\t0.30\n__CR_END__\n__CR_PROCESSES__\n42 root 1.0 0.2 "
+                .to_vec();
+        stdout.extend_from_slice(&[0xff, 0xfe]);
+        stdout.extend_from_slice(b"svc\n__CR_END__\n");
+        let output = CommandOutput {
+            stdout,
+            stderr: Vec::new(),
+            exit_code: 0,
+        };
+
+        let text = output.success_text_lossy().unwrap();
+        assert!(parse_cpu_resources(&text).is_ok());
+        let processes = parse_process_resources(&text).unwrap();
+        assert_eq!(processes.rows.len(), 1);
+        assert!(processes.rows[0].name.contains("svc"));
     }
 
     #[test]
