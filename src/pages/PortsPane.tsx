@@ -54,6 +54,7 @@ export function PortsPane({
   const [search, setSearch] = useState("");
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
+  const [portsSudo, setPortsSudo] = useState(false);
 
   // Firewall and established connections are host-live data: kept in component
   // state only and never persisted to the Workspace.
@@ -92,7 +93,7 @@ export function PortsPane({
     }
   }
 
-  async function loadPorts(force = false) {
+  async function loadPorts(force = false, sudoPassword: string | null = null) {
     const current = cacheRef.current;
     if (!force && isCacheFresh(current)) {
       void loadContainers();
@@ -101,7 +102,7 @@ export function PortsPane({
     const request = ++requestRef.current;
     onCacheChange({ ...current, loading: true, error: null });
     try {
-      const items = await api.listPorts(connection.id);
+      const items = await api.listPorts(connection.id, sudoPassword);
       if (request !== requestRef.current) return;
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
       void loadContainers();
@@ -195,6 +196,7 @@ export function PortsPane({
 
   const showProtocol = tab !== "connections";
   const showExposure = tab === "overview" || tab === "table";
+  const unresolvedOwners = cache.items.some((socket) => socket.ownership !== "known");
 
   return (
     <section className="feature-page ports-page">
@@ -246,6 +248,15 @@ export function PortsPane({
               Retry with sudo
             </button>
           )}
+        </p>
+      )}
+      {unresolvedOwners && (tab === "overview" || tab === "table") && (
+        <p className="inline-warning firewall-warning">
+          <ShieldAlert size={14} /> Some listeners could not be attributed to a process without
+          elevation.
+          <button type="button" className="link-button" onClick={() => setPortsSudo(true)}>
+            Resolve owners with sudo
+          </button>
         </p>
       )}
 
@@ -339,6 +350,16 @@ export function PortsPane({
           onSubmit={async (password) => {
             setFirewallSudo(false);
             await loadFirewall(password);
+          }}
+        />
+      )}
+      {portsSudo && (
+        <CredentialDialog
+          connectionLabel={connection.displayName}
+          onClose={() => setPortsSudo(false)}
+          onSubmit={async (password) => {
+            setPortsSudo(false);
+            await loadPorts(true, password);
           }}
         />
       )}

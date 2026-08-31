@@ -2950,8 +2950,11 @@ kbd {
   position: absolute;
   top: 0;
   left: 0;
+  display: flex;
+  align-items: center;
+  gap: 120px;
   width: max-content;
-  padding: 8px;
+  padding: 24px;
   transform-origin: 0 0;
 }
 
@@ -2959,25 +2962,23 @@ kbd {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: -1;
   overflow: visible;
   pointer-events: none;
 }
 
 .arch-links path {
   fill: none;
-  stroke: var(--border-strong);
+  stroke: var(--text-faint);
   stroke-width: 1.5;
 }
 
 .arch-root {
-  position: relative;
-  z-index: 1;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: max-content;
-  margin: 0 auto 24px;
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
@@ -2995,15 +2996,14 @@ kbd {
   font-size: 10.5px;
 }
 
-.arch-groups {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 20px 24px;
-  justify-content: center;
+.arch-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .arch-group {
+  width: 264px;
   display: flex;
   flex-direction: column;
   overflow: hidden;

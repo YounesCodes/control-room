@@ -348,11 +348,12 @@ failures as a complete host health result.
 
 Ports is a manual TCP and UDP snapshot with four tabs: Overview, Connections, Docker, and Table.
 Overview is the default: an architecture diagram on a pan-and-zoom canvas (drag to pan, wheel or the
-toolbar to zoom, Fit, and Fullscreen). A generic host node roots the diagram with its detected OS as
-a small badge, and orthogonal connectors run down to one boundary box per owning container, service,
-or process — each box holding that owner's listener chips with port, protocol, exposure (all
-interfaces, local only, or specific address), and firewall annotation. Selecting a chip opens a
-read-only detail panel; it never navigates away. Connections aggregates established TCP
+toolbar to zoom, Fit, and Fullscreen). A generic host node sits at the left with its detected OS as a
+small badge, and curved connectors fan out to a vertical column of boundary boxes — one per owning
+container, service, or process — each holding that owner's listener chips with port, protocol,
+exposure (all interfaces, local only, or specific address), and firewall annotation. Process
+ownership that needs elevation (for example `sshd` on port 22) is offered through the standard sudo
+retry. Selecting a chip opens a read-only detail panel; it never navigates away. Connections aggregates established TCP
 connections by owning listener rather than drawing a node per client, with established and remote
 counts and a bounded remote-endpoint sample. Docker draws published-port topology (host port to
 container to container port), grouped by Compose project with an Ungrouped fallback and kept out of

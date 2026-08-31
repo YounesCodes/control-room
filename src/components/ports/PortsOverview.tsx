@@ -96,14 +96,19 @@ export function PortsOverview({
     const host = hostRef.current;
     if (!content || !host) return;
     setCanvasSize({ width: content.offsetWidth, height: content.offsetHeight });
-    const hostX = host.offsetLeft + host.offsetWidth / 2;
-    const hostY = host.offsetTop + host.offsetHeight;
-    const busY = hostY + 22;
+    // Fan out from the host's right edge to each owner box's left edge with a
+    // smooth horizontal S-curve.
+    const hostX = host.offsetLeft + host.offsetWidth;
+    const hostY = host.offsetTop + host.offsetHeight / 2;
     const next: Link[] = [];
     groupRefs.current.forEach((element, key) => {
-      const gx = element.offsetLeft + element.offsetWidth / 2;
-      const gy = element.offsetTop;
-      next.push({ id: key, d: `M${hostX},${hostY} V${busY} H${gx} V${gy}` });
+      const groupX = element.offsetLeft;
+      const groupY = element.offsetTop + element.offsetHeight / 2;
+      const controlX = hostX + (groupX - hostX) / 2;
+      next.push({
+        id: key,
+        d: `M${hostX},${hostY} C${controlX},${hostY} ${controlX},${groupY} ${groupX},${groupY}`,
+      });
     });
     setLinks(next);
   }, []);
@@ -239,12 +244,7 @@ export function PortsOverview({
                 </div>
               </div>
 
-              <div
-                className="arch-groups"
-                style={{
-                  gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, groups.length))}, 220px)`,
-                }}
-              >
+              <div className="arch-column">
                 {groups.map((group) => (
                   <div
                     className={`arch-group owner-${group.owner.kind}`}

@@ -198,10 +198,11 @@ pub fn list_ports(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
+    sudo_password: Option<String>,
 ) -> Result<Vec<ListeningSocket>, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::list_ports(&connection)
+    remote::list_ports(&connection, sudo_password)
 }
 
 #[tauri::command(async)]

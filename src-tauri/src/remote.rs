@@ -232,10 +232,17 @@ pub fn list_containers(
         .collect()
 }
 
-pub fn list_ports(connection: &SavedConnection) -> Result<Vec<ListeningSocket>, String> {
-    let text = RemoteCommandExecutor::execute(connection, "list_ports", port_list_command())?
-        .success_text()?;
-    parse_listening_sockets(&text)
+pub fn list_ports(
+    connection: &SavedConnection,
+    sudo_password: Option<String>,
+) -> Result<Vec<ListeningSocket>, String> {
+    let command = port_list_command();
+    let output = if let Some(password) = sudo_password {
+        RemoteCommandExecutor::execute_with_sudo(connection, "list_ports", command, password)?
+    } else {
+        RemoteCommandExecutor::execute(connection, "list_ports", command)?
+    };
+    parse_listening_sockets(&output.success_text()?)
 }
 
 fn run_ssh(

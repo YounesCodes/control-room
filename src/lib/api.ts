@@ -70,8 +70,8 @@ export const api = {
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
-  listPorts: (connectionId: string) =>
-    invokeRemoteInspection<ListeningSocket[]>("list_ports", { connectionId }),
+  listPorts: (connectionId: string, sudoPassword: string | null = null) =>
+    invokeRemoteInspection<ListeningSocket[]>("list_ports", { connectionId, sudoPassword }),
   inspectFirewall: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<FirewallStatus>("inspect_firewall", { connectionId, sudoPassword }),
   inspectConnections: (connectionId: string) =>
