@@ -1,8 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
+  ChevronDown,
+  ChevronRight,
   Columns2,
   FileClock,
+  FolderCog,
   Gauge,
   History,
   Maximize2,
@@ -16,18 +19,21 @@ import {
   Server,
   Settings,
   SquareTerminal,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
+import { organizeConnections } from "./lib/connection-organization";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
 import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
@@ -57,7 +63,9 @@ import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   CachedList,
+  ConnectionGroup,
   ConnectionState,
+  ConnectionTag,
   DockerContainer,
   DockerContainerDetails,
   EnvironmentInfo,
@@ -95,6 +103,8 @@ const TerminalPane = lazy(() =>
 
 export function App() {
   const [connections, setConnections] = useState<SavedConnection[]>([]);
+  const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
+  const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
@@ -103,6 +113,9 @@ export function App() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hostSearch, setHostSearch] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
+  const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
@@ -130,43 +143,61 @@ export function App() {
       api.settingsContract(),
       api.environment(),
       api.workspaceState(),
+      api.listConnectionGroups(),
+      api.listConnectionTags(),
     ])
-      .then(([connectionsResult, settingsResult, environmentResult, workspaceStateResult]) => {
-        if (!current) return;
-        if (connectionsResult.status === "fulfilled") {
-          setConnections(connectionsResult.value);
-          if (workspaceStateResult.status === "fulfilled") {
-            const restored = restoreWorkspaceState(
-              connectionsResult.value,
-              workspaceStateResult.value,
-            );
-            setWorkspaces(restored.workspaces);
-            setActiveWorkspaceId(restored.activeWorkspaceId);
-            setTerminalLayout(restored.terminalLayout);
-            setWorkspacePersistenceReady(true);
+      .then(
+        ([
+          connectionsResult,
+          settingsResult,
+          environmentResult,
+          workspaceStateResult,
+          groupsResult,
+          tagsResult,
+        ]) => {
+          if (!current) return;
+          if (connectionsResult.status === "fulfilled") {
+            setConnections(connectionsResult.value);
+            if (workspaceStateResult.status === "fulfilled") {
+              const restored = restoreWorkspaceState(
+                connectionsResult.value,
+                workspaceStateResult.value,
+              );
+              setWorkspaces(restored.workspaces);
+              setActiveWorkspaceId(restored.activeWorkspaceId);
+              setTerminalLayout(restored.terminalLayout);
+              setWorkspacePersistenceReady(true);
+            } else {
+              setActionError(
+                `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
+              );
+            }
+            for (const connection of connectionsResult.value) {
+              void api
+                .cachedCapabilities(connection.id)
+                .then((capabilities) => {
+                  if (current && capabilities) rememberCapabilities(capabilities);
+                })
+                .catch(() => undefined);
+            }
           } else {
+            setBootError(errorMessage(connectionsResult.reason));
+          }
+          if (settingsResult.status === "fulfilled") {
+            setSettingsContract(settingsResult.value);
+          } else {
+            setBootError(`Could not load Settings: ${errorMessage(settingsResult.reason)}`);
+          }
+          if (environmentResult.status === "fulfilled") setEnvironment(environmentResult.value);
+          if (groupsResult.status === "fulfilled") setConnectionGroups(groupsResult.value);
+          else
             setActionError(
-              `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
+              `Could not load connection groups: ${errorMessage(groupsResult.reason)}`,
             );
-          }
-          for (const connection of connectionsResult.value) {
-            void api
-              .cachedCapabilities(connection.id)
-              .then((capabilities) => {
-                if (current && capabilities) rememberCapabilities(capabilities);
-              })
-              .catch(() => undefined);
-          }
-        } else {
-          setBootError(errorMessage(connectionsResult.reason));
-        }
-        if (settingsResult.status === "fulfilled") {
-          setSettingsContract(settingsResult.value);
-        } else {
-          setBootError(`Could not load Settings: ${errorMessage(settingsResult.reason)}`);
-        }
-        if (environmentResult.status === "fulfilled") setEnvironment(environmentResult.value);
-      })
+          if (tagsResult.status === "fulfilled") setKnownTags(tagsResult.value);
+          else setActionError(`Could not load connection tags: ${errorMessage(tagsResult.reason)}`);
+        },
+      )
       .finally(() => current && setLoading(false));
     return () => {
       current = false;
@@ -293,15 +324,17 @@ export function App() {
     };
   }, [splitMenuOpen]);
 
-  const filteredConnections = useMemo(() => {
-    const query = hostSearch.trim().toLowerCase();
-    if (!query) return connections;
-    return connections.filter(
-      (connection) =>
-        connection.displayName.toLowerCase().includes(query) ||
-        connectionTarget(connection).toLowerCase().includes(query),
-    );
-  }, [connections, hostSearch]);
+  const connectionSections = useMemo(
+    () =>
+      organizeConnections(
+        connections,
+        connectionGroups,
+        hostSearch,
+        favoritesOnly,
+        ungroupedCollapsed,
+      ),
+    [connections, connectionGroups, hostSearch, favoritesOnly, ungroupedCollapsed],
+  );
 
   // The most meaningful live session state per saved connection, used to mark
   // which connections currently have an open Workspace and how it is doing.
@@ -598,10 +631,51 @@ export function App() {
       const next = exists
         ? current.map((connection) => (connection.id === saved.id ? saved : connection))
         : [...current, saved];
-      return next.sort((left, right) => left.displayName.localeCompare(right.displayName));
+      return next;
+    });
+    setKnownTags((current) => {
+      const byId = new Map(current.map((tag) => [tag.id, tag]));
+      for (const tag of saved.tags) byId.set(tag.id, tag);
+      return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name));
     });
     setWorkspaces((current) => updateWorkspaceConnectionSnapshots(current, saved));
     setDialogConnection(null);
+  }
+
+  function handleGroupDeleted(groupId: string) {
+    setConnections((current) =>
+      current.map((connection) =>
+        connection.groupId === groupId ? { ...connection, groupId: null } : connection,
+      ),
+    );
+    setWorkspaces((current) =>
+      current.map((workspace) =>
+        workspace.connectionSnapshot.groupId === groupId
+          ? {
+              ...workspace,
+              connectionSnapshot: { ...workspace.connectionSnapshot, groupId: null },
+            }
+          : workspace,
+      ),
+    );
+  }
+
+  function toggleConnectionGroup(groupId: string | null, collapsed: boolean) {
+    if (!groupId) {
+      setUngroupedCollapsed(collapsed);
+      return;
+    }
+    setConnectionGroups((current) =>
+      current.map((group) => (group.id === groupId ? { ...group, collapsed } : group)),
+    );
+    void api.setConnectionGroupCollapsed(groupId, collapsed).catch((caught) => {
+      setConnectionGroups((current) =>
+        current.map((group) =>
+          group.id === groupId ? { ...group, collapsed: !collapsed } : group,
+        ),
+      );
+      setActionError(`Could not update group: ${errorMessage(caught)}`);
+    });
   }
 
   function duplicateLabel(workspace: Workspace) {
@@ -622,6 +696,89 @@ export function App() {
       .writeSession(activeWorkspace.sessionId, new TextEncoder().encode(command))
       .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
     updateWorkspace(activeWorkspace.id, { view: "terminal" });
+  }
+
+  function renderConnectionRow(connection: SavedConnection) {
+    return (
+      <div
+        className={[
+          "host-row",
+          activeWorkspace?.connectionId === connection.id && !settingsOpen ? "active" : "",
+          hostMenuConnectionId === connection.id ? "menu-open" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-host-menu={connection.id}
+        key={connection.id}
+      >
+        <button className="host-main" type="button" onClick={() => openConnection(connection)}>
+          <span className="os-badge">
+            <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+            {connectionSessionStates[connection.id] && (
+              <span
+                className={`presence presence-${connectionSessionStates[connection.id]}`}
+                aria-hidden="true"
+              />
+            )}
+          </span>
+          <span className="host-row-details">
+            <strong>
+              {connection.favorite && (
+                <Star className="favorite-mark" size={11} aria-label="Favorite" />
+              )}
+              {connection.displayName}
+            </strong>
+            <small>{connectionTarget(connection)}</small>
+            {!!connection.tags.length && (
+              <span className="host-tag-summary">
+                {connection.tags
+                  .slice(0, 2)
+                  .map((tag) => tag.name)
+                  .join(" · ")}
+                {connection.tags.length > 2 ? ` +${connection.tags.length - 2}` : ""}
+              </span>
+            )}
+          </span>
+        </button>
+        <button
+          className="host-menu"
+          type="button"
+          onClick={() =>
+            setHostMenuConnectionId((current) => (current === connection.id ? null : connection.id))
+          }
+          aria-label={`Open actions for ${connection.displayName}`}
+          aria-haspopup="menu"
+          aria-expanded={hostMenuConnectionId === connection.id}
+        >
+          <MoreHorizontal size={16} />
+        </button>
+        {hostMenuConnectionId === connection.id && (
+          <div className="host-context-menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setHostMenuConnectionId(null);
+                setDialogConnection(connection);
+              }}
+            >
+              <Pencil size={14} /> Edit connection
+            </button>
+            <button
+              className="danger-text"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setHostMenuConnectionId(null);
+                void deleteConnection(connection);
+              }}
+            >
+              <Trash2 size={14} /> Delete connection
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (loading) return <LoadingState label="Starting Control Room…" />;
@@ -651,89 +808,56 @@ export function App() {
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
         </div>
-        <label className="search-field sidebar-search">
-          <Search size={14} />
-          <input
-            value={hostSearch}
-            onChange={(event) => setHostSearch(event.target.value)}
-            placeholder="Search connections"
-            aria-label="Search connections"
-          />
-        </label>
+        <div className="sidebar-filter-row">
+          <label className="search-field sidebar-search">
+            <Search size={14} />
+            <input
+              value={hostSearch}
+              onChange={(event) => setHostSearch(event.target.value)}
+              placeholder="Name, group, or tag"
+              aria-label="Filter connections"
+            />
+          </label>
+          <button
+            className={favoritesOnly ? "icon-button active" : "icon-button"}
+            type="button"
+            aria-label="Show favorites only"
+            aria-pressed={favoritesOnly}
+            onClick={() => setFavoritesOnly((current) => !current)}
+            title="Show favorites only"
+          >
+            <Star size={14} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Manage connection groups"
+            onClick={() => setConnectionGroupsOpen(true)}
+            title="Manage connection groups"
+          >
+            <FolderCog size={15} />
+          </button>
+        </div>
         <nav className="host-list" aria-label="Saved connections">
-          {filteredConnections.map((connection) => (
-            <div
-              className={[
-                "host-row",
-                activeWorkspace?.connectionId === connection.id && !settingsOpen ? "active" : "",
-                hostMenuConnectionId === connection.id ? "menu-open" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              data-host-menu={connection.id}
-              key={connection.id}
-            >
-              <button
-                className="host-main"
-                type="button"
-                onClick={() => openConnection(connection)}
-              >
-                <span className="os-badge">
-                  <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
-                  {connectionSessionStates[connection.id] && (
-                    <span
-                      className={`presence presence-${connectionSessionStates[connection.id]}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                </span>
-                <span>
-                  <strong>{connection.displayName}</strong>
-                  <small>{connectionTarget(connection)}</small>
-                </span>
-              </button>
-              <button
-                className="host-menu"
-                type="button"
-                onClick={() =>
-                  setHostMenuConnectionId((current) =>
-                    current === connection.id ? null : connection.id,
-                  )
-                }
-                aria-label={`Open actions for ${connection.displayName}`}
-                aria-haspopup="menu"
-                aria-expanded={hostMenuConnectionId === connection.id}
-              >
-                <MoreHorizontal size={16} />
-              </button>
-              {hostMenuConnectionId === connection.id && (
-                <div className="host-context-menu" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setHostMenuConnectionId(null);
-                      setDialogConnection(connection);
-                    }}
-                  >
-                    <Pencil size={14} /> Edit connection
-                  </button>
-                  <button
-                    className="danger-text"
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setHostMenuConnectionId(null);
-                      void deleteConnection(connection);
-                    }}
-                  >
-                    <Trash2 size={14} /> Delete connection
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-          {!filteredConnections.length && (
+          {connectionSections.map((section) => {
+            const collapsed = section.collapsed && !hostSearch.trim() && !favoritesOnly;
+            return (
+              <section className="connection-group-section" key={section.id ?? "ungrouped"}>
+                <button
+                  className="connection-group-heading"
+                  type="button"
+                  onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
+                  aria-expanded={!collapsed}
+                >
+                  {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  <span>{section.name}</span>
+                  <small>{section.connections.length}</small>
+                </button>
+                {!collapsed && section.connections.map(renderConnectionRow)}
+              </section>
+            );
+          })}
+          {!connectionSections.some((section) => section.connections.length) && (
             <p className="sidebar-empty">
               {connections.length ? "No matches" : "No connections yet"}
             </p>
@@ -1171,8 +1295,19 @@ export function App() {
       {dialogConnection && (
         <ConnectionDialog
           connection={dialogConnection === "new" ? undefined : dialogConnection}
+          groups={connectionGroups}
+          knownTags={knownTags}
           onClose={() => setDialogConnection(null)}
           onSaved={saveConnection}
+        />
+      )}
+
+      {connectionGroupsOpen && (
+        <ConnectionGroupsDialog
+          groups={connectionGroups}
+          onGroupsChange={setConnectionGroups}
+          onGroupDeleted={handleGroupDeleted}
+          onClose={() => setConnectionGroupsOpen(false)}
         />
       )}
 

@@ -6,6 +6,9 @@ export interface SavedConnection {
   port: number | null;
   identityFile: string | null;
   historyEnabled: boolean;
+  groupId: string | null;
+  favorite: boolean;
+  tags: ConnectionTag[];
   createdAt: string;
   updatedAt: string;
   lastConnectedAt: string | null;
@@ -18,6 +21,21 @@ export interface SavedConnectionInput {
   port: number | null;
   identityFile: string | null;
   historyEnabled: boolean;
+  groupId: string | null;
+  favorite: boolean;
+  tagNames: string[];
+}
+
+export interface ConnectionGroup {
+  id: string;
+  name: string;
+  position: number;
+  collapsed: boolean;
+}
+
+export interface ConnectionTag {
+  id: string;
+  name: string;
 }
 
 export interface HostCapabilities {

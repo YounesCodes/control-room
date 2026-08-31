@@ -10,6 +10,9 @@ pub struct SavedConnection {
     pub port: Option<u16>,
     pub identity_file: Option<String>,
     pub history_enabled: bool,
+    pub group_id: Option<String>,
+    pub favorite: bool,
+    pub tags: Vec<ConnectionTag>,
     pub created_at: String,
     pub updated_at: String,
     pub last_connected_at: Option<String>,
@@ -25,6 +28,28 @@ pub struct SavedConnectionInput {
     pub identity_file: Option<String>,
     #[serde(default)]
     pub history_enabled: bool,
+    #[serde(default)]
+    pub group_id: Option<String>,
+    #[serde(default)]
+    pub favorite: bool,
+    #[serde(default)]
+    pub tag_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionGroup {
+    pub id: String,
+    pub name: String,
+    pub position: i64,
+    pub collapsed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTag {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

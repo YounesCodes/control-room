@@ -416,6 +416,30 @@ code,
   padding: 0 9px;
 }
 
+.sidebar-filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 28px;
+  align-items: center;
+  gap: 5px;
+  margin: 0 10px 8px 14px;
+}
+
+.sidebar-filter-row .sidebar-search {
+  min-width: 0;
+  margin: 0;
+}
+
+.sidebar-filter-row > .icon-button {
+  width: 28px;
+  height: 28px;
+  color: var(--text-faint);
+}
+
+.sidebar-filter-row > .icon-button.active {
+  background: var(--fill-active);
+  color: var(--text);
+}
+
 .host-list {
   min-height: 90px;
   flex: 1;
@@ -426,6 +450,48 @@ code,
 .workspace-open .host-list {
   max-height: min(36vh, 320px);
   flex: 0 1 auto;
+}
+
+.connection-group-section + .connection-group-section {
+  margin-top: 4px;
+}
+
+.connection-group-heading {
+  display: grid;
+  width: 100%;
+  min-height: 27px;
+  grid-template-columns: 13px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 3px 8px;
+  color: var(--text-faint);
+  text-align: left;
+}
+
+.connection-group-heading:hover,
+.connection-group-heading:focus-visible {
+  background: var(--fill-hover);
+  color: var(--text-muted);
+}
+
+.connection-group-heading span {
+  overflow: hidden;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.connection-group-heading small {
+  min-width: 18px;
+  color: inherit;
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .host-row {
@@ -488,7 +554,7 @@ code,
   text-align: left;
 }
 
-.host-main > span:last-child {
+.host-row-details {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -496,6 +562,9 @@ code,
 }
 
 .host-main strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   overflow: hidden;
   font-size: 12.5px;
   font-weight: 600;
@@ -503,10 +572,24 @@ code,
   white-space: nowrap;
 }
 
+.favorite-mark {
+  flex: none;
+  fill: currentColor;
+  color: var(--text-muted);
+}
+
 .host-main small {
   overflow: hidden;
   color: #92928e;
   font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-tag-summary {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2491,6 +2574,137 @@ dd {
   color: var(--text-faint);
   font-size: 10.5px;
   line-height: 1.5;
+}
+
+.connection-organization-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 13px;
+}
+
+.connection-favorite-field {
+  min-height: 34px;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  padding: 0 5px;
+}
+
+.connection-favorite-field input {
+  width: 15px;
+  height: 15px;
+}
+
+.connection-favorite-field span {
+  color: var(--text-muted) !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.known-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -8px;
+}
+
+.known-tag-list button {
+  min-height: 24px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 3px 8px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.known-tag-list button:hover,
+.known-tag-list button:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.connection-groups-dialog {
+  padding: 20px;
+}
+
+.connection-group-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.connection-group-create label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.connection-group-create label > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.connection-group-list {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.connection-group-manage-row {
+  display: flex;
+  min-height: 45px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.connection-group-manage-row > span {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-group-manage-row > div,
+.connection-group-manage-row form,
+.connection-group-delete-confirm {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.connection-group-manage-row form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.connection-group-delete-confirm > span {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.connection-groups-empty {
+  margin: 18px 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
 }
 
 .form-row {

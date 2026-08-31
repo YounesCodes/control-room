@@ -3,21 +3,38 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { validateConnectionDraft } from "../lib/connection-validation";
-import type { HostCapabilities, SavedConnection, SavedConnectionInput } from "../types";
+import type {
+  ConnectionGroup,
+  ConnectionTag,
+  HostCapabilities,
+  SavedConnection,
+  SavedConnectionInput,
+} from "../types";
 import { Modal } from "./Modal";
 
 interface ConnectionDialogProps {
   connection?: SavedConnection;
+  groups: ConnectionGroup[];
+  knownTags: ConnectionTag[];
   onClose: () => void;
   onSaved: (connection: SavedConnection) => void;
 }
 
-export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDialogProps) {
+export function ConnectionDialog({
+  connection,
+  groups,
+  knownTags,
+  onClose,
+  onSaved,
+}: ConnectionDialogProps) {
   const [displayName, setDisplayName] = useState(connection?.displayName ?? "");
   const [destination, setDestination] = useState(connection?.destination ?? "");
   const [username, setUsername] = useState(connection?.username ?? "");
   const [port, setPort] = useState(connection?.port?.toString() ?? "");
   const [identityFile, setIdentityFile] = useState(connection?.identityFile ?? "");
+  const [groupId, setGroupId] = useState(connection?.groupId ?? "");
+  const [favorite, setFavorite] = useState(connection?.favorite ?? false);
+  const [tagText, setTagText] = useState(connection?.tags.map((tag) => tag.name).join(", ") ?? "");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +48,22 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
       port: port.trim() ? Number(port) : null,
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
+      groupId: groupId || null,
+      favorite,
+      tagNames: tagText
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
     };
+  }
+
+  function addKnownTag(name: string) {
+    const current = tagText
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    if (current.some((tag) => tag.toLocaleLowerCase() === name.toLocaleLowerCase())) return;
+    setTagText([...current, name].join(", "));
   }
 
   async function chooseIdentity() {
@@ -158,6 +190,46 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             The key stays in its existing location and is never copied into Control Room.
           </small>
         </label>
+        <div className="connection-organization-fields">
+          <label>
+            <span>Group</span>
+            <select value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+              <option value="">Ungrouped</option>
+              {groups.map((group) => (
+                <option value={group.id} key={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="checkbox-row connection-favorite-field">
+            <input
+              type="checkbox"
+              checked={favorite}
+              onChange={(event) => setFavorite(event.target.checked)}
+            />
+            <span>Favorite</span>
+          </label>
+        </div>
+        <label>
+          <span>Tags</span>
+          <input
+            value={tagText}
+            onChange={(event) => setTagText(event.target.value)}
+            placeholder="docker, critical"
+            maxLength={500}
+          />
+          <small>Separate up to 12 local tags with commas. Matching ignores case.</small>
+        </label>
+        {!!knownTags.length && (
+          <div className="known-tag-list" aria-label="Existing tags">
+            {knownTags.map((tag) => (
+              <button type="button" key={tag.id} onClick={() => addKnownTag(tag.name)}>
+                {tag.name}
+              </button>
+            ))}
+          </div>
+        )}
         {testResult && (
           <p className="inline-message" role="status">
             Noninteractive SSH works. systemd:{" "}

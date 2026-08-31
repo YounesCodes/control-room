@@ -100,9 +100,12 @@ exact term definitions.
 
 Navigation is two levels and never nests deeper.
 
-- **Left rail.** The connection list (search plus saved connections). Once a
-  Workspace is open, the rail also holds the view switcher (Overview, Terminal,
-  Systemd, Ports, Docker, Logs, History), with "Add connection" pinned at the bottom.
+- **Left rail.** The connection list is divided into manually ordered,
+  collapsible groups plus a derived Ungrouped section. Search matches connection
+  names, SSH targets, groups, and tags; a separate toggle limits the list to
+  favorites. Once a Workspace is open, the rail also holds the view switcher
+  (Overview, Terminal, Systemd, Ports, Docker, Logs, History), with "Add connection"
+  pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
@@ -137,11 +140,12 @@ ConPTY for the interactive terminal.
 
 The safety model shapes the UI. Remote operations are read-only, and the app
 never persists terminal output, fetched logs, passwords, or private keys. SQLite
-holds only connections, settings, capabilities, History, and _disconnected_
-Workspace layout, so a restored Workspace always comes back disconnected and
-never auto-reconnects. Structured features need non-interactive public-key or
-agent auth, though the terminal still shows ordinary OpenSSH prompts. AGENTS.md
-carries the full architecture and data rules.
+holds only connections and their local organization metadata, settings,
+capabilities, History, and _disconnected_ Workspace layout, so a restored
+Workspace always comes back disconnected and never auto-reconnects. Structured
+features need non-interactive public-key or agent auth, though the terminal still
+shows ordinary OpenSSH prompts. AGENTS.md carries the full architecture and data
+rules.
 
 One xterm detail worth knowing: xterm draws bold text with weight, not from the
 bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory
@@ -288,6 +292,11 @@ tab uses an underline instead. Same idea either way.
 dot on the OS mark: green for connected, amber for connecting, red for error,
 grey for disconnected. Live sessions read at a glance. The dot's ring colour
 matches the row or tab background, so it looks cut out of the icon.
+
+**Connection organization.** A Saved Connection can belong to one group, carry
+up to twelve case-insensitive tags, and be marked as a favorite. Group order and
+collapse state persist locally. Deleting a group returns its connections to the
+derived Ungrouped section and never opens, reconnects, or contacts a host.
 
 **Panel states.** Every data view separates loading (spinner and label), empty
 (icon and guidance, such as the Logs and History empty states), and error (icon,
@@ -474,6 +483,6 @@ transfer, container management, cloud sync, AI, and the rest) are the scope
 exclusions in AGENTS.md. New work should sharpen the existing features and their
 contextual actions before it adds another panel.
 
-Worth doing later, still in scope: connection tags or grouping in the rail,
-recent and pinned ordering in the palette, and more density and responsive
-tuning. Each one additive, each one measured against the principles above.
+Worth doing later, still in scope: recent and pinned ordering in the palette,
+and more density and responsive tuning. Each one additive, each one measured
+against the principles above.

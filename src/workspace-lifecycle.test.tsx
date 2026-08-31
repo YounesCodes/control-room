@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({
   settingsContract: vi.fn(),
   environment: vi.fn(),
   workspaceState: vi.fn(),
+  listConnectionGroups: vi.fn(),
+  listConnectionTags: vi.fn(),
   saveWorkspaceState: vi.fn(),
   cachedCapabilities: vi.fn(),
   deleteConnection: vi.fn(),
@@ -57,6 +59,9 @@ function connection(id: string, displayName: string): SavedConnection {
     port: null,
     identityFile: null,
     historyEnabled: false,
+    groupId: null,
+    favorite: false,
+    tags: [],
     createdAt: "",
     updatedAt: "",
     lastConnectedAt: null,
@@ -96,6 +101,8 @@ describe("App Workspace behavior", () => {
       platformSupported: true,
     });
     api.workspaceState.mockResolvedValue(restoredState([]));
+    api.listConnectionGroups.mockResolvedValue([]);
+    api.listConnectionTags.mockResolvedValue([]);
     api.saveWorkspaceState.mockResolvedValue(undefined);
     api.cachedCapabilities.mockResolvedValue(null);
     api.deleteConnection.mockResolvedValue(undefined);

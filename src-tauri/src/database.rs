@@ -6,15 +6,19 @@ use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::models::{
-    AppSettings, HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS,
-    PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
+    AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
+    LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
+    SavedConnectionInput,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 1;
+const LATEST_SCHEMA_VERSION: i64 = 2;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
 const MAX_IDENTITY_PATH_CHARS: usize = 32_767;
+const MAX_GROUP_NAME_CHARS: usize = 60;
+const MAX_TAG_NAME_CHARS: usize = 32;
+const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 
 pub struct Database {
@@ -43,29 +47,36 @@ impl Database {
 
     pub fn list_connections(&self) -> Result<Vec<SavedConnection>, String> {
         let connection = self.connection.lock();
-        let mut statement = connection
-            .prepare(
-                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, created_at, updated_at, last_connected_at FROM saved_connections ORDER BY display_name COLLATE NOCASE",
-            )
-            .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map([], map_connection)
-            .map_err(|error| error.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())
+        let mut connections = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, favorite, created_at, updated_at, last_connected_at FROM saved_connections ORDER BY favorite DESC, display_name COLLATE NOCASE",
+                )
+                .map_err(|error| error.to_string())?;
+            let rows = statement
+                .query_map([], map_connection)
+                .map_err(|error| error.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?
+        };
+        for saved in &mut connections {
+            saved.tags = load_connection_tags(&connection, &saved.id)?;
+        }
+        Ok(connections)
     }
 
     pub fn get_connection(&self, id: &str) -> Result<SavedConnection, String> {
-        self.connection
-            .lock()
+        let connection = self.connection.lock();
+        let mut saved = connection
             .query_row(
-                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, created_at, updated_at, last_connected_at FROM saved_connections WHERE id = ?1",
-                [id],
-                map_connection,
+                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, favorite, created_at, updated_at, last_connected_at FROM saved_connections WHERE id = ?1",
+                [id], map_connection,
             )
             .optional()
             .map_err(|error| error.to_string())?
-            .ok_or_else(|| "Saved Connection not found".into())
+            .ok_or_else(|| "Saved Connection not found".to_string())?;
+        saved.tags = load_connection_tags(&connection, id)?;
+        Ok(saved)
     }
 
     pub fn create_connection(
@@ -75,10 +86,14 @@ impl Database {
         validate_connection_input(&input)?;
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
-        self.connection
-            .lock()
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        validate_group_reference(&transaction, input.group_id.as_deref())?;
+        transaction
             .execute(
-                "INSERT INTO saved_connections (id, display_name, destination, username, port, identity_file, history_enabled, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                "INSERT INTO saved_connections (id, display_name, destination, username, port, identity_file, history_enabled, group_id, favorite, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
                 params![
                     id,
                     input.display_name.trim(),
@@ -87,10 +102,15 @@ impl Database {
                     input.port,
                     normalize_optional(input.identity_file),
                     input.history_enabled,
+                    input.group_id,
+                    input.favorite,
                     now,
                 ],
             )
             .map_err(|error| error.to_string())?;
+        sync_connection_tags(&transaction, &id, &input.tag_names)?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        drop(connection);
         self.get_connection(&id)
     }
 
@@ -100,11 +120,14 @@ impl Database {
         input: SavedConnectionInput,
     ) -> Result<SavedConnection, String> {
         validate_connection_input(&input)?;
-        let changed = self
-            .connection
-            .lock()
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        validate_group_reference(&transaction, input.group_id.as_deref())?;
+        let changed = transaction
             .execute(
-                "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, updated_at = ?8 WHERE id = ?1",
+                "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, group_id = ?8, favorite = ?9, updated_at = ?10 WHERE id = ?1",
                 params![
                     id,
                     input.display_name.trim(),
@@ -113,6 +136,8 @@ impl Database {
                     input.port,
                     normalize_optional(input.identity_file),
                     input.history_enabled,
+                    input.group_id,
+                    input.favorite,
                     Utc::now().to_rfc3339(),
                 ],
             )
@@ -120,7 +145,179 @@ impl Database {
         if changed == 0 {
             return Err("Saved Connection not found".into());
         }
+        sync_connection_tags(&transaction, id, &input.tag_names)?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        drop(connection);
         self.get_connection(id)
+    }
+
+    pub fn list_connection_groups(&self) -> Result<Vec<ConnectionGroup>, String> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare("SELECT id, name, position, collapsed FROM connection_groups ORDER BY position, name COLLATE NOCASE")
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(ConnectionGroup {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    position: row.get(2)?,
+                    collapsed: row.get(3)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn list_connection_tags(&self) -> Result<Vec<ConnectionTag>, String> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare("SELECT id, name FROM connection_tags ORDER BY normalized_name")
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(ConnectionTag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn create_connection_group(&self, name: &str) -> Result<ConnectionGroup, String> {
+        let (name, normalized) = validate_organization_name(name, MAX_GROUP_NAME_CHARS, "Group")?;
+        let id = Uuid::new_v4().to_string();
+        let connection = self.connection.lock();
+        let position: i64 = connection
+            .query_row(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM connection_groups",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        connection
+            .execute(
+                "INSERT INTO connection_groups (id, name, normalized_name, position, collapsed) VALUES (?1, ?2, ?3, ?4, 0)",
+                params![id, name, normalized, position],
+            )
+            .map_err(map_organization_error)?;
+        Ok(ConnectionGroup {
+            id,
+            name,
+            position,
+            collapsed: false,
+        })
+    }
+
+    pub fn rename_connection_group(&self, id: &str, name: &str) -> Result<ConnectionGroup, String> {
+        validate_uuid(id, "Group")?;
+        let (name, normalized) = validate_organization_name(name, MAX_GROUP_NAME_CHARS, "Group")?;
+        let connection = self.connection.lock();
+        let changed = connection
+            .execute(
+                "UPDATE connection_groups SET name = ?2, normalized_name = ?3 WHERE id = ?1",
+                params![id, name, normalized],
+            )
+            .map_err(map_organization_error)?;
+        if changed == 0 {
+            return Err("Group not found".into());
+        }
+        connection
+            .query_row(
+                "SELECT id, name, position, collapsed FROM connection_groups WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(ConnectionGroup {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        position: row.get(2)?,
+                        collapsed: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn delete_connection_group(&self, id: &str) -> Result<(), String> {
+        validate_uuid(id, "Group")?;
+        let changed = self
+            .connection
+            .lock()
+            .execute("DELETE FROM connection_groups WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("Group not found".into());
+        }
+        Ok(())
+    }
+
+    pub fn set_connection_group_collapsed(&self, id: &str, collapsed: bool) -> Result<(), String> {
+        validate_uuid(id, "Group")?;
+        let changed = self
+            .connection
+            .lock()
+            .execute(
+                "UPDATE connection_groups SET collapsed = ?2 WHERE id = ?1",
+                params![id, collapsed],
+            )
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("Group not found".into());
+        }
+        Ok(())
+    }
+
+    pub fn move_connection_group(
+        &self,
+        id: &str,
+        direction: &str,
+    ) -> Result<Vec<ConnectionGroup>, String> {
+        validate_uuid(id, "Group")?;
+        if direction != "up" && direction != "down" {
+            return Err("Group move direction is invalid".into());
+        }
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let position: i64 = transaction
+            .query_row(
+                "SELECT position FROM connection_groups WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Group not found".to_string())?;
+        let comparison = if direction == "up" { "<" } else { ">" };
+        let order = if direction == "up" { "DESC" } else { "ASC" };
+        let query = format!(
+            "SELECT id, position FROM connection_groups WHERE position {comparison} ?1 ORDER BY position {order} LIMIT 1"
+        );
+        let neighbor: Option<(String, i64)> = transaction
+            .query_row(&query, [position], |row| Ok((row.get(0)?, row.get(1)?)))
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some((neighbor_id, neighbor_position)) = neighbor {
+            transaction
+                .execute(
+                    "UPDATE connection_groups SET position = ?2 WHERE id = ?1",
+                    params![id, neighbor_position],
+                )
+                .map_err(|error| error.to_string())?;
+            transaction
+                .execute(
+                    "UPDATE connection_groups SET position = ?2 WHERE id = ?1",
+                    params![neighbor_id, position],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction.commit().map_err(|error| error.to_string())?;
+        drop(connection);
+        self.list_connection_groups()
     }
 
     pub fn delete_connection(&self, id: &str) -> Result<(), String> {
@@ -555,6 +752,47 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 2 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE connection_groups (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    normalized_name TEXT NOT NULL UNIQUE,
+                    position INTEGER NOT NULL,
+                    collapsed INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE connection_tags (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    normalized_name TEXT NOT NULL UNIQUE
+                );
+
+                ALTER TABLE saved_connections
+                ADD COLUMN group_id TEXT REFERENCES connection_groups(id) ON DELETE SET NULL;
+
+                ALTER TABLE saved_connections
+                ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;
+
+                CREATE TABLE saved_connection_tags (
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    tag_id TEXT NOT NULL REFERENCES connection_tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (connection_id, tag_id)
+                );
+
+                CREATE INDEX idx_saved_connections_group ON saved_connections(group_id);
+                CREATE INDEX idx_saved_connection_tags_tag ON saved_connection_tags(tag_id);
+                PRAGMA user_version = 2;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -567,10 +805,141 @@ fn map_connection(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedConnection> 
         port: row.get(4)?,
         identity_file: row.get(5)?,
         history_enabled: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
-        last_connected_at: row.get(9)?,
+        group_id: row.get(7)?,
+        favorite: row.get(8)?,
+        tags: Vec::new(),
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+        last_connected_at: row.get(11)?,
     })
+}
+
+fn load_connection_tags(
+    connection: &Connection,
+    connection_id: &str,
+) -> Result<Vec<ConnectionTag>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT tags.id, tags.name FROM connection_tags tags JOIN saved_connection_tags links ON links.tag_id = tags.id WHERE links.connection_id = ?1 ORDER BY tags.normalized_name",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([connection_id], |row| {
+            Ok(ConnectionTag {
+                id: row.get(0)?,
+                name: row.get(1)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn validate_group_reference(
+    transaction: &rusqlite::Transaction<'_>,
+    group_id: Option<&str>,
+) -> Result<(), String> {
+    let Some(group_id) = group_id else {
+        return Ok(());
+    };
+    validate_uuid(group_id, "Group")?;
+    let exists: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM connection_groups WHERE id = ?1)",
+            [group_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if exists {
+        Ok(())
+    } else {
+        Err("Group not found".into())
+    }
+}
+
+fn sync_connection_tags(
+    transaction: &rusqlite::Transaction<'_>,
+    connection_id: &str,
+    tag_names: &[String],
+) -> Result<(), String> {
+    let normalized = normalize_tag_names(tag_names)?;
+    transaction
+        .execute(
+            "DELETE FROM saved_connection_tags WHERE connection_id = ?1",
+            [connection_id],
+        )
+        .map_err(|error| error.to_string())?;
+    for (name, normalized_name) in normalized {
+        let tag_id: Option<String> = transaction
+            .query_row(
+                "SELECT id FROM connection_tags WHERE normalized_name = ?1",
+                [&normalized_name],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let tag_id = tag_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        transaction
+            .execute(
+                "INSERT OR IGNORE INTO connection_tags (id, name, normalized_name) VALUES (?1, ?2, ?3)",
+                params![tag_id, name, normalized_name],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO saved_connection_tags (connection_id, tag_id) VALUES (?1, ?2)",
+                params![connection_id, tag_id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn normalize_tag_names(tag_names: &[String]) -> Result<Vec<(String, String)>, String> {
+    let mut values = std::collections::BTreeMap::new();
+    for tag_name in tag_names {
+        let (name, normalized) = validate_organization_name(tag_name, MAX_TAG_NAME_CHARS, "Tag")?;
+        values.entry(normalized).or_insert(name);
+    }
+    if values.len() > MAX_TAGS_PER_CONNECTION {
+        return Err(format!(
+            "A Saved Connection can have at most {MAX_TAGS_PER_CONNECTION} tags"
+        ));
+    }
+    Ok(values
+        .into_iter()
+        .map(|(normalized, name)| (name, normalized))
+        .collect())
+}
+
+fn validate_organization_name(
+    value: &str,
+    maximum_chars: usize,
+    kind: &str,
+) -> Result<(String, String), String> {
+    let name = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.is_empty() || name.chars().count() > maximum_chars || name.chars().any(char::is_control)
+    {
+        return Err(format!(
+            "{kind} name must be between 1 and {maximum_chars} characters"
+        ));
+    }
+    let normalized = name.to_lowercase();
+    Ok((name, normalized))
+}
+
+fn validate_uuid(value: &str, kind: &str) -> Result<(), String> {
+    Uuid::parse_str(value)
+        .map(|_| ())
+        .map_err(|_| format!("{kind} ID is invalid"))
+}
+
+fn map_organization_error(error: rusqlite::Error) -> String {
+    if error.to_string().contains("UNIQUE constraint failed") {
+        "A group with that name already exists".into()
+    } else {
+        error.to_string()
+    }
 }
 
 fn normalize_optional(value: Option<String>) -> Option<String> {
@@ -638,6 +1007,10 @@ pub(crate) fn validate_connection_input(input: &SavedConnectionInput) -> Result<
             return Err("Identity file does not exist or is not a file".into());
         }
     }
+    normalize_tag_names(&input.tag_names)?;
+    if let Some(group_id) = input.group_id.as_deref() {
+        validate_uuid(group_id, "Group")?;
+    }
     Ok(())
 }
 
@@ -679,6 +1052,9 @@ mod tests {
             port: None,
             identity_file: None,
             history_enabled: true,
+            group_id: None,
+            favorite: false,
+            tag_names: Vec::new(),
         }
     }
 
@@ -728,6 +1104,93 @@ mod tests {
     }
 
     #[test]
+    fn connection_organization_persists_and_group_deletion_preserves_connections() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let homelab = database.create_connection_group("Homelab").unwrap();
+        let production = database.create_connection_group("Production").unwrap();
+        database
+            .set_connection_group_collapsed(&homelab.id, true)
+            .unwrap();
+        let groups = database
+            .move_connection_group(&production.id, "up")
+            .unwrap();
+        assert_eq!(groups[0].id, production.id);
+        assert!(groups[1].collapsed);
+
+        let mut organized = input("Database");
+        organized.group_id = Some(production.id.clone());
+        organized.favorite = true;
+        organized.tag_names = vec![" Docker ".into(), "docker".into(), "Critical".into()];
+        let saved = database.create_connection(organized).unwrap();
+        assert!(saved.favorite);
+        assert_eq!(saved.group_id.as_deref(), Some(production.id.as_str()));
+        assert_eq!(
+            saved
+                .tags
+                .iter()
+                .map(|tag| tag.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Critical", "Docker"]
+        );
+        assert_eq!(database.list_connection_tags().unwrap(), saved.tags);
+
+        database.delete_connection_group(&production.id).unwrap();
+        let returned = database.get_connection(&saved.id).unwrap();
+        assert_eq!(returned.group_id, None);
+        assert!(returned.favorite);
+        assert_eq!(returned.tags.len(), 2);
+        drop(database);
+
+        let reopened = Database::open(&path).unwrap();
+        let groups = reopened.list_connection_groups().unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].id, homelab.id);
+        assert!(groups[0].collapsed);
+        assert_eq!(reopened.get_connection(&saved.id).unwrap().group_id, None);
+    }
+
+    #[test]
+    fn organization_names_and_tag_limits_are_deterministic() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let first = database.create_connection_group(" Production ").unwrap();
+        assert_eq!(first.name, "Production");
+        assert_eq!(
+            database.create_connection_group("production").unwrap_err(),
+            "A group with that name already exists"
+        );
+        let second = database.create_connection_group("Staging").unwrap();
+        assert_eq!(
+            database
+                .rename_connection_group(&second.id, "PRODUCTION")
+                .unwrap_err(),
+            "A group with that name already exists"
+        );
+
+        let mut duplicate_tags = input("Duplicates");
+        duplicate_tags.tag_names = vec!["docker".into(); MAX_TAGS_PER_CONNECTION + 1];
+        assert_eq!(
+            database
+                .create_connection(duplicate_tags)
+                .unwrap()
+                .tags
+                .len(),
+            1
+        );
+
+        let mut too_many_tags = input("Too many");
+        too_many_tags.tag_names = (0..=MAX_TAGS_PER_CONNECTION)
+            .map(|index| format!("tag-{index}"))
+            .collect();
+        assert_eq!(
+            database.create_connection(too_many_tags).unwrap_err(),
+            "A Saved Connection can have at most 12 tags"
+        );
+    }
+
+    #[test]
     fn unversioned_database_is_migrated_without_losing_connections() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("control-room.db");
@@ -756,7 +1219,11 @@ mod tests {
         drop(connection);
 
         let database = Database::open(&path).unwrap();
-        assert_eq!(database.list_connections().unwrap()[0].id, "legacy");
+        let legacy = &database.list_connections().unwrap()[0];
+        assert_eq!(legacy.id, "legacy");
+        assert_eq!(legacy.group_id, None);
+        assert!(!legacy.favorite);
+        assert!(legacy.tags.is_empty());
         let version: i64 = database
             .connection
             .lock()
