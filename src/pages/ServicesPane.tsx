@@ -12,14 +12,16 @@ export function ServicesPane({
   cache,
   onCacheChange,
   onViewLogs,
+  focusId = null,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
   onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
+  focusId?: string | null;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(() =>
-    reconcileSelection(cache.items, null),
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => focusId ?? reconcileSelection(cache.items, null),
   );
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<SystemdStateFilter>("all");
@@ -56,8 +58,13 @@ export function ServicesPane({
   }, [connection.id]);
 
   useEffect(() => {
+    if (!cache.items.length) return;
     setSelectedId((selected) => reconcileSelection(cache.items, selected));
   }, [cache.items]);
+
+  useEffect(() => {
+    if (focusId) setSelectedId(focusId);
+  }, [focusId]);
 
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
   const filtered = useMemo(

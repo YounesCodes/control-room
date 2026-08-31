@@ -6,8 +6,9 @@ use crate::{
     history,
     models::{
         AppSettings, DockerContainer, EnvironmentInfo, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, PersistedWorkspaceState, SavedConnection,
-        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
+        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
+        SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
+        SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -190,6 +191,17 @@ pub fn list_containers(
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     remote::list_containers(&connection, sudo_password)
+}
+
+#[tauri::command(async)]
+pub fn list_ports(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+) -> Result<Vec<ListeningSocket>, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    remote::list_ports(&connection)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -378,6 +390,7 @@ mod tests {
             "refresh_capabilities",
             "list_services",
             "list_containers",
+            "list_ports",
             "start_journal_stream",
             "start_docker_log_stream",
             "get_history_integration_status",

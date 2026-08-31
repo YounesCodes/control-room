@@ -78,6 +78,20 @@ pub struct DockerContainer {
     pub compose_oneoff: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListeningSocket {
+    pub id: String,
+    pub protocol: String,
+    pub address_family: String,
+    pub local_address: String,
+    pub port: u16,
+    pub process_name: Option<String>,
+    pub process_id: Option<u32>,
+    pub systemd_unit: Option<String>,
+    pub ownership: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {

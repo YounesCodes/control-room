@@ -39,6 +39,7 @@ pub fn run() {
             commands::refresh_capabilities,
             commands::list_services,
             commands::list_containers,
+            commands::list_ports,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

@@ -6,6 +6,7 @@ import type {
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
+  ListeningSocket,
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
@@ -67,6 +68,8 @@ export const api = {
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
+  listPorts: (connectionId: string) =>
+    invokeRemoteInspection<ListeningSocket[]>("list_ports", { connectionId }),
   startJournalStream: (
     connectionId: string,
     service: string,

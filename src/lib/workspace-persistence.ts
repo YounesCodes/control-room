@@ -30,7 +30,10 @@ export function restoreWorkspaceState(
         reconnectToken: 0,
         connectRequested: false,
         servicesCache: emptyCachedList(),
+        portsCache: emptyCachedList(),
         containersCache: emptyCachedList(),
+        systemdSelectionId: null,
+        containerSelectionId: null,
         logSource: null,
       },
     ];

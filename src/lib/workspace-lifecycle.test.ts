@@ -33,7 +33,10 @@ function workspace(id: string, connectionId: string): Workspace {
     reconnectToken: 0,
     connectRequested: true,
     servicesCache: emptyCachedList(),
+    portsCache: emptyCachedList(),
     containersCache: emptyCachedList(),
+    systemdSelectionId: null,
+    containerSelectionId: null,
     logSource: null,
   };
 }

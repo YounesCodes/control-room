@@ -13,6 +13,7 @@ use std::{
 
 use chrono::Utc;
 use parking_lot::{Condvar, Mutex};
+use regex::Regex;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, ipc::Channel, ipc::Response};
 use uuid::Uuid;
@@ -21,8 +22,8 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        DockerContainer, HostCapabilities, LOG_TAIL_OPTIONS, SavedConnection, StreamStarted,
-        StreamStateEvent, SystemdUnit,
+        DockerContainer, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
+        StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -224,6 +225,12 @@ pub fn list_containers(
         .filter(|line| !line.trim().is_empty())
         .map(parse_container)
         .collect()
+}
+
+pub fn list_ports(connection: &SavedConnection) -> Result<Vec<ListeningSocket>, String> {
+    let text = RemoteCommandExecutor::execute(connection, "list_ports", port_list_command())?
+        .success_text()?;
+    parse_listening_sockets(&text)
 }
 
 fn run_ssh(
@@ -490,6 +497,111 @@ fn parse_container(line: &str) -> Result<DockerContainer, String> {
 
 fn docker_container_list_command() -> &'static str {
     r#"docker ps -a --no-trunc --format '{"ID":{{json .ID}},"Names":{{json .Names}},"Image":{{json .Image}},"State":{{json .State}},"Status":{{json .Status}},"Ports":{{json .Ports}},"CreatedAt":{{json .CreatedAt}},"ComposeProject":{{json (.Label "com.docker.compose.project")}},"ComposeService":{{json (.Label "com.docker.compose.service")}},"ComposeContainerNumber":{{json (.Label "com.docker.compose.container-number")}},"ComposeOneoff":{{json (.Label "com.docker.compose.oneoff")}}}'"#
+}
+
+const PROCESS_UNIT_MARKER: &str = "__CONTROL_ROOM_PROCESS_UNITS__";
+
+fn port_list_command() -> &'static str {
+    r#"env LC_ALL=C sh -c 'ss -H -lntupO; status=$?; test $status -eq 0 || exit $status; printf "\n__CONTROL_ROOM_PROCESS_UNITS__\n"; ps -eo pid=,unit=,comm= 2>/dev/null || true'"#
+}
+
+fn parse_listening_sockets(text: &str) -> Result<Vec<ListeningSocket>, String> {
+    let (socket_text, process_text) = text
+        .split_once(PROCESS_UNIT_MARKER)
+        .ok_or_else(|| "Socket inspection returned an incomplete result".to_string())?;
+    let process_units = parse_process_units(process_text);
+    let mut sockets = Vec::new();
+
+    for (index, line) in socket_text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .enumerate()
+    {
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.len() < 6 {
+            continue;
+        }
+        let protocol = match fields[0].trim_end_matches(|character| ['4', '6'].contains(&character))
+        {
+            "tcp" => "tcp",
+            "udp" => "udp",
+            _ => continue,
+        };
+        let Some((local_address, port)) = parse_local_endpoint(fields[4]) else {
+            continue;
+        };
+        let process_evidence = parse_process_evidence(&fields[6..].join(" "));
+        let (process_name, process_id, ownership) = match process_evidence.as_slice() {
+            [] => (None, None, "unavailable"),
+            [(pid, name)] => (Some(name.clone()), Some(*pid), "known"),
+            _ => (None, None, "ambiguous"),
+        };
+        let systemd_unit = process_id.and_then(|pid| process_units.get(&pid)).cloned();
+        let address_family = if local_address.contains(':') {
+            "ipv6"
+        } else {
+            "ipv4"
+        };
+        sockets.push(ListeningSocket {
+            id: format!("{protocol}:{local_address}:{port}:{index}"),
+            protocol: protocol.into(),
+            address_family: address_family.into(),
+            local_address,
+            port,
+            process_name,
+            process_id,
+            systemd_unit,
+            ownership: ownership.into(),
+        });
+    }
+
+    sockets.sort_by(|left, right| {
+        left.port
+            .cmp(&right.port)
+            .then_with(|| left.protocol.cmp(&right.protocol))
+            .then_with(|| left.local_address.cmp(&right.local_address))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    Ok(sockets)
+}
+
+fn parse_local_endpoint(value: &str) -> Option<(String, u16)> {
+    let (address, port) = value.rsplit_once(':')?;
+    let port = port.parse::<u16>().ok()?;
+    let address = address
+        .trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_string();
+    (!address.is_empty()).then_some((address, port))
+}
+
+fn parse_process_evidence(value: &str) -> Vec<(u32, String)> {
+    let pattern =
+        Regex::new(r#"\(\"([^\"]+)\",pid=(\d+)"#).expect("the socket process pattern is valid");
+    let mut evidence = pattern
+        .captures_iter(value)
+        .filter_map(|capture| {
+            Some((
+                capture.get(2)?.as_str().parse::<u32>().ok()?,
+                capture.get(1)?.as_str().to_string(),
+            ))
+        })
+        .collect::<Vec<_>>();
+    evidence.sort();
+    evidence.dedup();
+    evidence
+}
+
+fn parse_process_units(text: &str) -> HashMap<u32, String> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let pid = fields.next()?.parse::<u32>().ok()?;
+            let unit = validate_systemd_unit_id(fields.next()?).ok()?.to_string();
+            Some((pid, unit))
+        })
+        .collect()
 }
 
 fn valid_compose_project(value: &str) -> Option<String> {
@@ -842,6 +954,56 @@ mod tests {
             " enable ",
             " disable ",
         ] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn parses_tcp_udp_address_families_owners_and_shared_ports() {
+        let sockets = parse_listening_sockets(
+            "tcp LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:((\"nginx\",pid=742,fd=6))\n\
+             tcp LISTEN 0 511 [::]:443 [::]:* users:((\"nginx\",pid=742,fd=7))\n\
+             udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*\n\
+             tcp LISTEN 0 64 127.0.0.1:8080 0.0.0.0:* users:((\"worker-a\",pid=900,fd=3),(\"worker-b\",pid=901,fd=3))\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n\
+             742 nginx.service nginx\n\
+             900 worker-a.scope worker-a\n",
+        )
+        .unwrap();
+
+        assert_eq!(sockets.len(), 4);
+        assert_eq!(
+            sockets.iter().filter(|socket| socket.port == 443).count(),
+            2
+        );
+        assert_eq!(sockets[0].protocol, "udp");
+        assert_eq!(sockets[0].address_family, "ipv4");
+        assert_eq!(sockets[0].ownership, "unavailable");
+        assert_eq!(sockets[1].systemd_unit.as_deref(), Some("nginx.service"));
+        assert_eq!(sockets[2].address_family, "ipv6");
+        assert_eq!(sockets[3].ownership, "ambiguous");
+        assert_eq!(sockets[3].process_id, None);
+        assert_eq!(sockets[3].systemd_unit, None);
+    }
+
+    #[test]
+    fn ignores_unix_and_malformed_socket_rows() {
+        let sockets = parse_listening_sockets(
+            "u_str LISTEN 0 4096 /run/dbus/system_bus_socket * 0\n\
+             tcp LISTEN 0 128 127.0.0.1:* 0.0.0.0:*\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n",
+        )
+        .unwrap();
+        assert!(sockets.is_empty());
+    }
+
+    #[test]
+    fn port_listing_is_one_bounded_read_only_query_without_process_arguments() {
+        let command = port_list_command();
+        assert!(command.contains("ss -H -lntupO"));
+        assert!(command.contains("ps -eo pid=,unit=,comm="));
+        assert!(!command.contains("args="));
+        for mutation in [" kill ", " rm ", " systemctl start ", " docker stop "] {
             assert!(!command.contains(mutation));
         }
     }
