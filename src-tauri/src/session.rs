@@ -15,7 +15,10 @@ use uuid::Uuid;
 
 use crate::{
     database::Database,
-    models::{SavedConnection, SessionStarted, SessionStateEvent},
+    models::{
+        ConnectionDiagnostic, ConnectionDiagnosticStage, SavedConnection, SessionStarted,
+        SessionStateEvent,
+    },
     ssh::{connection_arguments, detect_ssh_path},
 };
 
@@ -44,11 +47,14 @@ struct OutputFlowState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TerminalFailureHint {
+    Configuration,
     Authentication,
     HostResolution,
     ConnectionRefused,
     ConnectionTimeout,
     HostKey,
+    Negotiation,
+    Route,
     ConnectionLost,
 }
 
@@ -208,7 +214,14 @@ impl SessionManager {
                             let _ = output_app
                                 .state::<Database>()
                                 .mark_connected(&output_connection_id);
-                            emit_state(&output_app, &output_session_id, "connected", None, None);
+                            emit_state(
+                                &output_app,
+                                &output_session_id,
+                                "connected",
+                                None,
+                                None,
+                                None,
+                            );
                         }
                         if !output_managed.output_flow.reserve(count) {
                             break;
@@ -248,15 +261,26 @@ impl SessionManager {
             match result {
                 Ok(status) => {
                     let failure = wait_managed.failure.lock().clone();
-                    let hint = wait_managed.failure_detector.lock().hint;
-                    let (state, category, reason) = classify_session_exit(
+                    let detector = wait_managed.failure_detector.lock();
+                    let hint = detector.hint;
+                    let connected = detector.connected;
+                    drop(detector);
+                    let (state, category, reason, diagnostic) = classify_session_exit(
                         wait_managed.stop_requested.load(Ordering::Acquire),
                         failure,
                         status.success(),
                         status.exit_code(),
                         hint,
+                        connected,
                     );
-                    emit_state(&wait_app, &wait_session_id, state, category, reason);
+                    emit_state(
+                        &wait_app,
+                        &wait_session_id,
+                        state,
+                        category,
+                        reason,
+                        diagnostic,
+                    );
                 }
                 Err(error) => emit_state(
                     &wait_app,
@@ -264,6 +288,7 @@ impl SessionManager {
                     "error",
                     Some("process".into()),
                     Some(format!("SSH process wait failed: {error}")),
+                    Some(connection_diagnostic(None, false)),
                 ),
             }
         });
@@ -348,6 +373,7 @@ fn emit_state(
     state: &str,
     category: Option<String>,
     reason: Option<String>,
+    diagnostic: Option<ConnectionDiagnostic>,
 ) {
     let _ = app.emit(
         "session-state-changed",
@@ -356,12 +382,17 @@ fn emit_state(
             state: state.into(),
             category,
             reason,
+            diagnostic,
         },
     );
 }
 
 fn detect_terminal_failure(output: &str) -> Option<TerminalFailureHint> {
-    if output.contains("permission denied") || output.contains("authentication failed") {
+    if output.contains("bad configuration option")
+        || output.contains("terminating, 1 bad configuration options")
+    {
+        Some(TerminalFailureHint::Configuration)
+    } else if output.contains("permission denied") || output.contains("authentication failed") {
         Some(TerminalFailureHint::Authentication)
     } else if output.contains("could not resolve hostname") {
         Some(TerminalFailureHint::HostResolution)
@@ -371,6 +402,17 @@ fn detect_terminal_failure(output: &str) -> Option<TerminalFailureHint> {
         Some(TerminalFailureHint::ConnectionTimeout)
     } else if output.contains("host key verification failed") {
         Some(TerminalFailureHint::HostKey)
+    } else if output.contains("no matching host key type found")
+        || output.contains("no matching key exchange method found")
+        || output.contains("no matching cipher found")
+        || output.contains("kex_exchange_identification")
+    {
+        Some(TerminalFailureHint::Negotiation)
+    } else if output.contains("stdio forwarding failed")
+        || output.contains("proxycommand") && output.contains("failed")
+        || output.contains("connection closed by unknown port 65535")
+    {
+        Some(TerminalFailureHint::Route)
     } else if output.contains("connection reset")
         || output.contains("broken pipe")
         || output.contains("connection closed")
@@ -388,17 +430,41 @@ fn classify_session_exit(
     success: bool,
     exit_code: u32,
     hint: Option<TerminalFailureHint>,
-) -> (&'static str, Option<String>, Option<String>) {
+    connected: bool,
+) -> (
+    &'static str,
+    Option<String>,
+    Option<String>,
+    Option<ConnectionDiagnostic>,
+) {
     if stop_requested {
-        return ("disconnected", Some("user-disconnect".into()), None);
+        return ("disconnected", Some("user-disconnect".into()), None, None);
     }
     if let Some(reason) = process_failure {
-        return ("error", Some("process".into()), Some(reason));
+        return (
+            "error",
+            Some("process".into()),
+            Some(reason),
+            Some(connection_diagnostic(None, connected)),
+        );
     }
     if success {
-        return ("disconnected", Some("remote-exit".into()), None);
+        return ("disconnected", Some("remote-exit".into()), None, None);
+    }
+    if connected && hint != Some(TerminalFailureHint::ConnectionLost) {
+        return (
+            "error",
+            Some("remote-exit".into()),
+            Some(format!(
+                "SSH session ended unexpectedly (exit code {exit_code})"
+            )),
+            None,
+        );
     }
     let (category, reason) = match hint {
+        Some(TerminalFailureHint::Configuration) => {
+            ("configuration", "OpenSSH client configuration failed")
+        }
         Some(TerminalFailureHint::Authentication) => {
             ("authentication", "SSH authentication failed")
         }
@@ -412,14 +478,185 @@ fn classify_session_exit(
             ("connection-timeout", "SSH connection timed out")
         }
         Some(TerminalFailureHint::HostKey) => ("host-key", "SSH host-key verification failed"),
+        Some(TerminalFailureHint::Negotiation) => ("negotiation", "SSH negotiation failed"),
+        Some(TerminalFailureHint::Route) => ("route", "SSH route or jump host failed"),
         Some(TerminalFailureHint::ConnectionLost) => ("connection-lost", "SSH connection was lost"),
         None => ("remote-exit", "SSH session ended unexpectedly"),
     };
+    let diagnostic = connection_diagnostic(hint, connected);
     (
         "error",
         Some(category.into()),
         Some(format!("{reason} (exit code {exit_code})")),
+        Some(diagnostic),
     )
+}
+
+fn connection_diagnostic(
+    hint: Option<TerminalFailureHint>,
+    connected: bool,
+) -> ConnectionDiagnostic {
+    use TerminalFailureHint as Hint;
+
+    let (category, summary, detail, statuses) = if connected {
+        (
+            "connection-lost",
+            "The SSH session ended after connecting.",
+            "OpenSSH: connection closed after the remote shell started.",
+            ["established"; 6],
+        )
+    } else {
+        match hint {
+            Some(Hint::Configuration) => (
+                "configuration",
+                "OpenSSH rejected the local client configuration.",
+                "OpenSSH: client configuration could not be used.",
+                [
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::HostResolution) => (
+                "host-resolution",
+                "The configured SSH destination could not be resolved.",
+                "OpenSSH: could not resolve the configured hostname.",
+                [
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::ConnectionRefused) => (
+                "connection-refused",
+                "The destination refused the SSH transport connection.",
+                "OpenSSH: connection refused.",
+                [
+                    "established",
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::ConnectionTimeout) => (
+                "connection-timeout",
+                "The SSH transport connection timed out.",
+                "OpenSSH: connection timed out.",
+                [
+                    "established",
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::HostKey) => (
+                "host-key",
+                "The server host key was not accepted.",
+                "OpenSSH: host key verification failed.",
+                [
+                    "established",
+                    "established",
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::Negotiation) => (
+                "negotiation",
+                "The client and server could not complete SSH negotiation.",
+                "OpenSSH: no compatible or valid negotiation could be completed.",
+                [
+                    "established",
+                    "established",
+                    "established",
+                    "unknown",
+                    "failed",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::Authentication) => (
+                "authentication",
+                "The SSH server rejected authentication.",
+                "OpenSSH: permission denied for the offered authentication methods.",
+                [
+                    "established",
+                    "established",
+                    "established",
+                    "established",
+                    "established",
+                    "failed",
+                ],
+            ),
+            Some(Hint::Route) => (
+                "route",
+                "The configured SSH route or jump host failed.",
+                "OpenSSH: proxy or jump-host forwarding failed.",
+                [
+                    "established",
+                    "unknown",
+                    "unknown",
+                    "unknown",
+                    "unknown",
+                    "not-established",
+                ],
+            ),
+            Some(Hint::ConnectionLost) => (
+                "connection-lost",
+                "The connection closed before the remote shell started.",
+                "OpenSSH: connection closed unexpectedly.",
+                [
+                    "established",
+                    "unknown",
+                    "unknown",
+                    "unknown",
+                    "unknown",
+                    "not-established",
+                ],
+            ),
+            None => (
+                "unknown",
+                "OpenSSH exited without enough recognized evidence to identify a stage.",
+                "OpenSSH: unrecognized connection failure.",
+                [
+                    "unknown", "unknown", "unknown", "unknown", "unknown", "unknown",
+                ],
+            ),
+        }
+    };
+    let labels = [
+        ("configuration", "Client configuration"),
+        ("name-resolution", "Name resolution"),
+        ("transport", "TCP transport"),
+        ("host-key", "Host key"),
+        ("negotiation", "SSH negotiation"),
+        ("authentication", "Authentication"),
+    ];
+    ConnectionDiagnostic {
+        schema_version: 1,
+        category: category.into(),
+        summary: summary.into(),
+        detail: detail.into(),
+        stages: labels
+            .into_iter()
+            .zip(statuses)
+            .map(|((id, label), status)| ConnectionDiagnosticStage {
+                id: id.into(),
+                label: label.into(),
+                status: status.into(),
+            })
+            .collect(),
+    }
 }
 
 #[cfg(test)]
@@ -434,7 +671,8 @@ mod tests {
 
     use super::{
         MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, TerminalFailureDetector, TerminalFailureHint,
-        classify_session_exit, interactive_shell_command, map_pty_kill_result,
+        classify_session_exit, connection_diagnostic, interactive_shell_command,
+        map_pty_kill_result,
     };
 
     #[test]
@@ -479,23 +717,163 @@ mod tests {
                 false,
                 1,
                 Some(TerminalFailureHint::ConnectionLost),
+                false,
             ),
-            ("disconnected", Some("user-disconnect".into()), None)
+            ("disconnected", Some("user-disconnect".into()), None, None)
         );
     }
 
     #[test]
     fn authentication_failure_has_a_distinct_error_category() {
-        let (state, category, reason) = classify_session_exit(
+        let (state, category, reason, diagnostic) = classify_session_exit(
             false,
             None,
             false,
             255,
             Some(TerminalFailureHint::Authentication),
+            false,
         );
         assert_eq!(state, "error");
         assert_eq!(category.as_deref(), Some("authentication"));
         assert!(reason.unwrap().starts_with("SSH authentication failed"));
+        assert_eq!(diagnostic.unwrap().category, "authentication");
+    }
+
+    #[test]
+    fn remote_shell_text_is_not_reclassified_as_a_connection_failure() {
+        let (state, category, reason, diagnostic) = classify_session_exit(
+            false,
+            None,
+            false,
+            1,
+            Some(TerminalFailureHint::Authentication),
+            true,
+        );
+        assert_eq!(state, "error");
+        assert_eq!(category.as_deref(), Some("remote-exit"));
+        assert!(reason.unwrap().contains("exit code 1"));
+        assert!(diagnostic.is_none());
+    }
+
+    #[test]
+    fn version_one_openssh_fixtures_only_establish_supported_stages() {
+        let fixtures = [
+            (
+                "C:/Users/alice/.ssh/config line 3: Bad configuration option: IncludeSecrets",
+                TerminalFailureHint::Configuration,
+                "configuration",
+                [
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            (
+                "ssh: Could not resolve hostname private.example: No such host is known.",
+                TerminalFailureHint::HostResolution,
+                "host-resolution",
+                [
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            (
+                "ssh: connect to host 192.0.2.8 port 22: Connection refused",
+                TerminalFailureHint::ConnectionRefused,
+                "connection-refused",
+                [
+                    "established",
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            (
+                "Host key verification failed.",
+                TerminalFailureHint::HostKey,
+                "host-key",
+                [
+                    "established",
+                    "established",
+                    "established",
+                    "failed",
+                    "not-established",
+                    "not-established",
+                ],
+            ),
+            (
+                "Unable to negotiate with 192.0.2.8: no matching host key type found.",
+                TerminalFailureHint::Negotiation,
+                "negotiation",
+                [
+                    "established",
+                    "established",
+                    "established",
+                    "unknown",
+                    "failed",
+                    "not-established",
+                ],
+            ),
+            (
+                "alice@private.example: Permission denied (publickey,password).",
+                TerminalFailureHint::Authentication,
+                "authentication",
+                [
+                    "established",
+                    "established",
+                    "established",
+                    "established",
+                    "established",
+                    "failed",
+                ],
+            ),
+            (
+                "channel 0: open failed: connect failed: stdio forwarding failed",
+                TerminalFailureHint::Route,
+                "route",
+                [
+                    "established",
+                    "unknown",
+                    "unknown",
+                    "unknown",
+                    "unknown",
+                    "not-established",
+                ],
+            ),
+        ];
+
+        for (fixture, expected_hint, expected_category, expected_statuses) in fixtures {
+            let mut detector = TerminalFailureDetector::default();
+            detector.observe(fixture.as_bytes());
+            assert_eq!(detector.hint, Some(expected_hint), "fixture: {fixture}");
+            let diagnostic = connection_diagnostic(detector.hint, detector.connected);
+            assert_eq!(diagnostic.schema_version, 1);
+            assert_eq!(diagnostic.category, expected_category);
+            assert_eq!(
+                diagnostic
+                    .stages
+                    .iter()
+                    .map(|stage| stage.status.as_str())
+                    .collect::<Vec<_>>(),
+                expected_statuses,
+            );
+            assert!(!diagnostic.detail.contains("alice"));
+            assert!(!diagnostic.detail.contains("private.example"));
+            assert!(!diagnostic.detail.contains("C:/Users"));
+        }
+
+        let unknown = connection_diagnostic(None, false);
+        assert_eq!(unknown.category, "unknown");
+        assert!(unknown.stages.iter().all(|stage| stage.status == "unknown"));
     }
 
     #[test]

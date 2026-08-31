@@ -314,6 +314,12 @@ Reconnect after a drop, or clear the local buffer without sending anything to th
 host. Several sessions per connection, with split panes and focus mode for
 tiling.
 
+Failed terminal attempts may open a Connection diagnostics dialog from the inline error. Its
+ordered stage list distinguishes Established, Failed, Not established, and Unknown without
+claiming more than the installed OpenSSH client's observed evidence supports. The dialog shows a
+reviewed generic diagnostic instead of arbitrary stderr, runs no retry or probe, and disappears
+with its in-memory Terminal Session state.
+
 ---
 
 ## Components

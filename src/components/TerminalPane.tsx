@@ -3,7 +3,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { Eraser, PlugZap, RefreshCw } from "lucide-react";
+import { Eraser, PlugZap, RefreshCw, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { clearTerminalDisplay } from "../lib/terminal-display";
@@ -11,12 +11,14 @@ import { BoundedByteQueue, isControlRoomShortcut } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import type {
   AppSettings,
+  ConnectionDiagnostic,
   ConnectionState,
   SavedConnection,
   SessionStateEvent,
   Workspace,
 } from "../types";
 import { StatusDot } from "./StatusDot";
+import { ConnectionDiagnostics } from "./ConnectionDiagnostics";
 
 interface TerminalPaneProps {
   connection: SavedConnection;
@@ -67,6 +69,8 @@ export function TerminalPane({
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<ConnectionDiagnostic | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
   historyPausedRef.current = workspace.historyPaused;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
@@ -77,6 +81,7 @@ export function TerminalPane({
 
   handleSessionStateRef.current = (event) => {
     onStateRef.current(event.state, event.reason);
+    if (event.state === "error") setDiagnostic(event.diagnostic ?? null);
     if (event.state !== "disconnected" && event.state !== "error") return;
     acceptingInputRef.current = false;
     pendingInputRef.current.clear();
@@ -273,6 +278,8 @@ export function TerminalPane({
     onSessionRef.current(null);
     onStateRef.current("connecting", null);
     setLocalError(null);
+    setDiagnostic(null);
+    setDiagnosticsOpen(false);
     terminal.reset();
 
     const flushAcknowledgements = () => {
@@ -408,10 +415,22 @@ export function TerminalPane({
       </header>
       {(localError || workspace.reason) && (
         <div className="terminal-notice" role="status">
-          {localError ?? workspace.reason}
+          <span>{localError ?? workspace.reason}</span>
+          {diagnostic && (
+            <button
+              className="toolbar-button"
+              type="button"
+              onClick={() => setDiagnosticsOpen(true)}
+            >
+              <Stethoscope size={14} /> View diagnostics
+            </button>
+          )}
         </div>
       )}
       <div className="terminal-container" ref={containerRef} />
+      {diagnosticsOpen && diagnostic && (
+        <ConnectionDiagnostics diagnostic={diagnostic} onClose={() => setDiagnosticsOpen(false)} />
+      )}
     </section>
   );
 }

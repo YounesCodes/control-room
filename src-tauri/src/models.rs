@@ -240,6 +240,25 @@ pub struct SessionStateEvent {
     pub state: String,
     pub category: Option<String>,
     pub reason: Option<String>,
+    pub diagnostic: Option<ConnectionDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDiagnostic {
+    pub schema_version: u8,
+    pub category: String,
+    pub summary: String,
+    pub detail: String,
+    pub stages: Vec<ConnectionDiagnosticStage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDiagnosticStage {
+    pub id: String,
+    pub label: String,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -230,11 +230,31 @@ export interface SessionStateEvent {
     | "connection-refused"
     | "connection-timeout"
     | "host-key"
+    | "configuration"
+    | "negotiation"
+    | "route"
     | "connection-lost"
     | "process"
     | "remote-exit"
     | "user-disconnect";
   reason: string | null;
+  diagnostic?: ConnectionDiagnostic | null;
+}
+
+export type ConnectionDiagnosticStatus = "established" | "failed" | "not-established" | "unknown";
+
+export interface ConnectionDiagnosticStage {
+  id: string;
+  label: string;
+  status: ConnectionDiagnosticStatus;
+}
+
+export interface ConnectionDiagnostic {
+  schemaVersion: 1;
+  category: string;
+  summary: string;
+  detail: string;
+  stages: ConnectionDiagnosticStage[];
 }
 
 export interface StreamStateEvent {

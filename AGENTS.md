@@ -50,10 +50,14 @@ DESIGN.md.
    read-only, live only in Workspace memory, and are never persisted. Report
    binding exposure and firewall policy separately, and never claim a bind means
    Internet reachability.
-7. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-8. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+7. Derive Connection Diagnostics only from the real Terminal Session attempt,
+   its exit state, stable markers, and reviewed OpenSSH failure patterns. Keep
+   ambiguous stages Unknown, expose only sanitized generic evidence, never run an
+   automatic retry or probe, and never persist a diagnostic record or stderr.
+8. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+9. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.
-9. Do not commit or push unless the user asks.
+10. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -71,6 +75,9 @@ account you control.
   with the inspection views. A connection can have several Workspaces.
 - **Terminal Session**: one interactive SSH shell inside a Workspace. Its state
   belongs to the session, not the connection.
+- **Connection Diagnostic**: an in-memory, evidence-based explanation of a
+  failed Terminal Session attempt. It records only typed stage states and a
+  reviewed sanitized OpenSSH summary, never raw stderr.
 - **Structured Operation**: a bounded, read-only inspection request that runs
   independently of Terminal Sessions.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket

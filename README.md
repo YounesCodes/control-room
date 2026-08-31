@@ -41,6 +41,9 @@ The distinction matters. Control Room helps you inspect and move between related
 - Open multiple independent Workspaces and multiple Terminal Sessions for one Saved Connection.
 - Use an interactive terminal backed by the Windows OpenSSH client and ConPTY, with resizing, scrollback, Unicode, ANSI and VT output, copy and paste, and control keys.
 - Reconnect a dropped Terminal Session, clear its local display, or focus and split terminal panes.
+- After a failed terminal attempt, open Connection diagnostics to see which evidence-based SSH
+  stages were established, failed, not established, or remain unknown. The record comes from that
+  same OpenSSH attempt, contains only reviewed sanitized evidence, and stays in memory.
 - Restore Workspace tabs and layout after restarting the app. Restored Workspaces start disconnected and never reconnect automatically.
 
 ### Host inspection
@@ -134,6 +137,7 @@ It deliberately does not persist:
 - Imported or copied private keys.
 - Terminal output.
 - Fetched journald or Docker logs.
+- Connection diagnostic records and SSH diagnostic output.
 
 When a read-only request needs sudo, Control Room sends the password once for that retry and then discards it. The terminal itself is a normal SSH shell, so commands run there have the effects allowed by the remote account.
 
