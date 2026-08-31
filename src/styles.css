@@ -1922,6 +1922,104 @@ dd {
   padding-bottom: 18px;
 }
 
+.container-inspector-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.container-inspector-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.container-inspector-heading > div {
+  min-width: 0;
+}
+
+.inspector-tabs {
+  display: flex;
+  overflow-x: auto;
+  flex: none;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-top: 16px;
+}
+
+.inspector-tabs button {
+  min-height: 34px;
+  border-bottom: 2px solid transparent;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.inspector-tabs button:hover,
+.inspector-tabs button[aria-selected="true"] {
+  color: var(--text);
+}
+
+.inspector-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+}
+
+.inspector-tab-panel {
+  min-height: 220px;
+  padding-top: 12px;
+}
+
+.container-detail-list dd.technical {
+  overflow-wrap: anywhere;
+}
+
+.inspector-record-list {
+  border-top: 1px solid var(--border);
+}
+
+.inspector-record {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 4px;
+}
+
+.inspector-record-stacked {
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.inspector-record strong {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.inspector-record span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.sensitive-data-note {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  margin: 14px 0 0;
+  padding: 10px 11px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.container-log-action {
+  align-self: flex-start;
+  margin-top: 18px;
+}
+
 .detail-list {
   margin: 13px 0 18px;
 }
