@@ -13,6 +13,7 @@ use std::{
 
 use chrono::Utc;
 use parking_lot::{Condvar, Mutex};
+use regex::Regex;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, ipc::Channel, ipc::Response};
 use uuid::Uuid;
@@ -21,8 +22,9 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        DockerContainer, HostCapabilities, LOG_TAIL_OPTIONS, SavedConnection, StreamStarted,
-        StreamStateEvent, SystemdUnit,
+        ConnectionRemote, ConnectionSummary, DockerContainer, EstablishedConnections, FirewallRule,
+        FirewallStatus, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
+        StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -35,6 +37,10 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
 const MAX_STRUCTURED_QUEUE_WAIT: Duration = Duration::from_secs(4);
 const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
+const MAX_FIREWALL_RULES: usize = 200;
+const MAX_CONNECTION_ROWS: usize = 4000;
+const MAX_CONNECTION_GROUPS: usize = 200;
+const MAX_CONNECTION_REMOTES: usize = 20;
 
 #[derive(Default)]
 pub struct RemoteOperationLimiter {
@@ -226,6 +232,19 @@ pub fn list_containers(
         .collect()
 }
 
+pub fn list_ports(
+    connection: &SavedConnection,
+    sudo_password: Option<String>,
+) -> Result<Vec<ListeningSocket>, String> {
+    let command = port_list_command();
+    let output = if let Some(password) = sudo_password {
+        RemoteCommandExecutor::execute_with_sudo(connection, "list_ports", command, password)?
+    } else {
+        RemoteCommandExecutor::execute(connection, "list_ports", command)?
+    };
+    parse_listening_sockets(&output.success_text()?)
+}
+
 fn run_ssh(
     connection: &SavedConnection,
     operation: &'static str,
@@ -360,7 +379,11 @@ fn log_operation_timing(
 fn classify_failure(code: i32, stderr: &[u8]) -> String {
     let stderr = String::from_utf8_lossy(stderr).trim().to_string();
     let lower = stderr.to_ascii_lowercase();
-    let category = if lower.contains("permission denied") || lower.contains("access denied") {
+    let category = if lower.contains("permission denied")
+        || lower.contains("access denied")
+        || lower.contains("you need to be root")
+        || lower.contains("operation not permitted")
+    {
         "Permission denied"
     } else if lower.contains("could not resolve hostname") {
         "Host could not be resolved"
@@ -490,6 +513,404 @@ fn parse_container(line: &str) -> Result<DockerContainer, String> {
 
 fn docker_container_list_command() -> &'static str {
     r#"docker ps -a --no-trunc --format '{"ID":{{json .ID}},"Names":{{json .Names}},"Image":{{json .Image}},"State":{{json .State}},"Status":{{json .Status}},"Ports":{{json .Ports}},"CreatedAt":{{json .CreatedAt}},"ComposeProject":{{json (.Label "com.docker.compose.project")}},"ComposeService":{{json (.Label "com.docker.compose.service")}},"ComposeContainerNumber":{{json (.Label "com.docker.compose.container-number")}},"ComposeOneoff":{{json (.Label "com.docker.compose.oneoff")}}}'"#
+}
+
+const PROCESS_UNIT_MARKER: &str = "__CONTROL_ROOM_PROCESS_UNITS__";
+
+fn port_list_command() -> &'static str {
+    r#"env LC_ALL=C sh -c 'ss -H -lntupO; status=$?; test $status -eq 0 || exit $status; printf "\n__CONTROL_ROOM_PROCESS_UNITS__\n"; ps -eo pid=,unit=,comm= 2>/dev/null || true'"#
+}
+
+fn parse_listening_sockets(text: &str) -> Result<Vec<ListeningSocket>, String> {
+    let (socket_text, process_text) = text
+        .split_once(PROCESS_UNIT_MARKER)
+        .ok_or_else(|| "Socket inspection returned an incomplete result".to_string())?;
+    let process_units = parse_process_units(process_text);
+    let mut sockets = Vec::new();
+
+    for (index, line) in socket_text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .enumerate()
+    {
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.len() < 6 {
+            continue;
+        }
+        let protocol = match fields[0].trim_end_matches(|character| ['4', '6'].contains(&character))
+        {
+            "tcp" => "tcp",
+            "udp" => "udp",
+            _ => continue,
+        };
+        let Some((local_address, port)) = parse_local_endpoint(fields[4]) else {
+            continue;
+        };
+        let process_evidence = parse_process_evidence(&fields[6..].join(" "));
+        let (process_name, process_id, ownership) = match process_evidence.as_slice() {
+            [] => (None, None, "unavailable"),
+            [(pid, name)] => (Some(name.clone()), Some(*pid), "known"),
+            entries => {
+                // Several PIDs hold the same listening socket — the common
+                // prefork/worker pattern (nginx, apache-prefork, php-fpm,
+                // postgres). The process name stays an unambiguous kernel fact
+                // when every holder shares it, so keep it for display and
+                // filtering; the owning PID (and any systemd correlation) is
+                // genuinely ambiguous and is withheld.
+                let first_name = &entries[0].1;
+                if entries.iter().all(|(_, name)| name == first_name) {
+                    (Some(first_name.clone()), None, "ambiguous")
+                } else {
+                    (None, None, "ambiguous")
+                }
+            }
+        };
+        let systemd_unit = process_id.and_then(|pid| process_units.get(&pid)).cloned();
+        let address_family = if local_address.contains(':') {
+            "ipv6"
+        } else {
+            "ipv4"
+        };
+        sockets.push(ListeningSocket {
+            id: format!("{protocol}:{local_address}:{port}:{index}"),
+            protocol: protocol.into(),
+            address_family: address_family.into(),
+            local_address,
+            port,
+            process_name,
+            process_id,
+            systemd_unit,
+            ownership: ownership.into(),
+        });
+    }
+
+    sockets.sort_by(|left, right| {
+        left.port
+            .cmp(&right.port)
+            .then_with(|| left.protocol.cmp(&right.protocol))
+            .then_with(|| left.local_address.cmp(&right.local_address))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    Ok(sockets)
+}
+
+fn parse_local_endpoint(value: &str) -> Option<(String, u16)> {
+    let (address, port) = value.rsplit_once(':')?;
+    let port = port.parse::<u16>().ok()?;
+    let address = address
+        .trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_string();
+    (!address.is_empty()).then_some((address, port))
+}
+
+fn parse_process_evidence(value: &str) -> Vec<(u32, String)> {
+    let pattern =
+        Regex::new(r#"\(\"([^\"]+)\",pid=(\d+)"#).expect("the socket process pattern is valid");
+    let mut evidence = pattern
+        .captures_iter(value)
+        .filter_map(|capture| {
+            Some((
+                capture.get(2)?.as_str().parse::<u32>().ok()?,
+                capture.get(1)?.as_str().to_string(),
+            ))
+        })
+        .collect::<Vec<_>>();
+    evidence.sort();
+    evidence.dedup();
+    evidence
+}
+
+fn parse_process_units(text: &str) -> HashMap<u32, String> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let pid = fields.next()?.parse::<u32>().ok()?;
+            let unit = validate_systemd_unit_id(fields.next()?).ok()?.to_string();
+            Some((pid, unit))
+        })
+        .collect()
+}
+
+fn bounded_text(value: &str, maximum_chars: usize) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(maximum_chars)
+        .collect()
+}
+
+const FIREWALL_UNAVAILABLE_MARKER: &str = "__CR_FW_UNAVAILABLE__";
+
+pub fn list_firewall(
+    connection: &SavedConnection,
+    sudo_password: Option<String>,
+) -> Result<FirewallStatus, String> {
+    let command = firewall_status_command();
+    let output = if let Some(password) = sudo_password {
+        RemoteCommandExecutor::execute_with_sudo(connection, "list_firewall", command, password)?
+    } else {
+        RemoteCommandExecutor::execute(connection, "list_firewall", command)?
+    };
+    Ok(parse_firewall_status(&output.success_text()?))
+}
+
+fn firewall_status_command() -> &'static str {
+    // `ufw status` requires root; when run without privilege it exits non-zero
+    // with a "you need to be root" message, which classify_failure maps to a
+    // permission error so the UI can offer the existing sudo retry.
+    r#"env LC_ALL=C sh -c 'if ! command -v ufw >/dev/null 2>&1; then printf "__CR_FW_UNAVAILABLE__\n"; exit 0; fi; ufw status verbose'"#
+}
+
+fn parse_firewall_status(text: &str) -> FirewallStatus {
+    let collected_at = Utc::now().to_rfc3339();
+    if text.contains(FIREWALL_UNAVAILABLE_MARKER) {
+        return FirewallStatus {
+            available: false,
+            active: None,
+            default_incoming: None,
+            rules: Vec::new(),
+            collected_at,
+        };
+    }
+
+    let mut active = None;
+    let mut default_incoming = None;
+    let mut rules = Vec::new();
+    let mut in_rules = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(status) = trimmed.strip_prefix("Status:") {
+            active = Some(status.trim().eq_ignore_ascii_case("active"));
+            continue;
+        }
+        if let Some(defaults) = trimmed.strip_prefix("Default:") {
+            default_incoming = defaults
+                .split(',')
+                .find(|segment| segment.contains("(incoming)"))
+                .and_then(|segment| segment.split_whitespace().next())
+                .map(str::to_string);
+            continue;
+        }
+        if trimmed.starts_with("To") && trimmed.contains("Action") {
+            in_rules = true;
+            continue;
+        }
+        if trimmed.starts_with("--") {
+            continue;
+        }
+        if in_rules
+            && rules.len() < MAX_FIREWALL_RULES
+            && let Some(rule) = parse_firewall_rule(trimmed)
+        {
+            rules.push(rule);
+        }
+    }
+
+    FirewallStatus {
+        available: true,
+        active,
+        default_incoming,
+        rules,
+        collected_at,
+    }
+}
+
+fn parse_firewall_rule(line: &str) -> Option<FirewallRule> {
+    const ACTIONS: [&str; 4] = ["ALLOW", "DENY", "LIMIT", "REJECT"];
+    const DIRECTIONS: [&str; 3] = ["IN", "OUT", "FWD"];
+    let tokens: Vec<&str> = line.split_whitespace().collect();
+    let action_index = tokens.iter().position(|token| ACTIONS.contains(token))?;
+    let to = tokens[..action_index].join(" ");
+    if to.is_empty() {
+        return None;
+    }
+    let action = tokens[action_index].to_string();
+    let mut from_start = action_index + 1;
+    if tokens
+        .get(from_start)
+        .is_some_and(|token| DIRECTIONS.contains(token))
+    {
+        from_start += 1;
+    }
+    let from = tokens
+        .get(from_start..)
+        .map(|rest| rest.join(" "))
+        .unwrap_or_default();
+    let ipv6 = to.contains("(v6)") || from.contains("(v6)");
+    let (port, protocol) = parse_firewall_target(&to);
+    Some(FirewallRule {
+        to: bounded_text(&to, 120),
+        action,
+        from: bounded_text(if from.is_empty() { "Anywhere" } else { &from }, 120),
+        port,
+        protocol,
+        ipv6,
+    })
+}
+
+fn parse_firewall_target(to: &str) -> (Option<u16>, Option<String>) {
+    let cleaned = to.replace("(v6)", "");
+    let first = cleaned.split_whitespace().next().unwrap_or("");
+    let (port_str, protocol) = match first.split_once('/') {
+        Some((port, protocol)) => (port, Some(protocol.to_ascii_lowercase())),
+        None => (first, None),
+    };
+    let port = port_str.parse::<u16>().ok();
+    let protocol = protocol.filter(|value| value == "tcp" || value == "udp");
+    (port, protocol)
+}
+
+pub fn list_connections(connection: &SavedConnection) -> Result<EstablishedConnections, String> {
+    let text =
+        RemoteCommandExecutor::execute(connection, "list_connections", connections_command())?
+            .success_text()?;
+    Ok(parse_established_connections(&text))
+}
+
+fn connections_command() -> &'static str {
+    // One bounded, read-only snapshot of currently established TCP connections.
+    // Process ownership is only visible for the caller's own processes without
+    // privilege; peers without ownership still contribute to the counts.
+    r#"env LC_ALL=C sh -c 'ss -H -tnp state established 2>/dev/null | head -n 4000; printf "\n__CONTROL_ROOM_PROCESS_UNITS__\n"; ps -eo pid=,unit=,comm= 2>/dev/null || true'"#
+}
+
+#[derive(Default)]
+struct ConnectionAccumulator {
+    protocol: String,
+    local_port: u16,
+    process_name: Option<String>,
+    process_ids: std::collections::BTreeSet<u32>,
+    systemd_unit: Option<String>,
+    established: u32,
+    remotes: HashMap<String, u32>,
+}
+
+fn parse_established_connections(text: &str) -> EstablishedConnections {
+    let collected_at = Utc::now().to_rfc3339();
+    let (connection_text, process_text) = match text.split_once(PROCESS_UNIT_MARKER) {
+        Some(parts) => parts,
+        None => (text, ""),
+    };
+    let process_units = parse_process_units(process_text);
+
+    let mut groups: HashMap<String, ConnectionAccumulator> = HashMap::new();
+    let mut rows = 0usize;
+    let mut total_established = 0u32;
+
+    for line in connection_text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+    {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let mut endpoints = fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| parse_local_endpoint(field).map(|parsed| (index, parsed)));
+        let Some((_, (_, local_port))) = endpoints.next() else {
+            continue;
+        };
+        let Some((peer_index, (peer_address, _))) = endpoints.next() else {
+            continue;
+        };
+
+        rows += 1;
+        total_established = total_established.saturating_add(1);
+
+        let evidence = parse_process_evidence(&fields[peer_index + 1..].join(" "));
+        let (process_name, process_id) = match evidence.as_slice() {
+            [] => (None, None),
+            [(pid, name)] => (Some(name.clone()), Some(*pid)),
+            entries => {
+                let first_name = &entries[0].1;
+                if entries.iter().all(|(_, name)| name == first_name) {
+                    (Some(first_name.clone()), None)
+                } else {
+                    (None, None)
+                }
+            }
+        };
+        let systemd_unit = process_id.and_then(|pid| process_units.get(&pid)).cloned();
+
+        let owner_key = systemd_unit
+            .clone()
+            .or_else(|| process_name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        let key = format!("tcp:{local_port}:{owner_key}");
+        let entry = groups
+            .entry(key.clone())
+            .or_insert_with(|| ConnectionAccumulator {
+                protocol: "tcp".to_string(),
+                local_port,
+                process_name: process_name.clone(),
+                systemd_unit: systemd_unit.clone(),
+                ..ConnectionAccumulator::default()
+            });
+        entry.established = entry.established.saturating_add(1);
+        if let Some(pid) = process_id {
+            entry.process_ids.insert(pid);
+        }
+        *entry
+            .remotes
+            .entry(bounded_text(&peer_address, 80))
+            .or_insert(0) += 1;
+    }
+
+    let mut summaries: Vec<ConnectionSummary> = groups
+        .into_iter()
+        .map(|(key, accumulator)| {
+            let remote_address_count = accumulator.remotes.len() as u32;
+            let mut remotes: Vec<ConnectionRemote> = accumulator
+                .remotes
+                .into_iter()
+                .map(|(address, count)| ConnectionRemote { address, count })
+                .collect();
+            remotes.sort_by(|left, right| {
+                right
+                    .count
+                    .cmp(&left.count)
+                    .then_with(|| left.address.cmp(&right.address))
+            });
+            remotes.truncate(MAX_CONNECTION_REMOTES);
+            let process_id = if accumulator.process_ids.len() == 1 {
+                accumulator.process_ids.iter().next().copied()
+            } else {
+                None
+            };
+            ConnectionSummary {
+                key,
+                protocol: accumulator.protocol,
+                local_port: accumulator.local_port,
+                process_name: accumulator.process_name,
+                process_id,
+                systemd_unit: accumulator.systemd_unit,
+                established: accumulator.established,
+                remote_address_count,
+                remotes,
+            }
+        })
+        .collect();
+
+    summaries.sort_by(|left, right| {
+        right
+            .established
+            .cmp(&left.established)
+            .then_with(|| left.local_port.cmp(&right.local_port))
+            .then_with(|| left.key.cmp(&right.key))
+    });
+    summaries.truncate(MAX_CONNECTION_GROUPS);
+
+    EstablishedConnections {
+        groups: summaries,
+        total_established,
+        truncated: rows >= MAX_CONNECTION_ROWS,
+        collected_at,
+    }
 }
 
 fn valid_compose_project(value: &str) -> Option<String> {
@@ -842,6 +1263,173 @@ mod tests {
             " enable ",
             " disable ",
         ] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn parses_tcp_udp_address_families_owners_and_shared_ports() {
+        let sockets = parse_listening_sockets(
+            "tcp LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:((\"nginx\",pid=742,fd=6))\n\
+             tcp LISTEN 0 511 [::]:443 [::]:* users:((\"nginx\",pid=742,fd=7))\n\
+             udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*\n\
+             tcp LISTEN 0 64 127.0.0.1:8080 0.0.0.0:* users:((\"worker-a\",pid=900,fd=3),(\"worker-b\",pid=901,fd=3))\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n\
+             742 nginx.service nginx\n\
+             900 worker-a.scope worker-a\n",
+        )
+        .unwrap();
+
+        assert_eq!(sockets.len(), 4);
+        assert_eq!(
+            sockets.iter().filter(|socket| socket.port == 443).count(),
+            2
+        );
+        assert_eq!(sockets[0].protocol, "udp");
+        assert_eq!(sockets[0].address_family, "ipv4");
+        assert_eq!(sockets[0].ownership, "unavailable");
+        assert_eq!(sockets[1].systemd_unit.as_deref(), Some("nginx.service"));
+        assert_eq!(sockets[2].address_family, "ipv6");
+        assert_eq!(sockets[3].ownership, "ambiguous");
+        assert_eq!(sockets[3].process_id, None);
+        assert_eq!(sockets[3].systemd_unit, None);
+    }
+
+    #[test]
+    fn shared_name_multiprocess_listener_keeps_the_process_name_but_not_ownership() {
+        // A prefork/worker server (nginx master + workers) reports one socket
+        // held by several PIDs that all share a process name.
+        let sockets = parse_listening_sockets(
+            "tcp LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:((\"nginx\",pid=742,fd=6),(\"nginx\",pid=743,fd=6),(\"nginx\",pid=744,fd=6))\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n\
+             742 nginx.service nginx\n",
+        )
+        .unwrap();
+
+        assert_eq!(sockets.len(), 1);
+        // Process name is an unambiguous kernel fact and must survive for
+        // display and filtering.
+        assert_eq!(sockets[0].process_name.as_deref(), Some("nginx"));
+        // The owning PID and systemd correlation are genuinely ambiguous.
+        assert_eq!(sockets[0].ownership, "ambiguous");
+        assert_eq!(sockets[0].process_id, None);
+        assert_eq!(sockets[0].systemd_unit, None);
+    }
+
+    #[test]
+    fn ignores_unix_and_malformed_socket_rows() {
+        let sockets = parse_listening_sockets(
+            "u_str LISTEN 0 4096 /run/dbus/system_bus_socket * 0\n\
+             tcp LISTEN 0 128 127.0.0.1:* 0.0.0.0:*\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n",
+        )
+        .unwrap();
+        assert!(sockets.is_empty());
+    }
+
+    #[test]
+    fn port_listing_is_one_bounded_read_only_query_without_process_arguments() {
+        let command = port_list_command();
+        assert!(command.contains("ss -H -lntupO"));
+        assert!(command.contains("ps -eo pid=,unit=,comm="));
+        assert!(!command.contains("args="));
+        for mutation in [" kill ", " rm ", " systemctl start ", " docker stop "] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn parses_ufw_status_rules_defaults_and_families() {
+        let status = parse_firewall_status(
+            "Status: active\nLogging: on (low)\nDefault: deny (incoming), allow (outgoing), disabled (routed)\nNew profiles: skip\n\nTo                         Action      From\n--                         ------      ----\n22/tcp                     ALLOW IN    Anywhere\n443                        ALLOW IN    Anywhere\n5432/tcp                   ALLOW IN    192.168.0.0/16\n22/tcp (v6)                ALLOW IN    Anywhere (v6)\n",
+        );
+        assert!(status.available);
+        assert_eq!(status.active, Some(true));
+        assert_eq!(status.default_incoming.as_deref(), Some("deny"));
+        assert_eq!(status.rules.len(), 4);
+        assert_eq!(status.rules[0].port, Some(22));
+        assert_eq!(status.rules[0].protocol.as_deref(), Some("tcp"));
+        assert_eq!(status.rules[0].from, "Anywhere");
+        // A bare port keeps no protocol; a private source is preserved verbatim.
+        assert_eq!(status.rules[1].port, Some(443));
+        assert_eq!(status.rules[1].protocol, None);
+        assert_eq!(status.rules[2].from, "192.168.0.0/16");
+        assert!(status.rules[3].ipv6);
+    }
+
+    #[test]
+    fn firewall_reports_unavailable_when_ufw_is_missing() {
+        let status = parse_firewall_status("__CR_FW_UNAVAILABLE__\n");
+        assert!(!status.available);
+        assert_eq!(status.active, None);
+        assert!(status.rules.is_empty());
+    }
+
+    #[test]
+    fn firewall_command_is_read_only_and_probes_ufw() {
+        let command = firewall_status_command();
+        assert!(command.contains("ufw status"));
+        for mutation in [
+            " ufw enable",
+            " ufw disable",
+            " ufw allow",
+            " ufw deny",
+            " ufw delete",
+        ] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn aggregates_established_connections_by_owner_and_port() {
+        let text = "0 0 10.0.0.5:443 203.0.113.9:5001 users:((\"nginx\",pid=742,fd=8))\n\
+             0 0 10.0.0.5:443 203.0.113.9:5002 users:((\"nginx\",pid=743,fd=9))\n\
+             0 0 10.0.0.5:443 198.51.100.7:6100 users:((\"nginx\",pid=742,fd=10))\n\
+             0 0 10.0.0.5:22 198.51.100.9:40001 users:((\"sshd\",pid=1200,fd=3))\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n\
+             742 nginx.service nginx\n\
+             743 nginx.service nginx\n\
+             1200 ssh.service sshd\n";
+        let overview = parse_established_connections(text);
+        assert_eq!(overview.total_established, 4);
+        assert!(!overview.truncated);
+        assert_eq!(overview.groups.len(), 2);
+        // Busiest listener first.
+        let https = &overview.groups[0];
+        assert_eq!(https.local_port, 443);
+        assert_eq!(https.systemd_unit.as_deref(), Some("nginx.service"));
+        assert_eq!(https.established, 3);
+        assert_eq!(https.remote_address_count, 2);
+        assert_eq!(https.remotes[0].address, "203.0.113.9");
+        assert_eq!(https.remotes[0].count, 2);
+        // Mixed PIDs behind one service leave no single PID.
+        assert_eq!(https.process_id, None);
+        let ssh = &overview.groups[1];
+        assert_eq!(ssh.local_port, 22);
+        assert_eq!(ssh.process_id, Some(1200));
+    }
+
+    #[test]
+    fn established_connections_parse_ipv6_and_tolerate_missing_ownership() {
+        let text = "0 0 [2001:db8::1]:443 [2001:db8::99]:5001 \n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n";
+        let overview = parse_established_connections(text);
+        assert_eq!(overview.total_established, 1);
+        assert_eq!(overview.groups.len(), 1);
+        let group = &overview.groups[0];
+        assert_eq!(group.local_port, 443);
+        assert_eq!(group.process_name, None);
+        assert_eq!(group.systemd_unit, None);
+        assert_eq!(group.remotes[0].address, "2001:db8::99");
+    }
+
+    #[test]
+    fn connections_command_is_one_bounded_read_only_query() {
+        let command = connections_command();
+        assert!(command.contains("ss -H -tnp state established"));
+        assert!(command.contains("head -n 4000"));
+        assert!(!command.contains("args="));
+        for mutation in [" kill ", " rm ", " ss -K", " tcpkill "] {
             assert!(!command.contains(mutation));
         }
     }

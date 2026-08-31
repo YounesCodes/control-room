@@ -65,6 +65,59 @@ export interface DockerContainer {
   composeOneoff: boolean | null;
 }
 
+export interface ListeningSocket {
+  id: string;
+  protocol: "tcp" | "udp";
+  addressFamily: "ipv4" | "ipv6";
+  localAddress: string;
+  port: number;
+  processName: string | null;
+  processId: number | null;
+  systemdUnit: string | null;
+  ownership: "known" | "unavailable" | "ambiguous";
+}
+
+export interface FirewallRule {
+  to: string;
+  action: string;
+  from: string;
+  port: number | null;
+  protocol: string | null;
+  ipv6: boolean;
+}
+
+export interface FirewallStatus {
+  available: boolean;
+  active: boolean | null;
+  defaultIncoming: string | null;
+  rules: FirewallRule[];
+  collectedAt: string;
+}
+
+export interface ConnectionRemote {
+  address: string;
+  count: number;
+}
+
+export interface ConnectionSummary {
+  key: string;
+  protocol: string;
+  localPort: number;
+  processName: string | null;
+  processId: number | null;
+  systemdUnit: string | null;
+  established: number;
+  remoteAddressCount: number;
+  remotes: ConnectionRemote[];
+}
+
+export interface EstablishedConnections {
+  groups: ConnectionSummary[];
+  totalEstablished: number;
+  truncated: boolean;
+  collectedAt: string;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -117,7 +170,8 @@ export interface EnvironmentInfo {
 }
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
-export type WorkspaceView = "overview" | "terminal" | "services" | "docker" | "logs" | "history";
+export type WorkspaceView =
+  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -146,7 +200,10 @@ export interface Workspace {
   reconnectToken: number;
   connectRequested: boolean;
   servicesCache: CachedList<SystemdUnit>;
+  portsCache: CachedList<ListeningSocket>;
   containersCache: CachedList<DockerContainer>;
+  systemdSelectionId: string | null;
+  containerSelectionId: string | null;
   logSource: LogSourceSelection | null;
 }
 

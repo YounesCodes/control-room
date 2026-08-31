@@ -4,13 +4,13 @@
 
 [![Latest release](https://img.shields.io/github/v/release/YounesCodes/control-room?display_name=tag)](https://github.com/YounesCodes/control-room/releases/latest) [![CI](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml)
 
-Control Room is a local Windows desktop application for working with Linux machines over SSH. It gives you a real interactive shell and a set of bounded, read-only views for the same Remote Host: system details, systemd units, journald, Docker containers, logs, and opt-in Bash command history.
+Control Room is a local Windows desktop application for working with Linux machines over SSH. It gives you a real interactive shell and a set of bounded, read-only views for the same Remote Host: system details, systemd units, listening ports, journald, Docker containers, logs, and opt-in Bash command history.
 
 It is for people who manage Linux machines from Windows and want host context close to their terminal work. Control Room is not a monitoring service, RMM tool, server control panel, web dashboard, cloud platform, SSH replacement, or AI tool. The terminal remains the place where you perform administrative work.
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -25,6 +25,7 @@ Saved Connection
          +-- Interactive SSH terminal
          +-- Host overview
          +-- systemd units
+         +-- listening TCP and UDP ports
          +-- Docker containers
          +-- journald and Docker logs
          +-- Enhanced History, when enabled
@@ -48,12 +49,19 @@ The distinction matters. Control Room helps you inspect and move between related
 - Inspect system-scope systemd services, timers, mounts, and sockets. Failed units sort first,
   active and failed totals remain visible, and state and type filters narrow the list. Each unit
   keeps its canonical identity and can open its journal.
+- Inspect a timestamped snapshot of listening TCP and UDP sockets across four tabs: a visual
+  Overview graph (host to listener to owning service or process, with exposure and UFW firewall
+  annotations), Connections (established connections aggregated by listener), Docker (published
+  host-to-container port topology), and a precise, searchable Table. Filter by protocol, exposure,
+  and text; binding exposure and firewall policy are reported separately, and a broad bind is never
+  presented as Internet reachability. Process details stay unavailable when the remote account
+  cannot read them, and navigation appears only for explicit ownership evidence.
 - Group Docker Compose containers by project and service, switch to a flat list, search by
   project, service, name, image, or ID, inspect each container, and open its logs. Containers
   without valid Compose identity labels stay under Ungrouped.
 - Reuse recent inspection results briefly and refresh them manually when you need current data.
 
-All structured inspection is read-only. Control Room does not start, stop, restart, reset, create, or remove units or containers.
+All structured inspection is read-only. Control Room does not scan networks, test reachability, or start, stop, restart, reset, create, or remove units or containers.
 
 ### Logs
 
@@ -88,7 +96,7 @@ Enabling Enhanced History is the explicit exception to the inspection-only rule.
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Local machine                | Windows 11 x64                                                                                                                                                  |
 | SSH client                   | The Windows OpenSSH client already installed on the machine                                                                                                     |
-| Structured remote inspection | Debian or Ubuntu family Linux with systemd, journald, and Bash                                                                                                  |
+| Structured remote inspection | Debian or Ubuntu family Linux with systemd, journald, Bash, and `ss` from iproute2                                                                              |
 | Docker inspection            | Optional Docker installation on the remote host. The connected account must be able to query the Docker daemon, or you can retry a read-only request with sudo. |
 | Other Linux hosts            | Terminal-only, best effort. The structured views target the environment above.                                                                                  |
 

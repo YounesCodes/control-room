@@ -78,6 +78,76 @@ pub struct DockerContainer {
     pub compose_oneoff: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListeningSocket {
+    pub id: String,
+    pub protocol: String,
+    pub address_family: String,
+    pub local_address: String,
+    pub port: u16,
+    pub process_name: Option<String>,
+    pub process_id: Option<u32>,
+    pub systemd_unit: Option<String>,
+    pub ownership: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FirewallRule {
+    pub to: String,
+    pub action: String,
+    pub from: String,
+    pub port: Option<u16>,
+    pub protocol: Option<String>,
+    pub ipv6: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FirewallStatus {
+    /// Whether a supported firewall front-end (ufw) is installed.
+    pub available: bool,
+    /// `Some(true)` when the firewall reports itself active, `Some(false)` when
+    /// inactive, `None` when availability could not be determined.
+    pub active: Option<bool>,
+    pub default_incoming: Option<String>,
+    pub rules: Vec<FirewallRule>,
+    pub collected_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionRemote {
+    pub address: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSummary {
+    pub key: String,
+    pub protocol: String,
+    pub local_port: u16,
+    pub process_name: Option<String>,
+    pub process_id: Option<u32>,
+    pub systemd_unit: Option<String>,
+    pub established: u32,
+    pub remote_address_count: u32,
+    /// A bounded sample of remote peers, most frequent first.
+    pub remotes: Vec<ConnectionRemote>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EstablishedConnections {
+    pub groups: Vec<ConnectionSummary>,
+    pub total_established: u32,
+    /// True when the bounded collection stopped before reading every row.
+    pub truncated: bool,
+    pub collected_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {

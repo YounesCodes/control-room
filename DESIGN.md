@@ -45,7 +45,7 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Docker, Logs, or History as
+terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -92,7 +92,7 @@ run, and you type those yourself.
 The vocabulary is small, and every entity has an ID. A Saved Connection (a
 reusable SSH destination) opens one or more Workspaces, each pairing a live
 Terminal Session with read-only inspection views. Structured Operations (host
-facts, systemd units, containers) and Log Streams run independently of the terminal,
+facts, systemd units, listening sockets, containers) and Log Streams run independently of the terminal,
 and Enhanced History is an opt-in local record of commands. AGENTS.md carries the
 exact term definitions.
 
@@ -102,7 +102,7 @@ Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list (search plus saved connections). Once a
   Workspace is open, the rail also holds the view switcher (Overview, Terminal,
-  Systemd, Docker, Logs, History), with "Add connection" pinned at the bottom.
+  Systemd, Ports, Docker, Logs, History), with "Add connection" pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
@@ -332,7 +332,7 @@ Reusable primitives in `src/components/` that everything else composes.
 - **TerminalPane.** The xterm host and session lifecycle.
 
 Shared patterns: the split page (a dense list beside a detail panel) used by
-Systemd and Docker; the definition grid and capability list on the Overview host
+Systemd, Ports, and Docker; the definition grid and capability list on the Overview host
 dashboard; the dense row with a leading status indicator; and the compact chip
 for exit codes and counts.
 
@@ -345,6 +345,30 @@ The Systemd list covers system-scope services, timers, mounts, and sockets throu
 bounded property query. Failed units sort first, while state and type filters keep the full
 list usable. The header reports current active and failed totals without presenting zero
 failures as a complete host health result.
+
+Ports is a manual TCP and UDP snapshot with four tabs: Overview, Connections, Docker, and Table.
+Overview is the default: an architecture diagram on a pan-and-zoom canvas (drag to pan, wheel or the
+toolbar to zoom, Fit, and Fullscreen). A generic host node sits at the left with its detected OS as a
+small badge, and curved connectors fan out to a vertical column of boundary boxes — one per owning
+container, service, or process — each holding that owner's listener chips with port, protocol,
+exposure (all interfaces, local only, or specific address), and firewall annotation. Process
+ownership that needs elevation (for example `sshd` on port 22) is offered through the standard sudo
+retry. Selecting a chip opens a read-only detail panel; it never navigates away. Connections aggregates established TCP
+connections by owning listener rather than drawing a node per client, with established and remote
+counts and a bounded remote-endpoint sample. Docker draws published-port topology (host port to
+container to container port), grouped by Compose project with an Ungrouped fallback and kept out of
+the host graph. Table keeps the precise, searchable, sortable list for exact addresses and large
+listener sets.
+
+Everything comes from bounded, read-only queries: one `ss` listener snapshot, one `ss` established
+snapshot, and `ufw status` for firewall policy (offered with the standard sudo retry when it needs
+root). Rows keep protocol, address family, bind address, and port separate from application
+ownership; a single visible PID may correlate to a validated systemd unit through `ps`, and an exact
+published host address, port, and protocol to one Docker container. Binding exposure and firewall
+policy are shown separately — a broad bind is never presented as proof of Internet reachability.
+Missing or conflicting evidence stays unavailable or ambiguous. Firewall and connection data live in
+Workspace memory only. The view does not include Unix sockets, scan networks, test reachability, or
+collect full process arguments.
 
 ---
 
