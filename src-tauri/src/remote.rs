@@ -21,8 +21,9 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        DockerContainer, HostCapabilities, LOG_TAIL_OPTIONS, SavedConnection, StreamStarted,
-        StreamStateEvent, SystemdUnit,
+        CpuResources, DockerContainer, FilesystemResource, HostCapabilities, LOG_TAIL_OPTIONS,
+        MemoryResources, ProcessResource, ProcessResources, ResourceSection, ResourceSnapshot,
+        SavedConnection, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -51,6 +52,46 @@ pub struct RemoteOperationPermit {
     connection_id: String,
     host: Arc<HostOperationLimit>,
     hosts: Arc<Mutex<HashMap<String, Arc<HostOperationLimit>>>>,
+}
+
+#[derive(Default)]
+pub struct ResourceOperationManager {
+    operations: Mutex<HashMap<String, Arc<AtomicBool>>>,
+}
+
+impl ResourceOperationManager {
+    pub fn register(&self, operation_id: &str) -> Result<Arc<AtomicBool>, String> {
+        Uuid::parse_str(operation_id).map_err(|_| "Invalid resource operation ID".to_string())?;
+        let mut operations = self.operations.lock();
+        if operations.contains_key(operation_id) {
+            return Err("Resource operation is already running".into());
+        }
+        let cancelled = Arc::new(AtomicBool::new(false));
+        operations.insert(operation_id.into(), cancelled.clone());
+        Ok(cancelled)
+    }
+
+    pub fn cancel(&self, operation_id: &str) -> Result<(), String> {
+        let cancelled = self
+            .operations
+            .lock()
+            .remove(operation_id)
+            .ok_or_else(|| "Resource operation is not running".to_string())?;
+        cancelled.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    pub fn token(&self, operation_id: &str) -> Result<Arc<AtomicBool>, String> {
+        self.operations
+            .lock()
+            .get(operation_id)
+            .cloned()
+            .ok_or_else(|| "Resource operation is not registered".to_string())
+    }
+
+    pub fn finish(&self, operation_id: &str) {
+        self.operations.lock().remove(operation_id);
+    }
 }
 
 impl RemoteOperationLimiter {
@@ -170,6 +211,15 @@ impl RemoteCommandExecutor {
     ) -> Result<CommandOutput, String> {
         run_ssh(connection, operation, remote_command, Some(input))
     }
+
+    pub fn execute_cancelable(
+        connection: &SavedConnection,
+        operation: &'static str,
+        remote_command: &str,
+        cancelled: &AtomicBool,
+    ) -> Result<CommandOutput, String> {
+        run_ssh_cancelable(connection, operation, remote_command, None, Some(cancelled))
+    }
 }
 
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
@@ -226,11 +276,211 @@ pub fn list_containers(
         .collect()
 }
 
+pub fn collect_resources(
+    connection: &SavedConnection,
+    operation_id: &str,
+    cancelled: &AtomicBool,
+) -> Result<ResourceSnapshot, String> {
+    let text = RemoteCommandExecutor::execute_cancelable(
+        connection,
+        "collect_resources",
+        resource_collection_command(),
+        cancelled,
+    )?
+    .success_text()?;
+    let collected_at = Utc::now().to_rfc3339();
+    Ok(ResourceSnapshot {
+        id: operation_id.into(),
+        collected_at,
+        cpu: resource_section(parse_cpu_resources(&text)),
+        memory: resource_section(parse_memory_resources(&text)),
+        filesystems: resource_section(parse_filesystem_resources(&text)),
+        processes: resource_section(parse_process_resources(&text)),
+    })
+}
+
+fn resource_collection_command() -> &'static str {
+    r#"LC_ALL=C; export LC_ALL
+printf '__CR_CPU__\n'
+if test -r /proc/loadavg; then
+  cpu_count=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || printf '0')
+  set -- $(cat /proc/loadavg 2>/dev/null)
+  if test "${cpu_count:-0}" -gt 0 2>/dev/null && test -n "$3"; then printf '%s\t%s\t%s\t%s\n' "$cpu_count" "$1" "$2" "$3"; else printf '__CR_ERROR__\tCPU data unavailable\n'; fi
+else printf '__CR_ERROR__\tCPU data unavailable\n'; fi
+printf '__CR_END__\n'
+printf '__CR_MEMORY__\n'
+if test -r /proc/meminfo; then
+  awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} /^SwapTotal:/ {st=$2} /^SwapFree:/ {sf=$2} END {if (t>0) printf "%.0f\t%.0f\t%.0f\t%.0f\n", t, a, st, sf; else exit 1}' /proc/meminfo || printf '__CR_ERROR__\tMemory data unavailable\n'
+else printf '__CR_ERROR__\tMemory data unavailable\n'; fi
+printf '__CR_END__\n'
+printf '__CR_FILESYSTEMS__\n'
+if command -v df >/dev/null 2>&1; then
+  df -PT -B1 2>/dev/null | awk 'NR > 1 && NR <= 51 {print}'
+else printf '__CR_ERROR__\tFilesystem data unavailable\n'; fi
+printf '__CR_END__\n'
+printf '__CR_PROCESSES__\n'
+if command -v ps >/dev/null 2>&1; then
+  ps -eo pid=,user=,pcpu=,pmem=,comm= --sort=-pcpu 2>/dev/null | awk 'NR <= 10 {print}'
+else printf '__CR_ERROR__\tProcess data unavailable\n'; fi
+printf '__CR_END__\n'"#
+}
+
+fn resource_section<T>(result: Result<T, String>) -> ResourceSection<T> {
+    let collected_at = Utc::now().to_rfc3339();
+    match result {
+        Ok(data) => ResourceSection {
+            collected_at,
+            data: Some(data),
+            error: None,
+        },
+        Err(error) => ResourceSection {
+            collected_at,
+            data: None,
+            error: Some(error),
+        },
+    }
+}
+
+fn resource_section_lines<'a>(text: &'a str, marker: &str) -> Result<Vec<&'a str>, String> {
+    let start = text
+        .lines()
+        .position(|line| line == marker)
+        .ok_or_else(|| "Section was not returned by the host".to_string())?;
+    let lines: Vec<_> = text
+        .lines()
+        .skip(start + 1)
+        .take_while(|line| *line != "__CR_END__")
+        .collect();
+    if let Some(error) = lines
+        .iter()
+        .find_map(|line| line.strip_prefix("__CR_ERROR__\t"))
+    {
+        return Err(bounded_text(error, 120));
+    }
+    Ok(lines)
+}
+
+fn parse_cpu_resources(text: &str) -> Result<CpuResources, String> {
+    let lines = resource_section_lines(text, "__CR_CPU__")?;
+    let values: Vec<_> = lines
+        .first()
+        .ok_or_else(|| "CPU data was empty".to_string())?
+        .split_whitespace()
+        .collect();
+    if values.len() != 4 {
+        return Err("CPU data was malformed".into());
+    }
+    let cpu_count = values[0].parse().map_err(|_| "CPU count was malformed")?;
+    let load_one = values[1].parse().map_err(|_| "CPU load was malformed")?;
+    let load_five = values[2].parse().map_err(|_| "CPU load was malformed")?;
+    let load_fifteen = values[3].parse().map_err(|_| "CPU load was malformed")?;
+    Ok(CpuResources {
+        cpu_count,
+        load_one,
+        load_five,
+        load_fifteen,
+    })
+}
+
+fn parse_memory_resources(text: &str) -> Result<MemoryResources, String> {
+    let lines = resource_section_lines(text, "__CR_MEMORY__")?;
+    let values: Vec<u64> = lines
+        .first()
+        .ok_or_else(|| "Memory data was empty".to_string())?
+        .split_whitespace()
+        .map(|value| {
+            value
+                .parse()
+                .map_err(|_| "Memory data was malformed".to_string())
+        })
+        .collect::<Result<_, _>>()?;
+    if values.len() != 4 {
+        return Err("Memory data was malformed".into());
+    }
+    let [total_kib, available_kib, swap_total_kib, swap_free_kib] =
+        <[u64; 4]>::try_from(values).map_err(|_| "Memory data was malformed")?;
+    Ok(MemoryResources {
+        total_bytes: total_kib.saturating_mul(1024),
+        available_bytes: available_kib.saturating_mul(1024),
+        used_bytes: total_kib.saturating_sub(available_kib).saturating_mul(1024),
+        swap_total_bytes: swap_total_kib.saturating_mul(1024),
+        swap_used_bytes: swap_total_kib
+            .saturating_sub(swap_free_kib)
+            .saturating_mul(1024),
+    })
+}
+
+fn parse_filesystem_resources(text: &str) -> Result<Vec<FilesystemResource>, String> {
+    let lines = resource_section_lines(text, "__CR_FILESYSTEMS__")?;
+    Ok(lines
+        .into_iter()
+        .filter_map(|line| {
+            let values: Vec<_> = line.split_whitespace().collect();
+            if values.len() < 7 {
+                return None;
+            }
+            Some(FilesystemResource {
+                filesystem_type: bounded_text(values[1], 32),
+                total_bytes: values[2].parse().ok()?,
+                used_bytes: values[3].parse().ok()?,
+                available_bytes: values[4].parse().ok()?,
+                used_percent: values[5].trim_end_matches('%').parse().ok()?,
+                mount_point: bounded_text(&values[6..].join(" "), 160),
+            })
+        })
+        .take(50)
+        .collect())
+}
+
+fn parse_process_resources(text: &str) -> Result<ProcessResources, String> {
+    let lines = resource_section_lines(text, "__CR_PROCESSES__")?;
+    let rows = lines
+        .into_iter()
+        .filter_map(|line| {
+            let values: Vec<_> = line.split_whitespace().collect();
+            if values.len() < 5 {
+                return None;
+            }
+            Some(ProcessResource {
+                pid: values[0].parse().ok()?,
+                user: bounded_text(values[1], 64),
+                cpu_percent: values[2].parse().ok()?,
+                memory_percent: values[3].parse().ok()?,
+                name: bounded_text(&values[4..].join(" "), 128),
+            })
+        })
+        .take(10)
+        .collect();
+    Ok(ProcessResources {
+        sort: "CPU usage descending".into(),
+        limit: 10,
+        rows,
+    })
+}
+
+fn bounded_text(value: &str, maximum_chars: usize) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(maximum_chars)
+        .collect()
+}
+
 fn run_ssh(
     connection: &SavedConnection,
     operation: &'static str,
     remote_command: &str,
     stdin: Option<&[u8]>,
+) -> Result<CommandOutput, String> {
+    run_ssh_cancelable(connection, operation, remote_command, stdin, None)
+}
+
+fn run_ssh_cancelable(
+    connection: &SavedConnection,
+    operation: &'static str,
+    remote_command: &str,
+    stdin: Option<&[u8]>,
+    cancelled: Option<&AtomicBool>,
 ) -> Result<CommandOutput, String> {
     let started_at = Instant::now();
     let ssh_path =
@@ -274,20 +524,32 @@ fn run_ssh(
     let stdout_first_byte = first_byte_tx.clone();
     let stdout_reader = thread::spawn(move || read_limited(stdout, stdout_first_byte));
     let stderr_reader = thread::spawn(move || read_limited(stderr, first_byte_tx));
-    let status = match child.wait_timeout(COMMAND_TIMEOUT) {
-        Ok(Some(status)) => status,
-        Ok(None) => {
+    let deadline = Instant::now() + COMMAND_TIMEOUT;
+    let status = loop {
+        if cancelled.is_some_and(|value| value.load(Ordering::SeqCst)) {
+            terminate_child(&mut child);
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
+            log_operation_timing(operation, started_at, spawned_at, None, "cancelled");
+            return Err("Resource collection cancelled".into());
+        }
+        let now = Instant::now();
+        if now >= deadline {
             terminate_child(&mut child);
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
             log_operation_timing(operation, started_at, spawned_at, None, "timeout");
             return Err("Remote command timed out after 20 seconds".into());
         }
-        Err(error) => {
-            terminate_child(&mut child);
-            let _ = stdout_reader.join();
-            let _ = stderr_reader.join();
-            return Err(format!("Could not wait for SSH process: {error}"));
+        match child.wait_timeout((deadline - now).min(Duration::from_millis(100))) {
+            Ok(Some(status)) => break status,
+            Ok(None) => continue,
+            Err(error) => {
+                terminate_child(&mut child);
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(format!("Could not wait for SSH process: {error}"));
+            }
         }
     };
     let stdout = stdout_reader
@@ -816,6 +1078,65 @@ mod tests {
         assert_eq!(units[1].id, "cleanup.timer");
         assert_eq!(units[2].unit_type, "service");
         assert_eq!(units[3].unit_type, "socket");
+    }
+
+    #[test]
+    fn parses_independently_fallible_resource_sections() {
+        let output = "__CR_CPU__\n4\t1.25\t0.75\t0.50\n__CR_END__\n__CR_MEMORY__\n8388608\t5242880\t2097152\t1572864\n__CR_END__\n__CR_FILESYSTEMS__\n/dev/sda1 ext4 100000 25000 75000 25% /\nserver:/data nfs4 200000 100000 100000 50% /srv/shared data\n__CR_END__\n__CR_PROCESSES__\n42 www-data 8.5 2.1 nginx\n7 root 1.0 0.2 kworker/0:1\n__CR_END__\n";
+
+        let cpu = parse_cpu_resources(output).unwrap();
+        assert_eq!(cpu.cpu_count, 4);
+        assert_eq!(cpu.load_one, 1.25);
+
+        let memory = parse_memory_resources(output).unwrap();
+        assert_eq!(memory.total_bytes, 8 * 1024 * 1024 * 1024);
+        assert_eq!(memory.used_bytes, 3 * 1024 * 1024 * 1024);
+        assert_eq!(memory.swap_used_bytes, 512 * 1024 * 1024);
+
+        let filesystems = parse_filesystem_resources(output).unwrap();
+        assert_eq!(filesystems.len(), 2);
+        assert_eq!(filesystems[1].mount_point, "/srv/shared data");
+        assert_eq!(filesystems[1].filesystem_type, "nfs4");
+
+        let processes = parse_process_resources(output).unwrap();
+        assert_eq!(processes.limit, 10);
+        assert_eq!(processes.rows[0].name, "nginx");
+    }
+
+    #[test]
+    fn resource_section_failure_does_not_invalidate_other_sections() {
+        let output = "__CR_CPU__\n2\t0.10\t0.20\t0.30\n__CR_END__\n__CR_MEMORY__\n__CR_ERROR__\tMemory data unavailable\n__CR_END__\n";
+        assert!(parse_cpu_resources(output).is_ok());
+        assert_eq!(
+            parse_memory_resources(output).unwrap_err(),
+            "Memory data unavailable"
+        );
+    }
+
+    #[test]
+    fn resource_collection_is_bounded_read_only_and_omits_process_arguments() {
+        let command = resource_collection_command();
+        assert!(command.contains("NR <= 10"));
+        assert!(command.contains("NR <= 51"));
+        assert!(command.contains("pid=,user=,pcpu=,pmem=,comm="));
+        assert!(!command.contains("args="));
+        assert!(!command.contains("environ"));
+        for mutation in [" kill ", " renice ", " mount ", " swapoff "] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn resource_operations_can_be_cancelled_and_are_removed_after_finish() {
+        let manager = ResourceOperationManager::default();
+        let operation_id = Uuid::new_v4().to_string();
+        let cancelled = manager.register(&operation_id).unwrap();
+        manager.cancel(&operation_id).unwrap();
+        assert!(cancelled.load(Ordering::SeqCst));
+        assert_eq!(
+            manager.cancel(&operation_id).unwrap_err(),
+            "Resource operation is not running"
+        );
     }
 
     #[test]

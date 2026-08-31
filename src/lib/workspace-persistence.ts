@@ -31,6 +31,7 @@ export function restoreWorkspaceState(
         connectRequested: false,
         servicesCache: emptyCachedList(),
         containersCache: emptyCachedList(),
+        resourceSnapshot: null,
         logSource: null,
       },
     ];

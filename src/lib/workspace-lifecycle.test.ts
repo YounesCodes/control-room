@@ -34,6 +34,7 @@ function workspace(id: string, connectionId: string): Workspace {
     connectRequested: true,
     servicesCache: emptyCachedList(),
     containersCache: emptyCachedList(),
+    resourceSnapshot: null,
     logSource: null,
   };
 }

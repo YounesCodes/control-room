@@ -7,6 +7,7 @@ import type {
   HistoryInput,
   HostCapabilities,
   PersistedWorkspaceState,
+  ResourceSnapshot,
   SavedConnection,
   SavedConnectionInput,
   SettingsContract,
@@ -67,6 +68,12 @@ export const api = {
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
+  beginResourceCollection: (operationId: string) =>
+    invoke<void>("begin_resource_collection", { operationId }),
+  collectResources: (connectionId: string, operationId: string) =>
+    invokeRemoteInspection<ResourceSnapshot>("collect_resources", { connectionId, operationId }),
+  cancelResourceCollection: (operationId: string) =>
+    invoke<void>("cancel_resource_collection", { operationId }),
   startJournalStream: (
     connectionId: string,
     service: string,

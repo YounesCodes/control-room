@@ -105,4 +105,52 @@ describe("Workspace restoration", () => {
       ),
     ).toMatchObject({ activeWorkspaceId: "workspace-a" });
   });
+
+  it("keeps resource samples out of persisted Workspace state", () => {
+    const state: PersistedWorkspaceState = {
+      workspaces: [
+        {
+          id: "workspace-a",
+          label: null,
+          connectionId: "connection-a",
+          view: "resources",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "workspace-a",
+      terminalLayout: null,
+    };
+    const restored = restoreWorkspaceState([connection("connection-a")], state);
+    restored.workspaces[0].resourceSnapshot = {
+      id: "sample-a",
+      collectedAt: "2026-08-31T12:00:00Z",
+      cpu: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: { cpuCount: 4, loadOne: 1, loadFive: 1, loadFifteen: 1 },
+        error: null,
+      },
+      memory: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: {
+          totalBytes: 8,
+          availableBytes: 4,
+          usedBytes: 4,
+          swapTotalBytes: 0,
+          swapUsedBytes: 0,
+        },
+        error: null,
+      },
+      filesystems: { collectedAt: "2026-08-31T12:00:00Z", data: [], error: null },
+      processes: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: { sort: "CPU usage descending", limit: 10, rows: [] },
+        error: null,
+      },
+    };
+
+    const persisted = persistWorkspaceState(restored.workspaces, "workspace-a", null);
+
+    expect(persisted.workspaces[0]).not.toHaveProperty("resourceSnapshot");
+    expect(JSON.stringify(persisted)).not.toContain("sample-a");
+  });
 });

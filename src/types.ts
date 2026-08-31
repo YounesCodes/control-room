@@ -65,6 +65,59 @@ export interface DockerContainer {
   composeOneoff: boolean | null;
 }
 
+export interface ResourceSnapshot {
+  id: string;
+  collectedAt: string;
+  cpu: ResourceSection<CpuResources>;
+  memory: ResourceSection<MemoryResources>;
+  filesystems: ResourceSection<FilesystemResource[]>;
+  processes: ResourceSection<ProcessResources>;
+}
+
+export interface ResourceSection<T> {
+  collectedAt: string;
+  data: T | null;
+  error: string | null;
+}
+
+export interface CpuResources {
+  cpuCount: number;
+  loadOne: number;
+  loadFive: number;
+  loadFifteen: number;
+}
+
+export interface MemoryResources {
+  totalBytes: number;
+  availableBytes: number;
+  usedBytes: number;
+  swapTotalBytes: number;
+  swapUsedBytes: number;
+}
+
+export interface FilesystemResource {
+  filesystemType: string;
+  totalBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+  usedPercent: number;
+  mountPoint: string;
+}
+
+export interface ProcessResources {
+  sort: string;
+  limit: number;
+  rows: ProcessResource[];
+}
+
+export interface ProcessResource {
+  pid: number;
+  user: string;
+  cpuPercent: number;
+  memoryPercent: number;
+  name: string;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -117,7 +170,8 @@ export interface EnvironmentInfo {
 }
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
-export type WorkspaceView = "overview" | "terminal" | "services" | "docker" | "logs" | "history";
+export type WorkspaceView =
+  "overview" | "terminal" | "services" | "docker" | "resources" | "logs" | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -147,6 +201,7 @@ export interface Workspace {
   connectRequested: boolean;
   servicesCache: CachedList<SystemdUnit>;
   containersCache: CachedList<DockerContainer>;
+  resourceSnapshot: ResourceSnapshot | null;
   logSource: LogSourceSelection | null;
 }
 

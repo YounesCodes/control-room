@@ -7,7 +7,7 @@ mod session;
 mod ssh;
 
 use database::Database;
-use remote::{RemoteOperationLimiter, StreamManager};
+use remote::{RemoteOperationLimiter, ResourceOperationManager, StreamManager};
 use session::SessionManager;
 use tauri::Manager;
 
@@ -17,6 +17,7 @@ pub fn run() {
         .manage(SessionManager::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
+        .manage(ResourceOperationManager::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -39,6 +40,9 @@ pub fn run() {
             commands::refresh_capabilities,
             commands::list_services,
             commands::list_containers,
+            commands::begin_resource_collection,
+            commands::collect_resources,
+            commands::cancel_resource_collection,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

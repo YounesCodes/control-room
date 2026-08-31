@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   Boxes,
   Columns2,
   FileClock,
@@ -51,6 +52,7 @@ import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
+import { ResourcesPane } from "./pages/ResourcesPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
@@ -60,6 +62,7 @@ import type {
   EnvironmentInfo,
   HostCapabilities,
   LogSourceSelection,
+  ResourceSnapshot,
   SavedConnection,
   SettingsContract,
   SystemdUnit,
@@ -79,6 +82,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
   { id: "docker", label: "Docker", icon: Boxes },
+  { id: "resources", label: "Resources", icon: Activity },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
 ];
@@ -405,6 +409,10 @@ export function App() {
     updateWorkspace(id, { containersCache });
   }
 
+  function updateResourceSnapshot(id: string, resourceSnapshot: ResourceSnapshot) {
+    updateWorkspace(id, { resourceSnapshot });
+  }
+
   function rememberCapabilities(capabilities: HostCapabilities) {
     setHostCapabilities((current) => ({
       ...current,
@@ -440,6 +448,7 @@ export function App() {
       connectRequested: true,
       servicesCache: emptyCachedList(),
       containersCache: emptyCachedList(),
+      resourceSnapshot: null,
       logSource: null,
     };
   }
@@ -1029,6 +1038,16 @@ export function App() {
                   cache={activeWorkspace.containersCache}
                   onCacheChange={(cache) => updateContainersCache(activeWorkspace.id, cache)}
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                />
+              )}
+              {activeWorkspace.view === "resources" && (
+                <ResourcesPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  snapshot={activeWorkspace.resourceSnapshot}
+                  onSnapshotChange={(snapshot) =>
+                    updateResourceSnapshot(activeWorkspace.id, snapshot)
+                  }
                 />
               )}
               {activeWorkspace.view === "logs" && (

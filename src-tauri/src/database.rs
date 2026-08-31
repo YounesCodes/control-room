@@ -406,7 +406,13 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             return Err("Workspace label is invalid".into());
         }
         if ![
-            "overview", "terminal", "services", "docker", "logs", "history",
+            "overview",
+            "terminal",
+            "services",
+            "docker",
+            "resources",
+            "logs",
+            "history",
         ]
         .contains(&workspace.view.as_str())
         {

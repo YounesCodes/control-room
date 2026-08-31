@@ -1344,7 +1344,8 @@ code,
 .overview-page,
 .settings-page,
 .history-page,
-.logs-page {
+.logs-page,
+.resources-page {
   padding: 26px 30px;
 }
 
@@ -1561,6 +1562,213 @@ dd {
   color: var(--text-muted);
   font-size: 12px;
   text-align: right;
+}
+
+/* ==========================================================================
+   On-demand resource investigation
+   ========================================================================== */
+
+.resources-page {
+  min-width: 0;
+}
+
+.resources-heading {
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.resources-heading small {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.resource-initial-state {
+  height: auto;
+  min-height: 320px;
+  border-top: 1px solid var(--border);
+}
+
+.resource-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+}
+
+.resource-section {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 18px 0 20px;
+}
+
+.resource-section:nth-child(odd):not(.resource-section-wide) {
+  border-right: 1px solid var(--border);
+  padding-right: 24px;
+}
+
+.resource-section:nth-child(even):not(.resource-section-wide) {
+  padding-left: 24px;
+}
+
+.resource-section-wide {
+  grid-column: 1 / -1;
+}
+
+.resource-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+
+.resource-section-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.resource-section-heading span,
+.resource-section-note,
+.resource-empty {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.resource-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.resource-summary-grid > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 1px solid var(--border-subtle);
+  padding: 4px 12px;
+}
+
+.resource-summary-grid > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.resource-summary-grid span,
+.resource-definition-list dt {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.resource-summary-grid strong {
+  color: var(--text);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-summary-grid p {
+  grid-column: 1 / -1;
+  margin: 12px 0 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.resource-definition-list {
+  margin: 0;
+}
+
+.resource-definition-list > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 0;
+}
+
+.resource-definition-list > div:last-child {
+  border-bottom: 0;
+}
+
+.resource-definition-list dd {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-section-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-left: 2px solid var(--failure);
+  background: var(--surface-raised);
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.resource-section-error svg {
+  color: var(--failure);
+}
+
+.resource-section-error small {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.resource-section-note {
+  margin: -4px 0 10px;
+}
+
+.resource-table-scroll {
+  overflow-x: auto;
+}
+
+.resource-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.resource-table th {
+  border-bottom: 1px solid var(--border);
+  padding: 7px 10px;
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.resource-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  color: var(--text);
+}
+
+.resource-table th:first-child,
+.resource-table td:first-child {
+  padding-left: 0;
+}
+
+.resource-table th:last-child,
+.resource-table td:last-child {
+  padding-right: 0;
+  text-align: right;
+}
+
+.resource-mono {
+  max-width: 360px;
+  overflow: hidden;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-empty {
+  margin: 14px 0 0;
 }
 
 /* ==========================================================================
@@ -2730,6 +2938,10 @@ kbd {
   .settings-page,
   .history-page,
   .logs-page {
+    padding: 22px;
+  }
+
+  .resources-page {
     padding: 22px;
   }
 }

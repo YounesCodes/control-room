@@ -42,10 +42,13 @@ DESIGN.md.
    independent and in memory.
 5. Derive Docker Compose grouping only from validated project and service labels.
    Keep every container instance distinct and retain an Ungrouped fallback.
-6. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-7. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+6. Keep resource investigation on demand: independently timestamp partial sections,
+   cap filesystem and process rows, omit process arguments, keep samples in Workspace
+   memory, and stop the bounded SSH child when collection is cancelled.
+7. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+8. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.
-8. Do not commit or push unless the user asks.
+9. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -67,6 +70,8 @@ account you control.
   independently of Terminal Sessions.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
   returned by the bounded Systemd inspection.
+- **Resource Sample**: a timestamped, in-memory result from one bounded, read-only
+  collection of CPU, memory, swap, filesystem, and limited process facts.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration

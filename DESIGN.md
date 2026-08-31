@@ -45,7 +45,7 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Docker, Logs, or History as
+terminal. From there you jump to Overview, Systemd, Docker, Resources, Logs, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -102,7 +102,7 @@ Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list (search plus saved connections). Once a
   Workspace is open, the rail also holds the view switcher (Overview, Terminal,
-  Systemd, Docker, Logs, History), with "Add connection" pinned at the bottom.
+  Systemd, Docker, Resources, Logs, History), with "Add connection" pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
@@ -345,6 +345,12 @@ The Systemd list covers system-scope services, timers, mounts, and sockets throu
 bounded property query. Failed units sort first, while state and type filters keep the full
 list usable. The header reports current active and failed totals without presenting zero
 failures as a complete host health result.
+
+The Resources view is an on-demand investigation surface, not a dashboard. One bounded
+Structured Operation collects independently fallible CPU, memory and swap, filesystem, and
+top-process sections. It uses summaries and tables, shows a collection time for every section,
+and offers explicit refresh and cancellation without polling. Samples remain in Workspace memory;
+process arguments are not collected.
 
 ---
 

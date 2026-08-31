@@ -6,10 +6,13 @@ use crate::{
     history,
     models::{
         AppSettings, DockerContainer, EnvironmentInfo, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, PersistedWorkspaceState, SavedConnection,
-        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
+        HostCapabilities, LOG_TAIL_OPTIONS, PersistedWorkspaceState, ResourceSnapshot,
+        SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
+        SystemdUnit,
     },
-    remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
+    remote::{
+        self, LogStreamOptions, RemoteOperationLimiter, ResourceOperationManager, StreamManager,
+    },
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
 };
@@ -190,6 +193,40 @@ pub fn list_containers(
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     remote::list_containers(&connection, sudo_password)
+}
+
+#[tauri::command(async)]
+pub fn begin_resource_collection(
+    operations: State<'_, ResourceOperationManager>,
+    operation_id: String,
+) -> Result<(), String> {
+    operations.register(&operation_id).map(|_| ())
+}
+
+#[tauri::command(async)]
+pub fn collect_resources(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    operations: State<'_, ResourceOperationManager>,
+    connection_id: String,
+    operation_id: String,
+) -> Result<ResourceSnapshot, String> {
+    let cancelled = operations.token(&operation_id)?;
+    let result = (|| {
+        let _permit = limiter.acquire(&connection_id)?;
+        let connection = database.get_connection(&connection_id)?;
+        remote::collect_resources(&connection, &operation_id, &cancelled)
+    })();
+    operations.finish(&operation_id);
+    result
+}
+
+#[tauri::command]
+pub fn cancel_resource_collection(
+    operations: State<'_, ResourceOperationManager>,
+    operation_id: String,
+) -> Result<(), String> {
+    operations.cancel(&operation_id)
 }
 
 #[allow(clippy::too_many_arguments)]
