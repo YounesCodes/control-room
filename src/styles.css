@@ -1664,7 +1664,7 @@ dd {
 
 .port-list-controls {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(0, 92px) minmax(0, 92px);
+  grid-template-columns: minmax(140px, 1fr) auto auto;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -1676,7 +1676,7 @@ dd {
 }
 
 .port-list-controls select {
-  width: 100%;
+  width: auto;
   min-height: 37px;
   padding-top: 0;
   padding-bottom: 0;
