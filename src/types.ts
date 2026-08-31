@@ -77,6 +77,47 @@ export interface ListeningSocket {
   ownership: "known" | "unavailable" | "ambiguous";
 }
 
+export interface FirewallRule {
+  to: string;
+  action: string;
+  from: string;
+  port: number | null;
+  protocol: string | null;
+  ipv6: boolean;
+}
+
+export interface FirewallStatus {
+  available: boolean;
+  active: boolean | null;
+  defaultIncoming: string | null;
+  rules: FirewallRule[];
+  collectedAt: string;
+}
+
+export interface ConnectionRemote {
+  address: string;
+  count: number;
+}
+
+export interface ConnectionSummary {
+  key: string;
+  protocol: string;
+  localPort: number;
+  processName: string | null;
+  processId: number | null;
+  systemdUnit: string | null;
+  established: number;
+  remoteAddressCount: number;
+  remotes: ConnectionRemote[];
+}
+
+export interface EstablishedConnections {
+  groups: ConnectionSummary[];
+  totalEstablished: number;
+  truncated: boolean;
+  collectedAt: string;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;

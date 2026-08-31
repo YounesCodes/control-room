@@ -3,6 +3,8 @@ import type {
   AppSettings,
   DockerContainer,
   EnvironmentInfo,
+  EstablishedConnections,
+  FirewallStatus,
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
@@ -70,6 +72,10 @@ export const api = {
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   listPorts: (connectionId: string) =>
     invokeRemoteInspection<ListeningSocket[]>("list_ports", { connectionId }),
+  inspectFirewall: (connectionId: string, sudoPassword: string | null = null) =>
+    invokeRemoteInspection<FirewallStatus>("inspect_firewall", { connectionId, sudoPassword }),
+  inspectConnections: (connectionId: string) =>
+    invokeRemoteInspection<EstablishedConnections>("inspect_connections", { connectionId }),
   startJournalStream: (
     connectionId: string,
     service: string,

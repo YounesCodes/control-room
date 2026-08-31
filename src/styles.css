@@ -2809,3 +2809,255 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Ports: tabbed visual inspector */
+.ports-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ports-page > .compact-heading {
+  padding: 18px 24px 12px;
+}
+
+.ports-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ports-tab {
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ports-tab:hover {
+  color: var(--text);
+}
+
+.ports-tab.active {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.ports-page > .port-list-controls {
+  margin: 12px 24px 0;
+}
+
+.ports-page > .inline-warning {
+  margin: 10px 24px 0;
+}
+
+.firewall-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ports-tab-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+.ports-view {
+  position: absolute;
+  inset: 0;
+}
+
+.ports-graph-panel {
+  padding: 20px 24px;
+}
+
+.connections-summary {
+  margin-bottom: 12px;
+}
+
+/* Host listener graph */
+.ports-graph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.graph-host-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  text-align: left;
+}
+
+.graph-host-node strong {
+  display: block;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.graph-host-node small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.graph-spine {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+.graph-branches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.graph-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 178px;
+}
+
+.graph-node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.graph-node:hover {
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+}
+
+.graph-node.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.port-node .node-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.node-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.node-firewall {
+  color: var(--text-faint);
+}
+
+.graph-link {
+  align-self: center;
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+
+.owner-node {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.owner-node.owner-unknown {
+  color: var(--text-faint);
+}
+
+/* Docker published-port topology */
+.docker-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.docker-project {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docker-branch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.docker-branch:hover {
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+}
+
+.docker-branch.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.docker-branch .graph-node {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
+  cursor: inherit;
+}
+
+.docker-container-node {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-strong);
+}
+
+.docker-target-node {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.docker-arrow {
+  flex: none;
+  color: var(--text-faint);
+}

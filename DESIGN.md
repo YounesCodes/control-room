@@ -346,12 +346,26 @@ bounded property query. Failed units sort first, while state and type filters ke
 list usable. The header reports current active and failed totals without presenting zero
 failures as a complete host health result.
 
-The Ports list is a manual TCP and UDP listener snapshot collected through one bounded `ss`
-query. Rows keep protocol, address family, bind address, and port separate from application
-ownership. A single visible PID may correlate to a validated systemd unit through `ps`; an exact
-published host address, port, and protocol may correlate to one Docker container. Missing or
-conflicting evidence stays unavailable or ambiguous. The view does not include Unix sockets,
-scan networks, test reachability, or collect full process arguments.
+Ports is a manual TCP and UDP snapshot with four tabs: Overview, Connections, Docker, and Table.
+Overview is the default: a compact host-to-listener-to-owner graph, one generic server node for the
+host with its detected OS as a small badge, and per-listener nodes that carry the port, protocol,
+exposure (all interfaces, local only, or specific address), and firewall annotation. Selecting a
+node opens a read-only detail panel; it never navigates away. Connections aggregates established TCP
+connections by owning listener rather than drawing a node per client, with established and remote
+counts and a bounded remote-endpoint sample. Docker draws published-port topology (host port to
+container to container port), grouped by Compose project with an Ungrouped fallback and kept out of
+the host graph. Table keeps the precise, searchable, sortable list for exact addresses and large
+listener sets.
+
+Everything comes from bounded, read-only queries: one `ss` listener snapshot, one `ss` established
+snapshot, and `ufw status` for firewall policy (offered with the standard sudo retry when it needs
+root). Rows keep protocol, address family, bind address, and port separate from application
+ownership; a single visible PID may correlate to a validated systemd unit through `ps`, and an exact
+published host address, port, and protocol to one Docker container. Binding exposure and firewall
+policy are shown separately — a broad bind is never presented as proof of Internet reachability.
+Missing or conflicting evidence stays unavailable or ambiguous. Firewall and connection data live in
+Workspace memory only. The view does not include Unix sockets, scan networks, test reachability, or
+collect full process arguments.
 
 ---
 

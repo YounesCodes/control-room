@@ -1038,6 +1038,7 @@ export function App() {
                 <PortsPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
+                  capabilities={hostCapabilities[activeConnection.id] ?? null}
                   cache={activeWorkspace.portsCache}
                   containersCache={activeWorkspace.containersCache}
                   onCacheChange={(cache) => updatePortsCache(activeWorkspace.id, cache)}

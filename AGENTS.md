@@ -46,6 +46,10 @@ DESIGN.md.
    test reachability, collect full process arguments, or infer owners from names.
    Service navigation requires one unambiguous PID with a validated systemd unit;
    container navigation requires an exact published address, port, and protocol.
+   The Ports firewall and established-connection snapshots stay bounded and
+   read-only, live only in Workspace memory, and are never persisted. Report
+   binding exposure and firewall policy separately, and never claim a bind means
+   Internet reachability.
 7. Add tests for parsers, argument builders, lifecycle changes, and regressions.
 8. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.

@@ -49,10 +49,13 @@ The distinction matters. Control Room helps you inspect and move between related
 - Inspect system-scope systemd services, timers, mounts, and sockets. Failed units sort first,
   active and failed totals remain visible, and state and type filters narrow the list. Each unit
   keeps its canonical identity and can open its journal.
-- Inspect a timestamped snapshot of listening TCP and UDP sockets. Filter and sort by port,
-  protocol, address, process, systemd unit, or Docker identity. Process details stay unavailable
-  when the remote account cannot read them, and navigation appears only for explicit ownership
-  evidence.
+- Inspect a timestamped snapshot of listening TCP and UDP sockets across four tabs: a visual
+  Overview graph (host to listener to owning service or process, with exposure and UFW firewall
+  annotations), Connections (established connections aggregated by listener), Docker (published
+  host-to-container port topology), and a precise, searchable Table. Filter by protocol, exposure,
+  and text; binding exposure and firewall policy are reported separately, and a broad bind is never
+  presented as Internet reachability. Process details stay unavailable when the remote account
+  cannot read them, and navigation appears only for explicit ownership evidence.
 - Group Docker Compose containers by project and service, switch to a flat list, search by
   project, service, name, image, or ID, inspect each container, and open its logs. Containers
   without valid Compose identity labels stay under Ungrouped.
