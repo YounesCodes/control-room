@@ -58,6 +58,10 @@ export interface DockerContainer {
   status: string;
   ports: string;
   createdAt: string;
+  composeProject: string | null;
+  composeService: string | null;
+  composeContainerNumber: number | null;
+  composeOneoff: boolean | null;
 }
 
 export interface HistoryEntry {

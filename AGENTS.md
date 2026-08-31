@@ -38,10 +38,12 @@ DESIGN.md.
    import the host's shell history.
 4. Keep service and container inspection read-only. Keep each Log Stream
    independent and in memory.
-5. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-6. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+5. Derive Docker Compose grouping only from validated project and service labels.
+   Keep every container instance distinct and retain an Ungrouped fallback.
+6. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+7. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.
-7. Do not commit or push unless the user asks.
+8. Do not commit or push unless the user asks.
 
 ## Validation
 

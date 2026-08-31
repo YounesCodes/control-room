@@ -46,7 +46,9 @@ The distinction matters. Control Room helps you inspect and move between related
 
 - View the hostname, operating system, kernel, architecture, uptime, default shell, and detected runtime capabilities.
 - List systemd service units, search them, inspect their state, and open their journal logs.
-- List Docker containers, search by name or image, inspect their state, and open their logs.
+- Group Docker Compose containers by project and service, switch to a flat list, search by
+  project, service, name, image, or ID, inspect each container, and open its logs. Containers
+  without valid Compose identity labels stay under Ungrouped.
 - Reuse recent inspection results briefly and refresh them manually when you need current data.
 
 All structured inspection is read-only. Control Room does not start, stop, restart, create, or remove services or containers.

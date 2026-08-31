@@ -71,6 +71,10 @@ pub struct DockerContainer {
     pub status: String,
     pub ports: String,
     pub created_at: String,
+    pub compose_project: Option<String>,
+    pub compose_service: Option<String>,
+    pub compose_container_number: Option<u32>,
+    pub compose_oneoff: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

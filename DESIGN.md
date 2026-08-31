@@ -182,7 +182,8 @@ Two families, one for chrome and one for anything technical.
   look. It ships as `woff2` so the desktop build works offline with no fallback
   flash, and the system stack is the fallback.
 - **Cascadia Mono, then Consolas, then monospace** for the terminal, logs, code,
-  service and container names, container IDs, and history commands.
+  service and container names, Compose project and service identities, container IDs,
+  and history commands.
 
 The type scale is small: 20 px section headings, ~17 px stat values, 12.5 px
 body, 11.5 px controls, and 10 px uppercase labels with tracking. Numeric columns
@@ -334,6 +335,11 @@ Shared patterns: the split page (a dense list beside a detail panel) used by
 Services and Docker; the definition grid and capability list on the Overview host
 dashboard; the dense row with a leading status indicator; and the compact chip
 for exit codes and counts.
+
+The Docker list derives Compose project groups from the official project and service
+labels returned by the bounded container listing. It keeps every instance as its own row,
+including replicas and one-off containers, and puts missing or malformed identities in
+Ungrouped. The user can switch to the flat list without changing the cached data.
 
 ---
 
