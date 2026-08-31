@@ -22,11 +22,11 @@ use zeroize::Zeroizing;
 use crate::{
     models::{
         DockerContainer, HostCapabilities, LOG_TAIL_OPTIONS, SavedConnection, StreamStarted,
-        StreamStateEvent, SystemdService,
+        StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
-        validate_service_name,
+        validate_systemd_unit_id,
     },
 };
 
@@ -202,11 +202,11 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
     })
 }
 
-pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdService>, String> {
-    let command = "LC_ALL=C systemctl show --type=service --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState";
+pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdUnit>, String> {
+    let command = systemd_unit_list_command();
     let text =
         RemoteCommandExecutor::execute(connection, "list_services", command)?.success_text()?;
-    Ok(parse_services(&text))
+    Ok(parse_systemd_units(&text))
 }
 
 pub fn list_containers(
@@ -405,13 +405,19 @@ fn parse_count(values: &HashMap<String, String>, key: &str) -> Option<u32> {
     values.get(key).and_then(|value| value.parse().ok())
 }
 
-fn parse_services(text: &str) -> Vec<SystemdService> {
-    text.split("\n\n")
+fn parse_systemd_units(text: &str) -> Vec<SystemdUnit> {
+    let mut units: Vec<_> = text
+        .split("\n\n")
         .filter_map(|block| {
             let values = parse_key_values(block);
             let id = values.get("Id")?.clone();
-            Some(SystemdService {
+            let unit_type = id.rsplit_once('.')?.1.to_string();
+            if !["service", "timer", "mount", "socket"].contains(&unit_type.as_str()) {
+                return None;
+            }
+            Some(SystemdUnit {
                 id,
+                unit_type,
                 description: values.get("Description").cloned().unwrap_or_default(),
                 load_state: values.get("LoadState").cloned().unwrap_or_default(),
                 active_state: values.get("ActiveState").cloned().unwrap_or_default(),
@@ -422,7 +428,20 @@ fn parse_services(text: &str) -> Vec<SystemdService> {
                     .cloned(),
             })
         })
-        .collect()
+        .collect();
+    units.sort_by(|left, right| {
+        let left_failed = left.active_state == "failed";
+        let right_failed = right.active_state == "failed";
+        right_failed
+            .cmp(&left_failed)
+            .then_with(|| left.unit_type.cmp(&right.unit_type))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    units
+}
+
+fn systemd_unit_list_command() -> &'static str {
+    "LC_ALL=C systemctl show --type=service,timer,mount,socket --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState"
 }
 
 fn parse_container(line: &str) -> Result<DockerContainer, String> {
@@ -535,7 +554,7 @@ impl StreamManager {
             sudo_password,
             output,
         } = options;
-        let service = validate_service_name(service)?;
+        let service = validate_systemd_unit_id(service)?;
         validate_tail(lines)?;
         let command = journal_command(service, lines, follow);
         self.start(app, connection, command, sudo_password, output)
@@ -788,13 +807,43 @@ mod tests {
     }
 
     #[test]
-    fn parses_systemd_show_blocks() {
-        let services = parse_services(
-            "Id=nginx.service\nDescription=nginx\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n\nId=old.service\nDescription=Old\nLoadState=loaded\nActiveState=inactive\nSubState=dead\nUnitFileState=disabled\n",
+    fn parses_and_sorts_systemd_units_across_supported_types() {
+        let units = parse_systemd_units(
+            "Id=nginx.service\nDescription=nginx\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n\nId=cleanup.timer\nDescription=Cleanup timer\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=enabled\n\nId=data.mount\nDescription=Data mount\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=generated\n\nId=api.socket\nDescription=API socket\nLoadState=loaded\nActiveState=active\nSubState=listening\nUnitFileState=enabled\n",
         );
-        assert_eq!(services.len(), 2);
-        assert_eq!(services[0].id, "nginx.service");
-        assert_eq!(services[1].active_state, "inactive");
+        assert_eq!(units.len(), 4);
+        assert_eq!(units[0].id, "data.mount");
+        assert_eq!(units[1].id, "cleanup.timer");
+        assert_eq!(units[2].unit_type, "service");
+        assert_eq!(units[3].unit_type, "socket");
+    }
+
+    #[test]
+    fn ignores_unsupported_or_malformed_systemd_units() {
+        let units = parse_systemd_units(
+            "Id=multi-user.target\nActiveState=active\n\nId=missing-suffix\nActiveState=failed\n",
+        );
+        assert!(units.is_empty());
+    }
+
+    #[test]
+    fn systemd_unit_listing_is_bounded_and_read_only() {
+        let command = systemd_unit_list_command();
+        assert!(command.contains("--type=service,timer,mount,socket"));
+        assert!(
+            command
+                .contains("--property=Id,Description,LoadState,ActiveState,SubState,UnitFileState")
+        );
+        for mutation in [
+            " start ",
+            " stop ",
+            " restart ",
+            " reset-failed ",
+            " enable ",
+            " disable ",
+        ] {
+            assert!(!command.contains(mutation));
+        }
     }
 
     #[test]

@@ -62,7 +62,7 @@ import type {
   LogSourceSelection,
   SavedConnection,
   SettingsContract,
-  SystemdService,
+  SystemdUnit,
   Workspace,
   WorkspaceView,
 } from "./types";
@@ -77,7 +77,7 @@ const emptyEnvironment: EnvironmentInfo = {
 const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
-  { id: "services", label: "Services", icon: Server },
+  { id: "services", label: "Systemd", icon: Server },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
@@ -397,7 +397,7 @@ export function App() {
     }
   }
 
-  function updateServicesCache(id: string, servicesCache: CachedList<SystemdService>) {
+  function updateServicesCache(id: string, servicesCache: CachedList<SystemdUnit>) {
     updateWorkspace(id, { servicesCache });
   }
 

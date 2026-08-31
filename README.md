@@ -4,13 +4,13 @@
 
 [![Latest release](https://img.shields.io/github/v/release/YounesCodes/control-room?display_name=tag)](https://github.com/YounesCodes/control-room/releases/latest) [![CI](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml)
 
-Control Room is a local Windows desktop application for working with Linux machines over SSH. It gives you a real interactive shell and a set of bounded, read-only views for the same Remote Host: system details, systemd services, journald, Docker containers, logs, and opt-in Bash command history.
+Control Room is a local Windows desktop application for working with Linux machines over SSH. It gives you a real interactive shell and a set of bounded, read-only views for the same Remote Host: system details, systemd units, journald, Docker containers, logs, and opt-in Bash command history.
 
 It is for people who manage Linux machines from Windows and want host context close to their terminal work. Control Room is not a monitoring service, RMM tool, server control panel, web dashboard, cloud platform, SSH replacement, or AI tool. The terminal remains the place where you perform administrative work.
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Services, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -24,7 +24,7 @@ Saved Connection
     +-- Workspace
          +-- Interactive SSH terminal
          +-- Host overview
-         +-- systemd services
+         +-- systemd units
          +-- Docker containers
          +-- journald and Docker logs
          +-- Enhanced History, when enabled
@@ -45,17 +45,19 @@ The distinction matters. Control Room helps you inspect and move between related
 ### Host inspection
 
 - View the hostname, operating system, kernel, architecture, uptime, default shell, and detected runtime capabilities.
-- List systemd service units, search them, inspect their state, and open their journal logs.
+- Inspect system-scope systemd services, timers, mounts, and sockets. Failed units sort first,
+  active and failed totals remain visible, and state and type filters narrow the list. Each unit
+  keeps its canonical identity and can open its journal.
 - Group Docker Compose containers by project and service, switch to a flat list, search by
   project, service, name, image, or ID, inspect each container, and open its logs. Containers
   without valid Compose identity labels stay under Ungrouped.
 - Reuse recent inspection results briefly and refresh them manually when you need current data.
 
-All structured inspection is read-only. Control Room does not start, stop, restart, create, or remove services or containers.
+All structured inspection is read-only. Control Room does not start, stop, restart, reset, create, or remove units or containers.
 
 ### Logs
 
-- Read journald output for a selected systemd service or Docker output for a selected container.
+- Read journald output for a selected systemd unit or Docker output for a selected container.
 - Choose a tail size, follow a live stream, pause or resume rendering, stop a stream, and clear the view.
 - Search the lines already loaded in the current view.
 - Keep each Log Stream independent and in memory. Control Room does not persist fetched logs.

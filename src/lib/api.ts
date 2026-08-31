@@ -10,7 +10,7 @@ import type {
   SavedConnection,
   SavedConnectionInput,
   SettingsContract,
-  SystemdService,
+  SystemdUnit,
 } from "../types";
 
 const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
@@ -64,7 +64,7 @@ export const api = {
   refreshCapabilities: (connectionId: string) =>
     invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
   listServices: (connectionId: string) =>
-    invokeRemoteInspection<SystemdService[]>("list_services", { connectionId }),
+    invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   startJournalStream: (

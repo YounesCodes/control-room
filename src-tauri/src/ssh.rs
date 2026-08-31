@@ -98,8 +98,34 @@ pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec
     arguments
 }
 
-pub fn validate_service_name(value: &str) -> Result<&str, String> {
-    validate_remote_identifier(value, r"^[A-Za-z0-9@_.:-]+$", "service name")
+pub fn validate_systemd_unit_id(value: &str) -> Result<&str, String> {
+    let supported_suffix = [".service", ".timer", ".mount", ".socket"]
+        .iter()
+        .any(|suffix| value.ends_with(suffix));
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'\\' {
+            if index + 3 >= bytes.len()
+                || bytes[index + 1] != b'x'
+                || !bytes[index + 2].is_ascii_hexdigit()
+                || !bytes[index + 3].is_ascii_hexdigit()
+            {
+                return Err("Invalid systemd unit identifier".into());
+            }
+            index += 4;
+            continue;
+        }
+        if !(byte.is_ascii_alphanumeric() || b"@_.:-".contains(&byte)) {
+            return Err("Invalid systemd unit identifier".into());
+        }
+        index += 1;
+    }
+    if value.is_empty() || value.len() > 255 || !supported_suffix {
+        return Err("Invalid systemd unit identifier".into());
+    }
+    Ok(value)
 }
 
 pub fn validate_container_id(value: &str) -> Result<&str, String> {
@@ -185,8 +211,11 @@ mod tests {
 
     #[test]
     fn identifiers_reject_shell_syntax() {
-        assert!(validate_service_name("nginx.service").is_ok());
-        assert!(validate_service_name("nginx; reboot").is_err());
+        assert!(validate_systemd_unit_id("nginx.service").is_ok());
+        assert!(validate_systemd_unit_id(r"srv-data\x2darchive.mount").is_ok());
+        assert!(validate_systemd_unit_id("nginx; reboot.service").is_err());
+        assert!(validate_systemd_unit_id(r"broken\xZZ.mount").is_err());
+        assert!(validate_systemd_unit_id("multi-user.target").is_err());
         assert!(validate_container_id("npm-plus_1").is_ok());
         assert!(validate_container_id("$(whoami)").is_err());
     }
