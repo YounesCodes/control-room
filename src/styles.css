@@ -1325,7 +1325,7 @@ code,
 
 .terminal-notice .toolbar-button {
   flex: 0 0 auto;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .connection-diagnostics {
@@ -1337,7 +1337,7 @@ code,
 
 .diagnostic-summary {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   line-height: 1.5;
 }
 
@@ -1398,7 +1398,7 @@ code,
 .diagnostic-evidence h3,
 .diagnostic-related h3 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 12px;
 }
 
@@ -1407,7 +1407,7 @@ code,
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
-  color: var(--text-primary);
+  color: var(--text);
   white-space: normal;
 }
 
