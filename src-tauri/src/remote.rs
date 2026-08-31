@@ -527,7 +527,7 @@ printf '__CR_END__\n'
 printf '__CR_FAILED__\n'
 if test "$current_selected" != true; then printf '__CR_ERROR__\tFailed units are available for the current boot only\n'
 elif ! command -v systemctl >/dev/null 2>&1; then printf '__CR_ERROR__\tsystemctl is not installed\n'
-elif systemctl show --type=service,timer,mount,socket --state=failed --no-pager --property=Id >/dev/null 2>&1; then systemctl show --type=service,timer,mount,socket --state=failed --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState 2>/dev/null
+elif systemctl show --type=service,timer,mount,socket --state=failed --all --no-pager --property=Id >/dev/null 2>&1; then systemctl show --type=service,timer,mount,socket --state=failed --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState 2>/dev/null
 else printf '__CR_ERROR__\tFailed-unit data unavailable\n'; fi
 printf '__CR_END__\n'
 printf '__CR_JOURNAL__\n'
@@ -633,20 +633,8 @@ fn parse_boot_timing(text: &str) -> Result<BootTiming, BootSectionFailure> {
             permission_required: false,
         });
     }
-    let kernel = original
-        .split("Startup finished in ")
-        .nth(1)
-        .and_then(|value| value.split(" (kernel)").next())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
-    let userspace = original
-        .split(" (kernel) + ")
-        .nth(1)
-        .and_then(|value| value.split(" (userspace)").next())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
+    let kernel = boot_timing_segment(&original, "kernel");
+    let userspace = boot_timing_segment(&original, "userspace");
     let total = original
         .split(" = ")
         .nth(1)
@@ -658,6 +646,33 @@ fn parse_boot_timing(text: &str) -> Result<BootTiming, BootSectionFailure> {
         userspace,
         original,
     })
+}
+
+/// Extract a single labelled `systemd-analyze time` segment (for example the
+/// value in front of `(kernel)` or `(userspace)`). `systemd-analyze` reports a
+/// variable set of segments — `(kernel) + (initrd) + (userspace)` on physical
+/// hosts, but only `(userspace)` on many containers and VMs — so each label is
+/// resolved independently and a missing label yields `None` rather than a
+/// fabricated value.
+fn boot_timing_segment(original: &str, label: &str) -> Option<String> {
+    let marker = format!(" ({label})");
+    let index = original.find(&marker)?;
+    let prefix = &original[..index];
+    let start = prefix
+        .rfind(" + ")
+        .map(|position| position + " + ".len())
+        .or_else(|| {
+            prefix
+                .rfind("finished in ")
+                .map(|position| position + "finished in ".len())
+        })
+        .unwrap_or(0);
+    let value = prefix[start..].trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(bounded_boot_text(value, 80))
+    }
 }
 
 fn parse_slow_boot_units(text: &str) -> Result<Vec<SlowBootUnit>, BootSectionFailure> {
@@ -679,7 +694,13 @@ fn parse_slow_boot_units(text: &str) -> Result<Vec<SlowBootUnit>, BootSectionFai
 
 fn parse_failed_boot_units(text: &str) -> Result<Vec<SystemdUnit>, BootSectionFailure> {
     let lines = boot_section_lines(text, "__CR_FAILED__")?;
-    Ok(parse_systemd_units(&lines.join("\n")))
+    // `systemctl show --all` enumerates every unit of the requested types; keep
+    // only the failed ones so the Failed units section never reports healthy
+    // units even if a host ignores the `--state=failed` filter.
+    Ok(parse_systemd_units(&lines.join("\n"))
+        .into_iter()
+        .filter(|unit| unit.active_state == "failed")
+        .collect())
 }
 
 fn parse_boot_journal(text: &str) -> Result<Vec<String>, BootSectionFailure> {
@@ -2118,8 +2139,48 @@ tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
         let slow = parse_slow_boot_units(&output).unwrap();
         assert_eq!(slow[0].duration, "1min 2.345s");
         assert_eq!(slow[0].unit, "backup.service");
+        // Non-service unit types reported by `systemd-analyze blame` must not be
+        // dropped from the slow-unit list.
+        assert_eq!(slow[1].unit, "network-online.target");
         assert_eq!(parse_failed_boot_units(&output).unwrap().len(), 1);
         assert_eq!(parse_boot_journal(&output).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn parse_boot_timing_handles_initrd_and_missing_kernel_segments() {
+        let with_initrd = "__CR_TIMING__\nStartup finished in 3.245s (kernel) + 4.5s (initrd) + 5.123s (userspace) = 12.868s\n__CR_END__\n";
+        let timing = parse_boot_timing(with_initrd).unwrap();
+        assert_eq!(timing.kernel.as_deref(), Some("3.245s"));
+        // Userspace must isolate its own segment, not swallow the initrd chunk.
+        assert_eq!(timing.userspace.as_deref(), Some("5.123s"));
+        assert_eq!(timing.total.as_deref(), Some("12.868s"));
+
+        // Containers and many VMs report only a userspace segment; kernel timing
+        // must read as unavailable rather than a fabricated value.
+        let no_kernel =
+            "__CR_TIMING__\nStartup finished in 2.456s (userspace) = 2.456s\n__CR_END__\n";
+        let timing = parse_boot_timing(no_kernel).unwrap();
+        assert_eq!(timing.kernel, None);
+        assert_eq!(timing.userspace.as_deref(), Some("2.456s"));
+        assert_eq!(timing.total.as_deref(), Some("2.456s"));
+    }
+
+    #[test]
+    fn parse_slow_boot_units_keeps_non_service_unit_types() {
+        let output = "__CR_SLOW__\n6.700s dev-sda1.device\n900ms swapfile.swap\n1.200s docker.socket\n__CR_END__\n";
+        let slow = parse_slow_boot_units(output).unwrap();
+        let units: Vec<&str> = slow.iter().map(|unit| unit.unit.as_str()).collect();
+        assert_eq!(units, ["dev-sda1.device", "swapfile.swap", "docker.socket"]);
+    }
+
+    #[test]
+    fn parse_failed_boot_units_reports_only_failed_units() {
+        // A host that ignores `--state=failed` returns every enumerated unit;
+        // the parser must still surface only the failed ones.
+        let output = "__CR_FAILED__\nId=ssh.service\nDescription=OpenSSH\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n\nId=backup.service\nDescription=Backup\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=enabled\n\n__CR_END__\n";
+        let failed = parse_failed_boot_units(output).unwrap();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, "backup.service");
     }
 
     #[test]
