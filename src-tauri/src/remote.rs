@@ -534,7 +534,20 @@ fn parse_listening_sockets(text: &str) -> Result<Vec<ListeningSocket>, String> {
         let (process_name, process_id, ownership) = match process_evidence.as_slice() {
             [] => (None, None, "unavailable"),
             [(pid, name)] => (Some(name.clone()), Some(*pid), "known"),
-            _ => (None, None, "ambiguous"),
+            entries => {
+                // Several PIDs hold the same listening socket — the common
+                // prefork/worker pattern (nginx, apache-prefork, php-fpm,
+                // postgres). The process name stays an unambiguous kernel fact
+                // when every holder shares it, so keep it for display and
+                // filtering; the owning PID (and any systemd correlation) is
+                // genuinely ambiguous and is withheld.
+                let first_name = &entries[0].1;
+                if entries.iter().all(|(_, name)| name == first_name) {
+                    (Some(first_name.clone()), None, "ambiguous")
+                } else {
+                    (None, None, "ambiguous")
+                }
+            }
         };
         let systemd_unit = process_id.and_then(|pid| process_units.get(&pid)).cloned();
         let address_family = if local_address.contains(':') {
@@ -984,6 +997,27 @@ mod tests {
         assert_eq!(sockets[3].ownership, "ambiguous");
         assert_eq!(sockets[3].process_id, None);
         assert_eq!(sockets[3].systemd_unit, None);
+    }
+
+    #[test]
+    fn shared_name_multiprocess_listener_keeps_the_process_name_but_not_ownership() {
+        // A prefork/worker server (nginx master + workers) reports one socket
+        // held by several PIDs that all share a process name.
+        let sockets = parse_listening_sockets(
+            "tcp LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:((\"nginx\",pid=742,fd=6),(\"nginx\",pid=743,fd=6),(\"nginx\",pid=744,fd=6))\n\
+             __CONTROL_ROOM_PROCESS_UNITS__\n\
+             742 nginx.service nginx\n",
+        )
+        .unwrap();
+
+        assert_eq!(sockets.len(), 1);
+        // Process name is an unambiguous kernel fact and must survive for
+        // display and filtering.
+        assert_eq!(sockets[0].process_name.as_deref(), Some("nginx"));
+        // The owning PID and systemd correlation are genuinely ambiguous.
+        assert_eq!(sockets[0].ownership, "ambiguous");
+        assert_eq!(sockets[0].process_id, None);
+        assert_eq!(sockets[0].systemd_unit, None);
     }
 
     #[test]
