@@ -7,12 +7,14 @@ use crate::{
     models::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
-        SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        HostCapabilities, HostSnapshot, HostSnapshotSummary, LOG_TAIL_OPTIONS, ListeningSocket,
+        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, SnapshotComparison,
+        SnapshotProgress, SnapshotSection, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
+    snapshots::{self, SectionReporter, SnapshotCaptureRegistry},
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
 };
 
@@ -416,6 +418,101 @@ pub fn start_docker_log_stream(
 #[tauri::command]
 pub fn stop_log_stream(streams: State<'_, StreamManager>, stream_id: String) -> Result<(), String> {
     streams.stop(&stream_id)
+}
+
+struct ChannelSectionReporter<'a> {
+    capture_id: &'a str,
+    channel: Channel<SnapshotProgress>,
+}
+
+impl SectionReporter for ChannelSectionReporter<'_> {
+    fn report(&self, section: &SnapshotSection, completed: u32, total: u32) {
+        let _ = self.channel.send(SnapshotProgress {
+            capture_id: self.capture_id.to_string(),
+            kind: section.kind.clone(),
+            status: section.status.clone(),
+            message: section.message.clone(),
+            completed,
+            total,
+        });
+    }
+}
+
+/// Captures one snapshot. Nothing here runs on a timer: the command exists only
+/// because the user chose Capture snapshot.
+#[tauri::command(async)]
+pub fn capture_host_snapshot(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    captures: State<'_, SnapshotCaptureRegistry>,
+    connection_id: String,
+    capture_id: String,
+    label: Option<String>,
+    progress: Channel<SnapshotProgress>,
+) -> Result<HostSnapshotSummary, String> {
+    let connection = database.get_connection(&connection_id)?;
+    let _permit = limiter.acquire(&connection_id)?;
+    let reporter = ChannelSectionReporter {
+        capture_id: &capture_id,
+        channel: progress,
+    };
+    let snapshot = snapshots::capture(&connection, &capture_id, label, &captures, &reporter)?;
+    database.save_host_snapshot(&snapshot)
+}
+
+#[tauri::command]
+pub fn cancel_host_snapshot(
+    captures: State<'_, SnapshotCaptureRegistry>,
+    capture_id: String,
+) -> Result<(), String> {
+    captures.cancel(&capture_id)
+}
+
+#[tauri::command]
+pub fn list_host_snapshots(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<Vec<HostSnapshotSummary>, String> {
+    database.list_host_snapshots(&connection_id)
+}
+
+#[tauri::command]
+pub fn get_host_snapshot(
+    database: State<'_, Database>,
+    id: String,
+) -> Result<HostSnapshot, String> {
+    database.get_host_snapshot(&id)
+}
+
+#[tauri::command]
+pub fn rename_host_snapshot(
+    database: State<'_, Database>,
+    id: String,
+    label: Option<String>,
+) -> Result<HostSnapshotSummary, String> {
+    database.rename_host_snapshot(&id, label)
+}
+
+#[tauri::command]
+pub fn delete_host_snapshot(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_host_snapshot(&id)
+}
+
+#[tauri::command]
+pub fn compare_host_snapshots(
+    database: State<'_, Database>,
+    base_id: String,
+    target_id: String,
+) -> Result<SnapshotComparison, String> {
+    if base_id == target_id {
+        return Err("Choose two different snapshots to compare".into());
+    }
+    let base = database.get_host_snapshot(&base_id)?;
+    let target = database.get_host_snapshot(&target_id)?;
+    if base.connection_id != target.connection_id {
+        return Err("Snapshots from different Saved Connections cannot be compared".into());
+    }
+    Ok(snapshots::compare(&base, &target))
 }
 
 #[tauri::command]

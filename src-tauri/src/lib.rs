@@ -4,11 +4,13 @@ mod history;
 mod models;
 mod remote;
 mod session;
+mod snapshots;
 mod ssh;
 
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
+use snapshots::SnapshotCaptureRegistry;
 use tauri::Manager;
 
 pub fn run() {
@@ -17,6 +19,7 @@ pub fn run() {
         .manage(SessionManager::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
+        .manage(SnapshotCaptureRegistry::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -57,6 +60,13 @@ pub fn run() {
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,
+            commands::capture_host_snapshot,
+            commands::cancel_host_snapshot,
+            commands::list_host_snapshots,
+            commands::get_host_snapshot,
+            commands::rename_host_snapshot,
+            commands::delete_host_snapshot,
+            commands::compare_host_snapshots,
             commands::get_history,
             commands::add_history_entry,
             commands::delete_history_entry,

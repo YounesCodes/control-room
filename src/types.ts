@@ -188,6 +188,106 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export interface HostIdentity {
+  hostname: string | null;
+  machineFingerprint: string | null;
+  osId: string | null;
+  osVersion: string | null;
+  kernel: string | null;
+  architecture: string | null;
+}
+
+export type SnapshotSectionKind =
+  "host" | "systemdUnits" | "containers" | "listeners" | "filesystems";
+
+export type SnapshotSectionStatus = "collected" | "partial" | "unsupported" | "unavailable";
+
+export interface SnapshotFact {
+  name: string;
+  value: string;
+}
+
+export interface SnapshotEntry {
+  identity: string;
+  label: string;
+  facts: SnapshotFact[];
+}
+
+export interface SnapshotSection {
+  kind: SnapshotSectionKind;
+  status: SnapshotSectionStatus;
+  collectedAt: string;
+  message: string | null;
+  entries: SnapshotEntry[];
+}
+
+export interface HostSnapshot {
+  id: string;
+  connectionId: string;
+  label: string | null;
+  schemaVersion: number;
+  capturedAt: string;
+  identity: HostIdentity;
+  sections: SnapshotSection[];
+}
+
+export interface SnapshotSectionSummary {
+  kind: SnapshotSectionKind;
+  status: SnapshotSectionStatus;
+  entryCount: number;
+}
+
+export interface HostSnapshotSummary {
+  id: string;
+  connectionId: string;
+  label: string | null;
+  schemaVersion: number;
+  capturedAt: string;
+  identity: HostIdentity;
+  sections: SnapshotSectionSummary[];
+}
+
+export interface SnapshotProgress {
+  captureId: string;
+  kind: SnapshotSectionKind;
+  status: SnapshotSectionStatus;
+  message: string | null;
+  completed: number;
+  total: number;
+}
+
+export interface SnapshotFactChange {
+  name: string;
+  baseValue: string | null;
+  targetValue: string | null;
+}
+
+export interface SnapshotEntryChange {
+  identity: string;
+  label: string;
+  changes: SnapshotFactChange[];
+}
+
+export interface SnapshotSectionDiff {
+  kind: SnapshotSectionKind;
+  baseStatus: SnapshotSectionStatus;
+  targetStatus: SnapshotSectionStatus;
+  comparable: boolean;
+  note: string | null;
+  added: SnapshotEntry[];
+  removed: SnapshotEntry[];
+  changed: SnapshotEntryChange[];
+  unchangedCount: number;
+}
+
+export interface SnapshotComparison {
+  base: HostSnapshotSummary;
+  target: HostSnapshotSummary;
+  identityMatch: "same" | "different" | "unknown";
+  schemaCompatible: boolean;
+  sections: SnapshotSectionDiff[];
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -242,7 +342,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "snapshots"
+  | "history"
+  | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];
@@ -284,6 +392,7 @@ export interface Workspace {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
+  snapshotSelectionId: string | null;
 }
 
 interface PersistedWorkspace {

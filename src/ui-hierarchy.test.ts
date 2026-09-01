@@ -50,6 +50,20 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps snapshot capture manual and never schedules it", () => {
+    const snapshotsSource = readFileSync(
+      new URL("./pages/SnapshotsPane.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain('{ id: "snapshots", label: "Snapshots", icon: Camera }');
+    expect(snapshotsSource).toContain("api.captureHostSnapshot");
+    expect(snapshotsSource).not.toContain("setInterval");
+    expect(snapshotsSource).not.toContain("setTimeout");
+    expect(snapshotsSource).toContain(
+      "Captured only when you ask. Control Room never collects in the background.",
+    );
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

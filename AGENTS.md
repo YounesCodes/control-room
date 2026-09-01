@@ -74,10 +74,17 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Capture a Host Snapshot only when the user asks. Never schedule, poll, or
+    recapture in the background. Store normalized facts, per-section collection
+    time, support status, user label, schema version, and host identity evidence.
+    Never store raw command output, logs, credentials, or environment values.
+    Keep collected, partial, unsupported, and unavailable distinct, and never
+    report a section Control Room could not read as unchanged. Compare snapshots
+    deterministically by domain identity and draw no causal conclusion.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -113,3 +120,9 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Host Snapshot**: an explicit, timestamped capture of normalized host state
+  for one Saved Connection, versioned by schema and split into sections that
+  each record their own collection time and support status.
+- **Normalized Host State**: the versioned section, entry, and fact shape a
+  snapshot stores. Entries carry a domain-aware identity so two captures can be
+  compared without per-section diff code.

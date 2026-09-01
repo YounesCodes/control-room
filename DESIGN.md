@@ -45,7 +45,7 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, or History as
+terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, Snapshots, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -107,7 +107,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  Snapshots, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -389,6 +389,18 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Snapshots is a split page: saved captures on the left, one capture or one comparison on the right.
+Capture is a button, never a schedule. While it runs, each finished section appears with its own
+status chip, and Stop ends the run once the section in flight returns. The four section states
+(collected, partial, not present, not readable) use the three status hues and stay distinct in
+every view, because collapsing them would let missing evidence read as an unchanged host.
+
+Choosing another capture in the Compare with select switches the panel to a comparison, always
+ordered earlier to later regardless of which row is selected. Each section shows both statuses,
+then additions, removals, and changed facts with the old and new value side by side. A section that
+could not be compared shows why in place of a diff and is excluded from the change count. A
+mismatched or unreadable machine fingerprint is called out at the top of the comparison.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full

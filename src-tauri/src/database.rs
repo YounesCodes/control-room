@@ -5,13 +5,17 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::models::{
-    AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
-    LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
-    SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
+use crate::{
+    models::{
+        AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
+        HostSnapshot, HostSnapshotSummary, LOG_TAIL_OPTIONS, PersistedTerminalLayout,
+        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
+        ScratchpadNoteInput,
+    },
+    snapshots,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 6;
+const LATEST_SCHEMA_VERSION: i64 = 8;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -21,6 +25,9 @@ const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
+/// Snapshots are kept manually. This cap only stops an unbounded local file:
+/// when it is reached, the oldest capture for that connection is dropped.
+const MAX_SNAPSHOTS_PER_CONNECTION: usize = 20;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -587,6 +594,111 @@ impl Database {
         Ok(())
     }
 
+    /// Stores one capture. The payload holds normalized facts only. No command
+    /// output, log text, credential, or environment value reaches this table.
+    pub fn save_host_snapshot(
+        &self,
+        snapshot: &HostSnapshot,
+    ) -> Result<HostSnapshotSummary, String> {
+        let payload = serde_json::to_string(snapshot).map_err(|error| error.to_string())?;
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO host_snapshots (id, connection_id, label, schema_version, captured_at, payload) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    snapshot.id,
+                    snapshot.connection_id,
+                    snapshot.label,
+                    snapshot.schema_version,
+                    snapshot.captured_at,
+                    payload
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "DELETE FROM host_snapshots WHERE connection_id = ?1 AND id NOT IN (SELECT id FROM host_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
+                params![snapshot.connection_id, MAX_SNAPSHOTS_PER_CONNECTION as i64],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(snapshots::summarize(snapshot))
+    }
+
+    pub fn list_host_snapshots(
+        &self,
+        connection_id: &str,
+    ) -> Result<Vec<HostSnapshotSummary>, String> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT payload FROM host_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([connection_id], |row| row.get::<_, String>(0))
+            .map_err(|error| error.to_string())?;
+        let mut summaries = Vec::new();
+        for row in rows {
+            let payload = row.map_err(|error| error.to_string())?;
+            // A payload written by a future schema is skipped rather than
+            // guessed at. The capture stays on disk until the user deletes it.
+            if let Ok(snapshot) = serde_json::from_str::<HostSnapshot>(&payload) {
+                summaries.push(snapshots::summarize(&snapshot));
+            }
+        }
+        Ok(summaries)
+    }
+
+    pub fn get_host_snapshot(&self, id: &str) -> Result<HostSnapshot, String> {
+        let payload: Option<String> = self
+            .connection
+            .lock()
+            .query_row(
+                "SELECT payload FROM host_snapshots WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let payload = payload.ok_or_else(|| "That snapshot no longer exists".to_string())?;
+        serde_json::from_str(&payload)
+            .map_err(|_| "That snapshot was written by a newer version of Control Room".into())
+    }
+
+    pub fn rename_host_snapshot(
+        &self,
+        id: &str,
+        label: Option<String>,
+    ) -> Result<HostSnapshotSummary, String> {
+        let mut snapshot = self.get_host_snapshot(id)?;
+        snapshot.label = snapshots::normalize_label(label);
+        let payload = serde_json::to_string(&snapshot).map_err(|error| error.to_string())?;
+        self.connection
+            .lock()
+            .execute(
+                "UPDATE host_snapshots SET label = ?2, payload = ?3 WHERE id = ?1",
+                params![id, snapshot.label, payload],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(snapshots::summarize(&snapshot))
+    }
+
+    pub fn delete_host_snapshot(&self, id: &str) -> Result<(), String> {
+        let removed = self
+            .connection
+            .lock()
+            .execute("DELETE FROM host_snapshots WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        if removed == 0 {
+            return Err("That snapshot no longer exists".into());
+        }
+        Ok(())
+    }
+
     pub fn get_settings(&self) -> Result<AppSettings, String> {
         let payload: Option<String> = self
             .connection
@@ -1054,6 +1166,18 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 CREATE INDEX idx_scratchpad_notes_connection
                 ON scratchpad_notes(connection_id);
 
+                CREATE TABLE host_snapshots (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    label TEXT,
+                    schema_version INTEGER NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE INDEX idx_host_snapshots_connection
+                ON host_snapshots(connection_id, captured_at DESC);
+
                 PRAGMA user_version = 4;
                 "#,
             )
@@ -1117,6 +1241,33 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 ALTER TABLE saved_connections
                 ADD COLUMN sudo_enabled INTEGER NOT NULL DEFAULT 0;
                 PRAGMA user_version = 6;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    // 7 belongs to command snippets (#37). This branch starts at 8 so both can
+    // land without either migration being skipped.
+    if version < 8 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS host_snapshots (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    label TEXT,
+                    schema_version INTEGER NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_host_snapshots_connection
+                ON host_snapshots(connection_id, captured_at DESC);
+
+                PRAGMA user_version = 8;
                 "#,
             )
             .map_err(|error| error.to_string())?;
@@ -1392,6 +1543,198 @@ mod tests {
             group_id: None,
             tag_names: Vec::new(),
         }
+    }
+
+    fn snapshot_for(connection_id: &str, id: &str, captured_at: &str) -> HostSnapshot {
+        HostSnapshot {
+            id: id.into(),
+            connection_id: connection_id.into(),
+            label: None,
+            schema_version: crate::models::SNAPSHOT_SCHEMA_VERSION,
+            captured_at: captured_at.into(),
+            identity: crate::models::HostIdentity {
+                hostname: Some("debian-laptop".into()),
+                machine_fingerprint: Some("0123456789abcdef".into()),
+                os_id: Some("debian".into()),
+                os_version: Some("13".into()),
+                kernel: Some("6.1.0".into()),
+                architecture: Some("x86_64".into()),
+            },
+            sections: vec![crate::models::SnapshotSection {
+                kind: "systemdUnits".into(),
+                status: "collected".into(),
+                collected_at: captured_at.into(),
+                message: None,
+                entries: vec![crate::models::SnapshotEntry {
+                    identity: "ssh.service".into(),
+                    label: "ssh.service".into(),
+                    facts: vec![crate::models::SnapshotFact {
+                        name: "activeState".into(),
+                        value: "active".into(),
+                    }],
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn snapshots_round_trip_rename_and_delete() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let snapshot = snapshot_for(&saved.id, "snapshot-a", "2026-09-01T10:00:00Z");
+        let summary = database.save_host_snapshot(&snapshot).unwrap();
+        assert_eq!(summary.sections[0].entry_count, 1);
+        assert_eq!(database.list_host_snapshots(&saved.id).unwrap().len(), 1);
+        assert_eq!(database.get_host_snapshot("snapshot-a").unwrap(), snapshot);
+
+        let renamed = database
+            .rename_host_snapshot("snapshot-a", Some("  before upgrade  ".into()))
+            .unwrap();
+        assert_eq!(renamed.label.as_deref(), Some("before upgrade"));
+        assert_eq!(
+            database
+                .get_host_snapshot("snapshot-a")
+                .unwrap()
+                .label
+                .as_deref(),
+            Some("before upgrade")
+        );
+
+        database.delete_host_snapshot("snapshot-a").unwrap();
+        assert!(database.list_host_snapshots(&saved.id).unwrap().is_empty());
+        assert!(database.get_host_snapshot("snapshot-a").is_err());
+        assert!(database.delete_host_snapshot("snapshot-a").is_err());
+    }
+
+    #[test]
+    fn deleting_a_connection_removes_its_snapshots() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_snapshot(&snapshot_for(
+                &saved.id,
+                "snapshot-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        database.delete_connection(&saved.id).unwrap();
+        assert!(database.get_host_snapshot("snapshot-a").is_err());
+    }
+
+    #[test]
+    fn snapshot_retention_drops_the_oldest_capture() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        for index in 0..MAX_SNAPSHOTS_PER_CONNECTION + 2 {
+            database
+                .save_host_snapshot(&snapshot_for(
+                    &saved.id,
+                    &format!("snapshot-{index:02}"),
+                    &format!("2026-09-01T{index:02}:00:00Z"),
+                ))
+                .unwrap();
+        }
+        let stored = database.list_host_snapshots(&saved.id).unwrap();
+        assert_eq!(stored.len(), MAX_SNAPSHOTS_PER_CONNECTION);
+        assert_eq!(stored[0].id, "snapshot-21");
+        assert!(database.get_host_snapshot("snapshot-00").is_err());
+        assert!(database.get_host_snapshot("snapshot-01").is_err());
+    }
+
+    #[test]
+    fn a_snapshot_written_by_a_newer_schema_is_reported_not_guessed() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO host_snapshots (id, connection_id, label, schema_version, captured_at, payload) VALUES ('future', ?1, NULL, 99, '2026-09-01T10:00:00Z', ?2)",
+                params![saved.id, "{\"unknown\":true}"],
+            )
+            .unwrap();
+        assert!(database.list_host_snapshots(&saved.id).unwrap().is_empty());
+        assert!(database.get_host_snapshot("future").is_err());
+    }
+
+    #[test]
+    fn migration_adds_the_snapshot_table_to_an_older_database() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    r#"
+                    CREATE TABLE saved_connections (
+                        id TEXT PRIMARY KEY,
+                        display_name TEXT NOT NULL,
+                        destination TEXT NOT NULL,
+                        username TEXT,
+                        port INTEGER,
+                        identity_file TEXT,
+                        history_enabled INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        last_connected_at TEXT
+                    );
+                    INSERT INTO saved_connections (id, display_name, destination, created_at, updated_at)
+                    VALUES ('connection-a', 'Laptop', 'debian-laptop', '2026-01-01', '2026-01-01');
+                    "#,
+                )
+                .unwrap();
+        }
+        let database = Database::open(&path).unwrap();
+        let version: i64 = database
+            .connection
+            .lock()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
+        database
+            .save_host_snapshot(&snapshot_for(
+                "connection-a",
+                "snapshot-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        assert_eq!(
+            database.list_host_snapshots("connection-a").unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn stored_snapshots_hold_normalized_facts_only() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_snapshot(&snapshot_for(
+                &saved.id,
+                "snapshot-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        let payload: String = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT payload FROM host_snapshots WHERE id = 'snapshot-a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        // The stored shape has no place for raw output, so the payload can only
+        // hold the section, entry, and fact fields the collectors produced.
+        for field in ["stdout", "stderr", "password", "environment", "logs"] {
+            assert!(!payload.contains(field), "payload leaked {field}");
+        }
+        assert!(payload.contains("\"kind\":\"systemdUnits\""));
     }
 
     #[test]

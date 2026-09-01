@@ -1271,6 +1271,192 @@ code,
    Workspace content + terminal panes
    ========================================================================== */
 
+/* ==========================================================================
+   Host snapshots
+   ========================================================================== */
+
+.snapshot-capture {
+  display: flex;
+  padding: 0 16px 10px;
+  gap: 8px;
+}
+
+.snapshot-capture input {
+  min-width: 0;
+  flex: 1;
+}
+
+.snapshot-progress {
+  display: flex;
+  margin: 0 16px 10px;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  gap: 4px;
+  list-style: none;
+}
+
+.snapshot-progress li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  gap: 8px;
+}
+
+.snapshot-progress-count {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.snapshot-status {
+  padding: 1px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.snapshot-status-collected {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.snapshot-status-partial,
+.snapshot-status-unsupported {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.snapshot-status-unavailable {
+  border-color: var(--failure);
+  color: var(--failure);
+}
+
+.snapshot-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.snapshot-detail-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.snapshot-rename {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+}
+
+.snapshot-rename input {
+  min-width: 0;
+  flex: 1;
+}
+
+.snapshot-compare-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.snapshot-compare-field select {
+  min-width: 0;
+  flex: 1;
+}
+
+.snapshot-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.snapshot-section {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.snapshot-section header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.snapshot-section h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 12.5px;
+}
+
+.snapshot-section-count {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.snapshot-comparison-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snapshot-change-list,
+.snapshot-fact-list {
+  display: flex;
+  margin: 8px 0 0;
+  flex-direction: column;
+  padding: 0;
+  gap: 4px;
+  list-style: none;
+}
+
+.snapshot-change-list > li {
+  display: flex;
+  align-items: baseline;
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.snapshot-fact-list {
+  margin: 4px 0 0 12px;
+}
+
+.snapshot-fact-list li {
+  display: flex;
+  align-items: baseline;
+  color: var(--text-faint);
+  font-size: 11px;
+  gap: 6px;
+}
+
+.snapshot-change-mark {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.snapshot-change-added {
+  color: var(--success);
+}
+
+.snapshot-change-removed {
+  color: var(--failure);
+}
+
 .workspace-content {
   position: relative;
   min-width: 0;

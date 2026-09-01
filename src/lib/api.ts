@@ -11,6 +11,8 @@ import type {
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
+  HostSnapshot,
+  HostSnapshotSummary,
   ListeningSocket,
   PersistedWorkspaceState,
   SavedConnection,
@@ -19,6 +21,8 @@ import type {
   ScratchpadNoteInput,
   ScratchpadScope,
   SettingsContract,
+  SnapshotComparison,
+  SnapshotProgress,
   SystemdUnit,
 } from "../types";
 
@@ -143,6 +147,27 @@ export const api = {
       output,
     }),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
+  captureHostSnapshot: (
+    connectionId: string,
+    captureId: string,
+    label: string | null,
+    progress: Channel<SnapshotProgress>,
+  ) =>
+    invoke<HostSnapshotSummary>("capture_host_snapshot", {
+      connectionId,
+      captureId,
+      label,
+      progress,
+    }),
+  cancelHostSnapshot: (captureId: string) => invoke<void>("cancel_host_snapshot", { captureId }),
+  listHostSnapshots: (connectionId: string) =>
+    invoke<HostSnapshotSummary[]>("list_host_snapshots", { connectionId }),
+  getHostSnapshot: (id: string) => invoke<HostSnapshot>("get_host_snapshot", { id }),
+  renameHostSnapshot: (id: string, label: string | null) =>
+    invoke<HostSnapshotSummary>("rename_host_snapshot", { id, label }),
+  deleteHostSnapshot: (id: string) => invoke<void>("delete_host_snapshot", { id }),
+  compareHostSnapshots: (baseId: string, targetId: string) =>
+    invoke<SnapshotComparison>("compare_host_snapshots", { baseId, targetId }),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),
