@@ -14,6 +14,9 @@ const api = vi.hoisted(() => ({
   saveWorkspaceState: vi.fn(),
   cachedCapabilities: vi.fn(),
   deleteConnection: vi.fn(),
+  deleteScratchpadNote: vi.fn(),
+  scratchpadNote: vi.fn(),
+  saveScratchpadNote: vi.fn(),
   closeSession: vi.fn(),
 }));
 
@@ -105,6 +108,9 @@ describe("App Workspace behavior", () => {
     api.saveWorkspaceState.mockResolvedValue(undefined);
     api.cachedCapabilities.mockResolvedValue(null);
     api.deleteConnection.mockResolvedValue(undefined);
+    api.deleteScratchpadNote.mockResolvedValue(undefined);
+    api.scratchpadNote.mockResolvedValue(null);
+    api.saveScratchpadNote.mockResolvedValue({});
     api.closeSession.mockResolvedValue(undefined);
   });
 
@@ -164,5 +170,19 @@ describe("App Workspace behavior", () => {
     fireEvent.keyDown(displayName, { key: "r", ctrlKey: true, shiftKey: true });
 
     expect(terminal.getAttribute("data-reconnect-token")).toBe("0");
+  });
+
+  it("closes a Workspace without deleting connection or global Scratchpad notes", async () => {
+    const user = userEvent.setup();
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    api.workspaceState.mockResolvedValue(restoredState([saved.id]));
+    render(<App />);
+
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
+
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
+    expect(api.deleteScratchpadNote).not.toHaveBeenCalled();
   });
 });

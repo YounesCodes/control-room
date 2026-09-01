@@ -1458,8 +1458,171 @@ code,
 .overview-page,
 .settings-page,
 .history-page,
-.logs-page {
+.logs-page,
+.scratchpad-page {
   padding: 26px 30px;
+}
+
+.scratchpad-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.scratchpad-heading {
+  width: 100%;
+  max-width: 980px;
+  align-items: center;
+}
+
+.scratchpad-scope-switch {
+  display: grid;
+  width: min(410px, 48%);
+  flex: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  padding: 4px;
+}
+
+.scratchpad-scope-switch button {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 7px 11px;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.scratchpad-scope-switch button svg {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.scratchpad-scope-switch button:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.scratchpad-scope-switch button[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  background: var(--fill-selected);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.scratchpad-scope-switch button[aria-pressed="true"] svg {
+  color: var(--accent);
+}
+
+.scratchpad-scope-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scratchpad-scope-copy strong {
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.scratchpad-scope-copy span {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scratchpad-scope-switch button[aria-pressed="true"] .scratchpad-scope-copy span {
+  color: var(--text-muted);
+}
+
+.scratchpad-editor {
+  display: flex;
+  width: 100%;
+  max-width: 980px;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+.scratchpad-meta {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.scratchpad-meta > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.scratchpad-meta strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.scratchpad-meta span,
+.scratchpad-save-state {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.scratchpad-save-state {
+  flex: none;
+}
+
+.scratchpad-save-error {
+  color: var(--failure);
+}
+
+.scratchpad-editor textarea {
+  width: 100%;
+  min-height: 260px;
+  flex: 1;
+  resize: none;
+  padding: 16px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre-wrap;
+}
+
+.scratchpad-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 12px;
+}
+
+.scratchpad-footer p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.scratchpad-footer .row-actions {
+  display: flex;
+  flex: none;
+  gap: 7px;
 }
 
 .overview-content {

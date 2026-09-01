@@ -237,7 +237,7 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history";
+  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];
@@ -293,6 +293,25 @@ export interface PersistedWorkspaceState {
   workspaces: PersistedWorkspace[];
   activeWorkspaceId: string | null;
   terminalLayout: import("./lib/terminal-layout").TerminalLayout | null;
+}
+
+export type ScratchpadScope = "connection" | "global";
+
+export interface ScratchpadNote {
+  id: string;
+  scope: ScratchpadScope;
+  ownerId: string;
+  connectionId: string | null;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScratchpadNoteInput {
+  scope: ScratchpadScope;
+  ownerId: string;
+  connectionId: string | null;
+  text: string;
 }
 
 export interface SessionStateEvent {
