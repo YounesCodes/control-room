@@ -22,7 +22,6 @@ function workspace(id: string, connectionId: string): Workspace {
       identityFile: null,
       historyEnabled: false,
       groupId: null,
-      favorite: false,
       tags: [],
       createdAt: "",
       updatedAt: "",

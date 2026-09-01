@@ -85,8 +85,8 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 
 ### Productivity
 
-- Organize Saved Connections into collapsible groups, add reusable local tags, mark favorites,
-  and filter the sidebar by connection name, SSH target, group, tag, or favorite status.
+- Organize Saved Connections into collapsible groups, add reusable local tags,
+  and filter the sidebar by connection name, SSH target, group, or tag.
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
 - Tune terminal font, size, scrollback, colors, log tail defaults, and the global Enhanced History setting.
 
@@ -130,7 +130,7 @@ The interactive terminal uses normal OpenSSH behavior, including its prompts. St
 Control Room keeps its local state in SQLite. It stores:
 
 - Saved Connection details, including the destination, username, optional port, optional identity-file
-  path, group, tags, and favorite status. Group order and collapse state are local too.
+  path, group, and tags. Group order and collapse state are local too.
 - Application settings and disconnected Workspace layout.
 - Cached host capability data such as the operating system and detected service or container counts.
 - Enhanced History entries only when you enable capture. Each entry can include the command, working directory, timestamps, and exit code.

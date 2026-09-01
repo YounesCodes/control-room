@@ -9,7 +9,6 @@ export interface ConnectionSection {
 }
 
 function connectionSort(left: SavedConnection, right: SavedConnection): number {
-  if (left.favorite !== right.favorite) return left.favorite ? -1 : 1;
   return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
 }
 
@@ -17,9 +16,7 @@ export function connectionMatchesFilter(
   connection: SavedConnection,
   groupName: string | null,
   query: string,
-  favoritesOnly: boolean,
 ): boolean {
-  if (favoritesOnly && !connection.favorite) return false;
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized) return true;
   return [
@@ -34,7 +31,6 @@ export function organizeConnections(
   connections: SavedConnection[],
   groups: ConnectionGroup[],
   query: string,
-  favoritesOnly: boolean,
   ungroupedCollapsed: boolean,
 ): ConnectionSection[] {
   const orderedGroups = [...groups].sort(
@@ -50,8 +46,7 @@ export function organizeConnections(
     connections: connections
       .filter(
         (connection) =>
-          connection.groupId === group.id &&
-          connectionMatchesFilter(connection, group.name, query, favoritesOnly),
+          connection.groupId === group.id && connectionMatchesFilter(connection, group.name, query),
       )
       .sort(connectionSort),
   }));
@@ -63,7 +58,7 @@ export function organizeConnections(
       .filter(
         (connection) =>
           (!connection.groupId || !knownGroups.has(connection.groupId)) &&
-          connectionMatchesFilter(connection, null, query, favoritesOnly),
+          connectionMatchesFilter(connection, null, query),
       )
       .sort(connectionSort),
   });

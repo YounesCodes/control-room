@@ -102,9 +102,9 @@ Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list is divided into manually ordered,
   collapsible groups plus a derived Ungrouped section. Search matches connection
-  names, SSH targets, groups, and tags; a separate toggle limits the list to
-  favorites. Once a Workspace is open, the rail also holds the view switcher
-  (Overview, Terminal, Systemd, Ports, Docker, Logs, History), with "Add connection"
+  names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
+  holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
+  History), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -293,8 +293,8 @@ dot on the OS mark: green for connected, amber for connecting, red for error,
 grey for disconnected. Live sessions read at a glance. The dot's ring colour
 matches the row or tab background, so it looks cut out of the icon.
 
-**Connection organization.** A Saved Connection can belong to one group, carry
-up to twelve case-insensitive tags, and be marked as a favorite. Group order and
+**Connection organization.** A Saved Connection can belong to one group and carry
+up to twelve case-insensitive tags. Group order and
 collapse state persist locally. Deleting a group returns its connections to the
 derived Ungrouped section and never opens, reconnects, or contacts a host.
 

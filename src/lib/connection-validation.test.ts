@@ -11,7 +11,6 @@ function input(patch: Partial<SavedConnectionInput> = {}): SavedConnectionInput 
     identityFile: null,
     historyEnabled: false,
     groupId: null,
-    favorite: false,
     tagNames: [],
     ...patch,
   };

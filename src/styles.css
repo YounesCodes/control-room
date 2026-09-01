@@ -572,12 +572,6 @@ code,
   white-space: nowrap;
 }
 
-.favorite-mark {
-  flex: none;
-  fill: currentColor;
-  color: var(--text-muted);
-}
-
 .host-main small {
   overflow: hidden;
   color: #92928e;
@@ -2581,27 +2575,6 @@ dd {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 13px;
-}
-
-.connection-favorite-field {
-  min-height: 34px;
-  flex-direction: row !important;
-  align-items: center;
-  gap: 8px !important;
-  padding: 0 5px;
-}
-
-.connection-favorite-field input {
-  width: 15px;
-  height: 15px;
-}
-
-.connection-favorite-field span {
-  color: var(--text-muted) !important;
-  font-size: 11.5px !important;
-  font-weight: 500 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
 }
 
 .known-tag-list {

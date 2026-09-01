@@ -60,7 +60,6 @@ function connection(id: string, displayName: string): SavedConnection {
     identityFile: null,
     historyEnabled: false,
     groupId: null,
-    favorite: false,
     tags: [],
     createdAt: "",
     updatedAt: "",

@@ -33,7 +33,6 @@ export function ConnectionDialog({
   const [port, setPort] = useState(connection?.port?.toString() ?? "");
   const [identityFile, setIdentityFile] = useState(connection?.identityFile ?? "");
   const [groupId, setGroupId] = useState(connection?.groupId ?? "");
-  const [favorite, setFavorite] = useState(connection?.favorite ?? false);
   const [tagText, setTagText] = useState(connection?.tags.map((tag) => tag.name).join(", ") ?? "");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -49,7 +48,6 @@ export function ConnectionDialog({
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
       groupId: groupId || null,
-      favorite,
       tagNames: tagText
         .split(",")
         .map((tag) => tag.trim())
@@ -201,14 +199,6 @@ export function ConnectionDialog({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="checkbox-row connection-favorite-field">
-            <input
-              type="checkbox"
-              checked={favorite}
-              onChange={(event) => setFavorite(event.target.checked)}
-            />
-            <span>Favorite</span>
           </label>
         </div>
         <label>

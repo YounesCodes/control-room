@@ -178,7 +178,6 @@ mod tests {
             identity_file: None,
             history_enabled: true,
             group_id: None,
-            favorite: false,
             tags: Vec::new(),
             created_at: String::new(),
             updated_at: String::new(),

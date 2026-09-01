@@ -19,7 +19,6 @@ import {
   Server,
   Settings,
   SquareTerminal,
-  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -113,7 +112,6 @@ export function App() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hostSearch, setHostSearch] = useState("");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
@@ -325,15 +323,8 @@ export function App() {
   }, [splitMenuOpen]);
 
   const connectionSections = useMemo(
-    () =>
-      organizeConnections(
-        connections,
-        connectionGroups,
-        hostSearch,
-        favoritesOnly,
-        ungroupedCollapsed,
-      ),
-    [connections, connectionGroups, hostSearch, favoritesOnly, ungroupedCollapsed],
+    () => organizeConnections(connections, connectionGroups, hostSearch, ungroupedCollapsed),
+    [connections, connectionGroups, hostSearch, ungroupedCollapsed],
   );
 
   // The most meaningful live session state per saved connection, used to mark
@@ -722,12 +713,7 @@ export function App() {
             )}
           </span>
           <span className="host-row-details">
-            <strong>
-              {connection.favorite && (
-                <Star className="favorite-mark" size={11} aria-label="Favorite" />
-              )}
-              {connection.displayName}
-            </strong>
+            <strong>{connection.displayName}</strong>
             <small>{connectionTarget(connection)}</small>
             {!!connection.tags.length && (
               <span className="host-tag-summary">
@@ -819,16 +805,6 @@ export function App() {
             />
           </label>
           <button
-            className={favoritesOnly ? "icon-button active" : "icon-button"}
-            type="button"
-            aria-label="Show favorites only"
-            aria-pressed={favoritesOnly}
-            onClick={() => setFavoritesOnly((current) => !current)}
-            title="Show favorites only"
-          >
-            <Star size={14} />
-          </button>
-          <button
             className="icon-button"
             type="button"
             aria-label="Manage connection groups"
@@ -840,7 +816,7 @@ export function App() {
         </div>
         <nav className="host-list" aria-label="Saved connections">
           {connectionSections.map((section) => {
-            const collapsed = section.collapsed && !hostSearch.trim() && !favoritesOnly;
+            const collapsed = section.collapsed && !hostSearch.trim();
             return (
               <section className="connection-group-section" key={section.id ?? "ungrouped"}>
                 <button

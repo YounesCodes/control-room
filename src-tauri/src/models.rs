@@ -11,7 +11,6 @@ pub struct SavedConnection {
     pub identity_file: Option<String>,
     pub history_enabled: bool,
     pub group_id: Option<String>,
-    pub favorite: bool,
     pub tags: Vec<ConnectionTag>,
     pub created_at: String,
     pub updated_at: String,
@@ -30,8 +29,6 @@ pub struct SavedConnectionInput {
     pub history_enabled: bool,
     #[serde(default)]
     pub group_id: Option<String>,
-    #[serde(default)]
-    pub favorite: bool,
     #[serde(default)]
     pub tag_names: Vec<String>,
 }

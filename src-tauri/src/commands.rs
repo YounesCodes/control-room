@@ -68,7 +68,6 @@ fn validated_test_connection(input: SavedConnectionInput) -> Result<SavedConnect
             .filter(|value| !value.is_empty()),
         history_enabled: false,
         group_id: None,
-        favorite: false,
         tags: Vec::new(),
         created_at: now.clone(),
         updated_at: now,
@@ -162,7 +161,6 @@ pub fn start_session(
         identity_file: connection.identity_file.clone(),
         history_enabled: connection.history_enabled,
         group_id: connection.group_id.clone(),
-        favorite: connection.favorite,
         tag_names: connection.tags.iter().map(|tag| tag.name.clone()).collect(),
     })?;
     if !database.get_settings()?.global_history_enabled {
@@ -529,7 +527,6 @@ mod tests {
             identity_file: None,
             history_enabled: true,
             group_id: None,
-            favorite: false,
             tag_names: Vec::new(),
         })
         .unwrap();

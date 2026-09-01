@@ -31,7 +31,6 @@ const connection: SavedConnection = {
   identityFile: null,
   historyEnabled: true,
   groupId: null,
-  favorite: false,
   tags: [],
   createdAt: "",
   updatedAt: "",

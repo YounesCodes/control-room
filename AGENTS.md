@@ -40,7 +40,7 @@ DESIGN.md.
    system-scope services, timers, mounts, and sockets, sorts failures first, and
    never treats zero failures as a complete health result. Keep each Log Stream
    independent and in memory.
-5. Keep Connection Groups, tags, favorites, ordering, and collapse state local.
+5. Keep Connection Groups, tags, ordering, and collapse state local.
    A Saved Connection belongs to at most one group. Deleting a group returns its
    connections to the derived Ungrouped section and never contacts a Remote Host.
 6. Derive Docker Compose grouping only from validated project and service labels.

@@ -13,7 +13,6 @@ function connection(id: string): SavedConnection {
     identityFile: null,
     historyEnabled: false,
     groupId: null,
-    favorite: false,
     tags: [],
     createdAt: "",
     updatedAt: "",

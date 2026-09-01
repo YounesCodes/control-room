@@ -12,7 +12,6 @@ function connection(id: string, patch: Partial<SavedConnection> = {}): SavedConn
     identityFile: null,
     historyEnabled: false,
     groupId: null,
-    favorite: false,
     tags: [],
     createdAt: "",
     updatedAt: "",
@@ -27,16 +26,15 @@ const groups: ConnectionGroup[] = [
 ];
 
 describe("connection organization", () => {
-  it("groups deterministically, sorts favorites first, and retains Ungrouped", () => {
+  it("groups deterministically by name and retains Ungrouped", () => {
     const sections = organizeConnections(
       [
         connection("worker", { groupId: "group-a" }),
-        connection("api", { groupId: "group-a", favorite: true }),
+        connection("api", { groupId: "group-a" }),
         connection("orphan", { groupId: "deleted-group" }),
       ],
       groups,
       "",
-      false,
       false,
     );
 
@@ -46,18 +44,14 @@ describe("connection organization", () => {
     expect(sections[2].connections[0].id).toBe("orphan");
   });
 
-  it("filters locally across names, targets, groups, tags, and favorites", () => {
+  it("filters locally across names, targets, groups, and tags", () => {
     const saved = connection("api", {
       groupId: "group-a",
-      favorite: true,
       tags: [{ id: "tag-a", name: "Critical" }],
     });
-    expect(connectionMatchesFilter(saved, "Production", "critical", false)).toBe(true);
-    expect(connectionMatchesFilter(saved, "Production", "production", false)).toBe(true);
-    expect(connectionMatchesFilter(saved, "Production", "api.example", false)).toBe(true);
-    expect(connectionMatchesFilter(saved, "Production", "missing", false)).toBe(false);
-    expect(connectionMatchesFilter({ ...saved, favorite: false }, "Production", "", true)).toBe(
-      false,
-    );
+    expect(connectionMatchesFilter(saved, "Production", "critical")).toBe(true);
+    expect(connectionMatchesFilter(saved, "Production", "production")).toBe(true);
+    expect(connectionMatchesFilter(saved, "Production", "api.example")).toBe(true);
+    expect(connectionMatchesFilter(saved, "Production", "missing")).toBe(false);
   });
 });

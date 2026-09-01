@@ -7,7 +7,6 @@ export interface SavedConnection {
   identityFile: string | null;
   historyEnabled: boolean;
   groupId: string | null;
-  favorite: boolean;
   tags: ConnectionTag[];
   createdAt: string;
   updatedAt: string;
@@ -22,7 +21,6 @@ export interface SavedConnectionInput {
   identityFile: string | null;
   historyEnabled: boolean;
   groupId: string | null;
-  favorite: boolean;
   tagNames: string[];
 }
 

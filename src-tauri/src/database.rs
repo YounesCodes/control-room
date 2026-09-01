@@ -50,7 +50,7 @@ impl Database {
         let mut connections = {
             let mut statement = connection
                 .prepare(
-                    "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, favorite, created_at, updated_at, last_connected_at FROM saved_connections ORDER BY favorite DESC, display_name COLLATE NOCASE",
+                    "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, last_connected_at FROM saved_connections ORDER BY display_name COLLATE NOCASE",
                 )
                 .map_err(|error| error.to_string())?;
             let rows = statement
@@ -69,7 +69,7 @@ impl Database {
         let connection = self.connection.lock();
         let mut saved = connection
             .query_row(
-                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, favorite, created_at, updated_at, last_connected_at FROM saved_connections WHERE id = ?1",
+                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, last_connected_at FROM saved_connections WHERE id = ?1",
                 [id], map_connection,
             )
             .optional()
@@ -93,7 +93,7 @@ impl Database {
         validate_group_reference(&transaction, input.group_id.as_deref())?;
         transaction
             .execute(
-                "INSERT INTO saved_connections (id, display_name, destination, username, port, identity_file, history_enabled, group_id, favorite, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+                "INSERT INTO saved_connections (id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
                 params![
                     id,
                     input.display_name.trim(),
@@ -103,7 +103,6 @@ impl Database {
                     normalize_optional(input.identity_file),
                     input.history_enabled,
                     input.group_id,
-                    input.favorite,
                     now,
                 ],
             )
@@ -127,7 +126,7 @@ impl Database {
         validate_group_reference(&transaction, input.group_id.as_deref())?;
         let changed = transaction
             .execute(
-                "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, group_id = ?8, favorite = ?9, updated_at = ?10 WHERE id = ?1",
+                "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, group_id = ?8, updated_at = ?9 WHERE id = ?1",
                 params![
                     id,
                     input.display_name.trim(),
@@ -137,7 +136,6 @@ impl Database {
                     normalize_optional(input.identity_file),
                     input.history_enabled,
                     input.group_id,
-                    input.favorite,
                     Utc::now().to_rfc3339(),
                 ],
             )
@@ -776,9 +774,6 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 ALTER TABLE saved_connections
                 ADD COLUMN group_id TEXT REFERENCES connection_groups(id) ON DELETE SET NULL;
 
-                ALTER TABLE saved_connections
-                ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;
-
                 CREATE TABLE saved_connection_tags (
                     connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
                     tag_id TEXT NOT NULL REFERENCES connection_tags(id) ON DELETE CASCADE,
@@ -806,11 +801,10 @@ fn map_connection(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedConnection> 
         identity_file: row.get(5)?,
         history_enabled: row.get(6)?,
         group_id: row.get(7)?,
-        favorite: row.get(8)?,
         tags: Vec::new(),
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
-        last_connected_at: row.get(11)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+        last_connected_at: row.get(10)?,
     })
 }
 
@@ -1053,7 +1047,6 @@ mod tests {
             identity_file: None,
             history_enabled: true,
             group_id: None,
-            favorite: false,
             tag_names: Vec::new(),
         }
     }
@@ -1121,10 +1114,8 @@ mod tests {
 
         let mut organized = input("Database");
         organized.group_id = Some(production.id.clone());
-        organized.favorite = true;
         organized.tag_names = vec![" Docker ".into(), "docker".into(), "Critical".into()];
         let saved = database.create_connection(organized).unwrap();
-        assert!(saved.favorite);
         assert_eq!(saved.group_id.as_deref(), Some(production.id.as_str()));
         assert_eq!(
             saved
@@ -1139,7 +1130,6 @@ mod tests {
         database.delete_connection_group(&production.id).unwrap();
         let returned = database.get_connection(&saved.id).unwrap();
         assert_eq!(returned.group_id, None);
-        assert!(returned.favorite);
         assert_eq!(returned.tags.len(), 2);
         drop(database);
 
@@ -1222,7 +1212,6 @@ mod tests {
         let legacy = &database.list_connections().unwrap()[0];
         assert_eq!(legacy.id, "legacy");
         assert_eq!(legacy.group_id, None);
-        assert!(!legacy.favorite);
         assert!(legacy.tags.is_empty());
         let version: i64 = database
             .connection
