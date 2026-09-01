@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { tagTextColor } from "./connection-tag-color";
+import { tagBadgeStyle, tagDisplayColor } from "./connection-tag-color";
 
 describe("connection tag colors", () => {
-  it("chooses readable text for dark and light tag backgrounds", () => {
-    expect(tagTextColor("#24292f")).toBe("#ffffff");
-    expect(tagTextColor("#f6f8fa")).toBe("#000000");
+  it("uses one hue for text, a tinted background, and a matching border", () => {
+    expect(tagBadgeStyle("#58a6ff")).toEqual({
+      color: "#58a6ff",
+      backgroundColor: "rgb(88 166 255 / 14%)",
+      borderColor: "rgb(88 166 255 / 58%)",
+    });
   });
 
-  it("uses black text on the bright default GitHub label green", () => {
-    expect(tagTextColor("#42d17a")).toBe("#000000");
+  it("lightens dark selections without replacing their hue with black or white", () => {
+    const displayColor = tagDisplayColor("#24292f");
+    expect(displayColor).not.toBe("#24292f");
+    expect(displayColor).not.toBe("#000000");
+    expect(displayColor).not.toBe("#ffffff");
   });
 });

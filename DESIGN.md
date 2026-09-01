@@ -165,8 +165,10 @@ lighter as they rise, the standard move for dark UIs, not from heavy shadows.
 The only built-in non-neutral colours in the UI are three status hues. They carry
 meaning (connection and session state, systemd unit and container state, command exit
 status, inline messages) and never act as accents. Connection Tag badges may use a
-color selected by the user. The app stores that local metadata and calculates black
-or white badge text for contrast. A tag color never communicates runtime state.
+color selected by the user. The badge uses that hue for its text, a translucent
+version for its background, and a stronger translucent version for its border.
+The renderer lightens selections that would not remain legible on Control Room's
+dark surfaces. A tag color never communicates runtime state.
 
 | Role    | Hex       | Meaning                                           |
 | ------- | --------- | ------------------------------------------------- |
