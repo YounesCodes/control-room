@@ -33,6 +33,7 @@ import { WindowControls } from "./components/WindowControls";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
 import { organizeConnections } from "./lib/connection-organization";
+import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
 import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
@@ -633,6 +634,43 @@ export function App() {
     setDialogConnection(null);
   }
 
+  function handleTagUpdated(updatedTag: ConnectionTag) {
+    const updateTags = (tags: ConnectionTag[]) =>
+      tags.map((tag) => (tag.id === updatedTag.id ? updatedTag : tag));
+    setKnownTags((current) =>
+      updateTags(current).sort((left, right) => left.name.localeCompare(right.name)),
+    );
+    setConnections((current) =>
+      current.map((connection) => ({ ...connection, tags: updateTags(connection.tags) })),
+    );
+    setWorkspaces((current) =>
+      current.map((workspace) => ({
+        ...workspace,
+        connectionSnapshot: {
+          ...workspace.connectionSnapshot,
+          tags: updateTags(workspace.connectionSnapshot.tags),
+        },
+      })),
+    );
+  }
+
+  function handleTagDeleted(tagId: string) {
+    const removeTag = (tags: ConnectionTag[]) => tags.filter((tag) => tag.id !== tagId);
+    setKnownTags((current) => removeTag(current));
+    setConnections((current) =>
+      current.map((connection) => ({ ...connection, tags: removeTag(connection.tags) })),
+    );
+    setWorkspaces((current) =>
+      current.map((workspace) => ({
+        ...workspace,
+        connectionSnapshot: {
+          ...workspace.connectionSnapshot,
+          tags: removeTag(workspace.connectionSnapshot.tags),
+        },
+      })),
+    );
+  }
+
   function handleGroupDeleted(groupId: string) {
     setConnections((current) =>
       current.map((connection) =>
@@ -717,11 +755,18 @@ export function App() {
             <small>{connectionTarget(connection)}</small>
             {!!connection.tags.length && (
               <span className="host-tag-summary">
-                {connection.tags
-                  .slice(0, 2)
-                  .map((tag) => tag.name)
-                  .join(" · ")}
-                {connection.tags.length > 2 ? ` +${connection.tags.length - 2}` : ""}
+                {connection.tags.slice(0, 2).map((tag) => (
+                  <span
+                    className="connection-tag-badge"
+                    style={tagBadgeStyle(tag.color)}
+                    key={tag.id}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+                {connection.tags.length > 2 && (
+                  <span className="host-tag-overflow">+{connection.tags.length - 2}</span>
+                )}
               </span>
             )}
           </span>
@@ -800,18 +845,18 @@ export function App() {
             <input
               value={hostSearch}
               onChange={(event) => setHostSearch(event.target.value)}
-              placeholder="Name, group, or tag"
-              aria-label="Filter connections"
+              placeholder="Name, group, tag"
+              aria-label="Filter connections by name, group, or tag"
             />
           </label>
           <button
             className="icon-button"
             type="button"
-            aria-label="Manage connection groups"
+            aria-label="Manage groups and tags"
             onClick={() => setConnectionGroupsOpen(true)}
-            title="Manage connection groups"
+            title="Manage groups and tags"
           >
-            <FolderCog size={15} />
+            <FolderCog size={18} />
           </button>
         </div>
         <nav className="host-list" aria-label="Saved connections">
@@ -1281,8 +1326,12 @@ export function App() {
       {connectionGroupsOpen && (
         <ConnectionGroupsDialog
           groups={connectionGroups}
+          tags={knownTags}
           onGroupsChange={setConnectionGroups}
+          onTagsChange={setKnownTags}
           onGroupDeleted={handleGroupDeleted}
+          onTagUpdated={handleTagUpdated}
+          onTagDeleted={handleTagDeleted}
           onClose={() => setConnectionGroupsOpen(false)}
         />
       )}

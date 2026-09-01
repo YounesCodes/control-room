@@ -56,6 +56,8 @@ const connection: SavedConnection = {
   port: null,
   identityFile: null,
   historyEnabled: false,
+  groupId: null,
+  tags: [],
   createdAt: "",
   updatedAt: "",
   lastConnectedAt: null,

@@ -11,7 +11,7 @@ use crate::models::{
     SavedConnectionInput,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 2;
+const LATEST_SCHEMA_VERSION: i64 = 3;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -171,17 +171,105 @@ impl Database {
     pub fn list_connection_tags(&self) -> Result<Vec<ConnectionTag>, String> {
         let connection = self.connection.lock();
         let mut statement = connection
-            .prepare("SELECT id, name FROM connection_tags ORDER BY normalized_name")
+            .prepare("SELECT id, name, color FROM connection_tags ORDER BY normalized_name")
             .map_err(|error| error.to_string())?;
         let rows = statement
             .query_map([], |row| {
                 Ok(ConnectionTag {
                     id: row.get(0)?,
                     name: row.get(1)?,
+                    color: row.get(2)?,
                 })
             })
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn create_connection_tag(&self, name: &str, color: &str) -> Result<ConnectionTag, String> {
+        let (name, normalized) = validate_organization_name(name, MAX_TAG_NAME_CHARS, "Tag")?;
+        let color = normalize_tag_color(color)?;
+        let tag = ConnectionTag {
+            id: Uuid::new_v4().to_string(),
+            name,
+            color,
+        };
+        self.connection
+            .lock()
+            .execute(
+                "INSERT INTO connection_tags (id, name, normalized_name, color) VALUES (?1, ?2, ?3, ?4)",
+                params![tag.id, tag.name, normalized, tag.color],
+            )
+            .map_err(|error| map_organization_error(error, "tag"))?;
+        Ok(tag)
+    }
+
+    pub fn rename_connection_tag(&self, id: &str, name: &str) -> Result<ConnectionTag, String> {
+        validate_uuid(id, "Tag")?;
+        let (name, normalized) = validate_organization_name(name, MAX_TAG_NAME_CHARS, "Tag")?;
+        let connection = self.connection.lock();
+        let changed = connection
+            .execute(
+                "UPDATE connection_tags SET name = ?2, normalized_name = ?3 WHERE id = ?1",
+                params![id, name, normalized],
+            )
+            .map_err(|error| map_organization_error(error, "tag"))?;
+        if changed == 0 {
+            return Err("Tag not found".into());
+        }
+        connection
+            .query_row(
+                "SELECT id, name, color FROM connection_tags WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(ConnectionTag {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        color: row.get(2)?,
+                    })
+                },
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn delete_connection_tag(&self, id: &str) -> Result<(), String> {
+        validate_uuid(id, "Tag")?;
+        let changed = self
+            .connection
+            .lock()
+            .execute("DELETE FROM connection_tags WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("Tag not found".into());
+        }
+        Ok(())
+    }
+
+    pub fn set_connection_tag_color(&self, id: &str, color: &str) -> Result<ConnectionTag, String> {
+        validate_uuid(id, "Tag")?;
+        let color = normalize_tag_color(color)?;
+        let connection = self.connection.lock();
+        let changed = connection
+            .execute(
+                "UPDATE connection_tags SET color = ?2 WHERE id = ?1",
+                params![id, color],
+            )
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("Tag not found".into());
+        }
+        connection
+            .query_row(
+                "SELECT id, name, color FROM connection_tags WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(ConnectionTag {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        color: row.get(2)?,
+                    })
+                },
+            )
             .map_err(|error| error.to_string())
     }
 
@@ -201,7 +289,7 @@ impl Database {
                 "INSERT INTO connection_groups (id, name, normalized_name, position, collapsed) VALUES (?1, ?2, ?3, ?4, 0)",
                 params![id, name, normalized, position],
             )
-            .map_err(map_organization_error)?;
+            .map_err(|error| map_organization_error(error, "group"))?;
         Ok(ConnectionGroup {
             id,
             name,
@@ -219,7 +307,7 @@ impl Database {
                 "UPDATE connection_groups SET name = ?2, normalized_name = ?3 WHERE id = ?1",
                 params![id, name, normalized],
             )
-            .map_err(map_organization_error)?;
+            .map_err(|error| map_organization_error(error, "group"))?;
         if changed == 0 {
             return Err("Group not found".into());
         }
@@ -788,6 +876,21 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 3 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                ALTER TABLE connection_tags
+                ADD COLUMN color TEXT NOT NULL DEFAULT '#3a3a3a';
+                PRAGMA user_version = 3;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -814,7 +917,7 @@ fn load_connection_tags(
 ) -> Result<Vec<ConnectionTag>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT tags.id, tags.name FROM connection_tags tags JOIN saved_connection_tags links ON links.tag_id = tags.id WHERE links.connection_id = ?1 ORDER BY tags.normalized_name",
+            "SELECT tags.id, tags.name, tags.color FROM connection_tags tags JOIN saved_connection_tags links ON links.tag_id = tags.id WHERE links.connection_id = ?1 ORDER BY tags.normalized_name",
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -822,6 +925,7 @@ fn load_connection_tags(
             Ok(ConnectionTag {
                 id: row.get(0)?,
                 name: row.get(1)?,
+                color: row.get(2)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -872,13 +976,7 @@ fn sync_connection_tags(
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        let tag_id = tag_id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        transaction
-            .execute(
-                "INSERT OR IGNORE INTO connection_tags (id, name, normalized_name) VALUES (?1, ?2, ?3)",
-                params![tag_id, name, normalized_name],
-            )
-            .map_err(|error| error.to_string())?;
+        let tag_id = tag_id.ok_or_else(|| format!("Tag '{name}' does not exist"))?;
         transaction
             .execute(
                 "INSERT INTO saved_connection_tags (connection_id, tag_id) VALUES (?1, ?2)",
@@ -922,15 +1020,27 @@ fn validate_organization_name(
     Ok((name, normalized))
 }
 
+fn normalize_tag_color(value: &str) -> Result<String, String> {
+    if value.len() != 7
+        || !value.starts_with('#')
+        || !value[1..]
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err("Tag colors must use #RRGGBB format".into());
+    }
+    Ok(value.to_ascii_lowercase())
+}
+
 fn validate_uuid(value: &str, kind: &str) -> Result<(), String> {
     Uuid::parse_str(value)
         .map(|_| ())
         .map_err(|_| format!("{kind} ID is invalid"))
 }
 
-fn map_organization_error(error: rusqlite::Error) -> String {
+fn map_organization_error(error: rusqlite::Error, kind: &str) -> String {
     if error.to_string().contains("UNIQUE constraint failed") {
-        "A group with that name already exists".into()
+        format!("A {kind} with that name already exists")
     } else {
         error.to_string()
     }
@@ -1114,6 +1224,10 @@ mod tests {
 
         let mut organized = input("Database");
         organized.group_id = Some(production.id.clone());
+        database.create_connection_tag("Docker", "#3a3a3a").unwrap();
+        database
+            .create_connection_tag("Critical", "#8250df")
+            .unwrap();
         organized.tag_names = vec![" Docker ".into(), "docker".into(), "Critical".into()];
         let saved = database.create_connection(organized).unwrap();
         assert_eq!(saved.group_id.as_deref(), Some(production.id.as_str()));
@@ -1126,11 +1240,54 @@ mod tests {
             vec!["Critical", "Docker"]
         );
         assert_eq!(database.list_connection_tags().unwrap(), saved.tags);
+        let critical_tag = saved
+            .tags
+            .iter()
+            .find(|tag| tag.name == "Critical")
+            .unwrap();
+        let recolored = database
+            .set_connection_tag_color(&critical_tag.id, "#A371F7")
+            .unwrap();
+        assert_eq!(recolored.color, "#a371f7");
+        assert_eq!(
+            database
+                .get_connection(&saved.id)
+                .unwrap()
+                .tags
+                .iter()
+                .find(|tag| tag.id == critical_tag.id)
+                .unwrap()
+                .color,
+            "#a371f7"
+        );
+        assert_eq!(
+            database
+                .set_connection_tag_color(&critical_tag.id, "purple")
+                .unwrap_err(),
+            "Tag colors must use #RRGGBB format"
+        );
 
         database.delete_connection_group(&production.id).unwrap();
         let returned = database.get_connection(&saved.id).unwrap();
         assert_eq!(returned.group_id, None);
         assert_eq!(returned.tags.len(), 2);
+        let renamed = database
+            .rename_connection_tag(&critical_tag.id, "Priority")
+            .unwrap();
+        assert_eq!(renamed.name, "Priority");
+        assert_eq!(
+            database
+                .get_connection(&saved.id)
+                .unwrap()
+                .tags
+                .iter()
+                .find(|tag| tag.id == critical_tag.id)
+                .unwrap()
+                .name,
+            "Priority"
+        );
+        database.delete_connection_tag(&critical_tag.id).unwrap();
+        assert_eq!(database.get_connection(&saved.id).unwrap().tags.len(), 1);
         drop(database);
 
         let reopened = Database::open(&path).unwrap();
@@ -1157,6 +1314,21 @@ mod tests {
                 .rename_connection_group(&second.id, "PRODUCTION")
                 .unwrap_err(),
             "A group with that name already exists"
+        );
+
+        let mut unknown_tag = input("Unknown tag");
+        unknown_tag.tag_names = vec!["missing".into()];
+        assert_eq!(
+            database.create_connection(unknown_tag).unwrap_err(),
+            "Tag 'missing' does not exist"
+        );
+
+        database.create_connection_tag("docker", "#3a3a3a").unwrap();
+        assert_eq!(
+            database
+                .create_connection_tag("DOCKER", "#3a3a3a")
+                .unwrap_err(),
+            "A tag with that name already exists"
         );
 
         let mut duplicate_tags = input("Duplicates");

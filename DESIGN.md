@@ -60,9 +60,10 @@ run, and you type those yourself.
    (a dot, a chip, an accent bar), and give the terminal the room.
 
 2. **Monochrome with intent.** The interface is near-black and greyscale. The
-   only non-neutral colours are three status hues (success, warning, failure).
-   So colour always means something here. It is never decoration. That restraint
-   is the product's identity, and the tests enforce it.
+   only built-in non-neutral colours are three status hues (success, warning,
+   failure). User-picked Connection Tag colors are the one metadata exception.
+   They identify machines and never imply health. Colour always has a job here,
+   and the tests enforce the built-in palette.
 
 3. **Keyboard-first, desktop-native.** Real window chrome, a command palette,
    discoverable shortcuts, split panes, focus mode. Nothing important is
@@ -161,9 +162,11 @@ Settings colour preview in agreement.
 A greyscale system on a near-black ground. Depth comes from making surfaces
 lighter as they rise, the standard move for dark UIs, not from heavy shadows.
 
-The only non-neutral colours in the whole UI are three status hues. They carry
+The only built-in non-neutral colours in the UI are three status hues. They carry
 meaning (connection and session state, systemd unit and container state, command exit
-status, inline messages) and never act as accents.
+status, inline messages) and never act as accents. Connection Tag badges may use a
+color selected by the user. The app stores that local metadata and calculates black
+or white badge text for contrast. A tag color never communicates runtime state.
 
 | Role    | Hex       | Meaning                                           |
 | ------- | --------- | ------------------------------------------------- |
@@ -198,7 +201,8 @@ use `tabular-nums`.
 - **Spacing.** A consistent rhythm, not arbitrary values. Layout uses flex or
   grid `gap`, not per-element margins that collapse.
 - **Radius.** A three-step scale, 4/6/8 px (small controls, then menus and cards,
-  then modals). It replaced an earlier scatter of 2/3/5.
+  then modals). Connection Tag badges and their color wells are the circular
+  exceptions. The scale replaced an earlier scatter of 2/3/5.
 - **Elevation.** The surface ramp below, plus two neutral shadow tokens for
   popovers and modals.
 - **Motion.** Quiet on purpose. Roughly 110 ms on interactions, 160 ms on overlay
@@ -294,9 +298,12 @@ grey for disconnected. Live sessions read at a glance. The dot's ring colour
 matches the row or tab background, so it looks cut out of the icon.
 
 **Connection organization.** A Saved Connection can belong to one group and carry
-up to twelve case-insensitive tags. Group order and
+up to twelve case-insensitive, color-coded tags. Group order and
 collapse state persist locally. Deleting a group returns its connections to the
-derived Ungrouped section and never opens, reconnects, or contacts a host.
+derived Ungrouped section and never opens, reconnects, or contacts a host. The
+organization dialog owns tag creation, renaming, color selection, and deletion.
+The Saved Connection editor only assigns existing tags. Deleting a tag removes
+its local associations from every connection.
 
 **Panel states.** Every data view separates loading (spinner and label), empty
 (icon and guidance, such as the Logs and History empty states), and error (icon,
@@ -459,11 +466,12 @@ single-user inspector.
 
 Two test files encode the design decisions that must not drift.
 
-- **`src/color-palette.test.ts`** scans every hex and rgb literal in
+- **`src/color-palette.test.ts`** scans every built-in hex and rgb literal in
   `src/styles.css` and fails unless the only non-neutral colours are exactly
-  `#42d17a`, `#d6a84a`, and `#ef5b6b`. It also checks WCAG contrast for the text
+  `#42d17a`, `#d6a84a`, and `#ef5b6b`. Runtime Connection Tag colors are stored
+  data, not stylesheet literals. The test also checks WCAG contrast for the text
   hierarchy, the accent, and the status colours, and it pins the terminal ANSI
-  defaults. This is what makes "monochrome with intent" a fact instead of a hope.
+  defaults.
 - **`src/ui-hierarchy.test.ts`** locks the structure: the 42 px titlebar row, the
   bounded connection list and 980 px content cap, terminal padding on the xterm
   element, focus-mode rules, session presence in navigation, the in-app (not

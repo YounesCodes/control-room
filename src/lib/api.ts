@@ -53,6 +53,13 @@ export const api = {
   deleteConnection: (id: string) => invoke<void>("delete_connection", { id }),
   listConnectionGroups: () => invoke<ConnectionGroup[]>("list_connection_groups"),
   listConnectionTags: () => invoke<ConnectionTag[]>("list_connection_tags"),
+  createConnectionTag: (name: string, color: string) =>
+    invoke<ConnectionTag>("create_connection_tag", { name, color }),
+  renameConnectionTag: (id: string, name: string) =>
+    invoke<ConnectionTag>("rename_connection_tag", { id, name }),
+  deleteConnectionTag: (id: string) => invoke<void>("delete_connection_tag", { id }),
+  setConnectionTagColor: (id: string, color: string) =>
+    invoke<ConnectionTag>("set_connection_tag_color", { id, color }),
   createConnectionGroup: (name: string) =>
     invoke<ConnectionGroup>("create_connection_group", { name }),
   renameConnectionGroup: (id: string, name: string) =>

@@ -6,10 +6,10 @@ use crate::{
     history,
     models::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
-        EnvironmentInfo,
-        EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput, HostCapabilities,
-        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
-        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
+        EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
+        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
+        SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
+        SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -100,6 +100,38 @@ pub fn list_connection_groups(
 #[tauri::command]
 pub fn list_connection_tags(database: State<'_, Database>) -> Result<Vec<ConnectionTag>, String> {
     database.list_connection_tags()
+}
+
+#[tauri::command]
+pub fn create_connection_tag(
+    database: State<'_, Database>,
+    name: String,
+    color: String,
+) -> Result<ConnectionTag, String> {
+    database.create_connection_tag(&name, &color)
+}
+
+#[tauri::command]
+pub fn rename_connection_tag(
+    database: State<'_, Database>,
+    id: String,
+    name: String,
+) -> Result<ConnectionTag, String> {
+    database.rename_connection_tag(&id, &name)
+}
+
+#[tauri::command]
+pub fn delete_connection_tag(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_connection_tag(&id)
+}
+
+#[tauri::command]
+pub fn set_connection_tag_color(
+    database: State<'_, Database>,
+    id: String,
+    color: String,
+) -> Result<ConnectionTag, String> {
+    database.set_connection_tag_color(&id, &color)
 }
 
 #[tauri::command]
@@ -543,6 +575,10 @@ mod tests {
         for command in [
             "list_connection_groups",
             "list_connection_tags",
+            "create_connection_tag",
+            "rename_connection_tag",
+            "delete_connection_tag",
+            "set_connection_tag_color",
             "create_connection_group",
             "rename_connection_group",
             "delete_connection_group",

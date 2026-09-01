@@ -47,6 +47,7 @@ pub struct ConnectionGroup {
 pub struct ConnectionTag {
     pub id: String,
     pub name: String,
+    pub color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

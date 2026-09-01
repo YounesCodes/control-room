@@ -59,7 +59,7 @@ DESIGN.md.
    health logs, or host mount sources.
 9. Add tests for parsers, argument builders, lifecycle changes, and regressions.
 10. Keep README, DESIGN.md, and this file current when behavior changes. Do not
-   redesign unrelated UI.
+    redesign unrelated UI.
 11. Do not commit or push unless the user asks.
 
 ## Validation

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { validateConnectionDraft } from "../lib/connection-validation";
 import type {
   ConnectionGroup,
@@ -33,7 +34,7 @@ export function ConnectionDialog({
   const [port, setPort] = useState(connection?.port?.toString() ?? "");
   const [identityFile, setIdentityFile] = useState(connection?.identityFile ?? "");
   const [groupId, setGroupId] = useState(connection?.groupId ?? "");
-  const [tagText, setTagText] = useState(connection?.tags.map((tag) => tag.name).join(", ") ?? "");
+  const [selectedTagIds, setSelectedTagIds] = useState(connection?.tags.map((tag) => tag.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,20 +49,14 @@ export function ConnectionDialog({
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
       groupId: groupId || null,
-      tagNames: tagText
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
+      tagNames: knownTags.filter((tag) => selectedTagIds.includes(tag.id)).map((tag) => tag.name),
     };
   }
 
-  function addKnownTag(name: string) {
-    const current = tagText
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-    if (current.some((tag) => tag.toLocaleLowerCase() === name.toLocaleLowerCase())) return;
-    setTagText([...current, name].join(", "));
+  function toggleTag(id: string) {
+    setSelectedTagIds((current) =>
+      current.includes(id) ? current.filter((tagId) => tagId !== id) : [...current, id],
+    );
   }
 
   async function chooseIdentity() {
@@ -201,25 +196,28 @@ export function ConnectionDialog({
             </select>
           </label>
         </div>
-        <label>
+        <div className="connection-tag-selector">
           <span>Tags</span>
-          <input
-            value={tagText}
-            onChange={(event) => setTagText(event.target.value)}
-            placeholder="docker, critical"
-            maxLength={500}
-          />
-          <small>Separate up to 12 local tags with commas. Matching ignores case.</small>
-        </label>
-        {!!knownTags.length && (
-          <div className="known-tag-list" aria-label="Existing tags">
-            {knownTags.map((tag) => (
-              <button type="button" key={tag.id} onClick={() => addKnownTag(tag.name)}>
-                {tag.name}
-              </button>
-            ))}
-          </div>
-        )}
+          {knownTags.length ? (
+            <div className="known-tag-list" aria-label="Available tags">
+              {knownTags.map((tag) => (
+                <button
+                  className="connection-tag-badge"
+                  style={tagBadgeStyle(tag.color)}
+                  type="button"
+                  aria-pressed={selectedTagIds.includes(tag.id)}
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <small>Create tags from Manage groups and tags, then assign them here.</small>
+          )}
+          {!!knownTags.length && <small>Select up to 12 local tags.</small>}
+        </div>
         {testResult && (
           <p className="inline-message" role="status">
             Noninteractive SSH works. systemd:{" "}

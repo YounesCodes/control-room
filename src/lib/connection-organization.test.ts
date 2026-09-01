@@ -47,7 +47,7 @@ describe("connection organization", () => {
   it("filters locally across names, targets, groups, and tags", () => {
     const saved = connection("api", {
       groupId: "group-a",
-      tags: [{ id: "tag-a", name: "Critical" }],
+      tags: [{ id: "tag-a", name: "Critical", color: "#3a3a3a" }],
     });
     expect(connectionMatchesFilter(saved, "Production", "critical")).toBe(true);
     expect(connectionMatchesFilter(saved, "Production", "production")).toBe(true);

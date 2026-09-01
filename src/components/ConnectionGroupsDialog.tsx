@@ -1,24 +1,38 @@
 import { useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import type { ConnectionGroup } from "../types";
+import { tagBadgeStyle } from "../lib/connection-tag-color";
+import type { ConnectionGroup, ConnectionTag } from "../types";
 import { Modal } from "./Modal";
 
 export function ConnectionGroupsDialog({
   groups,
+  tags,
   onGroupsChange,
+  onTagsChange,
   onGroupDeleted,
+  onTagUpdated,
+  onTagDeleted,
   onClose,
 }: {
   groups: ConnectionGroup[];
+  tags: ConnectionTag[];
   onGroupsChange: (groups: ConnectionGroup[]) => void;
+  onTagsChange: (tags: ConnectionTag[]) => void;
   onGroupDeleted: (id: string) => void;
+  onTagUpdated: (tag: ConnectionTag) => void;
+  onTagDeleted: (id: string) => void;
   onClose: () => void;
 }) {
   const [newName, setNewName] = useState("");
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3a3a3a");
+  const [tagRenameId, setTagRenameId] = useState<string | null>(null);
+  const [tagRenameName, setTagRenameName] = useState("");
+  const [tagDeleteId, setTagDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,13 +95,73 @@ export function ConnectionGroupsDialog({
     }
   }
 
+  async function createTag(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const tag = await api.createConnectionTag(newTagName, newTagColor);
+      onTagsChange([...tags, tag].sort((left, right) => left.name.localeCompare(right.name)));
+      setNewTagName("");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameTag(event: FormEvent) {
+    event.preventDefault();
+    if (!tagRenameId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const renamed = await api.renameConnectionTag(tagRenameId, tagRenameName);
+      onTagUpdated(renamed);
+      setTagRenameId(null);
+      setTagRenameName("");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setTagColor(tag: ConnectionTag, color: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      onTagUpdated(await api.setConnectionTagColor(tag.id, color));
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeTag(id: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteConnectionTag(id);
+      onTagsChange(tags.filter((tag) => tag.id !== id));
+      onTagDeleted(id);
+      setTagDeleteId(null);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <Modal title="Connection groups" onClose={onClose}>
+    <Modal title="Connection groups and tags" onClose={onClose}>
       <div className="connection-groups-dialog">
         <p className="modal-copy">
-          Groups organize Saved Connections locally. Deleting a group returns its connections to
-          Ungrouped.
+          Groups and tags organize Saved Connections locally. Deleting a group returns its
+          connections to Ungrouped. Deleting a tag removes it from every connection.
         </p>
+        <h3 className="connection-organization-heading">Groups</h3>
         <form className="connection-group-create" onSubmit={create}>
           <label>
             <span>New group</span>
@@ -201,6 +275,118 @@ export function ConnectionGroupsDialog({
           ))}
           {!groups.length && (
             <p className="connection-groups-empty">No groups yet. Ungrouped is always available.</p>
+          )}
+        </div>
+        <h3 className="connection-organization-heading">Tags</h3>
+        <form className="connection-tag-create" onSubmit={createTag}>
+          <label>
+            <span>New tag</span>
+            <input
+              value={newTagName}
+              onChange={(event) => setNewTagName(event.target.value)}
+              maxLength={32}
+              placeholder="critical"
+            />
+          </label>
+          <label className="connection-tag-color-field">
+            <span>Color</span>
+            <input
+              type="color"
+              value={newTagColor}
+              onChange={(event) => setNewTagColor(event.target.value)}
+            />
+          </label>
+          <button className="primary-button" type="submit" disabled={busy || !newTagName.trim()}>
+            Add tag
+          </button>
+        </form>
+        <div className="connection-tag-manage-list" aria-label="Connection tags">
+          {tags.map((tag) => (
+            <div className="connection-tag-manage-row" key={tag.id}>
+              {tagRenameId === tag.id ? (
+                <form onSubmit={renameTag}>
+                  <input
+                    autoFocus
+                    aria-label={`Rename ${tag.name}`}
+                    value={tagRenameName}
+                    onChange={(event) => setTagRenameName(event.target.value)}
+                    maxLength={32}
+                  />
+                  <button
+                    className="primary-button"
+                    type="submit"
+                    disabled={busy || !tagRenameName.trim()}
+                  >
+                    Save
+                  </button>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setTagRenameId(null)}
+                  >
+                    Cancel
+                  </button>
+                </form>
+              ) : tagDeleteId === tag.id ? (
+                <div className="connection-tag-delete-confirm">
+                  <span>Delete {tag.name} from every connection?</span>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeTag(tag.id)}
+                  >
+                    Delete tag
+                  </button>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setTagDeleteId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span className="connection-tag-badge" style={tagBadgeStyle(tag.color)}>
+                    {tag.name}
+                  </span>
+                  <div>
+                    <label className="tag-color-control" title={`Choose a color for ${tag.name}`}>
+                      <span className="sr-only">Color for {tag.name}</span>
+                      <input
+                        type="color"
+                        value={tag.color}
+                        disabled={busy}
+                        onChange={(event) => void setTagColor(tag, event.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => {
+                        setTagRenameId(tag.id);
+                        setTagRenameName(tag.name);
+                      }}
+                      aria-label={`Rename ${tag.name}`}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      className="icon-button danger-text"
+                      type="button"
+                      onClick={() => setTagDeleteId(tag.id)}
+                      aria-label={`Delete ${tag.name}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {!tags.length && (
+            <p className="connection-groups-empty">No tags yet. Add one before assigning it.</p>
           )}
         </div>
         <footer className="modal-actions">
