@@ -107,7 +107,7 @@ Enabling Enhanced History is the explicit exception to the inspection-only rule.
 
 ## Install
 
-The current published release is [v0.2.0](https://github.com/YounesCodes/control-room/releases/tag/v0.2.0). Download the latest Windows installer from [GitHub Releases](https://github.com/YounesCodes/control-room/releases/latest), run it, and start Control Room.
+The current published release is [v0.3.0](https://github.com/YounesCodes/control-room/releases/tag/v0.3.0). Download the latest Windows installer from [GitHub Releases](https://github.com/YounesCodes/control-room/releases/latest), run it, and start Control Room.
 
 The installer is an unsigned, per-user NSIS package. Windows may show an unrecognized-publisher warning. The release includes a SHA-256 checksum beside the installer.
 
