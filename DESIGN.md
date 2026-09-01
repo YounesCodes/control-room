@@ -341,6 +341,13 @@ labels returned by the bounded container listing. It keeps every instance as its
 including replicas and one-off containers, and puts missing or malformed identities in
 Ungrouped. The user can switch to the flat list without changing the cached data.
 
+Selecting a container loads a separate timestamped inspection by its full Docker ID. The detail
+panel has Overview, Ports, Networks, Mounts, and Metadata sections. Rust emits only approved typed
+records, and React never receives raw `docker inspect` JSON. Image references and content IDs stay
+separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
+service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
+and health logs are not collected.
+
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full
 list usable. The header reports current active and failed totals without presenting zero

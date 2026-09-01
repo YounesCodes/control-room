@@ -94,6 +94,35 @@ pub struct ListeningSocket {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct DockerContainerDetails {
+    pub id: String,
+    pub name: String,
+    pub image_reference: String,
+    pub image_content_id: String,
+    pub state: String,
+    pub running: bool,
+    pub paused: bool,
+    pub restarting: bool,
+    pub oom_killed: bool,
+    pub dead: bool,
+    pub exit_code: i32,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub health_status: Option<String>,
+    pub failing_streak: Option<u32>,
+    pub restart_policy: String,
+    pub restart_maximum_retry_count: u32,
+    pub published_ports: Vec<DockerPublishedPort>,
+    pub networks: Vec<DockerNetworkAttachment>,
+    pub mounts: Vec<DockerMount>,
+    pub compose_project: Option<String>,
+    pub compose_service: Option<String>,
+    pub compose_container_number: Option<u32>,
+    pub compose_oneoff: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct FirewallRule {
     pub to: String,
     pub action: String,
@@ -101,6 +130,14 @@ pub struct FirewallRule {
     pub port: Option<u16>,
     pub protocol: Option<String>,
     pub ipv6: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerPublishedPort {
+    pub container_port: String,
+    pub host_address: String,
+    pub host_port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -114,6 +151,16 @@ pub struct FirewallStatus {
     pub default_incoming: Option<String>,
     pub rules: Vec<FirewallRule>,
     pub collected_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerNetworkAttachment {
+    pub name: String,
+    pub ipv4_address: Option<String>,
+    pub ipv4_gateway: Option<String>,
+    pub ipv6_address: Option<String>,
+    pub ipv6_gateway: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -146,6 +193,16 @@ pub struct EstablishedConnections {
     /// True when the bounded collection stopped before reading every row.
     pub truncated: bool,
     pub collected_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerMount {
+    pub mount_type: String,
+    pub name: Option<String>,
+    pub destination: String,
+    pub writable: bool,
+    pub propagation: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

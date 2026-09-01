@@ -59,6 +59,11 @@ The distinction matters. Control Room helps you inspect and move between related
 - Group Docker Compose containers by project and service, switch to a flat list, search by
   project, service, name, image, or ID, inspect each container, and open its logs. Containers
   without valid Compose identity labels stay under Ungrouped.
+- Inspect one container by its full Docker ID across Overview, Ports, Networks, Mounts, and
+  Metadata sections. The inspector separates image references from content IDs and reports
+  state, health, lifecycle times, restart policy, published ports, network addresses, mount
+  destinations, and validated Compose identity. It does not collect environment values,
+  command arguments, arbitrary labels, health logs, or host mount sources.
 - Reuse recent inspection results briefly and refresh them manually when you need current data.
 
 All structured inspection is read-only. Control Room does not scan networks, test reachability, or start, stop, restart, reset, create, or remove units or containers.

@@ -22,7 +22,8 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        ConnectionRemote, ConnectionSummary, DockerContainer, EstablishedConnections, FirewallRule,
+        ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
+        DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, FirewallRule,
         FirewallStatus, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
         StreamStarted, StreamStateEvent, SystemdUnit,
     },
@@ -243,6 +244,40 @@ pub fn list_ports(
         RemoteCommandExecutor::execute(connection, "list_ports", command)?
     };
     parse_listening_sockets(&output.success_text()?)
+}
+
+pub fn inspect_container(
+    connection: &SavedConnection,
+    container_id: &str,
+    sudo_password: Option<String>,
+) -> Result<DockerContainerDetails, String> {
+    let container_id = validate_stable_container_id(container_id)?;
+    let command = docker_container_inspect_command(container_id);
+    let output = if let Some(password) = sudo_password {
+        RemoteCommandExecutor::execute_with_sudo(
+            connection,
+            "inspect_container",
+            &command,
+            password,
+        )?
+    } else {
+        RemoteCommandExecutor::execute(connection, "inspect_container", &command)?
+    };
+    if output.exit_code != 0 && is_missing_container(&output.stderr) {
+        return Err("Container no longer exists. Refresh the container list.".into());
+    }
+    let text = output.success_text()?;
+    let details = parse_container_details(&text)?;
+    if details.id != container_id {
+        return Err("Docker returned details for an unexpected container".into());
+    }
+    Ok(details)
+}
+
+fn is_missing_container(stderr: &[u8]) -> bool {
+    String::from_utf8_lossy(stderr)
+        .to_ascii_lowercase()
+        .contains("no such object")
 }
 
 fn run_ssh(
@@ -913,6 +948,316 @@ fn parse_established_connections(text: &str) -> EstablishedConnections {
     }
 }
 
+fn validate_stable_container_id(value: &str) -> Result<&str, String> {
+    let value = validate_container_id(value)?;
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("Container inspection requires a full Docker ID".into());
+    }
+    Ok(value)
+}
+
+fn docker_container_inspect_command(container_id: &str) -> String {
+    // Emit the raw container JSON and parse it in Rust. A `docker inspect
+    // --format` template cannot read optional nested fields such as
+    // `.State.Health` safely: on a container with no healthcheck the field is
+    // absent, and Docker's raw-JSON fallback runs the template with
+    // `missingkey=error`, so even an `{{if .State.Health}}` guard fails with
+    // "map has no entry for key". The container id is validated to 64 hex
+    // characters before it reaches this command, so it carries no shell syntax.
+    format!("docker inspect --type container -- '{container_id}'")
+}
+
+fn parse_container_details(text: &str) -> Result<DockerContainerDetails, String> {
+    let parsed: Value = serde_json::from_str(text)
+        .map_err(|error| format!("Docker inspect returned invalid JSON: {error}"))?;
+    let elements = parsed
+        .as_array()
+        .ok_or_else(|| "Docker inspect returned an unexpected payload".to_string())?;
+    if elements.len() != 1 {
+        return Err("Docker inspect returned an unexpected number of containers".into());
+    }
+    let root = &elements[0];
+
+    let mut details = parse_container_detail_header(root)?;
+
+    let mut mounts = Vec::new();
+    if let Some(entries) = root.get("Mounts").and_then(Value::as_array) {
+        for entry in entries {
+            if mounts.len() >= 2048 {
+                return Err("Docker inspect returned too many mount records".into());
+            }
+            mounts.push(parse_container_mount(entry)?);
+        }
+    }
+
+    let mut networks = Vec::new();
+    if let Some(entries) = root
+        .get("NetworkSettings")
+        .and_then(|settings| settings.get("Networks"))
+        .and_then(Value::as_object)
+    {
+        for (name, network) in entries {
+            if networks.len() >= 2048 {
+                return Err("Docker inspect returned too many network records".into());
+            }
+            networks.push(parse_container_network(name, network)?);
+        }
+    }
+
+    let mut published_ports = Vec::new();
+    if let Some(entries) = root
+        .get("NetworkSettings")
+        .and_then(|settings| settings.get("Ports"))
+        .and_then(Value::as_object)
+    {
+        for (container_port, bindings) in entries {
+            // An exposed-but-unpublished port maps to a null binding list.
+            let Some(bindings) = bindings.as_array() else {
+                continue;
+            };
+            for binding in bindings {
+                if published_ports.len() >= 2048 {
+                    return Err("Docker inspect returned too many published ports".into());
+                }
+                published_ports.push(parse_container_port(container_port, binding)?);
+            }
+        }
+    }
+
+    mounts.sort_by(|left, right| left.destination.cmp(&right.destination));
+    networks.sort_by(|left, right| left.name.cmp(&right.name));
+    published_ports.sort_by(|left, right| {
+        left.host_port
+            .cmp(&right.host_port)
+            .then_with(|| left.host_address.cmp(&right.host_address))
+            .then_with(|| left.container_port.cmp(&right.container_port))
+    });
+    details.mounts = mounts;
+    details.networks = networks;
+    details.published_ports = published_ports;
+    Ok(details)
+}
+
+fn parse_container_detail_header(root: &Value) -> Result<DockerContainerDetails, String> {
+    let state = root.get("State");
+    let state_string = |key: &str| {
+        state
+            .and_then(|state| state.get(key))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let state_bool = |key: &str| {
+        state
+            .and_then(|state| state.get(key))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    };
+    let state_timestamp = |key: &str| {
+        state
+            .and_then(|state| state.get(key))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty() && *value != "0001-01-01T00:00:00Z")
+            .map(str::to_string)
+    };
+    let health = state.and_then(|state| state.get("Health"));
+
+    let label = |key: &str| {
+        root.get("Config")
+            .and_then(|config| config.get("Labels"))
+            .and_then(Value::as_object)
+            .and_then(|labels| labels.get(key))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let compose_project = valid_compose_project(&label("com.docker.compose.project"));
+    let compose_service = valid_compose_service(&label("com.docker.compose.service"));
+    let (compose_project, compose_service, compose_container_number, compose_oneoff) =
+        match (compose_project, compose_service) {
+            (Some(project), Some(service)) => (
+                Some(project),
+                Some(service),
+                label("com.docker.compose.container-number")
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|number| *number > 0),
+                match label("com.docker.compose.oneoff")
+                    .to_ascii_lowercase()
+                    .as_str()
+                {
+                    "true" => Some(true),
+                    "false" => Some(false),
+                    _ => None,
+                },
+            ),
+            _ => (None, None, None, None),
+        };
+
+    let restart_policy = root
+        .get("HostConfig")
+        .and_then(|config| config.get("RestartPolicy"));
+
+    Ok(DockerContainerDetails {
+        id: root
+            .get("Id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        name: root
+            .get("Name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim_start_matches('/')
+            .to_string(),
+        image_reference: redact_registry_reference(
+            root.get("Config")
+                .and_then(|config| config.get("Image"))
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        ),
+        image_content_id: root
+            .get("Image")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        state: state_string("Status"),
+        running: state_bool("Running"),
+        paused: state_bool("Paused"),
+        restarting: state_bool("Restarting"),
+        oom_killed: state_bool("OOMKilled"),
+        dead: state_bool("Dead"),
+        exit_code: state
+            .and_then(|state| state.get("ExitCode"))
+            .and_then(Value::as_i64)
+            .unwrap_or(0) as i32,
+        started_at: state_timestamp("StartedAt"),
+        finished_at: state_timestamp("FinishedAt"),
+        health_status: health
+            .and_then(|health| health.get("Status"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        failing_streak: health
+            .and_then(|health| health.get("FailingStreak"))
+            .and_then(Value::as_u64)
+            .and_then(|number| u32::try_from(number).ok()),
+        restart_policy: restart_policy
+            .and_then(|policy| policy.get("Name"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        restart_maximum_retry_count: restart_policy
+            .and_then(|policy| policy.get("MaximumRetryCount"))
+            .and_then(Value::as_u64)
+            .and_then(|number| u32::try_from(number).ok())
+            .unwrap_or(0),
+        published_ports: Vec::new(),
+        networks: Vec::new(),
+        mounts: Vec::new(),
+        compose_project,
+        compose_service,
+        compose_container_number,
+        compose_oneoff,
+    })
+}
+
+fn parse_container_mount(value: &Value) -> Result<DockerMount, String> {
+    let mount_type = required_json_string(value, "Type", "mount type")?;
+    let destination = required_json_string(value, "Destination", "mount destination")?;
+    Ok(DockerMount {
+        mount_type,
+        name: value
+            .get("Name")
+            .and_then(Value::as_str)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string),
+        destination,
+        writable: value.get("RW").and_then(Value::as_bool).unwrap_or(false),
+        propagation: value
+            .get("Propagation")
+            .and_then(Value::as_str)
+            .filter(|propagation| !propagation.is_empty())
+            .map(str::to_string),
+    })
+}
+
+fn parse_container_network(name: &str, value: &Value) -> Result<DockerNetworkAttachment, String> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 4096 || name.chars().any(char::is_control) {
+        return Err("Docker inspect returned an invalid network name".into());
+    }
+    Ok(DockerNetworkAttachment {
+        name: name.to_string(),
+        ipv4_address: optional_json_string(value, "IPAddress"),
+        ipv4_gateway: optional_json_string(value, "Gateway"),
+        ipv6_address: optional_json_string(value, "GlobalIPv6Address"),
+        ipv6_gateway: optional_json_string(value, "IPv6Gateway"),
+    })
+}
+
+fn parse_container_port(
+    container_port: &str,
+    binding: &Value,
+) -> Result<DockerPublishedPort, String> {
+    let container_port = container_port.trim();
+    if container_port.is_empty()
+        || container_port.len() > 4096
+        || container_port.chars().any(char::is_control)
+    {
+        return Err("Docker inspect returned an invalid container port".into());
+    }
+    let host_port = required_json_string(binding, "HostPort", "published host port")?
+        .parse::<u16>()
+        .map_err(|_| "Docker inspect returned an invalid published host port".to_string())?;
+    if host_port == 0 {
+        return Err("Docker inspect returned an invalid published host port".into());
+    }
+    Ok(DockerPublishedPort {
+        container_port: container_port.to_string(),
+        host_address: optional_json_string(binding, "HostIp").unwrap_or_else(|| "*".into()),
+        host_port,
+    })
+}
+
+fn required_json_string(value: &Value, key: &str, label: &str) -> Result<String, String> {
+    let value = value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| {
+            !value.is_empty() && value.len() <= 4096 && !value.chars().any(char::is_control)
+        })
+        .ok_or_else(|| format!("Docker inspect returned an invalid {label}"))?;
+    Ok(value.to_string())
+}
+
+fn optional_json_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| {
+            !value.is_empty() && value.len() <= 4096 && !value.chars().any(char::is_control)
+        })
+        .map(str::to_string)
+}
+
+fn redact_registry_reference(value: &str) -> String {
+    let without_query = value
+        .split_once('?')
+        .map_or(value, |(reference, _)| reference);
+    let Some((scheme, remainder)) = without_query.split_once("://") else {
+        return without_query.to_string();
+    };
+    let authority_end = remainder.find('/').unwrap_or(remainder.len());
+    let (authority, path) = remainder.split_at(authority_end);
+    let authority = authority
+        .rsplit_once('@')
+        .map_or(authority.to_string(), |(_, host)| {
+            format!("[redacted]@{host}")
+        });
+    format!("{scheme}://{authority}{path}")
+}
+
 fn valid_compose_project(value: &str) -> Option<String> {
     let value = value.trim();
     if value.is_empty()
@@ -1446,6 +1791,121 @@ mod tests {
         assert_eq!(container.compose_service.as_deref(), Some("gateway"));
         assert_eq!(container.compose_container_number, Some(2));
         assert_eq!(container.compose_oneoff, Some(false));
+    }
+
+    #[test]
+    fn parses_unhealthy_compose_container_details_without_sensitive_values() {
+        let id = "a".repeat(64);
+        // Raw `docker inspect` output. The parser must surface only approved
+        // fields even though Env, host mount Source, and health Log are present.
+        let json = r#"[{
+            "Id":"__ID__","Name":"/gateway-1","Image":"sha256:abc",
+            "Config":{
+                "Image":"https://user:secret@registry.example/gateway:latest?token=hidden",
+                "Env":["SECRET=should-not-surface"],
+                "Cmd":["/bin/gateway","--serve"],
+                "Labels":{
+                    "com.docker.compose.project":"proxy",
+                    "com.docker.compose.service":"gateway",
+                    "com.docker.compose.container-number":"1",
+                    "com.docker.compose.oneoff":"False"
+                }
+            },
+            "State":{
+                "Status":"running","Running":true,"Paused":false,"Restarting":false,
+                "OOMKilled":false,"Dead":false,"ExitCode":0,
+                "StartedAt":"2026-08-31T01:00:00Z","FinishedAt":"0001-01-01T00:00:00Z",
+                "Health":{"Status":"unhealthy","FailingStreak":3,"Log":[{"Output":"boom"}]}
+            },
+            "HostConfig":{"RestartPolicy":{"Name":"unless-stopped","MaximumRetryCount":0}},
+            "Mounts":[{"Type":"bind","Name":"","Source":"/host/secret","Destination":"/etc/gateway","RW":false,"Propagation":"rprivate"}],
+            "NetworkSettings":{
+                "Networks":{"proxy_default":{"IPAddress":"172.20.0.2","Gateway":"172.20.0.1","GlobalIPv6Address":"","IPv6Gateway":""}},
+                "Ports":{"8443/tcp":[{"HostIp":"0.0.0.0","HostPort":"443"}]}
+            }
+        }]"#
+        .replace("__ID__", &id);
+        let details = parse_container_details(&json).unwrap();
+
+        assert_eq!(details.id, id);
+        assert_eq!(details.name, "gateway-1");
+        assert_eq!(
+            details.image_reference,
+            "https://[redacted]@registry.example/gateway:latest"
+        );
+        assert_eq!(details.health_status.as_deref(), Some("unhealthy"));
+        assert_eq!(details.failing_streak, Some(3));
+        assert_eq!(details.finished_at, None);
+        assert_eq!(details.compose_project.as_deref(), Some("proxy"));
+        assert_eq!(details.compose_container_number, Some(1));
+        assert_eq!(details.mounts[0].mount_type, "bind");
+        assert_eq!(details.mounts[0].name, None);
+        assert_eq!(
+            details.networks[0].ipv4_address.as_deref(),
+            Some("172.20.0.2")
+        );
+        assert_eq!(details.published_ports[0].host_port, 443);
+
+        // Env, host mount source, and health-check logs are never exposed.
+        let serialized = serde_json::to_string(&details).unwrap();
+        assert!(!serialized.contains("should-not-surface"));
+        assert!(!serialized.contains("/host/secret"));
+        assert!(!serialized.contains("boom"));
+        assert!(!serialized.contains("secret@"));
+    }
+
+    #[test]
+    fn parses_stopped_non_compose_container_without_health_or_bindings() {
+        let id = "b".repeat(64);
+        // A container with no healthcheck has no `State.Health` key at all, and
+        // an exposed-but-unpublished port maps to a null binding list. Both must
+        // parse cleanly rather than fail.
+        let json = r#"[{
+            "Id":"__ID__","Name":"/job","Image":"sha256:def",
+            "Config":{"Image":"job:1","Labels":{}},
+            "State":{
+                "Status":"exited","Running":false,"Paused":false,"Restarting":false,
+                "OOMKilled":true,"Dead":false,"ExitCode":137,
+                "StartedAt":"2026-08-31T01:00:00Z","FinishedAt":"2026-08-31T01:05:00Z"
+            },
+            "HostConfig":{"RestartPolicy":{"Name":"no","MaximumRetryCount":0}},
+            "Mounts":[],
+            "NetworkSettings":{"Networks":{},"Ports":{"5000/tcp":null}}
+        }]"#
+        .replace("__ID__", &id);
+        let details = parse_container_details(&json).unwrap();
+
+        assert!(!details.running);
+        assert!(details.oom_killed);
+        assert_eq!(details.exit_code, 137);
+        assert_eq!(details.health_status, None);
+        assert_eq!(details.failing_streak, None);
+        assert_eq!(details.compose_project, None);
+        assert!(details.mounts.is_empty());
+        assert!(details.networks.is_empty());
+        assert!(details.published_ports.is_empty());
+    }
+
+    #[test]
+    fn container_inspection_uses_full_stable_id_and_avoids_templates_and_mutations() {
+        let id = "c".repeat(64);
+        assert!(validate_stable_container_id(&id).is_ok());
+        assert!(validate_stable_container_id("short-id").is_err());
+        let command = docker_container_inspect_command(&id);
+        assert!(command.starts_with("docker inspect --type container -- "));
+        assert!(command.ends_with(&format!("'{id}'")));
+        // No Go template projection: raw JSON is fetched once and filtered in Rust.
+        assert!(!command.contains("--format"));
+        assert!(!command.contains("{{"));
+        for mutation in [" start ", " stop ", " restart ", " rm ", " exec "] {
+            assert!(!command.contains(mutation));
+        }
+    }
+
+    #[test]
+    fn reports_removed_containers_as_stale_selection() {
+        assert!(is_missing_container(b"Error: No such object: abc"));
+        assert!(!is_missing_container(b"permission denied"));
     }
 
     #[test]
