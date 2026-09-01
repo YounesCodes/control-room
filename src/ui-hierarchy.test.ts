@@ -48,6 +48,24 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps correlated log lines in memory and out of storage", () => {
+    const correlateSource = readFileSync(
+      new URL("./pages/CorrelatePane.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain('{ id: "correlate", label: "Correlate", icon: Layers }');
+    expect(correlateSource).toContain(
+      "Merged in memory only. Control Room never stores fetched log lines.",
+    );
+    // Correlation reuses the existing Log Stream commands and adds no save,
+    // export, or persistence path of its own.
+    expect(correlateSource).toContain("api.startJournalStream");
+    expect(correlateSource).toContain("api.startDockerLogStream");
+    expect(correlateSource).not.toContain("localStorage");
+    expect(correlateSource).not.toContain("saveWorkspaceState");
+    expect(correlateSource).not.toContain("writeTextFile");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

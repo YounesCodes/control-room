@@ -8,6 +8,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  Layers,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -63,6 +64,7 @@ import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { ScratchpadPane } from "./pages/ScratchpadPane";
+import { CorrelatePane } from "./pages/CorrelatePane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   CachedList,
@@ -97,6 +99,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
+  { id: "correlate", label: "Correlate", icon: Layers },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
@@ -1253,6 +1256,20 @@ export function App() {
                     updateContainersCache(activeWorkspace.id, cache)
                   }
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
+                />
+              )}
+              {activeWorkspace.view === "correlate" && (
+                <CorrelatePane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  settings={settings}
+                  logTailOptions={settingsContract.logTailOptions}
+                  servicesCache={activeWorkspace.servicesCache}
+                  containersCache={activeWorkspace.containersCache}
+                  onServicesCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
+                  onContainersCacheChange={(cache) =>
+                    updateContainersCache(activeWorkspace.id, cache)
+                  }
                 />
               )}
               {activeWorkspace.view === "history" && (

@@ -353,6 +353,7 @@ pub fn start_journal_stream(
         LogStreamOptions {
             lines,
             follow,
+            timestamps: true,
             sudo_password,
             output,
         },
@@ -370,6 +371,7 @@ pub fn start_docker_log_stream(
     container: String,
     lines: u16,
     follow: bool,
+    timestamps: bool,
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
@@ -382,6 +384,7 @@ pub fn start_docker_log_stream(
         LogStreamOptions {
             lines,
             follow,
+            timestamps,
             sudo_password,
             output,
         },

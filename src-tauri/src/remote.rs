@@ -1297,6 +1297,9 @@ struct ManagedStream {
 pub struct LogStreamOptions {
     pub lines: u16,
     pub follow: bool,
+    /// Ask the source to prefix every line with its own timestamp. journald
+    /// already does this, so the flag only changes the Docker command.
+    pub timestamps: bool,
     pub sudo_password: Option<String>,
     pub output: Channel<Response>,
 }
@@ -1317,11 +1320,14 @@ impl StreamManager {
         let LogStreamOptions {
             lines,
             follow,
+            timestamps: _,
             sudo_password,
             output,
         } = options;
         let service = validate_systemd_unit_id(service)?;
         validate_tail(lines)?;
+        // journalctl already prints `-o short-iso-precise`, so a journal stream
+        // is always timestamped and the flag has nothing to add.
         let command = journal_command(service, lines, follow);
         self.start(app, connection, command, sudo_password, output)
     }
@@ -1336,12 +1342,13 @@ impl StreamManager {
         let LogStreamOptions {
             lines,
             follow,
+            timestamps,
             sudo_password,
             output,
         } = options;
         let container = validate_container_id(container)?;
         validate_tail(lines)?;
-        let command = docker_log_command(container, lines, follow);
+        let command = docker_log_command(container, lines, follow, timestamps);
         self.start(app, connection, command, sudo_password, output)
     }
 
@@ -1489,10 +1496,11 @@ fn journal_command(service: &str, lines: u16, follow: bool) -> String {
     )
 }
 
-fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
+fn docker_log_command(container: &str, lines: u16, follow: bool, timestamps: bool) -> String {
     format!(
-        "env LC_ALL=C docker logs --tail {lines}{} '{container}' 2>&1",
-        if follow { " --follow" } else { "" }
+        "env LC_ALL=C docker logs --tail {lines}{}{} '{container}' 2>&1",
+        if follow { " --follow" } else { "" },
+        if timestamps { " --timestamps" } else { "" }
     )
 }
 
@@ -1553,6 +1561,35 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn a_docker_stream_asks_for_timestamps_only_when_correlation_needs_them() {
+        assert_eq!(
+            docker_log_command("api", 200, true, false),
+            "env LC_ALL=C docker logs --tail 200 --follow 'api' 2>&1"
+        );
+        assert_eq!(
+            docker_log_command("api", 200, true, true),
+            "env LC_ALL=C docker logs --tail 200 --follow --timestamps 'api' 2>&1"
+        );
+        assert_eq!(
+            docker_log_command("api", 50, false, true),
+            "env LC_ALL=C docker logs --tail 50 --timestamps 'api' 2>&1"
+        );
+    }
+
+    #[test]
+    fn a_journal_stream_is_timestamped_whatever_the_caller_asks() {
+        // journalctl carries its own timestamp, so correlation needs no second
+        // switch and the existing Logs view output does not change.
+        assert!(journal_command("nginx.service", 200, true).contains("-o short-iso-precise"));
+        let source = include_str!("remote.rs");
+        let builder = source
+            .split("fn journal_command")
+            .nth(1)
+            .expect("journal command builder");
+        assert!(!builder[..200].contains("timestamps"));
+    }
 
     fn live_connection() -> SavedConnection {
         SavedConnection {
@@ -1950,7 +1987,7 @@ mod tests {
     #[test]
     fn docker_logs_merge_container_stderr_into_the_stream() {
         assert_eq!(
-            docker_log_command("container-1", 200, true),
+            docker_log_command("container-1", 200, true, false),
             "env LC_ALL=C docker logs --tail 200 --follow 'container-1' 2>&1"
         );
         assert_eq!(

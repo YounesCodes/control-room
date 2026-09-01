@@ -133,12 +133,14 @@ export const api = {
     follow: boolean,
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
+    timestamps = false,
   ) =>
     invoke<{ streamId: string }>("start_docker_log_stream", {
       connectionId,
       container,
       lines,
       follow,
+      timestamps,
       sudoPassword,
       output,
     }),

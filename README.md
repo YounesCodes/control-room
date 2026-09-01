@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Correlate, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -28,6 +28,7 @@ Saved Connection
          +-- listening TCP and UDP ports
          +-- Docker containers
          +-- journald and Docker logs
+         +-- correlated multi-source log view
          +-- Enhanced History, when enabled
 ```
 
@@ -74,6 +75,29 @@ All structured inspection is read-only. Control Room does not scan networks, tes
 - Choose a tail size, follow a live stream, pause or resume rendering, stop a stream, and clear the view.
 - Search the lines already loaded in the current view.
 - Keep each Log Stream independent and in memory. Control Room does not persist fetched logs.
+
+### Correlated logs
+
+The Correlate view merges several journald and Docker log streams from one host into a single
+chronological list. Each line shows its normalized time, which source it came from, and the original
+message text.
+
+Every source keeps its own stream, lifecycle, and error state. Adding a source starts one more
+stream, removing a source stops only that one, and a source that fails to start leaves the others
+running. Source checkboxes filter the merged view, and pause freezes rendering while the streams
+keep reading.
+
+Ordering uses each source's own timestamp: journald already prints one, and Docker streams for
+correlation are started with `--timestamps`. A line with no timestamp of its own, such as a stack
+trace continuation, takes the time of the line above it from the same source and is labelled as a
+continuation. A line from a source that has printed nothing dated falls back to arrival time and
+says so. Ties break on source then sequence, so the same input always renders the same way. A line
+that arrives after later lines are already on screen is marked late, and with two or more sources
+running the view states plainly that Control Room does not correct for clock skew between hosts.
+
+Memory is bounded at 500 lines per source and 2000 merged lines, and the view reports how many older
+lines it dropped. Nothing is written to disk: there is no save, no export, and no automatic copy.
+Removing a source or leaving the Workspace clears its buffer.
 
 ### Enhanced History
 

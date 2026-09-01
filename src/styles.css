@@ -1271,6 +1271,156 @@ code,
    Workspace content + terminal panes
    ========================================================================== */
 
+/* ==========================================================================
+   Cross-source log correlation
+   ========================================================================== */
+
+.correlate-page {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding-bottom: 12px;
+  gap: 8px;
+}
+
+.correlate-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.correlate-add {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 16px;
+  gap: 8px;
+}
+
+.correlate-add select {
+  min-width: 0;
+}
+
+.correlate-add select:nth-of-type(2) {
+  flex: 1;
+}
+
+.correlate-sources {
+  display: flex;
+  margin: 0;
+  flex-wrap: wrap;
+  padding: 0 16px;
+  gap: 6px;
+  list-style: none;
+}
+
+.correlate-sources li {
+  display: flex;
+  align-items: center;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.correlate-sources small {
+  max-width: 24ch;
+  overflow: hidden;
+  color: var(--failure);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correlate-state {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.correlate-state-running {
+  color: var(--success);
+}
+
+.correlate-state-starting {
+  color: var(--warning);
+}
+
+.correlate-state-error {
+  color: var(--failure);
+}
+
+.correlate-lines {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.correlate-line {
+  display: grid;
+  align-items: baseline;
+  padding: 1px 0;
+  gap: 8px;
+  grid-template-columns: 96px 14ch minmax(0, 1fr) auto;
+}
+
+.correlate-line time {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.correlate-line-source {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correlate-line-message {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.correlate-line-flags {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.correlate-line-flags em {
+  color: var(--warning);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.correlate-empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.correlate-footer {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 16px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  gap: 6px;
+}
+
 .workspace-content {
   position: relative;
   min-width: 0;

@@ -105,7 +105,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  Correlate, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -365,6 +365,14 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Correlate is one dense monospace column: time, source, message, then any qualifier the line earned.
+Sources sit above it as chips carrying their own state and error, because the point of the view is
+that the streams stay independent. Qualifiers use the warning hue and plain words rather than
+symbols: late, continues the previous line, no timestamp, ordered by arrival. That honesty is the
+feature. A merged log view that silently invents an order is worse than two separate ones, so
+anything Control Room had to guess is labelled where the reader will see it, and the skew notice
+sits above the list whenever two sources are running.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full

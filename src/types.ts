@@ -184,6 +184,40 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export interface ParsedLogLine {
+  at: number | null;
+  originalTimestamp: string | null;
+  message: string;
+}
+
+export type CorrelationSourceState = "stopped" | "starting" | "running" | "error";
+
+// One Log Stream inside a correlation. It keeps its own id, lifecycle, and
+// error state, so one source failing changes nothing for the others.
+export interface CorrelationSource {
+  id: string;
+  type: LogSourceType;
+  target: string;
+  label: string;
+  streamId: string | null;
+  state: CorrelationSourceState;
+  error: string | null;
+}
+
+export type CorrelatedTimeSource = "parsed" | "inherited" | "arrival";
+
+export interface CorrelatedLine {
+  key: string;
+  sourceId: string;
+  sequence: number;
+  arrivalOrder: number;
+  at: number;
+  timeSource: CorrelatedTimeSource;
+  originalTimestamp: string | null;
+  message: string;
+  late: boolean;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -237,7 +271,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "correlate"
+  | "history"
+  | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];

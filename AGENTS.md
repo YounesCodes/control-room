@@ -61,10 +61,18 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Correlate logs only by consuming existing independent Log Streams. Never
+    couple or restart them, and never launch a new remote command for
+    correlation. Keep every source's id, lifecycle, and error state its own.
+    Normalize supported timestamps, label inherited and arrival-time fallbacks
+    instead of presenting them as the source's own time, break ties
+    deterministically, mark late lines, and never claim clocks are
+    synchronized. Bound memory per source and in total, report dropped lines,
+    and never persist a fetched log line.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -98,5 +106,7 @@ account you control.
   Connection or shared globally across the app. It is not encrypted secret storage.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
+- **Correlation**: an in-memory merge of several Log Streams into one
+  chronological view. It owns no stream, starts no command, and stores nothing.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
