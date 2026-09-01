@@ -2,22 +2,39 @@ import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { validateConnectionDraft } from "../lib/connection-validation";
-import type { HostCapabilities, SavedConnection, SavedConnectionInput } from "../types";
+import type {
+  ConnectionGroup,
+  ConnectionTag,
+  HostCapabilities,
+  SavedConnection,
+  SavedConnectionInput,
+} from "../types";
 import { Modal } from "./Modal";
 
 interface ConnectionDialogProps {
   connection?: SavedConnection;
+  groups: ConnectionGroup[];
+  knownTags: ConnectionTag[];
   onClose: () => void;
   onSaved: (connection: SavedConnection) => void;
 }
 
-export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDialogProps) {
+export function ConnectionDialog({
+  connection,
+  groups,
+  knownTags,
+  onClose,
+  onSaved,
+}: ConnectionDialogProps) {
   const [displayName, setDisplayName] = useState(connection?.displayName ?? "");
   const [destination, setDestination] = useState(connection?.destination ?? "");
   const [username, setUsername] = useState(connection?.username ?? "");
   const [port, setPort] = useState(connection?.port?.toString() ?? "");
   const [identityFile, setIdentityFile] = useState(connection?.identityFile ?? "");
+  const [groupId, setGroupId] = useState(connection?.groupId ?? "");
+  const [selectedTagIds, setSelectedTagIds] = useState(connection?.tags.map((tag) => tag.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +48,15 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
       port: port.trim() ? Number(port) : null,
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
+      groupId: groupId || null,
+      tagNames: knownTags.filter((tag) => selectedTagIds.includes(tag.id)).map((tag) => tag.name),
     };
+  }
+
+  function toggleTag(id: string) {
+    setSelectedTagIds((current) =>
+      current.includes(id) ? current.filter((tagId) => tagId !== id) : [...current, id],
+    );
   }
 
   async function chooseIdentity() {
@@ -158,6 +183,41 @@ export function ConnectionDialog({ connection, onClose, onSaved }: ConnectionDia
             The key stays in its existing location and is never copied into Control Room.
           </small>
         </label>
+        <div className="connection-organization-fields">
+          <label>
+            <span>Group</span>
+            <select value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+              <option value="">Ungrouped</option>
+              {groups.map((group) => (
+                <option value={group.id} key={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="connection-tag-selector">
+          <span>Tags</span>
+          {knownTags.length ? (
+            <div className="known-tag-list" aria-label="Available tags">
+              {knownTags.map((tag) => (
+                <button
+                  className="connection-tag-badge"
+                  style={tagBadgeStyle(tag.color)}
+                  type="button"
+                  aria-pressed={selectedTagIds.includes(tag.id)}
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <small>Create tags from Manage groups and tags, then assign them here.</small>
+          )}
+          {!!knownTags.length && <small>Select up to 12 local tags.</small>}
+        </div>
         {testResult && (
           <p className="inline-message" role="status">
             Noninteractive SSH works. systemd:{" "}

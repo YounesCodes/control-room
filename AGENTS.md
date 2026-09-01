@@ -40,9 +40,12 @@ DESIGN.md.
    system-scope services, timers, mounts, and sockets, sorts failures first, and
    never treats zero failures as a complete health result. Keep each Log Stream
    independent and in memory.
-5. Derive Docker Compose grouping only from validated project and service labels.
+5. Keep Connection Groups, tags, ordering, and collapse state local.
+   A Saved Connection belongs to at most one group. Deleting a group returns its
+   connections to the derived Ungrouped section and never contacts a Remote Host.
+6. Derive Docker Compose grouping only from validated project and service labels.
    Keep every container instance distinct and retain an Ungrouped fallback.
-6. Keep port inspection to bounded TCP and UDP listener snapshots. Never scan,
+7. Keep port inspection to bounded TCP and UDP listener snapshots. Never scan,
    test reachability, collect full process arguments, or infer owners from names.
    Service navigation requires one unambiguous PID with a validated systemd unit;
    container navigation requires an exact published address, port, and protocol.
@@ -50,14 +53,14 @@ DESIGN.md.
    read-only, live only in Workspace memory, and are never persisted. Report
    binding exposure and firewall policy separately, and never claim a bind means
    Internet reachability.
-7. Inspect one Docker container only by its full stable ID. Collect typed state,
+8. Inspect one Docker container only by its full stable ID. Collect typed state,
    health, lifecycle, restart, port, network, mount, image, and validated Compose
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
-8. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-9. Keep README, DESIGN.md, and this file current when behavior changes. Do not
-   redesign unrelated UI.
-10. Do not commit or push unless the user asks.
+9. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+10. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+    redesign unrelated UI.
+11. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -69,6 +72,10 @@ account you control.
 
 - **Saved Connection**: a reusable SSH destination and username, with optional
   port or identity-file overrides.
+- **Connection Group**: a local, manually ordered Saved Connection section. A
+  Saved Connection belongs to at most one group; Ungrouped is derived.
+- **Connection Tag**: reusable local metadata attached to Saved Connections for
+  filtering. Tags do not grant permissions or trigger operations.
 - **Remote Host**: the Linux system reached through a connection. Several
   connections can point at one host.
 - **Workspace**: an open view of one connection that groups a Terminal Session

@@ -1,6 +1,8 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
+  ConnectionGroup,
+  ConnectionTag,
   DockerContainer,
   DockerContainerDetails,
   EnvironmentInfo,
@@ -49,6 +51,24 @@ export const api = {
   testConnection: (input: SavedConnectionInput) =>
     invokeRemoteInspection<HostCapabilities>("test_connection", { input }),
   deleteConnection: (id: string) => invoke<void>("delete_connection", { id }),
+  listConnectionGroups: () => invoke<ConnectionGroup[]>("list_connection_groups"),
+  listConnectionTags: () => invoke<ConnectionTag[]>("list_connection_tags"),
+  createConnectionTag: (name: string, color: string) =>
+    invoke<ConnectionTag>("create_connection_tag", { name, color }),
+  renameConnectionTag: (id: string, name: string) =>
+    invoke<ConnectionTag>("rename_connection_tag", { id, name }),
+  deleteConnectionTag: (id: string) => invoke<void>("delete_connection_tag", { id }),
+  setConnectionTagColor: (id: string, color: string) =>
+    invoke<ConnectionTag>("set_connection_tag_color", { id, color }),
+  createConnectionGroup: (name: string) =>
+    invoke<ConnectionGroup>("create_connection_group", { name }),
+  renameConnectionGroup: (id: string, name: string) =>
+    invoke<ConnectionGroup>("rename_connection_group", { id, name }),
+  deleteConnectionGroup: (id: string) => invoke<void>("delete_connection_group", { id }),
+  setConnectionGroupCollapsed: (id: string, collapsed: boolean) =>
+    invoke<void>("set_connection_group_collapsed", { id, collapsed }),
+  moveConnectionGroup: (id: string, direction: "up" | "down") =>
+    invoke<ConnectionGroup[]>("move_connection_group", { id, direction }),
   startSession: (connectionId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
       connectionId,

@@ -5,10 +5,11 @@ use crate::{
     database::{Database, validate_connection_input},
     history,
     models::{
-        AppSettings, DockerContainer, DockerContainerDetails, EnvironmentInfo,
-        EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput, HostCapabilities,
-        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
-        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
+        AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
+        EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
+        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
+        SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
+        SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -66,6 +67,8 @@ fn validated_test_connection(input: SavedConnectionInput) -> Result<SavedConnect
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
         history_enabled: false,
+        group_id: None,
+        tags: Vec::new(),
         created_at: now.clone(),
         updated_at: now,
         last_connected_at: None,
@@ -87,6 +90,90 @@ pub fn delete_connection(database: State<'_, Database>, id: String) -> Result<()
     database.delete_connection(&id)
 }
 
+#[tauri::command]
+pub fn list_connection_groups(
+    database: State<'_, Database>,
+) -> Result<Vec<ConnectionGroup>, String> {
+    database.list_connection_groups()
+}
+
+#[tauri::command]
+pub fn list_connection_tags(database: State<'_, Database>) -> Result<Vec<ConnectionTag>, String> {
+    database.list_connection_tags()
+}
+
+#[tauri::command]
+pub fn create_connection_tag(
+    database: State<'_, Database>,
+    name: String,
+    color: String,
+) -> Result<ConnectionTag, String> {
+    database.create_connection_tag(&name, &color)
+}
+
+#[tauri::command]
+pub fn rename_connection_tag(
+    database: State<'_, Database>,
+    id: String,
+    name: String,
+) -> Result<ConnectionTag, String> {
+    database.rename_connection_tag(&id, &name)
+}
+
+#[tauri::command]
+pub fn delete_connection_tag(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_connection_tag(&id)
+}
+
+#[tauri::command]
+pub fn set_connection_tag_color(
+    database: State<'_, Database>,
+    id: String,
+    color: String,
+) -> Result<ConnectionTag, String> {
+    database.set_connection_tag_color(&id, &color)
+}
+
+#[tauri::command]
+pub fn create_connection_group(
+    database: State<'_, Database>,
+    name: String,
+) -> Result<ConnectionGroup, String> {
+    database.create_connection_group(&name)
+}
+
+#[tauri::command]
+pub fn rename_connection_group(
+    database: State<'_, Database>,
+    id: String,
+    name: String,
+) -> Result<ConnectionGroup, String> {
+    database.rename_connection_group(&id, &name)
+}
+
+#[tauri::command]
+pub fn delete_connection_group(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_connection_group(&id)
+}
+
+#[tauri::command]
+pub fn set_connection_group_collapsed(
+    database: State<'_, Database>,
+    id: String,
+    collapsed: bool,
+) -> Result<(), String> {
+    database.set_connection_group_collapsed(&id, collapsed)
+}
+
+#[tauri::command]
+pub fn move_connection_group(
+    database: State<'_, Database>,
+    id: String,
+    direction: String,
+) -> Result<Vec<ConnectionGroup>, String> {
+    database.move_connection_group(&id, &direction)
+}
+
 #[tauri::command(async)]
 pub fn start_session(
     app: AppHandle,
@@ -105,6 +192,8 @@ pub fn start_session(
         port: connection.port,
         identity_file: connection.identity_file.clone(),
         history_enabled: connection.history_enabled,
+        group_id: connection.group_id.clone(),
+        tag_names: connection.tags.iter().map(|tag| tag.name.clone()).collect(),
     })?;
     if !database.get_settings()?.global_history_enabled {
         connection.history_enabled = false;
@@ -469,6 +558,8 @@ mod tests {
             port: Some(22),
             identity_file: None,
             history_enabled: true,
+            group_id: None,
+            tag_names: Vec::new(),
         })
         .unwrap();
 
@@ -476,5 +567,34 @@ mod tests {
         assert_eq!(connection.destination, "host-alias");
         assert_eq!(connection.username.as_deref(), Some("user"));
         assert!(!connection.history_enabled);
+    }
+
+    #[test]
+    fn connection_organization_commands_are_local_only() {
+        let source = include_str!("commands.rs");
+        for command in [
+            "list_connection_groups",
+            "list_connection_tags",
+            "create_connection_tag",
+            "rename_connection_tag",
+            "delete_connection_tag",
+            "set_connection_tag_color",
+            "create_connection_group",
+            "rename_connection_group",
+            "delete_connection_group",
+            "set_connection_group_collapsed",
+            "move_connection_group",
+        ] {
+            let body = source
+                .split(&format!("pub fn {command}"))
+                .nth(1)
+                .expect("organization command exists")
+                .split("#[tauri::command")
+                .next()
+                .expect("organization command body exists");
+            assert!(body.contains("database."));
+            assert!(!body.contains("remote::"));
+            assert!(!body.contains("SessionManager"));
+        }
     }
 }

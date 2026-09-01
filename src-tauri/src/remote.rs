@@ -1566,6 +1566,8 @@ mod tests {
                 .and_then(|value| value.parse().ok()),
             identity_file: None,
             history_enabled: false,
+            group_id: None,
+            tags: Vec::new(),
             created_at: String::new(),
             updated_at: String::new(),
             last_connected_at: None,
