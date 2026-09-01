@@ -19,6 +19,7 @@ import {
   Server,
   Settings,
   SquareTerminal,
+  StickyNote,
   Trash2,
   X,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
 import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
+import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib/scratchpad-draft";
 import {
   createTerminalLayout,
   getTerminalLayoutIds,
@@ -60,6 +62,7 @@ import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
+import { ScratchpadPane } from "./pages/ScratchpadPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
   CachedList,
@@ -95,6 +98,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
+  { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
 
 const TerminalPane = lazy(() =>
@@ -553,6 +557,7 @@ export function App() {
   async function performCloseWorkspace(id: string) {
     const workspace = workspaces.find((item) => item.id === id);
     if (!workspace) return;
+    setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     const index = workspaces.findIndex((item) => item.id === id);
     const remaining = workspaces.filter((item) => item.id !== id);
@@ -591,11 +596,14 @@ export function App() {
   async function performDeleteConnection(connection: SavedConnection) {
     setActionError(null);
     try {
+      await quiesceScratchpad("connection", connection.id);
       await api.deleteConnection(connection.id);
     } catch (caught) {
+      resumeScratchpad("connection", connection.id);
       setActionError(`Could not delete Saved Connection: ${errorMessage(caught)}`);
       return;
     }
+    clearScratchpadDraft("connection", connection.id);
     const removal = removeConnectionWorkspaces(
       workspaces,
       connection.id,
@@ -1269,6 +1277,9 @@ export function App() {
                   onPaste={pasteIntoTerminal}
                   canPaste={Boolean(activeWorkspace.sessionId)}
                 />
+              )}
+              {activeWorkspace.view === "scratchpad" && (
+                <ScratchpadPane key={activeWorkspace.id} connection={activeConnection} />
               )}
             </div>
           </section>

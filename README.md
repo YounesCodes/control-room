@@ -89,6 +89,8 @@ Capture starts only in sessions opened after you enable it. Control Room does no
   those groups, and assign existing tags from each connection editor. Filter the sidebar by
   connection name, SSH target, group, or tag.
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
+- Keep one plain-text Scratchpad note per Saved Connection and one global note shared across every
+  connection and Workspace. Closing a Workspace does not delete either note.
 - Tune terminal font, size, scrollback, colors, log tail defaults, and the global Enhanced History setting.
 
 ## Read-only by design
@@ -133,6 +135,8 @@ Control Room keeps its local state in SQLite. It stores:
 - Saved Connection details, including the destination, username, optional port, optional identity-file
   path, group, and color-coded tags. Group order and collapse state are local too.
 - Application settings and disconnected Workspace layout.
+- User-authored connection and global Scratchpad notes. These are ordinary local data, not
+  encrypted secret storage.
 - Cached host capability data such as the operating system and detected service or container counts.
 - Enhanced History entries only when you enable capture. Each entry can include the command, working directory, timestamps, and exit code.
 
