@@ -36,6 +36,18 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(/\.app-shell\s*\{[^}]*grid-template-rows: 42px/s);
   });
 
+  it("does not reserve a dead favorites column beside the connection filter", () => {
+    expect(appSource).toContain('placeholder="Name, group, tag"');
+    expect(appSource).toContain('aria-label="Filter connections by name, group, or tag"');
+    expect(appSource).toContain("<FolderCog size={18} />");
+    expect(stylesSource).toMatch(
+      /\.sidebar-filter-row\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 32px;/s,
+    );
+    expect(stylesSource).toMatch(
+      /\.sidebar-filter-row > \.icon-button\s*\{[^}]*width: 32px;[^}]*height: 32px;/s,
+    );
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather
