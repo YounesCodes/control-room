@@ -8,6 +8,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  ListTree,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -36,6 +37,12 @@ import { organizeConnections } from "./lib/connection-organization";
 import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
+import {
+  appendTimelineEvent,
+  connectionEvent,
+  logStreamEvent,
+  objectEvent,
+} from "./lib/session-timeline";
 import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
 import {
   createTerminalLayout,
@@ -61,6 +68,7 @@ import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
+import { TimelinePane } from "./pages/TimelinePane";
 import type {
   CachedList,
   ConnectionGroup,
@@ -75,6 +83,8 @@ import type {
   SavedConnection,
   SettingsContract,
   SystemdUnit,
+  TimelineEventInput,
+  TimelineTarget,
   CachedValue,
   Workspace,
   WorkspaceView,
@@ -94,6 +104,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
+  { id: "timeline", label: "Timeline", icon: ListTree },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -471,6 +482,25 @@ export function App() {
       .finally(() => capabilityDetectionsRef.current.delete(connectionId));
   }
 
+  function recordTimelineEvent(id: string, event: TimelineEventInput | null) {
+    if (!event) return;
+    setWorkspaces((current) =>
+      current.map((workspace) =>
+        workspace.id === id
+          ? { ...workspace, timeline: appendTimelineEvent(workspace.timeline, event) }
+          : workspace,
+      ),
+    );
+  }
+
+  function openTimelineTarget(id: string, target: TimelineTarget) {
+    if (target.type === "systemdUnit") {
+      updateWorkspace(id, { view: "services", systemdSelectionId: target.id });
+    } else if (target.type === "dockerContainer") {
+      updateWorkspace(id, { view: "docker", containerSelectionId: target.id });
+    }
+  }
+
   function openLogs(id: string, logSource: LogSourceSelection) {
     updateWorkspace(id, { view: "logs", logSource });
   }
@@ -495,6 +525,7 @@ export function App() {
       containerSelectionId: null,
       containerDetailsCache: {},
       logSource: null,
+      timeline: [],
     };
   }
 
@@ -1165,6 +1196,10 @@ export function App() {
                                 ? false
                                 : workspace.connectRequested,
                           });
+                          recordTimelineEvent(
+                            workspace.id,
+                            connectionEvent(workspace.timeline, state, reason),
+                          );
                           if (state === "connected") {
                             detectConnectionCapabilities(workspace.connectionId);
                           }
@@ -1175,6 +1210,7 @@ export function App() {
                             reconnectToken: workspace.reconnectToken + 1,
                           })
                         }
+                        onTimelineEvent={(event) => recordTimelineEvent(workspace.id, event)}
                       />
                     </div>
                   );
@@ -1194,6 +1230,12 @@ export function App() {
                   cache={activeWorkspace.servicesCache}
                   onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                  onOpenObject={(unitId) =>
+                    recordTimelineEvent(
+                      activeWorkspace.id,
+                      objectEvent({ type: "systemdUnit", id: unitId }),
+                    )
+                  }
                   focusId={activeWorkspace.systemdSelectionId}
                 />
               )}
@@ -1228,6 +1270,12 @@ export function App() {
                     updateContainerDetailsCache(activeWorkspace.id, containerId, details)
                   }
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                  onOpenObject={(containerId) =>
+                    recordTimelineEvent(
+                      activeWorkspace.id,
+                      objectEvent({ type: "dockerContainer", id: containerId }),
+                    )
+                  }
                   focusId={activeWorkspace.containerSelectionId}
                 />
               )}
@@ -1245,6 +1293,18 @@ export function App() {
                     updateContainersCache(activeWorkspace.id, cache)
                   }
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
+                  onStreamLifecycle={(source, started) =>
+                    recordTimelineEvent(activeWorkspace.id, logStreamEvent(source, started))
+                  }
+                />
+              )}
+              {activeWorkspace.view === "timeline" && (
+                <TimelinePane
+                  key={activeWorkspace.id}
+                  timeline={activeWorkspace.timeline}
+                  historyEnabled={settings.globalHistoryEnabled && activeConnection.historyEnabled}
+                  onClear={() => updateWorkspace(activeWorkspace.id, { timeline: [] })}
+                  onOpenTarget={(target) => openTimelineTarget(activeWorkspace.id, target)}
                 />
               )}
               {activeWorkspace.view === "history" && (

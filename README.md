@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Timeline, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -28,6 +28,7 @@ Saved Connection
          +-- listening TCP and UDP ports
          +-- Docker containers
          +-- journald and Docker logs
+         +-- session timeline
          +-- Enhanced History, when enabled
 ```
 
@@ -82,6 +83,25 @@ Enhanced History is an opt-in Bash integration, not an import of the remote acco
 When enabled, Control Room installs a marked block in the remote account's `~/.bashrc` and a script under `~/.local/share/control-room/`. Integrated Bash sessions report the command, working directory, timestamps, and exit code back to Control Room. The app records those entries locally, where you can search, copy, paste, delete, clear, pause, disable, or remove the integration.
 
 Capture starts only in sessions opened after you enable it. Control Room does not infer commands from keystrokes or read `.bash_history`. Command lines may contain secrets, so enable this only when that local record is appropriate for your work.
+
+### Session timeline
+
+The Timeline view keeps a short chronological account of the current investigation for one
+Workspace: connected, ran a command, opened a unit or container, started a journal or container
+log stream, disconnected, reconnected.
+
+Only those events are recorded. View switches, scrolling, filter typing, and the selection that
+reconciles itself after a refresh never appear, and Control Room does not track clicks, capture
+screens, or store terminal output or fetched log lines. Consecutive identical events collapse into
+one row with a repeat count, and a disconnect draws a visible boundary.
+
+Commands appear only when Enhanced History is enabled for the connection, on exactly the terms
+Enhanced History already uses. With it off, the view says so and still records connection, object,
+and Log Stream events.
+
+The timeline lives in Workspace memory. It is never written to disk, a restored Workspace starts
+empty, and Clear removes it immediately. Rows for a unit or container can reopen that object in its
+inspection view.
 
 ### Productivity
 

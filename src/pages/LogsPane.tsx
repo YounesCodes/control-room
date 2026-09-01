@@ -32,6 +32,7 @@ export function LogsPane({
   onServicesCacheChange,
   onContainersCacheChange,
   onSourceChange,
+  onStreamLifecycle,
 }: {
   connection: SavedConnection;
   settings: AppSettings;
@@ -42,6 +43,7 @@ export function LogsPane({
   onServicesCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onContainersCacheChange: (cache: CachedList<DockerContainer>) => void;
   onSourceChange: (source: LogSourceSelection | null) => void;
+  onStreamLifecycle: (source: LogSourceSelection, started: boolean) => void;
 }) {
   const [sourceType, setSourceType] = useState<LogSourceType>(selectedSource?.type ?? "systemd");
   const [sourceId, setSourceId] = useState(selectedSource?.id ?? "");
@@ -233,6 +235,7 @@ export function LogsPane({
       await api.stopLogStream(streamId);
       if (streamIdRef.current === streamId) streamIdRef.current = null;
       setStreamStatus("stopped");
+      if (sourceId) onStreamLifecycle({ type: sourceType, id: sourceId }, false);
       return true;
     } catch (caught) {
       if (streamIdRef.current === streamId) setStreamStatus("running");
@@ -292,6 +295,7 @@ export function LogsPane({
       streamIdRef.current = started.streamId;
       startingRef.current = false;
       setStreamStatus("running");
+      onStreamLifecycle({ type: sourceType, id: sourceId }, true);
       const earlyState = earlyStateRef.current.get(started.streamId);
       if (earlyState) {
         earlyStateRef.current.delete(started.streamId);

@@ -184,6 +184,43 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export type TimelineEventKind =
+  | "connected"
+  | "reconnected"
+  | "disconnected"
+  | "connectionFailed"
+  | "command"
+  | "openedObject"
+  | "logStreamStarted"
+  | "logStreamStopped";
+
+export interface TimelineTarget {
+  type: "systemdUnit" | "dockerContainer" | "logSource";
+  id: string;
+  sourceType?: LogSourceType;
+}
+
+export interface TimelineEventInput {
+  id: string;
+  at: string;
+  kind: TimelineEventKind;
+  label: string;
+  detail?: string | null;
+  target?: TimelineTarget | null;
+}
+
+// One recorded step of an investigation. The timeline lives in Workspace memory
+// and is never written to disk.
+export interface TimelineEvent {
+  id: string;
+  at: string;
+  kind: TimelineEventKind;
+  label: string;
+  detail: string | null;
+  target: TimelineTarget | null;
+  repeatCount: number;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -237,7 +274,7 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history";
+  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "timeline" | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -279,6 +316,7 @@ export interface Workspace {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
+  timeline: TimelineEvent[];
 }
 
 interface PersistedWorkspace {

@@ -12,12 +12,14 @@ export function ServicesPane({
   cache,
   onCacheChange,
   onViewLogs,
+  onOpenObject,
   focusId = null,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
   onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
+  onOpenObject: (unitId: string) => void;
   focusId?: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -152,7 +154,10 @@ export function ServicesPane({
               className={unit.id === selectedId ? "dense-row selected-row" : "dense-row"}
               type="button"
               key={unit.id}
-              onClick={() => setSelectedId(unit.id)}
+              onClick={() => {
+                setSelectedId(unit.id);
+                onOpenObject(unit.id);
+              }}
             >
               <span className={`service-indicator service-${unit.activeState}`} />
               <span className="row-main">

@@ -93,6 +93,7 @@ describe("DockerPane container inspection", () => {
         onCacheChange={vi.fn()}
         onDetailsCacheChange={onDetailsCacheChange}
         onViewLogs={vi.fn()}
+        onOpenObject={vi.fn()}
       />,
     );
 
@@ -111,6 +112,7 @@ describe("DockerPane container inspection", () => {
         onCacheChange={vi.fn()}
         onDetailsCacheChange={onDetailsCacheChange}
         onViewLogs={vi.fn()}
+        onOpenObject={vi.fn()}
       />,
     );
     await user.click(screen.getByLabelText("Refresh container details"));

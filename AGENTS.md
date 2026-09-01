@@ -57,10 +57,15 @@ DESIGN.md.
    health, lifecycle, restart, port, network, mount, image, and validated Compose
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
-9. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-10. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+9. Record a Session Timeline only from the documented event allowlist:
+   connection lifecycle, reported Enhanced History commands, opening a systemd
+   unit or container, and Log Stream start and stop. Never record view changes,
+   clicks, keystrokes, terminal output, or fetched log lines. Keep the timeline
+   in Workspace memory, never persist it, and start a restored Workspace empty.
+10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-11. Do not commit or push unless the user asks.
+12. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -94,3 +99,5 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Session Timeline**: an in-memory, ordered record of allowlisted investigation
+  events for one Workspace. It is never persisted and never survives a restart.

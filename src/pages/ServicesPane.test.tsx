@@ -58,6 +58,7 @@ describe("ServicesPane failed units view", () => {
   it("shows counts, filters across types, and opens the selected unit journal", async () => {
     const user = userEvent.setup();
     const onViewLogs = vi.fn();
+    const onOpenObject = vi.fn();
     render(
       <ServicesPane
         connection={connection}
@@ -69,6 +70,7 @@ describe("ServicesPane failed units view", () => {
         ])}
         onCacheChange={vi.fn()}
         onViewLogs={onViewLogs}
+        onOpenObject={onOpenObject}
       />,
     );
 
@@ -93,6 +95,7 @@ describe("ServicesPane failed units view", () => {
         cache={cache([unit("web.service", "service", "active", "running")])}
         onCacheChange={vi.fn()}
         onViewLogs={vi.fn()}
+        onOpenObject={vi.fn()}
       />,
     );
 

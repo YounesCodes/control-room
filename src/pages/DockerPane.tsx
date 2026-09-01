@@ -27,6 +27,7 @@ export function DockerPane({
   onCacheChange,
   onDetailsCacheChange,
   onViewLogs,
+  onOpenObject,
   focusId = null,
 }: {
   connection: SavedConnection;
@@ -35,6 +36,7 @@ export function DockerPane({
   onCacheChange: (cache: CachedList<DockerContainer>) => void;
   onDetailsCacheChange: (containerId: string, cache: CachedValue<DockerContainerDetails>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
+  onOpenObject: (containerId: string) => void;
   focusId?: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -159,7 +161,10 @@ export function DockerPane({
         type="button"
         key={container.id}
         data-container-id={container.id}
-        onClick={() => setSelectedId(container.id)}
+        onClick={() => {
+          setSelectedId(container.id);
+          onOpenObject(container.id);
+        }}
       >
         <span className={`service-indicator service-${container.state}`} />
         <span className="row-main">

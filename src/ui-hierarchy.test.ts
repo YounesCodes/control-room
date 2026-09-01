@@ -48,6 +48,28 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps the timeline in memory and out of persisted Workspace state", () => {
+    const timelineSource = readFileSync(
+      new URL("./pages/TimelinePane.tsx", import.meta.url),
+      "utf8",
+    );
+    const persistenceSource = readFileSync(
+      new URL("./lib/workspace-persistence.ts", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain('{ id: "timeline", label: "Timeline", icon: ListTree }');
+    // Restored Workspaces come back disconnected, so their timeline starts
+    // empty rather than implying earlier live events are current.
+    expect(persistenceSource).toContain("timeline: []");
+    const persisted = persistenceSource.slice(
+      persistenceSource.indexOf("export function persistWorkspaceState"),
+    );
+    expect(persisted).not.toContain("timeline");
+    expect(timelineSource).toContain(
+      "Held in memory for this Workspace only. Closing Control Room clears it.",
+    );
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

@@ -45,7 +45,7 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, or History as
+terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, Timeline, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -105,7 +105,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History), with "Add connection"
+  Timeline, History), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -365,6 +365,13 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Timeline is one dense column: time, a status-coloured mark, the event, and a hover-revealed Open
+for objects that can still be reached. It records an allowlist, not everything the user touched, so
+view switches and filter typing never appear. Consecutive identical events collapse into a repeat
+count instead of stacking, and a disconnect draws a rule across the column so a drop and recovery
+read as one story. Order follows arrival, not the reported clock, because a host clock adjustment
+must not rewrite what the user did. The record lives in Workspace memory, and the header says so.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full

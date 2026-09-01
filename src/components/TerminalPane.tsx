@@ -6,6 +6,7 @@ import { Terminal } from "@xterm/xterm";
 import { Eraser, PlugZap, RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
+import { commandEvent } from "../lib/session-timeline";
 import { clearTerminalDisplay } from "../lib/terminal-display";
 import { BoundedByteQueue, isControlRoomShortcut } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
@@ -14,6 +15,7 @@ import type {
   ConnectionState,
   SavedConnection,
   SessionStateEvent,
+  TimelineEventInput,
   Workspace,
 } from "../types";
 import { StatusDot } from "./StatusDot";
@@ -28,6 +30,7 @@ interface TerminalPaneProps {
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
   onReconnect: () => void;
+  onTimelineEvent: (event: TimelineEventInput) => void;
 }
 
 interface PendingHistory {
@@ -48,6 +51,7 @@ export function TerminalPane({
   onSession,
   onState,
   onReconnect,
+  onTimelineEvent,
 }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -60,6 +64,7 @@ export function TerminalPane({
   const earlySessionEventsRef = useRef(new Map<string, SessionStateEvent>());
   const historyPausedRef = useRef(workspace.historyPaused);
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
+  const onTimelineEventRef = useRef(onTimelineEvent);
   const visibleRef = useRef(visible);
   const connectionIdRef = useRef(connection.id);
   const onSessionRef = useRef(onSession);
@@ -70,6 +75,7 @@ export function TerminalPane({
 
   historyPausedRef.current = workspace.historyPaused;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
+  onTimelineEventRef.current = onTimelineEvent;
   visibleRef.current = visible;
   connectionIdRef.current = connection.id;
   onSessionRef.current = onSession;
@@ -174,6 +180,9 @@ export function TerminalPane({
             globalHistoryEnabledRef.current &&
             !historyPausedRef.current
           ) {
+            // A command reaches the timeline on the same terms it reaches
+            // Enhanced History: only when the opt-in integration reported it.
+            onTimelineEventRef.current(commandEvent(pending.command, event.exitCode));
             void api
               .addHistory({
                 connectionId: connectionIdRef.current,
