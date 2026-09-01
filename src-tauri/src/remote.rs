@@ -25,7 +25,7 @@ use crate::{
         ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
         DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, FirewallRule,
         FirewallStatus, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
-        StreamStarted, StreamStateEvent, SystemdUnit,
+        StreamStarted, StreamStateEvent, SystemdUnit, SystemdUnitState,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -244,6 +244,45 @@ pub fn list_ports(
         RemoteCommandExecutor::execute(connection, "list_ports", command)?
     };
     parse_listening_sockets(&output.success_text()?)
+}
+
+const NO_SYSTEMD_MARKER: &str = "__CR_NO_SYSTEMD__";
+
+/// Reads one unit's state without listing every unit on the host. Returns
+/// `None` when the host has no systemctl, which is a different answer from a
+/// unit that does not exist.
+pub fn inspect_unit_state(
+    connection: &SavedConnection,
+    unit: &str,
+) -> Result<Option<SystemdUnitState>, String> {
+    let unit = validate_systemd_unit_id(unit)?;
+    let command = format!(
+        r#"LC_ALL=C; if ! command -v systemctl >/dev/null 2>&1; then printf '{NO_SYSTEMD_MARKER}\n'; exit 0; fi; systemctl show --system --no-pager --property=Id --property=LoadState --property=ActiveState --property=SubState --property=UnitFileState -- '{unit}' 2>/dev/null"#
+    );
+    let text = RemoteCommandExecutor::execute(connection, "inspect_unit_state", &command)?
+        .success_text()?;
+    Ok(parse_unit_state(&text))
+}
+
+fn parse_unit_state(text: &str) -> Option<SystemdUnitState> {
+    if text.contains(NO_SYSTEMD_MARKER) {
+        return None;
+    }
+    let values = parse_key_values(text);
+    let read = |key: &str| {
+        values
+            .get(key)
+            .map(|value| bounded_text(value, 128))
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "unknown".into())
+    };
+    Some(SystemdUnitState {
+        id: read("Id"),
+        load_state: read("LoadState"),
+        active_state: read("ActiveState"),
+        sub_state: read("SubState"),
+        unit_file_state: read("UnitFileState"),
+    })
 }
 
 pub fn inspect_container(
@@ -1553,6 +1592,36 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn a_single_unit_state_separates_missing_systemd_from_a_missing_unit() {
+        assert!(parse_unit_state("__CR_NO_SYSTEMD__\n").is_none());
+        let missing = parse_unit_state(
+            "Id=ghost.service\nLoadState=not-found\nActiveState=inactive\nSubState=dead\nUnitFileState=\n",
+        )
+        .expect("systemd present");
+        assert_eq!(missing.load_state, "not-found");
+        assert_eq!(missing.unit_file_state, "unknown");
+        let running = parse_unit_state(
+            "Id=nginx.service\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n",
+        )
+        .expect("systemd present");
+        assert_eq!(running.id, "nginx.service");
+        assert_eq!(running.active_state, "active");
+        assert_eq!(running.unit_file_state, "enabled");
+    }
+
+    #[test]
+    fn the_single_unit_query_stays_in_system_scope_and_quotes_its_operand() {
+        let source = include_str!("remote.rs");
+        let body = source
+            .split("pub fn inspect_unit_state")
+            .nth(1)
+            .expect("collector");
+        assert!(body.contains("--system"));
+        assert!(body.contains("-- \'{unit}\'"));
+        assert!(body.contains("validate_systemd_unit_id(unit)"));
+    }
 
     fn live_connection() -> SavedConnection {
         SavedConnection {

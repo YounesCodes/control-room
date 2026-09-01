@@ -83,6 +83,27 @@ When enabled, Control Room installs a marked block in the remote account's `~/.b
 
 Capture starts only in sessions opened after you enable it. Control Room does not infer commands from keystrokes or read `.bash_history`. Command lines may contain secrets, so enable this only when that local record is appropriate for your work.
 
+### Cross-host inspections
+
+Compare hosts in the sidebar runs one predefined read-only inspection against Saved Connections you
+tick by hand. Three inspections are available: host facts, the state of one systemd unit, and the
+listeners bound to one port.
+
+Targets are always explicit. A group or a tag can narrow what you see, but never becomes the target
+set on its own, and the dialog reads the list and the exact fact names back to you before anything
+runs. There is no field for a command anywhere in the request: Control Room sends an operation id, a
+validated parameter, and the connection ids you confirmed.
+
+Three hosts are contacted at a time. Each host gets its own row and its own answer: read,
+unreachable, authentication required, permission required, not supported, failed, or cancelled.
+One failed host never erases another host's result, and a row that is not read shows a dash rather
+than a blank that could pass for "nothing there". Stop cancels every queued host immediately;
+a host whose bounded command is already in flight is reported as cancelled once that command
+returns or times out.
+
+Results live in memory for the length of the dialog. Nothing about a run is stored, and no sudo
+password is ever collected for a multi-host run.
+
 ### Productivity
 
 - Organize Saved Connections into collapsible groups, manage reusable color-coded tags beside

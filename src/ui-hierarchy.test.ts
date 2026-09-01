@@ -48,6 +48,27 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps cross-host targets explicit and gives React no command field", () => {
+    const dialogSource = readFileSync(
+      new URL("./components/CrossHostDialog.tsx", import.meta.url),
+      "utf8",
+    );
+    const operationModel = readFileSync(
+      new URL("../src-tauri/src/models.rs", import.meta.url),
+      "utf8",
+    ).slice(0);
+    expect(appSource).toContain("<CrossHostDialog");
+    expect(appSource).toContain("Compare hosts");
+    // The request carries an operation id and target ids, never a command.
+    expect(dialogSource).toContain("operationId: operation.id");
+    expect(dialogSource).not.toContain("command:");
+    const request = operationModel.slice(
+      operationModel.indexOf("pub struct CrossHostRequest"),
+      operationModel.indexOf("pub struct CrossHostFact"),
+    );
+    expect(request).not.toContain("command");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

@@ -3,6 +3,9 @@ import type {
   AppSettings,
   ConnectionGroup,
   ConnectionTag,
+  CrossHostOperation,
+  CrossHostRequest,
+  CrossHostResult,
   DockerContainer,
   DockerContainerDetails,
   EnvironmentInfo,
@@ -140,6 +143,11 @@ export const api = {
       output,
     }),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
+  listCrossHostOperations: () => invoke<CrossHostOperation[]>("list_cross_host_operations"),
+  runCrossHostInspection: (request: CrossHostRequest, progress: Channel<CrossHostResult>) =>
+    invoke<CrossHostResult[]>("run_cross_host_inspection", { request, progress }),
+  cancelCrossHostInspection: (runId: string) =>
+    invoke<void>("cancel_cross_host_inspection", { runId }),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),

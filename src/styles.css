@@ -1271,6 +1271,137 @@ code,
    Workspace content + terminal panes
    ========================================================================== */
 
+/* ==========================================================================
+   Cross-host inspection
+   ========================================================================== */
+
+.sidebar-secondary {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--fill-control);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11.5px;
+  gap: 8px;
+  transition: background var(--motion-fast) var(--ease);
+}
+
+.sidebar-secondary:hover:not(:disabled) {
+  background: var(--fill-control-hover);
+  color: var(--text);
+}
+
+.sidebar-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.cross-host-body {
+  display: flex;
+  max-height: 70vh;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  gap: 10px;
+}
+
+.cross-host-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.cross-host-targets {
+  display: flex;
+  max-height: 190px;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  gap: 4px;
+}
+
+.cross-host-targets legend {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cross-host-targets small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.cross-host-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cross-host-results {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.cross-host-results table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.cross-host-results th,
+.cross-host-results td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-faint);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cross-host-results thead th {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cross-host-results td small {
+  display: block;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  white-space: normal;
+}
+
+.cross-host-state {
+  color: var(--text-muted);
+}
+
+.cross-host-state-completed {
+  color: var(--success);
+}
+
+.cross-host-state-running,
+.cross-host-state-cancelled,
+.cross-host-state-unsupported {
+  color: var(--warning);
+}
+
+.cross-host-state-failed,
+.cross-host-state-unreachable,
+.cross-host-state-authenticationRequired,
+.cross-host-state-permissionRequired {
+  color: var(--failure);
+}
+
 .workspace-content {
   position: relative;
   min-width: 0;

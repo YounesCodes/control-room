@@ -2,14 +2,15 @@ use chrono::Utc;
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
+    cross_host::{self, CrossHostRunRegistry, TargetReporter},
     database::{Database, validate_connection_input},
     history,
     models::{
-        AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
-        EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
-        SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
-        SystemdUnit,
+        AppSettings, ConnectionGroup, ConnectionTag, CrossHostOperation, CrossHostRequest,
+        CrossHostResult, DockerContainer, DockerContainerDetails, EnvironmentInfo,
+        EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput, HostCapabilities,
+        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -391,6 +392,63 @@ pub fn start_docker_log_stream(
 #[tauri::command]
 pub fn stop_log_stream(streams: State<'_, StreamManager>, stream_id: String) -> Result<(), String> {
     streams.stop(&stream_id)
+}
+
+struct ChannelTargetReporter {
+    channel: Channel<CrossHostResult>,
+}
+
+impl TargetReporter for ChannelTargetReporter {
+    fn report(&self, result: &CrossHostResult) {
+        let _ = self.channel.send(result.clone());
+    }
+}
+
+/// The fixed catalogue of operations that may run against several hosts.
+#[tauri::command]
+pub fn list_cross_host_operations() -> Vec<CrossHostOperation> {
+    cross_host::operations()
+}
+
+/// Runs one registered operation against explicitly chosen Saved Connections.
+/// React names an operation id and an optional parameter; it never supplies a
+/// command.
+#[tauri::command(async)]
+pub fn run_cross_host_inspection(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    runs: State<'_, CrossHostRunRegistry>,
+    request: CrossHostRequest,
+    progress: Channel<CrossHostResult>,
+) -> Result<Vec<CrossHostResult>, String> {
+    let operation = cross_host::find_operation(&request.operation_id)
+        .ok_or_else(|| "That operation cannot run across hosts".to_string())?;
+    let mut targets = Vec::with_capacity(request.connection_ids.len());
+    let mut seen = std::collections::HashSet::new();
+    for id in &request.connection_ids {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        targets.push(database.get_connection(id)?);
+    }
+    let reporter = ChannelTargetReporter { channel: progress };
+    cross_host::run(
+        &targets,
+        &operation,
+        request.parameter.as_deref(),
+        &request.run_id,
+        &limiter,
+        &runs,
+        &reporter,
+    )
+}
+
+#[tauri::command]
+pub fn cancel_cross_host_inspection(
+    runs: State<'_, CrossHostRunRegistry>,
+    run_id: String,
+) -> Result<(), String> {
+    runs.cancel(&run_id)
 }
 
 #[tauri::command]

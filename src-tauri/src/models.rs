@@ -228,6 +228,72 @@ pub struct DockerMount {
     pub propagation: Option<String>,
 }
 
+/// One systemd unit's state read on its own, without listing every unit.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemdUnitState {
+    pub id: String,
+    pub load_state: String,
+    pub active_state: String,
+    pub sub_state: String,
+    pub unit_file_state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossHostParameter {
+    /// `systemdUnit` or `port`. React renders the field; Rust validates it.
+    pub kind: String,
+    pub label: String,
+    pub placeholder: String,
+}
+
+/// One entry in the fixed multi-host operation registry. There is no field for
+/// a command: React can only name an id that already exists in Rust.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossHostOperation {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub parameter: Option<CrossHostParameter>,
+    /// The fact names this operation returns, so the target list can preview
+    /// exactly what will be read before anything runs.
+    pub facts: Vec<String>,
+}
+
+/// One multi-host run request. The targets are ids the user confirmed, never a
+/// group or tag expanded silently.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossHostRequest {
+    pub run_id: String,
+    pub operation_id: String,
+    pub parameter: Option<String>,
+    pub connection_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossHostFact {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossHostResult {
+    pub run_id: String,
+    pub connection_id: String,
+    pub connection_name: String,
+    /// `running`, `completed`, `failed`, `unsupported`, `unreachable`,
+    /// `authenticationRequired`, `permissionRequired`, or `cancelled`.
+    pub state: String,
+    pub message: Option<String>,
+    pub collected_at: Option<String>,
+    pub facts: Vec<CrossHostFact>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {

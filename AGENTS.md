@@ -57,10 +57,17 @@ DESIGN.md.
    health, lifecycle, restart, port, network, mount, image, and validated Compose
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
-9. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-10. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+9. Run a multi-host inspection only from the fixed Rust operation registry,
+   only against connection ids the user confirmed one by one, and only through
+   the bounded Structured Operations path. React never sends a command or a
+   parameter Rust has not validated. A group or tag may narrow selection but
+   never defines targets. Keep concurrency bounded, give every host an
+   independent state, and never collect a sudo password for a multi-host run.
+   Keep run results in memory.
+10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-11. Do not commit or push unless the user asks.
+12. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -84,6 +91,9 @@ account you control.
   belongs to the session, not the connection.
 - **Structured Operation**: a bounded, read-only inspection request that runs
   independently of Terminal Sessions.
+- **Cross-Host Inspection**: one registered Structured Operation run against
+  several explicitly confirmed Saved Connections, with bounded concurrency and
+  an independent result per host.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
   returned by the bounded Systemd inspection.
 - **Listening Socket**: one TCP or UDP listener returned by a manual, bounded

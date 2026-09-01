@@ -1,4 +1,5 @@
 mod commands;
+mod cross_host;
 mod database;
 mod history;
 mod models;
@@ -6,6 +7,7 @@ mod remote;
 mod session;
 mod ssh;
 
+use cross_host::CrossHostRunRegistry;
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
@@ -17,6 +19,7 @@ pub fn run() {
         .manage(SessionManager::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
+        .manage(CrossHostRunRegistry::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -57,6 +60,9 @@ pub fn run() {
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,
+            commands::list_cross_host_operations,
+            commands::run_cross_host_inspection,
+            commands::cancel_cross_host_inspection,
             commands::get_history,
             commands::add_history_entry,
             commands::delete_history_entry,

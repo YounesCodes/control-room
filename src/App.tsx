@@ -8,6 +8,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  Layers,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -26,6 +27,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
+import { CrossHostDialog } from "./components/CrossHostDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
@@ -115,6 +117,7 @@ export function App() {
   const [hostSearch, setHostSearch] = useState("");
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
+  const [crossHostOpen, setCrossHostOpen] = useState(false);
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
@@ -905,6 +908,14 @@ export function App() {
         )}
         <div className="sidebar-footer">
           <button
+            className="sidebar-secondary"
+            type="button"
+            onClick={() => setCrossHostOpen(true)}
+            disabled={!connections.length}
+          >
+            <Layers size={16} /> Compare hosts
+          </button>
+          <button
             className="sidebar-primary"
             type="button"
             onClick={() => setDialogConnection("new")}
@@ -1323,6 +1334,9 @@ export function App() {
         />
       )}
 
+      {crossHostOpen && (
+        <CrossHostDialog connections={connections} onClose={() => setCrossHostOpen(false)} />
+      )}
       {connectionGroupsOpen && (
         <ConnectionGroupsDialog
           groups={connectionGroups}

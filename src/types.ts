@@ -184,6 +184,54 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export interface CrossHostParameter {
+  kind: "systemdUnit" | "port";
+  label: string;
+  placeholder: string;
+}
+
+// One entry in the fixed registry Rust owns. There is no command field: React
+// can only name an operation that already exists on the Rust side.
+export interface CrossHostOperation {
+  id: string;
+  label: string;
+  description: string;
+  parameter: CrossHostParameter | null;
+  facts: string[];
+}
+
+export interface CrossHostRequest {
+  runId: string;
+  operationId: string;
+  parameter: string | null;
+  connectionIds: string[];
+}
+
+export type CrossHostState =
+  | "running"
+  | "completed"
+  | "failed"
+  | "unsupported"
+  | "unreachable"
+  | "authenticationRequired"
+  | "permissionRequired"
+  | "cancelled";
+
+export interface CrossHostFact {
+  name: string;
+  value: string;
+}
+
+export interface CrossHostResult {
+  runId: string;
+  connectionId: string;
+  connectionName: string;
+  state: CrossHostState;
+  message: string | null;
+  collectedAt: string | null;
+  facts: CrossHostFact[];
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
