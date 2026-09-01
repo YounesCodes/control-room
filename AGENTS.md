@@ -50,10 +50,14 @@ DESIGN.md.
    read-only, live only in Workspace memory, and are never persisted. Report
    binding exposure and firewall policy separately, and never claim a bind means
    Internet reachability.
-7. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-8. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+7. Inspect one Docker container only by its full stable ID. Collect typed state,
+   health, lifecycle, restart, port, network, mount, image, and validated Compose
+   facts. Never collect environment values, command arguments, arbitrary labels,
+   health logs, or host mount sources.
+8. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+9. Keep README, DESIGN.md, and this file current when behavior changes. Do not
    redesign unrelated UI.
-9. Do not commit or push unless the user asks.
+10. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -77,6 +81,8 @@ account you control.
   returned by the bounded Systemd inspection.
 - **Listening Socket**: one TCP or UDP listener returned by a manual, bounded
   host snapshot. Kernel socket facts remain separate from correlated ownership.
+- **Container Inspection**: a timestamped, in-memory detail record collected by
+  full Docker ID without lifecycle controls or raw inspect JSON in React.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration

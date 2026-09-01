@@ -59,6 +59,7 @@ import type {
   CachedList,
   ConnectionState,
   DockerContainer,
+  DockerContainerDetails,
   EnvironmentInfo,
   HostCapabilities,
   ListeningSocket,
@@ -66,6 +67,7 @@ import type {
   SavedConnection,
   SettingsContract,
   SystemdUnit,
+  CachedValue,
   Workspace,
   WorkspaceView,
 } from "./types";
@@ -413,6 +415,21 @@ export function App() {
     updateWorkspace(id, { portsCache });
   }
 
+  function updateContainerDetailsCache(
+    id: string,
+    containerId: string,
+    details: CachedValue<DockerContainerDetails>,
+  ) {
+    const workspace = workspaces.find((item) => item.id === id);
+    if (!workspace) return;
+    updateWorkspace(id, {
+      containerDetailsCache: {
+        ...workspace.containerDetailsCache,
+        [containerId]: details,
+      },
+    });
+  }
+
   function rememberCapabilities(capabilities: HostCapabilities) {
     setHostCapabilities((current) => ({
       ...current,
@@ -451,6 +468,7 @@ export function App() {
       containersCache: emptyCachedList(),
       systemdSelectionId: null,
       containerSelectionId: null,
+      containerDetailsCache: {},
       logSource: null,
     };
   }
@@ -1059,7 +1077,11 @@ export function App() {
                   key={activeWorkspace.id}
                   connection={activeConnection}
                   cache={activeWorkspace.containersCache}
+                  detailsCache={activeWorkspace.containerDetailsCache}
                   onCacheChange={(cache) => updateContainersCache(activeWorkspace.id, cache)}
+                  onDetailsCacheChange={(containerId, details) =>
+                    updateContainerDetailsCache(activeWorkspace.id, containerId, details)
+                  }
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                   focusId={activeWorkspace.containerSelectionId}
                 />

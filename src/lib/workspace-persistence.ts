@@ -34,6 +34,7 @@ export function restoreWorkspaceState(
         containersCache: emptyCachedList(),
         systemdSelectionId: null,
         containerSelectionId: null,
+        containerDetailsCache: {},
         logSource: null,
       },
     ];

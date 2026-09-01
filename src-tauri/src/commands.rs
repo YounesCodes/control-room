@@ -5,10 +5,10 @@ use crate::{
     database::{Database, validate_connection_input},
     history,
     models::{
-        AppSettings, DockerContainer, EnvironmentInfo, EstablishedConnections, FirewallStatus,
-        HistoryEntry, HistoryInput, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
-        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        AppSettings, DockerContainer, DockerContainerDetails, EnvironmentInfo,
+        EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput, HostCapabilities,
+        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -228,6 +228,19 @@ pub fn inspect_connections(
     remote::list_connections(&connection)
 }
 
+#[tauri::command(async)]
+pub fn inspect_container(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+    container_id: String,
+    sudo_password: Option<String>,
+) -> Result<DockerContainerDetails, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    remote::inspect_container(&connection, &container_id, sudo_password)
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn start_journal_stream(
@@ -415,6 +428,9 @@ mod tests {
             "list_services",
             "list_containers",
             "list_ports",
+            "inspect_firewall",
+            "inspect_connections",
+            "inspect_container",
             "start_journal_stream",
             "start_docker_log_stream",
             "get_history_integration_status",

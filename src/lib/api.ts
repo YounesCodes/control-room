@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
   DockerContainer,
+  DockerContainerDetails,
   EnvironmentInfo,
   EstablishedConnections,
   FirewallStatus,
@@ -76,6 +77,16 @@ export const api = {
     invokeRemoteInspection<FirewallStatus>("inspect_firewall", { connectionId, sudoPassword }),
   inspectConnections: (connectionId: string) =>
     invokeRemoteInspection<EstablishedConnections>("inspect_connections", { connectionId }),
+  inspectContainer: (
+    connectionId: string,
+    containerId: string,
+    sudoPassword: string | null = null,
+  ) =>
+    invokeRemoteInspection<DockerContainerDetails>("inspect_container", {
+      connectionId,
+      containerId,
+      sudoPassword,
+    }),
   startJournalStream: (
     connectionId: string,
     service: string,

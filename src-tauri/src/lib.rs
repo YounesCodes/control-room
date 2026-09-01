@@ -42,6 +42,7 @@ pub fn run() {
             commands::list_ports,
             commands::inspect_firewall,
             commands::inspect_connections,
+            commands::inspect_container,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

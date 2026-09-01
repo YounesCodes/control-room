@@ -118,6 +118,55 @@ export interface EstablishedConnections {
   collectedAt: string;
 }
 
+export interface DockerContainerDetails {
+  id: string;
+  name: string;
+  imageReference: string;
+  imageContentId: string;
+  state: string;
+  running: boolean;
+  paused: boolean;
+  restarting: boolean;
+  oomKilled: boolean;
+  dead: boolean;
+  exitCode: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  healthStatus: string | null;
+  failingStreak: number | null;
+  restartPolicy: string;
+  restartMaximumRetryCount: number;
+  publishedPorts: DockerPublishedPort[];
+  networks: DockerNetworkAttachment[];
+  mounts: DockerMount[];
+  composeProject: string | null;
+  composeService: string | null;
+  composeContainerNumber: number | null;
+  composeOneoff: boolean | null;
+}
+
+export interface DockerPublishedPort {
+  containerPort: string;
+  hostAddress: string;
+  hostPort: number;
+}
+
+export interface DockerNetworkAttachment {
+  name: string;
+  ipv4Address: string | null;
+  ipv4Gateway: string | null;
+  ipv6Address: string | null;
+  ipv6Gateway: string | null;
+}
+
+export interface DockerMount {
+  mountType: string;
+  name: string | null;
+  destination: string;
+  writable: boolean;
+  propagation: string | null;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -180,6 +229,13 @@ export interface CachedList<T> {
   error: string | null;
 }
 
+export interface CachedValue<T> {
+  value: T | null;
+  fetchedAt: number | null;
+  loading: boolean;
+  error: string | null;
+}
+
 export type LogSourceType = "systemd" | "docker";
 
 export interface LogSourceSelection {
@@ -204,6 +260,7 @@ export interface Workspace {
   containersCache: CachedList<DockerContainer>;
   systemdSelectionId: string | null;
   containerSelectionId: string | null;
+  containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
 }
 

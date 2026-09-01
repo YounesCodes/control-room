@@ -26,6 +26,7 @@ describe("structured discovery timeout", () => {
     ["services", () => api.listServices("connection-id")],
     ["Docker containers", () => api.listContainers("connection-id")],
     ["listening ports", () => api.listPorts("connection-id")],
+    ["Docker container details", () => api.inspectContainer("connection-id", "a".repeat(64))],
   ])("turns a stalled %s request into an actionable error", async (_label, request) => {
     const result = request().then(
       () => "resolved",
