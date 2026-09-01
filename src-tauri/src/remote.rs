@@ -23,9 +23,9 @@ use zeroize::Zeroizing;
 use crate::{
     models::{
         ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
-        DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, FirewallRule,
-        FirewallStatus, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
-        StreamStarted, StreamStateEvent, SystemdUnit,
+        DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, Filesystem,
+        FirewallRule, FirewallStatus, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
+        SavedConnection, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -244,6 +244,102 @@ pub fn list_ports(
         RemoteCommandExecutor::execute(connection, "list_ports", command)?
     };
     parse_listening_sockets(&output.success_text()?)
+}
+
+const NO_DF_MARKER: &str = "__CR_NO_DF__";
+const MAX_FILESYSTEMS: usize = 200;
+
+/// Pseudo filesystems that describe the kernel rather than stored data. They
+/// add noise to a comparison without saying anything about the host.
+const PSEUDO_FILESYSTEM_TYPES: [&str; 22] = [
+    "tmpfs",
+    "devtmpfs",
+    "ramfs",
+    "squashfs",
+    "overlay",
+    "efivarfs",
+    "proc",
+    "sysfs",
+    "cgroup",
+    "cgroup2",
+    "devpts",
+    "securityfs",
+    "debugfs",
+    "tracefs",
+    "fusectl",
+    "configfs",
+    "pstore",
+    "bpf",
+    "autofs",
+    "mqueue",
+    "hugetlbfs",
+    "nsfs",
+];
+
+pub fn list_filesystems(connection: &SavedConnection) -> Result<Vec<Filesystem>, String> {
+    let command = format!(
+        r#"LC_ALL=C; if command -v df >/dev/null 2>&1; then df -P -T 2>/dev/null; else printf '{NO_DF_MARKER}\n'; fi"#
+    );
+    let text =
+        RemoteCommandExecutor::execute(connection, "list_filesystems", &command)?.success_text()?;
+    parse_filesystems(&text)
+}
+
+fn parse_filesystems(text: &str) -> Result<Vec<Filesystem>, String> {
+    if text.contains(NO_DF_MARKER) {
+        return Err("The host has no df command".into());
+    }
+    let mut filesystems = Vec::new();
+    for line in text.lines().skip(1) {
+        if filesystems.len() >= MAX_FILESYSTEMS {
+            break;
+        }
+        if let Some(filesystem) = parse_filesystem(line) {
+            filesystems.push(filesystem);
+        }
+    }
+    filesystems.sort_by(|left, right| left.mount_point.cmp(&right.mount_point));
+    filesystems.dedup_by(|left, right| left.mount_point == right.mount_point);
+    Ok(filesystems)
+}
+
+fn parse_filesystem(line: &str) -> Option<Filesystem> {
+    // `df -P -T` prints Filesystem, Type, 1024-blocks, Used, Available,
+    // Capacity, then the mount point, which may contain spaces. The device
+    // path is read to find the field boundary and then dropped.
+    let mut fields = line.split_whitespace();
+    let device = fields.next()?;
+    let filesystem_type = fields.next()?;
+    let size_kib: u64 = fields.next()?.parse().ok()?;
+    let _used: u64 = fields.next()?.parse().ok()?;
+    let _available: u64 = fields.next()?.parse().ok()?;
+    let used_percent: u8 = fields.next()?.strip_suffix('%')?.parse().ok()?;
+    if used_percent > 100 {
+        return None;
+    }
+    let mount_point = line
+        .split_whitespace()
+        .skip(6)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if device.is_empty() || !mount_point.starts_with('/') {
+        return None;
+    }
+    if PSEUDO_FILESYSTEM_TYPES.contains(&filesystem_type) {
+        return None;
+    }
+    if ["/proc", "/sys", "/dev", "/run"]
+        .iter()
+        .any(|prefix| mount_point == *prefix || mount_point.starts_with(&format!("{prefix}/")))
+    {
+        return None;
+    }
+    Some(Filesystem {
+        mount_point: bounded_text(&mount_point, 512),
+        filesystem_type: bounded_text(filesystem_type, 64),
+        size_kib,
+        used_percent,
+    })
 }
 
 pub fn inspect_container(
@@ -1553,6 +1649,57 @@ mod tests {
     };
 
     use super::*;
+
+    const DF_OUTPUT: &str = "Filesystem     Type     1024-blocks     Used Available Capacity Mounted on\n\
+udev           devtmpfs     8123456        0   8123456       0% /dev\n\
+/dev/sda1      ext4        61234567 24123456  33876543      42% /\n\
+tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
+/dev/sdb1      xfs        104857600 52428800  52428800      50% /srv/data archive\n\
+/dev/sda15     vfat          523248     6100    517148       2% /boot/efi\n";
+
+    #[test]
+    fn filesystem_rows_keep_real_mounts_and_drop_pseudo_ones() {
+        let filesystems = parse_filesystems(DF_OUTPUT).unwrap();
+        let mounts: Vec<&str> = filesystems
+            .iter()
+            .map(|filesystem| filesystem.mount_point.as_str())
+            .collect();
+        assert_eq!(mounts, vec!["/", "/boot/efi", "/srv/data archive"]);
+        assert_eq!(filesystems[0].filesystem_type, "ext4");
+        assert_eq!(filesystems[0].size_kib, 61_234_567);
+        assert_eq!(filesystems[0].used_percent, 42);
+    }
+
+    #[test]
+    fn filesystem_rows_never_carry_the_device_path() {
+        let rendered = format!("{:?}", parse_filesystems(DF_OUTPUT).unwrap());
+        assert!(!rendered.contains("/dev/sda1"));
+        assert!(!rendered.contains("/dev/sdb1"));
+    }
+
+    #[test]
+    fn malformed_and_missing_filesystem_output_is_rejected_not_guessed() {
+        assert!(parse_filesystems("__CR_NO_DF__\n").is_err());
+        assert!(
+            parse_filesystems("Filesystem Type\ngarbage line here\n")
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            parse_filesystems(
+                "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 ext4 100 50 50 999% /\n"
+            )
+            .unwrap()
+            .is_empty()
+        );
+        assert!(
+            parse_filesystems(
+                "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 ext4 100 50 50 50% relative\n"
+            )
+            .unwrap()
+            .is_empty()
+        );
+    }
 
     fn live_connection() -> SavedConnection {
         SavedConnection {

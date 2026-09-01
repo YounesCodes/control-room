@@ -228,6 +228,123 @@ pub struct DockerMount {
     pub propagation: Option<String>,
 }
 
+/// One mounted filesystem from a bounded `df` snapshot. Device paths are not
+/// collected: the mount point, type, size, and use are enough to compare.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Filesystem {
+    pub mount_point: String,
+    pub filesystem_type: String,
+    pub size_kib: u64,
+    pub used_percent: u8,
+}
+
+/// Normalized host state for a comparison. Sections hold entries keyed by a
+/// domain identity, and entries hold typed name/value facts, so the diff needs
+/// no per-domain formatting code.
+///
+/// These types are this branch's own copy of the shared Normalized Host State.
+/// Host Snapshots defines the versioned original; the two should be folded into
+/// one type once that work is merged.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostStateFact {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostStateEntry {
+    pub identity: String,
+    pub label: String,
+    pub facts: Vec<HostStateFact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostStateSection {
+    /// `host`, `systemdUnits`, `listeners`, `containers`, or `filesystems`.
+    pub kind: String,
+    /// `collected`, `partial`, `unsupported`, `unavailable`, or `notCollected`.
+    pub status: String,
+    pub collected_at: Option<String>,
+    pub message: Option<String>,
+    pub entries: Vec<HostStateEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiffSide {
+    pub connection_id: String,
+    pub connection_name: String,
+    pub collected_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiffFact {
+    pub name: String,
+    pub left_value: Option<String>,
+    pub right_value: Option<String>,
+    pub equal: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiffRow {
+    pub identity: String,
+    pub label: String,
+    /// `equal`, `different`, `leftOnly`, or `rightOnly`.
+    pub state: String,
+    pub facts: Vec<HostDiffFact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiffSection {
+    pub kind: String,
+    pub left_status: String,
+    pub right_status: String,
+    /// False when either side was unsupported, unreadable, or never reached.
+    /// Such a section is never reported as agreement.
+    pub comparable: bool,
+    pub note: Option<String>,
+    pub rows: Vec<HostDiffRow>,
+    pub equal_count: u32,
+    pub different_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiff {
+    pub left: HostDiffSide,
+    pub right: HostDiffSide,
+    /// Seconds between the two sides' last collection, or `None` when a side
+    /// never reported one.
+    pub collection_skew_seconds: Option<i64>,
+    pub sections: Vec<HostDiffSection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiffRequest {
+    pub run_id: String,
+    pub left_connection_id: String,
+    pub right_connection_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDiffProgress {
+    pub run_id: String,
+    pub connection_id: String,
+    pub kind: String,
+    pub status: String,
+    pub completed: u32,
+    pub total: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {

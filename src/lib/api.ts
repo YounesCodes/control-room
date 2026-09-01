@@ -11,6 +11,9 @@ import type {
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
+  HostDiff,
+  HostDiffProgress,
+  HostDiffRequest,
   ListeningSocket,
   PersistedWorkspaceState,
   SavedConnection,
@@ -143,6 +146,9 @@ export const api = {
       output,
     }),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
+  compareTwoHosts: (request: HostDiffRequest, progress: Channel<HostDiffProgress>) =>
+    invoke<HostDiff>("compare_two_hosts", { request, progress }),
+  cancelHostDiff: (runId: string) => invoke<void>("cancel_host_diff", { runId }),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),

@@ -83,6 +83,31 @@ When enabled, Control Room installs a marked block in the remote account's `~/.b
 
 Capture starts only in sessions opened after you enable it. Control Room does not infer commands from keystrokes or read `.bash_history`. Command lines may contain secrets, so enable this only when that local record is appropriate for your work.
 
+### Host-to-host diff
+
+Compare hosts in the sidebar reads the same facts from two Saved Connections at the same time and
+reports where they differ: host facts, systemd units, listening sockets, containers, and
+filesystems.
+
+The comparison never says which host is right and never changes either one. Both sides are read in
+parallel, each side records its own per-section status, and the dialog shows both collection times
+and warns when the two reads are more than two minutes apart.
+
+Identity rules are explicit, because guessing them is how a diff lies. A systemd unit is matched by
+unit id. A listener is matched by protocol, address family, and port, with the bind address compared
+rather than treated as identity. A container is matched by its validated Compose project, service,
+and instance number when all are present, and by name otherwise, with the image reference compared
+rather than treated as identity. A filesystem is matched by mount point. The hostname is a row
+label, never a compared fact.
+
+Every section keeps collected, partial, not present, not readable, and not collected distinct. A
+section either host could not read is reported as not comparable, with the reason, and is excluded
+from the difference count, so absent evidence never reads as agreement. Differences only is on by
+default. A differing unit or listener row can open Systemd or Ports on either host.
+
+Stop ends the run; sections not yet reached are marked not collected rather than left blank.
+Nothing about a comparison is stored.
+
 ### Productivity
 
 - Organize Saved Connections into collapsible groups, manage reusable color-coded tags beside

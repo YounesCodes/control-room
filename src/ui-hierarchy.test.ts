@@ -48,6 +48,21 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps the host comparison read-only and offers no remediation", () => {
+    const dialogSource = readFileSync(
+      new URL("./components/HostDiffDialog.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain("<HostDiffDialog");
+    expect(appSource).toContain("Compare hosts");
+    expect(dialogSource).toContain("never changes a host and never says which one is right");
+    // Drill-down navigates to an inspection view. Nothing here acts on a host.
+    for (const verb of ["restart", "start(", "stop(", "remove"]) {
+      expect(dialogSource.toLowerCase()).not.toContain(`onfix${verb}`);
+    }
+    expect(dialogSource).not.toContain("api.writeSession");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

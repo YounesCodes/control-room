@@ -184,6 +184,67 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export type HostDiffSectionKind =
+  "host" | "systemdUnits" | "listeners" | "containers" | "filesystems";
+
+export type HostStateStatus =
+  "collected" | "partial" | "unsupported" | "unavailable" | "notCollected";
+
+export type HostDiffRowState = "equal" | "different" | "leftOnly" | "rightOnly";
+
+export interface HostDiffSide {
+  connectionId: string;
+  connectionName: string;
+  collectedAt: string | null;
+}
+
+export interface HostDiffFact {
+  name: string;
+  leftValue: string | null;
+  rightValue: string | null;
+  equal: boolean;
+}
+
+export interface HostDiffRow {
+  identity: string;
+  label: string;
+  state: HostDiffRowState;
+  facts: HostDiffFact[];
+}
+
+export interface HostDiffSection {
+  kind: HostDiffSectionKind;
+  leftStatus: HostStateStatus;
+  rightStatus: HostStateStatus;
+  comparable: boolean;
+  note: string | null;
+  rows: HostDiffRow[];
+  equalCount: number;
+  differentCount: number;
+}
+
+export interface HostDiff {
+  left: HostDiffSide;
+  right: HostDiffSide;
+  collectionSkewSeconds: number | null;
+  sections: HostDiffSection[];
+}
+
+export interface HostDiffRequest {
+  runId: string;
+  leftConnectionId: string;
+  rightConnectionId: string;
+}
+
+export interface HostDiffProgress {
+  runId: string;
+  connectionId: string;
+  kind: HostDiffSectionKind;
+  status: HostStateStatus;
+  completed: number;
+  total: number;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;

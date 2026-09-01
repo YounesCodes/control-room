@@ -1,12 +1,14 @@
 mod commands;
 mod database;
 mod history;
+mod host_diff;
 mod models;
 mod remote;
 mod session;
 mod ssh;
 
 use database::Database;
+use host_diff::HostDiffRunRegistry;
 use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
 use tauri::Manager;
@@ -17,6 +19,7 @@ pub fn run() {
         .manage(SessionManager::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
+        .manage(HostDiffRunRegistry::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -57,6 +60,8 @@ pub fn run() {
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,
+            commands::compare_two_hosts,
+            commands::cancel_host_diff,
             commands::get_history,
             commands::add_history_entry,
             commands::delete_history_entry,

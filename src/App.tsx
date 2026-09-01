@@ -7,6 +7,7 @@ import {
   FileClock,
   FolderCog,
   Gauge,
+  GitCompare,
   History,
   Maximize2,
   MoreHorizontal,
@@ -27,6 +28,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
+import { HostDiffDialog } from "./components/HostDiffDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
@@ -119,6 +121,7 @@ export function App() {
   const [hostSearch, setHostSearch] = useState("");
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
+  const [hostDiffOpen, setHostDiffOpen] = useState(false);
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
@@ -538,6 +541,37 @@ export function App() {
     });
   }
 
+  // Opens or reuses a Workspace for the connection, then focuses the object the
+  // caller named. Used by the host comparison to move from a difference to the
+  // inspection view on either host.
+  function openConnectionObject(
+    connectionId: string,
+    view: WorkspaceView,
+    selectionId: string | null,
+  ) {
+    const connection = connections.find((item) => item.id === connectionId);
+    if (!connection) {
+      setActionError("That Saved Connection no longer exists.");
+      return;
+    }
+    const existing = [...workspaces]
+      .reverse()
+      .find((workspace) => workspace.connectionId === connectionId);
+    const patch = {
+      view,
+      systemdSelectionId: view === "services" ? selectionId : null,
+      containerSelectionId: view === "docker" ? selectionId : null,
+    };
+    if (existing) {
+      setActiveWorkspaceId(existing.id);
+      updateWorkspace(existing.id, patch);
+      return;
+    }
+    const workspace = { ...createWorkspace(connection), ...patch };
+    setWorkspaces((current) => [...current, workspace]);
+    setActiveWorkspaceId(workspace.id);
+  }
+
   function closeWorkspace(id: string) {
     const workspace = workspaces.find((item) => item.id === id);
     if (!workspace) return;
@@ -912,6 +946,17 @@ export function App() {
           </div>
         )}
         <div className="sidebar-footer">
+          <button
+            className="sidebar-secondary"
+            type="button"
+            onClick={() => setHostDiffOpen(true)}
+            disabled={connections.length < 2}
+            title={
+              connections.length < 2 ? "Save two connections to compare hosts" : "Compare two hosts"
+            }
+          >
+            <GitCompare size={16} /> Compare hosts
+          </button>
           <button
             className="sidebar-primary"
             type="button"
@@ -1334,6 +1379,16 @@ export function App() {
         />
       )}
 
+      {hostDiffOpen && (
+        <HostDiffDialog
+          connections={connections}
+          onClose={() => setHostDiffOpen(false)}
+          onOpenObject={(connectionId, view, selectionId) => {
+            setHostDiffOpen(false);
+            openConnectionObject(connectionId, view, selectionId);
+          }}
+        />
+      )}
       {connectionGroupsOpen && (
         <ConnectionGroupsDialog
           groups={connectionGroups}

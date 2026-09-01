@@ -1271,6 +1271,186 @@ code,
    Workspace content + terminal panes
    ========================================================================== */
 
+/* ==========================================================================
+   Host-to-host diff
+   ========================================================================== */
+
+.sidebar-secondary {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--fill-control);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11.5px;
+  gap: 8px;
+  transition: background var(--motion-fast) var(--ease);
+}
+
+.sidebar-secondary:hover:not(:disabled) {
+  background: var(--fill-control-hover);
+  color: var(--text);
+}
+
+.sidebar-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.host-diff-body {
+  display: flex;
+  max-height: 74vh;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  gap: 10px;
+}
+
+.host-diff-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.host-diff-pickers {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.host-diff-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-diff-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-diff-section {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.host-diff-section header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-diff-section h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 12.5px;
+}
+
+.host-diff-count {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.host-diff-status {
+  padding: 1px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.host-diff-status-collected {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.host-diff-status-partial,
+.host-diff-status-unsupported,
+.host-diff-status-notCollected {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.host-diff-status-unavailable {
+  border-color: var(--failure);
+  color: var(--failure);
+}
+
+.host-diff-section table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.host-diff-section th,
+.host-diff-section td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-faint);
+  text-align: left;
+  vertical-align: top;
+}
+
+.host-diff-section thead th {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.host-diff-section tbody th code {
+  display: block;
+}
+
+.host-diff-row-state {
+  display: block;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.host-diff-row-leftOnly,
+.host-diff-row-rightOnly {
+  color: var(--warning);
+}
+
+.host-diff-row-different {
+  color: var(--failure);
+}
+
+.host-diff-open {
+  display: flex;
+  gap: 4px;
+}
+
+.host-diff-open button {
+  padding: 2px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10.5px;
+}
+
+.host-diff-open button:hover {
+  background: var(--fill-control-hover);
+  color: var(--text);
+}
+
 .workspace-content {
   position: relative;
   min-width: 0;

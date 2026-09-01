@@ -366,6 +366,15 @@ separate. Mounts omit host sources, while metadata is limited to the validated C
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
 
+Compare hosts sits in the sidebar footer above Add connection and opens a modal, because the work
+spans two connections and belongs to no single Workspace. The dialog reads top to bottom: what will
+run, which two hosts, then the result. Each section header carries both hosts' statuses side by
+side, so a partial or unreadable half is visible before any row is. Rows show one fact per line with
+the two values next to each other, and Differences only is on by default because a diff exists to
+show what moved. A section that could not be compared shows why in place of rows and is left out of
+the difference count. Both collection times sit above the sections, and a gap over two minutes gets
+a warning, since a stale half of a comparison is a wrong comparison.
+
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full
 list usable. The header reports current active and failed totals without presenting zero

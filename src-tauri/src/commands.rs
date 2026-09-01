@@ -4,11 +4,13 @@ use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 use crate::{
     database::{Database, validate_connection_input},
     history,
+    host_diff::{self, HostDiffRunRegistry, SectionReporter},
     models::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
-        SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
+        HostCapabilities, HostDiff, HostDiffProgress, HostDiffRequest, HostStateSection,
+        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
         SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
@@ -391,6 +393,51 @@ pub fn start_docker_log_stream(
 #[tauri::command]
 pub fn stop_log_stream(streams: State<'_, StreamManager>, stream_id: String) -> Result<(), String> {
     streams.stop(&stream_id)
+}
+
+struct ChannelSectionReporter {
+    run_id: String,
+    channel: Channel<HostDiffProgress>,
+}
+
+impl SectionReporter for ChannelSectionReporter {
+    fn report(&self, connection_id: &str, section: &HostStateSection, completed: u32, total: u32) {
+        let _ = self.channel.send(HostDiffProgress {
+            run_id: self.run_id.clone(),
+            connection_id: connection_id.to_string(),
+            kind: section.kind.clone(),
+            status: section.status.clone(),
+            completed,
+            total,
+        });
+    }
+}
+
+/// Collects comparable state from two explicitly chosen Saved Connections and
+/// returns the typed difference. Read-only, bounded, and cancellable.
+#[tauri::command(async)]
+pub fn compare_two_hosts(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    runs: State<'_, HostDiffRunRegistry>,
+    request: HostDiffRequest,
+    progress: Channel<HostDiffProgress>,
+) -> Result<HostDiff, String> {
+    let left = database.get_connection(&request.left_connection_id)?;
+    let right = database.get_connection(&request.right_connection_id)?;
+    let reporter = ChannelSectionReporter {
+        run_id: request.run_id.clone(),
+        channel: progress,
+    };
+    host_diff::compare_hosts(&left, &right, &request.run_id, &limiter, &runs, &reporter)
+}
+
+#[tauri::command]
+pub fn cancel_host_diff(
+    runs: State<'_, HostDiffRunRegistry>,
+    run_id: String,
+) -> Result<(), String> {
+    runs.cancel(&run_id)
 }
 
 #[tauri::command]

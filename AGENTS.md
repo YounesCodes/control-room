@@ -61,10 +61,17 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Compare two hosts only from explicitly chosen Saved Connections, using
+    bounded read-only collectors run in parallel. Never declare a host correct,
+    offer remediation, or run an arbitrary command. Match objects by defined
+    domain identity, never by similar names. Keep collected, partial,
+    unsupported, unavailable, and notCollected distinct, never present missing
+    data as equality, and report both collection times and their skew. Keep a
+    comparison in memory.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -88,6 +95,8 @@ account you control.
   belongs to the session, not the connection.
 - **Structured Operation**: a bounded, read-only inspection request that runs
   independently of Terminal Sessions.
+- **Host Comparison**: a one-shot, in-memory difference between normalized state
+  collected from two Saved Connections at about the same time.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
   returned by the bounded Systemd inspection.
 - **Listening Socket**: one TCP or UDP listener returned by a manual, bounded
