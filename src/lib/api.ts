@@ -17,6 +17,7 @@ import type {
   SavedConnectionInput,
   SettingsContract,
   SystemdUnit,
+  TerminalContextReference,
 } from "../types";
 
 const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
@@ -140,6 +141,8 @@ export const api = {
       output,
     }),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
+  parseTerminalContext: (command: string) =>
+    invoke<TerminalContextReference | null>("parse_terminal_context", { command }),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),

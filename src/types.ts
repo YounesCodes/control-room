@@ -184,6 +184,15 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export type TerminalContextKind = "systemdUnit" | "dockerContainer";
+
+// One object named by a reported Enhanced History command.
+export interface TerminalContextReference {
+  kind: TerminalContextKind;
+  id: string;
+  sourceCommand: string;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -220,6 +229,7 @@ export interface AppSettings {
   terminalCyan: string;
   defaultLogTail: number;
   globalHistoryEnabled: boolean;
+  terminalContextActionsEnabled: boolean;
 }
 
 export interface SettingsContract {
@@ -279,6 +289,7 @@ export interface Workspace {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
+  terminalContext: TerminalContextReference | null;
 }
 
 interface PersistedWorkspace {

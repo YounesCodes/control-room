@@ -48,6 +48,17 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps terminal context out of the terminal and out of focus mode", () => {
+    // Context comes from a reported Enhanced History command, never from the
+    // terminal buffer, so the bar lives in the Workspace, not in TerminalPane.
+    expect(appSource).toContain("<TerminalContextBar");
+    expect(terminalSource).not.toContain("TerminalContextBar");
+    expect(terminalSource).toContain(".parseTerminalContext(pending.command)");
+    expect(stylesSource).toMatch(
+      /\.terminal-focus-mode \.terminal-context-bar\s*\{[^}]*display: none;/s,
+    );
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

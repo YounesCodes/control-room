@@ -83,13 +83,21 @@ When enabled, Control Room installs a marked block in the remote account's `~/.b
 
 Capture starts only in sessions opened after you enable it. Control Room does not infer commands from keystrokes or read `.bash_history`. Command lines may contain secrets, so enable this only when that local record is appropriate for your work.
 
+### Terminal context actions
+
+When Enhanced History reports a supported read-only command, the Workspace shows a small bar naming the object that command referred to, with the command it came from. The supported forms are `systemctl status|show|cat|is-active|is-enabled|is-failed|list-dependencies <unit>`, `journalctl -u <unit>`, and `docker logs|port|top|stats <container>` including their `docker container ...` spellings. A bare `sudo` prefix is understood.
+
+From that bar you can open the unit in Systemd, inspect the container, or follow its logs. Each action re-reads the live unit or container list first, so a removed, renamed, or ambiguous object reports that instead of opening a stale view.
+
+Nothing else produces context. Pipelines, redirections, command substitution, globs, aliases, shell functions, lifecycle commands such as `systemctl restart`, options that target another host or the user manager, and any command with more than one object all yield no context. Control Room never reads keystrokes or scrollback to find one. With Enhanced History off, or with the setting turned off in Settings, no terminal context appears at all. The current context lives in Workspace memory, is replaced by the next supported command, and is cleared by the bar's dismiss button.
+
 ### Productivity
 
 - Organize Saved Connections into collapsible groups, manage reusable color-coded tags beside
   those groups, and assign existing tags from each connection editor. Filter the sidebar by
   connection name, SSH target, group, or tag.
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
-- Tune terminal font, size, scrollback, colors, log tail defaults, and the global Enhanced History setting.
+- Tune terminal font, size, scrollback, colors, log tail defaults, the global Enhanced History setting, and whether terminal context actions appear.
 
 ## Read-only by design
 

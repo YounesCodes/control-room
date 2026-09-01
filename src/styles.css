@@ -1271,6 +1271,112 @@ code,
    Workspace content + terminal panes
    ========================================================================== */
 
+/* ==========================================================================
+   Terminal context bar
+   ========================================================================== */
+
+.terminal-context-bar {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border-faint);
+  background: var(--surface-chrome);
+  color: var(--text-muted);
+  gap: 10px;
+}
+
+.terminal-focus-mode .terminal-context-bar {
+  display: none;
+}
+
+.terminal-context-object {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.terminal-context-object small {
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terminal-context-object code {
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.terminal-context-source {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-context-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.terminal-context-actions button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11.5px;
+  gap: 5px;
+  transition: background var(--motion-fast) var(--ease);
+}
+
+.terminal-context-actions button:hover:not(:disabled) {
+  background: var(--fill-control-hover);
+  color: var(--text);
+}
+
+.terminal-context-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.terminal-context-message {
+  flex-shrink: 0;
+  max-width: 46ch;
+  overflow: hidden;
+  color: var(--warning);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-context-dismiss {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.terminal-context-dismiss:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
 .workspace-content {
   position: relative;
   min-width: 0;

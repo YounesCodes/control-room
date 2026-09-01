@@ -228,6 +228,18 @@ pub struct DockerMount {
     pub propagation: Option<String>,
 }
 
+/// One object named by a reported Enhanced History command. Control Room keeps
+/// it in Workspace memory only.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalContextReference {
+    /// `systemdUnit` or `dockerContainer`.
+    pub kind: String,
+    /// The canonical systemd unit id, or the container name or id as typed.
+    pub id: String,
+    pub source_command: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {
@@ -275,6 +287,7 @@ pub struct AppSettings {
     pub terminal_cyan: String,
     pub default_log_tail: u16,
     pub global_history_enabled: bool,
+    pub terminal_context_actions_enabled: bool,
 }
 
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
@@ -302,6 +315,7 @@ impl Default for AppSettings {
             terminal_cyan: "#65d4d1".into(),
             default_log_tail: 200,
             global_history_enabled: true,
+            terminal_context_actions_enabled: true,
         }
     }
 }

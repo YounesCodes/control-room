@@ -48,6 +48,7 @@ const settings: AppSettings = {
   terminalCyan: "#65d4d1",
   defaultLogTail: 200,
   globalHistoryEnabled: true,
+  terminalContextActionsEnabled: true,
 };
 
 function connection(id: string, displayName: string): SavedConnection {

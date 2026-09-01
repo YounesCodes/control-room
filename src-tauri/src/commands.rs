@@ -9,11 +9,12 @@ use crate::{
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
         HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
         SavedConnection, SavedConnectionInput, SessionStarted, SettingsContract, StreamStarted,
-        SystemdUnit,
+        SystemdUnit, TerminalContextReference,
     },
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
+    terminal_context,
 };
 
 #[tauri::command(async)]
@@ -391,6 +392,13 @@ pub fn start_docker_log_stream(
 #[tauri::command]
 pub fn stop_log_stream(streams: State<'_, StreamManager>, stream_id: String) -> Result<(), String> {
     streams.stop(&stream_id)
+}
+
+/// Parses one reported Enhanced History command into a typed object
+/// reference. This runs no remote operation and touches no stored data.
+#[tauri::command]
+pub fn parse_terminal_context(command: String) -> Option<TerminalContextReference> {
+    terminal_context::parse_terminal_context(&command)
 }
 
 #[tauri::command]

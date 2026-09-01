@@ -5,6 +5,7 @@ mod models;
 mod remote;
 mod session;
 mod ssh;
+mod terminal_context;
 
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
@@ -57,6 +58,7 @@ pub fn run() {
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,
+            commands::parse_terminal_context,
             commands::get_history,
             commands::add_history_entry,
             commands::delete_history_entry,

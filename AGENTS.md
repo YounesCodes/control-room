@@ -57,10 +57,17 @@ DESIGN.md.
    health, lifecycle, restart, port, network, mount, image, and validated Compose
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
-9. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-10. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+9. Derive terminal context only from a completed Enhanced History event and a
+   fixed allowlist of read-only command forms parsed in Rust. Never read
+   keystrokes, scrollback, or terminal output, and never claim context for an
+   ambiguous command, a lifecycle command, or a command aimed at another host,
+   another daemon, or the user manager. Keep the current context in Workspace
+   memory, resolve it against fresh structured data before opening a view, and
+   persist only the opt-out setting.
+10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-11. Do not commit or push unless the user asks.
+12. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -94,3 +101,6 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Terminal Context**: the single object named by the most recent supported
+  Enhanced History command in a Workspace. It lives in memory and is never
+  persisted.

@@ -366,6 +366,16 @@ separate. Mounts omit host sources, while metadata is limited to the validated C
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
 
+When Enhanced History reports a supported read-only command, a single-row context bar sits
+between the tab strip and the active view. It names the object type, the canonical unit id or
+container reference, and the command it came from, then offers two routes: open the object in
+Systemd or Docker, or follow its logs. Rust parses a fixed allowlist of command forms; anything
+ambiguous, piped, expanded, elevated beyond a bare `sudo`, aimed at another host, or naming more
+than one object produces no bar at all. Each action re-reads the live unit or container list before
+navigating, so a removed or ambiguous object reports that in place instead of opening a stale view.
+The bar hides in terminal focus mode, is replaced by the next supported command, and clears on
+dismiss. Nothing about it is persisted except the Settings opt-out.
+
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full
 list usable. The header reports current active and failed totals without presenting zero

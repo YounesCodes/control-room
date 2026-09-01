@@ -14,6 +14,7 @@ import type {
   ConnectionState,
   SavedConnection,
   SessionStateEvent,
+  TerminalContextReference,
   Workspace,
 } from "../types";
 import { StatusDot } from "./StatusDot";
@@ -28,6 +29,7 @@ interface TerminalPaneProps {
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
   onReconnect: () => void;
+  onTerminalContext: (reference: TerminalContextReference) => void;
 }
 
 interface PendingHistory {
@@ -48,6 +50,7 @@ export function TerminalPane({
   onSession,
   onState,
   onReconnect,
+  onTerminalContext,
 }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -60,6 +63,8 @@ export function TerminalPane({
   const earlySessionEventsRef = useRef(new Map<string, SessionStateEvent>());
   const historyPausedRef = useRef(workspace.historyPaused);
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
+  const contextActionsEnabledRef = useRef(settings.terminalContextActionsEnabled);
+  const onTerminalContextRef = useRef(onTerminalContext);
   const visibleRef = useRef(visible);
   const connectionIdRef = useRef(connection.id);
   const onSessionRef = useRef(onSession);
@@ -70,6 +75,8 @@ export function TerminalPane({
 
   historyPausedRef.current = workspace.historyPaused;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
+  contextActionsEnabledRef.current = settings.terminalContextActionsEnabled;
+  onTerminalContextRef.current = onTerminalContext;
   visibleRef.current = visible;
   connectionIdRef.current = connection.id;
   onSessionRef.current = onSession;
@@ -174,6 +181,16 @@ export function TerminalPane({
             globalHistoryEnabledRef.current &&
             !historyPausedRef.current
           ) {
+            // Context follows the same opt-in as History capture: it exists
+            // only for a command the Bash integration reported.
+            if (contextActionsEnabledRef.current) {
+              void api
+                .parseTerminalContext(pending.command)
+                .then((reference) => {
+                  if (reference) onTerminalContextRef.current(reference);
+                })
+                .catch(() => undefined);
+            }
             void api
               .addHistory({
                 connectionId: connectionIdRef.current,

@@ -27,6 +27,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
+import { TerminalContextBar } from "./components/TerminalContextBar";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
@@ -75,6 +76,7 @@ import type {
   SavedConnection,
   SettingsContract,
   SystemdUnit,
+  TerminalContextReference,
   CachedValue,
   Workspace,
   WorkspaceView,
@@ -495,6 +497,7 @@ export function App() {
       containerSelectionId: null,
       containerDetailsCache: {},
       logSource: null,
+      terminalContext: null,
     };
   }
 
@@ -1092,6 +1095,21 @@ export function App() {
             className={settingsOpen ? "workspace-view workspace-view-hidden" : "workspace-view"}
             aria-hidden={settingsOpen || undefined}
           >
+            {activeWorkspace.terminalContext && (
+              <TerminalContextBar
+                key={activeWorkspace.id}
+                connection={activeConnection}
+                reference={activeWorkspace.terminalContext}
+                onDismiss={() => updateWorkspace(activeWorkspace.id, { terminalContext: null })}
+                onOpenSystemd={(systemdSelectionId) =>
+                  updateWorkspace(activeWorkspace.id, { view: "services", systemdSelectionId })
+                }
+                onOpenContainer={(containerSelectionId) =>
+                  updateWorkspace(activeWorkspace.id, { view: "docker", containerSelectionId })
+                }
+                onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+              />
+            )}
             <div
               className={
                 terminalSplitMode ? "workspace-content terminal-pane-layout" : "workspace-content"
@@ -1174,6 +1192,9 @@ export function App() {
                             connectRequested: true,
                             reconnectToken: workspace.reconnectToken + 1,
                           })
+                        }
+                        onTerminalContext={(reference: TerminalContextReference) =>
+                          updateWorkspace(workspace.id, { terminalContext: reference })
                         }
                       />
                     </div>

@@ -205,6 +205,16 @@ export function SettingsPane({
             />{" "}
             Enable Enhanced History globally
           </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={draft.terminalContextActionsEnabled}
+              onChange={(event) =>
+                setDraft({ ...draft, terminalContextActionsEnabled: event.target.checked })
+              }
+            />{" "}
+            Offer inspection actions for the object in the last reported command
+          </label>
         </fieldset>
         <fieldset>
           <legend>SSH environment</legend>
