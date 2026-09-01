@@ -369,7 +369,7 @@ pub struct ScratchpadNote {
     pub id: String,
     pub scope: String,
     pub owner_id: String,
-    pub connection_id: String,
+    pub connection_id: Option<String>,
     pub text: String,
     pub created_at: String,
     pub updated_at: String,
@@ -380,7 +380,7 @@ pub struct ScratchpadNote {
 pub struct ScratchpadNoteInput {
     pub scope: String,
     pub owner_id: String,
-    pub connection_id: String,
+    pub connection_id: Option<String>,
     pub text: String,
 }
 

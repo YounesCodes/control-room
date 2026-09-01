@@ -58,8 +58,9 @@ DESIGN.md.
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
 9. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
-   Connection notes persist across Workspaces. A Workspace note is deleted when
-   its Workspace closes. Never capture terminal or log output automatically.
+   Each Saved Connection has one note, and one global note is shared across all
+   connections and Workspaces. Closing a Workspace deletes neither. Never capture
+   terminal or log output automatically.
 10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
 11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
@@ -94,7 +95,7 @@ account you control.
 - **Container Inspection**: a timestamped, in-memory detail record collected by
   full Docker ID without lifecycle controls or raw inspect JSON in React.
 - **Scratchpad Note**: user-authored plain text stored locally for one Saved
-  Connection or Workspace. It is not encrypted secret storage.
+  Connection or shared globally across the app. It is not encrypted secret storage.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration

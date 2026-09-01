@@ -155,11 +155,11 @@ export const api = {
   workspaceState: () => invoke<PersistedWorkspaceState>("get_workspace_state"),
   saveWorkspaceState: (state: PersistedWorkspaceState) =>
     invoke<void>("save_workspace_state", { state }),
-  scratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string) =>
+  scratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string | null) =>
     invoke<ScratchpadNote | null>("get_scratchpad_note", { scope, ownerId, connectionId }),
   saveScratchpadNote: (input: ScratchpadNoteInput) =>
     invoke<ScratchpadNote>("save_scratchpad_note", { input }),
-  deleteScratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string) =>
+  deleteScratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string | null) =>
     invoke<void>("delete_scratchpad_note", { scope, ownerId, connectionId }),
   historyIntegrationStatus: (connectionId: string) =>
     invoke<boolean>("get_history_integration_status", { connectionId }),

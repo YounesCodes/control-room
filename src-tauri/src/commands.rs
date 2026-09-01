@@ -470,9 +470,9 @@ pub fn get_scratchpad_note(
     database: State<'_, Database>,
     scope: String,
     owner_id: String,
-    connection_id: String,
+    connection_id: Option<String>,
 ) -> Result<Option<ScratchpadNote>, String> {
-    database.get_scratchpad_note(&scope, &owner_id, &connection_id)
+    database.get_scratchpad_note(&scope, &owner_id, connection_id.as_deref())
 }
 
 #[tauri::command]
@@ -488,9 +488,9 @@ pub fn delete_scratchpad_note(
     database: State<'_, Database>,
     scope: String,
     owner_id: String,
-    connection_id: String,
+    connection_id: Option<String>,
 ) -> Result<(), String> {
-    database.delete_scratchpad_note(&scope, &owner_id, &connection_id)
+    database.delete_scratchpad_note(&scope, &owner_id, connection_id.as_deref())
 }
 
 #[tauri::command(async)]

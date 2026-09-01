@@ -295,13 +295,13 @@ export interface PersistedWorkspaceState {
   terminalLayout: import("./lib/terminal-layout").TerminalLayout | null;
 }
 
-export type ScratchpadScope = "connection" | "workspace";
+export type ScratchpadScope = "connection" | "global";
 
 export interface ScratchpadNote {
   id: string;
   scope: ScratchpadScope;
   ownerId: string;
-  connectionId: string;
+  connectionId: string | null;
   text: string;
   createdAt: string;
   updatedAt: string;
@@ -310,7 +310,7 @@ export interface ScratchpadNote {
 export interface ScratchpadNoteInput {
   scope: ScratchpadScope;
   ownerId: string;
-  connectionId: string;
+  connectionId: string | null;
   text: string;
 }
 

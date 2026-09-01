@@ -172,46 +172,17 @@ describe("App Workspace behavior", () => {
     expect(terminal.getAttribute("data-reconnect-token")).toBe("0");
   });
 
-  it("keeps a Workspace open when its Scratchpad cannot be deleted", async () => {
+  it("closes a Workspace without deleting connection or global Scratchpad notes", async () => {
     const user = userEvent.setup();
     const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
     api.listConnections.mockResolvedValue([saved]);
     api.workspaceState.mockResolvedValue(restoredState([saved.id]));
-    api.deleteScratchpadNote.mockRejectedValue(new Error("database busy"));
     render(<App />);
 
     expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
 
-    expect(await screen.findByText(/Scratchpad could not be deleted.*database busy/)).toBeTruthy();
-    expect(screen.getByTestId("terminal-workspace-0")).toBeTruthy();
-    expect(api.closeSession).not.toHaveBeenCalled();
-  });
-
-  it("waits for an active Scratchpad save before deleting and closing its Workspace", async () => {
-    const user = userEvent.setup();
-    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
-    api.listConnections.mockResolvedValue([saved]);
-    api.workspaceState.mockResolvedValue(restoredState([saved.id]));
-    let finishSave: (value: object) => void = () => undefined;
-    api.saveScratchpadNote.mockReturnValue(
-      new Promise((resolve) => {
-        finishSave = resolve;
-      }),
-    );
-    render(<App />);
-
-    await screen.findByTestId("terminal-workspace-0");
-    await user.click(screen.getByRole("button", { name: "Scratchpad" }));
-    await user.click(screen.getByRole("button", { name: "This Workspace" }));
-    const editor = await screen.findByLabelText("Workspace note");
-    fireEvent.change(editor, { target: { value: "Pending write" } });
-    await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalled(), { timeout: 2_000 });
-    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
-    expect(api.deleteScratchpadNote).not.toHaveBeenCalled();
-
-    finishSave({});
-    await waitFor(() => expect(api.deleteScratchpadNote).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
+    expect(api.deleteScratchpadNote).not.toHaveBeenCalled();
   });
 });

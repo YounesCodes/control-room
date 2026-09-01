@@ -1474,6 +1474,78 @@ code,
   align-items: center;
 }
 
+.scratchpad-scope-switch {
+  display: grid;
+  width: min(410px, 48%);
+  flex: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  padding: 4px;
+}
+
+.scratchpad-scope-switch button {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 7px 11px;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.scratchpad-scope-switch button svg {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.scratchpad-scope-switch button:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.scratchpad-scope-switch button[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  background: var(--fill-selected);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.scratchpad-scope-switch button[aria-pressed="true"] svg {
+  color: var(--accent);
+}
+
+.scratchpad-scope-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scratchpad-scope-copy strong {
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.scratchpad-scope-copy span {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scratchpad-scope-switch button[aria-pressed="true"] .scratchpad-scope-copy span {
+  color: var(--text-muted);
+}
+
 .scratchpad-editor {
   display: flex;
   width: 100%;

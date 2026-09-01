@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Eraser, RefreshCw, Trash2 } from "lucide-react";
+import { Eraser, Globe2, Redo2, RefreshCw, Server, Trash2, Undo2 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
@@ -13,38 +13,43 @@ import {
 import type { SavedConnection, ScratchpadScope } from "../types";
 
 type SaveStatus = "saved" | "unsaved" | "saving" | "error";
+const EDIT_HISTORY_LIMIT = 100;
 
-export function ScratchpadPane({
-  connection,
-  workspaceId,
-}: {
-  connection: SavedConnection;
-  workspaceId: string;
-}) {
+export function ScratchpadPane({ connection }: { connection: SavedConnection }) {
   const [scope, setScope] = useState<ScratchpadScope>("connection");
-  const ownerId = scope === "connection" ? connection.id : workspaceId;
+  const ownerId = scope === "connection" ? connection.id : "global";
 
   return (
     <section className="feature-page scratchpad-page">
       <header className="page-heading scratchpad-heading">
         <div>
           <h2>Scratchpad</h2>
-          <p>Plain local notes for this connection or this Workspace.</p>
+          <p>Plain local notes for this connection or the whole app.</p>
         </div>
-        <div className="view-toggle" aria-label="Scratchpad scope">
+        <div className="scratchpad-scope-switch" role="group" aria-label="Scratchpad scope">
           <button
             type="button"
             aria-pressed={scope === "connection"}
+            aria-label={`Connection note for ${connection.displayName}`}
             onClick={() => setScope("connection")}
           >
-            Connection
+            <Server size={17} aria-hidden="true" />
+            <span className="scratchpad-scope-copy">
+              <strong>Connection</strong>
+              <span title={connection.displayName}>{connection.displayName}</span>
+            </span>
           </button>
           <button
             type="button"
-            aria-pressed={scope === "workspace"}
-            onClick={() => setScope("workspace")}
+            aria-pressed={scope === "global"}
+            aria-label="Global note for all connections"
+            onClick={() => setScope("global")}
           >
-            This Workspace
+            <Globe2 size={17} aria-hidden="true" />
+            <span className="scratchpad-scope-copy">
+              <strong>Global</strong>
+              <span>All connections</span>
+            </span>
           </button>
         </div>
       </header>
@@ -75,7 +80,11 @@ function ScratchpadEditor({
   const [status, setStatus] = useState<SaveStatus>("saved");
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [, setHistoryVersion] = useState(0);
   const textRef = useRef("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const undoRef = useRef<string[]>([]);
+  const redoRef = useRef<string[]>([]);
   const savedTextRef = useRef("");
   const pendingRef = useRef<string | null>(null);
   const savingRef = useRef(false);
@@ -91,7 +100,7 @@ function ScratchpadEditor({
     setLoadFailed(false);
     setError(null);
     void api
-      .scratchpadNote(scope, ownerId, connection.id)
+      .scratchpadNote(scope, ownerId, scope === "connection" ? connection.id : null)
       .then((note) => {
         if (!current) return;
         const draft = readScratchpadDraft(scope, ownerId);
@@ -100,6 +109,9 @@ function ScratchpadEditor({
         if (draft === saved) clearScratchpadDraft(scope, ownerId);
         savedTextRef.current = saved;
         textRef.current = initial;
+        undoRef.current = [];
+        redoRef.current = [];
+        setHistoryVersion((current) => current + 1);
         setText(initial);
         setHasRecord(Boolean(note));
         setStatus(initial === saved ? "saved" : "unsaved");
@@ -112,6 +124,9 @@ function ScratchpadEditor({
           textRef.current = draft;
           setText(draft);
         }
+        undoRef.current = [];
+        redoRef.current = [];
+        setHistoryVersion((current) => current + 1);
         setError(`Could not load the SQLite note: ${errorMessage(caught)}`);
         setLoadFailed(true);
         setStatus("error");
@@ -122,6 +137,41 @@ function ScratchpadEditor({
       mountedRef.current = false;
     };
   }, [connection.id, loadVersion, ownerId, scope]);
+
+  function setEditedText(nextText: string) {
+    const currentText = textRef.current;
+    if (nextText === currentText) return;
+    undoRef.current.push(currentText);
+    if (undoRef.current.length > EDIT_HISTORY_LIMIT) undoRef.current.shift();
+    redoRef.current = [];
+    textRef.current = nextText;
+    setText(nextText);
+    setHistoryVersion((current) => current + 1);
+  }
+
+  function restoreText(nextText: string) {
+    textRef.current = nextText;
+    setText(nextText);
+    setHistoryVersion((current) => current + 1);
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextText.length, nextText.length);
+    });
+  }
+
+  function undoEdit() {
+    const previousText = undoRef.current.pop();
+    if (previousText === undefined) return;
+    redoRef.current.push(textRef.current);
+    restoreText(previousText);
+  }
+
+  function redoEdit() {
+    const nextText = redoRef.current.pop();
+    if (nextText === undefined) return;
+    undoRef.current.push(textRef.current);
+    restoreText(nextText);
+  }
 
   async function runFlush() {
     if (savingRef.current || deletingRef.current) return;
@@ -137,7 +187,7 @@ function ScratchpadEditor({
         await api.saveScratchpadNote({
           scope,
           ownerId,
-          connectionId: connection.id,
+          connectionId: scope === "connection" ? connection.id : null,
           text: snapshot,
         });
         savedTextRef.current = snapshot;
@@ -212,9 +262,12 @@ function ScratchpadEditor({
     await quiesce();
     setError(null);
     try {
-      await api.deleteScratchpadNote(scope, ownerId, connection.id);
+      await api.deleteScratchpadNote(scope, ownerId, scope === "connection" ? connection.id : null);
       savedTextRef.current = "";
       textRef.current = "";
+      undoRef.current = [];
+      redoRef.current = [];
+      setHistoryVersion((current) => current + 1);
       clearScratchpadDraft(scope, ownerId);
       setText("");
       setHasRecord(false);
@@ -238,7 +291,7 @@ function ScratchpadEditor({
     );
   }
 
-  const scopeLabel = scope === "connection" ? "Connection note" : "Workspace note";
+  const scopeLabel = scope === "connection" ? "Connection note" : "Global note";
   return (
     <div className="scratchpad-editor">
       <div className="scratchpad-meta">
@@ -247,7 +300,7 @@ function ScratchpadEditor({
           <span>
             {scope === "connection"
               ? `Shared by every Workspace for ${connection.displayName}`
-              : "Deleted when this Workspace is closed"}
+              : "Shared by every Saved Connection and Workspace"}
           </span>
         </div>
         <span className={`scratchpad-save-state scratchpad-save-${status}`} role="status">
@@ -261,10 +314,23 @@ function ScratchpadEditor({
         </span>
       </div>
       <textarea
+        ref={textareaRef}
         aria-label={scopeLabel}
         value={text}
         maxLength={MAX_SCRATCHPAD_CHARS}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => setEditedText(event.target.value)}
+        onKeyDown={(event) => {
+          if (!(event.ctrlKey || event.metaKey)) return;
+          const key = event.key.toLowerCase();
+          if (key === "z") {
+            event.preventDefault();
+            if (event.shiftKey) redoEdit();
+            else undoEdit();
+          } else if (key === "y") {
+            event.preventDefault();
+            redoEdit();
+          }
+        }}
         placeholder="Deployment paths, service names, reminders…"
         spellCheck={false}
       />
@@ -293,8 +359,26 @@ function ScratchpadEditor({
           <button
             className="secondary-button"
             type="button"
+            disabled={undoRef.current.length === 0}
+            onClick={undoEdit}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={14} /> Undo
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={redoRef.current.length === 0}
+            onClick={redoEdit}
+            title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+          >
+            <Redo2 size={14} /> Redo
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
             disabled={!text}
-            onClick={() => setText("")}
+            onClick={() => setEditedText("")}
           >
             <Eraser size={14} /> Clear text
           </button>

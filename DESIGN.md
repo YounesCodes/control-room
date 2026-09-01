@@ -395,12 +395,12 @@ Missing or conflicting evidence stays unavailable or ambiguous. Firewall and con
 Workspace memory only. The view does not include Unix sockets, scan networks, test reachability, or
 collect full process arguments.
 
-Scratchpad is a plain-text local editor with connection and Workspace scopes. It
+Scratchpad is a plain-text local editor with connection and global scopes. Each
+Saved Connection has its own note; the global note appears from every connection. It
 autosaves through typed SQLite commands after a short debounce and keeps a
 WebView-local fallback draft until SQLite confirms the same text. It never
 captures terminal or log output, renders Markdown or raw HTML, contacts a Remote
-Host, or claims to protect secrets. Connection notes survive Workspace closure;
-closing a Workspace first quiesces pending writes and deletes its Workspace note.
+Host, or claims to protect secrets. Closing a Workspace deletes neither note.
 
 ---
 

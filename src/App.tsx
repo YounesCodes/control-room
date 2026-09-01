@@ -558,17 +558,6 @@ export function App() {
     const workspace = workspaces.find((item) => item.id === id);
     if (!workspace) return;
     setActionError(null);
-    try {
-      await quiesceScratchpad("workspace", workspace.id);
-      await api.deleteScratchpadNote("workspace", workspace.id, workspace.connectionId);
-      clearScratchpadDraft("workspace", workspace.id);
-    } catch (caught) {
-      resumeScratchpad("workspace", workspace.id);
-      setActionError(
-        `Could not close Workspace because its Scratchpad could not be deleted: ${errorMessage(caught)}`,
-      );
-      return;
-    }
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     const index = workspaces.findIndex((item) => item.id === id);
     const remaining = workspaces.filter((item) => item.id !== id);
@@ -608,28 +597,13 @@ export function App() {
     setActionError(null);
     try {
       await quiesceScratchpad("connection", connection.id);
-      for (const workspace of workspaces) {
-        if (workspace.connectionId === connection.id) {
-          await quiesceScratchpad("workspace", workspace.id);
-        }
-      }
       await api.deleteConnection(connection.id);
     } catch (caught) {
       resumeScratchpad("connection", connection.id);
-      for (const workspace of workspaces) {
-        if (workspace.connectionId === connection.id) {
-          resumeScratchpad("workspace", workspace.id);
-        }
-      }
       setActionError(`Could not delete Saved Connection: ${errorMessage(caught)}`);
       return;
     }
     clearScratchpadDraft("connection", connection.id);
-    for (const workspace of workspaces) {
-      if (workspace.connectionId === connection.id) {
-        clearScratchpadDraft("workspace", workspace.id);
-      }
-    }
     const removal = removeConnectionWorkspaces(
       workspaces,
       connection.id,
@@ -1305,11 +1279,7 @@ export function App() {
                 />
               )}
               {activeWorkspace.view === "scratchpad" && (
-                <ScratchpadPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  workspaceId={activeWorkspace.id}
-                />
+                <ScratchpadPane key={activeWorkspace.id} connection={activeConnection} />
               )}
             </div>
           </section>
