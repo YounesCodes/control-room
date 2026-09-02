@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Diagnostics, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -28,6 +28,7 @@ Saved Connection
          +-- listening TCP and UDP ports
          +-- Docker containers
          +-- journald and Docker logs
+         +-- per-unit service diagnostics
          +-- Enhanced History, when enabled
 ```
 
@@ -74,6 +75,29 @@ All structured inspection is read-only. Control Room does not scan networks, tes
 - Choose a tail size, follow a live stream, pause or resume rendering, stop a stream, and clear the view.
 - Search the lines already loaded in the current view.
 - Keep each Log Stream independent and in memory. Control Room does not persist fetched logs.
+
+### Service diagnostics
+
+Diagnostics gathers what one systemd unit reports about itself into four sections: unit state and
+exit facts, a bounded journal excerpt, one level of dependencies with their current states, and the
+listening sockets attributed to the unit.
+
+Each section is its own read. It carries the time it was read and where the facts came from, it
+refreshes on its own, and it can be cancelled on its own. A section that fails leaves the others
+alone, so a port read denied by permissions does not hide the journal. Only a permission failure
+offers a sudo retry, and the password is used for that one section and never saved.
+
+The sections state facts and stop there. Control Room names no cause and suggests no remedy. Where
+the evidence is incomplete it says so: an inactive one-shot unit that succeeded is labelled as not a
+failure, and when no listener matches the unit but some listeners on the host had no unambiguous
+owner, the view says that rather than reporting none. Timers and mounts get the three sections that
+apply to them, and the listener section is reported as not applicable rather than collected and
+empty.
+
+Nothing is written to disk. The journal excerpt is bounded to at most 500 entries, dependencies to
+one level and 40 resolved units, and results live in Workspace memory until the view is left. For
+administrative work the view types `systemctl status` into the Terminal Session and waits for you to
+press Enter.
 
 ### Enhanced History
 

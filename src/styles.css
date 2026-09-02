@@ -1268,6 +1268,183 @@ code,
 }
 
 /* ==========================================================================
+   Service diagnostics
+   ========================================================================== */
+
+.diagnostics-page {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostics-controls {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 16px;
+  gap: 12px;
+}
+
+.diagnostics-controls label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.diagnostics-controls span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.diagnostics-controls select:first-of-type {
+  max-width: 340px;
+}
+
+.diagnostics-sections {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 16px 8px;
+  gap: 8px;
+}
+
+.diagnostics-section {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.diagnostics-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diagnostics-section h3 {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.diagnostics-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diagnostics-status {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.diagnostics-status-partial {
+  color: var(--warning);
+}
+
+.diagnostics-provenance,
+.diagnostics-note {
+  margin: 4px 0 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.diagnostics-headline {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.diagnostics-facts {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.diagnostics-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 6px;
+  gap: 8px;
+}
+
+.diagnostics-journal {
+  display: flex;
+  max-height: 260px;
+  flex-direction: column;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  white-space: pre;
+}
+
+.diagnostics-relation {
+  margin-top: 8px;
+}
+
+.diagnostics-relation h4 {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.diagnostics-relation ul {
+  display: flex;
+  margin: 4px 0 0;
+  flex-wrap: wrap;
+  padding: 0;
+  gap: 4px 10px;
+  list-style: none;
+}
+
+.diagnostics-relation li {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11.5px;
+}
+
+.diagnostics-relation small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.diagnostics-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0 16px 12px;
+  gap: 8px;
+}
+
+.diagnostics-footer small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.unit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ==========================================================================
    Workspace content + terminal panes
    ========================================================================== */
 

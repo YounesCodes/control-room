@@ -1,5 +1,6 @@
 mod commands;
 mod database;
+mod diagnostics;
 mod history;
 mod models;
 mod remote;
@@ -7,6 +8,7 @@ mod session;
 mod ssh;
 
 use database::Database;
+use diagnostics::DiagnosticCancellations;
 use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
 use tauri::Manager;
@@ -17,6 +19,7 @@ pub fn run() {
         .manage(SessionManager::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
+        .manage(DiagnosticCancellations::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -54,6 +57,8 @@ pub fn run() {
             commands::inspect_firewall,
             commands::inspect_connections,
             commands::inspect_container,
+            commands::collect_service_diagnostic,
+            commands::cancel_service_diagnostic,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

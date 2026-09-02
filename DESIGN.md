@@ -105,7 +105,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  Diagnostics, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -365,6 +365,13 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Diagnostics is a stack of cards, one per section, each with its own status word, source line, and
+refresh control. The cards look alike on purpose: no card is the summary, and none of them is a
+verdict. Qualifiers are written as plain sentences under the heading rather than as icons, because
+the difference between "no listener was found" and "no listener was attributed and owners were
+incomplete" cannot survive being compressed into a symbol. The header repeats one line above every
+card: facts as the host reported them, no cause inferred.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full

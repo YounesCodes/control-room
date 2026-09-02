@@ -184,6 +184,88 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export type DiagnosticSectionKind = "state" | "journal" | "dependencies" | "listeners";
+
+export interface UnitStateFacts {
+  id: string;
+  known: boolean;
+  description: string | null;
+  loadState: string | null;
+  activeState: string | null;
+  subState: string | null;
+  unitFileState: string | null;
+  unitType: string | null;
+  remainAfterExit: boolean | null;
+  result: string | null;
+  mainPid: number | null;
+  execMainPid: number | null;
+  execMainStatus: number | null;
+  execMainCode: string | null;
+  restartCount: number | null;
+  conditionResult: boolean | null;
+  assertResult: boolean | null;
+  loadError: string | null;
+  fragmentPath: string | null;
+  stateChangeTimestamp: string | null;
+  activeEnterTimestamp: string | null;
+  inactiveEnterTimestamp: string | null;
+}
+
+export interface JournalExcerpt {
+  lines: string[];
+  requestedLines: number;
+  reachedRequestedLines: boolean;
+  empty: boolean;
+}
+
+export interface DependencyUnit {
+  id: string;
+  loadState: string | null;
+  activeState: string | null;
+  subState: string | null;
+}
+
+export interface DependencyRelation {
+  kind: string;
+  units: DependencyUnit[];
+}
+
+export interface DependencyFacts {
+  relations: DependencyRelation[];
+  namedUnits: number;
+  resolvedUnits: number;
+  truncated: boolean;
+  statesResolved: boolean;
+}
+
+export interface ListenerEvidence {
+  sockets: ListeningSocket[];
+  totalListeners: number;
+  ownershipComplete: boolean;
+}
+
+export interface ServiceDiagnosticSection {
+  unit: string;
+  kind: DiagnosticSectionKind;
+  status: "collected" | "partial" | "notApplicable";
+  source: string;
+  collectedAt: string;
+  note: string | null;
+  state: UnitStateFacts | null;
+  journal: JournalExcerpt | null;
+  dependencies: DependencyFacts | null;
+  listeners: ListenerEvidence | null;
+}
+
+export interface ServiceDiagnosticRequest {
+  connectionId: string;
+  unit: string;
+  kind: DiagnosticSectionKind;
+  operationId: string;
+  journalLines: number | null;
+  sudoPassword: string | null;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -237,7 +319,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "diagnostics"
+  | "history"
+  | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];
@@ -279,6 +369,7 @@ export interface Workspace {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
+  diagnosticsUnitId: string | null;
 }
 
 interface PersistedWorkspace {

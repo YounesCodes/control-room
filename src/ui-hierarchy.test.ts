@@ -48,6 +48,24 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps service diagnostics factual, in memory, and out of command construction", () => {
+    const diagnosticsSource = readFileSync(
+      new URL("./pages/DiagnosticsPane.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain('{ id: "diagnostics", label: "Diagnostics", icon: Stethoscope }');
+    expect(diagnosticsSource).toContain("EVIDENCE_NOTICE");
+    // Sections are read through the typed Rust commands. The pane builds no
+    // remote command of its own and writes nothing to disk.
+    expect(diagnosticsSource).toContain("api.collectServiceDiagnostic");
+    expect(diagnosticsSource).not.toContain("journalctl");
+    expect(diagnosticsSource).not.toContain("systemctl show");
+    expect(diagnosticsSource).not.toContain("api.writeSession");
+    expect(diagnosticsSource).not.toContain("localStorage");
+    expect(diagnosticsSource).not.toContain("saveWorkspaceState");
+    expect(diagnosticsSource).not.toContain("writeTextFile");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

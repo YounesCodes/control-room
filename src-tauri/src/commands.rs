@@ -3,6 +3,9 @@ use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
     database::{Database, validate_connection_input},
+    diagnostics::{
+        self, DiagnosticCancellations, ServiceDiagnosticRequest, ServiceDiagnosticSection,
+    },
     history,
     models::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
@@ -330,6 +333,26 @@ pub fn inspect_container(
     remote::inspect_container(&connection, &container_id, sudo_password)
 }
 
+#[tauri::command(async)]
+pub fn collect_service_diagnostic(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    cancellations: State<'_, DiagnosticCancellations>,
+    request: ServiceDiagnosticRequest,
+) -> Result<ServiceDiagnosticSection, String> {
+    let _permit = limiter.acquire(&request.connection_id)?;
+    let connection = database.get_connection(&request.connection_id)?;
+    diagnostics::collect_section(&connection, &request, &cancellations)
+}
+
+#[tauri::command]
+pub fn cancel_service_diagnostic(
+    cancellations: State<'_, DiagnosticCancellations>,
+    operation_id: String,
+) {
+    cancellations.cancel(&operation_id);
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn start_journal_stream(
@@ -548,6 +571,7 @@ mod tests {
             "inspect_firewall",
             "inspect_connections",
             "inspect_container",
+            "collect_service_diagnostic",
             "start_journal_stream",
             "start_docker_log_stream",
             "get_history_integration_status",

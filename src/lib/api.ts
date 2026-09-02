@@ -15,6 +15,8 @@ import type {
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
+  ServiceDiagnosticRequest,
+  ServiceDiagnosticSection,
   ScratchpadNote,
   ScratchpadNoteInput,
   ScratchpadScope,
@@ -110,6 +112,13 @@ export const api = {
       containerId,
       sudoPassword,
     }),
+  // Diagnostic sections are not wrapped in the shared inspection timeout. A
+  // section can take two bounded round trips, and the user cancels it rather
+  // than a timer deciding for them.
+  collectServiceDiagnostic: (request: ServiceDiagnosticRequest) =>
+    invoke<ServiceDiagnosticSection>("collect_service_diagnostic", { request }),
+  cancelServiceDiagnostic: (operationId: string) =>
+    invoke<void>("cancel_service_diagnostic", { operationId }),
   startJournalStream: (
     connectionId: string,
     service: string,

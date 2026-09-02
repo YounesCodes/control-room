@@ -69,6 +69,7 @@ describe("ServicesPane failed units view", () => {
         ])}
         onCacheChange={vi.fn()}
         onViewLogs={onViewLogs}
+        onOpenDiagnostics={vi.fn()}
       />,
     );
 
@@ -86,6 +87,24 @@ describe("ServicesPane failed units view", () => {
     expect(onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "backup.timer" });
   });
 
+  it("opens diagnostics for the selected unit", async () => {
+    const user = userEvent.setup();
+    const onOpenDiagnostics = vi.fn();
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("web.service", "service", "failed", "failed")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenDiagnostics={onOpenDiagnostics}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /web.service/i }));
+    await user.click(screen.getByRole("button", { name: "Diagnostics" }));
+    expect(onOpenDiagnostics).toHaveBeenCalledWith("web.service");
+  });
+
   it("describes zero failures as a scoped current result", () => {
     render(
       <ServicesPane
@@ -93,6 +112,7 @@ describe("ServicesPane failed units view", () => {
         cache={cache([unit("web.service", "service", "active", "running")])}
         onCacheChange={vi.fn()}
         onViewLogs={vi.fn()}
+        onOpenDiagnostics={vi.fn()}
       />,
     );
 

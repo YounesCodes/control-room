@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileClock, RefreshCw, Search } from "lucide-react";
+import { FileClock, RefreshCw, Search, Stethoscope } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
@@ -12,12 +12,14 @@ export function ServicesPane({
   cache,
   onCacheChange,
   onViewLogs,
+  onOpenDiagnostics,
   focusId = null,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
   onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
+  onOpenDiagnostics: (unitId: string) => void;
   focusId?: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -197,13 +199,22 @@ export function ServicesPane({
                 <dd>{selected.unitFileState ?? "Unknown"}</dd>
               </div>
             </dl>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
-            >
-              <FileClock size={15} /> View journal
-            </button>
+            <div className="unit-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
+              >
+                <FileClock size={15} /> View journal
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onOpenDiagnostics(selected.id)}
+              >
+                <Stethoscope size={15} /> Diagnostics
+              </button>
+            </div>
           </>
         ) : (
           <EmptyState title="Select a unit" />

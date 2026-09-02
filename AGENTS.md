@@ -61,10 +61,18 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Keep Service Diagnostics factual. Compose separately typed read-only
+    operations, one per section, each with its own collection time, source,
+    refresh, and cancel. A failing section never invalidates another. Bound the
+    journal excerpt and keep dependency expansion to one level. Never name a
+    cause, assert causality from ordering, suggest a remedy, or collect
+    environment values, command lines, or health logs. Report missing evidence
+    as missing rather than as agreement. Sudo retry is per failed section, only
+    after a permission error, and never saved.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -98,5 +106,8 @@ account you control.
   Connection or shared globally across the app. It is not encrypted secret storage.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
+- **Diagnostic Section**: one bounded read-only view of a single Systemd Unit,
+  with its own source, collection time, lifecycle, and failure. It reports
+  facts and never a cause.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.

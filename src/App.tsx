@@ -19,6 +19,7 @@ import {
   Server,
   Settings,
   SquareTerminal,
+  Stethoscope,
   StickyNote,
   Trash2,
   X,
@@ -56,6 +57,7 @@ import {
   updateWorkspaceConnectionSnapshots,
   workspaceDisplayLabel,
 } from "./lib/workspace-lifecycle";
+import { DiagnosticsPane } from "./pages/DiagnosticsPane";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
@@ -97,6 +99,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
+  { id: "diagnostics", label: "Diagnostics", icon: Stethoscope },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
@@ -499,6 +502,7 @@ export function App() {
       containerSelectionId: null,
       containerDetailsCache: {},
       logSource: null,
+      diagnosticsUnitId: null,
     };
   }
 
@@ -1202,6 +1206,12 @@ export function App() {
                   cache={activeWorkspace.servicesCache}
                   onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                  onOpenDiagnostics={(diagnosticsUnitId) =>
+                    updateWorkspace(activeWorkspace.id, {
+                      view: "diagnostics",
+                      diagnosticsUnitId,
+                    })
+                  }
                   focusId={activeWorkspace.systemdSelectionId}
                 />
               )}
@@ -1253,6 +1263,21 @@ export function App() {
                     updateContainersCache(activeWorkspace.id, cache)
                   }
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
+                />
+              )}
+              {activeWorkspace.view === "diagnostics" && (
+                <DiagnosticsPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  servicesCache={activeWorkspace.servicesCache}
+                  onServicesCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
+                  unitId={activeWorkspace.diagnosticsUnitId}
+                  onUnitChange={(diagnosticsUnitId) =>
+                    updateWorkspace(activeWorkspace.id, { diagnosticsUnitId })
+                  }
+                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
+                  onPaste={pasteIntoTerminal}
+                  canPaste={Boolean(activeWorkspace.sessionId)}
                 />
               )}
               {activeWorkspace.view === "history" && (
