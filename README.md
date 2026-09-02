@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Snippets, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -74,6 +74,32 @@ All structured inspection is read-only. Control Room does not scan networks, tes
 - Choose a tail size, follow a live stream, pause or resume rendering, stop a stream, and clear the view.
 - Search the lines already loaded in the current view.
 - Keep each Log Stream independent and in memory. Control Room does not persist fetched logs.
+
+### Snippets
+
+A snippet is a one-line command template with named parameters, such as
+`journalctl -u {{service}} -n {{lines}}`. You fill in the values, read the finished command, and
+insert it into the terminal. Control Room never runs it: insertion puts the text at the cursor
+without Enter, and nothing happens until you press it.
+
+Parameters are typed. A string is single-quoted with any embedded quote closed and reopened, so a
+value containing `;` or `$(...)` stays one argument. An integer is parsed, range-checked, and written
+bare. A choice must be one of the values the snippet declares. Control characters are refused before
+anything is rendered, and there is no raw mode, because a raw mode would remove the only guarantee
+the preview makes.
+
+The preview and the inserted text are the same string. Rust renders it from the stored template, and
+React only displays what came back, so what you read is what goes in. A value that is not usable
+produces an error next to that field and no preview at all.
+
+Templates are one command line: line breaks, tabs, and other control characters are refused when the
+snippet is saved. A template that names a parameter with no definition, defines one it never uses, or
+defines the same one twice is refused too, so a snippet cannot prompt for a value that goes nowhere.
+Snippets are Bash-only and say so, because quoting rules are not portable.
+
+Snippets are stored locally in SQLite: name, template, parameter definitions, scope, and order. A
+snippet belongs either to every connection or to one Saved Connection, and deleting that connection
+deletes its snippets. Values you enter are never stored, and neither is any output.
 
 ### Enhanced History
 

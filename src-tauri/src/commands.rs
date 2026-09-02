@@ -13,6 +13,7 @@ use crate::{
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
+    snippets::{self, CommandSnippet, CommandSnippetInput, SnippetRender},
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
 };
 
@@ -488,6 +489,51 @@ pub fn save_workspace_state(
     state: PersistedWorkspaceState,
 ) -> Result<(), String> {
     database.save_workspace_state(&state)
+}
+
+/// Snippets are stored, rendered, and validated in Rust. React sends parameter
+/// values and receives the finished text; it never assembles a command itself.
+#[tauri::command]
+pub fn list_command_snippets(
+    database: State<'_, Database>,
+    connection_id: Option<String>,
+) -> Result<Vec<CommandSnippet>, String> {
+    database.list_command_snippets(connection_id.as_deref())
+}
+
+#[tauri::command]
+pub fn save_command_snippet(
+    database: State<'_, Database>,
+    input: CommandSnippetInput,
+) -> Result<CommandSnippet, String> {
+    database.save_command_snippet(input)
+}
+
+#[tauri::command]
+pub fn delete_command_snippet(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_command_snippet(&id)
+}
+
+#[tauri::command]
+pub fn move_command_snippet(
+    database: State<'_, Database>,
+    id: String,
+    direction: String,
+    connection_id: Option<String>,
+) -> Result<Vec<CommandSnippet>, String> {
+    database.move_command_snippet(&id, &direction, connection_id.as_deref())
+}
+
+/// The snippet is read from the database rather than taken from the caller, so
+/// the text that is previewed came from the stored template.
+#[tauri::command]
+pub fn render_command_snippet(
+    database: State<'_, Database>,
+    id: String,
+    values: std::collections::HashMap<String, String>,
+) -> Result<SnippetRender, String> {
+    let snippet = database.get_command_snippet(&id)?;
+    Ok(snippets::render(&snippet, &values))
 }
 
 #[tauri::command]

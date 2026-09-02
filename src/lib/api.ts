@@ -1,6 +1,8 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
+  CommandSnippet,
+  CommandSnippetInput,
   ConnectionGroup,
   ConnectionTag,
   DockerContainer,
@@ -19,6 +21,7 @@ import type {
   ScratchpadNoteInput,
   ScratchpadScope,
   SettingsContract,
+  SnippetRender,
   SystemdUnit,
 } from "../types";
 
@@ -155,6 +158,17 @@ export const api = {
   workspaceState: () => invoke<PersistedWorkspaceState>("get_workspace_state"),
   saveWorkspaceState: (state: PersistedWorkspaceState) =>
     invoke<void>("save_workspace_state", { state }),
+  // Snippet text is rendered in Rust from the stored template, so the preview
+  // and the inserted text are the same string.
+  listCommandSnippets: (connectionId: string | null) =>
+    invoke<CommandSnippet[]>("list_command_snippets", { connectionId }),
+  saveCommandSnippet: (input: CommandSnippetInput) =>
+    invoke<CommandSnippet>("save_command_snippet", { input }),
+  deleteCommandSnippet: (id: string) => invoke<void>("delete_command_snippet", { id }),
+  moveCommandSnippet: (id: string, direction: "up" | "down", connectionId: string | null) =>
+    invoke<CommandSnippet[]>("move_command_snippet", { id, direction, connectionId }),
+  renderCommandSnippet: (id: string, values: Record<string, string>) =>
+    invoke<SnippetRender>("render_command_snippet", { id, values }),
   scratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string | null) =>
     invoke<ScratchpadNote | null>("get_scratchpad_note", { scope, ownerId, connectionId }),
   saveScratchpadNote: (input: ScratchpadNoteInput) =>

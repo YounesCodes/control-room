@@ -5,13 +5,16 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::models::{
-    AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
-    LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
-    SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
+use crate::{
+    models::{
+        AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
+        LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
+    },
+    snippets::{self, CommandSnippet, CommandSnippetInput},
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 6;
+const LATEST_SCHEMA_VERSION: i64 = 7;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -729,6 +732,206 @@ impl Database {
         Ok(note)
     }
 
+    pub fn list_command_snippets(
+        &self,
+        connection_id: Option<&str>,
+    ) -> Result<Vec<CommandSnippet>, String> {
+        if let Some(connection_id) = connection_id {
+            validate_uuid(connection_id, "Saved Connection")?;
+        }
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT id, name, template, parameters, shell, connection_id, position, created_at, updated_at FROM command_snippets WHERE connection_id IS NULL OR connection_id = ?1 ORDER BY position, created_at",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![connection_id], map_command_snippet)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn get_command_snippet(&self, id: &str) -> Result<CommandSnippet, String> {
+        validate_uuid(id, "Snippet")?;
+        self.connection
+            .lock()
+            .query_row(
+                "SELECT id, name, template, parameters, shell, connection_id, position, created_at, updated_at FROM command_snippets WHERE id = ?1",
+                [id],
+                map_command_snippet,
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Snippet not found".to_string())
+    }
+
+    pub fn save_command_snippet(
+        &self,
+        input: CommandSnippetInput,
+    ) -> Result<CommandSnippet, String> {
+        snippets::validate_input(&input)?;
+        if let Some(id) = input.id.as_deref() {
+            validate_uuid(id, "Snippet")?;
+        }
+        if let Some(connection_id) = input.connection_id.as_deref() {
+            validate_uuid(connection_id, "Saved Connection")?;
+        }
+        let parameters = serde_json::to_string(&input.parameters)
+            .map_err(|error| format!("Snippet parameters could not be stored: {error}"))?;
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        if let Some(connection_id) = input.connection_id.as_deref() {
+            let exists: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM saved_connections WHERE id = ?1)",
+                    [connection_id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| error.to_string())?;
+            if !exists {
+                return Err("Saved Connection not found".into());
+            }
+        }
+        let now = Utc::now().to_rfc3339();
+        let id = match input.id {
+            Some(id) => {
+                let changed = transaction
+                    .execute(
+                        "UPDATE command_snippets SET name = ?2, template = ?3, parameters = ?4, connection_id = ?5, updated_at = ?6 WHERE id = ?1",
+                        params![
+                            id,
+                            input.name.trim(),
+                            input.template,
+                            parameters,
+                            input.connection_id,
+                            now
+                        ],
+                    )
+                    .map_err(|error| error.to_string())?;
+                if changed == 0 {
+                    return Err("Snippet not found".into());
+                }
+                id
+            }
+            None => {
+                let total: i64 = transaction
+                    .query_row("SELECT COUNT(*) FROM command_snippets", [], |row| {
+                        row.get(0)
+                    })
+                    .map_err(|error| error.to_string())?;
+                if total >= snippets::MAX_SNIPPETS as i64 {
+                    return Err(format!(
+                        "Control Room keeps at most {} snippets",
+                        snippets::MAX_SNIPPETS
+                    ));
+                }
+                let position: i64 = transaction
+                    .query_row(
+                        "SELECT COALESCE(MAX(position), -1) + 1 FROM command_snippets",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| error.to_string())?;
+                let id = Uuid::new_v4().to_string();
+                transaction
+                    .execute(
+                        "INSERT INTO command_snippets (id, name, template, parameters, shell, connection_id, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                        params![
+                            id,
+                            input.name.trim(),
+                            input.template,
+                            parameters,
+                            snippets::SNIPPET_SHELL,
+                            input.connection_id,
+                            position,
+                            now
+                        ],
+                    )
+                    .map_err(|error| error.to_string())?;
+                id
+            }
+        };
+        let snippet = transaction
+            .query_row(
+                "SELECT id, name, template, parameters, shell, connection_id, position, created_at, updated_at FROM command_snippets WHERE id = ?1",
+                [&id],
+                map_command_snippet,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(snippet)
+    }
+
+    pub fn delete_command_snippet(&self, id: &str) -> Result<(), String> {
+        validate_uuid(id, "Snippet")?;
+        self.connection
+            .lock()
+            .execute("DELETE FROM command_snippets WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn move_command_snippet(
+        &self,
+        id: &str,
+        direction: &str,
+        connection_id: Option<&str>,
+    ) -> Result<Vec<CommandSnippet>, String> {
+        validate_uuid(id, "Snippet")?;
+        if direction != "up" && direction != "down" {
+            return Err("Snippet move direction is invalid".into());
+        }
+        if let Some(connection_id) = connection_id {
+            validate_uuid(connection_id, "Saved Connection")?;
+        }
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let position: i64 = transaction
+            .query_row(
+                "SELECT position FROM command_snippets WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Snippet not found".to_string())?;
+        let comparison = if direction == "up" { "<" } else { ">" };
+        let order = if direction == "up" { "DESC" } else { "ASC" };
+        // Only snippets the same list shows can swap places, so a reorder in
+        // one Workspace never moves a snippet the user cannot see.
+        let query = format!(
+            "SELECT id, position FROM command_snippets WHERE position {comparison} ?1 AND (connection_id IS NULL OR connection_id = ?2) ORDER BY position {order} LIMIT 1"
+        );
+        let neighbor: Option<(String, i64)> = transaction
+            .query_row(&query, params![position, connection_id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some((neighbor_id, neighbor_position)) = neighbor {
+            transaction
+                .execute(
+                    "UPDATE command_snippets SET position = ?2 WHERE id = ?1",
+                    params![id, neighbor_position],
+                )
+                .map_err(|error| error.to_string())?;
+            transaction
+                .execute(
+                    "UPDATE command_snippets SET position = ?2 WHERE id = ?1",
+                    params![neighbor_id, position],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction.commit().map_err(|error| error.to_string())?;
+        drop(connection);
+        self.list_command_snippets(connection_id)
+    }
+
     pub fn delete_scratchpad_note(
         &self,
         scope: &str,
@@ -1122,7 +1325,52 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 7 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE command_snippets (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    template TEXT NOT NULL,
+                    parameters TEXT NOT NULL,
+                    shell TEXT NOT NULL CHECK(shell IN ('bash')),
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX idx_command_snippets_connection
+                ON command_snippets(connection_id);
+
+                PRAGMA user_version = 7;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
+}
+
+fn map_command_snippet(row: &rusqlite::Row<'_>) -> rusqlite::Result<CommandSnippet> {
+    let parameters: String = row.get(3)?;
+    Ok(CommandSnippet {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        template: row.get(2)?,
+        // A row written by an older or hand-edited database should not take the
+        // whole list down, so unreadable parameters read as none.
+        parameters: serde_json::from_str(&parameters).unwrap_or_default(),
+        shell: row.get(4)?,
+        connection_id: row.get(5)?,
+        position: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
+    })
 }
 
 fn map_connection(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedConnection> {
@@ -1642,6 +1890,193 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    fn snippet_input(
+        name: &str,
+        template: &str,
+        connection_id: Option<String>,
+    ) -> CommandSnippetInput {
+        CommandSnippetInput {
+            id: None,
+            name: name.into(),
+            template: template.into(),
+            parameters: vec![crate::snippets::SnippetParameter {
+                name: "service".into(),
+                prompt: "Unit".into(),
+                kind: "string".into(),
+                required: true,
+                choices: Vec::new(),
+                minimum: None,
+                maximum: None,
+                default_value: None,
+            }],
+            connection_id,
+        }
+    }
+
+    #[test]
+    fn snippets_are_scoped_globally_or_to_one_connection() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let laptop = database.create_connection(input("Laptop")).unwrap();
+        let server = database.create_connection(input("Server")).unwrap();
+        database
+            .save_command_snippet(snippet_input("Journal", "journalctl -u {{service}}", None))
+            .unwrap();
+        database
+            .save_command_snippet(snippet_input(
+                "Laptop only",
+                "systemctl status {{service}}",
+                Some(laptop.id.clone()),
+            ))
+            .unwrap();
+
+        let for_laptop = database.list_command_snippets(Some(&laptop.id)).unwrap();
+        assert_eq!(
+            for_laptop
+                .iter()
+                .map(|snippet| snippet.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Journal", "Laptop only"]
+        );
+        let for_server = database.list_command_snippets(Some(&server.id)).unwrap();
+        assert_eq!(
+            for_server
+                .iter()
+                .map(|snippet| snippet.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Journal"]
+        );
+        assert_eq!(for_laptop[0].shell, crate::snippets::SNIPPET_SHELL);
+    }
+
+    #[test]
+    fn deleting_a_connection_takes_its_snippets_and_leaves_the_global_ones() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let laptop = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_command_snippet(snippet_input("Journal", "journalctl -u {{service}}", None))
+            .unwrap();
+        database
+            .save_command_snippet(snippet_input(
+                "Laptop only",
+                "systemctl status {{service}}",
+                Some(laptop.id.clone()),
+            ))
+            .unwrap();
+        database.delete_connection(&laptop.id).unwrap();
+        let remaining = database.list_command_snippets(None).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name, "Journal");
+    }
+
+    #[test]
+    fn a_snippet_round_trips_its_parameters_and_updates_in_place() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database
+            .save_command_snippet(snippet_input("Journal", "journalctl -u {{service}}", None))
+            .unwrap();
+        assert_eq!(saved.parameters.len(), 1);
+        assert_eq!(saved.parameters[0].name, "service");
+
+        let mut update = snippet_input("Renamed", "systemctl status {{service}}", None);
+        update.id = Some(saved.id.clone());
+        let updated = database.save_command_snippet(update).unwrap();
+        assert_eq!(updated.id, saved.id);
+        assert_eq!(updated.name, "Renamed");
+        assert_eq!(updated.position, saved.position);
+        assert_eq!(updated.created_at, saved.created_at);
+        assert_eq!(database.list_command_snippets(None).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_invalid_snippet_is_refused_before_it_is_stored() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let mut unknown = snippet_input("Journal", "journalctl -u {{missing}}", None);
+        unknown.parameters.clear();
+        assert!(
+            database
+                .save_command_snippet(unknown)
+                .unwrap_err()
+                .contains("no parameter definition")
+        );
+        assert!(database.list_command_snippets(None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn snippets_reorder_only_against_the_ones_the_same_list_shows() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let laptop = database.create_connection(input("Laptop")).unwrap();
+        let server = database.create_connection(input("Server")).unwrap();
+        let first = database
+            .save_command_snippet(snippet_input("First", "echo {{service}}", None))
+            .unwrap();
+        database
+            .save_command_snippet(snippet_input(
+                "Server only",
+                "echo {{service}}",
+                Some(server.id.clone()),
+            ))
+            .unwrap();
+        let third = database
+            .save_command_snippet(snippet_input("Third", "echo {{service}}", None))
+            .unwrap();
+
+        let reordered = database
+            .move_command_snippet(&third.id, "up", Some(&laptop.id))
+            .unwrap();
+        assert_eq!(
+            reordered
+                .iter()
+                .map(|snippet| snippet.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Third", "First"],
+            "the server snippet is not in this list and did not move"
+        );
+        // The two global snippets swapped, which every list sees. The
+        // server-only snippet was not in the list that reordered and kept its
+        // own position.
+        let for_server = database.list_command_snippets(Some(&server.id)).unwrap();
+        assert_eq!(
+            for_server
+                .iter()
+                .map(|snippet| snippet.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Third", "Server only", "First"]
+        );
+        assert_eq!(for_server[1].position, 1);
+        assert!(
+            database
+                .move_command_snippet(&first.id, "sideways", None)
+                .unwrap_err()
+                .contains("direction is invalid")
+        );
+    }
+
+    #[test]
+    fn a_snippet_table_row_with_unreadable_parameters_does_not_take_the_list_down() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let saved = database
+            .save_command_snippet(snippet_input("Journal", "journalctl -u {{service}}", None))
+            .unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "UPDATE command_snippets SET parameters = 'not json' WHERE id = ?1",
+                [&saved.id],
+            )
+            .unwrap();
+        let listed = database.list_command_snippets(None).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].parameters.is_empty());
     }
 
     #[test]

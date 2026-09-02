@@ -4,6 +4,7 @@ mod history;
 mod models;
 mod remote;
 mod session;
+mod snippets;
 mod ssh;
 
 use database::Database;
@@ -66,6 +67,11 @@ pub fn run() {
             commands::save_settings,
             commands::get_workspace_state,
             commands::save_workspace_state,
+            commands::list_command_snippets,
+            commands::save_command_snippet,
+            commands::delete_command_snippet,
+            commands::move_command_snippet,
+            commands::render_command_snippet,
             commands::get_scratchpad_note,
             commands::save_scratchpad_note,
             commands::delete_scratchpad_note,

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
+  Braces,
   ChevronDown,
   ChevronRight,
   Columns2,
@@ -64,6 +65,7 @@ import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { ScratchpadPane } from "./pages/ScratchpadPane";
 import { SettingsPane } from "./pages/SettingsPane";
+import { SnippetsPane } from "./pages/SnippetsPane";
 import type {
   CachedList,
   ConnectionGroup,
@@ -97,6 +99,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
+  { id: "snippets", label: "Snippets", icon: Braces },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
@@ -1254,6 +1257,14 @@ export function App() {
                     updateContainersCache(activeWorkspace.id, cache)
                   }
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
+                />
+              )}
+              {activeWorkspace.view === "snippets" && (
+                <SnippetsPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  onPaste={pasteIntoTerminal}
+                  canPaste={Boolean(activeWorkspace.sessionId)}
                 />
               )}
               {activeWorkspace.view === "history" && (

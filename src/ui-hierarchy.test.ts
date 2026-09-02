@@ -50,6 +50,22 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("renders snippets in Rust and inserts without running them", () => {
+    const snippetsSource = readFileSync(
+      new URL("./pages/SnippetsPane.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain('{ id: "snippets", label: "Snippets", icon: Braces }');
+    // The preview and the inserted text are the same string, produced by the
+    // Rust renderer. The pane does no substitution and appends no Enter.
+    expect(snippetsSource).toContain("renderCommandSnippet(selected.id, values)");
+    expect(snippetsSource).toContain("onPaste(render.command)");
+    expect(snippetsSource).not.toContain("replace(");
+    expect(snippetsSource).not.toContain("api.writeSession");
+    expect(snippetsSource).not.toContain(String.raw`\r`);
+    expect(snippetsSource).not.toContain(String.raw`\n`);
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

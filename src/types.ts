@@ -188,6 +188,50 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export type SnippetParameterKind = "string" | "integer" | "choice";
+
+export interface SnippetParameter {
+  name: string;
+  prompt: string;
+  kind: SnippetParameterKind;
+  required: boolean;
+  choices: string[];
+  minimum: number | null;
+  maximum: number | null;
+  defaultValue: string | null;
+}
+
+export interface CommandSnippet {
+  id: string;
+  name: string;
+  template: string;
+  parameters: SnippetParameter[];
+  shell: string;
+  connectionId: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommandSnippetInput {
+  id: string | null;
+  name: string;
+  template: string;
+  parameters: SnippetParameter[];
+  connectionId: string | null;
+}
+
+export interface SnippetError {
+  parameter: string | null;
+  message: string;
+}
+
+export interface SnippetRender {
+  command: string | null;
+  errors: SnippetError[];
+  shell: string;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -242,7 +286,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "snippets"
+  | "history"
+  | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];

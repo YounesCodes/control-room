@@ -107,7 +107,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  Snippets, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -389,6 +389,13 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Snippets is a list beside a form. The form's order is fixed and deliberate: values, then the
+finished command, then Insert. The preview sits directly above the button that uses it, in the
+monospace face the terminal uses, so the text being approved looks like the text that will land at
+the prompt. When a value is not usable there is no preview at all rather than a stale or partial one,
+and the reason appears next to the field that caused it. The Insert button never carries an Enter,
+and the line under it says so every time.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full

@@ -74,10 +74,17 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Render Command Snippets in Rust from the stored template, with one
+    documented Bash quoting rule per parameter type and no raw mode. Keep
+    templates to one command line, refuse control characters, unknown
+    placeholders, unused or duplicate parameters, and out-of-range values
+    before rendering. Show the finished text before insertion, insert the same
+    string that was previewed, and never append Enter or run it. Store snippet
+    definitions locally; never store entered values or output.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -113,3 +120,6 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Command Snippet**: a locally stored one-line Bash template with typed
+  parameters. Control Room renders it for review and inserts it; the user's
+  Enter key is what runs it.
