@@ -48,6 +48,19 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps route inspection local, read-only, and free of key material", () => {
+    const routeSource = readFileSync(new URL("./pages/RoutePane.tsx", import.meta.url), "utf8");
+    expect(appSource).toContain('{ id: "route", label: "Route", icon: RouteIcon }');
+    expect(routeSource).toContain("api.resolveSshRoute");
+    expect(routeSource).toContain("LOCAL_ONLY_NOTICE");
+    // The route is resolved by the OpenSSH client in Rust. The pane starts no
+    // session, runs no command, and stores nothing.
+    expect(routeSource).not.toContain("api.startSession");
+    expect(routeSource).not.toContain("api.writeSession");
+    expect(routeSource).not.toContain("localStorage");
+    expect(routeSource).not.toContain("saveWorkspaceState");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

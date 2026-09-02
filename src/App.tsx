@@ -14,6 +14,7 @@ import {
   Network,
   Pencil,
   Plus,
+  Route as RouteIcon,
   Rows2,
   Search,
   Server,
@@ -61,6 +62,7 @@ import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
+import { RoutePane } from "./pages/RoutePane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { ScratchpadPane } from "./pages/ScratchpadPane";
 import { SettingsPane } from "./pages/SettingsPane";
@@ -97,6 +99,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
+  { id: "route", label: "Route", icon: RouteIcon },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
@@ -1254,6 +1257,9 @@ export function App() {
                   }
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
                 />
+              )}
+              {activeWorkspace.view === "route" && (
+                <RoutePane key={activeWorkspace.id} connection={activeConnection} />
               )}
               {activeWorkspace.view === "history" && (
                 <HistoryPane

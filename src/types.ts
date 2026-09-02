@@ -184,6 +184,27 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export interface RouteSegment {
+  kind: "origin" | "jump" | "destination";
+  status: "resolved" | "unresolved" | "opaqueProxy" | "loop" | "limit";
+  alias: string;
+  hostname: string | null;
+  user: string | null;
+  port: number | null;
+  identityFiles: string[];
+  proxyProgram: string | null;
+  note: string | null;
+}
+
+export interface SshRoute {
+  connectionId: string;
+  resolvedAt: string;
+  status: "resolved" | "partial";
+  segments: RouteSegment[];
+  truncated: boolean;
+  note: string | null;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -237,7 +258,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "route"
+  | "history"
+  | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];

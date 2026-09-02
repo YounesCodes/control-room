@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Route, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -74,6 +74,23 @@ All structured inspection is read-only. Control Room does not scan networks, tes
 - Choose a tail size, follow a live stream, pause or resume rendering, stop a stream, and clear the view.
 - Search the lines already loaded in the current view.
 - Keep each Log Stream independent and in memory. Control Room does not persist fetched logs.
+
+### Route
+
+The Route view shows the path a Saved Connection resolves to: this PC, each jump host, then the
+destination. Each segment shows the alias as written, the hostname OpenSSH resolved it to, the
+effective user and port, and the identity files it would offer by path.
+
+The facts come from the installed OpenSSH client's own effective-configuration mode. No host is
+contacted, no key is read, and Control Room does not work out routing itself. A ProxyJump chain is
+followed through each jump host's own configuration, bounded to eight segments, and a host that
+appears twice ends the walk instead of looping.
+
+Where a route cannot be interpreted, the view says so rather than guessing. A custom ProxyCommand
+reads as `Custom proxy command, route not safely interpretable`, with at most the program's name and
+never its arguments, since a proxy command can carry tokens. A segment OpenSSH could not resolve
+carries its own error, and fields the client reported nothing for are named as missing rather than
+filled in.
 
 ### Enhanced History
 

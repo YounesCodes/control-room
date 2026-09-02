@@ -19,6 +19,7 @@ import type {
   ScratchpadNoteInput,
   ScratchpadScope,
   SettingsContract,
+  SshRoute,
   SystemdUnit,
 } from "../types";
 
@@ -110,6 +111,10 @@ export const api = {
       containerId,
       sudoPassword,
     }),
+  // Route inspection runs the local OpenSSH client only, so it is not wrapped
+  // in the remote-inspection timeout.
+  resolveSshRoute: (connectionId: string) =>
+    invoke<SshRoute>("resolve_ssh_route", { connectionId }),
   startJournalStream: (
     connectionId: string,
     service: string,

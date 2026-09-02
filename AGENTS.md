@@ -61,10 +61,16 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Resolve SSH routes only from the installed OpenSSH client's effective
+    configuration, never by working out routing in Control Room and never by
+    connecting to a host. Keep the alias apart from the resolved hostname,
+    bound recursion, stop on a loop, and label unresolved, unsupported, and
+    incomplete segments instead of filling them in. Summarize a ProxyCommand
+    by program name at most, never its arguments, and never read key material.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -100,3 +106,6 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Route Segment**: one interpretable step from this PC to a destination, read
+  from the local OpenSSH client's effective configuration. It carries the alias
+  as written, the hostname it resolved to, and its own status.

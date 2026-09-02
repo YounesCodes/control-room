@@ -14,6 +14,7 @@ use crate::{
     remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
+    ssh_route::{self, SshRoute},
 };
 
 #[tauri::command(async)]
@@ -330,6 +331,17 @@ pub fn inspect_container(
     remote::inspect_container(&connection, &container_id, sudo_password)
 }
 
+/// Route inspection reads the local OpenSSH client's effective configuration
+/// and contacts no host, so it takes no remote-operation permit.
+#[tauri::command(async)]
+pub fn resolve_ssh_route(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<SshRoute, String> {
+    let connection = database.get_connection(&connection_id)?;
+    ssh_route::resolve_route(&connection)
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn start_journal_stream(
@@ -548,6 +560,7 @@ mod tests {
             "inspect_firewall",
             "inspect_connections",
             "inspect_container",
+            "resolve_ssh_route",
             "start_journal_stream",
             "start_docker_log_stream",
             "get_history_integration_status",

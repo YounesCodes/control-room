@@ -5,6 +5,7 @@ mod models;
 mod remote;
 mod session;
 mod ssh;
+mod ssh_route;
 
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
@@ -54,6 +55,7 @@ pub fn run() {
             commands::inspect_firewall,
             commands::inspect_connections,
             commands::inspect_container,
+            commands::resolve_ssh_route,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

@@ -105,7 +105,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  Route, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -365,6 +365,13 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Route is a single left-to-right chain of cards, one per segment, separated by a chevron. The chain
+is the diagram: no boxes-and-lines drawing, because the only structure worth showing is the order.
+Each card puts the alias first and the resolved target under it, in that order, since the question
+the view answers is what a name turned into. A segment that could not be interpreted keeps its place
+in the chain and says why in a sentence, so a partial route still reads as a route with a gap rather
+than as a shorter route.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full
