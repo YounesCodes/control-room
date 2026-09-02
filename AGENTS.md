@@ -61,10 +61,20 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Compare container images only across explicitly selected hosts, read one
+    host at a time, with each host's failure its own. Pair workloads only by
+    validated Compose project and service, and only after the user confirms the
+    suggested match. Leave ambiguous and unlabelled containers unpaired rather
+    than matching on names. Compare tags separately from immutable image
+    identity, treat a missing registry digest as missing rather than as a
+    difference, and never let a missing container, a stopped container, an
+    unreachable daemon, or an unread identity read as agreement. Never pull,
+    tag, push, start, stop, or change an image or container, and never contact
+    a registry.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -94,6 +104,9 @@ account you control.
   host snapshot. Kernel socket facts remain separate from correlated ownership.
 - **Container Inspection**: a timestamped, in-memory detail record collected by
   full Docker ID without lifecycle controls or raw inspect JSON in React.
+- **Workload**: one validated Compose project and service pair, used to suggest
+  which containers on different hosts are the same thing. A suggestion is not a
+  match until the user confirms it.
 - **Scratchpad Note**: user-authored plain text stored locally for one Saved
   Connection or shared globally across the app. It is not encrypted secret storage.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,

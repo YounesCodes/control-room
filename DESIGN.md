@@ -104,8 +104,8 @@ Navigation is two levels and never nests deeper.
 - **Left rail.** The connection list is divided into manually ordered,
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
-  holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Images,
+  Logs, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -365,6 +365,14 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Images stacks one card per workload, and a card says nothing about drift until its match is
+confirmed. That order is deliberate: the confirmation checkbox sits in the card header, above the
+comparison it unlocks, so the user reads the claim they are making before they read the answer. Cells
+carry the reference, a short image id, and the digest state as three separate values rather than one
+merged badge, because the whole feature exists for the case where the tag agrees and the image does
+not. States that are not evidence say what they are in words: no container for this workload, not
+running, image identity was not read, not collected.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full

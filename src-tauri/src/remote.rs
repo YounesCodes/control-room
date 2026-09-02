@@ -139,7 +139,7 @@ pub struct CommandOutput {
 }
 
 impl CommandOutput {
-    fn success_text(self) -> Result<String, String> {
+    pub(crate) fn success_text(self) -> Result<String, String> {
         if self.exit_code != 0 {
             return Err(classify_failure(self.exit_code, &self.stderr));
         }

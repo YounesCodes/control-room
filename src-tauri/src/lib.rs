@@ -1,6 +1,7 @@
 mod commands;
 mod database;
 mod history;
+mod image_drift;
 mod models;
 mod remote;
 mod session;
@@ -54,6 +55,7 @@ pub fn run() {
             commands::inspect_firewall,
             commands::inspect_connections,
             commands::inspect_container,
+            commands::collect_host_images,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

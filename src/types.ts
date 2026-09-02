@@ -184,6 +184,24 @@ export interface DockerMount {
   propagation: string | null;
 }
 
+export interface ContainerImageFact {
+  container: DockerContainer;
+  recordedReference: string | null;
+  imageId: string | null;
+  repoDigests: string[];
+}
+
+export interface HostImageInventory {
+  connectionId: string;
+  collectedAt: string;
+  containers: ContainerImageFact[];
+  inspectedContainers: number;
+  truncated: boolean;
+  identityComplete: boolean;
+  digestEvidenceAvailable: boolean;
+  identityError: string | null;
+}
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -237,7 +255,15 @@ export interface EnvironmentInfo {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "overview" | "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+  | "overview"
+  | "terminal"
+  | "services"
+  | "ports"
+  | "docker"
+  | "logs"
+  | "images"
+  | "history"
+  | "scratchpad";
 
 export interface CachedList<T> {
   items: T[];
@@ -279,6 +305,7 @@ export interface Workspace {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
+  imageDriftConnectionIds: string[];
 }
 
 interface PersistedWorkspace {

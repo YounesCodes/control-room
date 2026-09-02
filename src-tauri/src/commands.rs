@@ -4,6 +4,7 @@ use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 use crate::{
     database::{Database, validate_connection_input},
     history,
+    image_drift::{self, HostImageInventory},
     models::{
         AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
@@ -330,6 +331,18 @@ pub fn inspect_container(
     remote::inspect_container(&connection, &container_id, sudo_password)
 }
 
+#[tauri::command(async)]
+pub fn collect_host_images(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+    sudo_password: Option<String>,
+) -> Result<HostImageInventory, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    image_drift::collect_host_inventory(&connection, sudo_password)
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn start_journal_stream(
@@ -548,6 +561,7 @@ mod tests {
             "inspect_firewall",
             "inspect_connections",
             "inspect_container",
+            "collect_host_images",
             "start_journal_stream",
             "start_docker_log_stream",
             "get_history_integration_status",

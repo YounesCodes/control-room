@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Images, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -27,6 +27,7 @@ Saved Connection
          +-- systemd units
          +-- listening TCP and UDP ports
          +-- Docker containers
+         +-- container image drift across hosts
          +-- journald and Docker logs
          +-- Enhanced History, when enabled
 ```
@@ -74,6 +75,33 @@ All structured inspection is read-only. Control Room does not scan networks, tes
 - Choose a tail size, follow a live stream, pause or resume rendering, stop a stream, and clear the view.
 - Search the lines already loaded in the current view.
 - Keep each Log Stream independent and in memory. Control Room does not persist fetched logs.
+
+### Container image drift
+
+The Images view compares Compose workloads across up to six hosts. The Workspace's own connection is
+the anchor; you pick the others from your Saved Connections. Each host is read on its own, so a host
+that refuses or fails leaves the rest of the comparison intact and shows its own error, with a sudo
+retry offered only for a permission failure.
+
+A workload is a validated Compose project and service. Control Room suggests the pairing and you
+confirm it, because a shared project and service name does not prove two containers have the same
+role. Nothing is compared until you confirm. A service scaled to several containers on one host stays
+unpaired until you say which instance stands for it, and containers with no validated Compose labels
+are listed as not paired rather than matched on their names.
+
+Tags and immutable identity are compared separately, which is the point of the view: two hosts can
+both run `example/web:latest` and be running different images. The comparison rests on the local
+image content id, which every host reports and which is the same value for the same image everywhere.
+Registry digests are extra evidence and are reported separately, because an image built on the host
+has none, and a missing digest is never read as a difference.
+
+The verdict only ever covers hosts that supplied comparable evidence, and every summary says how many
+of the selected hosts that was. A missing container, a stopped container, a Docker daemon that could
+not be reached, and an image identity that was not read are four different states and none of them
+reads as agreement.
+
+Control Room pulls no image, contacts no registry, and starts, stops, or changes nothing. Results
+live in Workspace memory and are never written to disk.
 
 ### Enhanced History
 

@@ -10,6 +10,7 @@ import type {
   FirewallStatus,
   HistoryEntry,
   HistoryInput,
+  HostImageInventory,
   HostCapabilities,
   ListeningSocket,
   PersistedWorkspaceState,
@@ -110,6 +111,11 @@ export const api = {
       containerId,
       sudoPassword,
     }),
+  // Reading one host's image identity takes two bounded round trips, so this
+  // sits outside the shared inspection timeout. Hosts are read one at a time
+  // and each one reports its own failure.
+  collectHostImages: (connectionId: string, sudoPassword: string | null = null) =>
+    invoke<HostImageInventory>("collect_host_images", { connectionId, sudoPassword }),
   startJournalStream: (
     connectionId: string,
     service: string,

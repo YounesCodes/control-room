@@ -48,6 +48,19 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps image drift read-only, unconfirmed by default, and out of storage", () => {
+    const imagesSource = readFileSync(new URL("./pages/ImagesPane.tsx", import.meta.url), "utf8");
+    expect(appSource).toContain('{ id: "images", label: "Images", icon: Layers }');
+    expect(imagesSource).toContain("api.collectHostImages");
+    // Collection lives in Rust. The pane holds no Docker command and no
+    // mutation of any kind, and it stores nothing.
+    expect(imagesSource).not.toContain("docker ");
+    expect(imagesSource).not.toContain("localStorage");
+    expect(imagesSource).not.toContain("saveWorkspaceState");
+    expect(imagesSource).not.toContain("writeTextFile");
+    expect(imagesSource).toContain("Match confirmed");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

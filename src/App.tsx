@@ -8,6 +8,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  Layers,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -58,6 +59,7 @@ import {
 } from "./lib/workspace-lifecycle";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
+import { ImagesPane } from "./pages/ImagesPane";
 import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
@@ -96,6 +98,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
+  { id: "images", label: "Images", icon: Layers },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
@@ -499,6 +502,7 @@ export function App() {
       containerSelectionId: null,
       containerDetailsCache: {},
       logSource: null,
+      imageDriftConnectionIds: [],
     };
   }
 
@@ -1253,6 +1257,17 @@ export function App() {
                     updateContainersCache(activeWorkspace.id, cache)
                   }
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
+                />
+              )}
+              {activeWorkspace.view === "images" && (
+                <ImagesPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  connections={connections}
+                  selectedConnectionIds={activeWorkspace.imageDriftConnectionIds}
+                  onSelectedConnectionIdsChange={(imageDriftConnectionIds) =>
+                    updateWorkspace(activeWorkspace.id, { imageDriftConnectionIds })
+                  }
                 />
               )}
               {activeWorkspace.view === "history" && (
