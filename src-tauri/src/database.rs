@@ -922,7 +922,12 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(|error| error.to_string())?;
-    if version > LATEST_SCHEMA_VERSION {
+    #[cfg(debug_assertions)]
+    let known_additive_development_schema =
+        is_known_additive_development_schema(connection, version)?;
+    #[cfg(not(debug_assertions))]
+    let known_additive_development_schema = false;
+    if version > LATEST_SCHEMA_VERSION && !known_additive_development_schema {
         return Err(format!(
             "Database schema version {version} is newer than this app supports"
         ));
@@ -1107,6 +1112,65 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
         transaction.commit().map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn is_known_additive_development_schema(
+    connection: &Connection,
+    version: i64,
+) -> Result<bool, String> {
+    // Feature branches share Tauri's app-data directory during manual review.
+    // Two reviewed branches used v6 for one additive table, so older debug
+    // builds can ignore either exact schema without changing or deleting it.
+    // Release builds keep the strict newer-schema rejection above.
+    if version != 6 {
+        return Ok(false);
+    }
+    let snippet_columns = table_columns(connection, "PRAGMA table_info(command_snippets)")?;
+    let expected_snippet_columns = vec![
+        ("id".into(), "TEXT".into(), 0, 1),
+        ("name".into(), "TEXT".into(), 1, 0),
+        ("template".into(), "TEXT".into(), 1, 0),
+        ("parameters".into(), "TEXT".into(), 1, 0),
+        ("shell".into(), "TEXT".into(), 1, 0),
+        ("connection_id".into(), "TEXT".into(), 0, 0),
+        ("position".into(), "INTEGER".into(), 1, 0),
+        ("created_at".into(), "TEXT".into(), 1, 0),
+        ("updated_at".into(), "TEXT".into(), 1, 0),
+    ];
+    let pinned_columns = table_columns(connection, "PRAGMA table_info(pinned_commands)")?;
+    let expected_pinned_columns = vec![
+        ("id".into(), "TEXT".into(), 0, 1),
+        ("name".into(), "TEXT".into(), 1, 0),
+        ("command".into(), "TEXT".into(), 1, 0),
+        ("connection_id".into(), "TEXT".into(), 0, 0),
+        ("position".into(), "INTEGER".into(), 1, 0),
+        ("created_at".into(), "TEXT".into(), 1, 0),
+        ("updated_at".into(), "TEXT".into(), 1, 0),
+    ];
+    Ok(snippet_columns == expected_snippet_columns || pinned_columns == expected_pinned_columns)
+}
+
+#[cfg(debug_assertions)]
+fn table_columns(
+    connection: &Connection,
+    pragma: &str,
+) -> Result<Vec<(String, String, i64, i64)>, String> {
+    let mut statement = connection
+        .prepare(pragma)
+        .map_err(|error| error.to_string())?;
+    statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|error| error.to_string())
 }
 
 fn map_connection(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedConnection> {
@@ -1756,6 +1820,104 @@ mod tests {
         assert_eq!(scratchpad_table, 1);
         drop(database);
         Database::open(&path).unwrap();
+    }
+
+    #[test]
+    fn development_build_accepts_known_additive_v6_schema_without_mutating_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        drop(database);
+
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE command_snippets (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    template TEXT NOT NULL,
+                    parameters TEXT NOT NULL,
+                    shell TEXT NOT NULL CHECK(shell IN ('bash')),
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX idx_command_snippets_connection
+                ON command_snippets(connection_id);
+
+                PRAGMA user_version = 6;
+                "#,
+            )
+            .unwrap();
+        drop(connection);
+
+        let database = Database::open(&path).unwrap();
+        assert_eq!(database.list_connections().unwrap(), vec![saved]);
+        let connection = database.connection.lock();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        let snippet_table: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'command_snippets'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 6);
+        assert_eq!(snippet_table, 1);
+    }
+
+    #[test]
+    fn development_build_accepts_pinned_commands_v6_schema_without_mutating_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        drop(database);
+
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE pinned_commands (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX idx_pinned_commands_scope_position
+                ON pinned_commands(connection_id, position);
+
+                PRAGMA user_version = 6;
+                "#,
+            )
+            .unwrap();
+        drop(connection);
+
+        let database = Database::open(&path).unwrap();
+        assert_eq!(database.list_connections().unwrap(), vec![saved]);
+        let connection = database.connection.lock();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        let pinned_table: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'pinned_commands'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 6);
+        assert_eq!(pinned_table, 1);
     }
 
     #[test]
