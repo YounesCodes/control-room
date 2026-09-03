@@ -177,6 +177,7 @@ mod tests {
             port: None,
             identity_file: None,
             history_enabled: true,
+            sudo_enabled: false,
             group_id: None,
             tags: Vec::new(),
             created_at: String::new(),

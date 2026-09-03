@@ -10,6 +10,8 @@ const terminalSource = readFileSync(
   new URL("./components/TerminalPane.tsx", import.meta.url),
   "utf8",
 );
+const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
+const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
@@ -64,6 +66,17 @@ describe("application hierarchy", () => {
     );
     expect(searchLoader).toContain("api.history(connection.id, search)");
     expect(searchLoader).not.toContain("historyIntegrationStatus");
+  });
+
+  it("puts the global elevation switch in Settings and keeps one-shot sudo per pane", () => {
+    expect(settingsSource).toContain("<legend>Elevated commands</legend>");
+    expect(settingsSource).toContain("draft.globalSudoEnabled");
+    // Turning elevation on must not remove the per-request escape hatch: a host
+    // without passwordless sudo still falls back to an unelevated read, and the
+    // panes are where the user answers that with a password.
+    expect(logsSource).toContain("Retry with sudo");
+    expect(portsSource).toContain("Retry with sudo");
+    expect(dockerSource).toContain("Retry with sudo");
   });
 
   it("offers sudo when Docker log source discovery lacks permission", () => {

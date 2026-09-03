@@ -30,6 +30,7 @@ const connection: SavedConnection = {
   port: null,
   identityFile: null,
   historyEnabled: true,
+  sudoEnabled: false,
   groupId: null,
   tags: [],
   createdAt: "",

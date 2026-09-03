@@ -69,11 +69,13 @@ run, and you type those yourself.
    discoverable shortcuts, split panes, focus mode. Nothing important is
    mouse-only, and nothing important is a hidden keyboard-only trick.
 
-4. **Safe by construction.** Remote operations are read-only. The app never
-   persists terminal output, fetched logs, SSH or sudo passwords, or private
-   keys. A sudo retry is allowed only after a permission error, and it is never
-   saved. Rust owns process and argument construction. React never receives
-   arbitrary shell execution.
+4. **Safe by construction.** Remote operations are read-only, elevated or not.
+   The app never persists terminal output, fetched logs, SSH or sudo passwords,
+   or private keys. Sudo is off until the user allows it, per host or for every
+   host, and an allowance only reaches accounts that already have passwordless
+   sudo. A one-shot sudo password is offered after a permission error and is
+   never saved. Rust owns process and argument construction. React never
+   receives arbitrary shell execution.
 
 5. **Honest feedback.** Every asynchronous view has explicit loading, empty, and
    error states. Destructive actions look distinct and get confirmed in the
@@ -307,6 +309,20 @@ organization dialog owns tag creation, renaming, color selection, and deletion.
 The Saved Connection editor only assigns existing tags. Deleting a tag removes
 its local associations from every connection.
 
+**Elevated commands.** Structured Operations run as the connecting account until
+the user allows sudo. Settings has one switch for every Saved Connection; the
+Saved Connection editor has one for a single host. The global switch is an
+override rather than a default, so while it is on the per-host checkbox is
+checked, disabled, and captioned with the reason. The host keeps its own value
+underneath, so turning the global switch off restores what each host chose.
+
+An allowance is not a password prompt. An allowed read probes sudo on the host
+and elevates only when the account has passwordless sudo; otherwise the same read
+runs unelevated in the same round trip. When that unelevated read hits a
+permission wall, the pane offers "Retry with sudo" exactly as before, and the
+password is used once and dropped. That affordance never depends on the switch:
+elevating one request stays possible on a host that allows nothing.
+
 **Panel states.** Every data view separates loading (spinner and label), empty
 (icon and guidance, such as the Logs and History empty states), and error (icon,
 message, and retry, with a "Retry with sudo" affordance where a permission error
@@ -488,8 +504,9 @@ Two test files encode the design decisions that must not drift.
 - **`src/ui-hierarchy.test.ts`** locks the structure: the 42 px titlebar row, the
   bounded connection list and 980 px content cap, terminal padding on the xterm
   element, focus-mode rules, session presence in navigation, the in-app (not
-  native) discard confirm, and the exact counts of host-OS marks, drag regions,
-  and window controls in the shell.
+  native) discard confirm, the global elevation switch alongside the per-pane
+  sudo retries, and the exact counts of host-OS marks, drag regions, and window
+  controls in the shell.
 
 Both, plus the Rust suite, run under `npm run check` (format, lint, test, build)
 and in CI. When you change the UI, keep them green. If a change is a real design

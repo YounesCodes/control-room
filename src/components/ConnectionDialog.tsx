@@ -4,6 +4,7 @@ import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { validateConnectionDraft } from "../lib/connection-validation";
+import { elevationSource, elevationSummary } from "../lib/sudo-elevation";
 import type {
   ConnectionGroup,
   ConnectionTag,
@@ -17,6 +18,7 @@ interface ConnectionDialogProps {
   connection?: SavedConnection;
   groups: ConnectionGroup[];
   knownTags: ConnectionTag[];
+  globalSudoEnabled: boolean;
   onClose: () => void;
   onSaved: (connection: SavedConnection) => void;
 }
@@ -25,6 +27,7 @@ export function ConnectionDialog({
   connection,
   groups,
   knownTags,
+  globalSudoEnabled,
   onClose,
   onSaved,
 }: ConnectionDialogProps) {
@@ -35,6 +38,7 @@ export function ConnectionDialog({
   const [identityFile, setIdentityFile] = useState(connection?.identityFile ?? "");
   const [groupId, setGroupId] = useState(connection?.groupId ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState(connection?.tags.map((tag) => tag.id) ?? []);
+  const [sudoEnabled, setSudoEnabled] = useState(connection?.sudoEnabled ?? false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +52,7 @@ export function ConnectionDialog({
       port: port.trim() ? Number(port) : null,
       identityFile: identityFile.trim() || null,
       historyEnabled: connection?.historyEnabled ?? false,
+      sudoEnabled,
       groupId: groupId || null,
       tagNames: knownTags.filter((tag) => selectedTagIds.includes(tag.id)).map((tag) => tag.name),
     };
@@ -195,6 +200,18 @@ export function ConnectionDialog({
               ))}
             </select>
           </label>
+        </div>
+        <div className="elevation-field">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={globalSudoEnabled || sudoEnabled}
+              disabled={globalSudoEnabled}
+              onChange={(event) => setSudoEnabled(event.target.checked)}
+            />{" "}
+            Allow sudo for Structured Operations on this host
+          </label>
+          <small>{elevationSummary(elevationSource(globalSudoEnabled, sudoEnabled))}</small>
         </div>
         <div className="connection-tag-selector">
           <span>Tags</span>

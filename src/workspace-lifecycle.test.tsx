@@ -51,6 +51,7 @@ const settings: AppSettings = {
   terminalCyan: "#65d4d1",
   defaultLogTail: 200,
   globalHistoryEnabled: true,
+  globalSudoEnabled: false,
 };
 
 function connection(id: string, displayName: string): SavedConnection {
@@ -62,6 +63,7 @@ function connection(id: string, displayName: string): SavedConnection {
     port: null,
     identityFile: null,
     historyEnabled: false,
+    sudoEnabled: false,
     groupId: null,
     tags: [],
     createdAt: "",

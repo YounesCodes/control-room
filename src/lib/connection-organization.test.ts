@@ -11,6 +11,7 @@ function connection(id: string, patch: Partial<SavedConnection> = {}): SavedConn
     port: null,
     identityFile: null,
     historyEnabled: false,
+    sudoEnabled: false,
     groupId: null,
     tags: [],
     createdAt: "",

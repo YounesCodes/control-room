@@ -2770,6 +2770,28 @@ dd {
   line-height: 1.5;
 }
 
+.elevation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.settings-form fieldset > small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+/* A locked checkbox has to read as unavailable without disappearing: the note
+   underneath is what explains why it cannot be changed. */
+.checkbox-label:has(input:disabled) {
+  color: var(--text-faint);
+}
+
+.checkbox-label input:disabled {
+  cursor: not-allowed;
+}
+
 .connection-organization-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
