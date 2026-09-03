@@ -144,6 +144,7 @@ impl SessionManager {
             .map_err(|error| format!("PTY initialization failed: {error}"))?;
 
         let mut command = CommandBuilder::new(ssh_path);
+        command.env("TERM", TERMINAL_TYPE);
         command.args(connection_arguments(connection, true));
         command.arg(interactive_shell_command(connection.history_enabled));
         let mut child = pair
@@ -325,6 +326,15 @@ impl SessionManager {
     }
 }
 
+/// The terminal type requested for the remote pty. ssh forwards whatever `TERM`
+/// its own environment carries, so leaving it unset makes the remote depend on
+/// how the app was launched and on which ssh build `detect_ssh_path` picked.
+/// Microsoft's client happens to default to this value, but an OpenSSH found on
+/// PATH sends an empty string instead, and a remote with no `TERM` drops colour
+/// and misdraws full-screen tools. The frontend is a 256-colour xterm, so it
+/// says so rather than relying on either default.
+const TERMINAL_TYPE: &str = "xterm-256color";
+
 fn interactive_shell_command(history_enabled: bool) -> &'static str {
     if history_enabled {
         "printf '\\033]633;ControlRoom;connected\\007'; CONTROL_ROOM_SHELL_INTEGRATION=1 exec bash -i"
@@ -433,9 +443,28 @@ mod tests {
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
     use super::{
-        MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, TerminalFailureDetector, TerminalFailureHint,
-        classify_session_exit, interactive_shell_command, map_pty_kill_result,
+        MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, TERMINAL_TYPE, TerminalFailureDetector,
+        TerminalFailureHint, classify_session_exit, interactive_shell_command, map_pty_kill_result,
     };
+
+    // ssh forwards its own TERM, so an unset one leaves the remote depending on
+    // the launch environment and the ssh build. Setting it must not disturb the
+    // rest of the inherited environment.
+    #[test]
+    fn the_terminal_type_is_requested_explicitly_without_clearing_the_environment() {
+        // SAFETY: single-threaded test process, restored before returning.
+        unsafe { std::env::set_var("CONTROL_ROOM_ENV_PROBE", "kept") };
+        let mut command = CommandBuilder::new("ssh.exe");
+        command.env("TERM", TERMINAL_TYPE);
+
+        assert_eq!(command.get_env("TERM").unwrap(), TERMINAL_TYPE);
+        assert_eq!(
+            command.get_env("CONTROL_ROOM_ENV_PROBE"),
+            Some(std::ffi::OsStr::new("kept")),
+            "setting TERM must merge into the inherited environment, not replace it"
+        );
+        unsafe { std::env::remove_var("CONTROL_ROOM_ENV_PROBE") };
+    }
 
     #[test]
     #[cfg(windows)]
