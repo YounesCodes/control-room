@@ -25,6 +25,7 @@ const connection: SavedConnection = {
   port: null,
   identityFile: null,
   historyEnabled: false,
+  sudoEnabled: false,
   groupId: null,
   tags: [],
   createdAt: "",

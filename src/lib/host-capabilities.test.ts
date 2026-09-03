@@ -17,6 +17,8 @@ function capabilities(osId: string): HostCapabilities {
     journaldAvailable: false,
     dockerAvailable: false,
     dockerAccessible: false,
+    dockerAccessibleWithSudo: false,
+    passwordlessSudo: false,
     dockerVersion: null,
     runningServiceCount: null,
     runningContainerCount: null,

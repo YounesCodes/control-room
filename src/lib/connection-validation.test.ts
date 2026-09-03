@@ -10,6 +10,7 @@ function input(patch: Partial<SavedConnectionInput> = {}): SavedConnectionInput 
     port: 22,
     identityFile: null,
     historyEnabled: false,
+    sudoEnabled: false,
     groupId: null,
     tagNames: [],
     ...patch,

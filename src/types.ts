@@ -6,6 +6,7 @@ export interface SavedConnection {
   port: number | null;
   identityFile: string | null;
   historyEnabled: boolean;
+  sudoEnabled: boolean;
   groupId: string | null;
   tags: ConnectionTag[];
   createdAt: string;
@@ -20,6 +21,7 @@ export interface SavedConnectionInput {
   port: number | null;
   identityFile: string | null;
   historyEnabled: boolean;
+  sudoEnabled: boolean;
   groupId: string | null;
   tagNames: string[];
 }
@@ -51,6 +53,8 @@ export interface HostCapabilities {
   journaldAvailable: boolean;
   dockerAvailable: boolean;
   dockerAccessible: boolean;
+  dockerAccessibleWithSudo: boolean;
+  passwordlessSudo: boolean;
   dockerVersion: string | null;
   runningServiceCount: number | null;
   runningContainerCount: number | null;
@@ -220,6 +224,7 @@ export interface AppSettings {
   terminalCyan: string;
   defaultLogTail: number;
   globalHistoryEnabled: boolean;
+  globalSudoEnabled: boolean;
 }
 
 export interface SettingsContract {

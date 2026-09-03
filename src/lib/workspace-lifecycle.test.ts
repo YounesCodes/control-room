@@ -21,6 +21,7 @@ function workspace(id: string, connectionId: string): Workspace {
       port: null,
       identityFile: null,
       historyEnabled: false,
+      sudoEnabled: false,
       groupId: null,
       tags: [],
       createdAt: "",

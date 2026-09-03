@@ -10,6 +10,8 @@ const terminalSource = readFileSync(
   new URL("./components/TerminalPane.tsx", import.meta.url),
   "utf8",
 );
+const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
+const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
@@ -64,6 +66,45 @@ describe("application hierarchy", () => {
     );
     expect(searchLoader).toContain("api.history(connection.id, search)");
     expect(searchLoader).not.toContain("historyIntegrationStatus");
+  });
+
+  it("puts the global elevation switch in Settings and keeps one-shot sudo per pane", () => {
+    expect(settingsSource).toContain("<legend>Elevated commands</legend>");
+    expect(settingsSource).toContain("draft.globalSudoEnabled");
+    // Turning elevation on must not remove the per-request escape hatch: a host
+    // without passwordless sudo still falls back to an unelevated read, and the
+    // panes are where the user answers that with a password.
+    expect(logsSource).toContain("Retry with sudo");
+    expect(portsSource).toContain("Retry with sudo");
+    expect(dockerSource).toContain("Retry with sudo");
+  });
+
+  it("keeps a checkbox on one line inside a modal, as Settings already does", () => {
+    // .form-stack label used to stack every label vertically, checkbox rows
+    // included, so a checkbox in a dialog sat above its own text. Settings had
+    // always excluded them; modals never did, because no modal had one.
+    expect(stylesSource).toMatch(
+      /\.settings-form label:not\(\.checkbox-label\),\s*\.form-stack label:not\(\.checkbox-label\)\s*\{/,
+    );
+  });
+
+  it("centres a warning message whether or not the banner has an action", () => {
+    // The message is an anonymous flex item, so space-between pinned it to the
+    // free edge when no button followed it.
+    expect(stylesSource).toMatch(
+      /\.inline-warning > \.inline-warning-text[^}]*text-align: center/s,
+    );
+    expect(portsSource).toContain('<span className="inline-warning-text">');
+  });
+
+  it("shows whether the host can act on an elevation allowance", () => {
+    // A permission the account cannot use is the confusing case, so Overview
+    // reports passwordless sudo as a host fact beside systemd and Docker.
+    expect(overviewSource).toContain('label: "sudo"');
+    expect(overviewSource).toContain("capabilities.passwordlessSudo");
+    // Docker reachable only under sudo is its own answer, not "sudo required".
+    expect(overviewSource).toContain("dockerAccessibleWithSudo");
+    expect(overviewSource).toContain("reachable with sudo");
   });
 
   it("offers sudo when Docker log source discovery lacks permission", () => {

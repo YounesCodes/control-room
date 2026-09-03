@@ -7,7 +7,8 @@ import { PortsDocker } from "../components/ports/PortsDocker";
 import { PortsOverview } from "../components/ports/PortsOverview";
 import { PortsTable } from "../components/ports/PortsTable";
 import { api, errorMessage } from "../lib/api";
-import { filterAndSortSockets, type Exposure } from "../lib/port-inspector";
+import { filterAndSortSockets, ownerGapNotice, type Exposure } from "../lib/port-inspector";
+import { elevationAllowed } from "../lib/sudo-elevation";
 import { isCacheFresh } from "../lib/workspace-cache";
 import type {
   CachedList,
@@ -32,6 +33,7 @@ const TABS: { id: PortsTab; label: string }[] = [
 export function PortsPane({
   connection,
   capabilities,
+  globalSudoEnabled,
   cache,
   containersCache,
   onCacheChange,
@@ -42,6 +44,7 @@ export function PortsPane({
 }: {
   connection: SavedConnection;
   capabilities: HostCapabilities | null;
+  globalSudoEnabled: boolean;
   cache: CachedList<ListeningSocket>;
   containersCache: CachedList<DockerContainer>;
   onCacheChange: (cache: CachedList<ListeningSocket>) => void;
@@ -55,6 +58,10 @@ export function PortsPane({
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
   const [portsSudo, setPortsSudo] = useState(false);
+  // Whether the read behind the current list actually ran as root. A permission
+  // the account cannot use does not elevate anything, so this is not the same
+  // as the setting being on.
+  const [portsElevated, setPortsElevated] = useState(false);
 
   // Firewall and established connections are host-live data: kept in component
   // state only and never persisted to the Workspace.
@@ -64,6 +71,12 @@ export function PortsPane({
   const [connections, setConnections] = useState<EstablishedConnections | null>(null);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
+
+  // An allowance only elevates an account sudo does not question. Without the
+  // capability the read runs unelevated no matter what the switches say.
+  const elevationInEffect =
+    elevationAllowed(globalSudoEnabled, connection.sudoEnabled) &&
+    capabilities?.passwordlessSudo === true;
 
   const cacheRef = useRef(cache);
   const containersRef = useRef(containersCache);
@@ -104,6 +117,7 @@ export function PortsPane({
     try {
       const items = await api.listPorts(connection.id, sudoPassword);
       if (request !== requestRef.current) return;
+      setPortsElevated(sudoPassword !== null || elevationInEffect);
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
       void loadContainers();
     } catch (caught) {
@@ -158,6 +172,18 @@ export function PortsPane({
     if (tab === "connections") void loadConnections();
   }, [tab]);
 
+  // Changing the elevation allowance changes what a read can see, so the cached
+  // list from the other side of that change is stale by definition.
+  const firstElevationRef = useRef(true);
+  useEffect(() => {
+    if (firstElevationRef.current) {
+      firstElevationRef.current = false;
+      return;
+    }
+    void loadPorts(true);
+    void loadConnections(true);
+  }, [elevationInEffect]);
+
   function refresh() {
     void loadPorts(true);
     void loadContainers(true);
@@ -196,7 +222,7 @@ export function PortsPane({
 
   const showProtocol = tab !== "connections";
   const showExposure = tab === "overview" || tab === "table";
-  const unresolvedOwners = cache.items.some((socket) => socket.ownership !== "known");
+  const ownerGap = ownerGapNotice(cache.items, portsElevated);
 
   return (
     <section className="feature-page ports-page">
@@ -250,13 +276,15 @@ export function PortsPane({
           )}
         </p>
       )}
-      {unresolvedOwners && (tab === "overview" || tab === "table") && (
+      {ownerGap && (tab === "overview" || tab === "table") && (
         <p className="inline-warning firewall-warning">
-          <ShieldAlert size={14} /> Some listeners could not be attributed to a process without
-          elevation.
-          <button type="button" className="link-button" onClick={() => setPortsSudo(true)}>
-            Resolve owners with sudo
-          </button>
+          <ShieldAlert size={14} />
+          <span className="inline-warning-text">{ownerGap.message}</span>
+          {ownerGap.offerSudo && (
+            <button type="button" className="link-button" onClick={() => setPortsSudo(true)}>
+              Resolve owners with sudo
+            </button>
+          )}
         </p>
       )}
 

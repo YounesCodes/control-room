@@ -110,6 +110,58 @@ export function exposureLabel(exposure: Exposure): string {
   return "Specific address";
 }
 
+/**
+ * Why some listeners have no recorded owner. The two causes need different
+ * answers: one is a privilege wall, the other is a fact about the host that no
+ * amount of privilege changes.
+ */
+export interface OwnerGapNotice {
+  message: string;
+  /** True only when running the same read as root could actually help. */
+  offerSudo: boolean;
+}
+
+/**
+ * `elevated` says whether the read that produced these sockets already ran as
+ * root. Without it the pane would keep blaming a privilege wall for listeners
+ * that were read as root and still have no single owner.
+ */
+export function ownerGapNotice(
+  sockets: Pick<ListeningSocket, "ownership">[],
+  elevated: boolean,
+): OwnerGapNotice | null {
+  const unattributed = sockets.some((socket) => socket.ownership === "unavailable");
+  // Several processes hold one listening socket, the prefork and worker pattern.
+  // The owning PID is genuinely ambiguous, so root sees exactly what you see.
+  const ambiguous = sockets.some((socket) => socket.ownership === "ambiguous");
+
+  if (!unattributed && !ambiguous) return null;
+
+  if (unattributed && !elevated) {
+    return {
+      message: ambiguous
+        ? "Some listeners could not be attributed to a process without elevation, and some are held by several processes at once."
+        : "Some listeners could not be attributed to a process without elevation.",
+      offerSudo: true,
+    };
+  }
+
+  if (unattributed) {
+    return {
+      message: ambiguous
+        ? "This read ran as root. Some listeners still have no owning process, and some are held by several processes at once."
+        : "This read ran as root. Some listeners still have no owning process, which is normal for kernel-side sockets.",
+      offerSudo: false,
+    };
+  }
+
+  return {
+    message:
+      "Some listeners are held by several processes at once, so no single owner is recorded. Elevation does not change this.",
+    offerSudo: false,
+  };
+}
+
 export type OwnerKind = "container" | "service" | "process" | "unknown";
 
 export interface SocketOwner {

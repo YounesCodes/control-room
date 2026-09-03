@@ -24,8 +24,17 @@ DESIGN.md.
    Operation, and Log Stream an ID.
 4. Never persist terminal output, fetched logs, SSH or sudo passwords, or
    imported private keys.
-5. Keep remote operations read-only. A sudo retry is allowed only after a
-   permission error and must not save the password.
+5. Keep remote operations read-only. Elevation never widens what a Structured
+   Operation may do, only what it may read. Sudo is off by default and is turned
+   on by the user, either for one host in the Saved Connection editor or for all
+   of them in Settings. An allowed host runs a read under sudo only when the
+   account has passwordless sudo, and runs it unelevated otherwise, so an
+   allowance never becomes a password prompt on its own. A one-shot sudo
+   password stays available after a permission error whether or not elevation is
+   allowed, and is never saved. Report whether an account has passwordless sudo
+   as a host capability, separately from whether the user allowed elevation. A
+   permission the account cannot act on must not be shown as if reads were
+   elevated.
 
 ## Required behavior
 
