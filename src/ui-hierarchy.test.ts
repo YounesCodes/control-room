@@ -50,6 +50,20 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps baseline capture manual and never schedules it", () => {
+    const baselinesSource = readFileSync(
+      new URL("./pages/BaselinesPane.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(appSource).toContain('{ id: "baselines", label: "Baselines", icon: Camera }');
+    expect(baselinesSource).toContain("api.captureHostBaseline");
+    expect(baselinesSource).not.toContain("setInterval");
+    expect(baselinesSource).not.toContain("setTimeout");
+    expect(baselinesSource).toContain(
+      "Captured only when you ask. Control Room never collects in the background.",
+    );
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

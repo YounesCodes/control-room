@@ -42,6 +42,7 @@ function workspace(id: string, connectionId: string): Workspace {
     containerSelectionId: null,
     containerDetailsCache: {},
     logSource: null,
+    baselineSelectionId: null,
   };
 }
 

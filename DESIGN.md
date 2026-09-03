@@ -45,7 +45,7 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, or History as
+terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, Baselines, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -107,7 +107,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  History, Scratchpad), with "Add connection"
+  Baselines, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -389,6 +389,43 @@ records, and React never receives raw `docker inspect` JSON. Image references an
 separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
+
+Baselines is a split page: saved captures on the left, one capture or one comparison on the right.
+Capture is a button, never a schedule, and a checkbox row above it narrows which sections run. While
+it runs, each finished section appears with its own status chip, and Stop ends the run once the
+section in flight returns. Stopping keeps what was already read: the sections that never ran are
+recorded as not captured, because discarding finished work would contradict the button. The five
+section states (collected, partial, not present, not readable, not captured) use the three status
+hues plus a neutral dashed chip and stay distinct in every view, because collapsing them would let
+missing evidence read as an unchanged host. Each chip carries the sentence that separates it from
+its neighbours, since the difference between an absent subsystem and an unreadable one decides what
+the user does next.
+
+Each row on the left says how far that capture moved from the one below it, so the list points at
+where something happened instead of making the user diff pairs to find it. A pinned capture is kept
+past the retention limit and does not use one of its slots, because a baseline someone named on
+purpose should not be evicted by routine captures.
+
+A capture on its own opens: any section that read something expands to the entries it recorded, with
+a filter once the list runs long. Host facts report their status and nothing else, because the
+identity behind them is what the comparison and the identity warning are for. From any entry, one
+button reads that unit, port, or mount down the whole stored history, which answers when a value
+moved rather than only whether it did.
+
+Compare with offers Live machine state alongside every other capture. Live reads the host through
+the same bounded collection a capture runs and is never saved, so the list still only grows from
+Capture baseline; the panel names that side Live state and says the read was discarded. Read again
+repeats it, Stop ends it once the section in flight returns, and section progress appears in the
+panel while it runs. Choosing another capture instead orders the comparison earlier to later
+regardless of which row is selected. Each section shows both statuses, then additions, removals,
+and changed facts with the old and new value side by side. A section that could not be compared
+shows why in place of a diff and is excluded from the change count. Sections version their fact
+shape separately, so changing one section never makes the others incomparable against older
+captures. Facts that move on a healthy host are hidden behind one checkbox that appears only when
+such a change exists, and an entry left with nothing to show is counted as unchanged rather than
+listed as changed with an empty body. Copy and the two export buttons write exactly what the panel
+shows, filter included. A mismatched or unreadable machine fingerprint is called out at the top of
+the comparison.
 
 The Systemd list covers system-scope services, timers, mounts, and sockets through one
 bounded property query. Failed units sort first, while state and type filters keep the full
