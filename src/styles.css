@@ -2253,7 +2253,15 @@ dd {
 
 .boot-heading {
   align-items: flex-end;
+  flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+/* Without a basis of its own the title block is whatever the boot picker
+   leaves behind, and a long journalctl range wraps the heading to two lines. */
+.boot-heading > div:first-child {
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .boot-heading small {
@@ -2265,13 +2273,16 @@ dd {
 
 .boot-heading-actions {
   display: flex;
+  min-width: 0;
   align-items: flex-end;
   gap: 8px;
 }
 
 .boot-heading-actions label {
   display: flex;
-  min-width: 320px;
+  width: 360px;
+  min-width: 0;
+  max-width: 100%;
   flex-direction: column;
   gap: 5px;
 }
@@ -2284,10 +2295,16 @@ dd {
   text-transform: uppercase;
 }
 
+/* A select sizes itself to its widest option, and a boot range runs to two
+   full timestamps. Pinning the width makes it clip instead of grow, which is
+   safe because "Current boot" and "2 boots ago" lead the label. */
 .boot-heading-actions select {
+  width: 100%;
+  min-width: 0;
   min-height: 33px;
   padding-top: 0;
   padding-bottom: 0;
+  text-overflow: ellipsis;
 }
 
 .boot-sections {
@@ -2302,12 +2319,14 @@ dd {
   padding: 18px 0 20px;
 }
 
-.boot-section:not(.boot-section-wide):nth-child(even) {
+/* The narrow sections lead the grid, so the odd child is the left column.
+   Adding or removing a section above them flips this parity. */
+.boot-section:not(.boot-section-wide):nth-child(odd) {
   border-right: 1px solid var(--border);
   padding-right: 24px;
 }
 
-.boot-section:not(.boot-section-wide):nth-child(odd) {
+.boot-section:not(.boot-section-wide):nth-child(even) {
   padding-left: 24px;
 }
 
@@ -2315,12 +2334,6 @@ dd {
   grid-column: 1 / -1;
 }
 
-.boot-source-section {
-  padding-top: 12px;
-  padding-bottom: 12px;
-}
-
-.boot-source-section p,
 .boot-empty,
 .boot-observation,
 .boot-original,
@@ -2409,15 +2422,32 @@ dd {
 }
 
 .boot-unit-list > div {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 5px 12px;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 7px 0;
+  padding: 8px 0;
 }
 
-.boot-unit-list span,
+/* A duration string says how long, but not how it compares. The bar is drawn
+   against the longest row on screen, so the scale is the list itself. */
+.boot-unit-track {
+  grid-column: 1 / -1;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border-subtle);
+}
+
+.boot-unit-bar {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text-faint);
+}
+
+.boot-unit-list > div > span:first-child,
 .boot-failed-list strong {
   min-width: 0;
   overflow: hidden;
@@ -2471,12 +2501,56 @@ dd {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
-  padding: 12px;
+  padding: 6px 0;
   color: var(--text-muted);
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 10.5px;
   line-height: 1.55;
+  list-style: none;
+}
+
+/* One row per entry with the clock in its own column, so the messages line up
+   instead of starting wherever the timestamp happened to end. */
+.boot-journal-sample li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 12px;
+}
+
+.boot-journal-sample li:hover {
+  background: var(--fill-hover);
+}
+
+.boot-journal-sample time {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.boot-journal-sample span {
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+/* An entry journalctl wrote without a parsable timestamp keeps the full width
+   rather than being indented under an empty clock column. */
+.boot-journal-sample li > span:only-child {
+  grid-column: 1 / -1;
+}
+
+.boot-refreshing {
+  margin: 0 0 12px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.boot-summary {
+  margin-bottom: 18px;
+}
+
+.boot-heading-actions label small {
+  color: var(--text-faint);
+  font-size: 10px;
 }
 
 /* ==========================================================================

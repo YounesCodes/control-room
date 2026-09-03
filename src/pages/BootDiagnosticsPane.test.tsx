@@ -91,6 +91,13 @@ function snapshot(overrides: Partial<BootDiagnostics> = {}): BootDiagnostics {
   };
 }
 
+function summaryTile(label: string): string | undefined {
+  const summary = document.querySelector(".boot-summary");
+  return [...(summary?.querySelectorAll(".overview-stat") ?? [])]
+    .find((stat) => stat.querySelector(".overview-stat-label")?.textContent === label)
+    ?.querySelector(".overview-stat-value")?.textContent;
+}
+
 describe("BootDiagnosticsPane", () => {
   beforeEach(() => api.collectBootDiagnostics.mockResolvedValue(snapshot()));
   afterEach(() => {
@@ -165,6 +172,80 @@ describe("BootDiagnosticsPane", () => {
       />,
     );
     expect(screen.getByText("Timing is available for the current boot only")).toBeTruthy();
+  });
+
+  it("leads with the counts instead of making them be read out of the sections", async () => {
+    render(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot()}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    expect(summaryTile("Boot time")).toBe("8.368s");
+    expect(summaryTile("Units failed")).toBe("1");
+    expect(summaryTile("Journal warnings")).toBe("1");
+  });
+
+  // A host that cannot measure kernel time prints only a userspace figure and
+  // no total. Reporting that as unavailable contradicts the card below it.
+  it("falls back to userspace when systemd reports no total", async () => {
+    render(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot({
+          timing: {
+            collectedAt,
+            error: null,
+            permissionRequired: false,
+            data: {
+              total: null,
+              kernel: null,
+              userspace: "3.725s",
+              original: "Startup finished in 3.725s (userspace)",
+            },
+          },
+        })}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    expect(summaryTile("Boot time")).toBe("3.725s");
+    expect(screen.getByText(/userspace only/i)).toBeTruthy();
+  });
+
+  it("names boots by distance rather than by journalctl's negative index", async () => {
+    render(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot()}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    const options = [...(screen.getByLabelText("Boot") as HTMLSelectElement).options];
+    const labels = options.map((option) => option.textContent ?? "");
+    expect(labels.some((label) => label.startsWith("1 boot ago"))).toBe(true);
+    expect(labels.some((label) => label.startsWith("Current boot"))).toBe(true);
+    expect(labels.join(" ")).not.toContain("-1");
+  });
+
+  it("says why a previous boot offers no unit journals", async () => {
+    render(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot({ selectedBootId: previousId })}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "View journal" })).toBeNull();
+    expect(screen.getByText(/offered for the current boot only/i)).toBeTruthy();
   });
 
   it("offers transient sudo retry only for a permission-limited boot journal", async () => {
