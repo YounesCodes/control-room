@@ -391,7 +391,11 @@ root). Rows keep protocol, address family, bind address, and port separate from 
 ownership; a single visible PID may correlate to a validated systemd unit through `ps`, and an exact
 published host address, port, and protocol to one Docker container. Binding exposure and firewall
 policy are shown separately — a broad bind is never presented as proof of Internet reachability.
-Missing or conflicting evidence stays unavailable or ambiguous. Firewall and connection data live in
+Missing or conflicting evidence stays unavailable or ambiguous. The single
+exception is systemd's claim on a socket it activates: pid 1 holds the listening
+descriptor for every `.socket` unit, which would otherwise make ssh, docker, and
+their kind report no owner at all. That claim is dropped when a real holder
+remains. Two services that genuinely disagree still stay ambiguous. Firewall and connection data live in
 Workspace memory only. The view does not include Unix sockets, scan networks, test reachability, or
 collect full process arguments.
 
