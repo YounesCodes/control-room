@@ -1271,6 +1271,408 @@ code,
    Workspace content + terminal panes
    ========================================================================== */
 
+/* ==========================================================================
+   Host baselines
+   ========================================================================== */
+
+.baseline-capture {
+  display: flex;
+  padding: 0 16px 10px;
+  gap: 8px;
+}
+
+.baseline-capture input {
+  min-width: 0;
+  flex: 1;
+}
+
+.baseline-progress {
+  display: flex;
+  margin: 0 16px 10px;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  gap: 4px;
+  list-style: none;
+}
+
+.baseline-live-progress {
+  margin: 0 0 18px;
+}
+
+.baseline-progress li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  gap: 8px;
+}
+
+.baseline-progress-count {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.baseline-status {
+  padding: 1px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.baseline-status-collected {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.baseline-status-partial,
+.baseline-status-unsupported {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.baseline-status-unavailable {
+  border-color: var(--failure);
+  color: var(--failure);
+}
+
+/* A section nobody asked for is not a failure, so it stays neutral rather than
+   borrowing the warning or failure hue. */
+.baseline-status-skipped {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+/* Proximity does the grouping here. The gap inside one option has to read as
+   clearly smaller than the gap between options, or each label drifts toward
+   the checkbox to its right. 7px inside against 18px between.
+   The padding-top is what separates the rendered legend from the row; a
+   margin on the legend itself sits outside the fieldset's content box. */
+.baseline-section-choice {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 16px 12px;
+  padding: 9px 0 0;
+  border: 0;
+  gap: 9px 18px;
+}
+
+.baseline-section-choice legend {
+  padding: 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.baseline-section-choice label {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  gap: 7px;
+}
+
+.baseline-section-choice input {
+  margin: 0;
+}
+
+.baseline-section-toggle {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  gap: 5px;
+  text-align: left;
+}
+
+.baseline-section-toggle svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.baseline-entry-filter {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.baseline-entry-list {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  gap: 8px;
+  list-style: none;
+}
+
+.baseline-entry-list > li {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.baseline-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.baseline-entry-head code {
+  overflow: hidden;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baseline-entry-facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 5px 0 0;
+  gap: 3px 14px;
+}
+
+.baseline-entry-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.baseline-entry-facts dt {
+  font-size: 10.5px;
+}
+
+.baseline-entry-facts dd {
+  font-size: 11px;
+}
+
+/* The trace can be wider than the panel. It scrolls inside itself so the page
+   never scrolls sideways. */
+.baseline-trace {
+  overflow-x: auto;
+  margin-top: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.baseline-trace table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.baseline-trace th,
+.baseline-trace td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.baseline-trace thead th {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.baseline-trace tbody th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.baseline-trace tr:last-child th,
+.baseline-trace tr:last-child td {
+  border-bottom: 0;
+}
+
+.baseline-trace-absent {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Scoped to this list: making every dense row a flex container would break the
+   ellipsis those rows rely on. */
+.baseline-row-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.baseline-row-title svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.baseline-comparison-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.baseline-volatile-toggle {
+  display: flex;
+  margin-right: auto;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.baseline-volatile-toggle input {
+  margin: 0;
+}
+
+.baseline-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.baseline-detail-header > div:first-child {
+  min-width: 0;
+}
+
+.baseline-detail-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.baseline-rename {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+}
+
+.baseline-rename input {
+  min-width: 0;
+  flex: 1;
+}
+
+.baseline-compare-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 18px;
+}
+
+.baseline-compare-field {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.baseline-compare-field select {
+  min-width: 0;
+  flex: 1;
+}
+
+.baseline-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.baseline-section {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.baseline-section header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.baseline-section h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 12.5px;
+}
+
+.baseline-section-count {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.baseline-comparison-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.baseline-comparison-note {
+  margin: -8px 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.baseline-change-list,
+.baseline-fact-list {
+  display: flex;
+  margin: 8px 0 0;
+  flex-direction: column;
+  padding: 0;
+  gap: 4px;
+  list-style: none;
+}
+
+.baseline-change-list > li {
+  display: flex;
+  align-items: baseline;
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.baseline-fact-list {
+  margin: 4px 0 0 12px;
+}
+
+.baseline-fact-list li {
+  display: flex;
+  align-items: baseline;
+  color: var(--text-faint);
+  font-size: 11px;
+  gap: 6px;
+}
+
+.baseline-change-mark {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.baseline-change-added {
+  color: var(--success);
+}
+
+.baseline-change-removed {
+  color: var(--failure);
+}
+
 .workspace-content {
   position: relative;
   min-width: 0;

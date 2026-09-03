@@ -242,6 +242,207 @@ pub struct DockerMount {
     pub propagation: Option<String>,
 }
 
+/// One mounted filesystem from a bounded `df` baseline. Device paths are not
+/// collected: the mount point, type, size, and use are enough to compare.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Filesystem {
+    pub mount_point: String,
+    pub filesystem_type: String,
+    pub size_kib: u64,
+    pub used_percent: u8,
+}
+
+/// Version of the normalized host state written into stored baselines. Bump it
+/// whenever a section's identity or fact names change, so an older baseline is
+/// reported as incomparable instead of silently mis-diffed.
+pub const BASELINE_SCHEMA_VERSION: u32 = 1;
+
+/// Stable evidence about which Remote Host a baseline came from. The machine
+/// fingerprint is a truncated SHA-256 computed on the host, so the raw
+/// `/etc/machine-id` never leaves it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct HostIdentity {
+    pub hostname: Option<String>,
+    pub machine_fingerprint: Option<String>,
+    pub os_id: Option<String>,
+    pub os_version: Option<String>,
+    pub kernel: Option<String>,
+    pub architecture: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineFact {
+    pub name: String,
+    pub value: String,
+}
+
+/// One comparable object inside a section, keyed by a domain-aware identity.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineEntry {
+    pub identity: String,
+    pub label: String,
+    pub facts: Vec<BaselineFact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineSection {
+    /// `host`, `systemdUnits`, `containers`, `listeners`, or `filesystems`.
+    pub kind: String,
+    /// `collected`, `partial`, `unsupported`, `unavailable`, or `skipped`.
+    /// These are distinct: an absent subsystem is not the same as one this
+    /// account cannot read, and neither is one the user did not ask for.
+    pub status: String,
+    /// Version of this section's fact shape. Each section carries its own, so
+    /// changing what one section records never makes the others incomparable.
+    #[serde(default = "first_schema_version")]
+    pub schema_version: u32,
+    pub collected_at: String,
+    pub message: Option<String>,
+    pub entries: Vec<BaselineEntry>,
+}
+
+fn first_schema_version() -> u32 {
+    1
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostBaseline {
+    pub id: String,
+    pub connection_id: String,
+    pub label: Option<String>,
+    pub schema_version: u32,
+    pub captured_at: String,
+    /// A pinned capture is kept past the per-connection retention limit, so a
+    /// baseline the user named on purpose is never evicted by newer captures.
+    #[serde(default)]
+    pub pinned: bool,
+    pub identity: HostIdentity,
+    pub sections: Vec<BaselineSection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineSectionSummary {
+    pub kind: String,
+    pub status: String,
+    pub entry_count: u32,
+}
+
+/// One capture's value for a single tracked entry, for reading a unit, port, or
+/// mount across the whole stored history instead of two captures at a time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineTracePoint {
+    pub baseline_id: String,
+    pub label: Option<String>,
+    pub captured_at: String,
+    /// The status of the section this entry belongs to in that capture.
+    pub section_status: String,
+    /// False when the capture read the section but the entry was not in it.
+    pub present: bool,
+    pub facts: Vec<BaselineFact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineTrace {
+    pub kind: String,
+    pub identity: String,
+    pub label: String,
+    pub points: Vec<BaselineTracePoint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostBaselineSummary {
+    pub id: String,
+    pub connection_id: String,
+    pub label: Option<String>,
+    pub schema_version: u32,
+    pub captured_at: String,
+    pub pinned: bool,
+    pub identity: HostIdentity,
+    pub sections: Vec<BaselineSectionSummary>,
+    /// Entries that differ from the next older capture of the same connection.
+    /// None when there is no older capture, or when nothing could be compared.
+    pub changes_since_previous: Option<u32>,
+}
+
+/// What the user asked one capture to do. Sections is None for every section,
+/// or an explicit list when the user narrowed the capture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineCaptureRequest {
+    pub connection_id: String,
+    pub capture_id: String,
+    pub label: Option<String>,
+    pub sections: Option<Vec<String>>,
+}
+
+/// Emitted once per section while a capture runs. Capture is always explicit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineProgress {
+    pub capture_id: String,
+    pub kind: String,
+    pub status: String,
+    pub message: Option<String>,
+    pub completed: u32,
+    pub total: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineFactChange {
+    pub name: String,
+    pub base_value: Option<String>,
+    pub target_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineEntryChange {
+    pub identity: String,
+    pub label: String,
+    pub changes: Vec<BaselineFactChange>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineSectionDiff {
+    pub kind: String,
+    pub base_status: String,
+    pub target_status: String,
+    /// False when either side was unsupported, unavailable, or written by an
+    /// incompatible schema. Such a section is never reported as unchanged.
+    pub comparable: bool,
+    pub note: Option<String>,
+    pub added: Vec<BaselineEntry>,
+    pub removed: Vec<BaselineEntry>,
+    pub changed: Vec<BaselineEntryChange>,
+    pub unchanged_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineComparison {
+    pub base: HostBaselineSummary,
+    pub target: HostBaselineSummary,
+    /// `same`, `different`, or `unknown`, from machine fingerprint evidence.
+    pub identity_match: String,
+    pub schema_compatible: bool,
+    /// True when the target side was read from the host for this comparison and
+    /// never saved, so the UI can name it as live rather than as a capture.
+    pub target_is_live: bool,
+    pub sections: Vec<BaselineSectionDiff>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {

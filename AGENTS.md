@@ -74,10 +74,22 @@ DESIGN.md.
    Each Saved Connection has one note, and one global note is shared across all
    connections and Workspaces. Closing a Workspace deletes neither. Never capture
    terminal or log output automatically.
-10. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-11. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+10. Capture a Host Baseline only when the user asks. Never schedule, poll, or
+    recapture in the background. Store normalized facts, per-section collection
+    time, support status, user label, schema version, and host identity evidence.
+    Never store raw command output, logs, credentials, or environment values.
+    Keep collected, partial, unsupported, unavailable, and skipped distinct, and
+    never report a section Control Room did not read as unchanged. Stopping a
+    capture keeps the sections that finished and records the rest as skipped.
+    Version each section's fact shape on its own so one section's change never
+    blocks comparison of the others. Compare baselines
+    deterministically by domain identity and draw no causal conclusion. A
+    comparison against live machine state is still an explicit, user-initiated
+    read: never save it as a capture and never repeat it on its own.
+11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-12. Do not commit or push unless the user asks.
+13. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -113,3 +125,9 @@ account you control.
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration
   reports. It does not import the host's existing shell history.
+- **Host Baseline**: an explicit, timestamped capture of normalized host state
+  for one Saved Connection, versioned by schema and split into sections that
+  each record their own collection time and support status.
+- **Normalized Host State**: the versioned section, entry, and fact shape a
+  baseline stores. Entries carry a domain-aware identity so two captures can be
+  compared without per-section diff code.

@@ -2,14 +2,16 @@ use chrono::Utc;
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
+    baselines::{self, BaselineCaptureRegistry, SectionReporter},
     database::{Database, validate_connection_input},
     history,
     models::{
-        AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
+        AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
+        BaselineTrace, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
-        HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState,
-        SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
+        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -416,6 +418,183 @@ pub fn start_docker_log_stream(
 #[tauri::command]
 pub fn stop_log_stream(streams: State<'_, StreamManager>, stream_id: String) -> Result<(), String> {
     streams.stop(&stream_id)
+}
+
+struct ChannelSectionReporter<'a> {
+    capture_id: &'a str,
+    channel: Channel<BaselineProgress>,
+}
+
+impl SectionReporter for ChannelSectionReporter<'_> {
+    fn report(&self, section: &BaselineSection, completed: u32, total: u32) {
+        let _ = self.channel.send(BaselineProgress {
+            capture_id: self.capture_id.to_string(),
+            kind: section.kind.clone(),
+            status: section.status.clone(),
+            message: section.message.clone(),
+            completed,
+            total,
+        });
+    }
+}
+
+/// Captures one baseline. Nothing here runs on a timer: the command exists only
+/// because the user chose Capture baseline.
+#[tauri::command(async)]
+pub fn capture_host_baseline(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    captures: State<'_, BaselineCaptureRegistry>,
+    request: BaselineCaptureRequest,
+    progress: Channel<BaselineProgress>,
+) -> Result<HostBaselineSummary, String> {
+    let connection = database.get_connection(&request.connection_id)?;
+    let _permit = limiter.acquire(&request.connection_id)?;
+    let reporter = ChannelSectionReporter {
+        capture_id: &request.capture_id,
+        channel: progress,
+    };
+    // A capture honours the sudo permission the user granted for this host, so
+    // sections that need root are collected rather than recorded as partial.
+    // It still never prompts: without passwordless sudo the reads run
+    // unelevated and say so.
+    let elevation = elevation_for(&database, &connection, None)?;
+    let baseline = baselines::capture(
+        &connection,
+        &request.capture_id,
+        request.label,
+        request.sections.as_deref(),
+        &elevation,
+        &captures,
+        &reporter,
+    )?;
+    database.save_host_baseline(&baseline)
+}
+
+#[tauri::command]
+pub fn cancel_host_baseline(
+    captures: State<'_, BaselineCaptureRegistry>,
+    capture_id: String,
+) -> Result<(), String> {
+    captures.cancel(&capture_id)
+}
+
+#[tauri::command]
+pub fn list_host_baselines(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<Vec<HostBaselineSummary>, String> {
+    database.list_host_baselines(&connection_id)
+}
+
+#[tauri::command]
+pub fn get_host_baseline(
+    database: State<'_, Database>,
+    id: String,
+) -> Result<HostBaseline, String> {
+    database.get_host_baseline(&id)
+}
+
+#[tauri::command]
+pub fn rename_host_baseline(
+    database: State<'_, Database>,
+    id: String,
+    label: Option<String>,
+) -> Result<HostBaselineSummary, String> {
+    database.rename_host_baseline(&id, label)
+}
+
+/// Pins or unpins one capture. A pinned capture survives the per-connection
+/// retention limit, so a named baseline is not evicted by routine captures.
+#[tauri::command]
+pub fn set_host_baseline_pinned(
+    database: State<'_, Database>,
+    id: String,
+    pinned: bool,
+) -> Result<HostBaselineSummary, String> {
+    database.set_host_baseline_pinned(&id, pinned)
+}
+
+#[tauri::command]
+pub fn delete_host_baseline(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_host_baseline(&id)
+}
+
+/// Reads one entry across every stored capture of a connection, newest first.
+#[tauri::command]
+pub fn trace_host_baseline_entry(
+    database: State<'_, Database>,
+    connection_id: String,
+    kind: String,
+    identity: String,
+) -> Result<BaselineTrace, String> {
+    database.trace_host_baseline_entry(&connection_id, &kind, &identity)
+}
+
+/// Writes text the user already sees to a path the user already chose in the
+/// system save dialog. Nothing here reaches a host or the network.
+#[tauri::command]
+pub fn export_text_file(path: String, contents: String) -> Result<(), String> {
+    let extension = std::path::Path::new(&path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(extension.as_deref(), Some("md") | Some("json")) {
+        return Err("Exports are written as .md or .json only".into());
+    }
+    if contents.len() > 8 * 1024 * 1024 {
+        return Err("That export is too large to write".into());
+    }
+    std::fs::write(&path, contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn compare_host_baselines(
+    database: State<'_, Database>,
+    base_id: String,
+    target_id: String,
+) -> Result<BaselineComparison, String> {
+    if base_id == target_id {
+        return Err("Choose two different baselines to compare".into());
+    }
+    let base = database.get_host_baseline(&base_id)?;
+    let target = database.get_host_baseline(&target_id)?;
+    if base.connection_id != target.connection_id {
+        return Err("Baselines from different Saved Connections cannot be compared".into());
+    }
+    Ok(baselines::compare(&base, &target))
+}
+
+/// Compares a saved capture against the host as it is right now. The live read
+/// happens only because the user asked for this comparison and is never stored,
+/// so the baseline list still only grows from Capture baseline.
+#[tauri::command(async)]
+pub fn compare_host_baseline_with_live(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    captures: State<'_, BaselineCaptureRegistry>,
+    base_id: String,
+    capture_id: String,
+    progress: Channel<BaselineProgress>,
+) -> Result<BaselineComparison, String> {
+    let base = database.get_host_baseline(&base_id)?;
+    let connection = database.get_connection(&base.connection_id)?;
+    let _permit = limiter.acquire(&connection.id)?;
+    let reporter = ChannelSectionReporter {
+        capture_id: &capture_id,
+        channel: progress,
+    };
+    let elevation = elevation_for(&database, &connection, None)?;
+    let live = baselines::capture(
+        &connection,
+        &capture_id,
+        None,
+        None,
+        &elevation,
+        &captures,
+        &reporter,
+    )?;
+    Ok(baselines::compare_with_live(&base, &live))
 }
 
 #[tauri::command]

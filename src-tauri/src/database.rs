@@ -5,13 +5,17 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::models::{
-    AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
-    LOG_TAIL_OPTIONS, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
-    SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
+use crate::{
+    baselines,
+    models::{
+        AppSettings, BaselineTrace, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput,
+        HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS,
+        PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
+        ScratchpadNote, ScratchpadNoteInput,
+    },
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 6;
+const LATEST_SCHEMA_VERSION: i64 = 9;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -21,6 +25,9 @@ const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
+/// Baselines are kept manually. This cap only stops an unbounded local file:
+/// when it is reached, the oldest capture for that connection is dropped.
+const MAX_BASELINES_PER_CONNECTION: usize = 20;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -587,6 +594,170 @@ impl Database {
         Ok(())
     }
 
+    /// Stores one capture. The payload holds normalized facts only. No command
+    /// output, log text, credential, or environment value reaches this table.
+    pub fn save_host_baseline(
+        &self,
+        baseline: &HostBaseline,
+    ) -> Result<HostBaselineSummary, String> {
+        let payload = serde_json::to_string(baseline).map_err(|error| error.to_string())?;
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO host_baselines (id, connection_id, label, schema_version, captured_at, payload, pinned) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    baseline.id,
+                    baseline.connection_id,
+                    baseline.label,
+                    baseline.schema_version,
+                    baseline.captured_at,
+                    payload,
+                    baseline.pinned
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "DELETE FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT id FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
+                params![baseline.connection_id, MAX_BASELINES_PER_CONNECTION as i64],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(baselines::summarize(baseline))
+    }
+
+    pub fn list_host_baselines(
+        &self,
+        connection_id: &str,
+    ) -> Result<Vec<HostBaselineSummary>, String> {
+        let stored = self.read_host_baselines(connection_id)?;
+        // Each row reports how far it moved from the capture below it, so the
+        // list itself says where something happened instead of making the user
+        // diff pairs until they find it.
+        let mut summaries: Vec<HostBaselineSummary> =
+            stored.iter().map(baselines::summarize).collect();
+        for index in 0..summaries.len() {
+            let Some(previous) = stored.get(index + 1) else {
+                continue;
+            };
+            let comparison = baselines::compare(previous, &stored[index]);
+            summaries[index].changes_since_previous = baselines::total_changes(&comparison);
+        }
+        Ok(summaries)
+    }
+
+    /// Every stored capture of one connection, newest first, skipping payloads
+    /// a newer Control Room wrote rather than guessing at their shape.
+    fn read_host_baselines(&self, connection_id: &str) -> Result<Vec<HostBaseline>, String> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT payload, pinned FROM host_baselines WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([connection_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut baselines = Vec::new();
+        for row in rows {
+            let (payload, pinned) = row.map_err(|error| error.to_string())?;
+            if let Ok(mut baseline) = serde_json::from_str::<HostBaseline>(&payload) {
+                baseline.pinned = pinned;
+                baselines.push(baseline);
+            }
+        }
+        Ok(baselines)
+    }
+
+    pub fn trace_host_baseline_entry(
+        &self,
+        connection_id: &str,
+        kind: &str,
+        identity: &str,
+    ) -> Result<BaselineTrace, String> {
+        let stored = self.read_host_baselines(connection_id)?;
+        if stored.is_empty() {
+            return Err("This connection has no saved baselines".into());
+        }
+        Ok(baselines::trace_entry(&stored, kind, identity))
+    }
+
+    pub fn set_host_baseline_pinned(
+        &self,
+        id: &str,
+        pinned: bool,
+    ) -> Result<HostBaselineSummary, String> {
+        let mut baseline = self.get_host_baseline(id)?;
+        baseline.pinned = pinned;
+        let payload = serde_json::to_string(&baseline).map_err(|error| error.to_string())?;
+        let changed = self
+            .connection
+            .lock()
+            .execute(
+                "UPDATE host_baselines SET pinned = ?2, payload = ?3 WHERE id = ?1",
+                params![id, pinned, payload],
+            )
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("That baseline no longer exists".into());
+        }
+        Ok(baselines::summarize(&baseline))
+    }
+
+    pub fn get_host_baseline(&self, id: &str) -> Result<HostBaseline, String> {
+        let payload: Option<(String, bool)> = self
+            .connection
+            .lock()
+            .query_row(
+                "SELECT payload, pinned FROM host_baselines WHERE id = ?1",
+                [id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let (payload, pinned) =
+            payload.ok_or_else(|| "That baseline no longer exists".to_string())?;
+        let mut baseline: HostBaseline = serde_json::from_str(&payload)
+            .map_err(|_| "That baseline was written by a newer version of Control Room")?;
+        baseline.pinned = pinned;
+        Ok(baseline)
+    }
+
+    pub fn rename_host_baseline(
+        &self,
+        id: &str,
+        label: Option<String>,
+    ) -> Result<HostBaselineSummary, String> {
+        let mut baseline = self.get_host_baseline(id)?;
+        baseline.label = baselines::normalize_label(label);
+        let payload = serde_json::to_string(&baseline).map_err(|error| error.to_string())?;
+        self.connection
+            .lock()
+            .execute(
+                "UPDATE host_baselines SET label = ?2, payload = ?3 WHERE id = ?1",
+                params![id, baseline.label, payload],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(baselines::summarize(&baseline))
+    }
+
+    pub fn delete_host_baseline(&self, id: &str) -> Result<(), String> {
+        let removed = self
+            .connection
+            .lock()
+            .execute("DELETE FROM host_baselines WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        if removed == 0 {
+            return Err("That baseline no longer exists".into());
+        }
+        Ok(())
+    }
+
     pub fn get_settings(&self) -> Result<AppSettings, String> {
         let payload: Option<String> = self
             .connection
@@ -830,6 +1001,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             "ports",
             "docker",
             "logs",
+            "baselines",
             "history",
             "scratchpad",
         ]
@@ -1054,6 +1226,18 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 CREATE INDEX idx_scratchpad_notes_connection
                 ON scratchpad_notes(connection_id);
 
+                CREATE TABLE host_baselines (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    label TEXT,
+                    schema_version INTEGER NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE INDEX idx_host_baselines_connection
+                ON host_baselines(connection_id, captured_at DESC);
+
                 PRAGMA user_version = 4;
                 "#,
             )
@@ -1117,6 +1301,49 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 ALTER TABLE saved_connections
                 ADD COLUMN sudo_enabled INTEGER NOT NULL DEFAULT 0;
                 PRAGMA user_version = 6;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    // 7 belongs to command snippets (#37). This branch starts at 8 so both can
+    // land without either migration being skipped.
+    if version < 8 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS host_baselines (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    label TEXT,
+                    schema_version INTEGER NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_host_baselines_connection
+                ON host_baselines(connection_id, captured_at DESC);
+
+                PRAGMA user_version = 8;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 9 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                ALTER TABLE host_baselines
+                ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+
+                PRAGMA user_version = 9;
                 "#,
             )
             .map_err(|error| error.to_string())?;
@@ -1392,6 +1619,275 @@ mod tests {
             group_id: None,
             tag_names: Vec::new(),
         }
+    }
+
+    fn baseline_for(connection_id: &str, id: &str, captured_at: &str) -> HostBaseline {
+        HostBaseline {
+            pinned: false,
+            id: id.into(),
+            connection_id: connection_id.into(),
+            label: None,
+            schema_version: crate::models::BASELINE_SCHEMA_VERSION,
+            captured_at: captured_at.into(),
+            identity: crate::models::HostIdentity {
+                hostname: Some("debian-laptop".into()),
+                machine_fingerprint: Some("0123456789abcdef".into()),
+                os_id: Some("debian".into()),
+                os_version: Some("13".into()),
+                kernel: Some("6.1.0".into()),
+                architecture: Some("x86_64".into()),
+            },
+            sections: vec![crate::models::BaselineSection {
+                schema_version: 1,
+                kind: "systemdUnits".into(),
+                status: "collected".into(),
+                collected_at: captured_at.into(),
+                message: None,
+                entries: vec![crate::models::BaselineEntry {
+                    identity: "ssh.service".into(),
+                    label: "ssh.service".into(),
+                    facts: vec![crate::models::BaselineFact {
+                        name: "activeState".into(),
+                        value: "active".into(),
+                    }],
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn baselines_round_trip_rename_and_delete() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let baseline = baseline_for(&saved.id, "baseline-a", "2026-09-01T10:00:00Z");
+        let summary = database.save_host_baseline(&baseline).unwrap();
+        assert_eq!(summary.sections[0].entry_count, 1);
+        assert_eq!(database.list_host_baselines(&saved.id).unwrap().len(), 1);
+        assert_eq!(database.get_host_baseline("baseline-a").unwrap(), baseline);
+
+        let renamed = database
+            .rename_host_baseline("baseline-a", Some("  before upgrade  ".into()))
+            .unwrap();
+        assert_eq!(renamed.label.as_deref(), Some("before upgrade"));
+        assert_eq!(
+            database
+                .get_host_baseline("baseline-a")
+                .unwrap()
+                .label
+                .as_deref(),
+            Some("before upgrade")
+        );
+
+        database.delete_host_baseline("baseline-a").unwrap();
+        assert!(database.list_host_baselines(&saved.id).unwrap().is_empty());
+        assert!(database.get_host_baseline("baseline-a").is_err());
+        assert!(database.delete_host_baseline("baseline-a").is_err());
+    }
+
+    #[test]
+    fn a_pinned_capture_survives_retention_and_does_not_use_a_slot() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "baseline", "2026-09-01T00:00:00Z"))
+            .unwrap();
+        let pinned = database.set_host_baseline_pinned("baseline", true).unwrap();
+        assert!(pinned.pinned);
+
+        for index in 1..MAX_BASELINES_PER_CONNECTION + 3 {
+            database
+                .save_host_baseline(&baseline_for(
+                    &saved.id,
+                    &format!("baseline-{index:02}"),
+                    &format!("2026-09-01T{index:02}:00:00Z"),
+                ))
+                .unwrap();
+        }
+
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+        assert_eq!(stored.len(), MAX_BASELINES_PER_CONNECTION + 1);
+        assert!(database.get_host_baseline("baseline").unwrap().pinned);
+        assert!(stored.iter().any(|summary| summary.id == "baseline"));
+
+        database
+            .set_host_baseline_pinned("baseline", false)
+            .unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "one-more", "2026-09-02T00:00:00Z"))
+            .unwrap();
+        assert!(database.get_host_baseline("baseline").is_err());
+    }
+
+    #[test]
+    fn each_row_reports_how_far_it_moved_from_the_capture_below_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .unwrap();
+        let mut second = baseline_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        second.sections[0].entries[0].facts[0].value = "failed".into();
+        database.save_host_baseline(&second).unwrap();
+
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+
+        assert_eq!(stored[0].id, "second");
+        assert_eq!(stored[0].changes_since_previous, Some(1));
+        assert_eq!(stored[1].changes_since_previous, None);
+    }
+
+    #[test]
+    fn tracing_an_entry_reads_it_across_every_stored_capture() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .unwrap();
+        let mut second = baseline_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        second.sections[0].entries[0].facts[0].value = "failed".into();
+        database.save_host_baseline(&second).unwrap();
+
+        let trace = database
+            .trace_host_baseline_entry(&saved.id, "systemdUnits", "ssh.service")
+            .unwrap();
+
+        assert_eq!(trace.points.len(), 2);
+        assert_eq!(trace.points[0].facts[0].value, "failed");
+        assert_eq!(trace.points[1].facts[0].value, "active");
+    }
+
+    #[test]
+    fn deleting_a_connection_removes_its_baselines() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(
+                &saved.id,
+                "baseline-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        database.delete_connection(&saved.id).unwrap();
+        assert!(database.get_host_baseline("baseline-a").is_err());
+    }
+
+    #[test]
+    fn baseline_retention_drops_the_oldest_capture() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        for index in 0..MAX_BASELINES_PER_CONNECTION + 2 {
+            database
+                .save_host_baseline(&baseline_for(
+                    &saved.id,
+                    &format!("baseline-{index:02}"),
+                    &format!("2026-09-01T{index:02}:00:00Z"),
+                ))
+                .unwrap();
+        }
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+        assert_eq!(stored.len(), MAX_BASELINES_PER_CONNECTION);
+        assert_eq!(stored[0].id, "baseline-21");
+        assert!(database.get_host_baseline("baseline-00").is_err());
+        assert!(database.get_host_baseline("baseline-01").is_err());
+    }
+
+    #[test]
+    fn a_baseline_written_by_a_newer_schema_is_reported_not_guessed() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO host_baselines (id, connection_id, label, schema_version, captured_at, payload) VALUES ('future', ?1, NULL, 99, '2026-09-01T10:00:00Z', ?2)",
+                params![saved.id, "{\"unknown\":true}"],
+            )
+            .unwrap();
+        assert!(database.list_host_baselines(&saved.id).unwrap().is_empty());
+        assert!(database.get_host_baseline("future").is_err());
+    }
+
+    #[test]
+    fn migration_adds_the_baseline_table_to_an_older_database() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    r#"
+                    CREATE TABLE saved_connections (
+                        id TEXT PRIMARY KEY,
+                        display_name TEXT NOT NULL,
+                        destination TEXT NOT NULL,
+                        username TEXT,
+                        port INTEGER,
+                        identity_file TEXT,
+                        history_enabled INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        last_connected_at TEXT
+                    );
+                    INSERT INTO saved_connections (id, display_name, destination, created_at, updated_at)
+                    VALUES ('connection-a', 'Laptop', 'debian-laptop', '2026-01-01', '2026-01-01');
+                    "#,
+                )
+                .unwrap();
+        }
+        let database = Database::open(&path).unwrap();
+        let version: i64 = database
+            .connection
+            .lock()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
+        database
+            .save_host_baseline(&baseline_for(
+                "connection-a",
+                "baseline-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        assert_eq!(
+            database.list_host_baselines("connection-a").unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn stored_baselines_hold_normalized_facts_only() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(
+                &saved.id,
+                "baseline-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        let payload: String = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT payload FROM host_baselines WHERE id = 'baseline-a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        // The stored shape has no place for raw output, so the payload can only
+        // hold the section, entry, and fact fields the collectors produced.
+        for field in ["stdout", "stderr", "password", "environment", "logs"] {
+            assert!(!payload.contains(field), "payload leaked {field}");
+        }
+        assert!(payload.contains("\"kind\":\"systemdUnits\""));
     }
 
     #[test]
@@ -1994,5 +2490,49 @@ mod tests {
         database.save_workspace_state(&state).unwrap();
 
         assert_eq!(database.get_workspace_state().unwrap(), state);
+    }
+
+    #[test]
+    fn every_frontend_workspace_view_is_accepted() {
+        let types = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("src")
+                .join("types.ts"),
+        )
+        .unwrap();
+        let union = types
+            .split_once("export type WorkspaceView =")
+            .expect("WorkspaceView union is missing from src/types.ts")
+            .1
+            .split_once(';')
+            .expect("WorkspaceView union is not terminated")
+            .0;
+        let views: Vec<&str> = union
+            .split('|')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(|part| part.trim_matches('"'))
+            .collect();
+        assert!(views.len() > 1);
+
+        for view in views {
+            let workspace_id = Uuid::new_v4().to_string();
+            let state = PersistedWorkspaceState {
+                workspaces: vec![crate::models::PersistedWorkspace {
+                    id: workspace_id.clone(),
+                    label: None,
+                    connection_id: Uuid::new_v4().to_string(),
+                    view: view.into(),
+                    history_paused: false,
+                }],
+                active_workspace_id: Some(workspace_id),
+                terminal_layout: None,
+            };
+            assert!(
+                validate_workspace_state(&state).is_ok(),
+                "backend rejects Workspace view {view:?} declared in src/types.ts"
+            );
+        }
     }
 }

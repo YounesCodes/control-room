@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Baselines, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -28,6 +28,7 @@ Saved Connection
          +-- listening TCP and UDP ports
          +-- Docker containers
          +-- journald and Docker logs
+         +-- host baselines and comparisons
          +-- Enhanced History, when enabled
 ```
 
@@ -67,6 +68,47 @@ The distinction matters. Control Room helps you inspect and move between related
 - Reuse recent inspection results briefly and refresh them manually when you need current data.
 
 All structured inspection is read-only. Control Room does not scan networks, test reachability, or start, stop, restart, reset, create, or remove units or containers.
+
+### Host baselines
+
+Capture a timestamped record of the current host facts, systemd units, containers, listening
+sockets, and filesystems, then compare two captures to see what changed.
+
+Capture runs only when you select Capture baseline. There is no timer, no agent, and no background
+collection. Tick the sections you want before you start. Progress is reported one section at a
+time, and Stop ends the capture once the section in flight returns, keeping everything read up to
+that point.
+
+Each section records its own collection time and one of five states: collected, partial, not
+present, not readable, or not captured. Those stay distinct. A section left out of the capture, or
+one Control Room could not read, is reported as incomparable rather than counted as unchanged, so a
+comparison never implies a quiet host from missing evidence.
+
+Each section also carries its own schema version, so changing what one section records leaves the
+others comparable against older captures.
+
+Open a capture on its own and any section that read something expands to the entries it recorded,
+with a filter once the list is long. From an entry you can read that one unit, port, or mount
+across every stored capture, which answers when a value moved rather than only whether it did.
+
+You can compare the selected capture against another capture, or against the live machine state.
+The live comparison reads the host the same bounded way a capture does, then throws the read away:
+it answers "what has changed since then" without adding a capture you did not ask to keep. Read
+again repeats the read, and Stop ends it once the section in flight returns.
+
+A comparison lists additions, removals, and changed values with both the old and new value, keyed
+by systemd unit id, container name, socket address, or mount point. It draws no conclusion about
+why a value moved. Fields that move on their own, such as a systemd sub-state or a container state,
+are hidden by default so routine churn does not bury the rest; one checkbox brings them back. Copy
+puts the comparison on the clipboard as Markdown, and Markdown or JSON writes it to a file. Machine identity comes from a fingerprint the host computes itself, and the
+comparison says plainly when two captures came from different machines, when the live host answers
+as a different machine than the capture came from, or when identity could not be read at all.
+
+Baselines are stored locally as normalized facts only. Name, pin, compare, and delete them from the
+Baselines view. Each row says how many entries differ from the capture below it. Control Room keeps
+the 20 most recent captures per Saved Connection and drops the oldest beyond that. Pinning a
+capture keeps it past that limit and stops it using one of the 20 slots, so a named baseline is
+never evicted by routine captures. Deleting a Saved Connection deletes its baselines.
 
 ### Logs
 
@@ -150,6 +192,9 @@ Control Room keeps its local state in SQLite. It stores:
   encrypted secret storage.
 - Cached host capability data such as the operating system and detected service or container counts.
 - Enhanced History entries only when you enable capture. Each entry can include the command, working directory, timestamps, and exit code.
+- Host baselines you capture: normalized section facts, per-section collection time and status,
+  your label, the schema version, and host identity evidence including a hostname and a machine
+  fingerprint the host hashes itself.
 
 It deliberately does not persist:
 

@@ -36,6 +36,7 @@ export function restoreWorkspaceState(
         containerSelectionId: null,
         containerDetailsCache: {},
         logSource: null,
+        baselineSelectionId: null,
       },
     ];
   });
