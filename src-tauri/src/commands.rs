@@ -11,7 +11,7 @@ use crate::{
         SavedConnection, SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
         SettingsContract, StreamStarted, SystemdUnit,
     },
-    remote::{self, LogStreamOptions, RemoteOperationLimiter, StreamManager},
+    remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
 };
@@ -67,6 +67,7 @@ fn validated_test_connection(input: SavedConnectionInput) -> Result<SavedConnect
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
         history_enabled: false,
+        sudo_enabled: false,
         group_id: None,
         tags: Vec::new(),
         created_at: now.clone(),
@@ -192,6 +193,7 @@ pub fn start_session(
         port: connection.port,
         identity_file: connection.identity_file.clone(),
         history_enabled: connection.history_enabled,
+        sudo_enabled: connection.sudo_enabled,
         group_id: connection.group_id.clone(),
         tag_names: connection.tags.iter().map(|tag| tag.name.clone()).collect(),
     })?;
@@ -270,6 +272,19 @@ pub fn list_services(
     remote::list_services(&connection)
 }
 
+/// Decides how one Structured Operation should run on one host. The global
+/// setting is an override, not a default: while it is on, a connection that
+/// never opted in is still elevated, which is what "allow sudo everywhere"
+/// means. A password the user just typed always takes precedence.
+fn elevation_for(
+    database: &Database,
+    connection: &SavedConnection,
+    sudo_password: Option<String>,
+) -> Result<Elevation, String> {
+    let allowed = database.get_settings()?.global_sudo_enabled || connection.sudo_enabled;
+    Ok(Elevation::resolve(allowed, sudo_password))
+}
+
 #[tauri::command(async)]
 pub fn list_containers(
     database: State<'_, Database>,
@@ -279,7 +294,8 @@ pub fn list_containers(
 ) -> Result<Vec<DockerContainer>, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::list_containers(&connection, sudo_password)
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
+    remote::list_containers(&connection, elevation)
 }
 
 #[tauri::command(async)]
@@ -291,7 +307,8 @@ pub fn list_ports(
 ) -> Result<Vec<ListeningSocket>, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::list_ports(&connection, sudo_password)
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
+    remote::list_ports(&connection, elevation)
 }
 
 #[tauri::command(async)]
@@ -303,7 +320,8 @@ pub fn inspect_firewall(
 ) -> Result<FirewallStatus, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::list_firewall(&connection, sudo_password)
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
+    remote::list_firewall(&connection, elevation)
 }
 
 #[tauri::command(async)]
@@ -314,7 +332,11 @@ pub fn inspect_connections(
 ) -> Result<EstablishedConnections, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::list_connections(&connection)
+    // Peer ownership is only visible for the caller's own processes without
+    // privilege, so this read benefits from an allowance even though it has no
+    // password retry of its own.
+    let elevation = elevation_for(&database, &connection, None)?;
+    remote::list_connections(&connection, elevation)
 }
 
 #[tauri::command(async)]
@@ -327,7 +349,8 @@ pub fn inspect_container(
 ) -> Result<DockerContainerDetails, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::inspect_container(&connection, &container_id, sudo_password)
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
+    remote::inspect_container(&connection, &container_id, elevation)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -346,6 +369,7 @@ pub fn start_journal_stream(
 ) -> Result<StreamStarted, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
     streams.start_journal(
         app,
         &connection,
@@ -353,7 +377,7 @@ pub fn start_journal_stream(
         LogStreamOptions {
             lines,
             follow,
-            sudo_password,
+            elevation,
             output,
         },
     )
@@ -375,6 +399,7 @@ pub fn start_docker_log_stream(
 ) -> Result<StreamStarted, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
     streams.start_docker_logs(
         app,
         &connection,
@@ -382,7 +407,7 @@ pub fn start_docker_log_stream(
         LogStreamOptions {
             lines,
             follow,
-            sudo_password,
+            elevation,
             output,
         },
     )
@@ -532,8 +557,79 @@ pub fn uninstall_history_integration(
 
 #[cfg(test)]
 mod tests {
-    use super::validated_test_connection;
+    use super::{elevation_for, validated_test_connection};
+    use crate::database::Database;
     use crate::models::SavedConnectionInput;
+    use crate::remote::Elevation;
+
+    fn connection_input(sudo_enabled: bool) -> SavedConnectionInput {
+        SavedConnectionInput {
+            display_name: "Laptop".into(),
+            destination: "laptop".into(),
+            username: Some("test-user".into()),
+            port: None,
+            identity_file: None,
+            history_enabled: false,
+            sudo_enabled,
+            group_id: None,
+            tag_names: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn the_global_setting_elevates_hosts_that_never_opted_in() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let connection = database.create_connection(connection_input(false)).unwrap();
+
+        assert!(matches!(
+            elevation_for(&database, &connection, None).unwrap(),
+            Elevation::None
+        ));
+
+        let mut settings = database.get_settings().unwrap();
+        settings.global_sudo_enabled = true;
+        database.save_settings(&settings).unwrap();
+
+        assert!(matches!(
+            elevation_for(&database, &connection, None).unwrap(),
+            Elevation::Allowed
+        ));
+    }
+
+    #[test]
+    fn one_host_can_be_elevated_while_the_global_setting_is_off() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let elevated = database.create_connection(connection_input(true)).unwrap();
+        let plain = database
+            .create_connection(SavedConnectionInput {
+                display_name: "Server".into(),
+                ..connection_input(false)
+            })
+            .unwrap();
+
+        assert!(!database.get_settings().unwrap().global_sudo_enabled);
+        assert!(matches!(
+            elevation_for(&database, &elevated, None).unwrap(),
+            Elevation::Allowed
+        ));
+        assert!(matches!(
+            elevation_for(&database, &plain, None).unwrap(),
+            Elevation::None
+        ));
+    }
+
+    #[test]
+    fn a_one_shot_password_elevates_a_host_that_never_opted_in() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let connection = database.create_connection(connection_input(false)).unwrap();
+        assert!(matches!(
+            elevation_for(&database, &connection, Some("hunter2".into())).unwrap(),
+            Elevation::Password(_)
+        ));
+    }
 
     #[test]
     fn ssh_backed_commands_are_dispatched_asynchronously() {
@@ -586,6 +682,7 @@ mod tests {
             port: Some(22),
             identity_file: None,
             history_enabled: true,
+            sudo_enabled: false,
             group_id: None,
             tag_names: Vec::new(),
         })

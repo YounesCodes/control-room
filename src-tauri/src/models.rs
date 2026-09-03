@@ -10,6 +10,10 @@ pub struct SavedConnection {
     pub port: Option<u16>,
     pub identity_file: Option<String>,
     pub history_enabled: bool,
+    /// Whether Structured Operations on this host may run under sudo. The
+    /// global setting turns this on for every connection; this flag turns it on
+    /// for one. Neither stores a password.
+    pub sudo_enabled: bool,
     pub group_id: Option<String>,
     pub tags: Vec<ConnectionTag>,
     pub created_at: String,
@@ -27,6 +31,8 @@ pub struct SavedConnectionInput {
     pub identity_file: Option<String>,
     #[serde(default)]
     pub history_enabled: bool,
+    #[serde(default)]
+    pub sudo_enabled: bool,
     #[serde(default)]
     pub group_id: Option<String>,
     #[serde(default)]
@@ -66,6 +72,14 @@ pub struct HostCapabilities {
     pub journald_available: bool,
     pub docker_available: bool,
     pub docker_accessible: bool,
+    /// True when the daemon answered under sudo after refusing the connecting
+    /// account. Kept separate from `docker_accessible` so the Overview can say
+    /// which of the two happened instead of collapsing them into "no".
+    pub docker_accessible_with_sudo: bool,
+    /// True when this account can run sudo without being asked for a password.
+    /// This is a fact about the host, not a permission: allowing sudo is a
+    /// separate choice the user makes per connection or in Settings.
+    pub passwordless_sudo: bool,
     pub docker_version: Option<String>,
     pub running_service_count: Option<u32>,
     pub running_container_count: Option<u32>,
@@ -275,6 +289,9 @@ pub struct AppSettings {
     pub terminal_cyan: String,
     pub default_log_tail: u16,
     pub global_history_enabled: bool,
+    /// Allows sudo for Structured Operations on every Saved Connection. While
+    /// this is on, the per-connection flag has nothing left to decide.
+    pub global_sudo_enabled: bool,
 }
 
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
@@ -302,6 +319,7 @@ impl Default for AppSettings {
             terminal_cyan: "#65d4d1".into(),
             default_log_tail: 200,
             global_history_enabled: true,
+            global_sudo_enabled: false,
         }
     }
 }

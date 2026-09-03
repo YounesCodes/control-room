@@ -1210,6 +1210,7 @@ export function App() {
                   key={activeWorkspace.id}
                   connection={activeConnection}
                   capabilities={hostCapabilities[activeConnection.id] ?? null}
+                  globalSudoEnabled={settings.globalSudoEnabled}
                   cache={activeWorkspace.portsCache}
                   containersCache={activeWorkspace.containersCache}
                   onCacheChange={(cache) => updatePortsCache(activeWorkspace.id, cache)}
@@ -1329,6 +1330,7 @@ export function App() {
           connection={dialogConnection === "new" ? undefined : dialogConnection}
           groups={connectionGroups}
           knownTags={knownTags}
+          globalSudoEnabled={settings.globalSudoEnabled}
           onClose={() => setDialogConnection(null)}
           onSaved={saveConnection}
         />

@@ -6,6 +6,7 @@ import {
   filterAndSortSockets,
   firewallForSocket,
   groupSocketsByOwner,
+  ownerGapNotice,
   resolveSocketContainer,
   socketExposure,
   socketOwner,
@@ -172,5 +173,45 @@ describe("port inspector", () => {
     expect(links).toHaveLength(2);
     expect(links[0]).toMatchObject({ hostPort: 443, containerPort: 8443, protocol: "tcp" });
     expect(links[0].container.name).toBe("gateway-1");
+  });
+});
+
+describe("owner gap notice", () => {
+  const gap = (ownership: ListeningSocket["ownership"]) => ({ ownership });
+
+  it("says nothing when every listener has a single owner", () => {
+    expect(ownerGapNotice([gap("known"), gap("known")], false)).toBeNull();
+    expect(ownerGapNotice([], true)).toBeNull();
+  });
+
+  it("blames the privilege wall only on an unelevated read", () => {
+    const notice = ownerGapNotice([gap("known"), gap("unavailable")], false);
+    expect(notice?.message).toContain("without elevation");
+    expect(notice?.offerSudo).toBe(true);
+  });
+
+  it("does not offer sudo for a read that already ran as root", () => {
+    const notice = ownerGapNotice([gap("known"), gap("unavailable")], true);
+    expect(notice?.offerSudo).toBe(false);
+    expect(notice?.message).toContain("ran as root");
+    expect(notice?.message).not.toContain("without elevation");
+  });
+
+  it("never offers sudo for listeners several processes hold", () => {
+    // This is the reported bug: nginx workers made the pane claim a privilege
+    // wall and offer a retry that could not change the answer.
+    for (const elevated of [false, true]) {
+      const notice = ownerGapNotice([gap("known"), gap("ambiguous")], elevated);
+      expect(notice?.offerSudo).toBe(false);
+      expect(notice?.message).toContain("several processes");
+      expect(notice?.message).not.toContain("without elevation");
+    }
+  });
+
+  it("reports both causes when both are present", () => {
+    const notice = ownerGapNotice([gap("unavailable"), gap("ambiguous")], false);
+    expect(notice?.message).toContain("without elevation");
+    expect(notice?.message).toContain("several processes");
+    expect(notice?.offerSudo).toBe(true);
   });
 });
