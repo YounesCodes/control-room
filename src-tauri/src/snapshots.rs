@@ -25,7 +25,7 @@ use crate::{
         SnapshotSection, SnapshotSectionDiff, SnapshotSectionSummary, SnapshotTrace,
         SnapshotTracePoint,
     },
-    remote,
+    remote::{self, Elevation},
 };
 
 pub const SECTION_HOST: &str = "host";
@@ -128,12 +128,13 @@ pub fn capture(
     capture_id: &str,
     label: Option<String>,
     sections: Option<&[String]>,
+    elevation: &Elevation,
     registry: &SnapshotCaptureRegistry,
     reporter: &dyn SectionReporter,
 ) -> Result<HostSnapshot, String> {
     let selection = resolve_selection(sections)?;
     let cancelled = registry.register(capture_id);
-    let result = capture_sections(connection, &selection, &cancelled, reporter);
+    let result = capture_sections(connection, &selection, elevation, &cancelled, reporter);
     registry.release(capture_id);
     let (identity, sections) = result?;
     Ok(HostSnapshot {
@@ -154,6 +155,7 @@ pub fn capture(
 fn capture_sections(
     connection: &SavedConnection,
     selection: &[&str],
+    elevation: &Elevation,
     cancelled: &AtomicBool,
     reporter: &dyn SectionReporter,
 ) -> Result<(HostIdentity, Vec<SnapshotSection>), String> {
@@ -171,7 +173,7 @@ fn capture_sections(
                 "The capture was stopped before this section was read.",
             )
         } else {
-            collect_section(connection, kind, &identity)
+            collect_section(connection, kind, elevation, &identity)
         };
         reporter.report(&section, index as u32 + 1, total);
         sections.push(section);
@@ -194,13 +196,14 @@ fn skipped_section(kind: &str, message: &str) -> SnapshotSection {
 fn collect_section(
     connection: &SavedConnection,
     kind: &str,
+    elevation: &Elevation,
     identity: &HostIdentity,
 ) -> SnapshotSection {
     match kind {
         SECTION_HOST => host_section(identity),
         SECTION_SYSTEMD_UNITS => systemd_section(connection),
-        SECTION_CONTAINERS => containers_section(connection),
-        SECTION_LISTENERS => listeners_section(connection),
+        SECTION_CONTAINERS => containers_section(connection, elevation),
+        SECTION_LISTENERS => listeners_section(connection, elevation),
         _ => filesystems_section(connection),
     }
 }
@@ -295,8 +298,8 @@ fn systemd_section(connection: &SavedConnection) -> SnapshotSection {
     }
 }
 
-fn containers_section(connection: &SavedConnection) -> SnapshotSection {
-    match remote::list_containers(connection, None) {
+fn containers_section(connection: &SavedConnection, elevation: &Elevation) -> SnapshotSection {
+    match remote::list_containers(connection, elevation.clone()) {
         Ok(containers) => {
             let entries = containers
                 .into_iter()
@@ -345,8 +348,8 @@ fn mentions_missing_docker(error: &str) -> bool {
     lowered.contains("not installed") || lowered.contains("command not found")
 }
 
-fn listeners_section(connection: &SavedConnection) -> SnapshotSection {
-    match remote::list_ports(connection, None) {
+fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> SnapshotSection {
+    match remote::list_ports(connection, elevation.clone()) {
         Ok(sockets) => {
             let unowned = sockets
                 .iter()

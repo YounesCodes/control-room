@@ -455,11 +455,17 @@ pub fn capture_host_snapshot(
         capture_id: &request.capture_id,
         channel: progress,
     };
+    // A capture honours the sudo permission the user granted for this host, so
+    // sections that need root are collected rather than recorded as partial.
+    // It still never prompts: without passwordless sudo the reads run
+    // unelevated and say so.
+    let elevation = elevation_for(&database, &connection, None)?;
     let snapshot = snapshots::capture(
         &connection,
         &request.capture_id,
         request.label,
         request.sections.as_deref(),
+        &elevation,
         &captures,
         &reporter,
     )?;
@@ -579,7 +585,16 @@ pub fn compare_host_snapshot_with_live(
         capture_id: &capture_id,
         channel: progress,
     };
-    let live = snapshots::capture(&connection, &capture_id, None, None, &captures, &reporter)?;
+    let elevation = elevation_for(&database, &connection, None)?;
+    let live = snapshots::capture(
+        &connection,
+        &capture_id,
+        None,
+        None,
+        &elevation,
+        &captures,
+        &reporter,
+    )?;
     Ok(snapshots::compare_with_live(&base, &live))
 }
 
