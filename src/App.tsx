@@ -1329,6 +1329,7 @@ export function App() {
           connection={dialogConnection === "new" ? undefined : dialogConnection}
           groups={connectionGroups}
           knownTags={knownTags}
+          globalSudoEnabled={settings.globalSudoEnabled}
           onClose={() => setDialogConnection(null)}
           onSaved={saveConnection}
         />

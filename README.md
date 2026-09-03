@@ -91,7 +91,8 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
 - Keep one plain-text Scratchpad note per Saved Connection and one global note shared across every
   connection and Workspace. Closing a Workspace does not delete either note.
-- Tune terminal font, size, scrollback, colors, log tail defaults, and the global Enhanced History setting.
+- Tune terminal font, size, scrollback, colors, log tail defaults, the global Enhanced History setting, and
+  whether Structured Operations may use sudo.
 
 ## Read-only by design
 
@@ -99,15 +100,23 @@ Structured Operations use bounded, noninteractive SSH commands to read the Remot
 
 Enabling Enhanced History is the explicit exception to the inspection-only rule. It changes the remote account's Bash startup configuration only when you ask it to, and the same screen can remove that integration.
 
+## Elevated commands
+
+Some reads need root. Socket ownership, firewall policy, and the Docker daemon are the usual ones, and without privilege they come back partial or refused.
+
+Sudo is off until you allow it. Settings has one switch that covers every Saved Connection, and each connection editor has one for a single host. While the global switch is on, the per-host checkbox is locked and says so; each host keeps its own value, so turning the global switch back off restores what it had.
+
+Allowing sudo does not start asking for passwords. An allowed read checks the host first and elevates only when the account already has passwordless sudo. On every other account the same read runs unelevated, and when it hits a permission error the pane offers **Retry with sudo** the way it always has. That one-shot password works whether or not sudo is allowed, and it is used once and discarded. Elevation only widens what a read can see. It never lets a Structured Operation change the machine.
+
 ## Support
 
-| Where                        | Support                                                                                                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local machine                | Windows 11 x64                                                                                                                                                  |
-| SSH client                   | The Windows OpenSSH client already installed on the machine                                                                                                     |
-| Structured remote inspection | Debian or Ubuntu family Linux with systemd, journald, Bash, and `ss` from iproute2                                                                              |
-| Docker inspection            | Optional Docker installation on the remote host. The connected account must be able to query the Docker daemon, or you can retry a read-only request with sudo. |
-| Other Linux hosts            | Terminal-only, best effort. The structured views target the environment above.                                                                                  |
+| Where                        | Support                                                                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local machine                | Windows 11 x64                                                                                                                                                                            |
+| SSH client                   | The Windows OpenSSH client already installed on the machine                                                                                                                               |
+| Structured remote inspection | Debian or Ubuntu family Linux with systemd, journald, Bash, and `ss` from iproute2                                                                                                        |
+| Docker inspection            | Optional Docker installation on the remote host. The connected account must be able to query the Docker daemon, or you can allow sudo for the host and retry a read-only request with it. |
+| Other Linux hosts            | Terminal-only, best effort. The structured views target the environment above.                                                                                                            |
 
 ## Install
 
@@ -147,7 +156,7 @@ It deliberately does not persist:
 - Terminal output.
 - Fetched journald or Docker logs.
 
-When a read-only request needs sudo, Control Room sends the password once for that retry and then discards it. The terminal itself is a normal SSH shell, so commands run there have the effects allowed by the remote account.
+Allowing sudo stores a permission, never a credential. When a read-only request needs a sudo password, Control Room sends it once for that retry and then discards it. The terminal itself is a normal SSH shell, so commands run there have the effects allowed by the remote account.
 
 ## Keyboard shortcuts
 

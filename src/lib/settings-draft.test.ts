@@ -15,6 +15,7 @@ const settings: AppSettings = {
   terminalCyan: "#00ffff",
   defaultLogTail: 200,
   globalHistoryEnabled: true,
+  globalSudoEnabled: false,
 };
 
 describe("Settings drafts", () => {

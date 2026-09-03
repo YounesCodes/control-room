@@ -147,6 +147,50 @@ impl CommandOutput {
     }
 }
 
+/// How much privilege a Structured Operation asks for. Elevation is a
+/// per-request decision, never a stored credential: `Password` holds a value the
+/// user typed a moment ago and drops it when the request ends.
+#[derive(Debug, Clone, Default)]
+pub enum Elevation {
+    /// Run as the connecting account.
+    #[default]
+    None,
+    /// The Saved Connection allows sudo, so run elevated when the account has
+    /// passwordless sudo and run unelevated when it does not.
+    Allowed,
+    /// A one-shot password from the sudo dialog.
+    Password(Zeroizing<String>),
+}
+
+impl Elevation {
+    /// Turns a stored permission and an optional one-shot password into the mode
+    /// a request should run in. A password the user just typed always wins: it
+    /// is the answer to a prompt that already happened.
+    pub fn resolve(allowed: bool, password: Option<String>) -> Self {
+        match password {
+            Some(password) => Self::Password(Zeroizing::new(password)),
+            None if allowed => Self::Allowed,
+            None => Self::None,
+        }
+    }
+}
+
+/// Wraps a read in sudo according to `elevation`.
+///
+/// `Allowed` probes sudo and falls back inside the same shell, so an account
+/// without passwordless sudo still gets its unelevated result in one round trip
+/// instead of an error. When that result hits a permission wall, the caller can
+/// still offer the password dialog.
+pub fn elevated_command(remote_command: &str, elevation: &Elevation) -> String {
+    match elevation {
+        Elevation::None => remote_command.to_string(),
+        Elevation::Allowed => format!(
+            "if sudo -n true 2>/dev/null; then sudo -n -- {remote_command}; else {remote_command}; fi"
+        ),
+        Elevation::Password(_) => format!("sudo -S -p '[control-room-sudo]' -- {remote_command}"),
+    }
+}
+
 pub struct RemoteCommandExecutor;
 
 impl RemoteCommandExecutor {
@@ -158,15 +202,22 @@ impl RemoteCommandExecutor {
         run_ssh(connection, operation, remote_command, None)
     }
 
-    pub fn execute_with_sudo(
+    /// Runs one read at the requested privilege. The password, when there is
+    /// one, goes to sudo over stdin and is never written to the command line
+    /// where the remote host's process list could show it.
+    pub fn execute_elevated(
         connection: &SavedConnection,
         operation: &'static str,
         remote_command: &str,
-        password: String,
+        elevation: &Elevation,
     ) -> Result<CommandOutput, String> {
-        let password = Zeroizing::new(password);
-        let elevated = format!("sudo -S -p '[control-room-sudo]' -- {remote_command}");
-        run_ssh(connection, operation, &elevated, Some(password.as_bytes()))
+        let command = elevated_command(remote_command, elevation);
+        match elevation {
+            Elevation::Password(password) => {
+                run_ssh(connection, operation, &command, Some(password.as_bytes()))
+            }
+            _ => run_ssh(connection, operation, &command, None),
+        }
     }
 
     pub fn execute_with_input(
@@ -218,14 +269,15 @@ pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdUnit>, S
 
 pub fn list_containers(
     connection: &SavedConnection,
-    sudo_password: Option<String>,
+    elevation: Elevation,
 ) -> Result<Vec<DockerContainer>, String> {
     let command = docker_container_list_command();
-    let output = if let Some(password) = sudo_password {
-        RemoteCommandExecutor::execute_with_sudo(connection, "list_containers", command, password)?
-    } else {
-        RemoteCommandExecutor::execute(connection, "list_containers", command)?
-    };
+    let output = RemoteCommandExecutor::execute_elevated(
+        connection,
+        "list_containers",
+        command,
+        &elevation,
+    )?;
     let text = output.success_text()?;
     text.lines()
         .filter(|line| !line.trim().is_empty())
@@ -235,34 +287,27 @@ pub fn list_containers(
 
 pub fn list_ports(
     connection: &SavedConnection,
-    sudo_password: Option<String>,
+    elevation: Elevation,
 ) -> Result<Vec<ListeningSocket>, String> {
     let command = port_list_command();
-    let output = if let Some(password) = sudo_password {
-        RemoteCommandExecutor::execute_with_sudo(connection, "list_ports", command, password)?
-    } else {
-        RemoteCommandExecutor::execute(connection, "list_ports", command)?
-    };
+    let output =
+        RemoteCommandExecutor::execute_elevated(connection, "list_ports", command, &elevation)?;
     parse_listening_sockets(&output.success_text()?)
 }
 
 pub fn inspect_container(
     connection: &SavedConnection,
     container_id: &str,
-    sudo_password: Option<String>,
+    elevation: Elevation,
 ) -> Result<DockerContainerDetails, String> {
     let container_id = validate_stable_container_id(container_id)?;
     let command = docker_container_inspect_command(container_id);
-    let output = if let Some(password) = sudo_password {
-        RemoteCommandExecutor::execute_with_sudo(
-            connection,
-            "inspect_container",
-            &command,
-            password,
-        )?
-    } else {
-        RemoteCommandExecutor::execute(connection, "inspect_container", &command)?
-    };
+    let output = RemoteCommandExecutor::execute_elevated(
+        connection,
+        "inspect_container",
+        &command,
+        &elevation,
+    )?;
     if output.exit_code != 0 && is_missing_container(&output.stderr) {
         return Err("Container no longer exists. Refresh the container list.".into());
     }
@@ -680,14 +725,11 @@ const FIREWALL_UNAVAILABLE_MARKER: &str = "__CR_FW_UNAVAILABLE__";
 
 pub fn list_firewall(
     connection: &SavedConnection,
-    sudo_password: Option<String>,
+    elevation: Elevation,
 ) -> Result<FirewallStatus, String> {
     let command = firewall_status_command();
-    let output = if let Some(password) = sudo_password {
-        RemoteCommandExecutor::execute_with_sudo(connection, "list_firewall", command, password)?
-    } else {
-        RemoteCommandExecutor::execute(connection, "list_firewall", command)?
-    };
+    let output =
+        RemoteCommandExecutor::execute_elevated(connection, "list_firewall", command, &elevation)?;
     Ok(parse_firewall_status(&output.success_text()?))
 }
 
@@ -801,10 +843,17 @@ fn parse_firewall_target(to: &str) -> (Option<u16>, Option<String>) {
     (port, protocol)
 }
 
-pub fn list_connections(connection: &SavedConnection) -> Result<EstablishedConnections, String> {
-    let text =
-        RemoteCommandExecutor::execute(connection, "list_connections", connections_command())?
-            .success_text()?;
+pub fn list_connections(
+    connection: &SavedConnection,
+    elevation: Elevation,
+) -> Result<EstablishedConnections, String> {
+    let text = RemoteCommandExecutor::execute_elevated(
+        connection,
+        "list_connections",
+        connections_command(),
+        &elevation,
+    )?
+    .success_text()?;
     Ok(parse_established_connections(&text))
 }
 
@@ -1297,7 +1346,7 @@ struct ManagedStream {
 pub struct LogStreamOptions {
     pub lines: u16,
     pub follow: bool,
-    pub sudo_password: Option<String>,
+    pub elevation: Elevation,
     pub output: Channel<Response>,
 }
 
@@ -1317,13 +1366,13 @@ impl StreamManager {
         let LogStreamOptions {
             lines,
             follow,
-            sudo_password,
+            elevation,
             output,
         } = options;
         let service = validate_systemd_unit_id(service)?;
         validate_tail(lines)?;
         let command = journal_command(service, lines, follow);
-        self.start(app, connection, command, sudo_password, output)
+        self.start(app, connection, command, elevation, output)
     }
 
     pub fn start_docker_logs(
@@ -1336,13 +1385,13 @@ impl StreamManager {
         let LogStreamOptions {
             lines,
             follow,
-            sudo_password,
+            elevation,
             output,
         } = options;
         let container = validate_container_id(container)?;
         validate_tail(lines)?;
         let command = docker_log_command(container, lines, follow);
-        self.start(app, connection, command, sudo_password, output)
+        self.start(app, connection, command, elevation, output)
     }
 
     fn start(
@@ -1350,18 +1399,13 @@ impl StreamManager {
         app: AppHandle,
         connection: &SavedConnection,
         command: String,
-        sudo_password: Option<String>,
+        elevation: Elevation,
         output: Channel<Response>,
     ) -> Result<StreamStarted, String> {
         let ssh_path =
             detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
         let mut arguments = connection_arguments(connection, false);
-        let remote_command = if sudo_password.is_some() {
-            format!("sudo -S -p '[control-room-sudo]' -- {command}")
-        } else {
-            command
-        };
-        arguments.push(remote_command);
+        arguments.push(elevated_command(&command, &elevation));
         let mut child = background_command(ssh_path)
             .args(arguments)
             .stdin(Stdio::piped())
@@ -1369,8 +1413,7 @@ impl StreamManager {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| format!("Log stream could not start: {error}"))?;
-        if let Some(password) = sudo_password {
-            let password = Zeroizing::new(password);
+        if let Elevation::Password(password) = &elevation {
             if let Some(mut stdin) = child.stdin.take()
                 && let Err(error) = stdin
                     .write_all(password.as_bytes())
@@ -1566,6 +1609,7 @@ mod tests {
                 .and_then(|value| value.parse().ok()),
             identity_file: None,
             history_enabled: false,
+            sudo_enabled: false,
             group_id: None,
             tags: Vec::new(),
             created_at: String::new(),
@@ -1710,6 +1754,73 @@ mod tests {
         assert!(!status.available);
         assert_eq!(status.active, None);
         assert!(status.rules.is_empty());
+    }
+
+    #[test]
+    fn elevation_off_leaves_the_command_alone() {
+        assert_eq!(
+            elevated_command("ss -H -lntupO", &Elevation::None),
+            "ss -H -lntupO"
+        );
+    }
+
+    #[test]
+    fn allowed_elevation_uses_sudo_only_when_it_needs_no_password() {
+        let command = elevated_command("ss -H -lntupO", &Elevation::Allowed);
+        assert_eq!(
+            command,
+            "if sudo -n true 2>/dev/null; then sudo -n -- ss -H -lntupO; else ss -H -lntupO; fi"
+        );
+        // The fallback matters: an account without passwordless sudo still gets
+        // the unelevated read instead of a sudo error.
+        assert!(!command.contains("sudo -S"));
+    }
+
+    #[test]
+    fn a_typed_password_goes_to_sudo_over_stdin_not_the_command_line() {
+        let command = elevated_command(
+            "ufw status verbose",
+            &Elevation::Password(Zeroizing::new("hunter2".into())),
+        );
+        assert_eq!(
+            command,
+            "sudo -S -p '[control-room-sudo]' -- ufw status verbose"
+        );
+        assert!(!command.contains("hunter2"));
+    }
+
+    #[test]
+    fn a_typed_password_outranks_the_stored_permission() {
+        assert!(matches!(
+            Elevation::resolve(false, Some("hunter2".into())),
+            Elevation::Password(_)
+        ));
+        assert!(matches!(
+            Elevation::resolve(true, Some("hunter2".into())),
+            Elevation::Password(_)
+        ));
+        assert!(matches!(Elevation::resolve(true, None), Elevation::Allowed));
+        assert!(matches!(Elevation::resolve(false, None), Elevation::None));
+    }
+
+    #[test]
+    fn elevation_never_turns_a_read_into_a_write() {
+        for command in [
+            port_list_command(),
+            firewall_status_command(),
+            docker_container_list_command(),
+        ] {
+            for elevation in [
+                Elevation::None,
+                Elevation::Allowed,
+                Elevation::Password(Zeroizing::new("hunter2".into())),
+            ] {
+                let elevated = elevated_command(command, &elevation);
+                for mutation in [" rm ", " systemctl start", " docker rm", " ufw allow"] {
+                    assert!(!elevated.contains(mutation), "{elevated}");
+                }
+            }
+        }
     }
 
     #[test]
@@ -2070,6 +2181,6 @@ mod tests {
         assert!(capabilities.docker_available);
         let services = list_services(&connection).unwrap();
         assert!(!services.is_empty());
-        let _containers = list_containers(&connection, None).unwrap();
+        let _containers = list_containers(&connection, Elevation::None).unwrap();
     }
 }

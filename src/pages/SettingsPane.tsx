@@ -207,6 +207,23 @@ export function SettingsPane({
           </label>
         </fieldset>
         <fieldset>
+          <legend>Elevated commands</legend>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={draft.globalSudoEnabled}
+              onChange={(event) => setDraft({ ...draft, globalSudoEnabled: event.target.checked })}
+            />{" "}
+            Allow sudo for Structured Operations on every Saved Connection
+          </label>
+          <small>
+            Reads that need root, such as socket ownership and firewall policy, run under sudo
+            wherever the account has passwordless sudo, and run unelevated everywhere else. This
+            overrides the per-connection setting while it is on. Control Room never stores a sudo
+            password, and elevation never turns a read into a change.
+          </small>
+        </fieldset>
+        <fieldset>
           <legend>SSH environment</legend>
           <dl className="detail-list">
             <div>

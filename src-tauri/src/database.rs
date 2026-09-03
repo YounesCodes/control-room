@@ -11,7 +11,7 @@ use crate::models::{
     SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 5;
+const LATEST_SCHEMA_VERSION: i64 = 6;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -51,7 +51,7 @@ impl Database {
         let mut connections = {
             let mut statement = connection
                 .prepare(
-                    "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, last_connected_at FROM saved_connections ORDER BY display_name COLLATE NOCASE",
+                    "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, last_connected_at, sudo_enabled FROM saved_connections ORDER BY display_name COLLATE NOCASE",
                 )
                 .map_err(|error| error.to_string())?;
             let rows = statement
@@ -70,7 +70,7 @@ impl Database {
         let connection = self.connection.lock();
         let mut saved = connection
             .query_row(
-                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, last_connected_at FROM saved_connections WHERE id = ?1",
+                "SELECT id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, last_connected_at, sudo_enabled FROM saved_connections WHERE id = ?1",
                 [id], map_connection,
             )
             .optional()
@@ -94,7 +94,7 @@ impl Database {
         validate_group_reference(&transaction, input.group_id.as_deref())?;
         transaction
             .execute(
-                "INSERT INTO saved_connections (id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                "INSERT INTO saved_connections (id, display_name, destination, username, port, identity_file, history_enabled, group_id, created_at, updated_at, sudo_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)",
                 params![
                     id,
                     input.display_name.trim(),
@@ -105,6 +105,7 @@ impl Database {
                     input.history_enabled,
                     input.group_id,
                     now,
+                    input.sudo_enabled,
                 ],
             )
             .map_err(|error| error.to_string())?;
@@ -127,7 +128,7 @@ impl Database {
         validate_group_reference(&transaction, input.group_id.as_deref())?;
         let changed = transaction
             .execute(
-                "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, group_id = ?8, updated_at = ?9 WHERE id = ?1",
+                "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, group_id = ?8, updated_at = ?9, sudo_enabled = ?10 WHERE id = ?1",
                 params![
                     id,
                     input.display_name.trim(),
@@ -138,6 +139,7 @@ impl Database {
                     input.history_enabled,
                     input.group_id,
                     Utc::now().to_rfc3339(),
+                    input.sudo_enabled,
                 ],
             )
             .map_err(|error| error.to_string())?;
@@ -1105,6 +1107,21 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 6 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                ALTER TABLE saved_connections
+                ADD COLUMN sudo_enabled INTEGER NOT NULL DEFAULT 0;
+                PRAGMA user_version = 6;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -1117,6 +1134,7 @@ fn map_connection(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedConnection> 
         port: row.get(4)?,
         identity_file: row.get(5)?,
         history_enabled: row.get(6)?,
+        sudo_enabled: row.get(11)?,
         group_id: row.get(7)?,
         tags: Vec::new(),
         created_at: row.get(8)?,
@@ -1370,6 +1388,7 @@ mod tests {
             port: None,
             identity_file: None,
             history_enabled: true,
+            sudo_enabled: false,
             group_id: None,
             tag_names: Vec::new(),
         }
@@ -1737,6 +1756,9 @@ mod tests {
         assert_eq!(legacy.id, "legacy");
         assert_eq!(legacy.group_id, None);
         assert!(legacy.tags.is_empty());
+        // A database written before elevation existed must come back with sudo
+        // off, never inherited from some other host.
+        assert!(!legacy.sudo_enabled);
         let version: i64 = database
             .connection
             .lock()
