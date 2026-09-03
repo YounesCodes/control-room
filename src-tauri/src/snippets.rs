@@ -280,9 +280,12 @@ fn render_value(parameter: &SnippetParameter, value: &str) -> Result<String, Str
                 .trim()
                 .parse()
                 .map_err(|_| "enter a whole number".to_string())?;
-            if let Some(minimum) = parameter.minimum
-                && parsed < minimum
-            {
+            // An integer renders unquoted, so a negative one becomes an option
+            // rather than an argument: `head -n {{count}}` with -1 turns into
+            // `head -n -1`. An author who genuinely wants negatives says so with
+            // an explicit minimum; without one, zero is the floor.
+            let minimum = parameter.minimum.unwrap_or(0);
+            if parsed < minimum {
                 return Err(format!("enter {minimum} or more"));
             }
             if let Some(maximum) = parameter.maximum
@@ -484,6 +487,31 @@ mod tests {
         assert_eq!(quote_bash("a b; rm -rf /"), "'a b; rm -rf /'");
         assert_eq!(quote_bash("$(id)"), "'$(id)'");
         assert_eq!(quote_bash("`id`"), "'`id`'");
+    }
+
+    #[test]
+    fn an_integer_without_bounds_will_not_render_a_leading_dash() {
+        let mut values = HashMap::new();
+        let bare = snippet("head -n {{count}}", vec![parameter("count", KIND_INTEGER)]);
+
+        values.insert("count".to_string(), "-1".to_string());
+        let refused = render(&bare, &values);
+        assert!(refused.command.is_none());
+        assert_eq!(refused.errors[0].parameter.as_deref(), Some("count"));
+
+        values.insert("count".to_string(), "5".to_string());
+        assert_eq!(render(&bare, &values).command.as_deref(), Some("head -n 5"));
+
+        // An author who wants negatives asks for them.
+        let signed = snippet(
+            "tz {{count}}",
+            vec![SnippetParameter {
+                minimum: Some(-12),
+                ..parameter("count", KIND_INTEGER)
+            }],
+        );
+        values.insert("count".to_string(), "-5".to_string());
+        assert_eq!(render(&signed, &values).command.as_deref(), Some("tz -5"));
     }
 
     #[test]
