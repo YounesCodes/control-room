@@ -22,7 +22,8 @@ use crate::{
     models::{
         HostIdentity, HostSnapshot, HostSnapshotSummary, SNAPSHOT_SCHEMA_VERSION, SavedConnection,
         SnapshotComparison, SnapshotEntry, SnapshotEntryChange, SnapshotFact, SnapshotFactChange,
-        SnapshotSection, SnapshotSectionDiff, SnapshotSectionSummary,
+        SnapshotSection, SnapshotSectionDiff, SnapshotSectionSummary, SnapshotTrace,
+        SnapshotTracePoint,
     },
     remote,
 };
@@ -46,6 +47,23 @@ pub const STATUS_COLLECTED: &str = "collected";
 pub const STATUS_PARTIAL: &str = "partial";
 pub const STATUS_UNSUPPORTED: &str = "unsupported";
 pub const STATUS_UNAVAILABLE: &str = "unavailable";
+/// The capture never asked this section for anything: the user left it out, or
+/// stopped the run before it came up. Distinct from a section that was asked
+/// and could not answer.
+pub const STATUS_SKIPPED: &str = "skipped";
+
+/// Each section's fact shape carries its own version. Bump only the section you
+/// changed: an older capture stays comparable in every section you did not
+/// touch, which matters because captures are manual and retention is bounded.
+pub fn section_schema_version(kind: &str) -> u32 {
+    match kind {
+        SECTION_HOST => 1,
+        SECTION_SYSTEMD_UNITS => 1,
+        SECTION_CONTAINERS => 1,
+        SECTION_LISTENERS => 1,
+        _ => 1,
+    }
+}
 
 /// Tracks captures the user asked to stop. A capture checks the flag between
 /// sections, so cancelling takes effect once the section in flight returns.
@@ -83,15 +101,39 @@ pub trait SectionReporter {
     fn report(&self, section: &SnapshotSection, completed: u32, total: u32);
 }
 
+/// Validates the section selection, rejecting names this build does not know
+/// rather than silently capturing less than the caller asked for.
+pub fn resolve_selection(requested: Option<&[String]>) -> Result<Vec<&'static str>, String> {
+    let Some(requested) = requested else {
+        return Ok(SECTION_KINDS.to_vec());
+    };
+    if requested.is_empty() {
+        return Err("Choose at least one section to capture".into());
+    }
+    let mut selected = Vec::new();
+    for name in requested {
+        let kind = SECTION_KINDS
+            .iter()
+            .find(|kind| *kind == name)
+            .ok_or_else(|| format!("Unknown snapshot section: {name}"))?;
+        if !selected.contains(kind) {
+            selected.push(*kind);
+        }
+    }
+    Ok(selected)
+}
+
 pub fn capture(
     connection: &SavedConnection,
     capture_id: &str,
     label: Option<String>,
+    sections: Option<&[String]>,
     registry: &SnapshotCaptureRegistry,
     reporter: &dyn SectionReporter,
 ) -> Result<HostSnapshot, String> {
+    let selection = resolve_selection(sections)?;
     let cancelled = registry.register(capture_id);
-    let result = capture_sections(connection, &cancelled, reporter);
+    let result = capture_sections(connection, &selection, &cancelled, reporter);
     registry.release(capture_id);
     let (identity, sections) = result?;
     Ok(HostSnapshot {
@@ -100,28 +142,53 @@ pub fn capture(
         label: normalize_label(label),
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         captured_at: Utc::now().to_rfc3339(),
+        pinned: false,
         identity,
         sections,
     })
 }
 
+/// Every section always appears, so a capture can never look complete when it
+/// is not. A section the user left out or stopped short of is recorded as
+/// skipped, which is neither collected nor a failed read.
 fn capture_sections(
     connection: &SavedConnection,
+    selection: &[&str],
     cancelled: &AtomicBool,
     reporter: &dyn SectionReporter,
 ) -> Result<(HostIdentity, Vec<SnapshotSection>), String> {
     let identity = remote::collect_host_identity(connection)?;
     let total = SECTION_KINDS.len() as u32;
     let mut sections = Vec::new();
+    let mut stopped = false;
     for (index, kind) in SECTION_KINDS.iter().enumerate() {
-        if cancelled.load(Ordering::SeqCst) {
-            return Err("Capture stopped before it finished".into());
-        }
-        let section = collect_section(connection, kind, &identity);
+        let section = if !selection.contains(kind) {
+            skipped_section(kind, "This section was not part of the capture.")
+        } else if stopped || cancelled.load(Ordering::SeqCst) {
+            stopped = true;
+            skipped_section(
+                kind,
+                "The capture was stopped before this section was read.",
+            )
+        } else {
+            collect_section(connection, kind, &identity)
+        };
         reporter.report(&section, index as u32 + 1, total);
         sections.push(section);
     }
+    // Keeping what finished is the point of stopping. Saving a capture that
+    // read nothing would only spend a retention slot on an empty record.
+    let read_anything = sections
+        .iter()
+        .any(|section| section.status != STATUS_SKIPPED);
+    if !read_anything {
+        return Err("Capture stopped before it read anything".into());
+    }
     Ok((identity, sections))
+}
+
+fn skipped_section(kind: &str, message: &str) -> SnapshotSection {
+    section(kind, STATUS_SKIPPED, Some(message.to_string()), Vec::new())
 }
 
 fn collect_section(
@@ -147,6 +214,7 @@ fn section(
     SnapshotSection {
         kind: kind.into(),
         status: status.into(),
+        schema_version: section_schema_version(kind),
         collected_at: Utc::now().to_rfc3339(),
         message,
         entries,
@@ -317,9 +385,7 @@ fn listeners_section(connection: &SavedConnection) -> SnapshotSection {
                 STATUS_COLLECTED
             };
             let message = (unowned > 0).then(|| {
-                format!(
-                    "{unowned} listeners have no readable owner. Process details need elevation."
-                )
+                format!("{unowned} ports have no readable owner. Process details need elevation.")
             });
             section(SECTION_LISTENERS, status, message, entries)
         }
@@ -390,6 +456,7 @@ pub fn summarize(snapshot: &HostSnapshot) -> HostSnapshotSummary {
         schema_version: snapshot.schema_version,
         captured_at: snapshot.captured_at.clone(),
         identity: snapshot.identity.clone(),
+        pinned: snapshot.pinned,
         sections: snapshot
             .sections
             .iter()
@@ -399,6 +466,69 @@ pub fn summarize(snapshot: &HostSnapshot) -> HostSnapshotSummary {
                 entry_count: section.entries.len() as u32,
             })
             .collect(),
+        changes_since_previous: None,
+    }
+}
+
+/// Total entries that differ between two captures, counting only the sections
+/// both sides could read. None when nothing was comparable, so a row can say
+/// "not comparable" rather than showing a reassuring zero.
+pub fn total_changes(comparison: &SnapshotComparison) -> Option<u32> {
+    let comparable: Vec<&SnapshotSectionDiff> = comparison
+        .sections
+        .iter()
+        .filter(|section| section.comparable)
+        .collect();
+    if comparable.is_empty() {
+        return None;
+    }
+    Some(
+        comparable
+            .iter()
+            .map(|section| {
+                (section.added.len() + section.removed.len() + section.changed.len()) as u32
+            })
+            .sum(),
+    )
+}
+
+/// Reads one entry across every capture given, newest first. This answers when
+/// a value moved, which two-capture comparison cannot.
+pub fn trace_entry(snapshots: &[HostSnapshot], kind: &str, identity: &str) -> SnapshotTrace {
+    let mut label = identity.to_string();
+    let points = snapshots
+        .iter()
+        .map(|snapshot| {
+            let section = snapshot
+                .sections
+                .iter()
+                .find(|section| section.kind == kind);
+            let entry = section.and_then(|section| {
+                section
+                    .entries
+                    .iter()
+                    .find(|entry| entry.identity == identity)
+            });
+            if let Some(entry) = entry {
+                label = entry.label.clone();
+            }
+            SnapshotTracePoint {
+                snapshot_id: snapshot.id.clone(),
+                label: snapshot.label.clone(),
+                captured_at: snapshot.captured_at.clone(),
+                section_status: section
+                    .map(|section| section.status.clone())
+                    .unwrap_or_else(|| STATUS_SKIPPED.into()),
+                present: entry.is_some(),
+                facts: entry.map(|entry| entry.facts.clone()).unwrap_or_default(),
+            }
+        })
+        .collect();
+    SnapshotTrace {
+        kind: kind.into(),
+        identity: identity.into(),
+        label,
+        points,
     }
 }
 
@@ -406,6 +536,21 @@ pub fn summarize(snapshot: &HostSnapshot) -> HostSnapshotSummary {
 /// it could not compare instead of implying nothing changed there, and it draws
 /// no causal conclusion about why a value moved.
 pub fn compare(base: &HostSnapshot, target: &HostSnapshot) -> SnapshotComparison {
+    compare_inner(base, target, false)
+}
+
+/// Compares a saved capture against state just read from the host. The live
+/// read is never stored, so this answers "what has changed since then" without
+/// adding a capture the user did not ask to keep.
+pub fn compare_with_live(base: &HostSnapshot, live: &HostSnapshot) -> SnapshotComparison {
+    compare_inner(base, live, true)
+}
+
+fn compare_inner(
+    base: &HostSnapshot,
+    target: &HostSnapshot,
+    target_is_live: bool,
+) -> SnapshotComparison {
     let schema_compatible = base.schema_version == target.schema_version;
     let sections = SECTION_KINDS
         .iter()
@@ -416,6 +561,7 @@ pub fn compare(base: &HostSnapshot, target: &HostSnapshot) -> SnapshotComparison
         target: summarize(target),
         identity_match: identity_match(&base.identity, &target.identity).into(),
         schema_compatible,
+        target_is_live,
         sections,
     }
 }
@@ -443,12 +589,18 @@ fn compare_section(
         .map(|section| section.status.clone())
         .unwrap_or_else(|| STATUS_UNAVAILABLE.into());
     let readable = |status: &str| status == STATUS_COLLECTED || status == STATUS_PARTIAL;
-    let comparable = schema_compatible && readable(&base_status) && readable(&target_status);
+    // Each section carries its own version, so a change to one section's facts
+    // never blocks comparison of the sections that did not change.
+    let section_schema_compatible = schema_compatible
+        && base_section.map(|section| section.schema_version)
+            == target_section.map(|section| section.schema_version);
+    let comparable =
+        section_schema_compatible && readable(&base_status) && readable(&target_status);
     if !comparable {
         return SnapshotSectionDiff {
             kind: kind.into(),
             note: Some(incomparable_note(
-                schema_compatible,
+                section_schema_compatible,
                 &base_status,
                 &target_status,
             )),
@@ -508,11 +660,12 @@ fn compare_section(
 
 fn incomparable_note(schema_compatible: bool, base_status: &str, target_status: &str) -> String {
     if !schema_compatible {
-        return "These snapshots use different schema versions, so this section cannot be compared."
+        return "These captures recorded this section in different shapes, so it cannot be compared. Other sections are unaffected."
             .into();
     }
     let describe = |status: &str| match status {
         STATUS_UNSUPPORTED => "the subsystem was not present",
+        STATUS_SKIPPED => "the section was not captured",
         _ => "the data could not be read",
     };
     match (base_status, target_status) {
@@ -594,6 +747,7 @@ mod tests {
     ) -> HostSnapshot {
         HostSnapshot {
             id: id.into(),
+            pinned: false,
             connection_id: "connection-a".into(),
             label: None,
             schema_version: SNAPSHOT_SCHEMA_VERSION,
@@ -771,7 +925,7 @@ mod tests {
             vec![section(
                 SECTION_LISTENERS,
                 STATUS_PARTIAL,
-                Some("2 listeners have no readable owner.".into()),
+                Some("2 ports have no readable owner.".into()),
                 vec![entry(
                     "tcp/ipv4/0.0.0.0:22",
                     &[("ownership", "unavailable")],
@@ -850,6 +1004,184 @@ mod tests {
         assert!(flag.load(Ordering::SeqCst));
         registry.release("capture-1");
         assert!(registry.cancel("capture-1").is_err());
+    }
+
+    #[test]
+    fn live_comparison_is_marked_live_and_diffs_the_same_way() {
+        let base = snapshot(
+            "base",
+            Some("aaaa"),
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry("ssh.service", &[("activeState", "active")])],
+            )],
+        );
+        let live = snapshot(
+            "live",
+            Some("aaaa"),
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry("ssh.service", &[("activeState", "failed")])],
+            )],
+        );
+
+        let comparison = compare_with_live(&base, &live);
+
+        assert!(comparison.target_is_live);
+        assert!(!compare(&base, &live).target_is_live);
+        let diff = find(comparison, SECTION_SYSTEMD_UNITS);
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(
+            diff.changed[0].changes[0].base_value.as_deref(),
+            Some("active")
+        );
+        assert_eq!(
+            diff.changed[0].changes[0].target_value.as_deref(),
+            Some("failed")
+        );
+    }
+
+    #[test]
+    fn live_comparison_still_reports_a_mismatched_machine_identity() {
+        let base = snapshot(
+            "base",
+            Some("aaaa"),
+            vec![units(STATUS_COLLECTED, Vec::new())],
+        );
+        let live = snapshot(
+            "live",
+            Some("bbbb"),
+            vec![units(STATUS_COLLECTED, Vec::new())],
+        );
+
+        assert_eq!(compare_with_live(&base, &live).identity_match, "different");
+    }
+
+    #[test]
+    fn a_section_only_blocks_comparison_for_its_own_schema_change() {
+        let mut base = snapshot(
+            "base",
+            Some("aaaa"),
+            vec![
+                units(
+                    STATUS_COLLECTED,
+                    vec![entry("ssh.service", &[("activeState", "active")])],
+                ),
+                section(SECTION_CONTAINERS, STATUS_COLLECTED, None, Vec::new()),
+            ],
+        );
+        let target = snapshot(
+            "target",
+            Some("aaaa"),
+            vec![
+                units(
+                    STATUS_COLLECTED,
+                    vec![entry("ssh.service", &[("activeState", "failed")])],
+                ),
+                section(SECTION_CONTAINERS, STATUS_COLLECTED, None, Vec::new()),
+            ],
+        );
+        base.sections[1].schema_version = 9;
+
+        let comparison = compare(&base, &target);
+
+        assert!(!find(comparison.clone(), SECTION_CONTAINERS).comparable);
+        let units_diff = find(comparison, SECTION_SYSTEMD_UNITS);
+        assert!(units_diff.comparable);
+        assert_eq!(units_diff.changed.len(), 1);
+    }
+
+    #[test]
+    fn a_skipped_section_is_never_reported_as_unchanged() {
+        let base = snapshot(
+            "base",
+            Some("aaaa"),
+            vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
+        );
+        let target = snapshot(
+            "target",
+            Some("aaaa"),
+            vec![skipped_section(
+                SECTION_SYSTEMD_UNITS,
+                "This section was not part of the capture.",
+            )],
+        );
+
+        let diff = find(compare(&base, &target), SECTION_SYSTEMD_UNITS);
+
+        assert!(!diff.comparable);
+        assert_eq!(diff.unchanged_count, 0);
+        assert!(diff.note.unwrap().contains("was not captured"));
+    }
+
+    #[test]
+    fn a_selection_keeps_every_section_and_marks_the_rest_skipped() {
+        assert_eq!(
+            resolve_selection(Some(&["listeners".to_string(), "listeners".to_string()])).unwrap(),
+            vec![SECTION_LISTENERS]
+        );
+        assert!(resolve_selection(Some(&[])).is_err());
+        assert!(resolve_selection(Some(&["nope".to_string()])).is_err());
+        assert_eq!(resolve_selection(None).unwrap(), SECTION_KINDS.to_vec());
+    }
+
+    #[test]
+    fn total_changes_says_nothing_rather_than_zero_when_no_section_compared() {
+        let base = snapshot(
+            "base",
+            Some("aaaa"),
+            vec![units(STATUS_UNAVAILABLE, Vec::new())],
+        );
+        let target = snapshot(
+            "target",
+            Some("aaaa"),
+            vec![units(STATUS_UNAVAILABLE, Vec::new())],
+        );
+        assert_eq!(total_changes(&compare(&base, &target)), None);
+
+        let readable = snapshot(
+            "readable",
+            Some("aaaa"),
+            vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
+        );
+        assert_eq!(total_changes(&compare(&readable, &readable)), Some(0));
+    }
+
+    #[test]
+    fn tracing_one_entry_reads_every_capture_and_marks_the_ones_missing_it() {
+        let newest = snapshot(
+            "newest",
+            Some("aaaa"),
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry("ssh.service", &[("activeState", "failed")])],
+            )],
+        );
+        let middle = snapshot(
+            "middle",
+            Some("aaaa"),
+            vec![units(STATUS_COLLECTED, Vec::new())],
+        );
+        let oldest = snapshot(
+            "oldest",
+            Some("aaaa"),
+            vec![skipped_section(SECTION_SYSTEMD_UNITS, "not captured")],
+        );
+
+        let trace = trace_entry(
+            &[newest, middle, oldest],
+            SECTION_SYSTEMD_UNITS,
+            "ssh.service",
+        );
+
+        assert_eq!(trace.label, "ssh.service");
+        assert_eq!(trace.points.len(), 3);
+        assert!(trace.points[0].present);
+        assert_eq!(trace.points[0].facts[0].value, "failed");
+        assert!(!trace.points[1].present);
+        assert_eq!(trace.points[1].section_status, STATUS_COLLECTED);
+        assert!(!trace.points[2].present);
+        assert_eq!(trace.points[2].section_status, STATUS_SKIPPED);
     }
 
     #[test]

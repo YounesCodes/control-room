@@ -293,13 +293,21 @@ pub struct SnapshotEntry {
 pub struct SnapshotSection {
     /// `host`, `systemdUnits`, `containers`, `listeners`, or `filesystems`.
     pub kind: String,
-    /// `collected`, `partial`, `unsupported`, or `unavailable`. These are
-    /// distinct: an absent subsystem is not the same as one this account
-    /// cannot read.
+    /// `collected`, `partial`, `unsupported`, `unavailable`, or `skipped`.
+    /// These are distinct: an absent subsystem is not the same as one this
+    /// account cannot read, and neither is one the user did not ask for.
     pub status: String,
+    /// Version of this section's fact shape. Each section carries its own, so
+    /// changing what one section records never makes the others incomparable.
+    #[serde(default = "first_schema_version")]
+    pub schema_version: u32,
     pub collected_at: String,
     pub message: Option<String>,
     pub entries: Vec<SnapshotEntry>,
+}
+
+fn first_schema_version() -> u32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -310,6 +318,10 @@ pub struct HostSnapshot {
     pub label: Option<String>,
     pub schema_version: u32,
     pub captured_at: String,
+    /// A pinned capture is kept past the per-connection retention limit, so a
+    /// baseline the user named on purpose is never evicted by newer captures.
+    #[serde(default)]
+    pub pinned: bool,
     pub identity: HostIdentity,
     pub sections: Vec<SnapshotSection>,
 }
@@ -322,6 +334,30 @@ pub struct SnapshotSectionSummary {
     pub entry_count: u32,
 }
 
+/// One capture's value for a single tracked entry, for reading a unit, port, or
+/// mount across the whole stored history instead of two captures at a time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotTracePoint {
+    pub snapshot_id: String,
+    pub label: Option<String>,
+    pub captured_at: String,
+    /// The status of the section this entry belongs to in that capture.
+    pub section_status: String,
+    /// False when the capture read the section but the entry was not in it.
+    pub present: bool,
+    pub facts: Vec<SnapshotFact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotTrace {
+    pub kind: String,
+    pub identity: String,
+    pub label: String,
+    pub points: Vec<SnapshotTracePoint>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct HostSnapshotSummary {
@@ -330,8 +366,23 @@ pub struct HostSnapshotSummary {
     pub label: Option<String>,
     pub schema_version: u32,
     pub captured_at: String,
+    pub pinned: bool,
     pub identity: HostIdentity,
     pub sections: Vec<SnapshotSectionSummary>,
+    /// Entries that differ from the next older capture of the same connection.
+    /// None when there is no older capture, or when nothing could be compared.
+    pub changes_since_previous: Option<u32>,
+}
+
+/// What the user asked one capture to do. Sections is None for every section,
+/// or an explicit list when the user narrowed the capture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotCaptureRequest {
+    pub connection_id: String,
+    pub capture_id: String,
+    pub label: Option<String>,
+    pub sections: Option<Vec<String>>,
 }
 
 /// Emitted once per section while a capture runs. Capture is always explicit.
@@ -386,6 +437,9 @@ pub struct SnapshotComparison {
     /// `same`, `different`, or `unknown`, from machine fingerprint evidence.
     pub identity_match: String,
     pub schema_compatible: bool,
+    /// True when the target side was read from the host for this comparison and
+    /// never saved, so the UI can name it as live rather than as a capture.
+    pub target_is_live: bool,
     pub sections: Vec<SnapshotSectionDiff>,
 }
 

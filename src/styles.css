@@ -1298,6 +1298,10 @@ code,
   list-style: none;
 }
 
+.snapshot-live-progress {
+  margin: 0 0 18px;
+}
+
 .snapshot-progress li {
   display: flex;
   align-items: center;
@@ -1340,11 +1344,202 @@ code,
   color: var(--failure);
 }
 
+/* A section nobody asked for is not a failure, so it stays neutral rather than
+   borrowing the warning or failure hue. */
+.snapshot-status-skipped {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.snapshot-section-choice {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 16px 10px;
+  padding: 0;
+  border: 0;
+  gap: 4px 12px;
+}
+
+.snapshot-section-choice legend {
+  padding: 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.snapshot-section-choice label {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  gap: 5px;
+}
+
+.snapshot-section-choice input {
+  margin: 0;
+}
+
+.snapshot-section-toggle {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  gap: 5px;
+  text-align: left;
+}
+
+.snapshot-section-toggle svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.snapshot-entry-filter {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.snapshot-entry-list {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  gap: 8px;
+  list-style: none;
+}
+
+.snapshot-entry-list > li {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.snapshot-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.snapshot-entry-head code {
+  overflow: hidden;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-entry-facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 5px 0 0;
+  gap: 3px 14px;
+}
+
+.snapshot-entry-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.snapshot-entry-facts dt {
+  font-size: 10.5px;
+}
+
+.snapshot-entry-facts dd {
+  font-size: 11px;
+}
+
+/* The trace can be wider than the panel. It scrolls inside itself so the page
+   never scrolls sideways. */
+.snapshot-trace {
+  overflow-x: auto;
+  margin-top: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.snapshot-trace table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.snapshot-trace th,
+.snapshot-trace td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.snapshot-trace thead th {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.snapshot-trace tbody th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.snapshot-trace tr:last-child th,
+.snapshot-trace tr:last-child td {
+  border-bottom: 0;
+}
+
+.snapshot-trace-absent {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Scoped to this list: making every dense row a flex container would break the
+   ellipsis those rows rely on. */
+.snapshot-row-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.snapshot-row-title svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.snapshot-comparison-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.snapshot-volatile-toggle {
+  display: flex;
+  margin-right: auto;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.snapshot-volatile-toggle input {
+  margin: 0;
+}
+
 .snapshot-detail-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+}
+
+.snapshot-detail-header > div:first-child {
+  min-width: 0;
 }
 
 .snapshot-detail-actions {
@@ -1365,10 +1560,19 @@ code,
   flex: 1;
 }
 
-.snapshot-compare-field {
+.snapshot-compare-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  margin: 16px 0 18px;
+}
+
+.snapshot-compare-field {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
 }
 
 .snapshot-compare-field select {
@@ -1410,6 +1614,12 @@ code,
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.snapshot-comparison-note {
+  margin: -8px 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
 }
 
 .snapshot-change-list,

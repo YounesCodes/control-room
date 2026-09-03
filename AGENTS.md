@@ -78,9 +78,14 @@ DESIGN.md.
     recapture in the background. Store normalized facts, per-section collection
     time, support status, user label, schema version, and host identity evidence.
     Never store raw command output, logs, credentials, or environment values.
-    Keep collected, partial, unsupported, and unavailable distinct, and never
-    report a section Control Room could not read as unchanged. Compare snapshots
-    deterministically by domain identity and draw no causal conclusion.
+    Keep collected, partial, unsupported, unavailable, and skipped distinct, and
+    never report a section Control Room did not read as unchanged. Stopping a
+    capture keeps the sections that finished and records the rest as skipped.
+    Version each section's fact shape on its own so one section's change never
+    blocks comparison of the others. Compare snapshots
+    deterministically by domain identity and draw no causal conclusion. A
+    comparison against live machine state is still an explicit, user-initiated
+    read: never save it as a capture and never repeat it on its own.
 11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
 12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.

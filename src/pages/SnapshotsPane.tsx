@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
-import { Camera, Pencil, Trash2, X } from "lucide-react";
+import { Camera, Pencil, Pin, PinOff, RefreshCw, Trash2, X } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { SnapshotComparisonView } from "../components/snapshots/SnapshotComparisonView";
+import { SnapshotSectionList } from "../components/snapshots/SnapshotSectionList";
 import { api, errorMessage } from "../lib/api";
 import {
-  changeCount,
-  comparisonSummary,
+  LIVE_COMPARISON_ID,
+  SECTION_KINDS,
   formatCapturedAt,
-  identityWarning,
   orderForComparison,
   sectionLabel,
   snapshotTitle,
@@ -20,9 +21,7 @@ import type {
   SavedConnection,
   SnapshotComparison,
   SnapshotProgress,
-  SnapshotSection,
-  SnapshotSectionDiff,
-  SnapshotSectionStatus,
+  SnapshotSectionKind,
 } from "../types";
 
 interface SnapshotsPaneProps {
@@ -39,6 +38,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   const [listError, setListError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
+  const [chosenSections, setChosenSections] = useState<SnapshotSectionKind[]>(SECTION_KINDS);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [progress, setProgress] = useState<SnapshotProgress[]>([]);
   const [detail, setDetail] = useState<HostSnapshot | null>(null);
@@ -46,6 +46,8 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   const [compareWithId, setCompareWithId] = useState("");
   const [comparison, setComparison] = useState<SnapshotComparison | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [liveReadId, setLiveReadId] = useState<string | null>(null);
+  const [liveProgress, setLiveProgress] = useState<SnapshotProgress[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const detailRequestRef = useRef(0);
@@ -78,6 +80,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   useEffect(() => {
     setComparison(null);
     setCompareWithId("");
+    setLiveProgress([]);
     setRenaming(false);
     if (!selectedId) {
       setDetail(null);
@@ -99,7 +102,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   }, [selectedId]);
 
   async function capture() {
-    if (captureId) return;
+    if (captureId || !chosenSections.length) return;
     const id = crypto.randomUUID();
     setCaptureId(id);
     setProgress([]);
@@ -110,9 +113,12 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     };
     try {
       const summary = await api.captureHostSnapshot(
-        connection.id,
-        id,
-        label.trim() || null,
+        {
+          connectionId: connection.id,
+          captureId: id,
+          label: label.trim() || null,
+          sections: chosenSections.length === SECTION_KINDS.length ? null : chosenSections,
+        },
         channel,
       );
       setLabel("");
@@ -133,10 +139,22 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     }
   }
 
+  function toggleSection(kind: SnapshotSectionKind, wanted: boolean) {
+    setChosenSections((current) =>
+      wanted
+        ? SECTION_KINDS.filter((candidate) => candidate === kind || current.includes(candidate))
+        : current.filter((candidate) => candidate !== kind),
+    );
+  }
+
   async function compare(otherId: string) {
     setCompareWithId(otherId);
     setComparison(null);
     if (!selected || !otherId) return;
+    if (otherId === LIVE_COMPARISON_ID) {
+      await compareWithLive();
+      return;
+    }
     const other = snapshots.find((snapshot) => snapshot.id === otherId);
     if (!other) return;
     const { baseId, targetId } = orderForComparison(selected, other);
@@ -151,11 +169,54 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     }
   }
 
+  // Reading the live host is the same bounded collection a capture runs, minus
+  // the save: the comparison is the only thing that outlives it.
+  async function compareWithLive() {
+    if (!selected || liveReadId) return;
+    const readId = crypto.randomUUID();
+    setLiveReadId(readId);
+    setLiveProgress([]);
+    setComparison(null);
+    setComparing(true);
+    setActionError(null);
+    const channel = new Channel<SnapshotProgress>();
+    channel.onmessage = (event) => {
+      setLiveProgress((current) => [...current, event]);
+    };
+    try {
+      setComparison(await api.compareHostSnapshotWithLive(selected.id, readId, channel));
+    } catch (caught) {
+      setActionError(errorMessage(caught));
+    } finally {
+      setLiveReadId(null);
+      setComparing(false);
+    }
+  }
+
+  async function stopLiveRead() {
+    if (!liveReadId) return;
+    try {
+      await api.cancelHostSnapshot(liveReadId);
+    } catch (caught) {
+      setActionError(errorMessage(caught));
+    }
+  }
+
   async function saveLabel() {
     if (!selected) return;
     try {
       await api.renameHostSnapshot(selected.id, renameDraft.trim() || null);
       setRenaming(false);
+      await loadList(selected.id);
+    } catch (caught) {
+      setActionError(errorMessage(caught));
+    }
+  }
+
+  async function togglePin() {
+    if (!selected) return;
+    try {
+      await api.setHostSnapshotPinned(selected.id, !selected.pinned);
       await loadList(selected.id);
     } catch (caught) {
       setActionError(errorMessage(caught));
@@ -170,6 +231,16 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     } catch (caught) {
       setActionError(errorMessage(caught));
     }
+  }
+
+  function moveSelection(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const index = snapshots.findIndex((snapshot) => snapshot.id === selectedId);
+    const target = snapshots[event.key === "ArrowDown" ? index + 1 : index - 1];
+    if (!target) return;
+    event.preventDefault();
+    onSelect(target.id);
+    document.getElementById(`snapshot-row-${target.id}`)?.focus();
   }
 
   if (loading) return <LoadingState label="Reading saved snapshots…" />;
@@ -205,11 +276,29 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
               <X size={15} /> Stop after this section
             </button>
           ) : (
-            <button className="primary-button" type="button" onClick={() => void capture()}>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={!chosenSections.length}
+              onClick={() => void capture()}
+            >
               <Camera size={15} /> Capture snapshot
             </button>
           )}
         </div>
+        <fieldset className="snapshot-section-choice" disabled={Boolean(captureId)}>
+          <legend>Sections</legend>
+          {SECTION_KINDS.map((kind) => (
+            <label key={kind}>
+              <input
+                type="checkbox"
+                checked={chosenSections.includes(kind)}
+                onChange={(event) => toggleSection(kind, event.target.checked)}
+              />
+              <span>{sectionLabel(kind)}</span>
+            </label>
+          ))}
+        </fieldset>
         {captureId && (
           <ol className="snapshot-progress" aria-live="polite">
             {progress.map((event) => (
@@ -226,27 +315,35 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
           </ol>
         )}
         {actionError && <p className="inline-error">{actionError}</p>}
-        <div className="dense-list">
+        <div className="dense-list" onKeyDown={moveSelection}>
           {snapshots.map((snapshot) => (
             <button
               className={snapshot.id === selectedId ? "dense-row selected-row" : "dense-row"}
               type="button"
+              id={`snapshot-row-${snapshot.id}`}
               key={snapshot.id}
               onClick={() => onSelect(snapshot.id)}
             >
               <span className="row-main">
-                <strong>{snapshotTitle(snapshot)}</strong>
-                <small>{formatCapturedAt(snapshot.capturedAt)}</small>
+                <strong className="snapshot-row-title">
+                  {snapshot.pinned && <Pin size={11} aria-label="Pinned" />}
+                  {snapshotTitle(snapshot)}
+                </strong>
+                <small>
+                  {formatCapturedAt(snapshot.capturedAt)}
+                  {snapshot.identity.hostname ? ` · ${snapshot.identity.hostname}` : ""}
+                </small>
               </span>
               <span className="row-state">
-                {snapshot.sections.filter((section) => section.status === "collected").length}/
-                {snapshot.sections.length} collected
+                {snapshot.changesSincePrevious === null
+                  ? `${snapshot.sections.filter((section) => section.status === "collected").length}/${snapshot.sections.length} collected`
+                  : `${snapshot.changesSincePrevious} changed`}
               </span>
             </button>
           ))}
           {!snapshots.length && (
             <EmptyState title="No snapshots yet">
-              Capture one to record the current units, containers, listeners, and filesystems.
+              Capture one to record the current units, containers, ports, and filesystems.
             </EmptyState>
           )}
         </div>
@@ -273,15 +370,29 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                   </button>
                 </div>
               ) : (
-                <>
+                <div>
                   <h2>{snapshotTitle(selected)}</h2>
                   <p>
-                    Captured {formatCapturedAt(selected.capturedAt)} · schema v
-                    {selected.schemaVersion}
+                    Captured {formatCapturedAt(selected.capturedAt)}
+                    {selected.pinned ? " · pinned, kept past the retention limit" : ""}
                   </p>
-                </>
+                </div>
               )}
               <div className="snapshot-detail-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={selected.pinned ? "Unpin snapshot" : "Pin snapshot"}
+                  aria-pressed={selected.pinned}
+                  title={
+                    selected.pinned
+                      ? "Unpin. Newer captures can evict this one again."
+                      : "Pin. Keeps this capture past the 20 per connection limit."
+                  }
+                  onClick={() => void togglePin()}
+                >
+                  {selected.pinned ? <PinOff size={15} /> : <Pin size={15} />}
+                </button>
                 <button
                   className="icon-button"
                   type="button"
@@ -303,153 +414,71 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 </button>
               </div>
             </header>
-            <label className="snapshot-compare-field">
-              <span>Compare with</span>
-              <select
-                value={compareWithId}
-                onChange={(event) => void compare(event.target.value)}
-                disabled={!others.length}
-              >
-                <option value="">No comparison</option>
-                {others.map((snapshot) => (
-                  <option key={snapshot.id} value={snapshot.id}>
-                    {snapshotTitle(snapshot)}
-                  </option>
+            <div className="snapshot-compare-row">
+              <label className="snapshot-compare-field">
+                <span>Compare with</span>
+                <select
+                  value={compareWithId}
+                  onChange={(event) => void compare(event.target.value)}
+                  disabled={Boolean(liveReadId)}
+                >
+                  <option value="">No comparison</option>
+                  <option value={LIVE_COMPARISON_ID}>Live machine state</option>
+                  {others.map((snapshot) => (
+                    <option key={snapshot.id} value={snapshot.id}>
+                      {snapshotTitle(snapshot)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {compareWithId === LIVE_COMPARISON_ID &&
+                (liveReadId ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void stopLiveRead()}
+                  >
+                    <X size={15} /> Stop after this section
+                  </button>
+                ) : (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void compareWithLive()}
+                  >
+                    <RefreshCw size={15} /> Read again
+                  </button>
                 ))}
-              </select>
-            </label>
-            {comparing && <LoadingState label="Comparing snapshots…" />}
-            {!comparing && comparison && <ComparisonView comparison={comparison} />}
+            </div>
+            {liveReadId && (
+              <ol className="snapshot-progress snapshot-live-progress" aria-live="polite">
+                {liveProgress.map((event) => (
+                  <li key={event.kind}>
+                    <span>{sectionLabel(event.kind)}</span>
+                    <span className={`snapshot-status snapshot-status-${event.status}`}>
+                      {statusLabel(event.status)}
+                    </span>
+                  </li>
+                ))}
+                <li className="snapshot-progress-count">
+                  Reading live state · {liveProgress.length} of {liveProgress[0]?.total ?? 5}{" "}
+                  sections
+                </li>
+              </ol>
+            )}
+            {comparing && !liveReadId && <LoadingState label="Comparing snapshots…" />}
+            {!comparing && comparison && (
+              <SnapshotComparisonView comparison={comparison} onError={setActionError} />
+            )}
             {!comparing && !comparison && detailLoading && (
               <LoadingState label="Reading snapshot…" />
             )}
             {!comparing && !comparison && !detailLoading && detail && (
-              <SnapshotView snapshot={detail} />
+              <SnapshotSectionList connectionId={connection.id} snapshot={detail} />
             )}
           </>
         )}
       </aside>
-    </section>
-  );
-}
-
-function StatusChip({ status }: { status: SnapshotSectionStatus }) {
-  return <span className={`snapshot-status snapshot-status-${status}`}>{statusLabel(status)}</span>;
-}
-
-function SnapshotView({ snapshot }: { snapshot: HostSnapshot }) {
-  return (
-    <div className="snapshot-sections">
-      {snapshot.sections.map((section) => (
-        <SectionView key={section.kind} section={section} />
-      ))}
-    </div>
-  );
-}
-
-function SectionView({ section }: { section: SnapshotSection }) {
-  return (
-    <section className="snapshot-section">
-      <header>
-        <h3>{sectionLabel(section.kind)}</h3>
-        <StatusChip status={section.status} />
-        <span className="snapshot-section-count">{section.entries.length} recorded</span>
-      </header>
-      {section.message && <p className="inline-warning">{section.message}</p>}
-      {section.kind === "host" &&
-        section.entries.map((entry) => (
-          <dl className="detail-list" key={entry.identity}>
-            {entry.facts.map((fact) => (
-              <div key={fact.name}>
-                <dt>{fact.name}</dt>
-                <dd className="technical">{fact.value}</dd>
-              </div>
-            ))}
-          </dl>
-        ))}
-    </section>
-  );
-}
-
-function ComparisonView({ comparison }: { comparison: SnapshotComparison }) {
-  const warning = identityWarning(comparison);
-  return (
-    <div className="snapshot-sections">
-      <p className="snapshot-comparison-summary">
-        {snapshotTitle(comparison.base)} → {snapshotTitle(comparison.target)}:{" "}
-        {comparisonSummary(comparison)}
-      </p>
-      {warning && <p className="inline-warning">{warning}</p>}
-      {!comparison.schemaCompatible && (
-        <p className="inline-warning">
-          These captures use different schema versions, so no section can be compared.
-        </p>
-      )}
-      {comparison.sections.map((section) => (
-        <SectionDiffView key={section.kind} diff={section} />
-      ))}
-    </div>
-  );
-}
-
-function SectionDiffView({ diff }: { diff: SnapshotSectionDiff }) {
-  const changes = changeCount(diff);
-  return (
-    <section className="snapshot-section">
-      <header>
-        <h3>{sectionLabel(diff.kind)}</h3>
-        <StatusChip status={diff.baseStatus} />
-        <span aria-hidden="true">→</span>
-        <StatusChip status={diff.targetStatus} />
-      </header>
-      {diff.note && <p className="inline-warning">{diff.note}</p>}
-      {diff.comparable && (
-        <p className="snapshot-section-count">
-          {changes === 0
-            ? `No change across ${diff.unchangedCount} compared entries`
-            : `${changes} changed of ${changes + diff.unchangedCount} compared entries`}
-        </p>
-      )}
-      {!!diff.added.length && (
-        <ul className="snapshot-change-list">
-          {diff.added.map((entry) => (
-            <li key={`added-${entry.identity}`}>
-              <span className="snapshot-change-mark snapshot-change-added">Added</span>
-              <code>{entry.label}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!!diff.removed.length && (
-        <ul className="snapshot-change-list">
-          {diff.removed.map((entry) => (
-            <li key={`removed-${entry.identity}`}>
-              <span className="snapshot-change-mark snapshot-change-removed">Removed</span>
-              <code>{entry.label}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!!diff.changed.length && (
-        <ul className="snapshot-change-list">
-          {diff.changed.map((entry) => (
-            <li key={`changed-${entry.identity}`}>
-              <span className="snapshot-change-mark">Changed</span>
-              <code>{entry.label}</code>
-              <ul className="snapshot-fact-list">
-                {entry.changes.map((change) => (
-                  <li key={change.name}>
-                    <span>{change.name}</span>
-                    <code>{change.baseValue ?? "not recorded"}</code>
-                    <span aria-hidden="true">→</span>
-                    <code>{change.targetValue ?? "not recorded"}</code>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }

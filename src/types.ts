@@ -200,7 +200,8 @@ export interface HostIdentity {
 export type SnapshotSectionKind =
   "host" | "systemdUnits" | "containers" | "listeners" | "filesystems";
 
-export type SnapshotSectionStatus = "collected" | "partial" | "unsupported" | "unavailable";
+export type SnapshotSectionStatus =
+  "collected" | "partial" | "unsupported" | "unavailable" | "skipped";
 
 export interface SnapshotFact {
   name: string;
@@ -216,9 +217,26 @@ export interface SnapshotEntry {
 export interface SnapshotSection {
   kind: SnapshotSectionKind;
   status: SnapshotSectionStatus;
+  schemaVersion: number;
   collectedAt: string;
   message: string | null;
   entries: SnapshotEntry[];
+}
+
+export interface SnapshotTracePoint {
+  snapshotId: string;
+  label: string | null;
+  capturedAt: string;
+  sectionStatus: SnapshotSectionStatus;
+  present: boolean;
+  facts: SnapshotFact[];
+}
+
+export interface SnapshotTrace {
+  kind: SnapshotSectionKind;
+  identity: string;
+  label: string;
+  points: SnapshotTracePoint[];
 }
 
 export interface HostSnapshot {
@@ -227,6 +245,7 @@ export interface HostSnapshot {
   label: string | null;
   schemaVersion: number;
   capturedAt: string;
+  pinned: boolean;
   identity: HostIdentity;
   sections: SnapshotSection[];
 }
@@ -243,8 +262,17 @@ export interface HostSnapshotSummary {
   label: string | null;
   schemaVersion: number;
   capturedAt: string;
+  pinned: boolean;
   identity: HostIdentity;
   sections: SnapshotSectionSummary[];
+  changesSincePrevious: number | null;
+}
+
+export interface SnapshotCaptureRequest {
+  connectionId: string;
+  captureId: string;
+  label: string | null;
+  sections: SnapshotSectionKind[] | null;
 }
 
 export interface SnapshotProgress {
@@ -285,6 +313,7 @@ export interface SnapshotComparison {
   target: HostSnapshotSummary;
   identityMatch: "same" | "different" | "unknown";
   schemaCompatible: boolean;
+  targetIsLive: boolean;
   sections: SnapshotSectionDiff[];
 }
 

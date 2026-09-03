@@ -21,8 +21,11 @@ import type {
   ScratchpadNoteInput,
   ScratchpadScope,
   SettingsContract,
+  SnapshotCaptureRequest,
   SnapshotComparison,
   SnapshotProgress,
+  SnapshotSectionKind,
+  SnapshotTrace,
   SystemdUnit,
 } from "../types";
 
@@ -147,27 +150,33 @@ export const api = {
       output,
     }),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
-  captureHostSnapshot: (
-    connectionId: string,
-    captureId: string,
-    label: string | null,
-    progress: Channel<SnapshotProgress>,
-  ) =>
-    invoke<HostSnapshotSummary>("capture_host_snapshot", {
-      connectionId,
-      captureId,
-      label,
-      progress,
-    }),
+  captureHostSnapshot: (request: SnapshotCaptureRequest, progress: Channel<SnapshotProgress>) =>
+    invoke<HostSnapshotSummary>("capture_host_snapshot", { request, progress }),
   cancelHostSnapshot: (captureId: string) => invoke<void>("cancel_host_snapshot", { captureId }),
   listHostSnapshots: (connectionId: string) =>
     invoke<HostSnapshotSummary[]>("list_host_snapshots", { connectionId }),
   getHostSnapshot: (id: string) => invoke<HostSnapshot>("get_host_snapshot", { id }),
   renameHostSnapshot: (id: string, label: string | null) =>
     invoke<HostSnapshotSummary>("rename_host_snapshot", { id, label }),
+  setHostSnapshotPinned: (id: string, pinned: boolean) =>
+    invoke<HostSnapshotSummary>("set_host_snapshot_pinned", { id, pinned }),
   deleteHostSnapshot: (id: string) => invoke<void>("delete_host_snapshot", { id }),
+  traceHostSnapshotEntry: (connectionId: string, kind: SnapshotSectionKind, identity: string) =>
+    invoke<SnapshotTrace>("trace_host_snapshot_entry", { connectionId, kind, identity }),
+  exportTextFile: (path: string, contents: string) =>
+    invoke<void>("export_text_file", { path, contents }),
   compareHostSnapshots: (baseId: string, targetId: string) =>
     invoke<SnapshotComparison>("compare_host_snapshots", { baseId, targetId }),
+  compareHostSnapshotWithLive: (
+    baseId: string,
+    captureId: string,
+    progress: Channel<SnapshotProgress>,
+  ) =>
+    invoke<SnapshotComparison>("compare_host_snapshot_with_live", {
+      baseId,
+      captureId,
+      progress,
+    }),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),

@@ -10,12 +10,12 @@ use crate::{
         AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
         HostSnapshot, HostSnapshotSummary, LOG_TAIL_OPTIONS, PersistedTerminalLayout,
         PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
-        ScratchpadNoteInput,
+        ScratchpadNoteInput, SnapshotTrace,
     },
     snapshots,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 8;
+const LATEST_SCHEMA_VERSION: i64 = 9;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -607,20 +607,21 @@ impl Database {
             .map_err(|error| error.to_string())?;
         transaction
             .execute(
-                "INSERT INTO host_snapshots (id, connection_id, label, schema_version, captured_at, payload) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO host_snapshots (id, connection_id, label, schema_version, captured_at, payload, pinned) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     snapshot.id,
                     snapshot.connection_id,
                     snapshot.label,
                     snapshot.schema_version,
                     snapshot.captured_at,
-                    payload
+                    payload,
+                    snapshot.pinned
                 ],
             )
             .map_err(|error| error.to_string())?;
         transaction
             .execute(
-                "DELETE FROM host_snapshots WHERE connection_id = ?1 AND id NOT IN (SELECT id FROM host_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
+                "DELETE FROM host_snapshots WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT id FROM host_snapshots WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
                 params![snapshot.connection_id, MAX_SNAPSHOTS_PER_CONNECTION as i64],
             )
             .map_err(|error| error.to_string())?;
@@ -632,41 +633,99 @@ impl Database {
         &self,
         connection_id: &str,
     ) -> Result<Vec<HostSnapshotSummary>, String> {
-        let connection = self.connection.lock();
-        let mut statement = connection
-            .prepare(
-                "SELECT payload FROM host_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC",
-            )
-            .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map([connection_id], |row| row.get::<_, String>(0))
-            .map_err(|error| error.to_string())?;
-        let mut summaries = Vec::new();
-        for row in rows {
-            let payload = row.map_err(|error| error.to_string())?;
-            // A payload written by a future schema is skipped rather than
-            // guessed at. The capture stays on disk until the user deletes it.
-            if let Ok(snapshot) = serde_json::from_str::<HostSnapshot>(&payload) {
-                summaries.push(snapshots::summarize(&snapshot));
-            }
+        let stored = self.read_host_snapshots(connection_id)?;
+        // Each row reports how far it moved from the capture below it, so the
+        // list itself says where something happened instead of making the user
+        // diff pairs until they find it.
+        let mut summaries: Vec<HostSnapshotSummary> =
+            stored.iter().map(snapshots::summarize).collect();
+        for index in 0..summaries.len() {
+            let Some(previous) = stored.get(index + 1) else {
+                continue;
+            };
+            let comparison = snapshots::compare(previous, &stored[index]);
+            summaries[index].changes_since_previous = snapshots::total_changes(&comparison);
         }
         Ok(summaries)
     }
 
+    /// Every stored capture of one connection, newest first, skipping payloads
+    /// a newer Control Room wrote rather than guessing at their shape.
+    fn read_host_snapshots(&self, connection_id: &str) -> Result<Vec<HostSnapshot>, String> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT payload, pinned FROM host_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([connection_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut snapshots = Vec::new();
+        for row in rows {
+            let (payload, pinned) = row.map_err(|error| error.to_string())?;
+            if let Ok(mut snapshot) = serde_json::from_str::<HostSnapshot>(&payload) {
+                snapshot.pinned = pinned;
+                snapshots.push(snapshot);
+            }
+        }
+        Ok(snapshots)
+    }
+
+    pub fn trace_host_snapshot_entry(
+        &self,
+        connection_id: &str,
+        kind: &str,
+        identity: &str,
+    ) -> Result<SnapshotTrace, String> {
+        let stored = self.read_host_snapshots(connection_id)?;
+        if stored.is_empty() {
+            return Err("This connection has no saved snapshots".into());
+        }
+        Ok(snapshots::trace_entry(&stored, kind, identity))
+    }
+
+    pub fn set_host_snapshot_pinned(
+        &self,
+        id: &str,
+        pinned: bool,
+    ) -> Result<HostSnapshotSummary, String> {
+        let mut snapshot = self.get_host_snapshot(id)?;
+        snapshot.pinned = pinned;
+        let payload = serde_json::to_string(&snapshot).map_err(|error| error.to_string())?;
+        let changed = self
+            .connection
+            .lock()
+            .execute(
+                "UPDATE host_snapshots SET pinned = ?2, payload = ?3 WHERE id = ?1",
+                params![id, pinned, payload],
+            )
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err("That snapshot no longer exists".into());
+        }
+        Ok(snapshots::summarize(&snapshot))
+    }
+
     pub fn get_host_snapshot(&self, id: &str) -> Result<HostSnapshot, String> {
-        let payload: Option<String> = self
+        let payload: Option<(String, bool)> = self
             .connection
             .lock()
             .query_row(
-                "SELECT payload FROM host_snapshots WHERE id = ?1",
+                "SELECT payload, pinned FROM host_snapshots WHERE id = ?1",
                 [id],
-                |row| row.get(0),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        let payload = payload.ok_or_else(|| "That snapshot no longer exists".to_string())?;
-        serde_json::from_str(&payload)
-            .map_err(|_| "That snapshot was written by a newer version of Control Room".into())
+        let (payload, pinned) =
+            payload.ok_or_else(|| "That snapshot no longer exists".to_string())?;
+        let mut snapshot: HostSnapshot = serde_json::from_str(&payload)
+            .map_err(|_| "That snapshot was written by a newer version of Control Room")?;
+        snapshot.pinned = pinned;
+        Ok(snapshot)
     }
 
     pub fn rename_host_snapshot(
@@ -942,6 +1001,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             "ports",
             "docker",
             "logs",
+            "snapshots",
             "history",
             "scratchpad",
         ]
@@ -1273,6 +1333,22 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 9 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                ALTER TABLE host_snapshots
+                ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+
+                PRAGMA user_version = 9;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -1547,6 +1623,7 @@ mod tests {
 
     fn snapshot_for(connection_id: &str, id: &str, captured_at: &str) -> HostSnapshot {
         HostSnapshot {
+            pinned: false,
             id: id.into(),
             connection_id: connection_id.into(),
             label: None,
@@ -1561,6 +1638,7 @@ mod tests {
                 architecture: Some("x86_64".into()),
             },
             sections: vec![crate::models::SnapshotSection {
+                schema_version: 1,
                 kind: "systemdUnits".into(),
                 status: "collected".into(),
                 collected_at: captured_at.into(),
@@ -1605,6 +1683,81 @@ mod tests {
         assert!(database.list_host_snapshots(&saved.id).unwrap().is_empty());
         assert!(database.get_host_snapshot("snapshot-a").is_err());
         assert!(database.delete_host_snapshot("snapshot-a").is_err());
+    }
+
+    #[test]
+    fn a_pinned_capture_survives_retention_and_does_not_use_a_slot() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_snapshot(&snapshot_for(&saved.id, "baseline", "2026-09-01T00:00:00Z"))
+            .unwrap();
+        let pinned = database.set_host_snapshot_pinned("baseline", true).unwrap();
+        assert!(pinned.pinned);
+
+        for index in 1..MAX_SNAPSHOTS_PER_CONNECTION + 3 {
+            database
+                .save_host_snapshot(&snapshot_for(
+                    &saved.id,
+                    &format!("snapshot-{index:02}"),
+                    &format!("2026-09-01T{index:02}:00:00Z"),
+                ))
+                .unwrap();
+        }
+
+        let stored = database.list_host_snapshots(&saved.id).unwrap();
+        assert_eq!(stored.len(), MAX_SNAPSHOTS_PER_CONNECTION + 1);
+        assert!(database.get_host_snapshot("baseline").unwrap().pinned);
+        assert!(stored.iter().any(|summary| summary.id == "baseline"));
+
+        database
+            .set_host_snapshot_pinned("baseline", false)
+            .unwrap();
+        database
+            .save_host_snapshot(&snapshot_for(&saved.id, "one-more", "2026-09-02T00:00:00Z"))
+            .unwrap();
+        assert!(database.get_host_snapshot("baseline").is_err());
+    }
+
+    #[test]
+    fn each_row_reports_how_far_it_moved_from_the_capture_below_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_snapshot(&snapshot_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .unwrap();
+        let mut second = snapshot_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        second.sections[0].entries[0].facts[0].value = "failed".into();
+        database.save_host_snapshot(&second).unwrap();
+
+        let stored = database.list_host_snapshots(&saved.id).unwrap();
+
+        assert_eq!(stored[0].id, "second");
+        assert_eq!(stored[0].changes_since_previous, Some(1));
+        assert_eq!(stored[1].changes_since_previous, None);
+    }
+
+    #[test]
+    fn tracing_an_entry_reads_it_across_every_stored_capture() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_snapshot(&snapshot_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .unwrap();
+        let mut second = snapshot_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        second.sections[0].entries[0].facts[0].value = "failed".into();
+        database.save_host_snapshot(&second).unwrap();
+
+        let trace = database
+            .trace_host_snapshot_entry(&saved.id, "systemdUnits", "ssh.service")
+            .unwrap();
+
+        assert_eq!(trace.points.len(), 2);
+        assert_eq!(trace.points[0].facts[0].value, "failed");
+        assert_eq!(trace.points[1].facts[0].value, "active");
     }
 
     #[test]
@@ -2337,5 +2490,49 @@ mod tests {
         database.save_workspace_state(&state).unwrap();
 
         assert_eq!(database.get_workspace_state().unwrap(), state);
+    }
+
+    #[test]
+    fn every_frontend_workspace_view_is_accepted() {
+        let types = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("src")
+                .join("types.ts"),
+        )
+        .unwrap();
+        let union = types
+            .split_once("export type WorkspaceView =")
+            .expect("WorkspaceView union is missing from src/types.ts")
+            .1
+            .split_once(';')
+            .expect("WorkspaceView union is not terminated")
+            .0;
+        let views: Vec<&str> = union
+            .split('|')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(|part| part.trim_matches('"'))
+            .collect();
+        assert!(views.len() > 1);
+
+        for view in views {
+            let workspace_id = Uuid::new_v4().to_string();
+            let state = PersistedWorkspaceState {
+                workspaces: vec![crate::models::PersistedWorkspace {
+                    id: workspace_id.clone(),
+                    label: None,
+                    connection_id: Uuid::new_v4().to_string(),
+                    view: view.into(),
+                    history_paused: false,
+                }],
+                active_workspace_id: Some(workspace_id),
+                terminal_layout: None,
+            };
+            assert!(
+                validate_workspace_state(&state).is_ok(),
+                "backend rejects Workspace view {view:?} declared in src/types.ts"
+            );
+        }
     }
 }

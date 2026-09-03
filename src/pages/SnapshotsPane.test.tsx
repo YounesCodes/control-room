@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +12,13 @@ const api = vi.hoisted(() => ({
   renameHostSnapshot: vi.fn(),
   deleteHostSnapshot: vi.fn(),
   compareHostSnapshots: vi.fn(),
+  compareHostSnapshotWithLive: vi.fn(),
+  setHostSnapshotPinned: vi.fn(),
+  traceHostSnapshotEntry: vi.fn(),
+  exportTextFile: vi.fn(),
 }));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn() }));
 
 vi.mock("../lib/api", () => ({
   api,
@@ -57,14 +63,22 @@ const identity = {
   architecture: "x86_64",
 };
 
-function summary(id: string, capturedAt: string, label: string | null): HostSnapshotSummary {
+function summary(
+  id: string,
+  capturedAt: string,
+  label: string | null,
+  extra: Partial<HostSnapshotSummary> = {},
+): HostSnapshotSummary {
   return {
     id,
     connectionId: connection.id,
     label,
     schemaVersion: 1,
     capturedAt,
+    pinned: false,
+    changesSincePrevious: null,
     identity,
+    ...extra,
     sections: [
       { kind: "host", status: "collected", entryCount: 1 },
       { kind: "systemdUnits", status: "collected", entryCount: 40 },
@@ -81,11 +95,13 @@ const detail: HostSnapshot = {
   label: "after upgrade",
   schemaVersion: 1,
   capturedAt: "2026-09-02T10:00:00Z",
+  pinned: false,
   identity,
   sections: [
     {
       kind: "host",
       status: "collected",
+      schemaVersion: 1,
       collectedAt: "2026-09-02T10:00:00Z",
       message: null,
       entries: [
@@ -97,8 +113,28 @@ const detail: HostSnapshot = {
       ],
     },
     {
+      kind: "systemdUnits",
+      status: "collected",
+      schemaVersion: 1,
+      collectedAt: "2026-09-02T10:00:00Z",
+      message: null,
+      entries: [
+        {
+          identity: "ssh.service",
+          label: "ssh.service",
+          facts: [{ name: "activeState", value: "active" }],
+        },
+        {
+          identity: "nginx.service",
+          label: "nginx.service",
+          facts: [{ name: "activeState", value: "failed" }],
+        },
+      ],
+    },
+    {
       kind: "containers",
       status: "unsupported",
+      schemaVersion: 1,
       collectedAt: "2026-09-02T10:00:00Z",
       message: "Docker is not installed",
       entries: [],
@@ -111,6 +147,7 @@ const comparison: SnapshotComparison = {
   target: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
   identityMatch: "same",
   schemaCompatible: true,
+  targetIsLive: false,
   sections: [
     {
       kind: "systemdUnits",
@@ -142,6 +179,12 @@ const comparison: SnapshotComparison = {
     },
   ],
 };
+
+// The section names now appear twice on the page: once as capture checkboxes,
+// once in the detail. Detail assertions look inside the detail panel only.
+function detail_panel() {
+  return within(screen.getByRole("complementary"));
+}
 
 function renderPane(selectedId: string | null = "later") {
   const onSelect = vi.fn();
@@ -175,9 +218,9 @@ describe("snapshots pane", () => {
     api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
     api.getHostSnapshot.mockResolvedValue(detail);
     renderPane();
-    expect(await screen.findByText("Containers")).toBeTruthy();
-    expect(screen.getByText("Not present")).toBeTruthy();
-    expect(screen.getByText("Docker is not installed")).toBeTruthy();
+    await screen.findAllByText("Containers");
+    expect(detail_panel().getByText("Not present")).toBeTruthy();
+    expect(detail_panel().getByText("Docker is not installed")).toBeTruthy();
   });
 
   it("compares earlier to later whichever capture is selected", async () => {
@@ -215,6 +258,167 @@ describe("snapshots pane", () => {
     expect(
       screen.getByText("3 changes, 1 section could not be compared", { exact: false }),
     ).toBeTruthy();
+  });
+
+  it("compares the selected capture against live machine state without saving a capture", async () => {
+    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    api.compareHostSnapshotWithLive.mockResolvedValue({
+      ...comparison,
+      base: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+      target: summary("live", "2026-09-03T09:00:00Z", null),
+      targetIsLive: true,
+    });
+    renderPane("later");
+    await screen.findAllByText("Host facts");
+
+    await userEvent.selectOptions(screen.getByRole("combobox"), "live");
+
+    await waitFor(() =>
+      expect(api.compareHostSnapshotWithLive).toHaveBeenCalledWith(
+        "later",
+        expect.any(String),
+        expect.anything(),
+      ),
+    );
+    expect(await screen.findByText(/after upgrade → Live state:/)).toBeTruthy();
+    expect(screen.getByText(/This read was not saved/)).toBeTruthy();
+    expect(api.captureHostSnapshot).not.toHaveBeenCalled();
+    expect(screen.getByText("postgresql.service")).toBeTruthy();
+  });
+
+  it("offers the live comparison even when no other capture exists", async () => {
+    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    renderPane("later");
+    await screen.findAllByText("Host facts");
+
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    expect(select.disabled).toBe(false);
+    expect([...select.options].map((option) => option.value).includes("live")).toBe(true);
+  });
+
+  it("shows host facts as collected without listing their values", async () => {
+    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    renderPane("later");
+    await screen.findAllByText("Host facts");
+
+    expect(detail_panel().getAllByText("Collected")).not.toHaveLength(0);
+    expect(detail_panel().queryByText("kernel")).toBeNull();
+    expect(detail_panel().queryByText("6.1.0")).toBeNull();
+  });
+
+  it("opens a section to the entries it recorded", async () => {
+    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    renderPane("later");
+    await screen.findAllByText("Systemd units");
+
+    expect(detail_panel().queryByText("ssh.service")).toBeNull();
+    await userEvent.click(detail_panel().getByRole("button", { name: /Systemd units/ }));
+
+    expect(detail_panel().getByText("ssh.service")).toBeTruthy();
+    expect(detail_panel().getByText("nginx.service")).toBeTruthy();
+    expect(detail_panel().getByText("failed")).toBeTruthy();
+  });
+
+  it("reads one entry across every stored capture", async () => {
+    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    api.traceHostSnapshotEntry.mockResolvedValue({
+      kind: "systemdUnits",
+      identity: "ssh.service",
+      label: "ssh.service",
+      points: [
+        {
+          snapshotId: "later",
+          label: "after upgrade",
+          capturedAt: "2026-09-02T10:00:00Z",
+          sectionStatus: "collected",
+          present: true,
+          facts: [{ name: "activeState", value: "failed" }],
+        },
+        {
+          snapshotId: "earlier",
+          label: "before upgrade",
+          capturedAt: "2026-09-01T10:00:00Z",
+          sectionStatus: "collected",
+          present: false,
+          facts: [],
+        },
+      ],
+    });
+    renderPane("later");
+    await screen.findAllByText("Systemd units");
+    await userEvent.click(detail_panel().getByRole("button", { name: /Systemd units/ }));
+
+    await userEvent.click(detail_panel().getByRole("button", { name: "History of ssh.service" }));
+
+    await waitFor(() =>
+      expect(api.traceHostSnapshotEntry).toHaveBeenCalledWith(
+        "connection-a",
+        "systemdUnits",
+        "ssh.service",
+      ),
+    );
+    expect(await detail_panel().findByText("Not present in this capture")).toBeTruthy();
+  });
+
+  it("pins a capture so retention cannot evict it", async () => {
+    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    api.setHostSnapshotPinned.mockResolvedValue(
+      summary("later", "2026-09-02T10:00:00Z", null, { pinned: true }),
+    );
+    renderPane("later");
+    await screen.findAllByText("Host facts");
+
+    await userEvent.click(screen.getByRole("button", { name: "Pin snapshot" }));
+
+    await waitFor(() => expect(api.setHostSnapshotPinned).toHaveBeenCalledWith("later", true));
+  });
+
+  it("captures only the sections that stay ticked", async () => {
+    api.listHostSnapshots.mockResolvedValue([]);
+    api.captureHostSnapshot.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
+    renderPane(null);
+    await screen.findByText("No snapshots yet");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Containers" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Filesystems" }));
+    await userEvent.click(screen.getByRole("button", { name: /Capture snapshot/ }));
+
+    await waitFor(() => expect(api.captureHostSnapshot).toHaveBeenCalled());
+    expect(api.captureHostSnapshot.mock.calls[0][0].sections).toEqual([
+      "host",
+      "systemdUnits",
+      "listeners",
+    ]);
+  });
+
+  it("sends no section list when every section is wanted", async () => {
+    api.listHostSnapshots.mockResolvedValue([]);
+    api.captureHostSnapshot.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
+    renderPane(null);
+    await screen.findByText("No snapshots yet");
+
+    await userEvent.click(screen.getByRole("button", { name: /Capture snapshot/ }));
+
+    await waitFor(() => expect(api.captureHostSnapshot).toHaveBeenCalled());
+    expect(api.captureHostSnapshot.mock.calls[0][0].sections).toBeNull();
+  });
+
+  it("says how far each row moved from the capture below it", async () => {
+    api.listHostSnapshots.mockResolvedValue([
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade", { changesSincePrevious: 12 }),
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+    ]);
+    api.getHostSnapshot.mockResolvedValue(detail);
+    renderPane("later");
+
+    expect(await screen.findByText("12 changed")).toBeTruthy();
+    expect(screen.getByText("3/5 collected")).toBeTruthy();
   });
 
   it("deletes the selected capture", async () => {

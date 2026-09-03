@@ -9,8 +9,9 @@ use crate::{
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
         HostCapabilities, HostSnapshot, HostSnapshotSummary, LOG_TAIL_OPTIONS, ListeningSocket,
         PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
-        ScratchpadNoteInput, SessionStarted, SettingsContract, SnapshotComparison,
-        SnapshotProgress, SnapshotSection, StreamStarted, SystemdUnit,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, SnapshotCaptureRequest,
+        SnapshotComparison, SnapshotProgress, SnapshotSection, SnapshotTrace, StreamStarted,
+        SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -445,18 +446,23 @@ pub fn capture_host_snapshot(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
     captures: State<'_, SnapshotCaptureRegistry>,
-    connection_id: String,
-    capture_id: String,
-    label: Option<String>,
+    request: SnapshotCaptureRequest,
     progress: Channel<SnapshotProgress>,
 ) -> Result<HostSnapshotSummary, String> {
-    let connection = database.get_connection(&connection_id)?;
-    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&request.connection_id)?;
+    let _permit = limiter.acquire(&request.connection_id)?;
     let reporter = ChannelSectionReporter {
-        capture_id: &capture_id,
+        capture_id: &request.capture_id,
         channel: progress,
     };
-    let snapshot = snapshots::capture(&connection, &capture_id, label, &captures, &reporter)?;
+    let snapshot = snapshots::capture(
+        &connection,
+        &request.capture_id,
+        request.label,
+        request.sections.as_deref(),
+        &captures,
+        &reporter,
+    )?;
     database.save_host_snapshot(&snapshot)
 }
 
@@ -493,9 +499,48 @@ pub fn rename_host_snapshot(
     database.rename_host_snapshot(&id, label)
 }
 
+/// Pins or unpins one capture. A pinned capture survives the per-connection
+/// retention limit, so a named baseline is not evicted by routine captures.
+#[tauri::command]
+pub fn set_host_snapshot_pinned(
+    database: State<'_, Database>,
+    id: String,
+    pinned: bool,
+) -> Result<HostSnapshotSummary, String> {
+    database.set_host_snapshot_pinned(&id, pinned)
+}
+
 #[tauri::command]
 pub fn delete_host_snapshot(database: State<'_, Database>, id: String) -> Result<(), String> {
     database.delete_host_snapshot(&id)
+}
+
+/// Reads one entry across every stored capture of a connection, newest first.
+#[tauri::command]
+pub fn trace_host_snapshot_entry(
+    database: State<'_, Database>,
+    connection_id: String,
+    kind: String,
+    identity: String,
+) -> Result<SnapshotTrace, String> {
+    database.trace_host_snapshot_entry(&connection_id, &kind, &identity)
+}
+
+/// Writes text the user already sees to a path the user already chose in the
+/// system save dialog. Nothing here reaches a host or the network.
+#[tauri::command]
+pub fn export_text_file(path: String, contents: String) -> Result<(), String> {
+    let extension = std::path::Path::new(&path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(extension.as_deref(), Some("md") | Some("json")) {
+        return Err("Exports are written as .md or .json only".into());
+    }
+    if contents.len() > 8 * 1024 * 1024 {
+        return Err("That export is too large to write".into());
+    }
+    std::fs::write(&path, contents).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -513,6 +558,29 @@ pub fn compare_host_snapshots(
         return Err("Snapshots from different Saved Connections cannot be compared".into());
     }
     Ok(snapshots::compare(&base, &target))
+}
+
+/// Compares a saved capture against the host as it is right now. The live read
+/// happens only because the user asked for this comparison and is never stored,
+/// so the snapshot list still only grows from Capture snapshot.
+#[tauri::command(async)]
+pub fn compare_host_snapshot_with_live(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    captures: State<'_, SnapshotCaptureRegistry>,
+    base_id: String,
+    capture_id: String,
+    progress: Channel<SnapshotProgress>,
+) -> Result<SnapshotComparison, String> {
+    let base = database.get_host_snapshot(&base_id)?;
+    let connection = database.get_connection(&base.connection_id)?;
+    let _permit = limiter.acquire(&connection.id)?;
+    let reporter = ChannelSectionReporter {
+        capture_id: &capture_id,
+        channel: progress,
+    };
+    let live = snapshots::capture(&connection, &capture_id, None, None, &captures, &reporter)?;
+    Ok(snapshots::compare_with_live(&base, &live))
 }
 
 #[tauri::command]
