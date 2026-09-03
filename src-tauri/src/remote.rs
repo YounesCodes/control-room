@@ -452,6 +452,7 @@ fn is_missing_container(stderr: &[u8]) -> bool {
     String::from_utf8_lossy(stderr)
         .to_ascii_lowercase()
         .contains("no such object")
+}
 
 pub fn collect_boot_diagnostics(
     connection: &SavedConnection,
@@ -638,14 +639,39 @@ fn parse_boot_timing(text: &str) -> Result<BootTiming, BootSectionFailure> {
     let total = original
         .split(" = ")
         .nth(1)
-        .and_then(|value| value.split_whitespace().next())
-        .map(str::to_string);
+        .map(boot_duration_prefix)
+        .filter(|value| !value.is_empty());
     Ok(BootTiming {
         total,
         kernel,
         userspace,
         original,
     })
+}
+
+/// Take the duration at the start of `value`, which systemd writes as one or
+/// more `<number><unit>` words: `7.797s`, but also `1min 33.000s` and
+/// `2h 5min 1.250s`. Reading only the first word would report a host that
+/// booted in `1min 33.000s` as `1min`, which understates exactly the slow boots
+/// this view exists to explain.
+fn boot_duration_prefix(value: &str) -> String {
+    let mut words = Vec::new();
+    for word in value.split_whitespace() {
+        let is_duration = word
+            .find(|character: char| !character.is_ascii_digit() && character != '.')
+            .is_some_and(|index| {
+                index > 0
+                    && matches!(
+                        &word[index..],
+                        "s" | "ms" | "us" | "min" | "h" | "d" | "w" | "y"
+                    )
+            });
+        if !is_duration {
+            break;
+        }
+        words.push(word);
+    }
+    words.join(" ")
 }
 
 /// Extract a single labelled `systemd-analyze time` segment (for example the
@@ -1125,13 +1151,27 @@ fn without_activation_supervisor(evidence: Vec<(u32, String)>) -> Vec<(u32, Stri
     }
 }
 
+/// The unit types the Systemd view actually lists, kept in step with
+/// `systemd_unit_list_command`.
+///
+/// `validate_systemd_unit_id` accepts every canonical unit type because boot
+/// diagnostics legitimately reports `.target`, `.device`, and `.scope`. Ports
+/// needs the narrower set: correlating a listener to `init.scope` or
+/// `user.slice` would offer a click-through to a unit the Systemd view never
+/// shows, landing the user on an empty panel.
+fn is_navigable_systemd_unit(unit: &str) -> bool {
+    [".service", ".timer", ".mount", ".socket"]
+        .iter()
+        .any(|suffix| unit.ends_with(suffix))
+}
+
 fn parse_process_units(text: &str) -> HashMap<u32, String> {
     text.lines()
         .filter_map(|line| {
             let mut fields = line.split_whitespace();
             let pid = fields.next()?.parse::<u32>().ok()?;
-            let unit = validate_systemd_unit_id(fields.next()?).ok()?.to_string();
-            Some((pid, unit))
+            let unit = validate_systemd_unit_id(fields.next()?).ok()?;
+            is_navigable_systemd_unit(unit).then(|| (pid, unit.to_string()))
         })
         .collect()
 }
@@ -2144,6 +2184,102 @@ tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
         assert_eq!(slow[1].unit, "network-online.target");
         assert_eq!(parse_failed_boot_units(&output).unwrap().len(), 1);
         assert_eq!(parse_boot_journal(&output).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ports_only_offers_navigation_to_units_the_systemd_view_lists() {
+        // Real output: pid 1 runs under init.scope, and desktop or login
+        // sessions run under session-N.scope. Boot diagnostics widened the
+        // shared validator to accept those, which would have turned them into
+        // click-throughs to a unit the Systemd view never lists.
+        let text = concat!(
+            "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* ",
+            "users:((\"sshd\",pid=1276,fd=3))
+",
+            "tcp LISTEN 0 4096 0.0.0.0:2375 0.0.0.0:* ",
+            "users:((\"systemd\",pid=1,fd=120))
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+            "1276 ssh.service sshd
+",
+            "1 init.scope systemd
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+
+        let ssh = sockets.iter().find(|s| s.port == 22).expect("port 22");
+        assert_eq!(ssh.systemd_unit.as_deref(), Some("ssh.service"));
+
+        let activated = sockets.iter().find(|s| s.port == 2375).expect("port 2375");
+        assert_eq!(activated.process_name.as_deref(), Some("systemd"));
+        // The owner is still reported; only the dead navigation target is not.
+        assert_eq!(activated.systemd_unit, None);
+
+        assert!(is_navigable_systemd_unit("ssh.service"));
+        assert!(is_navigable_systemd_unit("srv-data.mount"));
+        assert!(!is_navigable_systemd_unit("init.scope"));
+        assert!(!is_navigable_systemd_unit("user.slice"));
+        assert!(!is_navigable_systemd_unit("multi-user.target"));
+        // The widened validator itself must keep accepting these for boot use.
+        assert!(validate_systemd_unit_id("init.scope").is_ok());
+        assert!(validate_systemd_unit_id("multi-user.target").is_ok());
+    }
+
+    #[test]
+    fn a_multi_word_boot_total_is_not_truncated_to_its_first_word() {
+        // Real output from a Debian host that takes over a minute to boot.
+        // Reading one word reported this as "1min".
+        let text = concat!(
+            "__CR_TIMING__
+",
+            "Startup finished in 12.830s (kernel) + 1min 20.170s (userspace) = 1min 33.000s
+",
+            "graphical.target reached after 1min 20.097s in userspace.
+",
+            "__CR_END__
+",
+        );
+        let timing = parse_boot_timing(text).unwrap();
+        assert_eq!(timing.total.as_deref(), Some("1min 33.000s"));
+        assert_eq!(timing.kernel.as_deref(), Some("12.830s"));
+        assert_eq!(timing.userspace.as_deref(), Some("1min 20.170s"));
+    }
+
+    #[test]
+    fn a_single_word_boot_total_still_stops_before_the_next_sentence() {
+        let text = concat!(
+            "__CR_TIMING__
+",
+            "Startup finished in 1.708s (kernel) + 6.089s (userspace) = 7.797s
+",
+            "graphical.target reached after 5.637s in userspace.
+",
+            "__CR_END__
+",
+        );
+        assert_eq!(
+            parse_boot_timing(text).unwrap().total.as_deref(),
+            Some("7.797s")
+        );
+    }
+
+    #[test]
+    fn boot_duration_prefix_stops_at_the_first_word_that_is_not_a_duration() {
+        assert_eq!(
+            boot_duration_prefix("7.797s graphical.target reached"),
+            "7.797s"
+        );
+        assert_eq!(
+            boot_duration_prefix("2h 5min 1.250s after"),
+            "2h 5min 1.250s"
+        );
+        assert_eq!(boot_duration_prefix("1min 33.000s"), "1min 33.000s");
+        // Not a duration, so nothing is taken rather than a wrong value shown.
+        assert_eq!(boot_duration_prefix("unavailable"), "");
+        assert_eq!(boot_duration_prefix("s"), "");
+        assert_eq!(boot_duration_prefix("12.5 seconds"), "");
     }
 
     #[test]

@@ -116,6 +116,8 @@ export const api = {
     invokeRemoteInspection<DockerContainerDetails>("inspect_container", {
       connectionId,
       containerId,
+      sudoPassword,
+    }),
   collectBootDiagnostics: (
     connectionId: string,
     bootId: string | null,

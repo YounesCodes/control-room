@@ -186,6 +186,8 @@ export interface DockerMount {
   destination: string;
   writable: boolean;
   propagation: string | null;
+}
+
 export interface BootDiagnostics {
   id: string;
   collectedAt: string;

@@ -10,9 +10,9 @@ use crate::{
         BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
         DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary, HostCapabilities,
-        LOG_TAIL_OPTIONS, ListeningSocket,
-        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
-        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
+        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
+        SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -366,7 +366,8 @@ pub fn collect_boot_diagnostics(
 ) -> Result<BootDiagnostics, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    remote::collect_boot_diagnostics(&connection, boot_id.as_deref(), sudo_password)
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
+    remote::collect_boot_diagnostics(&connection, boot_id.as_deref(), elevation)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -464,6 +464,7 @@ export function App() {
         [containerId]: details,
       },
     });
+  }
 
   function updateBootDiagnostics(id: string, bootDiagnostics: BootDiagnostics) {
     updateWorkspace(id, { bootDiagnostics });
