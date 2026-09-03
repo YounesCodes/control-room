@@ -27,6 +27,21 @@ export function isControlRoomShortcut(event: TerminalKeyEvent): boolean {
   return key === "t" || key === "w" || key === "r" || key === "p";
 }
 
+type TerminalContextMenu = {
+  enabled: boolean;
+  button: number;
+  mouseTrackingMode: string;
+};
+
+/// Click-to-paste is opt-in and only answers the right mouse button: the menu
+/// key raises the same event with no button behind it, and a remote program that
+/// reads the mouse, such as Vim or top, owns the click itself.
+export function shouldPasteOnRightClick(menu: TerminalContextMenu): boolean {
+  if (!menu.enabled) return false;
+  if (menu.button !== 2) return false;
+  return menu.mouseTrackingMode === "none";
+}
+
 export class BoundedByteQueue {
   private readonly chunks: Uint8Array[] = [];
   private retainedBytes = 0;

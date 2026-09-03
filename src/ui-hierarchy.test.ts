@@ -143,6 +143,18 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("drawBoldTextInBrightColors: false");
   });
 
+  it("keeps click-to-paste an opt-in Terminal setting the pane reads live", () => {
+    expect(settingsSource).toContain("draft.terminalRightClickPaste");
+    expect(settingsSource).toContain("Paste on right click in the terminal");
+    // Ctrl+Shift+V stays the default paste, so the click gesture is the extra,
+    // and the pane reads the flag through a ref because the terminal is built
+    // once per pane.
+    expect(terminalSource).toContain("shouldPasteOnRightClick");
+    expect(terminalSource).toContain(
+      "rightClickPasteRef.current = settings.terminalRightClickPaste",
+    );
+  });
+
   it("detects a newly connected host without requiring an Overview visit", () => {
     expect(appSource).toMatch(
       /state === "connected"[\s\S]*detectConnectionCapabilities\(workspace\.connectionId\)/,
