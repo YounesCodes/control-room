@@ -62,6 +62,22 @@ export interface HostCapabilities {
   detectedAt: string;
 }
 
+/// One bounded sample of current load. Every field is nullable because a host
+/// may expose part of /proc and not the rest, and a missing reading is shown as
+/// missing rather than as zero, which would read as an idle host.
+export interface HostResources {
+  sampledAt: string;
+  cpuPercent: number | null;
+  coreCount: number | null;
+  load1: number | null;
+  load5: number | null;
+  load15: number | null;
+  memoryTotalKib: number | null;
+  memoryAvailableKib: number | null;
+  swapTotalKib: number | null;
+  swapFreeKib: number | null;
+}
+
 export interface SystemdUnit {
   id: string;
   unitType: string;

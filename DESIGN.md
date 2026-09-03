@@ -379,6 +379,28 @@ Systemd, Ports, and Docker; the definition grid and capability list on the Overv
 dashboard; the dense row with a leading status indicator; and the compact chip
 for exit codes and counts.
 
+Overview leads with what a host cannot tell you from a cached fact: two live
+meters for CPU busy share and memory in use, each a current reading over a
+sparkline of the recent window. The chart is neutral grey on purpose. Length
+carries magnitude, and a status hue would imply a verdict on whether 80% is bad,
+which depends on the host and not on the app. Used memory is measured against
+`MemAvailable`, so a host caching aggressively is not drawn as full. A reading
+the host did not return says so rather than showing zero, because a flat line at
+the bottom is indistinguishable from an idle machine.
+
+These meters are the one repeating read in the app, and the boundaries are the
+point: sampling runs only while the pane is open, pauses on request, stops while
+the window is hidden, never overlaps round trips, and stores nothing. Closing the
+pane forgets the window. The line under the heading says the cadence and says
+nothing is kept, because a chart that appears to be recording invites the
+question of where the recording went.
+
+The facts below the meters are cached, since they change when someone changes
+the host rather than on a clock. Past a day old the pane says how old they are
+instead of presenting them as current. Uptime is shown as its two largest units,
+with `uptime -p`'s full prose on hover, because the prose wraps a stat value to
+two lines and buries the number.
+
 The Docker list derives Compose project groups from the official project and service
 labels returned by the bounded container listing. It keeps every instance as its own row,
 including replicas and one-off containers, and puts missing or malformed identities in

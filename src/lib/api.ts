@@ -14,6 +14,7 @@ import type {
   HostCapabilities,
   HostBaseline,
   HostBaselineSummary,
+  HostResources,
   ListeningSocket,
   PersistedWorkspaceState,
   SavedConnection,
@@ -98,6 +99,8 @@ export const api = {
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>
     invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
+  sampleHostResources: (connectionId: string) =>
+    invokeRemoteInspection<HostResources>("sample_host_resources", { connectionId }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
