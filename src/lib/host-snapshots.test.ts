@@ -30,6 +30,8 @@ function summary(id: string, capturedAt: string, label: string | null = null): H
     label,
     schemaVersion: 1,
     capturedAt,
+    pinned: false,
+    changesSincePrevious: null,
     identity: {
       hostname: "host-a",
       machineFingerprint: "0123456789abcdef",
