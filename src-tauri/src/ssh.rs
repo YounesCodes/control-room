@@ -99,9 +99,25 @@ pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec
 }
 
 pub fn validate_systemd_unit_id(value: &str) -> Result<&str, String> {
-    let supported_suffix = [".service", ".timer", ".mount", ".socket"]
-        .iter()
-        .any(|suffix| value.ends_with(suffix));
+    // Accept every canonical systemd unit type. `systemd-analyze blame` and
+    // `journalctl -u` legitimately reference `.device`, `.swap`, `.target`,
+    // `.scope`, etc.; the character-class check below is what guards against
+    // injection, not the suffix set.
+    let supported_suffix = [
+        ".service",
+        ".socket",
+        ".device",
+        ".mount",
+        ".automount",
+        ".swap",
+        ".target",
+        ".path",
+        ".timer",
+        ".slice",
+        ".scope",
+    ]
+    .iter()
+    .any(|suffix| value.ends_with(suffix));
     let bytes = value.as_bytes();
     let mut index = 0;
     while index < bytes.len() {
@@ -216,9 +232,16 @@ mod tests {
     fn identifiers_reject_shell_syntax() {
         assert!(validate_systemd_unit_id("nginx.service").is_ok());
         assert!(validate_systemd_unit_id(r"srv-data\x2darchive.mount").is_ok());
+        // Every canonical systemd unit type is a valid identifier; these appear
+        // in `systemd-analyze blame` and are addressable by `journalctl -u`.
+        assert!(validate_systemd_unit_id("multi-user.target").is_ok());
+        assert!(validate_systemd_unit_id("dev-sda1.device").is_ok());
+        assert!(validate_systemd_unit_id("swapfile.swap").is_ok());
+        assert!(validate_systemd_unit_id("user@1000.service").is_ok());
         assert!(validate_systemd_unit_id("nginx; reboot.service").is_err());
         assert!(validate_systemd_unit_id(r"broken\xZZ.mount").is_err());
-        assert!(validate_systemd_unit_id("multi-user.target").is_err());
+        assert!(validate_systemd_unit_id("plain-name").is_err());
+        assert!(validate_systemd_unit_id("bogus.unknown").is_err());
         assert!(validate_container_id("npm-plus_1").is_ok());
         assert!(validate_container_id("$(whoami)").is_err());
     }

@@ -108,4 +108,61 @@ describe("Workspace restoration", () => {
       ),
     ).toMatchObject({ activeWorkspaceId: "workspace-a" });
   });
+
+  it("keeps Boot Diagnostics and journal evidence out of persisted Workspace state", () => {
+    const state: PersistedWorkspaceState = {
+      workspaces: [
+        {
+          id: "workspace-a",
+          label: null,
+          connectionId: "connection-a",
+          view: "boot",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "workspace-a",
+      terminalLayout: null,
+    };
+    const restored = restoreWorkspaceState([connection("connection-a")], state);
+    restored.workspaces[0].bootDiagnostics = {
+      id: "diagnostic-a",
+      collectedAt: "2026-08-31T12:00:00Z",
+      selectedBootId: "a".repeat(32),
+      boots: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: [],
+        error: null,
+        permissionRequired: false,
+      },
+      timing: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: null,
+        error: "Unavailable",
+        permissionRequired: false,
+      },
+      slowUnits: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: [],
+        error: null,
+        permissionRequired: false,
+      },
+      failedUnits: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: [],
+        error: null,
+        permissionRequired: false,
+      },
+      journal: {
+        collectedAt: "2026-08-31T12:00:00Z",
+        data: ["sensitive journal evidence"],
+        error: null,
+        permissionRequired: false,
+      },
+    };
+
+    const persisted = persistWorkspaceState(restored.workspaces, "workspace-a", null);
+
+    expect(persisted.workspaces[0]).not.toHaveProperty("bootDiagnostics");
+    expect(JSON.stringify(persisted)).not.toContain("sensitive journal evidence");
+  });
 });

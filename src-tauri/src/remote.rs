@@ -22,10 +22,11 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
-        DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, Filesystem,
-        FirewallRule, FirewallStatus, HostCapabilities, HostIdentity, LOG_TAIL_OPTIONS,
-        ListeningSocket, SavedConnection, StreamStarted, StreamStateEvent, SystemdUnit,
+        BootDiagnostics, BootRecord, BootSection, BootTiming, ConnectionRemote, ConnectionSummary,
+        DockerContainer, DockerContainerDetails, DockerMount, DockerNetworkAttachment,
+        DockerPublishedPort, EstablishedConnections, Filesystem, FirewallRule, FirewallStatus,
+        HostCapabilities, HostIdentity, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
+        SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -453,6 +454,298 @@ fn is_missing_container(stderr: &[u8]) -> bool {
         .contains("no such object")
 }
 
+pub fn collect_boot_diagnostics(
+    connection: &SavedConnection,
+    boot_id: Option<&str>,
+    elevation: Elevation,
+) -> Result<BootDiagnostics, String> {
+    if let Some(boot_id) = boot_id {
+        validate_boot_id(boot_id)?;
+    }
+    let command = boot_diagnostics_command(boot_id);
+    let output = RemoteCommandExecutor::execute_elevated(
+        connection,
+        "collect_boot_diagnostics",
+        &command,
+        &elevation,
+    )?;
+    let text = output.success_text()?;
+    let boots_result = parse_boot_records(&text);
+    let selected_boot_id = boot_id.map(str::to_string).or_else(|| {
+        boots_result
+            .as_ref()
+            .ok()
+            .and_then(|boots| boots.iter().find(|boot| boot.current))
+            .map(|boot| boot.id.clone())
+    });
+    Ok(BootDiagnostics {
+        id: Uuid::new_v4().to_string(),
+        collected_at: Utc::now().to_rfc3339(),
+        selected_boot_id,
+        boots: boot_section(boots_result),
+        timing: boot_section(parse_boot_timing(&text)),
+        slow_units: boot_section(parse_slow_boot_units(&text)),
+        failed_units: boot_section(parse_failed_boot_units(&text)),
+        journal: boot_section(parse_boot_journal(&text)),
+    })
+}
+
+fn validate_boot_id(boot_id: &str) -> Result<(), String> {
+    if boot_id.len() == 32
+        && boot_id
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        Ok(())
+    } else {
+        Err("Invalid boot ID".into())
+    }
+}
+
+fn boot_diagnostics_command(boot_id: Option<&str>) -> String {
+    let selector = boot_id.unwrap_or("0");
+    let script = format!(
+        r#"boot_selector='{selector}'
+current_boot=$(tr -d '-' </proc/sys/kernel/random/boot_id 2>/dev/null)
+if test "$boot_selector" = 0 || test "$boot_selector" = "$current_boot"; then current_selected=true; else current_selected=false; fi
+printf '__CR_BOOTS__\n'
+if ! command -v journalctl >/dev/null 2>&1; then printf '__CR_ERROR__\tjournalctl is not installed\n'
+elif journalctl --list-boots --no-pager --quiet >/dev/null 2>&1; then
+  journalctl --list-boots --no-pager --quiet 2>/dev/null | tail -n 10
+else printf '__CR_ERROR__\tBoot list unavailable\n'; fi
+printf '__CR_END__\n'
+printf '__CR_TIMING__\n'
+if test "$current_selected" != true; then printf '__CR_ERROR__\tTiming is available for the current boot only\n'
+elif command -v systemd-analyze >/dev/null 2>&1; then systemd-analyze time --no-pager 2>/dev/null || printf '__CR_ERROR__\tBoot timing unavailable\n'
+else printf '__CR_ERROR__\tsystemd-analyze is not installed\n'; fi
+printf '__CR_END__\n'
+printf '__CR_SLOW__\n'
+if test "$current_selected" != true; then printf '__CR_ERROR__\tSlow units are available for the current boot only\n'
+elif ! command -v systemd-analyze >/dev/null 2>&1; then printf '__CR_ERROR__\tsystemd-analyze is not installed\n'
+elif systemd-analyze blame --no-pager >/dev/null 2>&1; then systemd-analyze blame --no-pager 2>/dev/null | head -n 20
+else printf '__CR_ERROR__\tSlow-unit data unavailable\n'; fi
+printf '__CR_END__\n'
+printf '__CR_FAILED__\n'
+if test "$current_selected" != true; then printf '__CR_ERROR__\tFailed units are available for the current boot only\n'
+elif ! command -v systemctl >/dev/null 2>&1; then printf '__CR_ERROR__\tsystemctl is not installed\n'
+elif systemctl show --type=service,timer,mount,socket --state=failed --all --no-pager --property=Id >/dev/null 2>&1; then systemctl show --type=service,timer,mount,socket --state=failed --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState 2>/dev/null
+else printf '__CR_ERROR__\tFailed-unit data unavailable\n'; fi
+printf '__CR_END__\n'
+printf '__CR_JOURNAL__\n'
+if ! command -v journalctl >/dev/null 2>&1; then printf '__CR_ERROR__\tjournalctl is not installed\n'
+elif journalctl --boot "$boot_selector" -n 1 --no-pager --quiet >/dev/null 2>&1; then journalctl --boot "$boot_selector" --priority=warning -n 30 --no-pager --quiet -o short-iso-precise 2>/dev/null
+else
+  journal_error=$(journalctl --boot "$boot_selector" -n 1 --no-pager --quiet 2>&1 >/dev/null)
+  if printf '%s' "$journal_error" | grep -Eqi 'permission denied|not permitted'; then printf '__CR_PERMISSION__\tBoot journal requires permission\n'; else printf '__CR_ERROR__\tBoot journal is unavailable\n'; fi
+fi
+printf '__CR_END__\n'"#
+    );
+    format!("env LC_ALL=C sh -c {}", shell_single_quote(&script))
+}
+
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+#[derive(Debug)]
+struct BootSectionFailure {
+    message: String,
+    permission_required: bool,
+}
+
+fn boot_section<T>(result: Result<T, BootSectionFailure>) -> BootSection<T> {
+    let collected_at = Utc::now().to_rfc3339();
+    match result {
+        Ok(data) => BootSection {
+            collected_at,
+            data: Some(data),
+            error: None,
+            permission_required: false,
+        },
+        Err(failure) => BootSection {
+            collected_at,
+            data: None,
+            error: Some(failure.message),
+            permission_required: failure.permission_required,
+        },
+    }
+}
+
+fn boot_section_lines<'a>(text: &'a str, marker: &str) -> Result<Vec<&'a str>, BootSectionFailure> {
+    let start = text
+        .lines()
+        .position(|line| line == marker)
+        .ok_or_else(|| BootSectionFailure {
+            message: "Section was not returned by the host".into(),
+            permission_required: false,
+        })?;
+    let lines: Vec<_> = text
+        .lines()
+        .skip(start + 1)
+        .take_while(|line| *line != "__CR_END__")
+        .collect();
+    if let Some(message) = lines
+        .iter()
+        .find_map(|line| line.strip_prefix("__CR_PERMISSION__\t"))
+    {
+        return Err(BootSectionFailure {
+            message: bounded_boot_text(message, 160),
+            permission_required: true,
+        });
+    }
+    if let Some(message) = lines
+        .iter()
+        .find_map(|line| line.strip_prefix("__CR_ERROR__\t"))
+    {
+        return Err(BootSectionFailure {
+            message: bounded_boot_text(message, 160),
+            permission_required: false,
+        });
+    }
+    Ok(lines)
+}
+
+fn parse_boot_records(text: &str) -> Result<Vec<BootRecord>, BootSectionFailure> {
+    let lines = boot_section_lines(text, "__CR_BOOTS__")?;
+    Ok(lines
+        .into_iter()
+        .filter_map(|line| {
+            let mut values = line.split_whitespace();
+            let index: i32 = values.next()?.parse().ok()?;
+            let id = values.next()?;
+            validate_boot_id(id).ok()?;
+            Some(BootRecord {
+                index,
+                id: id.to_ascii_lowercase(),
+                range: bounded_boot_text(&values.collect::<Vec<_>>().join(" "), 220),
+                current: index == 0,
+            })
+        })
+        .take(10)
+        .collect())
+}
+
+fn parse_boot_timing(text: &str) -> Result<BootTiming, BootSectionFailure> {
+    let lines = boot_section_lines(text, "__CR_TIMING__")?;
+    let original = bounded_boot_text(&lines.join(" "), 500);
+    if original.is_empty() {
+        return Err(BootSectionFailure {
+            message: "Boot timing was empty".into(),
+            permission_required: false,
+        });
+    }
+    let kernel = boot_timing_segment(&original, "kernel");
+    let userspace = boot_timing_segment(&original, "userspace");
+    let total = original
+        .split(" = ")
+        .nth(1)
+        .map(boot_duration_prefix)
+        .filter(|value| !value.is_empty());
+    Ok(BootTiming {
+        total,
+        kernel,
+        userspace,
+        original,
+    })
+}
+
+/// Take the duration at the start of `value`, which systemd writes as one or
+/// more `<number><unit>` words: `7.797s`, but also `1min 33.000s` and
+/// `2h 5min 1.250s`. Reading only the first word would report a host that
+/// booted in `1min 33.000s` as `1min`, which understates exactly the slow boots
+/// this view exists to explain.
+fn boot_duration_prefix(value: &str) -> String {
+    let mut words = Vec::new();
+    for word in value.split_whitespace() {
+        let is_duration = word
+            .find(|character: char| !character.is_ascii_digit() && character != '.')
+            .is_some_and(|index| {
+                index > 0
+                    && matches!(
+                        &word[index..],
+                        "s" | "ms" | "us" | "min" | "h" | "d" | "w" | "y"
+                    )
+            });
+        if !is_duration {
+            break;
+        }
+        words.push(word);
+    }
+    words.join(" ")
+}
+
+/// Extract a single labelled `systemd-analyze time` segment (for example the
+/// value in front of `(kernel)` or `(userspace)`). `systemd-analyze` reports a
+/// variable set of segments — `(kernel) + (initrd) + (userspace)` on physical
+/// hosts, but only `(userspace)` on many containers and VMs — so each label is
+/// resolved independently and a missing label yields `None` rather than a
+/// fabricated value.
+fn boot_timing_segment(original: &str, label: &str) -> Option<String> {
+    let marker = format!(" ({label})");
+    let index = original.find(&marker)?;
+    let prefix = &original[..index];
+    let start = prefix
+        .rfind(" + ")
+        .map(|position| position + " + ".len())
+        .or_else(|| {
+            prefix
+                .rfind("finished in ")
+                .map(|position| position + "finished in ".len())
+        })
+        .unwrap_or(0);
+    let value = prefix[start..].trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(bounded_boot_text(value, 80))
+    }
+}
+
+fn parse_slow_boot_units(text: &str) -> Result<Vec<SlowBootUnit>, BootSectionFailure> {
+    let lines = boot_section_lines(text, "__CR_SLOW__")?;
+    Ok(lines
+        .into_iter()
+        .filter_map(|line| {
+            let line = line.trim();
+            let (duration, unit) = line.rsplit_once(char::is_whitespace)?;
+            validate_systemd_unit_id(unit).ok()?;
+            Some(SlowBootUnit {
+                unit: unit.into(),
+                duration: bounded_boot_text(duration.trim(), 80),
+            })
+        })
+        .take(20)
+        .collect())
+}
+
+fn parse_failed_boot_units(text: &str) -> Result<Vec<SystemdUnit>, BootSectionFailure> {
+    let lines = boot_section_lines(text, "__CR_FAILED__")?;
+    // `systemctl show --all` enumerates every unit of the requested types; keep
+    // only the failed ones so the Failed units section never reports healthy
+    // units even if a host ignores the `--state=failed` filter.
+    Ok(parse_systemd_units(&lines.join("\n"))
+        .into_iter()
+        .filter(|unit| unit.active_state == "failed")
+        .collect())
+}
+
+fn parse_boot_journal(text: &str) -> Result<Vec<String>, BootSectionFailure> {
+    let lines = boot_section_lines(text, "__CR_JOURNAL__")?;
+    Ok(lines
+        .into_iter()
+        .map(|line| bounded_boot_text(line, 500))
+        .take(30)
+        .collect())
+}
+
+fn bounded_boot_text(value: &str, maximum_chars: usize) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_control() || *character == '\t')
+        .take(maximum_chars)
+        .collect()
+}
+
 fn run_ssh(
     connection: &SavedConnection,
     operation: &'static str,
@@ -858,13 +1151,27 @@ fn without_activation_supervisor(evidence: Vec<(u32, String)>) -> Vec<(u32, Stri
     }
 }
 
+/// The unit types the Systemd view actually lists, kept in step with
+/// `systemd_unit_list_command`.
+///
+/// `validate_systemd_unit_id` accepts every canonical unit type because boot
+/// diagnostics legitimately reports `.target`, `.device`, and `.scope`. Ports
+/// needs the narrower set: correlating a listener to `init.scope` or
+/// `user.slice` would offer a click-through to a unit the Systemd view never
+/// shows, landing the user on an empty panel.
+fn is_navigable_systemd_unit(unit: &str) -> bool {
+    [".service", ".timer", ".mount", ".socket"]
+        .iter()
+        .any(|suffix| unit.ends_with(suffix))
+}
+
 fn parse_process_units(text: &str) -> HashMap<u32, String> {
     text.lines()
         .filter_map(|line| {
             let mut fields = line.split_whitespace();
             let pid = fields.next()?.parse::<u32>().ok()?;
-            let unit = validate_systemd_unit_id(fields.next()?).ok()?.to_string();
-            Some((pid, unit))
+            let unit = validate_systemd_unit_id(fields.next()?).ok()?;
+            is_navigable_systemd_unit(unit).then(|| (pid, unit.to_string()))
         })
         .collect()
 }
@@ -1852,6 +2159,201 @@ tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
         assert_eq!(units[1].id, "cleanup.timer");
         assert_eq!(units[2].unit_type, "service");
         assert_eq!(units[3].unit_type, "socket");
+    }
+
+    #[test]
+    fn parses_complete_boot_diagnostics_without_losing_original_durations() {
+        let current = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let previous = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let output = format!(
+            "__CR_BOOTS__\n-1 {previous} Sat 2026-08-30 — Sat 2026-08-30\n 0 {current} Sun 2026-08-31 — Sun 2026-08-31\n__CR_END__\n__CR_TIMING__\nStartup finished in 3.245s (kernel) + 5.123s (userspace) = 8.368s graphical.target reached after 5.000s in userspace.\n__CR_END__\n__CR_SLOW__\n1min 2.345s backup.service\n2.400s network-online.target\n__CR_END__\n__CR_FAILED__\nId=backup.service\nDescription=Backup\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=enabled\n\n__CR_END__\n__CR_JOURNAL__\n2026-08-31 warning: bounded evidence\n__CR_END__\n"
+        );
+
+        let boots = parse_boot_records(&output).unwrap();
+        assert_eq!(boots.len(), 2);
+        assert!(boots[1].current);
+        let timing = parse_boot_timing(&output).unwrap();
+        assert_eq!(timing.kernel.as_deref(), Some("3.245s"));
+        assert_eq!(timing.userspace.as_deref(), Some("5.123s"));
+        assert_eq!(timing.total.as_deref(), Some("8.368s"));
+        let slow = parse_slow_boot_units(&output).unwrap();
+        assert_eq!(slow[0].duration, "1min 2.345s");
+        assert_eq!(slow[0].unit, "backup.service");
+        // Non-service unit types reported by `systemd-analyze blame` must not be
+        // dropped from the slow-unit list.
+        assert_eq!(slow[1].unit, "network-online.target");
+        assert_eq!(parse_failed_boot_units(&output).unwrap().len(), 1);
+        assert_eq!(parse_boot_journal(&output).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ports_only_offers_navigation_to_units_the_systemd_view_lists() {
+        // Real output: pid 1 runs under init.scope, and desktop or login
+        // sessions run under session-N.scope. Boot diagnostics widened the
+        // shared validator to accept those, which would have turned them into
+        // click-throughs to a unit the Systemd view never lists.
+        let text = concat!(
+            "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* ",
+            "users:((\"sshd\",pid=1276,fd=3))
+",
+            "tcp LISTEN 0 4096 0.0.0.0:2375 0.0.0.0:* ",
+            "users:((\"systemd\",pid=1,fd=120))
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+            "1276 ssh.service sshd
+",
+            "1 init.scope systemd
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+
+        let ssh = sockets.iter().find(|s| s.port == 22).expect("port 22");
+        assert_eq!(ssh.systemd_unit.as_deref(), Some("ssh.service"));
+
+        let activated = sockets.iter().find(|s| s.port == 2375).expect("port 2375");
+        assert_eq!(activated.process_name.as_deref(), Some("systemd"));
+        // The owner is still reported; only the dead navigation target is not.
+        assert_eq!(activated.systemd_unit, None);
+
+        assert!(is_navigable_systemd_unit("ssh.service"));
+        assert!(is_navigable_systemd_unit("srv-data.mount"));
+        assert!(!is_navigable_systemd_unit("init.scope"));
+        assert!(!is_navigable_systemd_unit("user.slice"));
+        assert!(!is_navigable_systemd_unit("multi-user.target"));
+        // The widened validator itself must keep accepting these for boot use.
+        assert!(validate_systemd_unit_id("init.scope").is_ok());
+        assert!(validate_systemd_unit_id("multi-user.target").is_ok());
+    }
+
+    #[test]
+    fn a_multi_word_boot_total_is_not_truncated_to_its_first_word() {
+        // Real output from a Debian host that takes over a minute to boot.
+        // Reading one word reported this as "1min".
+        let text = concat!(
+            "__CR_TIMING__
+",
+            "Startup finished in 12.830s (kernel) + 1min 20.170s (userspace) = 1min 33.000s
+",
+            "graphical.target reached after 1min 20.097s in userspace.
+",
+            "__CR_END__
+",
+        );
+        let timing = parse_boot_timing(text).unwrap();
+        assert_eq!(timing.total.as_deref(), Some("1min 33.000s"));
+        assert_eq!(timing.kernel.as_deref(), Some("12.830s"));
+        assert_eq!(timing.userspace.as_deref(), Some("1min 20.170s"));
+    }
+
+    #[test]
+    fn a_single_word_boot_total_still_stops_before_the_next_sentence() {
+        let text = concat!(
+            "__CR_TIMING__
+",
+            "Startup finished in 1.708s (kernel) + 6.089s (userspace) = 7.797s
+",
+            "graphical.target reached after 5.637s in userspace.
+",
+            "__CR_END__
+",
+        );
+        assert_eq!(
+            parse_boot_timing(text).unwrap().total.as_deref(),
+            Some("7.797s")
+        );
+    }
+
+    #[test]
+    fn boot_duration_prefix_stops_at_the_first_word_that_is_not_a_duration() {
+        assert_eq!(
+            boot_duration_prefix("7.797s graphical.target reached"),
+            "7.797s"
+        );
+        assert_eq!(
+            boot_duration_prefix("2h 5min 1.250s after"),
+            "2h 5min 1.250s"
+        );
+        assert_eq!(boot_duration_prefix("1min 33.000s"), "1min 33.000s");
+        // Not a duration, so nothing is taken rather than a wrong value shown.
+        assert_eq!(boot_duration_prefix("unavailable"), "");
+        assert_eq!(boot_duration_prefix("s"), "");
+        assert_eq!(boot_duration_prefix("12.5 seconds"), "");
+    }
+
+    #[test]
+    fn parse_boot_timing_handles_initrd_and_missing_kernel_segments() {
+        let with_initrd = "__CR_TIMING__\nStartup finished in 3.245s (kernel) + 4.5s (initrd) + 5.123s (userspace) = 12.868s\n__CR_END__\n";
+        let timing = parse_boot_timing(with_initrd).unwrap();
+        assert_eq!(timing.kernel.as_deref(), Some("3.245s"));
+        // Userspace must isolate its own segment, not swallow the initrd chunk.
+        assert_eq!(timing.userspace.as_deref(), Some("5.123s"));
+        assert_eq!(timing.total.as_deref(), Some("12.868s"));
+
+        // Containers and many VMs report only a userspace segment; kernel timing
+        // must read as unavailable rather than a fabricated value.
+        let no_kernel =
+            "__CR_TIMING__\nStartup finished in 2.456s (userspace) = 2.456s\n__CR_END__\n";
+        let timing = parse_boot_timing(no_kernel).unwrap();
+        assert_eq!(timing.kernel, None);
+        assert_eq!(timing.userspace.as_deref(), Some("2.456s"));
+        assert_eq!(timing.total.as_deref(), Some("2.456s"));
+    }
+
+    #[test]
+    fn parse_slow_boot_units_keeps_non_service_unit_types() {
+        let output = "__CR_SLOW__\n6.700s dev-sda1.device\n900ms swapfile.swap\n1.200s docker.socket\n__CR_END__\n";
+        let slow = parse_slow_boot_units(output).unwrap();
+        let units: Vec<&str> = slow.iter().map(|unit| unit.unit.as_str()).collect();
+        assert_eq!(units, ["dev-sda1.device", "swapfile.swap", "docker.socket"]);
+    }
+
+    #[test]
+    fn parse_failed_boot_units_reports_only_failed_units() {
+        // A host that ignores `--state=failed` returns every enumerated unit;
+        // the parser must still surface only the failed ones.
+        let output = "__CR_FAILED__\nId=ssh.service\nDescription=OpenSSH\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n\nId=backup.service\nDescription=Backup\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=enabled\n\n__CR_END__\n";
+        let failed = parse_failed_boot_units(output).unwrap();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, "backup.service");
+    }
+
+    #[test]
+    fn boot_sections_preserve_partial_previous_and_permission_states() {
+        let output = "__CR_TIMING__\n__CR_ERROR__\tTiming is available for the current boot only\n__CR_END__\n__CR_JOURNAL__\n__CR_PERMISSION__\tBoot journal requires permission\n__CR_END__\n";
+        let timing = parse_boot_timing(output).unwrap_err();
+        assert_eq!(
+            timing.message,
+            "Timing is available for the current boot only"
+        );
+        assert!(!timing.permission_required);
+        let journal = parse_boot_journal(output).unwrap_err();
+        assert!(journal.permission_required);
+    }
+
+    #[test]
+    fn boot_sources_report_unavailable_sections() {
+        let output = "__CR_BOOTS__\n__CR_ERROR__\tjournalctl is not installed\n__CR_END__\n";
+        assert_eq!(
+            parse_boot_records(output).unwrap_err().message,
+            "journalctl is not installed"
+        );
+    }
+
+    #[test]
+    fn boot_commands_are_bounded_read_only_and_validate_selectors() {
+        let boot_id = "0123456789abcdef0123456789abcdef";
+        let command = boot_diagnostics_command(Some(boot_id));
+        assert!(command.contains("tail -n 10"));
+        assert!(command.contains("head -n 20"));
+        assert!(command.contains("-n 30"));
+        assert!(command.contains(boot_id));
+        assert!(validate_boot_id(boot_id).is_ok());
+        assert!(validate_boot_id("0; reboot").is_err());
+        for mutation in [" start ", " stop ", " restart ", " reset-failed "] {
+            assert!(!command.contains(mutation));
+        }
     }
 
     #[test]
