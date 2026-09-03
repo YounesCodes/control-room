@@ -1783,6 +1783,23 @@ __CONTROL_ROOM_PROCESS_UNITS__
     }
 
     #[test]
+    fn an_unelevated_read_reports_no_owner_at_all() {
+        // The same host read without elevation: ss prints no users:(...) column,
+        // so every listener is unattributed. This is the one case sudo does fix,
+        // and the Ports banner has to tell it apart from the cases sudo cannot.
+        let text = concat!(
+            "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+        assert_eq!(sockets[0].ownership, "unavailable");
+        assert_eq!(sockets[0].process_name, None);
+    }
+
+    #[test]
     fn a_process_merely_named_systemd_is_not_the_supervisor() {
         // systemd-resolve is a service like any other. Only pid 1 itself is the
         // activation supervisor.
