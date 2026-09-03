@@ -50,16 +50,16 @@ describe("application hierarchy", () => {
     );
   });
 
-  it("keeps snapshot capture manual and never schedules it", () => {
-    const snapshotsSource = readFileSync(
-      new URL("./pages/SnapshotsPane.tsx", import.meta.url),
+  it("keeps baseline capture manual and never schedules it", () => {
+    const baselinesSource = readFileSync(
+      new URL("./pages/BaselinesPane.tsx", import.meta.url),
       "utf8",
     );
-    expect(appSource).toContain('{ id: "snapshots", label: "Snapshots", icon: Camera }');
-    expect(snapshotsSource).toContain("api.captureHostSnapshot");
-    expect(snapshotsSource).not.toContain("setInterval");
-    expect(snapshotsSource).not.toContain("setTimeout");
-    expect(snapshotsSource).toContain(
+    expect(appSource).toContain('{ id: "baselines", label: "Baselines", icon: Camera }');
+    expect(baselinesSource).toContain("api.captureHostBaseline");
+    expect(baselinesSource).not.toContain("setInterval");
+    expect(baselinesSource).not.toContain("setTimeout");
+    expect(baselinesSource).toContain(
       "Captured only when you ask. Control Room never collects in the background.",
     );
   });

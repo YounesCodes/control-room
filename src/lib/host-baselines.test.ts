@@ -11,19 +11,19 @@ import {
   identityWarning,
   orderForComparison,
   sectionLabel,
-  snapshotTitle,
-  sortSnapshots,
+  baselineTitle,
+  sortBaselines,
   statusLabel,
-} from "./host-snapshots";
+} from "./host-baselines";
 import type {
-  HostSnapshotSummary,
-  SnapshotComparison,
-  SnapshotSectionDiff,
-  SnapshotSectionKind,
-  SnapshotSectionStatus,
+  HostBaselineSummary,
+  BaselineComparison,
+  BaselineSectionDiff,
+  BaselineSectionKind,
+  BaselineSectionStatus,
 } from "../types";
 
-function summary(id: string, capturedAt: string, label: string | null = null): HostSnapshotSummary {
+function summary(id: string, capturedAt: string, label: string | null = null): HostBaselineSummary {
   return {
     id,
     connectionId: "connection-a",
@@ -45,10 +45,10 @@ function summary(id: string, capturedAt: string, label: string | null = null): H
 }
 
 function diff(
-  kind: SnapshotSectionKind,
+  kind: BaselineSectionKind,
   comparable: boolean,
   counts: { added?: number; removed?: number; changed?: number; unchanged?: number } = {},
-): SnapshotSectionDiff {
+): BaselineSectionDiff {
   const entry = (index: number) => ({
     identity: `${kind}-${index}`,
     label: `${kind}-${index}`,
@@ -56,7 +56,7 @@ function diff(
   });
   return {
     kind,
-    baseStatus: "collected" as SnapshotSectionStatus,
+    baseStatus: "collected" as BaselineSectionStatus,
     targetStatus: comparable ? "collected" : "unsupported",
     comparable,
     note: null,
@@ -72,10 +72,10 @@ function diff(
 }
 
 function comparison(
-  sections: SnapshotSectionDiff[],
-  identityMatch: SnapshotComparison["identityMatch"] = "same",
+  sections: BaselineSectionDiff[],
+  identityMatch: BaselineComparison["identityMatch"] = "same",
   targetIsLive = false,
-): SnapshotComparison {
+): BaselineComparison {
   return {
     base: summary("base", "2026-09-01T10:00:00Z"),
     target: summary("target", "2026-09-02T10:00:00Z"),
@@ -86,7 +86,7 @@ function comparison(
   };
 }
 
-describe("snapshot labels", () => {
+describe("baseline labels", () => {
   it("names sections and statuses in plain words", () => {
     expect(sectionLabel("systemdUnits")).toBe("Systemd units");
     expect(sectionLabel("filesystems")).toBe("Filesystems");
@@ -95,11 +95,11 @@ describe("snapshot labels", () => {
     expect(statusLabel("partial")).toBe("Partial");
   });
 
-  it("falls back to the capture time when a snapshot has no label", () => {
-    expect(snapshotTitle(summary("a", "2026-09-01T10:00:00Z", "before upgrade"))).toBe(
+  it("falls back to the capture time when a baseline has no label", () => {
+    expect(baselineTitle(summary("a", "2026-09-01T10:00:00Z", "before upgrade"))).toBe(
       "before upgrade",
     );
-    expect(snapshotTitle(summary("a", "2026-09-01T10:00:00Z"))).not.toBe("");
+    expect(baselineTitle(summary("a", "2026-09-01T10:00:00Z"))).not.toBe("");
   });
 });
 
@@ -150,16 +150,16 @@ describe("live comparison naming", () => {
     expect(comparisonTargetTitle(comparison([], "same", true))).toBe("Live state");
   });
 
-  it("keeps the snapshot title when both sides are saved captures", () => {
+  it("keeps the baseline title when both sides are saved captures", () => {
     expect(comparisonTargetTitle(comparison([]))).toBe(
-      snapshotTitle(summary("target", "2026-09-02T10:00:00Z")),
+      baselineTitle(summary("target", "2026-09-02T10:00:00Z")),
     );
   });
 });
 
-describe("snapshot ordering", () => {
+describe("baseline ordering", () => {
   it("lists the newest capture first and breaks ties by id", () => {
-    const ordered = sortSnapshots([
+    const ordered = sortBaselines([
       summary("a", "2026-09-01T10:00:00Z"),
       summary("c", "2026-09-03T10:00:00Z"),
       summary("b", "2026-09-01T10:00:00Z"),
@@ -176,7 +176,7 @@ describe("snapshot ordering", () => {
 });
 
 describe("noisy facts", () => {
-  function churn(): SnapshotComparison {
+  function churn(): BaselineComparison {
     const base = comparison([diff("systemdUnits", true, { unchanged: 3 })]);
     base.sections[0].changed = [
       {

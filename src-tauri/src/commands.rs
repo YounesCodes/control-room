@@ -2,20 +2,19 @@ use chrono::Utc;
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
+    baselines::{self, BaselineCaptureRegistry, SectionReporter},
     database::{Database, validate_connection_input},
     history,
     models::{
-        AppSettings, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
+        AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
+        BaselineTrace, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
         EnvironmentInfo, EstablishedConnections, FirewallStatus, HistoryEntry, HistoryInput,
-        HostCapabilities, HostSnapshot, HostSnapshotSummary, LOG_TAIL_OPTIONS, ListeningSocket,
+        HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS, ListeningSocket,
         PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
-        ScratchpadNoteInput, SessionStarted, SettingsContract, SnapshotCaptureRequest,
-        SnapshotComparison, SnapshotProgress, SnapshotSection, SnapshotTrace, StreamStarted,
-        SystemdUnit,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
-    snapshots::{self, SectionReporter, SnapshotCaptureRegistry},
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
 };
 
@@ -423,12 +422,12 @@ pub fn stop_log_stream(streams: State<'_, StreamManager>, stream_id: String) -> 
 
 struct ChannelSectionReporter<'a> {
     capture_id: &'a str,
-    channel: Channel<SnapshotProgress>,
+    channel: Channel<BaselineProgress>,
 }
 
 impl SectionReporter for ChannelSectionReporter<'_> {
-    fn report(&self, section: &SnapshotSection, completed: u32, total: u32) {
-        let _ = self.channel.send(SnapshotProgress {
+    fn report(&self, section: &BaselineSection, completed: u32, total: u32) {
+        let _ = self.channel.send(BaselineProgress {
             capture_id: self.capture_id.to_string(),
             kind: section.kind.clone(),
             status: section.status.clone(),
@@ -439,16 +438,16 @@ impl SectionReporter for ChannelSectionReporter<'_> {
     }
 }
 
-/// Captures one snapshot. Nothing here runs on a timer: the command exists only
-/// because the user chose Capture snapshot.
+/// Captures one baseline. Nothing here runs on a timer: the command exists only
+/// because the user chose Capture baseline.
 #[tauri::command(async)]
-pub fn capture_host_snapshot(
+pub fn capture_host_baseline(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
-    captures: State<'_, SnapshotCaptureRegistry>,
-    request: SnapshotCaptureRequest,
-    progress: Channel<SnapshotProgress>,
-) -> Result<HostSnapshotSummary, String> {
+    captures: State<'_, BaselineCaptureRegistry>,
+    request: BaselineCaptureRequest,
+    progress: Channel<BaselineProgress>,
+) -> Result<HostBaselineSummary, String> {
     let connection = database.get_connection(&request.connection_id)?;
     let _permit = limiter.acquire(&request.connection_id)?;
     let reporter = ChannelSectionReporter {
@@ -460,7 +459,7 @@ pub fn capture_host_snapshot(
     // It still never prompts: without passwordless sudo the reads run
     // unelevated and say so.
     let elevation = elevation_for(&database, &connection, None)?;
-    let snapshot = snapshots::capture(
+    let baseline = baselines::capture(
         &connection,
         &request.capture_id,
         request.label,
@@ -469,67 +468,67 @@ pub fn capture_host_snapshot(
         &captures,
         &reporter,
     )?;
-    database.save_host_snapshot(&snapshot)
+    database.save_host_baseline(&baseline)
 }
 
 #[tauri::command]
-pub fn cancel_host_snapshot(
-    captures: State<'_, SnapshotCaptureRegistry>,
+pub fn cancel_host_baseline(
+    captures: State<'_, BaselineCaptureRegistry>,
     capture_id: String,
 ) -> Result<(), String> {
     captures.cancel(&capture_id)
 }
 
 #[tauri::command]
-pub fn list_host_snapshots(
+pub fn list_host_baselines(
     database: State<'_, Database>,
     connection_id: String,
-) -> Result<Vec<HostSnapshotSummary>, String> {
-    database.list_host_snapshots(&connection_id)
+) -> Result<Vec<HostBaselineSummary>, String> {
+    database.list_host_baselines(&connection_id)
 }
 
 #[tauri::command]
-pub fn get_host_snapshot(
+pub fn get_host_baseline(
     database: State<'_, Database>,
     id: String,
-) -> Result<HostSnapshot, String> {
-    database.get_host_snapshot(&id)
+) -> Result<HostBaseline, String> {
+    database.get_host_baseline(&id)
 }
 
 #[tauri::command]
-pub fn rename_host_snapshot(
+pub fn rename_host_baseline(
     database: State<'_, Database>,
     id: String,
     label: Option<String>,
-) -> Result<HostSnapshotSummary, String> {
-    database.rename_host_snapshot(&id, label)
+) -> Result<HostBaselineSummary, String> {
+    database.rename_host_baseline(&id, label)
 }
 
 /// Pins or unpins one capture. A pinned capture survives the per-connection
 /// retention limit, so a named baseline is not evicted by routine captures.
 #[tauri::command]
-pub fn set_host_snapshot_pinned(
+pub fn set_host_baseline_pinned(
     database: State<'_, Database>,
     id: String,
     pinned: bool,
-) -> Result<HostSnapshotSummary, String> {
-    database.set_host_snapshot_pinned(&id, pinned)
+) -> Result<HostBaselineSummary, String> {
+    database.set_host_baseline_pinned(&id, pinned)
 }
 
 #[tauri::command]
-pub fn delete_host_snapshot(database: State<'_, Database>, id: String) -> Result<(), String> {
-    database.delete_host_snapshot(&id)
+pub fn delete_host_baseline(database: State<'_, Database>, id: String) -> Result<(), String> {
+    database.delete_host_baseline(&id)
 }
 
 /// Reads one entry across every stored capture of a connection, newest first.
 #[tauri::command]
-pub fn trace_host_snapshot_entry(
+pub fn trace_host_baseline_entry(
     database: State<'_, Database>,
     connection_id: String,
     kind: String,
     identity: String,
-) -> Result<SnapshotTrace, String> {
-    database.trace_host_snapshot_entry(&connection_id, &kind, &identity)
+) -> Result<BaselineTrace, String> {
+    database.trace_host_baseline_entry(&connection_id, &kind, &identity)
 }
 
 /// Writes text the user already sees to a path the user already chose in the
@@ -550,35 +549,35 @@ pub fn export_text_file(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn compare_host_snapshots(
+pub fn compare_host_baselines(
     database: State<'_, Database>,
     base_id: String,
     target_id: String,
-) -> Result<SnapshotComparison, String> {
+) -> Result<BaselineComparison, String> {
     if base_id == target_id {
-        return Err("Choose two different snapshots to compare".into());
+        return Err("Choose two different baselines to compare".into());
     }
-    let base = database.get_host_snapshot(&base_id)?;
-    let target = database.get_host_snapshot(&target_id)?;
+    let base = database.get_host_baseline(&base_id)?;
+    let target = database.get_host_baseline(&target_id)?;
     if base.connection_id != target.connection_id {
-        return Err("Snapshots from different Saved Connections cannot be compared".into());
+        return Err("Baselines from different Saved Connections cannot be compared".into());
     }
-    Ok(snapshots::compare(&base, &target))
+    Ok(baselines::compare(&base, &target))
 }
 
 /// Compares a saved capture against the host as it is right now. The live read
 /// happens only because the user asked for this comparison and is never stored,
-/// so the snapshot list still only grows from Capture snapshot.
+/// so the baseline list still only grows from Capture baseline.
 #[tauri::command(async)]
-pub fn compare_host_snapshot_with_live(
+pub fn compare_host_baseline_with_live(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
-    captures: State<'_, SnapshotCaptureRegistry>,
+    captures: State<'_, BaselineCaptureRegistry>,
     base_id: String,
     capture_id: String,
-    progress: Channel<SnapshotProgress>,
-) -> Result<SnapshotComparison, String> {
-    let base = database.get_host_snapshot(&base_id)?;
+    progress: Channel<BaselineProgress>,
+) -> Result<BaselineComparison, String> {
+    let base = database.get_host_baseline(&base_id)?;
     let connection = database.get_connection(&base.connection_id)?;
     let _permit = limiter.acquire(&connection.id)?;
     let reporter = ChannelSectionReporter {
@@ -586,7 +585,7 @@ pub fn compare_host_snapshot_with_live(
         channel: progress,
     };
     let elevation = elevation_for(&database, &connection, None)?;
-    let live = snapshots::capture(
+    let live = baselines::capture(
         &connection,
         &capture_id,
         None,
@@ -595,7 +594,7 @@ pub fn compare_host_snapshot_with_live(
         &captures,
         &reporter,
     )?;
-    Ok(snapshots::compare_with_live(&base, &live))
+    Ok(baselines::compare_with_live(&base, &live))
 }
 
 #[tauri::command]

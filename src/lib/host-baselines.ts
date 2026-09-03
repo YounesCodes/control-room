@@ -1,13 +1,13 @@
 import type {
-  HostSnapshotSummary,
-  SnapshotComparison,
-  SnapshotEntryChange,
-  SnapshotSectionDiff,
-  SnapshotSectionKind,
-  SnapshotSectionStatus,
+  HostBaselineSummary,
+  BaselineComparison,
+  BaselineEntryChange,
+  BaselineSectionDiff,
+  BaselineSectionKind,
+  BaselineSectionStatus,
 } from "../types";
 
-const SECTION_LABELS: Record<SnapshotSectionKind, string> = {
+const SECTION_LABELS: Record<BaselineSectionKind, string> = {
   host: "Host facts",
   systemdUnits: "Systemd units",
   containers: "Containers",
@@ -15,7 +15,19 @@ const SECTION_LABELS: Record<SnapshotSectionKind, string> = {
   filesystems: "Filesystems",
 };
 
-const STATUS_LABELS: Record<SnapshotSectionStatus, string> = {
+// The capture fieldset is five checkboxes across one narrow panel, where the
+// heading-length names do not fit and the last option drops to a line of its
+// own. Under a "Sections" legend the shorter names lose nothing. Headings and
+// the exported Markdown keep the full ones.
+const SECTION_SHORT_LABELS: Record<BaselineSectionKind, string> = {
+  host: "Host",
+  systemdUnits: "Systemd",
+  containers: "Containers",
+  listeners: "Ports",
+  filesystems: "Filesystems",
+};
+
+const STATUS_LABELS: Record<BaselineSectionStatus, string> = {
   collected: "Collected",
   partial: "Partial",
   unsupported: "Not present",
@@ -25,7 +37,7 @@ const STATUS_LABELS: Record<SnapshotSectionStatus, string> = {
 
 // The chips are one word each, and the difference between them decides whether
 // a missing answer is the host's shape or a permission problem.
-const STATUS_HINTS: Record<SnapshotSectionStatus, string> = {
+const STATUS_HINTS: Record<BaselineSectionStatus, string> = {
   collected: "Control Room read this section in full.",
   partial: "Control Room read this section, but some entries were incomplete.",
   unsupported: "The subsystem is not installed on this host.",
@@ -33,7 +45,7 @@ const STATUS_HINTS: Record<SnapshotSectionStatus, string> = {
   skipped: "This capture never asked for this section.",
 };
 
-export const SECTION_KINDS: SnapshotSectionKind[] = [
+export const SECTION_KINDS: BaselineSectionKind[] = [
   "host",
   "systemdUnits",
   "containers",
@@ -43,20 +55,20 @@ export const SECTION_KINDS: SnapshotSectionKind[] = [
 
 // Facts that move on a healthy host. Left in, they bury the changes that matter
 // under normal churn, so a comparison hides them until the user asks.
-const VOLATILE_FACTS: Partial<Record<SnapshotSectionKind, string[]>> = {
+const VOLATILE_FACTS: Partial<Record<BaselineSectionKind, string[]>> = {
   systemdUnits: ["subState"],
   containers: ["state"],
 };
 
-export function statusHint(status: SnapshotSectionStatus): string {
+export function statusHint(status: BaselineSectionStatus): string {
   return STATUS_HINTS[status] ?? "";
 }
 
-export function volatileFacts(kind: SnapshotSectionKind): string[] {
+export function volatileFacts(kind: BaselineSectionKind): string[] {
   return VOLATILE_FACTS[kind] ?? [];
 }
 
-export function hasVolatileChanges(comparison: SnapshotComparison): boolean {
+export function hasVolatileChanges(comparison: BaselineComparison): boolean {
   return comparison.sections.some((section) =>
     section.changed.some((entry) =>
       entry.changes.some((change) => volatileFacts(section.kind).includes(change.name)),
@@ -67,9 +79,9 @@ export function hasVolatileChanges(comparison: SnapshotComparison): boolean {
 // Dropping a muted fact can empty an entry's change list. Such an entry is
 // removed rather than shown as changed with nothing to show.
 export function applyVolatileFilter(
-  comparison: SnapshotComparison,
+  comparison: BaselineComparison,
   hideVolatile: boolean,
-): SnapshotComparison {
+): BaselineComparison {
   if (!hideVolatile) return comparison;
   return {
     ...comparison,
@@ -81,7 +93,7 @@ export function applyVolatileFilter(
           ...entry,
           changes: entry.changes.filter((change) => !muted.includes(change.name)),
         }))
-        .filter((entry: SnapshotEntryChange) => entry.changes.length > 0);
+        .filter((entry: BaselineEntryChange) => entry.changes.length > 0);
       return {
         ...section,
         changed,
@@ -91,16 +103,20 @@ export function applyVolatileFilter(
   };
 }
 
-export function sectionLabel(kind: SnapshotSectionKind): string {
+export function sectionLabel(kind: BaselineSectionKind): string {
   return SECTION_LABELS[kind] ?? kind;
 }
 
-export function statusLabel(status: SnapshotSectionStatus): string {
+export function sectionShortLabel(kind: BaselineSectionKind): string {
+  return SECTION_SHORT_LABELS[kind] ?? sectionLabel(kind);
+}
+
+export function statusLabel(status: BaselineSectionStatus): string {
   return STATUS_LABELS[status] ?? status;
 }
 
-export function snapshotTitle(snapshot: HostSnapshotSummary): string {
-  return snapshot.label ?? formatCapturedAt(snapshot.capturedAt);
+export function baselineTitle(baseline: HostBaselineSummary): string {
+  return baseline.label ?? formatCapturedAt(baseline.capturedAt);
 }
 
 export function formatCapturedAt(value: string): string {
@@ -109,13 +125,13 @@ export function formatCapturedAt(value: string): string {
   return captured.toLocaleString();
 }
 
-export function changeCount(diff: SnapshotSectionDiff): number {
+export function changeCount(diff: BaselineSectionDiff): number {
   return diff.added.length + diff.removed.length + diff.changed.length;
 }
 
 // A section that could not be compared is never counted as unchanged, so the
 // summary line cannot imply a quiet host when evidence is missing.
-export function comparisonSummary(comparison: SnapshotComparison): string {
+export function comparisonSummary(comparison: BaselineComparison): string {
   const comparable = comparison.sections.filter((section) => section.comparable);
   const skipped = comparison.sections.length - comparable.length;
   const changes = comparable.reduce((total, section) => total + changeCount(section), 0);
@@ -131,11 +147,11 @@ export function comparisonSummary(comparison: SnapshotComparison): string {
 export const LIVE_COMPARISON_ID = "live";
 const LIVE_TARGET_TITLE = "Live state";
 
-export function comparisonTargetTitle(comparison: SnapshotComparison): string {
-  return comparison.targetIsLive ? LIVE_TARGET_TITLE : snapshotTitle(comparison.target);
+export function comparisonTargetTitle(comparison: BaselineComparison): string {
+  return comparison.targetIsLive ? LIVE_TARGET_TITLE : baselineTitle(comparison.target);
 }
 
-export function identityWarning(comparison: SnapshotComparison): string | null {
+export function identityWarning(comparison: BaselineComparison): string | null {
   if (comparison.identityMatch === "different") {
     return comparison.targetIsLive
       ? "This connection is answering as a different machine than the capture came from. Treat the comparison as two hosts, not one host over time."
@@ -151,8 +167,8 @@ export function identityWarning(comparison: SnapshotComparison): string | null {
 
 // Orders newest first and keeps the ordering stable for captures that share a
 // timestamp, so the list never reshuffles between reads.
-export function sortSnapshots(snapshots: HostSnapshotSummary[]): HostSnapshotSummary[] {
-  return [...snapshots].sort((left, right) => {
+export function sortBaselines(baselines: HostBaselineSummary[]): HostBaselineSummary[] {
+  return [...baselines].sort((left, right) => {
     if (left.capturedAt === right.capturedAt) return right.id.localeCompare(left.id);
     return right.capturedAt.localeCompare(left.capturedAt);
   });
@@ -160,8 +176,8 @@ export function sortSnapshots(snapshots: HostSnapshotSummary[]): HostSnapshotSum
 
 // The comparison always reads earlier to later, whichever row the user picked.
 export function orderForComparison(
-  selected: HostSnapshotSummary,
-  other: HostSnapshotSummary,
+  selected: HostBaselineSummary,
+  other: HostBaselineSummary,
 ): { baseId: string; targetId: string } {
   const selectedIsEarlier =
     selected.capturedAt < other.capturedAt ||
@@ -173,9 +189,9 @@ export function orderForComparison(
 
 // Export writes what the panel shows and nothing more: the same normalized
 // facts, already filtered the same way, so a pasted diff matches the screen.
-export function comparisonToMarkdown(comparison: SnapshotComparison): string {
+export function comparisonToMarkdown(comparison: BaselineComparison): string {
   const lines: string[] = [
-    `# ${snapshotTitle(comparison.base)} → ${comparisonTargetTitle(comparison)}`,
+    `# ${baselineTitle(comparison.base)} → ${comparisonTargetTitle(comparison)}`,
     "",
     comparisonSummary(comparison),
     "",
@@ -216,19 +232,19 @@ export function comparisonToMarkdown(comparison: SnapshotComparison): string {
   return lines.join("\n");
 }
 
-export function comparisonToJson(comparison: SnapshotComparison): string {
+export function comparisonToJson(comparison: BaselineComparison): string {
   return JSON.stringify(comparison, null, 2);
 }
 
 // A file name someone can find again a week later, and one no filesystem will
 // reject.
-export function exportFileName(comparison: SnapshotComparison, extension: string): string {
+export function exportFileName(comparison: BaselineComparison, extension: string): string {
   const safe = (value: string) =>
     value
       .replace(/[^a-zA-Z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 40) || "capture";
-  return `snapshot-${safe(snapshotTitle(comparison.base))}-to-${safe(
+  return `baseline-${safe(baselineTitle(comparison.base))}-to-${safe(
     comparisonTargetTitle(comparison),
   )}.${extension}`;
 }

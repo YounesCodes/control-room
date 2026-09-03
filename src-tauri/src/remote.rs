@@ -308,7 +308,7 @@ const NO_DF_MARKER: &str = "__CR_NO_DF__";
 const MAX_FILESYSTEMS: usize = 200;
 
 /// Pseudo filesystems that describe the kernel rather than stored data. They
-/// add noise to a snapshot comparison without saying anything about the host.
+/// add noise to a baseline comparison without saying anything about the host.
 const PSEUDO_FILESYSTEM_TYPES: [&str; 22] = [
     "tmpfs",
     "devtmpfs",
@@ -339,7 +339,7 @@ const PSEUDO_FILESYSTEM_TYPES: [&str; 22] = [
 pub fn collect_host_identity(connection: &SavedConnection) -> Result<HostIdentity, String> {
     let command = r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; if test -r /etc/machine-id && command -v sha256sum >/dev/null 2>&1; then printf 'machine_fingerprint=%s\n' "$(tr -d '\n' < /etc/machine-id | sha256sum | cut -c1-16)"; fi"#;
     let text =
-        RemoteCommandExecutor::execute(connection, "snapshot_identity", command)?.success_text()?;
+        RemoteCommandExecutor::execute(connection, "baseline_identity", command)?.success_text()?;
     let values = parse_key_values(&text);
     let read = |key: &str| {
         values

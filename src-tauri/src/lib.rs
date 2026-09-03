@@ -1,16 +1,16 @@
+mod baselines;
 mod commands;
 mod database;
 mod history;
 mod models;
 mod remote;
 mod session;
-mod snapshots;
 mod ssh;
 
+use baselines::BaselineCaptureRegistry;
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
-use snapshots::SnapshotCaptureRegistry;
 use tauri::Manager;
 
 pub fn run() {
@@ -19,7 +19,7 @@ pub fn run() {
         .manage(SessionManager::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
-        .manage(SnapshotCaptureRegistry::default())
+        .manage(BaselineCaptureRegistry::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -60,17 +60,17 @@ pub fn run() {
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,
-            commands::capture_host_snapshot,
-            commands::cancel_host_snapshot,
-            commands::list_host_snapshots,
-            commands::get_host_snapshot,
-            commands::rename_host_snapshot,
-            commands::set_host_snapshot_pinned,
-            commands::delete_host_snapshot,
-            commands::trace_host_snapshot_entry,
+            commands::capture_host_baseline,
+            commands::cancel_host_baseline,
+            commands::list_host_baselines,
+            commands::get_host_baseline,
+            commands::rename_host_baseline,
+            commands::set_host_baseline_pinned,
+            commands::delete_host_baseline,
+            commands::trace_host_baseline_entry,
             commands::export_text_file,
-            commands::compare_host_snapshots,
-            commands::compare_host_snapshot_with_live,
+            commands::compare_host_baselines,
+            commands::compare_host_baseline_with_live,
             commands::get_history,
             commands::add_history_entry,
             commands::delete_history_entry,

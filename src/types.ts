@@ -197,49 +197,49 @@ export interface HostIdentity {
   architecture: string | null;
 }
 
-export type SnapshotSectionKind =
+export type BaselineSectionKind =
   "host" | "systemdUnits" | "containers" | "listeners" | "filesystems";
 
-export type SnapshotSectionStatus =
+export type BaselineSectionStatus =
   "collected" | "partial" | "unsupported" | "unavailable" | "skipped";
 
-export interface SnapshotFact {
+export interface BaselineFact {
   name: string;
   value: string;
 }
 
-export interface SnapshotEntry {
+export interface BaselineEntry {
   identity: string;
   label: string;
-  facts: SnapshotFact[];
+  facts: BaselineFact[];
 }
 
-export interface SnapshotSection {
-  kind: SnapshotSectionKind;
-  status: SnapshotSectionStatus;
+export interface BaselineSection {
+  kind: BaselineSectionKind;
+  status: BaselineSectionStatus;
   schemaVersion: number;
   collectedAt: string;
   message: string | null;
-  entries: SnapshotEntry[];
+  entries: BaselineEntry[];
 }
 
-export interface SnapshotTracePoint {
-  snapshotId: string;
+export interface BaselineTracePoint {
+  baselineId: string;
   label: string | null;
   capturedAt: string;
-  sectionStatus: SnapshotSectionStatus;
+  sectionStatus: BaselineSectionStatus;
   present: boolean;
-  facts: SnapshotFact[];
+  facts: BaselineFact[];
 }
 
-export interface SnapshotTrace {
-  kind: SnapshotSectionKind;
+export interface BaselineTrace {
+  kind: BaselineSectionKind;
   identity: string;
   label: string;
-  points: SnapshotTracePoint[];
+  points: BaselineTracePoint[];
 }
 
-export interface HostSnapshot {
+export interface HostBaseline {
   id: string;
   connectionId: string;
   label: string | null;
@@ -247,16 +247,16 @@ export interface HostSnapshot {
   capturedAt: string;
   pinned: boolean;
   identity: HostIdentity;
-  sections: SnapshotSection[];
+  sections: BaselineSection[];
 }
 
-export interface SnapshotSectionSummary {
-  kind: SnapshotSectionKind;
-  status: SnapshotSectionStatus;
+export interface BaselineSectionSummary {
+  kind: BaselineSectionKind;
+  status: BaselineSectionStatus;
   entryCount: number;
 }
 
-export interface HostSnapshotSummary {
+export interface HostBaselineSummary {
   id: string;
   connectionId: string;
   label: string | null;
@@ -264,57 +264,57 @@ export interface HostSnapshotSummary {
   capturedAt: string;
   pinned: boolean;
   identity: HostIdentity;
-  sections: SnapshotSectionSummary[];
+  sections: BaselineSectionSummary[];
   changesSincePrevious: number | null;
 }
 
-export interface SnapshotCaptureRequest {
+export interface BaselineCaptureRequest {
   connectionId: string;
   captureId: string;
   label: string | null;
-  sections: SnapshotSectionKind[] | null;
+  sections: BaselineSectionKind[] | null;
 }
 
-export interface SnapshotProgress {
+export interface BaselineProgress {
   captureId: string;
-  kind: SnapshotSectionKind;
-  status: SnapshotSectionStatus;
+  kind: BaselineSectionKind;
+  status: BaselineSectionStatus;
   message: string | null;
   completed: number;
   total: number;
 }
 
-export interface SnapshotFactChange {
+export interface BaselineFactChange {
   name: string;
   baseValue: string | null;
   targetValue: string | null;
 }
 
-export interface SnapshotEntryChange {
+export interface BaselineEntryChange {
   identity: string;
   label: string;
-  changes: SnapshotFactChange[];
+  changes: BaselineFactChange[];
 }
 
-export interface SnapshotSectionDiff {
-  kind: SnapshotSectionKind;
-  baseStatus: SnapshotSectionStatus;
-  targetStatus: SnapshotSectionStatus;
+export interface BaselineSectionDiff {
+  kind: BaselineSectionKind;
+  baseStatus: BaselineSectionStatus;
+  targetStatus: BaselineSectionStatus;
   comparable: boolean;
   note: string | null;
-  added: SnapshotEntry[];
-  removed: SnapshotEntry[];
-  changed: SnapshotEntryChange[];
+  added: BaselineEntry[];
+  removed: BaselineEntry[];
+  changed: BaselineEntryChange[];
   unchangedCount: number;
 }
 
-export interface SnapshotComparison {
-  base: HostSnapshotSummary;
-  target: HostSnapshotSummary;
+export interface BaselineComparison {
+  base: HostBaselineSummary;
+  target: HostBaselineSummary;
   identityMatch: "same" | "different" | "unknown";
   schemaCompatible: boolean;
   targetIsLive: boolean;
-  sections: SnapshotSectionDiff[];
+  sections: BaselineSectionDiff[];
 }
 
 export interface HistoryEntry {
@@ -377,7 +377,7 @@ export type WorkspaceView =
   | "ports"
   | "docker"
   | "logs"
-  | "snapshots"
+  | "baselines"
   | "history"
   | "scratchpad";
 
@@ -421,7 +421,7 @@ export interface Workspace {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
-  snapshotSelectionId: string | null;
+  baselineSelectionId: string | null;
 }
 
 interface PersistedWorkspace {

@@ -1,4 +1,4 @@
-//! Host Snapshots: a bounded, explicit capture of normalized host state, and a
+//! Host Baselines: a bounded, explicit capture of normalized host state, and a
 //! deterministic comparison between two captures of the same Saved Connection.
 //!
 //! Capture only ever runs because the user asked for it. There is no timer, no
@@ -20,10 +20,10 @@ use uuid::Uuid;
 
 use crate::{
     models::{
-        HostIdentity, HostSnapshot, HostSnapshotSummary, SNAPSHOT_SCHEMA_VERSION, SavedConnection,
-        SnapshotComparison, SnapshotEntry, SnapshotEntryChange, SnapshotFact, SnapshotFactChange,
-        SnapshotSection, SnapshotSectionDiff, SnapshotSectionSummary, SnapshotTrace,
-        SnapshotTracePoint,
+        BASELINE_SCHEMA_VERSION, BaselineComparison, BaselineEntry, BaselineEntryChange,
+        BaselineFact, BaselineFactChange, BaselineSection, BaselineSectionDiff,
+        BaselineSectionSummary, BaselineTrace, BaselineTracePoint, HostBaseline,
+        HostBaselineSummary, HostIdentity, SavedConnection,
     },
     remote::{self, Elevation},
 };
@@ -68,11 +68,11 @@ pub fn section_schema_version(kind: &str) -> u32 {
 /// Tracks captures the user asked to stop. A capture checks the flag between
 /// sections, so cancelling takes effect once the section in flight returns.
 #[derive(Default)]
-pub struct SnapshotCaptureRegistry {
+pub struct BaselineCaptureRegistry {
     captures: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
-impl SnapshotCaptureRegistry {
+impl BaselineCaptureRegistry {
     fn register(&self, capture_id: &str) -> Arc<AtomicBool> {
         let flag = Arc::new(AtomicBool::new(false));
         self.captures
@@ -98,7 +98,7 @@ impl SnapshotCaptureRegistry {
 
 /// Reports one finished section while a capture is still running.
 pub trait SectionReporter {
-    fn report(&self, section: &SnapshotSection, completed: u32, total: u32);
+    fn report(&self, section: &BaselineSection, completed: u32, total: u32);
 }
 
 /// Validates the section selection, rejecting names this build does not know
@@ -115,7 +115,7 @@ pub fn resolve_selection(requested: Option<&[String]>) -> Result<Vec<&'static st
         let kind = SECTION_KINDS
             .iter()
             .find(|kind| *kind == name)
-            .ok_or_else(|| format!("Unknown snapshot section: {name}"))?;
+            .ok_or_else(|| format!("Unknown baseline section: {name}"))?;
         if !selected.contains(kind) {
             selected.push(*kind);
         }
@@ -129,19 +129,19 @@ pub fn capture(
     label: Option<String>,
     sections: Option<&[String]>,
     elevation: &Elevation,
-    registry: &SnapshotCaptureRegistry,
+    registry: &BaselineCaptureRegistry,
     reporter: &dyn SectionReporter,
-) -> Result<HostSnapshot, String> {
+) -> Result<HostBaseline, String> {
     let selection = resolve_selection(sections)?;
     let cancelled = registry.register(capture_id);
     let result = capture_sections(connection, &selection, elevation, &cancelled, reporter);
     registry.release(capture_id);
     let (identity, sections) = result?;
-    Ok(HostSnapshot {
+    Ok(HostBaseline {
         id: Uuid::new_v4().to_string(),
         connection_id: connection.id.clone(),
         label: normalize_label(label),
-        schema_version: SNAPSHOT_SCHEMA_VERSION,
+        schema_version: BASELINE_SCHEMA_VERSION,
         captured_at: Utc::now().to_rfc3339(),
         pinned: false,
         identity,
@@ -158,7 +158,7 @@ fn capture_sections(
     elevation: &Elevation,
     cancelled: &AtomicBool,
     reporter: &dyn SectionReporter,
-) -> Result<(HostIdentity, Vec<SnapshotSection>), String> {
+) -> Result<(HostIdentity, Vec<BaselineSection>), String> {
     let identity = remote::collect_host_identity(connection)?;
     let total = SECTION_KINDS.len() as u32;
     let mut sections = Vec::new();
@@ -189,7 +189,7 @@ fn capture_sections(
     Ok((identity, sections))
 }
 
-fn skipped_section(kind: &str, message: &str) -> SnapshotSection {
+fn skipped_section(kind: &str, message: &str) -> BaselineSection {
     section(kind, STATUS_SKIPPED, Some(message.to_string()), Vec::new())
 }
 
@@ -198,7 +198,7 @@ fn collect_section(
     kind: &str,
     elevation: &Elevation,
     identity: &HostIdentity,
-) -> SnapshotSection {
+) -> BaselineSection {
     match kind {
         SECTION_HOST => host_section(identity),
         SECTION_SYSTEMD_UNITS => systemd_section(connection),
@@ -212,9 +212,9 @@ fn section(
     kind: &str,
     status: &str,
     message: Option<String>,
-    entries: Vec<SnapshotEntry>,
-) -> SnapshotSection {
-    SnapshotSection {
+    entries: Vec<BaselineEntry>,
+) -> BaselineSection {
+    BaselineSection {
         kind: kind.into(),
         status: status.into(),
         schema_version: section_schema_version(kind),
@@ -224,7 +224,7 @@ fn section(
     }
 }
 
-fn host_section(identity: &HostIdentity) -> SnapshotSection {
+fn host_section(identity: &HostIdentity) -> BaselineSection {
     let facts = vec![
         fact("hostname", identity.hostname.clone()),
         fact("operatingSystem", identity.os_id.clone()),
@@ -247,7 +247,7 @@ fn host_section(identity: &HostIdentity) -> SnapshotSection {
         SECTION_HOST,
         status,
         message,
-        vec![SnapshotEntry {
+        vec![BaselineEntry {
             identity: "host".into(),
             label: identity.hostname.clone().unwrap_or_else(|| "Host".into()),
             facts,
@@ -255,32 +255,32 @@ fn host_section(identity: &HostIdentity) -> SnapshotSection {
     )
 }
 
-fn systemd_section(connection: &SavedConnection) -> SnapshotSection {
+fn systemd_section(connection: &SavedConnection) -> BaselineSection {
     match remote::list_services(connection) {
         Ok(units) => {
             let entries = units
                 .into_iter()
-                .map(|unit| SnapshotEntry {
+                .map(|unit| BaselineEntry {
                     identity: unit.id.clone(),
                     label: unit.id.clone(),
                     facts: vec![
-                        SnapshotFact {
+                        BaselineFact {
                             name: "type".into(),
                             value: unit.unit_type,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "loadState".into(),
                             value: unit.load_state,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "activeState".into(),
                             value: unit.active_state,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "subState".into(),
                             value: unit.sub_state,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "unitFileState".into(),
                             value: unit.unit_file_state.unwrap_or_else(|| "unknown".into()),
                         },
@@ -298,32 +298,32 @@ fn systemd_section(connection: &SavedConnection) -> SnapshotSection {
     }
 }
 
-fn containers_section(connection: &SavedConnection, elevation: &Elevation) -> SnapshotSection {
+fn containers_section(connection: &SavedConnection, elevation: &Elevation) -> BaselineSection {
     match remote::list_containers(connection, elevation.clone()) {
         Ok(containers) => {
             let entries = containers
                 .into_iter()
-                .map(|container| SnapshotEntry {
+                .map(|container| BaselineEntry {
                     identity: container.name.clone(),
                     label: container.name.clone(),
                     facts: vec![
-                        SnapshotFact {
+                        BaselineFact {
                             name: "image".into(),
                             value: container.image,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "state".into(),
                             value: container.state,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "publishedPorts".into(),
                             value: container.ports,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "composeProject".into(),
                             value: container.compose_project.unwrap_or_else(|| "none".into()),
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "composeService".into(),
                             value: container.compose_service.unwrap_or_else(|| "none".into()),
                         },
@@ -348,7 +348,7 @@ fn mentions_missing_docker(error: &str) -> bool {
     lowered.contains("not installed") || lowered.contains("command not found")
 }
 
-fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> SnapshotSection {
+fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> BaselineSection {
     match remote::list_ports(connection, elevation.clone()) {
         Ok(sockets) => {
             let unowned = sockets
@@ -357,7 +357,7 @@ fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> Sna
                 .count();
             let entries = sockets
                 .into_iter()
-                .map(|socket| SnapshotEntry {
+                .map(|socket| BaselineEntry {
                     identity: format!(
                         "{}/{}/{}:{}",
                         socket.protocol, socket.address_family, socket.local_address, socket.port
@@ -367,15 +367,15 @@ fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> Sna
                         socket.local_address, socket.port, socket.protocol
                     ),
                     facts: vec![
-                        SnapshotFact {
+                        BaselineFact {
                             name: "process".into(),
                             value: socket.process_name.unwrap_or_else(|| "unavailable".into()),
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "systemdUnit".into(),
                             value: socket.systemd_unit.unwrap_or_else(|| "unavailable".into()),
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "ownership".into(),
                             value: socket.ownership,
                         },
@@ -401,24 +401,24 @@ fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> Sna
     }
 }
 
-fn filesystems_section(connection: &SavedConnection) -> SnapshotSection {
+fn filesystems_section(connection: &SavedConnection) -> BaselineSection {
     match remote::list_filesystems(connection) {
         Ok(filesystems) => {
             let entries = filesystems
                 .into_iter()
-                .map(|filesystem| SnapshotEntry {
+                .map(|filesystem| BaselineEntry {
                     identity: filesystem.mount_point.clone(),
                     label: filesystem.mount_point,
                     facts: vec![
-                        SnapshotFact {
+                        BaselineFact {
                             name: "type".into(),
                             value: filesystem.filesystem_type,
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "sizeKib".into(),
                             value: filesystem.size_kib.to_string(),
                         },
-                        SnapshotFact {
+                        BaselineFact {
                             name: "usedPercent".into(),
                             value: filesystem.used_percent.to_string(),
                         },
@@ -438,8 +438,8 @@ fn filesystems_section(connection: &SavedConnection) -> SnapshotSection {
     }
 }
 
-fn fact(name: &str, value: Option<String>) -> Option<SnapshotFact> {
-    value.map(|value| SnapshotFact {
+fn fact(name: &str, value: Option<String>) -> Option<BaselineFact> {
+    value.map(|value| BaselineFact {
         name: name.into(),
         value,
     })
@@ -451,19 +451,19 @@ pub fn normalize_label(label: Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-pub fn summarize(snapshot: &HostSnapshot) -> HostSnapshotSummary {
-    HostSnapshotSummary {
-        id: snapshot.id.clone(),
-        connection_id: snapshot.connection_id.clone(),
-        label: snapshot.label.clone(),
-        schema_version: snapshot.schema_version,
-        captured_at: snapshot.captured_at.clone(),
-        identity: snapshot.identity.clone(),
-        pinned: snapshot.pinned,
-        sections: snapshot
+pub fn summarize(baseline: &HostBaseline) -> HostBaselineSummary {
+    HostBaselineSummary {
+        id: baseline.id.clone(),
+        connection_id: baseline.connection_id.clone(),
+        label: baseline.label.clone(),
+        schema_version: baseline.schema_version,
+        captured_at: baseline.captured_at.clone(),
+        identity: baseline.identity.clone(),
+        pinned: baseline.pinned,
+        sections: baseline
             .sections
             .iter()
-            .map(|section| SnapshotSectionSummary {
+            .map(|section| BaselineSectionSummary {
                 kind: section.kind.clone(),
                 status: section.status.clone(),
                 entry_count: section.entries.len() as u32,
@@ -476,8 +476,8 @@ pub fn summarize(snapshot: &HostSnapshot) -> HostSnapshotSummary {
 /// Total entries that differ between two captures, counting only the sections
 /// both sides could read. None when nothing was comparable, so a row can say
 /// "not comparable" rather than showing a reassuring zero.
-pub fn total_changes(comparison: &SnapshotComparison) -> Option<u32> {
-    let comparable: Vec<&SnapshotSectionDiff> = comparison
+pub fn total_changes(comparison: &BaselineComparison) -> Option<u32> {
+    let comparable: Vec<&BaselineSectionDiff> = comparison
         .sections
         .iter()
         .filter(|section| section.comparable)
@@ -497,12 +497,12 @@ pub fn total_changes(comparison: &SnapshotComparison) -> Option<u32> {
 
 /// Reads one entry across every capture given, newest first. This answers when
 /// a value moved, which two-capture comparison cannot.
-pub fn trace_entry(snapshots: &[HostSnapshot], kind: &str, identity: &str) -> SnapshotTrace {
+pub fn trace_entry(baselines: &[HostBaseline], kind: &str, identity: &str) -> BaselineTrace {
     let mut label = identity.to_string();
-    let points = snapshots
+    let points = baselines
         .iter()
-        .map(|snapshot| {
-            let section = snapshot
+        .map(|baseline| {
+            let section = baseline
                 .sections
                 .iter()
                 .find(|section| section.kind == kind);
@@ -515,10 +515,10 @@ pub fn trace_entry(snapshots: &[HostSnapshot], kind: &str, identity: &str) -> Sn
             if let Some(entry) = entry {
                 label = entry.label.clone();
             }
-            SnapshotTracePoint {
-                snapshot_id: snapshot.id.clone(),
-                label: snapshot.label.clone(),
-                captured_at: snapshot.captured_at.clone(),
+            BaselineTracePoint {
+                baseline_id: baseline.id.clone(),
+                label: baseline.label.clone(),
+                captured_at: baseline.captured_at.clone(),
                 section_status: section
                     .map(|section| section.status.clone())
                     .unwrap_or_else(|| STATUS_SKIPPED.into()),
@@ -527,7 +527,7 @@ pub fn trace_entry(snapshots: &[HostSnapshot], kind: &str, identity: &str) -> Sn
             }
         })
         .collect();
-    SnapshotTrace {
+    BaselineTrace {
         kind: kind.into(),
         identity: identity.into(),
         label,
@@ -538,28 +538,28 @@ pub fn trace_entry(snapshots: &[HostSnapshot], kind: &str, identity: &str) -> Sn
 /// Compares two captures of the same Saved Connection. The result states what
 /// it could not compare instead of implying nothing changed there, and it draws
 /// no causal conclusion about why a value moved.
-pub fn compare(base: &HostSnapshot, target: &HostSnapshot) -> SnapshotComparison {
+pub fn compare(base: &HostBaseline, target: &HostBaseline) -> BaselineComparison {
     compare_inner(base, target, false)
 }
 
 /// Compares a saved capture against state just read from the host. The live
 /// read is never stored, so this answers "what has changed since then" without
 /// adding a capture the user did not ask to keep.
-pub fn compare_with_live(base: &HostSnapshot, live: &HostSnapshot) -> SnapshotComparison {
+pub fn compare_with_live(base: &HostBaseline, live: &HostBaseline) -> BaselineComparison {
     compare_inner(base, live, true)
 }
 
 fn compare_inner(
-    base: &HostSnapshot,
-    target: &HostSnapshot,
+    base: &HostBaseline,
+    target: &HostBaseline,
     target_is_live: bool,
-) -> SnapshotComparison {
+) -> BaselineComparison {
     let schema_compatible = base.schema_version == target.schema_version;
     let sections = SECTION_KINDS
         .iter()
         .map(|kind| compare_section(kind, base, target, schema_compatible))
         .collect();
-    SnapshotComparison {
+    BaselineComparison {
         base: summarize(base),
         target: summarize(target),
         identity_match: identity_match(&base.identity, &target.identity).into(),
@@ -579,10 +579,10 @@ fn identity_match(base: &HostIdentity, target: &HostIdentity) -> &'static str {
 
 fn compare_section(
     kind: &str,
-    base: &HostSnapshot,
-    target: &HostSnapshot,
+    base: &HostBaseline,
+    target: &HostBaseline,
     schema_compatible: bool,
-) -> SnapshotSectionDiff {
+) -> BaselineSectionDiff {
     let base_section = base.sections.iter().find(|section| section.kind == kind);
     let target_section = target.sections.iter().find(|section| section.kind == kind);
     let base_status = base_section
@@ -600,7 +600,7 @@ fn compare_section(
     let comparable =
         section_schema_compatible && readable(&base_status) && readable(&target_status);
     if !comparable {
-        return SnapshotSectionDiff {
+        return BaselineSectionDiff {
             kind: kind.into(),
             note: Some(incomparable_note(
                 section_schema_compatible,
@@ -630,7 +630,7 @@ fn compare_section(
                 if changes.is_empty() {
                     unchanged_count += 1;
                 } else {
-                    changed.push(SnapshotEntryChange {
+                    changed.push(BaselineEntryChange {
                         identity: identity.clone(),
                         label: entry.label.clone(),
                         changes,
@@ -645,7 +645,7 @@ fn compare_section(
         }
     }
     let partial = base_status == STATUS_PARTIAL || target_status == STATUS_PARTIAL;
-    SnapshotSectionDiff {
+    BaselineSectionDiff {
         kind: kind.into(),
         base_status,
         target_status,
@@ -682,7 +682,7 @@ fn incomparable_note(schema_compatible: bool, base_status: &str, target_status: 
     }
 }
 
-fn index_entries(section: Option<&SnapshotSection>) -> BTreeMap<String, &SnapshotEntry> {
+fn index_entries(section: Option<&BaselineSection>) -> BTreeMap<String, &BaselineEntry> {
     section
         .map(|section| {
             section
@@ -694,7 +694,7 @@ fn index_entries(section: Option<&SnapshotSection>) -> BTreeMap<String, &Snapsho
         .unwrap_or_default()
 }
 
-fn compare_facts(base: &SnapshotEntry, target: &SnapshotEntry) -> Vec<SnapshotFactChange> {
+fn compare_facts(base: &BaselineEntry, target: &BaselineEntry) -> Vec<BaselineFactChange> {
     let mut names: Vec<&str> = Vec::new();
     for entry in [base, target] {
         for fact in &entry.facts {
@@ -708,7 +708,7 @@ fn compare_facts(base: &SnapshotEntry, target: &SnapshotEntry) -> Vec<SnapshotFa
         .filter_map(|name| {
             let base_value = find_fact(base, name);
             let target_value = find_fact(target, name);
-            (base_value != target_value).then(|| SnapshotFactChange {
+            (base_value != target_value).then(|| BaselineFactChange {
                 name: name.to_string(),
                 base_value,
                 target_value,
@@ -717,7 +717,7 @@ fn compare_facts(base: &SnapshotEntry, target: &SnapshotEntry) -> Vec<SnapshotFa
         .collect()
 }
 
-fn find_fact(entry: &SnapshotEntry, name: &str) -> Option<String> {
+fn find_fact(entry: &BaselineEntry, name: &str) -> Option<String> {
     entry
         .facts
         .iter()
@@ -729,13 +729,13 @@ fn find_fact(entry: &SnapshotEntry, name: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn entry(identity: &str, facts: &[(&str, &str)]) -> SnapshotEntry {
-        SnapshotEntry {
+    fn entry(identity: &str, facts: &[(&str, &str)]) -> BaselineEntry {
+        BaselineEntry {
             identity: identity.into(),
             label: identity.into(),
             facts: facts
                 .iter()
-                .map(|(name, value)| SnapshotFact {
+                .map(|(name, value)| BaselineFact {
                     name: (*name).into(),
                     value: (*value).into(),
                 })
@@ -743,17 +743,17 @@ mod tests {
         }
     }
 
-    fn snapshot(
+    fn baseline(
         id: &str,
         fingerprint: Option<&str>,
-        sections: Vec<SnapshotSection>,
-    ) -> HostSnapshot {
-        HostSnapshot {
+        sections: Vec<BaselineSection>,
+    ) -> HostBaseline {
+        HostBaseline {
             id: id.into(),
             pinned: false,
             connection_id: "connection-a".into(),
             label: None,
-            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            schema_version: BASELINE_SCHEMA_VERSION,
             captured_at: "2026-09-01T00:00:00Z".into(),
             identity: HostIdentity {
                 hostname: Some("host-a".into()),
@@ -767,11 +767,11 @@ mod tests {
         }
     }
 
-    fn units(status: &str, entries: Vec<SnapshotEntry>) -> SnapshotSection {
+    fn units(status: &str, entries: Vec<BaselineEntry>) -> BaselineSection {
         section(SECTION_SYSTEMD_UNITS, status, None, entries)
     }
 
-    fn find(comparison: SnapshotComparison, kind: &str) -> SnapshotSectionDiff {
+    fn find(comparison: BaselineComparison, kind: &str) -> BaselineSectionDiff {
         comparison
             .sections
             .into_iter()
@@ -781,7 +781,7 @@ mod tests {
 
     #[test]
     fn diff_reports_typed_additions_removals_and_modifications() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(
@@ -792,7 +792,7 @@ mod tests {
                 ],
             )],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![units(
@@ -815,7 +815,7 @@ mod tests {
 
     #[test]
     fn changed_facts_carry_both_values() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(
@@ -826,7 +826,7 @@ mod tests {
                 )],
             )],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![units(
@@ -841,7 +841,7 @@ mod tests {
         assert_eq!(diff.changed.len(), 1);
         assert_eq!(
             diff.changed[0].changes,
-            vec![SnapshotFactChange {
+            vec![BaselineFactChange {
                 name: "activeState".into(),
                 base_value: Some("active".into()),
                 target_value: Some("failed".into()),
@@ -852,12 +852,12 @@ mod tests {
 
     #[test]
     fn a_fact_present_on_only_one_side_is_a_change() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, vec![entry("nginx.service", &[])])],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![units(
@@ -868,7 +868,7 @@ mod tests {
         let diff = find(compare(&base, &target), SECTION_SYSTEMD_UNITS);
         assert_eq!(
             diff.changed[0].changes,
-            vec![SnapshotFactChange {
+            vec![BaselineFactChange {
                 name: "activeState".into(),
                 base_value: None,
                 target_value: Some("active".into()),
@@ -878,7 +878,7 @@ mod tests {
 
     #[test]
     fn unsupported_and_unavailable_sections_never_look_unchanged() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![section(
@@ -888,7 +888,7 @@ mod tests {
                 vec![entry("api", &[])],
             )],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![section(
@@ -910,8 +910,8 @@ mod tests {
 
     #[test]
     fn a_missing_section_is_reported_rather_than_dropped() {
-        let base = snapshot("base", Some("aaaa"), Vec::new());
-        let target = snapshot("target", Some("aaaa"), Vec::new());
+        let base = baseline("base", Some("aaaa"), Vec::new());
+        let target = baseline("target", Some("aaaa"), Vec::new());
         let comparison = compare(&base, &target);
         assert_eq!(comparison.sections.len(), SECTION_KINDS.len());
         for diff in &comparison.sections {
@@ -922,7 +922,7 @@ mod tests {
 
     #[test]
     fn a_partial_section_still_compares_but_says_so() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![section(
@@ -935,7 +935,7 @@ mod tests {
                 )],
             )],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![section(
@@ -957,10 +957,10 @@ mod tests {
 
     #[test]
     fn host_identity_evidence_is_reported_without_guessing() {
-        let base = snapshot("base", Some("aaaa"), Vec::new());
-        let same = snapshot("same", Some("aaaa"), Vec::new());
-        let other = snapshot("other", Some("bbbb"), Vec::new());
-        let unknown = snapshot("unknown", None, Vec::new());
+        let base = baseline("base", Some("aaaa"), Vec::new());
+        let same = baseline("same", Some("aaaa"), Vec::new());
+        let other = baseline("other", Some("bbbb"), Vec::new());
+        let unknown = baseline("unknown", None, Vec::new());
         assert_eq!(compare(&base, &same).identity_match, "same");
         assert_eq!(compare(&base, &other).identity_match, "different");
         assert_eq!(compare(&base, &unknown).identity_match, "unknown");
@@ -968,17 +968,17 @@ mod tests {
 
     #[test]
     fn an_incompatible_schema_blocks_every_section() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
         );
-        let mut target = snapshot(
+        let mut target = baseline(
             "target",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
         );
-        target.schema_version = SNAPSHOT_SCHEMA_VERSION + 1;
+        target.schema_version = BASELINE_SCHEMA_VERSION + 1;
         let comparison = compare(&base, &target);
         assert!(!comparison.schema_compatible);
         assert!(comparison.sections.iter().all(|diff| !diff.comparable));
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn cancelling_an_unknown_capture_is_an_error_not_a_silent_success() {
-        let registry = SnapshotCaptureRegistry::default();
+        let registry = BaselineCaptureRegistry::default();
         assert!(registry.cancel("missing").is_err());
         let flag = registry.register("capture-1");
         assert!(registry.cancel("capture-1").is_ok());
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[test]
     fn live_comparison_is_marked_live_and_diffs_the_same_way() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(
@@ -1019,7 +1019,7 @@ mod tests {
                 vec![entry("ssh.service", &[("activeState", "active")])],
             )],
         );
-        let live = snapshot(
+        let live = baseline(
             "live",
             Some("aaaa"),
             vec![units(
@@ -1046,12 +1046,12 @@ mod tests {
 
     #[test]
     fn live_comparison_still_reports_a_mismatched_machine_identity() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, Vec::new())],
         );
-        let live = snapshot(
+        let live = baseline(
             "live",
             Some("bbbb"),
             vec![units(STATUS_COLLECTED, Vec::new())],
@@ -1062,7 +1062,7 @@ mod tests {
 
     #[test]
     fn a_section_only_blocks_comparison_for_its_own_schema_change() {
-        let mut base = snapshot(
+        let mut base = baseline(
             "base",
             Some("aaaa"),
             vec![
@@ -1073,7 +1073,7 @@ mod tests {
                 section(SECTION_CONTAINERS, STATUS_COLLECTED, None, Vec::new()),
             ],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![
@@ -1096,12 +1096,12 @@ mod tests {
 
     #[test]
     fn a_skipped_section_is_never_reported_as_unchanged() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![skipped_section(
@@ -1130,19 +1130,19 @@ mod tests {
 
     #[test]
     fn total_changes_says_nothing_rather_than_zero_when_no_section_compared() {
-        let base = snapshot(
+        let base = baseline(
             "base",
             Some("aaaa"),
             vec![units(STATUS_UNAVAILABLE, Vec::new())],
         );
-        let target = snapshot(
+        let target = baseline(
             "target",
             Some("aaaa"),
             vec![units(STATUS_UNAVAILABLE, Vec::new())],
         );
         assert_eq!(total_changes(&compare(&base, &target)), None);
 
-        let readable = snapshot(
+        let readable = baseline(
             "readable",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
@@ -1152,7 +1152,7 @@ mod tests {
 
     #[test]
     fn tracing_one_entry_reads_every_capture_and_marks_the_ones_missing_it() {
-        let newest = snapshot(
+        let newest = baseline(
             "newest",
             Some("aaaa"),
             vec![units(
@@ -1160,12 +1160,12 @@ mod tests {
                 vec![entry("ssh.service", &[("activeState", "failed")])],
             )],
         );
-        let middle = snapshot(
+        let middle = baseline(
             "middle",
             Some("aaaa"),
             vec![units(STATUS_COLLECTED, Vec::new())],
         );
-        let oldest = snapshot(
+        let oldest = baseline(
             "oldest",
             Some("aaaa"),
             vec![skipped_section(SECTION_SYSTEMD_UNITS, "not captured")],
@@ -1189,7 +1189,7 @@ mod tests {
 
     #[test]
     fn capture_is_explicit_and_never_scheduled() {
-        let source = include_str!("snapshots.rs");
+        let source = include_str!("baselines.rs");
         assert!(!source.contains(concat!("thread", "::spawn")));
         assert!(!source.contains(concat!("set", "_interval")));
         assert!(!source.contains(concat!("sleep", "(")));

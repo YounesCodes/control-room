@@ -5,16 +5,16 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
-  listHostSnapshots: vi.fn(),
-  getHostSnapshot: vi.fn(),
-  captureHostSnapshot: vi.fn(),
-  cancelHostSnapshot: vi.fn(),
-  renameHostSnapshot: vi.fn(),
-  deleteHostSnapshot: vi.fn(),
-  compareHostSnapshots: vi.fn(),
-  compareHostSnapshotWithLive: vi.fn(),
-  setHostSnapshotPinned: vi.fn(),
-  traceHostSnapshotEntry: vi.fn(),
+  listHostBaselines: vi.fn(),
+  getHostBaseline: vi.fn(),
+  captureHostBaseline: vi.fn(),
+  cancelHostBaseline: vi.fn(),
+  renameHostBaseline: vi.fn(),
+  deleteHostBaseline: vi.fn(),
+  compareHostBaselines: vi.fn(),
+  compareHostBaselineWithLive: vi.fn(),
+  setHostBaselinePinned: vi.fn(),
+  traceHostBaselineEntry: vi.fn(),
   exportTextFile: vi.fn(),
 }));
 
@@ -32,12 +32,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import type {
-  HostSnapshot,
-  HostSnapshotSummary,
+  HostBaseline,
+  HostBaselineSummary,
   SavedConnection,
-  SnapshotComparison,
+  BaselineComparison,
 } from "../types";
-import { SnapshotsPane } from "./SnapshotsPane";
+import { BaselinesPane } from "./BaselinesPane";
 
 const connection: SavedConnection = {
   id: "connection-a",
@@ -68,8 +68,8 @@ function summary(
   id: string,
   capturedAt: string,
   label: string | null,
-  extra: Partial<HostSnapshotSummary> = {},
-): HostSnapshotSummary {
+  extra: Partial<HostBaselineSummary> = {},
+): HostBaselineSummary {
   return {
     id,
     connectionId: connection.id,
@@ -90,7 +90,7 @@ function summary(
   };
 }
 
-const detail: HostSnapshot = {
+const detail: HostBaseline = {
   id: "later",
   connectionId: connection.id,
   label: "after upgrade",
@@ -143,7 +143,7 @@ const detail: HostSnapshot = {
   ],
 };
 
-const comparison: SnapshotComparison = {
+const comparison: BaselineComparison = {
   base: summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
   target: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
   identityMatch: "same",
@@ -189,7 +189,7 @@ function detail_panel() {
 
 function renderPane(selectedId: string | null = "later") {
   const onSelect = vi.fn();
-  render(<SnapshotsPane connection={connection} selectedId={selectedId} onSelect={onSelect} />);
+  render(<BaselinesPane connection={connection} selectedId={selectedId} onSelect={onSelect} />);
   return onSelect;
 }
 
@@ -198,13 +198,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("snapshots pane", () => {
+describe("baselines pane", () => {
   it("lists saved captures and says capture is manual", async () => {
-    api.listHostSnapshots.mockResolvedValue([
+    api.listHostBaselines.mockResolvedValue([
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
     ]);
-    api.getHostSnapshot.mockResolvedValue(detail);
+    api.getHostBaseline.mockResolvedValue(detail);
     renderPane();
     expect(await screen.findAllByText("before upgrade")).not.toHaveLength(0);
     expect(screen.getAllByText("after upgrade")).not.toHaveLength(0);
@@ -216,8 +216,8 @@ describe("snapshots pane", () => {
   });
 
   it("shows an unsupported section in the detail instead of hiding it", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
     renderPane();
     await screen.findAllByText("Containers");
     expect(detail_panel().getByText("Not present")).toBeTruthy();
@@ -225,16 +225,16 @@ describe("snapshots pane", () => {
   });
 
   it("compares earlier to later whichever capture is selected", async () => {
-    api.listHostSnapshots.mockResolvedValue([
+    api.listHostBaselines.mockResolvedValue([
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
     ]);
-    api.getHostSnapshot.mockResolvedValue(detail);
-    api.compareHostSnapshots.mockResolvedValue(comparison);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.compareHostBaselines.mockResolvedValue(comparison);
     renderPane("later");
     await screen.findAllByText("before upgrade");
     await userEvent.selectOptions(screen.getByRole("combobox"), "earlier");
-    await waitFor(() => expect(api.compareHostSnapshots).toHaveBeenCalledWith("earlier", "later"));
+    await waitFor(() => expect(api.compareHostBaselines).toHaveBeenCalledWith("earlier", "later"));
     expect(await screen.findByText("postgresql.service")).toBeTruthy();
     expect(screen.getByText("nginx.service")).toBeTruthy();
     expect(screen.getByText("ssh.service")).toBeTruthy();
@@ -242,12 +242,12 @@ describe("snapshots pane", () => {
   });
 
   it("reports a section it could not compare rather than calling it unchanged", async () => {
-    api.listHostSnapshots.mockResolvedValue([
+    api.listHostBaselines.mockResolvedValue([
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
     ]);
-    api.getHostSnapshot.mockResolvedValue(detail);
-    api.compareHostSnapshots.mockResolvedValue(comparison);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.compareHostBaselines.mockResolvedValue(comparison);
     renderPane("later");
     await screen.findAllByText("before upgrade");
     await userEvent.selectOptions(screen.getByRole("combobox"), "earlier");
@@ -262,9 +262,9 @@ describe("snapshots pane", () => {
   });
 
   it("compares the selected capture against live machine state without saving a capture", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
-    api.compareHostSnapshotWithLive.mockResolvedValue({
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.compareHostBaselineWithLive.mockResolvedValue({
       ...comparison,
       base: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
       target: summary("live", "2026-09-03T09:00:00Z", null),
@@ -276,7 +276,7 @@ describe("snapshots pane", () => {
     await userEvent.selectOptions(screen.getByRole("combobox"), "live");
 
     await waitFor(() =>
-      expect(api.compareHostSnapshotWithLive).toHaveBeenCalledWith(
+      expect(api.compareHostBaselineWithLive).toHaveBeenCalledWith(
         "later",
         expect.any(String),
         expect.anything(),
@@ -284,13 +284,13 @@ describe("snapshots pane", () => {
     );
     expect(await screen.findByText(/after upgrade → Live state:/)).toBeTruthy();
     expect(screen.getByText(/This read was not saved/)).toBeTruthy();
-    expect(api.captureHostSnapshot).not.toHaveBeenCalled();
+    expect(api.captureHostBaseline).not.toHaveBeenCalled();
     expect(screen.getByText("postgresql.service")).toBeTruthy();
   });
 
   it("offers the live comparison even when no other capture exists", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
     renderPane("later");
     await screen.findAllByText("Host facts");
 
@@ -300,8 +300,8 @@ describe("snapshots pane", () => {
   });
 
   it("shows host facts as collected without listing their values", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
     renderPane("later");
     await screen.findAllByText("Host facts");
 
@@ -311,8 +311,8 @@ describe("snapshots pane", () => {
   });
 
   it("opens a section to the entries it recorded", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
     renderPane("later");
     await screen.findAllByText("Systemd units");
 
@@ -325,15 +325,15 @@ describe("snapshots pane", () => {
   });
 
   it("reads one entry across every stored capture", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
-    api.traceHostSnapshotEntry.mockResolvedValue({
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.traceHostBaselineEntry.mockResolvedValue({
       kind: "systemdUnits",
       identity: "ssh.service",
       label: "ssh.service",
       points: [
         {
-          snapshotId: "later",
+          baselineId: "later",
           label: "after upgrade",
           capturedAt: "2026-09-02T10:00:00Z",
           sectionStatus: "collected",
@@ -341,7 +341,7 @@ describe("snapshots pane", () => {
           facts: [{ name: "activeState", value: "failed" }],
         },
         {
-          snapshotId: "earlier",
+          baselineId: "earlier",
           label: "before upgrade",
           capturedAt: "2026-09-01T10:00:00Z",
           sectionStatus: "collected",
@@ -357,7 +357,7 @@ describe("snapshots pane", () => {
     await userEvent.click(detail_panel().getByRole("button", { name: "History of ssh.service" }));
 
     await waitFor(() =>
-      expect(api.traceHostSnapshotEntry).toHaveBeenCalledWith(
+      expect(api.traceHostBaselineEntry).toHaveBeenCalledWith(
         "connection-a",
         "systemdUnits",
         "ssh.service",
@@ -367,31 +367,31 @@ describe("snapshots pane", () => {
   });
 
   it("pins a capture so retention cannot evict it", async () => {
-    api.listHostSnapshots.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostSnapshot.mockResolvedValue(detail);
-    api.setHostSnapshotPinned.mockResolvedValue(
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.setHostBaselinePinned.mockResolvedValue(
       summary("later", "2026-09-02T10:00:00Z", null, { pinned: true }),
     );
     renderPane("later");
     await screen.findAllByText("Host facts");
 
-    await userEvent.click(screen.getByRole("button", { name: "Pin snapshot" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pin baseline" }));
 
-    await waitFor(() => expect(api.setHostSnapshotPinned).toHaveBeenCalledWith("later", true));
+    await waitFor(() => expect(api.setHostBaselinePinned).toHaveBeenCalledWith("later", true));
   });
 
   it("captures only the sections that stay ticked", async () => {
-    api.listHostSnapshots.mockResolvedValue([]);
-    api.captureHostSnapshot.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
+    api.listHostBaselines.mockResolvedValue([]);
+    api.captureHostBaseline.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
     renderPane(null);
-    await screen.findByText("No snapshots yet");
+    await screen.findByText("No baselines yet");
 
     await userEvent.click(screen.getByRole("checkbox", { name: "Containers" }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Filesystems" }));
-    await userEvent.click(screen.getByRole("button", { name: /Capture snapshot/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
 
-    await waitFor(() => expect(api.captureHostSnapshot).toHaveBeenCalled());
-    expect(api.captureHostSnapshot.mock.calls[0][0].sections).toEqual([
+    await waitFor(() => expect(api.captureHostBaseline).toHaveBeenCalled());
+    expect(api.captureHostBaseline.mock.calls[0][0].sections).toEqual([
       "host",
       "systemdUnits",
       "listeners",
@@ -399,23 +399,23 @@ describe("snapshots pane", () => {
   });
 
   it("sends no section list when every section is wanted", async () => {
-    api.listHostSnapshots.mockResolvedValue([]);
-    api.captureHostSnapshot.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
+    api.listHostBaselines.mockResolvedValue([]);
+    api.captureHostBaseline.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
     renderPane(null);
-    await screen.findByText("No snapshots yet");
+    await screen.findByText("No baselines yet");
 
-    await userEvent.click(screen.getByRole("button", { name: /Capture snapshot/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
 
-    await waitFor(() => expect(api.captureHostSnapshot).toHaveBeenCalled());
-    expect(api.captureHostSnapshot.mock.calls[0][0].sections).toBeNull();
+    await waitFor(() => expect(api.captureHostBaseline).toHaveBeenCalled());
+    expect(api.captureHostBaseline.mock.calls[0][0].sections).toBeNull();
   });
 
   it("says how far each row moved from the capture below it", async () => {
-    api.listHostSnapshots.mockResolvedValue([
+    api.listHostBaselines.mockResolvedValue([
       summary("later", "2026-09-02T10:00:00Z", "after upgrade", { changesSincePrevious: 12 }),
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
     ]);
-    api.getHostSnapshot.mockResolvedValue(detail);
+    api.getHostBaseline.mockResolvedValue(detail);
     renderPane("later");
 
     expect(await screen.findByText("12 changed")).toBeTruthy();
@@ -423,23 +423,23 @@ describe("snapshots pane", () => {
   });
 
   it("deletes the selected capture", async () => {
-    api.listHostSnapshots.mockResolvedValue([
+    api.listHostBaselines.mockResolvedValue([
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
     ]);
-    api.getHostSnapshot.mockResolvedValue(detail);
-    api.deleteHostSnapshot.mockResolvedValue(undefined);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.deleteHostBaseline.mockResolvedValue(undefined);
     renderPane();
     await screen.findAllByText("after upgrade");
-    await userEvent.click(screen.getByRole("button", { name: "Delete snapshot" }));
-    await waitFor(() => expect(api.deleteHostSnapshot).toHaveBeenCalledWith("later"));
+    await userEvent.click(screen.getByRole("button", { name: "Delete baseline" }));
+    await waitFor(() => expect(api.deleteHostBaseline).toHaveBeenCalledWith("later"));
   });
 
-  it("surfaces a capture failure without inventing a snapshot", async () => {
-    api.listHostSnapshots.mockResolvedValue([]);
-    api.captureHostSnapshot.mockRejectedValue(new Error("Capture stopped before it finished"));
+  it("surfaces a capture failure without inventing a baseline", async () => {
+    api.listHostBaselines.mockResolvedValue([]);
+    api.captureHostBaseline.mockRejectedValue(new Error("Capture stopped before it finished"));
     renderPane(null);
-    await screen.findByText("No snapshots yet");
-    await userEvent.click(screen.getByRole("button", { name: /Capture snapshot/ }));
+    await screen.findByText("No baselines yet");
+    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
     expect(await screen.findByText("Capture stopped before it finished")).toBeTruthy();
   });
 });

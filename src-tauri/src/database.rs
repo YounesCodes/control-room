@@ -6,13 +6,13 @@ use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::{
+    baselines,
     models::{
-        AppSettings, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput, HostCapabilities,
-        HostSnapshot, HostSnapshotSummary, LOG_TAIL_OPTIONS, PersistedTerminalLayout,
-        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
-        ScratchpadNoteInput, SnapshotTrace,
+        AppSettings, BaselineTrace, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput,
+        HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS,
+        PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
+        ScratchpadNote, ScratchpadNoteInput,
     },
-    snapshots,
 };
 
 const LATEST_SCHEMA_VERSION: i64 = 9;
@@ -25,9 +25,9 @@ const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
-/// Snapshots are kept manually. This cap only stops an unbounded local file:
+/// Baselines are kept manually. This cap only stops an unbounded local file:
 /// when it is reached, the oldest capture for that connection is dropped.
-const MAX_SNAPSHOTS_PER_CONNECTION: usize = 20;
+const MAX_BASELINES_PER_CONNECTION: usize = 20;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -596,66 +596,66 @@ impl Database {
 
     /// Stores one capture. The payload holds normalized facts only. No command
     /// output, log text, credential, or environment value reaches this table.
-    pub fn save_host_snapshot(
+    pub fn save_host_baseline(
         &self,
-        snapshot: &HostSnapshot,
-    ) -> Result<HostSnapshotSummary, String> {
-        let payload = serde_json::to_string(snapshot).map_err(|error| error.to_string())?;
+        baseline: &HostBaseline,
+    ) -> Result<HostBaselineSummary, String> {
+        let payload = serde_json::to_string(baseline).map_err(|error| error.to_string())?;
         let mut connection = self.connection.lock();
         let transaction = connection
             .transaction()
             .map_err(|error| error.to_string())?;
         transaction
             .execute(
-                "INSERT INTO host_snapshots (id, connection_id, label, schema_version, captured_at, payload, pinned) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO host_baselines (id, connection_id, label, schema_version, captured_at, payload, pinned) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
-                    snapshot.id,
-                    snapshot.connection_id,
-                    snapshot.label,
-                    snapshot.schema_version,
-                    snapshot.captured_at,
+                    baseline.id,
+                    baseline.connection_id,
+                    baseline.label,
+                    baseline.schema_version,
+                    baseline.captured_at,
                     payload,
-                    snapshot.pinned
+                    baseline.pinned
                 ],
             )
             .map_err(|error| error.to_string())?;
         transaction
             .execute(
-                "DELETE FROM host_snapshots WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT id FROM host_snapshots WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
-                params![snapshot.connection_id, MAX_SNAPSHOTS_PER_CONNECTION as i64],
+                "DELETE FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT id FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
+                params![baseline.connection_id, MAX_BASELINES_PER_CONNECTION as i64],
             )
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
-        Ok(snapshots::summarize(snapshot))
+        Ok(baselines::summarize(baseline))
     }
 
-    pub fn list_host_snapshots(
+    pub fn list_host_baselines(
         &self,
         connection_id: &str,
-    ) -> Result<Vec<HostSnapshotSummary>, String> {
-        let stored = self.read_host_snapshots(connection_id)?;
+    ) -> Result<Vec<HostBaselineSummary>, String> {
+        let stored = self.read_host_baselines(connection_id)?;
         // Each row reports how far it moved from the capture below it, so the
         // list itself says where something happened instead of making the user
         // diff pairs until they find it.
-        let mut summaries: Vec<HostSnapshotSummary> =
-            stored.iter().map(snapshots::summarize).collect();
+        let mut summaries: Vec<HostBaselineSummary> =
+            stored.iter().map(baselines::summarize).collect();
         for index in 0..summaries.len() {
             let Some(previous) = stored.get(index + 1) else {
                 continue;
             };
-            let comparison = snapshots::compare(previous, &stored[index]);
-            summaries[index].changes_since_previous = snapshots::total_changes(&comparison);
+            let comparison = baselines::compare(previous, &stored[index]);
+            summaries[index].changes_since_previous = baselines::total_changes(&comparison);
         }
         Ok(summaries)
     }
 
     /// Every stored capture of one connection, newest first, skipping payloads
     /// a newer Control Room wrote rather than guessing at their shape.
-    fn read_host_snapshots(&self, connection_id: &str) -> Result<Vec<HostSnapshot>, String> {
+    fn read_host_baselines(&self, connection_id: &str) -> Result<Vec<HostBaseline>, String> {
         let connection = self.connection.lock();
         let mut statement = connection
             .prepare(
-                "SELECT payload, pinned FROM host_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC",
+                "SELECT payload, pinned FROM host_baselines WHERE connection_id = ?1 ORDER BY captured_at DESC, id DESC",
             )
             .map_err(|error| error.to_string())?;
         let rows = statement
@@ -663,97 +663,97 @@ impl Database {
                 Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
             })
             .map_err(|error| error.to_string())?;
-        let mut snapshots = Vec::new();
+        let mut baselines = Vec::new();
         for row in rows {
             let (payload, pinned) = row.map_err(|error| error.to_string())?;
-            if let Ok(mut snapshot) = serde_json::from_str::<HostSnapshot>(&payload) {
-                snapshot.pinned = pinned;
-                snapshots.push(snapshot);
+            if let Ok(mut baseline) = serde_json::from_str::<HostBaseline>(&payload) {
+                baseline.pinned = pinned;
+                baselines.push(baseline);
             }
         }
-        Ok(snapshots)
+        Ok(baselines)
     }
 
-    pub fn trace_host_snapshot_entry(
+    pub fn trace_host_baseline_entry(
         &self,
         connection_id: &str,
         kind: &str,
         identity: &str,
-    ) -> Result<SnapshotTrace, String> {
-        let stored = self.read_host_snapshots(connection_id)?;
+    ) -> Result<BaselineTrace, String> {
+        let stored = self.read_host_baselines(connection_id)?;
         if stored.is_empty() {
-            return Err("This connection has no saved snapshots".into());
+            return Err("This connection has no saved baselines".into());
         }
-        Ok(snapshots::trace_entry(&stored, kind, identity))
+        Ok(baselines::trace_entry(&stored, kind, identity))
     }
 
-    pub fn set_host_snapshot_pinned(
+    pub fn set_host_baseline_pinned(
         &self,
         id: &str,
         pinned: bool,
-    ) -> Result<HostSnapshotSummary, String> {
-        let mut snapshot = self.get_host_snapshot(id)?;
-        snapshot.pinned = pinned;
-        let payload = serde_json::to_string(&snapshot).map_err(|error| error.to_string())?;
+    ) -> Result<HostBaselineSummary, String> {
+        let mut baseline = self.get_host_baseline(id)?;
+        baseline.pinned = pinned;
+        let payload = serde_json::to_string(&baseline).map_err(|error| error.to_string())?;
         let changed = self
             .connection
             .lock()
             .execute(
-                "UPDATE host_snapshots SET pinned = ?2, payload = ?3 WHERE id = ?1",
+                "UPDATE host_baselines SET pinned = ?2, payload = ?3 WHERE id = ?1",
                 params![id, pinned, payload],
             )
             .map_err(|error| error.to_string())?;
         if changed == 0 {
-            return Err("That snapshot no longer exists".into());
+            return Err("That baseline no longer exists".into());
         }
-        Ok(snapshots::summarize(&snapshot))
+        Ok(baselines::summarize(&baseline))
     }
 
-    pub fn get_host_snapshot(&self, id: &str) -> Result<HostSnapshot, String> {
+    pub fn get_host_baseline(&self, id: &str) -> Result<HostBaseline, String> {
         let payload: Option<(String, bool)> = self
             .connection
             .lock()
             .query_row(
-                "SELECT payload, pinned FROM host_snapshots WHERE id = ?1",
+                "SELECT payload, pinned FROM host_baselines WHERE id = ?1",
                 [id],
                 |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
             )
             .optional()
             .map_err(|error| error.to_string())?;
         let (payload, pinned) =
-            payload.ok_or_else(|| "That snapshot no longer exists".to_string())?;
-        let mut snapshot: HostSnapshot = serde_json::from_str(&payload)
-            .map_err(|_| "That snapshot was written by a newer version of Control Room")?;
-        snapshot.pinned = pinned;
-        Ok(snapshot)
+            payload.ok_or_else(|| "That baseline no longer exists".to_string())?;
+        let mut baseline: HostBaseline = serde_json::from_str(&payload)
+            .map_err(|_| "That baseline was written by a newer version of Control Room")?;
+        baseline.pinned = pinned;
+        Ok(baseline)
     }
 
-    pub fn rename_host_snapshot(
+    pub fn rename_host_baseline(
         &self,
         id: &str,
         label: Option<String>,
-    ) -> Result<HostSnapshotSummary, String> {
-        let mut snapshot = self.get_host_snapshot(id)?;
-        snapshot.label = snapshots::normalize_label(label);
-        let payload = serde_json::to_string(&snapshot).map_err(|error| error.to_string())?;
+    ) -> Result<HostBaselineSummary, String> {
+        let mut baseline = self.get_host_baseline(id)?;
+        baseline.label = baselines::normalize_label(label);
+        let payload = serde_json::to_string(&baseline).map_err(|error| error.to_string())?;
         self.connection
             .lock()
             .execute(
-                "UPDATE host_snapshots SET label = ?2, payload = ?3 WHERE id = ?1",
-                params![id, snapshot.label, payload],
+                "UPDATE host_baselines SET label = ?2, payload = ?3 WHERE id = ?1",
+                params![id, baseline.label, payload],
             )
             .map_err(|error| error.to_string())?;
-        Ok(snapshots::summarize(&snapshot))
+        Ok(baselines::summarize(&baseline))
     }
 
-    pub fn delete_host_snapshot(&self, id: &str) -> Result<(), String> {
+    pub fn delete_host_baseline(&self, id: &str) -> Result<(), String> {
         let removed = self
             .connection
             .lock()
-            .execute("DELETE FROM host_snapshots WHERE id = ?1", [id])
+            .execute("DELETE FROM host_baselines WHERE id = ?1", [id])
             .map_err(|error| error.to_string())?;
         if removed == 0 {
-            return Err("That snapshot no longer exists".into());
+            return Err("That baseline no longer exists".into());
         }
         Ok(())
     }
@@ -1001,7 +1001,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             "ports",
             "docker",
             "logs",
-            "snapshots",
+            "baselines",
             "history",
             "scratchpad",
         ]
@@ -1226,7 +1226,7 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 CREATE INDEX idx_scratchpad_notes_connection
                 ON scratchpad_notes(connection_id);
 
-                CREATE TABLE host_snapshots (
+                CREATE TABLE host_baselines (
                     id TEXT PRIMARY KEY,
                     connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
                     label TEXT,
@@ -1235,8 +1235,8 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                     payload TEXT NOT NULL
                 );
 
-                CREATE INDEX idx_host_snapshots_connection
-                ON host_snapshots(connection_id, captured_at DESC);
+                CREATE INDEX idx_host_baselines_connection
+                ON host_baselines(connection_id, captured_at DESC);
 
                 PRAGMA user_version = 4;
                 "#,
@@ -1315,7 +1315,7 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
         transaction
             .execute_batch(
                 r#"
-                CREATE TABLE IF NOT EXISTS host_snapshots (
+                CREATE TABLE IF NOT EXISTS host_baselines (
                     id TEXT PRIMARY KEY,
                     connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
                     label TEXT,
@@ -1324,8 +1324,8 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                     payload TEXT NOT NULL
                 );
 
-                CREATE INDEX IF NOT EXISTS idx_host_snapshots_connection
-                ON host_snapshots(connection_id, captured_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_host_baselines_connection
+                ON host_baselines(connection_id, captured_at DESC);
 
                 PRAGMA user_version = 8;
                 "#,
@@ -1340,7 +1340,7 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
         transaction
             .execute_batch(
                 r#"
-                ALTER TABLE host_snapshots
+                ALTER TABLE host_baselines
                 ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
 
                 PRAGMA user_version = 9;
@@ -1621,13 +1621,13 @@ mod tests {
         }
     }
 
-    fn snapshot_for(connection_id: &str, id: &str, captured_at: &str) -> HostSnapshot {
-        HostSnapshot {
+    fn baseline_for(connection_id: &str, id: &str, captured_at: &str) -> HostBaseline {
+        HostBaseline {
             pinned: false,
             id: id.into(),
             connection_id: connection_id.into(),
             label: None,
-            schema_version: crate::models::SNAPSHOT_SCHEMA_VERSION,
+            schema_version: crate::models::BASELINE_SCHEMA_VERSION,
             captured_at: captured_at.into(),
             identity: crate::models::HostIdentity {
                 hostname: Some("debian-laptop".into()),
@@ -1637,16 +1637,16 @@ mod tests {
                 kernel: Some("6.1.0".into()),
                 architecture: Some("x86_64".into()),
             },
-            sections: vec![crate::models::SnapshotSection {
+            sections: vec![crate::models::BaselineSection {
                 schema_version: 1,
                 kind: "systemdUnits".into(),
                 status: "collected".into(),
                 collected_at: captured_at.into(),
                 message: None,
-                entries: vec![crate::models::SnapshotEntry {
+                entries: vec![crate::models::BaselineEntry {
                     identity: "ssh.service".into(),
                     label: "ssh.service".into(),
-                    facts: vec![crate::models::SnapshotFact {
+                    facts: vec![crate::models::BaselineFact {
                         name: "activeState".into(),
                         value: "active".into(),
                     }],
@@ -1656,33 +1656,33 @@ mod tests {
     }
 
     #[test]
-    fn snapshots_round_trip_rename_and_delete() {
+    fn baselines_round_trip_rename_and_delete() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
-        let snapshot = snapshot_for(&saved.id, "snapshot-a", "2026-09-01T10:00:00Z");
-        let summary = database.save_host_snapshot(&snapshot).unwrap();
+        let baseline = baseline_for(&saved.id, "baseline-a", "2026-09-01T10:00:00Z");
+        let summary = database.save_host_baseline(&baseline).unwrap();
         assert_eq!(summary.sections[0].entry_count, 1);
-        assert_eq!(database.list_host_snapshots(&saved.id).unwrap().len(), 1);
-        assert_eq!(database.get_host_snapshot("snapshot-a").unwrap(), snapshot);
+        assert_eq!(database.list_host_baselines(&saved.id).unwrap().len(), 1);
+        assert_eq!(database.get_host_baseline("baseline-a").unwrap(), baseline);
 
         let renamed = database
-            .rename_host_snapshot("snapshot-a", Some("  before upgrade  ".into()))
+            .rename_host_baseline("baseline-a", Some("  before upgrade  ".into()))
             .unwrap();
         assert_eq!(renamed.label.as_deref(), Some("before upgrade"));
         assert_eq!(
             database
-                .get_host_snapshot("snapshot-a")
+                .get_host_baseline("baseline-a")
                 .unwrap()
                 .label
                 .as_deref(),
             Some("before upgrade")
         );
 
-        database.delete_host_snapshot("snapshot-a").unwrap();
-        assert!(database.list_host_snapshots(&saved.id).unwrap().is_empty());
-        assert!(database.get_host_snapshot("snapshot-a").is_err());
-        assert!(database.delete_host_snapshot("snapshot-a").is_err());
+        database.delete_host_baseline("baseline-a").unwrap();
+        assert!(database.list_host_baselines(&saved.id).unwrap().is_empty());
+        assert!(database.get_host_baseline("baseline-a").is_err());
+        assert!(database.delete_host_baseline("baseline-a").is_err());
     }
 
     #[test]
@@ -1691,33 +1691,33 @@ mod tests {
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
         database
-            .save_host_snapshot(&snapshot_for(&saved.id, "baseline", "2026-09-01T00:00:00Z"))
+            .save_host_baseline(&baseline_for(&saved.id, "baseline", "2026-09-01T00:00:00Z"))
             .unwrap();
-        let pinned = database.set_host_snapshot_pinned("baseline", true).unwrap();
+        let pinned = database.set_host_baseline_pinned("baseline", true).unwrap();
         assert!(pinned.pinned);
 
-        for index in 1..MAX_SNAPSHOTS_PER_CONNECTION + 3 {
+        for index in 1..MAX_BASELINES_PER_CONNECTION + 3 {
             database
-                .save_host_snapshot(&snapshot_for(
+                .save_host_baseline(&baseline_for(
                     &saved.id,
-                    &format!("snapshot-{index:02}"),
+                    &format!("baseline-{index:02}"),
                     &format!("2026-09-01T{index:02}:00:00Z"),
                 ))
                 .unwrap();
         }
 
-        let stored = database.list_host_snapshots(&saved.id).unwrap();
-        assert_eq!(stored.len(), MAX_SNAPSHOTS_PER_CONNECTION + 1);
-        assert!(database.get_host_snapshot("baseline").unwrap().pinned);
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+        assert_eq!(stored.len(), MAX_BASELINES_PER_CONNECTION + 1);
+        assert!(database.get_host_baseline("baseline").unwrap().pinned);
         assert!(stored.iter().any(|summary| summary.id == "baseline"));
 
         database
-            .set_host_snapshot_pinned("baseline", false)
+            .set_host_baseline_pinned("baseline", false)
             .unwrap();
         database
-            .save_host_snapshot(&snapshot_for(&saved.id, "one-more", "2026-09-02T00:00:00Z"))
+            .save_host_baseline(&baseline_for(&saved.id, "one-more", "2026-09-02T00:00:00Z"))
             .unwrap();
-        assert!(database.get_host_snapshot("baseline").is_err());
+        assert!(database.get_host_baseline("baseline").is_err());
     }
 
     #[test]
@@ -1726,13 +1726,13 @@ mod tests {
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
         database
-            .save_host_snapshot(&snapshot_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .save_host_baseline(&baseline_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
             .unwrap();
-        let mut second = snapshot_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        let mut second = baseline_for(&saved.id, "second", "2026-09-02T10:00:00Z");
         second.sections[0].entries[0].facts[0].value = "failed".into();
-        database.save_host_snapshot(&second).unwrap();
+        database.save_host_baseline(&second).unwrap();
 
-        let stored = database.list_host_snapshots(&saved.id).unwrap();
+        let stored = database.list_host_baselines(&saved.id).unwrap();
 
         assert_eq!(stored[0].id, "second");
         assert_eq!(stored[0].changes_since_previous, Some(1));
@@ -1745,14 +1745,14 @@ mod tests {
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
         database
-            .save_host_snapshot(&snapshot_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .save_host_baseline(&baseline_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
             .unwrap();
-        let mut second = snapshot_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        let mut second = baseline_for(&saved.id, "second", "2026-09-02T10:00:00Z");
         second.sections[0].entries[0].facts[0].value = "failed".into();
-        database.save_host_snapshot(&second).unwrap();
+        database.save_host_baseline(&second).unwrap();
 
         let trace = database
-            .trace_host_snapshot_entry(&saved.id, "systemdUnits", "ssh.service")
+            .trace_host_baseline_entry(&saved.id, "systemdUnits", "ssh.service")
             .unwrap();
 
         assert_eq!(trace.points.len(), 2);
@@ -1761,44 +1761,44 @@ mod tests {
     }
 
     #[test]
-    fn deleting_a_connection_removes_its_snapshots() {
+    fn deleting_a_connection_removes_its_baselines() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
         database
-            .save_host_snapshot(&snapshot_for(
+            .save_host_baseline(&baseline_for(
                 &saved.id,
-                "snapshot-a",
+                "baseline-a",
                 "2026-09-01T10:00:00Z",
             ))
             .unwrap();
         database.delete_connection(&saved.id).unwrap();
-        assert!(database.get_host_snapshot("snapshot-a").is_err());
+        assert!(database.get_host_baseline("baseline-a").is_err());
     }
 
     #[test]
-    fn snapshot_retention_drops_the_oldest_capture() {
+    fn baseline_retention_drops_the_oldest_capture() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
-        for index in 0..MAX_SNAPSHOTS_PER_CONNECTION + 2 {
+        for index in 0..MAX_BASELINES_PER_CONNECTION + 2 {
             database
-                .save_host_snapshot(&snapshot_for(
+                .save_host_baseline(&baseline_for(
                     &saved.id,
-                    &format!("snapshot-{index:02}"),
+                    &format!("baseline-{index:02}"),
                     &format!("2026-09-01T{index:02}:00:00Z"),
                 ))
                 .unwrap();
         }
-        let stored = database.list_host_snapshots(&saved.id).unwrap();
-        assert_eq!(stored.len(), MAX_SNAPSHOTS_PER_CONNECTION);
-        assert_eq!(stored[0].id, "snapshot-21");
-        assert!(database.get_host_snapshot("snapshot-00").is_err());
-        assert!(database.get_host_snapshot("snapshot-01").is_err());
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+        assert_eq!(stored.len(), MAX_BASELINES_PER_CONNECTION);
+        assert_eq!(stored[0].id, "baseline-21");
+        assert!(database.get_host_baseline("baseline-00").is_err());
+        assert!(database.get_host_baseline("baseline-01").is_err());
     }
 
     #[test]
-    fn a_snapshot_written_by_a_newer_schema_is_reported_not_guessed() {
+    fn a_baseline_written_by_a_newer_schema_is_reported_not_guessed() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
@@ -1806,16 +1806,16 @@ mod tests {
             .connection
             .lock()
             .execute(
-                "INSERT INTO host_snapshots (id, connection_id, label, schema_version, captured_at, payload) VALUES ('future', ?1, NULL, 99, '2026-09-01T10:00:00Z', ?2)",
+                "INSERT INTO host_baselines (id, connection_id, label, schema_version, captured_at, payload) VALUES ('future', ?1, NULL, 99, '2026-09-01T10:00:00Z', ?2)",
                 params![saved.id, "{\"unknown\":true}"],
             )
             .unwrap();
-        assert!(database.list_host_snapshots(&saved.id).unwrap().is_empty());
-        assert!(database.get_host_snapshot("future").is_err());
+        assert!(database.list_host_baselines(&saved.id).unwrap().is_empty());
+        assert!(database.get_host_baseline("future").is_err());
     }
 
     #[test]
-    fn migration_adds_the_snapshot_table_to_an_older_database() {
+    fn migration_adds_the_baseline_table_to_an_older_database() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("control-room.db");
         {
@@ -1849,27 +1849,27 @@ mod tests {
             .unwrap();
         assert_eq!(version, LATEST_SCHEMA_VERSION);
         database
-            .save_host_snapshot(&snapshot_for(
+            .save_host_baseline(&baseline_for(
                 "connection-a",
-                "snapshot-a",
+                "baseline-a",
                 "2026-09-01T10:00:00Z",
             ))
             .unwrap();
         assert_eq!(
-            database.list_host_snapshots("connection-a").unwrap().len(),
+            database.list_host_baselines("connection-a").unwrap().len(),
             1
         );
     }
 
     #[test]
-    fn stored_snapshots_hold_normalized_facts_only() {
+    fn stored_baselines_hold_normalized_facts_only() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
         database
-            .save_host_snapshot(&snapshot_for(
+            .save_host_baseline(&baseline_for(
                 &saved.id,
-                "snapshot-a",
+                "baseline-a",
                 "2026-09-01T10:00:00Z",
             ))
             .unwrap();
@@ -1877,7 +1877,7 @@ mod tests {
             .connection
             .lock()
             .query_row(
-                "SELECT payload FROM host_snapshots WHERE id = 'snapshot-a'",
+                "SELECT payload FROM host_baselines WHERE id = 'baseline-a'",
                 [],
                 |row| row.get(0),
             )

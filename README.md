@@ -10,7 +10,7 @@ It is for people who manage Linux machines from Windows and want host context cl
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Snapshots, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Logs, Baselines, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
 
 ## Why Control Room?
 
@@ -28,7 +28,7 @@ Saved Connection
          +-- listening TCP and UDP ports
          +-- Docker containers
          +-- journald and Docker logs
-         +-- host snapshots and comparisons
+         +-- host baselines and comparisons
          +-- Enhanced History, when enabled
 ```
 
@@ -69,12 +69,12 @@ The distinction matters. Control Room helps you inspect and move between related
 
 All structured inspection is read-only. Control Room does not scan networks, test reachability, or start, stop, restart, reset, create, or remove units or containers.
 
-### Host snapshots
+### Host baselines
 
 Capture a timestamped record of the current host facts, systemd units, containers, listening
 sockets, and filesystems, then compare two captures to see what changed.
 
-Capture runs only when you select Capture snapshot. There is no timer, no agent, and no background
+Capture runs only when you select Capture baseline. There is no timer, no agent, and no background
 collection. Tick the sections you want before you start. Progress is reported one section at a
 time, and Stop ends the capture once the section in flight returns, keeping everything read up to
 that point.
@@ -104,11 +104,11 @@ puts the comparison on the clipboard as Markdown, and Markdown or JSON writes it
 comparison says plainly when two captures came from different machines, when the live host answers
 as a different machine than the capture came from, or when identity could not be read at all.
 
-Snapshots are stored locally as normalized facts only. Name, pin, compare, and delete them from the
-Snapshots view. Each row says how many entries differ from the capture below it. Control Room keeps
+Baselines are stored locally as normalized facts only. Name, pin, compare, and delete them from the
+Baselines view. Each row says how many entries differ from the capture below it. Control Room keeps
 the 20 most recent captures per Saved Connection and drops the oldest beyond that. Pinning a
 capture keeps it past that limit and stops it using one of the 20 slots, so a named baseline is
-never evicted by routine captures. Deleting a Saved Connection deletes its snapshots.
+never evicted by routine captures. Deleting a Saved Connection deletes its baselines.
 
 ### Logs
 
@@ -192,7 +192,7 @@ Control Room keeps its local state in SQLite. It stores:
   encrypted secret storage.
 - Cached host capability data such as the operating system and detected service or container counts.
 - Enhanced History entries only when you enable capture. Each entry can include the command, working directory, timestamps, and exit code.
-- Host snapshots you capture: normalized section facts, per-section collection time and status,
+- Host baselines you capture: normalized section facts, per-section collection time and status,
   your label, the schema version, and host identity evidence including a hostname and a machine
   fingerprint the host hashes itself.
 

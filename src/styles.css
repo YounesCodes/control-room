@@ -1272,21 +1272,21 @@ code,
    ========================================================================== */
 
 /* ==========================================================================
-   Host snapshots
+   Host baselines
    ========================================================================== */
 
-.snapshot-capture {
+.baseline-capture {
   display: flex;
   padding: 0 16px 10px;
   gap: 8px;
 }
 
-.snapshot-capture input {
+.baseline-capture input {
   min-width: 0;
   flex: 1;
 }
 
-.snapshot-progress {
+.baseline-progress {
   display: flex;
   margin: 0 16px 10px;
   flex-direction: column;
@@ -1298,11 +1298,11 @@ code,
   list-style: none;
 }
 
-.snapshot-live-progress {
+.baseline-live-progress {
   margin: 0 0 18px;
 }
 
-.snapshot-progress li {
+.baseline-progress li {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1310,14 +1310,14 @@ code,
   gap: 8px;
 }
 
-.snapshot-progress-count {
+.baseline-progress-count {
   color: var(--text-faint);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.snapshot-status {
+.baseline-status {
   padding: 1px 6px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -1328,39 +1328,44 @@ code,
   white-space: nowrap;
 }
 
-.snapshot-status-collected {
+.baseline-status-collected {
   border-color: var(--success);
   color: var(--success);
 }
 
-.snapshot-status-partial,
-.snapshot-status-unsupported {
+.baseline-status-partial,
+.baseline-status-unsupported {
   border-color: var(--warning);
   color: var(--warning);
 }
 
-.snapshot-status-unavailable {
+.baseline-status-unavailable {
   border-color: var(--failure);
   color: var(--failure);
 }
 
 /* A section nobody asked for is not a failure, so it stays neutral rather than
    borrowing the warning or failure hue. */
-.snapshot-status-skipped {
+.baseline-status-skipped {
   border-style: dashed;
   color: var(--text-faint);
 }
 
-.snapshot-section-choice {
+/* Proximity does the grouping here. The gap inside one option has to read as
+   clearly smaller than the gap between options, or each label drifts toward
+   the checkbox to its right. 7px inside against 18px between.
+   The padding-top is what separates the rendered legend from the row; a
+   margin on the legend itself sits outside the fieldset's content box. */
+.baseline-section-choice {
   display: flex;
   flex-wrap: wrap;
-  margin: 0 16px 10px;
-  padding: 0;
+  margin: 0 16px 12px;
+  padding: 9px 0 0;
   border: 0;
-  gap: 4px 12px;
+  gap: 9px 18px;
 }
 
-.snapshot-section-choice legend {
+.baseline-section-choice legend {
   padding: 0;
   color: var(--text-faint);
   font-size: 10px;
@@ -1368,19 +1373,20 @@ code,
   text-transform: uppercase;
 }
 
-.snapshot-section-choice label {
+.baseline-section-choice label {
   display: flex;
+  min-height: 22px;
   align-items: center;
   color: var(--text-muted);
   font-size: 11.5px;
-  gap: 5px;
+  gap: 7px;
 }
 
-.snapshot-section-choice input {
+.baseline-section-choice input {
   margin: 0;
 }
 
-.snapshot-section-toggle {
+.baseline-section-toggle {
   display: flex;
   min-width: 0;
   flex: 1;
@@ -1393,17 +1399,17 @@ code,
   text-align: left;
 }
 
-.snapshot-section-toggle svg {
+.baseline-section-toggle svg {
   flex-shrink: 0;
   color: var(--text-faint);
 }
 
-.snapshot-entry-filter {
+.baseline-entry-filter {
   width: 100%;
   margin-top: 8px;
 }
 
-.snapshot-entry-list {
+.baseline-entry-list {
   display: flex;
   flex-direction: column;
   margin: 8px 0 0;
@@ -1412,70 +1418,70 @@ code,
   list-style: none;
 }
 
-.snapshot-entry-list > li {
+.baseline-entry-list > li {
   border-top: 1px solid var(--border-subtle);
   padding-top: 8px;
 }
 
-.snapshot-entry-head {
+.baseline-entry-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.snapshot-entry-head code {
+.baseline-entry-head code {
   overflow: hidden;
   font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.snapshot-entry-facts {
+.baseline-entry-facts {
   display: flex;
   flex-wrap: wrap;
   margin: 5px 0 0;
   gap: 3px 14px;
 }
 
-.snapshot-entry-facts > div {
+.baseline-entry-facts > div {
   display: flex;
   align-items: baseline;
   gap: 5px;
 }
 
-.snapshot-entry-facts dt {
+.baseline-entry-facts dt {
   font-size: 10.5px;
 }
 
-.snapshot-entry-facts dd {
+.baseline-entry-facts dd {
   font-size: 11px;
 }
 
 /* The trace can be wider than the panel. It scrolls inside itself so the page
    never scrolls sideways. */
-.snapshot-trace {
+.baseline-trace {
   overflow-x: auto;
   margin-top: 8px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
 
-.snapshot-trace table {
+.baseline-trace table {
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
 }
 
-.snapshot-trace th,
-.snapshot-trace td {
+.baseline-trace th,
+.baseline-trace td {
   border-bottom: 1px solid var(--border-subtle);
   padding: 5px 8px;
   text-align: left;
   white-space: nowrap;
 }
 
-.snapshot-trace thead th {
+.baseline-trace thead th {
   color: var(--text-faint);
   font-size: 10px;
   font-weight: 500;
@@ -1483,42 +1489,42 @@ code,
   text-transform: uppercase;
 }
 
-.snapshot-trace tbody th {
+.baseline-trace tbody th {
   color: var(--text-muted);
   font-weight: 500;
 }
 
-.snapshot-trace tr:last-child th,
-.snapshot-trace tr:last-child td {
+.baseline-trace tr:last-child th,
+.baseline-trace tr:last-child td {
   border-bottom: 0;
 }
 
-.snapshot-trace-absent {
+.baseline-trace-absent {
   color: var(--text-faint);
   font-style: italic;
 }
 
 /* Scoped to this list: making every dense row a flex container would break the
    ellipsis those rows rely on. */
-.snapshot-row-title {
+.baseline-row-title {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.snapshot-row-title svg {
+.baseline-row-title svg {
   flex-shrink: 0;
   color: var(--text-faint);
 }
 
-.snapshot-comparison-tools {
+.baseline-comparison-tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.snapshot-volatile-toggle {
+.baseline-volatile-toggle {
   display: flex;
   margin-right: auto;
   align-items: center;
@@ -1527,47 +1533,47 @@ code,
   gap: 6px;
 }
 
-.snapshot-volatile-toggle input {
+.baseline-volatile-toggle input {
   margin: 0;
 }
 
-.snapshot-detail-header {
+.baseline-detail-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.snapshot-detail-header > div:first-child {
+.baseline-detail-header > div:first-child {
   min-width: 0;
 }
 
-.snapshot-detail-actions {
+.baseline-detail-actions {
   display: flex;
   flex-shrink: 0;
   gap: 4px;
 }
 
-.snapshot-rename {
+.baseline-rename {
   display: flex;
   min-width: 0;
   flex: 1;
   gap: 6px;
 }
 
-.snapshot-rename input {
+.baseline-rename input {
   min-width: 0;
   flex: 1;
 }
 
-.snapshot-compare-row {
+.baseline-compare-row {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 16px 0 18px;
 }
 
-.snapshot-compare-field {
+.baseline-compare-field {
   display: flex;
   min-width: 0;
   flex: 1;
@@ -1575,55 +1581,55 @@ code,
   gap: 10px;
 }
 
-.snapshot-compare-field select {
+.baseline-compare-field select {
   min-width: 0;
   flex: 1;
 }
 
-.snapshot-sections {
+.baseline-sections {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.snapshot-section {
+.baseline-section {
   padding: 10px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
 }
 
-.snapshot-section header {
+.baseline-section header {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.snapshot-section h3 {
+.baseline-section h3 {
   margin: 0;
   flex: 1;
   font-size: 12.5px;
 }
 
-.snapshot-section-count {
+.baseline-section-count {
   color: var(--text-faint);
   font-size: 11px;
 }
 
-.snapshot-comparison-summary {
+.baseline-comparison-summary {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
 }
 
-.snapshot-comparison-note {
+.baseline-comparison-note {
   margin: -8px 0 0;
   color: var(--text-faint);
   font-size: 11.5px;
 }
 
-.snapshot-change-list,
-.snapshot-fact-list {
+.baseline-change-list,
+.baseline-fact-list {
   display: flex;
   margin: 8px 0 0;
   flex-direction: column;
@@ -1632,18 +1638,18 @@ code,
   list-style: none;
 }
 
-.snapshot-change-list > li {
+.baseline-change-list > li {
   display: flex;
   align-items: baseline;
   font-size: 11.5px;
   gap: 6px;
 }
 
-.snapshot-fact-list {
+.baseline-fact-list {
   margin: 4px 0 0 12px;
 }
 
-.snapshot-fact-list li {
+.baseline-fact-list li {
   display: flex;
   align-items: baseline;
   color: var(--text-faint);
@@ -1651,7 +1657,7 @@ code,
   gap: 6px;
 }
 
-.snapshot-change-mark {
+.baseline-change-mark {
   flex-shrink: 0;
   color: var(--text-faint);
   font-size: 10px;
@@ -1659,11 +1665,11 @@ code,
   text-transform: uppercase;
 }
 
-.snapshot-change-added {
+.baseline-change-added {
   color: var(--success);
 }
 
-.snapshot-change-removed {
+.baseline-change-removed {
   color: var(--failure);
 }
 

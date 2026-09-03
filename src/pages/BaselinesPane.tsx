@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { Camera, Pencil, Pin, PinOff, RefreshCw, Trash2, X } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
-import { SnapshotComparisonView } from "../components/snapshots/SnapshotComparisonView";
-import { SnapshotSectionList } from "../components/snapshots/SnapshotSectionList";
+import { BaselineComparisonView } from "../components/baselines/BaselineComparisonView";
+import { BaselineSectionList } from "../components/baselines/BaselineSectionList";
 import { api, errorMessage } from "../lib/api";
 import {
   LIVE_COMPARISON_ID,
@@ -11,60 +11,61 @@ import {
   formatCapturedAt,
   orderForComparison,
   sectionLabel,
-  snapshotTitle,
-  sortSnapshots,
+  sectionShortLabel,
+  baselineTitle,
+  sortBaselines,
   statusLabel,
-} from "../lib/host-snapshots";
+} from "../lib/host-baselines";
 import type {
-  HostSnapshot,
-  HostSnapshotSummary,
+  HostBaseline,
+  HostBaselineSummary,
   SavedConnection,
-  SnapshotComparison,
-  SnapshotProgress,
-  SnapshotSectionKind,
+  BaselineComparison,
+  BaselineProgress,
+  BaselineSectionKind,
 } from "../types";
 
-interface SnapshotsPaneProps {
+interface BaselinesPaneProps {
   connection: SavedConnection;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
 // Capture only ever starts from the button below. There is no timer here and no
-// automatic recapture: a snapshot exists because someone asked for one.
-export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPaneProps) {
-  const [snapshots, setSnapshots] = useState<HostSnapshotSummary[]>([]);
+// automatic recapture: a baseline exists because someone asked for one.
+export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPaneProps) {
+  const [baselines, setBaselines] = useState<HostBaselineSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [chosenSections, setChosenSections] = useState<SnapshotSectionKind[]>(SECTION_KINDS);
+  const [chosenSections, setChosenSections] = useState<BaselineSectionKind[]>(SECTION_KINDS);
   const [captureId, setCaptureId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<SnapshotProgress[]>([]);
-  const [detail, setDetail] = useState<HostSnapshot | null>(null);
+  const [progress, setProgress] = useState<BaselineProgress[]>([]);
+  const [detail, setDetail] = useState<HostBaseline | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [compareWithId, setCompareWithId] = useState("");
-  const [comparison, setComparison] = useState<SnapshotComparison | null>(null);
+  const [comparison, setComparison] = useState<BaselineComparison | null>(null);
   const [comparing, setComparing] = useState(false);
   const [liveReadId, setLiveReadId] = useState<string | null>(null);
-  const [liveProgress, setLiveProgress] = useState<SnapshotProgress[]>([]);
+  const [liveProgress, setLiveProgress] = useState<BaselineProgress[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const detailRequestRef = useRef(0);
 
-  const selected = snapshots.find((snapshot) => snapshot.id === selectedId) ?? null;
+  const selected = baselines.find((baseline) => baseline.id === selectedId) ?? null;
   const others = useMemo(
-    () => snapshots.filter((snapshot) => snapshot.id !== selectedId),
-    [snapshots, selectedId],
+    () => baselines.filter((baseline) => baseline.id !== selectedId),
+    [baselines, selectedId],
   );
 
   async function loadList(nextSelection?: string) {
     setListError(null);
     try {
-      const items = sortSnapshots(await api.listHostSnapshots(connection.id));
-      setSnapshots(items);
+      const items = sortBaselines(await api.listHostBaselines(connection.id));
+      setBaselines(items);
       const wanted = nextSelection ?? selectedId;
-      const exists = items.some((snapshot) => snapshot.id === wanted);
+      const exists = items.some((baseline) => baseline.id === wanted);
       onSelect(exists ? (wanted ?? null) : (items[0]?.id ?? null));
     } catch (caught) {
       setListError(errorMessage(caught));
@@ -89,9 +90,9 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     const request = ++detailRequestRef.current;
     setDetailLoading(true);
     void api
-      .getHostSnapshot(selectedId)
-      .then((snapshot) => {
-        if (request === detailRequestRef.current) setDetail(snapshot);
+      .getHostBaseline(selectedId)
+      .then((baseline) => {
+        if (request === detailRequestRef.current) setDetail(baseline);
       })
       .catch((caught: unknown) => {
         if (request === detailRequestRef.current) setActionError(errorMessage(caught));
@@ -107,12 +108,12 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     setCaptureId(id);
     setProgress([]);
     setActionError(null);
-    const channel = new Channel<SnapshotProgress>();
+    const channel = new Channel<BaselineProgress>();
     channel.onmessage = (event) => {
       setProgress((current) => [...current, event]);
     };
     try {
-      const summary = await api.captureHostSnapshot(
+      const summary = await api.captureHostBaseline(
         {
           connectionId: connection.id,
           captureId: id,
@@ -133,13 +134,13 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   async function stopCapture() {
     if (!captureId) return;
     try {
-      await api.cancelHostSnapshot(captureId);
+      await api.cancelHostBaseline(captureId);
     } catch (caught) {
       setActionError(errorMessage(caught));
     }
   }
 
-  function toggleSection(kind: SnapshotSectionKind, wanted: boolean) {
+  function toggleSection(kind: BaselineSectionKind, wanted: boolean) {
     setChosenSections((current) =>
       wanted
         ? SECTION_KINDS.filter((candidate) => candidate === kind || current.includes(candidate))
@@ -155,13 +156,13 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
       await compareWithLive();
       return;
     }
-    const other = snapshots.find((snapshot) => snapshot.id === otherId);
+    const other = baselines.find((baseline) => baseline.id === otherId);
     if (!other) return;
     const { baseId, targetId } = orderForComparison(selected, other);
     setComparing(true);
     setActionError(null);
     try {
-      setComparison(await api.compareHostSnapshots(baseId, targetId));
+      setComparison(await api.compareHostBaselines(baseId, targetId));
     } catch (caught) {
       setActionError(errorMessage(caught));
     } finally {
@@ -179,12 +180,12 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
     setComparison(null);
     setComparing(true);
     setActionError(null);
-    const channel = new Channel<SnapshotProgress>();
+    const channel = new Channel<BaselineProgress>();
     channel.onmessage = (event) => {
       setLiveProgress((current) => [...current, event]);
     };
     try {
-      setComparison(await api.compareHostSnapshotWithLive(selected.id, readId, channel));
+      setComparison(await api.compareHostBaselineWithLive(selected.id, readId, channel));
     } catch (caught) {
       setActionError(errorMessage(caught));
     } finally {
@@ -196,7 +197,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   async function stopLiveRead() {
     if (!liveReadId) return;
     try {
-      await api.cancelHostSnapshot(liveReadId);
+      await api.cancelHostBaseline(liveReadId);
     } catch (caught) {
       setActionError(errorMessage(caught));
     }
@@ -205,7 +206,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   async function saveLabel() {
     if (!selected) return;
     try {
-      await api.renameHostSnapshot(selected.id, renameDraft.trim() || null);
+      await api.renameHostBaseline(selected.id, renameDraft.trim() || null);
       setRenaming(false);
       await loadList(selected.id);
     } catch (caught) {
@@ -216,7 +217,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   async function togglePin() {
     if (!selected) return;
     try {
-      await api.setHostSnapshotPinned(selected.id, !selected.pinned);
+      await api.setHostBaselinePinned(selected.id, !selected.pinned);
       await loadList(selected.id);
     } catch (caught) {
       setActionError(errorMessage(caught));
@@ -226,7 +227,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
   async function remove() {
     if (!selected) return;
     try {
-      await api.deleteHostSnapshot(selected.id);
+      await api.deleteHostBaseline(selected.id);
       await loadList();
     } catch (caught) {
       setActionError(errorMessage(caught));
@@ -235,16 +236,16 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
 
   function moveSelection(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const index = snapshots.findIndex((snapshot) => snapshot.id === selectedId);
-    const target = snapshots[event.key === "ArrowDown" ? index + 1 : index - 1];
+    const index = baselines.findIndex((baseline) => baseline.id === selectedId);
+    const target = baselines[event.key === "ArrowDown" ? index + 1 : index - 1];
     if (!target) return;
     event.preventDefault();
     onSelect(target.id);
-    document.getElementById(`snapshot-row-${target.id}`)?.focus();
+    document.getElementById(`baseline-row-${target.id}`)?.focus();
   }
 
-  if (loading) return <LoadingState label="Reading saved snapshots…" />;
-  if (listError && !snapshots.length) {
+  if (loading) return <LoadingState label="Reading saved baselines…" />;
+  if (listError && !baselines.length) {
     return (
       <ErrorState message={listError} action={<button onClick={() => loadList()}>Retry</button>} />
     );
@@ -255,19 +256,22 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
-            <h2>Snapshots</h2>
-            <p>{snapshots.length} saved for this connection</p>
+            <h2>Baselines</h2>
+            <p>
+              A baseline is what this host looked like at one moment. Comparing two shows what
+              changed. {baselines.length} saved for this connection.
+            </p>
             <small className="unit-scope-note">
               Captured only when you ask. Control Room never collects in the background.
             </small>
           </div>
         </header>
-        <div className="snapshot-capture">
+        <div className="baseline-capture">
           <input
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             placeholder="Label (optional)"
-            aria-label="Snapshot label"
+            aria-label="Baseline label"
             maxLength={80}
             disabled={Boolean(captureId)}
           />
@@ -282,11 +286,11 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
               disabled={!chosenSections.length}
               onClick={() => void capture()}
             >
-              <Camera size={15} /> Capture snapshot
+              <Camera size={15} /> Capture baseline
             </button>
           )}
         </div>
-        <fieldset className="snapshot-section-choice" disabled={Boolean(captureId)}>
+        <fieldset className="baseline-section-choice" disabled={Boolean(captureId)}>
           <legend>Sections</legend>
           {SECTION_KINDS.map((kind) => (
             <label key={kind}>
@@ -295,54 +299,54 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 checked={chosenSections.includes(kind)}
                 onChange={(event) => toggleSection(kind, event.target.checked)}
               />
-              <span>{sectionLabel(kind)}</span>
+              <span>{sectionShortLabel(kind)}</span>
             </label>
           ))}
         </fieldset>
         {captureId && (
-          <ol className="snapshot-progress" aria-live="polite">
+          <ol className="baseline-progress" aria-live="polite">
             {progress.map((event) => (
               <li key={event.kind}>
                 <span>{sectionLabel(event.kind)}</span>
-                <span className={`snapshot-status snapshot-status-${event.status}`}>
+                <span className={`baseline-status baseline-status-${event.status}`}>
                   {statusLabel(event.status)}
                 </span>
               </li>
             ))}
-            <li className="snapshot-progress-count">
+            <li className="baseline-progress-count">
               {progress.length} of {progress[0]?.total ?? 5} sections
             </li>
           </ol>
         )}
         {actionError && <p className="inline-error">{actionError}</p>}
         <div className="dense-list" onKeyDown={moveSelection}>
-          {snapshots.map((snapshot) => (
+          {baselines.map((baseline) => (
             <button
-              className={snapshot.id === selectedId ? "dense-row selected-row" : "dense-row"}
+              className={baseline.id === selectedId ? "dense-row selected-row" : "dense-row"}
               type="button"
-              id={`snapshot-row-${snapshot.id}`}
-              key={snapshot.id}
-              onClick={() => onSelect(snapshot.id)}
+              id={`baseline-row-${baseline.id}`}
+              key={baseline.id}
+              onClick={() => onSelect(baseline.id)}
             >
               <span className="row-main">
-                <strong className="snapshot-row-title">
-                  {snapshot.pinned && <Pin size={11} aria-label="Pinned" />}
-                  {snapshotTitle(snapshot)}
+                <strong className="baseline-row-title">
+                  {baseline.pinned && <Pin size={11} aria-label="Pinned" />}
+                  {baselineTitle(baseline)}
                 </strong>
                 <small>
-                  {formatCapturedAt(snapshot.capturedAt)}
-                  {snapshot.identity.hostname ? ` · ${snapshot.identity.hostname}` : ""}
+                  {formatCapturedAt(baseline.capturedAt)}
+                  {baseline.identity.hostname ? ` · ${baseline.identity.hostname}` : ""}
                 </small>
               </span>
               <span className="row-state">
-                {snapshot.changesSincePrevious === null
-                  ? `${snapshot.sections.filter((section) => section.status === "collected").length}/${snapshot.sections.length} collected`
-                  : `${snapshot.changesSincePrevious} changed`}
+                {baseline.changesSincePrevious === null
+                  ? `${baseline.sections.filter((section) => section.status === "collected").length}/${baseline.sections.length} collected`
+                  : `${baseline.changesSincePrevious} changed`}
               </span>
             </button>
           ))}
-          {!snapshots.length && (
-            <EmptyState title="No snapshots yet">
+          {!baselines.length && (
+            <EmptyState title="No baselines yet">
               Capture one to record the current units, containers, ports, and filesystems.
             </EmptyState>
           )}
@@ -350,16 +354,16 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
       </div>
       <aside className="detail-panel">
         {!selected ? (
-          <EmptyState title="Select a snapshot" />
+          <EmptyState title="Select a baseline" />
         ) : (
           <>
-            <header className="snapshot-detail-header">
+            <header className="baseline-detail-header">
               {renaming ? (
-                <div className="snapshot-rename">
+                <div className="baseline-rename">
                   <input
                     value={renameDraft}
                     onChange={(event) => setRenameDraft(event.target.value)}
-                    aria-label="Snapshot label"
+                    aria-label="Baseline label"
                     maxLength={80}
                   />
                   <button type="button" onClick={() => void saveLabel()}>
@@ -371,18 +375,18 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 </div>
               ) : (
                 <div>
-                  <h2>{snapshotTitle(selected)}</h2>
+                  <h2>{baselineTitle(selected)}</h2>
                   <p>
                     Captured {formatCapturedAt(selected.capturedAt)}
                     {selected.pinned ? " · pinned, kept past the retention limit" : ""}
                   </p>
                 </div>
               )}
-              <div className="snapshot-detail-actions">
+              <div className="baseline-detail-actions">
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label={selected.pinned ? "Unpin snapshot" : "Pin snapshot"}
+                  aria-label={selected.pinned ? "Unpin baseline" : "Pin baseline"}
                   aria-pressed={selected.pinned}
                   title={
                     selected.pinned
@@ -396,7 +400,7 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Rename snapshot"
+                  aria-label="Rename baseline"
                   onClick={() => {
                     setRenameDraft(selected.label ?? "");
                     setRenaming(true);
@@ -407,15 +411,15 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Delete snapshot"
+                  aria-label="Delete baseline"
                   onClick={() => void remove()}
                 >
                   <Trash2 size={15} />
                 </button>
               </div>
             </header>
-            <div className="snapshot-compare-row">
-              <label className="snapshot-compare-field">
+            <div className="baseline-compare-row">
+              <label className="baseline-compare-field">
                 <span>Compare with</span>
                 <select
                   value={compareWithId}
@@ -424,9 +428,9 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 >
                   <option value="">No comparison</option>
                   <option value={LIVE_COMPARISON_ID}>Live machine state</option>
-                  {others.map((snapshot) => (
-                    <option key={snapshot.id} value={snapshot.id}>
-                      {snapshotTitle(snapshot)}
+                  {others.map((baseline) => (
+                    <option key={baseline.id} value={baseline.id}>
+                      {baselineTitle(baseline)}
                     </option>
                   ))}
                 </select>
@@ -451,30 +455,30 @@ export function SnapshotsPane({ connection, selectedId, onSelect }: SnapshotsPan
                 ))}
             </div>
             {liveReadId && (
-              <ol className="snapshot-progress snapshot-live-progress" aria-live="polite">
+              <ol className="baseline-progress baseline-live-progress" aria-live="polite">
                 {liveProgress.map((event) => (
                   <li key={event.kind}>
                     <span>{sectionLabel(event.kind)}</span>
-                    <span className={`snapshot-status snapshot-status-${event.status}`}>
+                    <span className={`baseline-status baseline-status-${event.status}`}>
                       {statusLabel(event.status)}
                     </span>
                   </li>
                 ))}
-                <li className="snapshot-progress-count">
+                <li className="baseline-progress-count">
                   Reading live state · {liveProgress.length} of {liveProgress[0]?.total ?? 5}{" "}
                   sections
                 </li>
               </ol>
             )}
-            {comparing && !liveReadId && <LoadingState label="Comparing snapshots…" />}
+            {comparing && !liveReadId && <LoadingState label="Comparing baselines…" />}
             {!comparing && comparison && (
-              <SnapshotComparisonView comparison={comparison} onError={setActionError} />
+              <BaselineComparisonView comparison={comparison} onError={setActionError} />
             )}
             {!comparing && !comparison && detailLoading && (
-              <LoadingState label="Reading snapshot…" />
+              <LoadingState label="Reading baseline…" />
             )}
             {!comparing && !comparison && !detailLoading && detail && (
-              <SnapshotSectionList connectionId={connection.id} snapshot={detail} />
+              <BaselineSectionList connectionId={connection.id} baseline={detail} />
             )}
           </>
         )}

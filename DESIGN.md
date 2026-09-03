@@ -45,7 +45,7 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, Snapshots, or History as
+terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, Baselines, or History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -107,7 +107,7 @@ Navigation is two levels and never nests deeper.
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
   holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  Snapshots, History, Scratchpad), with "Add connection"
+  Baselines, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -390,7 +390,7 @@ separate. Mounts omit host sources, while metadata is limited to the validated C
 service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
 and health logs are not collected.
 
-Snapshots is a split page: saved captures on the left, one capture or one comparison on the right.
+Baselines is a split page: saved captures on the left, one capture or one comparison on the right.
 Capture is a button, never a schedule, and a checkbox row above it narrows which sections run. While
 it runs, each finished section appears with its own status chip, and Stop ends the run once the
 section in flight returns. Stopping keeps what was already read: the sections that never ran are
@@ -414,7 +414,7 @@ moved rather than only whether it did.
 
 Compare with offers Live machine state alongside every other capture. Live reads the host through
 the same bounded collection a capture runs and is never saved, so the list still only grows from
-Capture snapshot; the panel names that side Live state and says the read was discarded. Read again
+Capture baseline; the panel names that side Live state and says the read was discarded. Read again
 repeats it, Stop ends it once the section in flight returns, and section progress appears in the
 panel while it runs. Choosing another capture instead orders the comparison earlier to later
 regardless of which row is selected. Each section shows both statuses, then additions, removals,

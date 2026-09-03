@@ -1,34 +1,34 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, History } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { formatCapturedAt, sectionLabel, statusHint, statusLabel } from "../../lib/host-snapshots";
+import { formatCapturedAt, sectionLabel, statusHint, statusLabel } from "../../lib/host-baselines";
 import type {
-  HostSnapshot,
-  SnapshotEntry,
-  SnapshotSection,
-  SnapshotSectionKind,
-  SnapshotSectionStatus,
-  SnapshotTrace,
+  HostBaseline,
+  BaselineEntry,
+  BaselineSection,
+  BaselineSectionKind,
+  BaselineSectionStatus,
+  BaselineTrace,
 } from "../../types";
 
-export function StatusChip({ status }: { status: SnapshotSectionStatus }) {
+export function StatusChip({ status }: { status: BaselineSectionStatus }) {
   return (
-    <span className={`snapshot-status snapshot-status-${status}`} title={statusHint(status)}>
+    <span className={`baseline-status baseline-status-${status}`} title={statusHint(status)}>
       {statusLabel(status)}
     </span>
   );
 }
 
-export function SnapshotSectionList({
+export function BaselineSectionList({
   connectionId,
-  snapshot,
+  baseline,
 }: {
   connectionId: string;
-  snapshot: HostSnapshot;
+  baseline: HostBaseline;
 }) {
   return (
-    <div className="snapshot-sections">
-      {snapshot.sections.map((section) => (
+    <div className="baseline-sections">
+      {baseline.sections.map((section) => (
         <SectionView key={section.kind} connectionId={connectionId} section={section} />
       ))}
     </div>
@@ -42,7 +42,7 @@ function SectionView({
   section,
 }: {
   connectionId: string;
-  section: SnapshotSection;
+  section: BaselineSection;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState("");
@@ -57,11 +57,11 @@ function SectionView({
     : section.entries;
 
   return (
-    <section className="snapshot-section">
+    <section className="baseline-section">
       <header>
         {expandable ? (
           <button
-            className="snapshot-section-toggle"
+            className="baseline-section-toggle"
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded((current) => !current)}
@@ -74,7 +74,7 @@ function SectionView({
         )}
         <StatusChip status={section.status} />
         {section.kind !== "host" && (
-          <span className="snapshot-section-count">{section.entries.length} recorded</span>
+          <span className="baseline-section-count">{section.entries.length} recorded</span>
         )}
       </header>
       {section.message && <p className="inline-warning">{section.message}</p>}
@@ -82,14 +82,14 @@ function SectionView({
         <>
           {section.entries.length > 8 && (
             <input
-              className="snapshot-entry-filter"
+              className="baseline-entry-filter"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               placeholder={`Filter ${section.entries.length} entries`}
               aria-label={`Filter ${sectionLabel(section.kind)}`}
             />
           )}
-          <ul className="snapshot-entry-list">
+          <ul className="baseline-entry-list">
             {visible.map((entry) => (
               <EntryRow
                 key={entry.identity}
@@ -99,7 +99,7 @@ function SectionView({
               />
             ))}
           </ul>
-          {!visible.length && <p className="snapshot-section-count">No entry matches that text</p>}
+          {!visible.length && <p className="baseline-section-count">No entry matches that text</p>}
         </>
       )}
     </section>
@@ -112,10 +112,10 @@ function EntryRow({
   entry,
 }: {
   connectionId: string;
-  kind: SnapshotSectionKind;
-  entry: SnapshotEntry;
+  kind: BaselineSectionKind;
+  entry: BaselineEntry;
 }) {
-  const [trace, setTrace] = useState<SnapshotTrace | null>(null);
+  const [trace, setTrace] = useState<BaselineTrace | null>(null);
   const [tracing, setTracing] = useState(false);
   const [traceError, setTraceError] = useState<string | null>(null);
 
@@ -127,7 +127,7 @@ function EntryRow({
     setTracing(true);
     setTraceError(null);
     try {
-      setTrace(await api.traceHostSnapshotEntry(connectionId, kind, entry.identity));
+      setTrace(await api.traceHostBaselineEntry(connectionId, kind, entry.identity));
     } catch (caught) {
       setTraceError(errorMessage(caught));
     } finally {
@@ -137,7 +137,7 @@ function EntryRow({
 
   return (
     <li>
-      <div className="snapshot-entry-head">
+      <div className="baseline-entry-head">
         <code>{entry.label}</code>
         <button
           className="icon-button"
@@ -149,7 +149,7 @@ function EntryRow({
           <History size={14} />
         </button>
       </div>
-      <dl className="snapshot-entry-facts">
+      <dl className="baseline-entry-facts">
         {entry.facts.map((fact) => (
           <div key={fact.name}>
             <dt>{fact.name}</dt>
@@ -157,7 +157,7 @@ function EntryRow({
           </div>
         ))}
       </dl>
-      {tracing && <p className="snapshot-section-count">Reading saved captures…</p>}
+      {tracing && <p className="baseline-section-count">Reading saved captures…</p>}
       {traceError && <p className="inline-error">{traceError}</p>}
       {trace && <TraceTable trace={trace} />}
     </li>
@@ -166,10 +166,10 @@ function EntryRow({
 
 // Two captures answer what changed. Reading one entry down the whole history
 // answers when it changed, which is usually the actual question.
-function TraceTable({ trace }: { trace: SnapshotTrace }) {
+function TraceTable({ trace }: { trace: BaselineTrace }) {
   const names = [...new Set(trace.points.flatMap((point) => point.facts.map((fact) => fact.name)))];
   return (
-    <div className="snapshot-trace">
+    <div className="baseline-trace">
       <table>
         <thead>
           <tr>
@@ -183,7 +183,7 @@ function TraceTable({ trace }: { trace: SnapshotTrace }) {
         </thead>
         <tbody>
           {trace.points.map((point) => (
-            <tr key={point.snapshotId}>
+            <tr key={point.baselineId}>
               <th scope="row">{point.label ?? formatCapturedAt(point.capturedAt)}</th>
               {point.present ? (
                 names.map((name) => (
@@ -192,7 +192,7 @@ function TraceTable({ trace }: { trace: SnapshotTrace }) {
                   </td>
                 ))
               ) : (
-                <td className="snapshot-trace-absent" colSpan={names.length || 1}>
+                <td className="baseline-trace-absent" colSpan={names.length || 1}>
                   {point.sectionStatus === "collected" || point.sectionStatus === "partial"
                     ? "Not present in this capture"
                     : statusLabel(point.sectionStatus)}

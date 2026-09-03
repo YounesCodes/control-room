@@ -65,7 +65,7 @@ import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { ScratchpadPane } from "./pages/ScratchpadPane";
 import { SettingsPane } from "./pages/SettingsPane";
-import { SnapshotsPane } from "./pages/SnapshotsPane";
+import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
   CachedList,
   ConnectionGroup,
@@ -99,7 +99,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
   { id: "logs", label: "Logs", icon: FileClock },
-  { id: "snapshots", label: "Snapshots", icon: Camera },
+  { id: "baselines", label: "Baselines", icon: Camera },
   { id: "history", label: "History", icon: History },
   { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
@@ -502,7 +502,7 @@ export function App() {
       containerSelectionId: null,
       containerDetailsCache: {},
       logSource: null,
-      snapshotSelectionId: null,
+      baselineSelectionId: null,
     };
   }
 
@@ -1260,13 +1260,13 @@ export function App() {
                   onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
                 />
               )}
-              {activeWorkspace.view === "snapshots" && (
-                <SnapshotsPane
+              {activeWorkspace.view === "baselines" && (
+                <BaselinesPane
                   key={activeWorkspace.id}
                   connection={activeConnection}
-                  selectedId={activeWorkspace.snapshotSelectionId}
-                  onSelect={(snapshotSelectionId) =>
-                    updateWorkspace(activeWorkspace.id, { snapshotSelectionId })
+                  selectedId={activeWorkspace.baselineSelectionId}
+                  onSelect={(baselineSelectionId) =>
+                    updateWorkspace(activeWorkspace.id, { baselineSelectionId })
                   }
                 />
               )}

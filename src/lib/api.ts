@@ -11,8 +11,8 @@ import type {
   HistoryEntry,
   HistoryInput,
   HostCapabilities,
-  HostSnapshot,
-  HostSnapshotSummary,
+  HostBaseline,
+  HostBaselineSummary,
   ListeningSocket,
   PersistedWorkspaceState,
   SavedConnection,
@@ -21,11 +21,11 @@ import type {
   ScratchpadNoteInput,
   ScratchpadScope,
   SettingsContract,
-  SnapshotCaptureRequest,
-  SnapshotComparison,
-  SnapshotProgress,
-  SnapshotSectionKind,
-  SnapshotTrace,
+  BaselineCaptureRequest,
+  BaselineComparison,
+  BaselineProgress,
+  BaselineSectionKind,
+  BaselineTrace,
   SystemdUnit,
 } from "../types";
 
@@ -150,29 +150,29 @@ export const api = {
       output,
     }),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
-  captureHostSnapshot: (request: SnapshotCaptureRequest, progress: Channel<SnapshotProgress>) =>
-    invoke<HostSnapshotSummary>("capture_host_snapshot", { request, progress }),
-  cancelHostSnapshot: (captureId: string) => invoke<void>("cancel_host_snapshot", { captureId }),
-  listHostSnapshots: (connectionId: string) =>
-    invoke<HostSnapshotSummary[]>("list_host_snapshots", { connectionId }),
-  getHostSnapshot: (id: string) => invoke<HostSnapshot>("get_host_snapshot", { id }),
-  renameHostSnapshot: (id: string, label: string | null) =>
-    invoke<HostSnapshotSummary>("rename_host_snapshot", { id, label }),
-  setHostSnapshotPinned: (id: string, pinned: boolean) =>
-    invoke<HostSnapshotSummary>("set_host_snapshot_pinned", { id, pinned }),
-  deleteHostSnapshot: (id: string) => invoke<void>("delete_host_snapshot", { id }),
-  traceHostSnapshotEntry: (connectionId: string, kind: SnapshotSectionKind, identity: string) =>
-    invoke<SnapshotTrace>("trace_host_snapshot_entry", { connectionId, kind, identity }),
+  captureHostBaseline: (request: BaselineCaptureRequest, progress: Channel<BaselineProgress>) =>
+    invoke<HostBaselineSummary>("capture_host_baseline", { request, progress }),
+  cancelHostBaseline: (captureId: string) => invoke<void>("cancel_host_baseline", { captureId }),
+  listHostBaselines: (connectionId: string) =>
+    invoke<HostBaselineSummary[]>("list_host_baselines", { connectionId }),
+  getHostBaseline: (id: string) => invoke<HostBaseline>("get_host_baseline", { id }),
+  renameHostBaseline: (id: string, label: string | null) =>
+    invoke<HostBaselineSummary>("rename_host_baseline", { id, label }),
+  setHostBaselinePinned: (id: string, pinned: boolean) =>
+    invoke<HostBaselineSummary>("set_host_baseline_pinned", { id, pinned }),
+  deleteHostBaseline: (id: string) => invoke<void>("delete_host_baseline", { id }),
+  traceHostBaselineEntry: (connectionId: string, kind: BaselineSectionKind, identity: string) =>
+    invoke<BaselineTrace>("trace_host_baseline_entry", { connectionId, kind, identity }),
   exportTextFile: (path: string, contents: string) =>
     invoke<void>("export_text_file", { path, contents }),
-  compareHostSnapshots: (baseId: string, targetId: string) =>
-    invoke<SnapshotComparison>("compare_host_snapshots", { baseId, targetId }),
-  compareHostSnapshotWithLive: (
+  compareHostBaselines: (baseId: string, targetId: string) =>
+    invoke<BaselineComparison>("compare_host_baselines", { baseId, targetId }),
+  compareHostBaselineWithLive: (
     baseId: string,
     captureId: string,
-    progress: Channel<SnapshotProgress>,
+    progress: Channel<BaselineProgress>,
   ) =>
-    invoke<SnapshotComparison>("compare_host_snapshot_with_live", {
+    invoke<BaselineComparison>("compare_host_baseline_with_live", {
       baseId,
       captureId,
       progress,

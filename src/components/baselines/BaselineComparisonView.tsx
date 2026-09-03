@@ -14,16 +14,16 @@ import {
   hasVolatileChanges,
   identityWarning,
   sectionLabel,
-  snapshotTitle,
-} from "../../lib/host-snapshots";
-import type { SnapshotComparison, SnapshotSectionDiff } from "../../types";
-import { StatusChip } from "./SnapshotSectionList";
+  baselineTitle,
+} from "../../lib/host-baselines";
+import type { BaselineComparison, BaselineSectionDiff } from "../../types";
+import { StatusChip } from "./BaselineSectionList";
 
-export function SnapshotComparisonView({
+export function BaselineComparisonView({
   comparison,
   onError,
 }: {
-  comparison: SnapshotComparison;
+  comparison: BaselineComparison;
   onError: (message: string) => void;
 }) {
   const [hideVolatile, setHideVolatile] = useState(true);
@@ -62,18 +62,18 @@ export function SnapshotComparisonView({
   }
 
   return (
-    <div className="snapshot-sections">
-      <p className="snapshot-comparison-summary">
-        {snapshotTitle(shown.base)} → {comparisonTargetTitle(shown)}: {comparisonSummary(shown)}
+    <div className="baseline-sections">
+      <p className="baseline-comparison-summary">
+        {baselineTitle(shown.base)} → {comparisonTargetTitle(shown)}: {comparisonSummary(shown)}
       </p>
       {shown.targetIsLive && (
-        <p className="snapshot-comparison-note">
+        <p className="baseline-comparison-note">
           Live state read {formatCapturedAt(shown.target.capturedAt)}. This read was not saved.
         </p>
       )}
-      <div className="snapshot-comparison-tools">
+      <div className="baseline-comparison-tools">
         {volatilePresent && (
-          <label className="snapshot-volatile-toggle">
+          <label className="baseline-volatile-toggle">
             <input
               type="checkbox"
               checked={hideVolatile}
@@ -105,10 +105,10 @@ export function SnapshotComparisonView({
   );
 }
 
-function SectionDiffView({ diff }: { diff: SnapshotSectionDiff }) {
+function SectionDiffView({ diff }: { diff: BaselineSectionDiff }) {
   const changes = changeCount(diff);
   return (
-    <section className="snapshot-section">
+    <section className="baseline-section">
       <header>
         <h3>{sectionLabel(diff.kind)}</h3>
         <StatusChip status={diff.baseStatus} />
@@ -117,39 +117,39 @@ function SectionDiffView({ diff }: { diff: SnapshotSectionDiff }) {
       </header>
       {diff.note && <p className="inline-warning">{diff.note}</p>}
       {diff.comparable && (
-        <p className="snapshot-section-count">
+        <p className="baseline-section-count">
           {changes === 0
             ? `No change across ${diff.unchangedCount} compared entries`
             : `${changes} changed of ${changes + diff.unchangedCount} compared entries`}
         </p>
       )}
       {!!diff.added.length && (
-        <ul className="snapshot-change-list">
+        <ul className="baseline-change-list">
           {diff.added.map((entry) => (
             <li key={`added-${entry.identity}`}>
-              <span className="snapshot-change-mark snapshot-change-added">Added</span>
+              <span className="baseline-change-mark baseline-change-added">Added</span>
               <code>{entry.label}</code>
             </li>
           ))}
         </ul>
       )}
       {!!diff.removed.length && (
-        <ul className="snapshot-change-list">
+        <ul className="baseline-change-list">
           {diff.removed.map((entry) => (
             <li key={`removed-${entry.identity}`}>
-              <span className="snapshot-change-mark snapshot-change-removed">Removed</span>
+              <span className="baseline-change-mark baseline-change-removed">Removed</span>
               <code>{entry.label}</code>
             </li>
           ))}
         </ul>
       )}
       {!!diff.changed.length && (
-        <ul className="snapshot-change-list">
+        <ul className="baseline-change-list">
           {diff.changed.map((entry) => (
             <li key={`changed-${entry.identity}`}>
-              <span className="snapshot-change-mark">Changed</span>
+              <span className="baseline-change-mark">Changed</span>
               <code>{entry.label}</code>
-              <ul className="snapshot-fact-list">
+              <ul className="baseline-fact-list">
                 {entry.changes.map((change) => (
                   <li key={change.name}>
                     <span>{change.name}</span>

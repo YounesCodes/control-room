@@ -242,7 +242,7 @@ pub struct DockerMount {
     pub propagation: Option<String>,
 }
 
-/// One mounted filesystem from a bounded `df` snapshot. Device paths are not
+/// One mounted filesystem from a bounded `df` baseline. Device paths are not
 /// collected: the mount point, type, size, and use are enough to compare.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -253,12 +253,12 @@ pub struct Filesystem {
     pub used_percent: u8,
 }
 
-/// Version of the normalized host state written into stored snapshots. Bump it
-/// whenever a section's identity or fact names change, so an older snapshot is
+/// Version of the normalized host state written into stored baselines. Bump it
+/// whenever a section's identity or fact names change, so an older baseline is
 /// reported as incomparable instead of silently mis-diffed.
-pub const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+pub const BASELINE_SCHEMA_VERSION: u32 = 1;
 
-/// Stable evidence about which Remote Host a snapshot came from. The machine
+/// Stable evidence about which Remote Host a baseline came from. The machine
 /// fingerprint is a truncated SHA-256 computed on the host, so the raw
 /// `/etc/machine-id` never leaves it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -274,7 +274,7 @@ pub struct HostIdentity {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotFact {
+pub struct BaselineFact {
     pub name: String,
     pub value: String,
 }
@@ -282,15 +282,15 @@ pub struct SnapshotFact {
 /// One comparable object inside a section, keyed by a domain-aware identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotEntry {
+pub struct BaselineEntry {
     pub identity: String,
     pub label: String,
-    pub facts: Vec<SnapshotFact>,
+    pub facts: Vec<BaselineFact>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotSection {
+pub struct BaselineSection {
     /// `host`, `systemdUnits`, `containers`, `listeners`, or `filesystems`.
     pub kind: String,
     /// `collected`, `partial`, `unsupported`, `unavailable`, or `skipped`.
@@ -303,7 +303,7 @@ pub struct SnapshotSection {
     pub schema_version: u32,
     pub collected_at: String,
     pub message: Option<String>,
-    pub entries: Vec<SnapshotEntry>,
+    pub entries: Vec<BaselineEntry>,
 }
 
 fn first_schema_version() -> u32 {
@@ -312,7 +312,7 @@ fn first_schema_version() -> u32 {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct HostSnapshot {
+pub struct HostBaseline {
     pub id: String,
     pub connection_id: String,
     pub label: Option<String>,
@@ -323,12 +323,12 @@ pub struct HostSnapshot {
     #[serde(default)]
     pub pinned: bool,
     pub identity: HostIdentity,
-    pub sections: Vec<SnapshotSection>,
+    pub sections: Vec<BaselineSection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotSectionSummary {
+pub struct BaselineSectionSummary {
     pub kind: String,
     pub status: String,
     pub entry_count: u32,
@@ -338,29 +338,29 @@ pub struct SnapshotSectionSummary {
 /// mount across the whole stored history instead of two captures at a time.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotTracePoint {
-    pub snapshot_id: String,
+pub struct BaselineTracePoint {
+    pub baseline_id: String,
     pub label: Option<String>,
     pub captured_at: String,
     /// The status of the section this entry belongs to in that capture.
     pub section_status: String,
     /// False when the capture read the section but the entry was not in it.
     pub present: bool,
-    pub facts: Vec<SnapshotFact>,
+    pub facts: Vec<BaselineFact>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotTrace {
+pub struct BaselineTrace {
     pub kind: String,
     pub identity: String,
     pub label: String,
-    pub points: Vec<SnapshotTracePoint>,
+    pub points: Vec<BaselineTracePoint>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct HostSnapshotSummary {
+pub struct HostBaselineSummary {
     pub id: String,
     pub connection_id: String,
     pub label: Option<String>,
@@ -368,7 +368,7 @@ pub struct HostSnapshotSummary {
     pub captured_at: String,
     pub pinned: bool,
     pub identity: HostIdentity,
-    pub sections: Vec<SnapshotSectionSummary>,
+    pub sections: Vec<BaselineSectionSummary>,
     /// Entries that differ from the next older capture of the same connection.
     /// None when there is no older capture, or when nothing could be compared.
     pub changes_since_previous: Option<u32>,
@@ -378,7 +378,7 @@ pub struct HostSnapshotSummary {
 /// or an explicit list when the user narrowed the capture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotCaptureRequest {
+pub struct BaselineCaptureRequest {
     pub connection_id: String,
     pub capture_id: String,
     pub label: Option<String>,
@@ -388,7 +388,7 @@ pub struct SnapshotCaptureRequest {
 /// Emitted once per section while a capture runs. Capture is always explicit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotProgress {
+pub struct BaselineProgress {
     pub capture_id: String,
     pub kind: String,
     pub status: String,
@@ -399,7 +399,7 @@ pub struct SnapshotProgress {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotFactChange {
+pub struct BaselineFactChange {
     pub name: String,
     pub base_value: Option<String>,
     pub target_value: Option<String>,
@@ -407,15 +407,15 @@ pub struct SnapshotFactChange {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotEntryChange {
+pub struct BaselineEntryChange {
     pub identity: String,
     pub label: String,
-    pub changes: Vec<SnapshotFactChange>,
+    pub changes: Vec<BaselineFactChange>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotSectionDiff {
+pub struct BaselineSectionDiff {
     pub kind: String,
     pub base_status: String,
     pub target_status: String,
@@ -423,24 +423,24 @@ pub struct SnapshotSectionDiff {
     /// incompatible schema. Such a section is never reported as unchanged.
     pub comparable: bool,
     pub note: Option<String>,
-    pub added: Vec<SnapshotEntry>,
-    pub removed: Vec<SnapshotEntry>,
-    pub changed: Vec<SnapshotEntryChange>,
+    pub added: Vec<BaselineEntry>,
+    pub removed: Vec<BaselineEntry>,
+    pub changed: Vec<BaselineEntryChange>,
     pub unchanged_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SnapshotComparison {
-    pub base: HostSnapshotSummary,
-    pub target: HostSnapshotSummary,
+pub struct BaselineComparison {
+    pub base: HostBaselineSummary,
+    pub target: HostBaselineSummary,
     /// `same`, `different`, or `unknown`, from machine fingerprint evidence.
     pub identity_match: String,
     pub schema_compatible: bool,
     /// True when the target side was read from the host for this comparison and
     /// never saved, so the UI can name it as live rather than as a capture.
     pub target_is_live: bool,
-    pub sections: Vec<SnapshotSectionDiff>,
+    pub sections: Vec<BaselineSectionDiff>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
