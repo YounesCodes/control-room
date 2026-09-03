@@ -278,7 +278,8 @@ export function PortsPane({
       )}
       {ownerGap && (tab === "overview" || tab === "table") && (
         <p className="inline-warning firewall-warning">
-          <ShieldAlert size={14} /> {ownerGap.message}
+          <ShieldAlert size={14} />
+          <span className="inline-warning-text">{ownerGap.message}</span>
           {ownerGap.offerSudo && (
             <button type="button" className="link-button" onClick={() => setPortsSudo(true)}>
               Resolve owners with sudo

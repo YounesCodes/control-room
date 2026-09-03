@@ -79,6 +79,24 @@ describe("application hierarchy", () => {
     expect(dockerSource).toContain("Retry with sudo");
   });
 
+  it("keeps a checkbox on one line inside a modal, as Settings already does", () => {
+    // .form-stack label used to stack every label vertically, checkbox rows
+    // included, so a checkbox in a dialog sat above its own text. Settings had
+    // always excluded them; modals never did, because no modal had one.
+    expect(stylesSource).toMatch(
+      /\.settings-form label:not\(\.checkbox-label\),\s*\.form-stack label:not\(\.checkbox-label\)\s*\{/,
+    );
+  });
+
+  it("centres a warning message whether or not the banner has an action", () => {
+    // The message is an anonymous flex item, so space-between pinned it to the
+    // free edge when no button followed it.
+    expect(stylesSource).toMatch(
+      /\.inline-warning > \.inline-warning-text[^}]*text-align: center/s,
+    );
+    expect(portsSource).toContain('<span className="inline-warning-text">');
+  });
+
   it("shows whether the host can act on an elevation allowance", () => {
     // A permission the account cannot use is the confusing case, so Overview
     // reports passwordless sudo as a host fact beside systemd and Docker.
