@@ -112,6 +112,7 @@ function renderPane() {
     <PortsPane
       connection={connection}
       capabilities={null}
+      globalSudoEnabled={false}
       cache={sockets}
       containersCache={containers}
       onCacheChange={vi.fn()}
