@@ -323,6 +323,14 @@ permission wall, the pane offers "Retry with sudo" exactly as before, and the
 password is used once and dropped. That affordance never depends on the switch:
 elevating one request stays possible on a host that allows nothing.
 
+Permission and capability are separate, and the UI says both. Whether the account
+has passwordless sudo is a host fact, reported in Overview beside systemd,
+journald, and Docker, and under the connection editor's checkbox once "Test
+structured access" has run. Without that, allowing sudo on an account that sudo
+questions looks like it did nothing. Docker gets the same treatment: a daemon
+that answers only under sudo reads as "reachable with sudo" rather than being
+folded into "sudo required".
+
 **Panel states.** Every data view separates loading (spinner and label), empty
 (icon and guidance, such as the Logs and History empty states), and error (icon,
 message, and retry, with a "Retry with sudo" affordance where a permission error

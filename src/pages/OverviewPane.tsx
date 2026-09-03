@@ -76,10 +76,13 @@ export function OverviewPane({
     ["Default shell", capabilities.defaultShell ?? "Unavailable"],
   ];
 
+  const dockerReachable = capabilities.dockerAccessible || capabilities.dockerAccessibleWithSudo;
   const dockerValue = capabilities.dockerAvailable
     ? capabilities.dockerAccessible
       ? `Version ${capabilities.dockerVersion ?? "unknown"}`
-      : "Installed — sudo required"
+      : capabilities.dockerAccessibleWithSudo
+        ? `Version ${capabilities.dockerVersion ?? "unknown"} — reachable with sudo`
+        : "Installed — sudo required"
     : "Not detected";
   const dockerTone: CapabilityTone = capabilities.dockerAvailable
     ? capabilities.dockerAccessible
@@ -98,10 +101,15 @@ export function OverviewPane({
       value: capabilities.journaldAvailable ? "Available" : "Not detected",
       tone: capabilities.journaldAvailable ? "ok" : "off",
     },
+    {
+      label: "sudo",
+      value: capabilities.passwordlessSudo ? "Passwordless" : "Password required",
+      tone: capabilities.passwordlessSudo ? "ok" : "off",
+    },
     { label: "Docker", value: dockerValue, tone: dockerTone },
   ];
 
-  const containersValue = capabilities.dockerAccessible
+  const containersValue = dockerReachable
     ? `${capabilities.runningContainerCount ?? 0} / ${capabilities.totalContainerCount ?? 0}`
     : "—";
   const stats: { label: string; value: string; hint?: string }[] = [
@@ -113,7 +121,7 @@ export function OverviewPane({
     {
       label: "Containers",
       value: containersValue,
-      hint: capabilities.dockerAccessible ? "running / total" : "Docker unavailable",
+      hint: dockerReachable ? "running / total" : "Docker unavailable",
     },
   ];
 

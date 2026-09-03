@@ -53,6 +53,8 @@ export interface HostCapabilities {
   journaldAvailable: boolean;
   dockerAvailable: boolean;
   dockerAccessible: boolean;
+  dockerAccessibleWithSudo: boolean;
+  passwordlessSudo: boolean;
   dockerVersion: string | null;
   runningServiceCount: number | null;
   runningContainerCount: number | null;

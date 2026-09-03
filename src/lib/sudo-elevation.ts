@@ -39,6 +39,21 @@ export function elevationSummary(source: ElevationSource): string {
   }
 }
 
+/**
+ * What the host itself can do, kept separate from what the user allowed. A
+ * permission the account cannot act on is the confusing case, so the UI says
+ * both sentences rather than folding them into one.
+ *
+ * `null` means capabilities have not been read yet, which is not the same as
+ * knowing the account has no passwordless sudo.
+ */
+export function elevationCapabilityNote(passwordlessSudo: boolean | null): string | null {
+  if (passwordlessSudo === null) return null;
+  return passwordlessSudo
+    ? "This account has passwordless sudo, so allowed reads run elevated."
+    : "This account is asked for a password by sudo, so allowed reads still run as the connecting account until you retry one with a password.";
+}
+
 export function connectionElevationSource(
   settings: AppSettings,
   connection: SavedConnection,

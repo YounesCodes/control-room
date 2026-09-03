@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   connectionElevationSource,
   elevationAllowed,
+  elevationCapabilityNote,
   elevationSource,
   elevationSummary,
   perHostControlLocked,
@@ -51,6 +52,18 @@ describe("sudo elevation", () => {
 
   it("says one-shot elevation is still available when nothing is allowed", () => {
     expect(elevationSummary("off")).toContain("one request at a time");
+  });
+
+  it("keeps an unread capability distinct from a known lack of passwordless sudo", () => {
+    expect(elevationCapabilityNote(null)).toBeNull();
+    expect(elevationCapabilityNote(true)).toContain("has passwordless sudo");
+    expect(elevationCapabilityNote(false)).toContain("asked for a password");
+  });
+
+  it("says an allowance without passwordless sudo still runs unelevated", () => {
+    // The confusing case is a permission the account cannot act on, so the note
+    // has to name the fallback rather than imply the reads are elevated.
+    expect(elevationCapabilityNote(false)).toContain("connecting account");
   });
 
   it("reads the source from a Saved Connection and the saved settings", () => {

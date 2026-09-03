@@ -230,8 +230,15 @@ impl RemoteCommandExecutor {
     }
 }
 
+/// One bounded, unelevated read of what the host offers. It stays unelevated
+/// on purpose: the account identity and default shell it reports have to be
+/// the connecting account's, not root's.
+fn capability_command() -> &'static str {
+    r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"; printf 'default_shell=%s\n' "$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"; if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then printf 'passwordless_sudo=true\n'; else printf 'passwordless_sudo=false\n'; fi; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; if sudo -n docker info >/dev/null 2>&1; then printf 'docker_accessible_with_sudo=true\n'; printf 'running_container_count=%s\n' "$(sudo -n docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(sudo -n docker ps -aq | wc -l)"; fi; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#
+}
+
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
-    let command = r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"; printf 'default_shell=%s\n' "$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#;
+    let command = capability_command();
     let text = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)?
         .success_text()?;
     let values = parse_key_values(&text);
@@ -249,6 +256,8 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
         journald_available: is_true(&values, "journald_available"),
         docker_available: is_true(&values, "docker_available"),
         docker_accessible: is_true(&values, "docker_accessible"),
+        docker_accessible_with_sudo: is_true(&values, "docker_accessible_with_sudo"),
+        passwordless_sudo: is_true(&values, "passwordless_sudo"),
         docker_version: values
             .get("docker_version")
             .filter(|value| !value.is_empty())
@@ -1857,6 +1866,35 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert!(!status.available);
         assert_eq!(status.active, None);
         assert!(status.rules.is_empty());
+    }
+
+    #[test]
+    fn capability_discovery_reports_sudo_as_a_fact_without_using_it() {
+        let script = capability_command();
+        assert!(script.contains("passwordless_sudo=true"));
+        assert!(script.contains("passwordless_sudo=false"));
+        // The probe must tolerate a host with no sudo at all rather than
+        // reporting a "command not found" failure as "no passwordless sudo".
+        assert!(script.contains("command -v sudo >/dev/null 2>&1 && sudo -n true"));
+        // Identity has to come from the connecting account. Elevating the whole
+        // script would report root as the default shell on every host.
+        assert!(script.contains(r#"$(id -un)"#));
+        assert!(!script.contains("sudo -n id"));
+        assert!(!script.contains("sudo -n getent"));
+    }
+
+    #[test]
+    fn docker_reachable_only_under_sudo_is_recorded_separately() {
+        let script = capability_command();
+        assert!(script.contains("docker_accessible_with_sudo=true"));
+        // The sudo fallback runs only after the direct probe failed, so a host
+        // the account can already reach never spends a second round trip.
+        let direct = script.find("docker_accessible=true").expect("direct probe");
+        let fallback = script
+            .find("docker_accessible_with_sudo=true")
+            .expect("sudo probe");
+        assert!(direct < fallback);
+        assert!(script.contains("sudo -n docker info"));
     }
 
     #[test]

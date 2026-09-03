@@ -79,6 +79,16 @@ describe("application hierarchy", () => {
     expect(dockerSource).toContain("Retry with sudo");
   });
 
+  it("shows whether the host can act on an elevation allowance", () => {
+    // A permission the account cannot use is the confusing case, so Overview
+    // reports passwordless sudo as a host fact beside systemd and Docker.
+    expect(overviewSource).toContain('label: "sudo"');
+    expect(overviewSource).toContain("capabilities.passwordlessSudo");
+    // Docker reachable only under sudo is its own answer, not "sudo required".
+    expect(overviewSource).toContain("dockerAccessibleWithSudo");
+    expect(overviewSource).toContain("reachable with sudo");
+  });
+
   it("offers sudo when Docker log source discovery lacks permission", () => {
     expect(logsSource).toContain('type SudoPurpose = "sources" | "stream"');
     expect(logsSource).toContain('setSudoPurpose("sources")');

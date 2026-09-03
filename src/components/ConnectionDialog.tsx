@@ -4,7 +4,7 @@ import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { validateConnectionDraft } from "../lib/connection-validation";
-import { elevationSource, elevationSummary } from "../lib/sudo-elevation";
+import { elevationCapabilityNote, elevationSource, elevationSummary } from "../lib/sudo-elevation";
 import type {
   ConnectionGroup,
   ConnectionTag,
@@ -121,6 +121,8 @@ export function ConnectionDialog({
     }
   }
 
+  const capabilityNote = elevationCapabilityNote(testResult?.passwordlessSudo ?? null);
+
   return (
     <Modal title={connection ? "Edit Saved Connection" : "Add Saved Connection"} onClose={onClose}>
       <form className="form-stack" onSubmit={submit}>
@@ -212,6 +214,11 @@ export function ConnectionDialog({
             Allow sudo for Structured Operations on this host
           </label>
           <small>{elevationSummary(elevationSource(globalSudoEnabled, sudoEnabled))}</small>
+          {capabilityNote ? (
+            <small>{capabilityNote}</small>
+          ) : (
+            <small>Test structured access to see whether this account needs a sudo password.</small>
+          )}
         </div>
         <div className="connection-tag-selector">
           <span>Tags</span>
@@ -240,7 +247,8 @@ export function ConnectionDialog({
             Noninteractive SSH works. systemd:{" "}
             {testResult.systemdAvailable ? "available" : "not detected"}; journald:{" "}
             {testResult.journaldAvailable ? "available" : "not detected"}; Docker:{" "}
-            {testResult.dockerAvailable ? "available" : "not detected"}.
+            {testResult.dockerAvailable ? "available" : "not detected"}; sudo:{" "}
+            {testResult.passwordlessSudo ? "passwordless" : "password required"}.
           </p>
         )}
         {error && <p className="inline-error">{error}</p>}

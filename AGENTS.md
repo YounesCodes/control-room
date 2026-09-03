@@ -31,7 +31,10 @@ DESIGN.md.
    account has passwordless sudo, and runs it unelevated otherwise, so an
    allowance never becomes a password prompt on its own. A one-shot sudo
    password stays available after a permission error whether or not elevation is
-   allowed, and is never saved.
+   allowed, and is never saved. Report whether an account has passwordless sudo
+   as a host capability, separately from whether the user allowed elevation. A
+   permission the account cannot act on must not be shown as if reads were
+   elevated.
 
 ## Required behavior
 

@@ -72,6 +72,14 @@ pub struct HostCapabilities {
     pub journald_available: bool,
     pub docker_available: bool,
     pub docker_accessible: bool,
+    /// True when the daemon answered under sudo after refusing the connecting
+    /// account. Kept separate from `docker_accessible` so the Overview can say
+    /// which of the two happened instead of collapsing them into "no".
+    pub docker_accessible_with_sudo: bool,
+    /// True when this account can run sudo without being asked for a password.
+    /// This is a fact about the host, not a permission: allowing sudo is a
+    /// separate choice the user makes per connection or in Settings.
+    pub passwordless_sudo: bool,
     pub docker_version: Option<String>,
     pub running_service_count: Option<u32>,
     pub running_container_count: Option<u32>,

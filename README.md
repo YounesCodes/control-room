@@ -108,6 +108,8 @@ Sudo is off until you allow it. Settings has one switch that covers every Saved 
 
 Allowing sudo does not start asking for passwords. An allowed read checks the host first and elevates only when the account already has passwordless sudo. On every other account the same read runs unelevated, and when it hits a permission error the pane offers **Retry with sudo** the way it always has. That one-shot password works whether or not sudo is allowed, and it is used once and discarded. Elevation only widens what a read can see. It never lets a Structured Operation change the machine.
 
+Because the allowance only bites where sudo asks no questions, Control Room tells you which kind of account you have. Overview reports sudo as `Passwordless` or `Password required` beside systemd, journald, and Docker, and **Test structured access** reports it in the connection editor. A Docker daemon that answers only under sudo shows as reachable with sudo rather than as unavailable.
+
 ## Support
 
 | Where                        | Support                                                                                                                                                                                   |
