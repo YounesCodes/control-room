@@ -581,7 +581,8 @@ fn parse_listening_sockets(text: &str) -> Result<Vec<ListeningSocket>, String> {
         let Some((local_address, port)) = parse_local_endpoint(fields[4]) else {
             continue;
         };
-        let process_evidence = parse_process_evidence(&fields[6..].join(" "));
+        let process_evidence =
+            without_activation_supervisor(parse_process_evidence(&fields[6..].join(" ")));
         let (process_name, process_id, ownership) = match process_evidence.as_slice() {
             [] => (None, None, "unavailable"),
             [(pid, name)] => (Some(name.clone()), Some(*pid), "known"),
@@ -655,6 +656,33 @@ fn parse_process_evidence(value: &str) -> Vec<(u32, String)> {
     evidence.sort();
     evidence.dedup();
     evidence
+}
+
+/// Drops systemd's own claim on a socket-activated listener.
+///
+/// systemd holds the listening file descriptor for every socket unit it
+/// activates, so `ss` reports both pid 1 and the real service on one socket.
+/// That second claim describes how the service was started, not who is serving,
+/// and treating it as a rival owner hides the answer on exactly the listeners
+/// that matter most: ssh, docker, and anything else started from a `.socket`.
+///
+/// Only pid 1 named `systemd` is dropped, and only when another holder remains,
+/// so a socket waiting on activation with no service behind it yet still reports
+/// systemd as its owner.
+fn without_activation_supervisor(evidence: Vec<(u32, String)>) -> Vec<(u32, String)> {
+    if evidence.len() < 2 {
+        return evidence;
+    }
+    let remaining: Vec<(u32, String)> = evidence
+        .iter()
+        .filter(|(pid, name)| !(*pid == 1 && name == "systemd"))
+        .cloned()
+        .collect();
+    if remaining.is_empty() {
+        evidence
+    } else {
+        remaining
+    }
 }
 
 fn parse_process_units(text: &str) -> HashMap<u32, String> {
@@ -1640,6 +1668,81 @@ mod tests {
         assert_eq!(sockets[3].ownership, "ambiguous");
         assert_eq!(sockets[3].process_id, None);
         assert_eq!(sockets[3].systemd_unit, None);
+    }
+
+    #[test]
+    fn socket_activated_sshd_is_owned_by_sshd_not_by_systemd() {
+        // Real output from an Ubuntu 24.04 host read as root. ssh.socket means
+        // pid 1 holds the listening fd alongside sshd. Before this rule the two
+        // names disagreed and port 22 reported no owner at all.
+        let text = concat!(
+            "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* ",
+            "users:((\"sshd\",pid=1276,fd=3),(\"systemd\",pid=1,fd=94))
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+            "1276 ssh.service sshd
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+        let ssh = &sockets[0];
+        assert_eq!(ssh.ownership, "known");
+        assert_eq!(ssh.process_id, Some(1276));
+        assert_eq!(ssh.process_name.as_deref(), Some("sshd"));
+        // A single owning PID is what unlocks systemd navigation, so the unit
+        // has to come through with it.
+        assert_eq!(ssh.systemd_unit.as_deref(), Some("ssh.service"));
+    }
+
+    #[test]
+    fn a_socket_waiting_on_activation_still_reports_systemd() {
+        // Nothing has been started behind this socket yet, so pid 1 is the only
+        // holder and is the honest answer rather than an artifact to drop.
+        let text = concat!(
+            "tcp LISTEN 0 4096 0.0.0.0:2375 0.0.0.0:* ",
+            "users:((\"systemd\",pid=1,fd=120))
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+        assert_eq!(sockets[0].ownership, "known");
+        assert_eq!(sockets[0].process_name.as_deref(), Some("systemd"));
+    }
+
+    #[test]
+    fn dropping_the_supervisor_does_not_invent_an_owner_for_real_rivals() {
+        // Two genuinely different services on one socket stay ambiguous. The
+        // rule removes systemd's activation claim, not disagreement.
+        let text = concat!(
+            "tcp LISTEN 0 4096 0.0.0.0:8080 0.0.0.0:* ",
+            "users:((\"nginx\",pid=900,fd=6),(\"haproxy\",pid=901,fd=7),(\"systemd\",pid=1,fd=9))
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+        assert_eq!(sockets[0].ownership, "ambiguous");
+        assert_eq!(sockets[0].process_id, None);
+    }
+
+    #[test]
+    fn a_process_merely_named_systemd_is_not_the_supervisor() {
+        // systemd-resolve is a service like any other. Only pid 1 itself is the
+        // activation supervisor.
+        let text = concat!(
+            "udp UNCONN 0 0 127.0.0.53:53 0.0.0.0:* ",
+            "users:((\"systemd-resolve\",pid=673,fd=14),(\"unbound\",pid=674,fd=3))
+",
+            "
+__CONTROL_ROOM_PROCESS_UNITS__
+",
+        );
+        let sockets = parse_listening_sockets(text).unwrap();
+        assert_eq!(sockets[0].ownership, "ambiguous");
     }
 
     #[test]

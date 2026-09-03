@@ -49,6 +49,10 @@ DESIGN.md.
    test reachability, collect full process arguments, or infer owners from names.
    Service navigation requires one unambiguous PID with a validated systemd unit;
    container navigation requires an exact published address, port, and protocol.
+   systemd's own claim on a socket it activates is the one holder that may be
+   dropped, because pid 1 holding a listening descriptor says how a service was
+   started rather than who is serving. Drop it only when another holder remains,
+   and only for pid 1 itself. Two services that genuinely disagree stay ambiguous.
    The Ports firewall and established-connection snapshots stay bounded and
    read-only, live only in Workspace memory, and are never persisted. Report
    binding exposure and firewall policy separately, and never claim a bind means
