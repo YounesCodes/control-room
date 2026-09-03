@@ -70,11 +70,15 @@ DESIGN.md.
    health, lifecycle, restart, port, network, mount, image, and validated Compose
    facts. Never collect environment values, command arguments, arbitrary labels,
    health logs, or host mount sources.
-9. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
-   Each Saved Connection has one note, and one global note is shared across all
-   connections and Workspaces. Closing a Workspace deletes neither. Never capture
-   terminal or log output automatically.
-10. Capture a Host Baseline only when the user asks. Never schedule, poll, or
+9. Keep Boot Diagnostics bounded and observational. Validate boot IDs, identify
+   current versus previous boots, timestamp partial sections, cap boot, unit, and
+   journal rows, and never persist boot evidence or claim a slow unit caused a
+   problem.
+10. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
+    Each Saved Connection has one note, and one global note is shared across all
+    connections and Workspaces. Closing a Workspace deletes neither. Never capture
+    terminal or log output automatically.
+11. Capture a Host Baseline only when the user asks. Never schedule, poll, or
     recapture in the background. Store normalized facts, per-section collection
     time, support status, user label, schema version, and host identity evidence.
     Never store raw command output, logs, credentials, or environment values.
@@ -86,10 +90,10 @@ DESIGN.md.
     deterministically by domain identity and draw no causal conclusion. A
     comparison against live machine state is still an explicit, user-initiated
     read: never save it as a capture and never repeat it on its own.
-11. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-12. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+12. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+13. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-13. Do not commit or push unless the user asks.
+14. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -121,6 +125,8 @@ account you control.
   full Docker ID without lifecycle controls or raw inspect JSON in React.
 - **Scratchpad Note**: user-authored plain text stored locally for one Saved
   Connection or shared globally across the app. It is not encrypted secret storage.
+- **Boot Diagnostic**: a timestamped, in-memory investigation of one validated boot ID
+  with independently fallible timing, unit, and bounded journal evidence.
 - **Log Stream**: a live journald or Docker log reader with its own lifecycle,
   held in memory.
 - **Enhanced History**: a local record of commands the installed Bash integration

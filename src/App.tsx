@@ -14,6 +14,7 @@ import {
   Minimize2,
   Network,
   Pencil,
+  Power,
   Plus,
   Rows2,
   Search,
@@ -58,6 +59,7 @@ import {
   workspaceDisplayLabel,
 } from "./lib/workspace-lifecycle";
 import { DockerPane } from "./pages/DockerPane";
+import { BootDiagnosticsPane } from "./pages/BootDiagnosticsPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
@@ -68,6 +70,7 @@ import { SettingsPane } from "./pages/SettingsPane";
 import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
   CachedList,
+  BootDiagnostics,
   ConnectionGroup,
   ConnectionState,
   ConnectionTag,
@@ -98,6 +101,7 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: Boxes },
+  { id: "boot", label: "Boot", icon: Power },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "baselines", label: "Baselines", icon: Camera },
   { id: "history", label: "History", icon: History },
@@ -462,6 +466,10 @@ export function App() {
     });
   }
 
+  function updateBootDiagnostics(id: string, bootDiagnostics: BootDiagnostics) {
+    updateWorkspace(id, { bootDiagnostics });
+  }
+
   function rememberCapabilities(capabilities: HostCapabilities) {
     setHostCapabilities((current) => ({
       ...current,
@@ -501,6 +509,7 @@ export function App() {
       systemdSelectionId: null,
       containerSelectionId: null,
       containerDetailsCache: {},
+      bootDiagnostics: null,
       logSource: null,
       baselineSelectionId: null,
     };
@@ -1242,6 +1251,17 @@ export function App() {
                   }
                   onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                   focusId={activeWorkspace.containerSelectionId}
+                />
+              )}
+              {activeWorkspace.view === "boot" && (
+                <BootDiagnosticsPane
+                  key={activeWorkspace.id}
+                  connection={activeConnection}
+                  snapshot={activeWorkspace.bootDiagnostics}
+                  onSnapshotChange={(snapshot) =>
+                    updateBootDiagnostics(activeWorkspace.id, snapshot)
+                  }
+                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
                 />
               )}
               {activeWorkspace.view === "logs" && (

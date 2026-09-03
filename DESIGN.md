@@ -45,7 +45,8 @@ containers, tail logs, recall exact commands. No web console, no
 agent on the host, no second credential store.
 
 The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Ports, Docker, Logs, Baselines, or History as
+terminal. From there you jump to Overview, Systemd, Ports, Docker, Boot, Logs, Baselines, or
+History as
 you need, open more sessions, split them, or move on. Everything the app does to
 a remote host is read-only. The terminal is the only place arbitrary commands
 run, and you type those yourself.
@@ -106,8 +107,8 @@ Navigation is two levels and never nests deeper.
 - **Left rail.** The connection list is divided into manually ordered,
   collapsible groups plus a derived Ungrouped section. Search matches connection
   names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
-  holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Logs,
-  Baselines, History, Scratchpad), with "Add connection"
+  holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Boot,
+  Logs, Baselines, History, Scratchpad), with "Add connection"
   pinned at the bottom.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
@@ -466,6 +467,12 @@ autosaves through typed SQLite commands after a short debounce and keeps a
 WebView-local fallback draft until SQLite confirms the same text. It never
 captures terminal or log output, renders Markdown or raw HTML, contacts a Remote
 Host, or claims to protect secrets. Closing a Workspace deletes neither note.
+
+Boot Diagnostics is an on-demand investigation, not a health score or causal diagnosis. It
+combines independently fallible systemd timing, bounded slow and failed unit facts, the ten most
+recent boot identities, and a 30-line warning-through-alert journal sample. Previous boots keep
+their own identity and explicitly mark current-only timing and unit sections unavailable. Results
+remain in Workspace memory, and only a permission failure offers a transient read-only sudo retry.
 
 ---
 
