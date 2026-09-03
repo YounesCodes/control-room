@@ -51,6 +51,7 @@ pub fn run() {
             commands::close_session,
             commands::get_cached_capabilities,
             commands::refresh_capabilities,
+            commands::sample_host_resources,
             commands::list_services,
             commands::list_containers,
             commands::list_ports,

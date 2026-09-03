@@ -48,6 +48,11 @@ The distinction matters. Control Room helps you inspect and move between related
 ### Host inspection
 
 - View the hostname, operating system, kernel, architecture, uptime, default shell, and detected runtime capabilities.
+- Watch CPU busy share and memory in use while the Overview pane is open, each a current reading
+  over a sparkline of the recent window. Sampling reads only `/proc`, pauses on request, stops when
+  you navigate away or the window is hidden, and keeps nothing: there is no agent, no schedule that
+  outlives the pane, and no stored history. A reading the host did not return is shown as
+  unavailable rather than as zero.
 - Inspect system-scope systemd services, timers, mounts, and sockets. Failed units sort first,
   active and failed totals remain visible, and state and type filters narrow the list. Each unit
   keeps its canonical identity and can open its journal.

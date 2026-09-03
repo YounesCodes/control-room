@@ -25,8 +25,8 @@ use crate::{
         BootDiagnostics, BootRecord, BootSection, BootTiming, ConnectionRemote, ConnectionSummary,
         DockerContainer, DockerContainerDetails, DockerMount, DockerNetworkAttachment,
         DockerPublishedPort, EstablishedConnections, Filesystem, FirewallRule, FirewallStatus,
-        HostCapabilities, HostIdentity, LOG_TAIL_OPTIONS, ListeningSocket, SavedConnection,
-        SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
+        HostCapabilities, HostIdentity, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
+        SavedConnection, SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -236,6 +236,69 @@ impl RemoteCommandExecutor {
 /// the connecting account's, not root's.
 fn capability_command() -> &'static str {
     r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"; printf 'default_shell=%s\n' "$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"; if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then printf 'passwordless_sudo=true\n'; else printf 'passwordless_sudo=false\n'; fi; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; if sudo -n docker info >/dev/null 2>&1; then printf 'docker_accessible_with_sudo=true\n'; printf 'running_container_count=%s\n' "$(sudo -n docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(sudo -n docker ps -aq | wc -l)"; fi; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#
+}
+
+/// One round trip that reads `/proc` and nothing else. CPU busy share only
+/// exists as a delta, so the two `/proc/stat` reads are taken on the host with
+/// a short gap between them rather than by holding a previous sample here and
+/// hoping the next request arrives on schedule. Everything is a plain read: no
+/// process list, no command lines, no per-process accounting.
+fn resource_command() -> &'static str {
+    r#"LC_ALL=C; if test -r /proc/stat; then awk '/^cpu /{t=0; for(n=2;n<=NF;n++) t+=$n; printf "cpu_total_1=%d\ncpu_idle_1=%d\n", t, $5+$6}' /proc/stat; sleep 0.25; awk '/^cpu /{t=0; for(n=2;n<=NF;n++) t+=$n; printf "cpu_total_2=%d\ncpu_idle_2=%d\n", t, $5+$6}' /proc/stat; fi; printf 'cores=%s\n' "$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null)"; if test -r /proc/loadavg; then printf 'load=%s\n' "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"; fi; if test -r /proc/meminfo; then awk '/^MemTotal:|^MemAvailable:|^SwapTotal:|^SwapFree:/{key=tolower(substr($1,1,length($1)-1)); printf "%s=%s\n", key, $2}' /proc/meminfo; fi"#
+}
+
+/// Busy share over the window. Returns `None` unless both reads landed and the
+/// counters actually moved, because a zero-width window would otherwise report
+/// a confident 0% on a host that was never measured.
+fn cpu_percent_from(values: &HashMap<String, String>) -> Option<f64> {
+    let read = |key: &str| values.get(key)?.parse::<u64>().ok();
+    let total_1 = read("cpu_total_1")?;
+    let idle_1 = read("cpu_idle_1")?;
+    let total_2 = read("cpu_total_2")?;
+    let idle_2 = read("cpu_idle_2")?;
+    let total_delta = total_2.checked_sub(total_1)?;
+    if total_delta == 0 {
+        return None;
+    }
+    // A counter reset mid-window would otherwise produce a negative busy share.
+    let idle_delta = idle_2.saturating_sub(idle_1).min(total_delta);
+    let busy = (total_delta - idle_delta) as f64 / total_delta as f64 * 100.0;
+    Some((busy * 10.0).round() / 10.0)
+}
+
+fn parse_kib(values: &HashMap<String, String>, key: &str) -> Option<u64> {
+    values.get(key)?.parse().ok()
+}
+
+pub fn collect_host_resources(connection: &SavedConnection) -> Result<HostResources, String> {
+    let text = RemoteCommandExecutor::execute(connection, "host_resources", resource_command())?
+        .success_text()?;
+    Ok(parse_host_resources(&text))
+}
+
+fn parse_host_resources(text: &str) -> HostResources {
+    let values = parse_key_values(text);
+    let loads: Vec<f64> = values
+        .get("load")
+        .map(|value| {
+            value
+                .split_whitespace()
+                .filter_map(|part| part.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    HostResources {
+        sampled_at: Utc::now().to_rfc3339(),
+        cpu_percent: cpu_percent_from(&values),
+        core_count: parse_count(&values, "cores"),
+        load1: loads.first().copied(),
+        load5: loads.get(1).copied(),
+        load15: loads.get(2).copied(),
+        memory_total_kib: parse_kib(&values, "memtotal"),
+        memory_available_kib: parse_kib(&values, "memavailable"),
+        swap_total_kib: parse_kib(&values, "swaptotal"),
+        swap_free_kib: parse_kib(&values, "swapfree"),
+    }
 }
 
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
@@ -2059,6 +2122,65 @@ mod tests {
     };
 
     use super::*;
+
+    const RESOURCE_OUTPUT: &str = "cpu_total_1=1000\n\
+cpu_idle_1=800\n\
+cpu_total_2=1200\n\
+cpu_idle_2=950\n\
+cores=4\n\
+load=0.15 0.32 0.41\n\
+memtotal=8123456\n\
+memavailable=5123456\n\
+swaptotal=1048576\n\
+swapfree=1048576\n";
+
+    #[test]
+    fn reads_cpu_busy_share_from_the_two_proc_stat_samples() {
+        let resources = parse_host_resources(RESOURCE_OUTPUT);
+        // 200 jiffies elapsed, 150 of them idle, so a quarter was busy.
+        assert_eq!(resources.cpu_percent, Some(25.0));
+        assert_eq!(resources.core_count, Some(4));
+        assert_eq!(resources.load1, Some(0.15));
+        assert_eq!(resources.load15, Some(0.41));
+        assert_eq!(resources.memory_total_kib, Some(8_123_456));
+        assert_eq!(resources.memory_available_kib, Some(5_123_456));
+        assert_eq!(resources.swap_free_kib, Some(1_048_576));
+    }
+
+    // A host that exposes no /proc/stat must not read as an idle one.
+    #[test]
+    fn reports_an_unmeasured_cpu_as_missing_rather_than_zero() {
+        let resources = parse_host_resources("cores=2\nmemtotal=100\n");
+        assert_eq!(resources.cpu_percent, None);
+        assert_eq!(resources.core_count, Some(2));
+    }
+
+    #[test]
+    fn refuses_a_zero_width_window_instead_of_dividing_by_it() {
+        let text = "cpu_total_1=500\ncpu_idle_1=400\ncpu_total_2=500\ncpu_idle_2=400\n";
+        assert_eq!(parse_host_resources(text).cpu_percent, None);
+    }
+
+    // Counters reset when a container is restarted under it. Clamping keeps the
+    // busy share inside 0 to 100 rather than emitting a negative width bar.
+    #[test]
+    fn clamps_a_counter_reset_rather_than_reporting_negative_load() {
+        let text = "cpu_total_1=100\ncpu_idle_1=90\ncpu_total_2=300\ncpu_idle_2=1000\n";
+        let percent = parse_host_resources(text).cpu_percent.unwrap();
+        assert!((0.0..=100.0).contains(&percent), "out of range: {percent}");
+        assert_eq!(percent, 0.0);
+    }
+
+    #[test]
+    fn the_resource_read_touches_only_proc() {
+        let command = resource_command();
+        for probe in ["/proc/stat", "/proc/meminfo", "/proc/loadavg"] {
+            assert!(command.contains(probe), "missing {probe}");
+        }
+        for forbidden in ["ps ", "docker", "systemctl", "journalctl", "sudo"] {
+            assert!(!command.contains(forbidden), "unexpected {forbidden}");
+        }
+    }
 
     const DF_OUTPUT: &str = "Filesystem     Type     1024-blocks     Used Available Capacity Mounted on\n\
 udev           devtmpfs     8123456        0   8123456       0% /dev\n\

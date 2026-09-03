@@ -74,11 +74,19 @@ DESIGN.md.
    current versus previous boots, timestamp partial sections, cap boot, unit, and
    journal rows, and never persist boot evidence or claim a slow unit caused a
    problem.
-10. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
+10. Overview's live load meters are the one read that repeats on a timer, and
+    the exception is bounded rather than open. Sample only while the Overview
+    pane is mounted, stop on unmount, stop while the window is hidden, never
+    overlap round trips, and read nothing but `/proc`. Never persist a sample,
+    never keep a history the user can read back, and never alert on a value.
+    This is not background monitoring: there is no agent, no schedule that
+    outlives the pane, and nothing stored. A missing reading is reported as
+    missing, because a zero would read as an idle host.
+11. Keep Scratchpad notes plain-text, local, user-authored, and size-bounded.
     Each Saved Connection has one note, and one global note is shared across all
     connections and Workspaces. Closing a Workspace deletes neither. Never capture
     terminal or log output automatically.
-11. Capture a Host Baseline only when the user asks. Never schedule, poll, or
+12. Capture a Host Baseline only when the user asks. Never schedule, poll, or
     recapture in the background. Store normalized facts, per-section collection
     time, support status, user label, schema version, and host identity evidence.
     Never store raw command output, logs, credentials, or environment values.
@@ -90,10 +98,10 @@ DESIGN.md.
     deterministically by domain identity and draw no causal conclusion. A
     comparison against live machine state is still an explicit, user-initiated
     read: never save it as a capture and never repeat it on its own.
-12. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-13. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+13. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+14. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-14. Do not commit or push unless the user asks.
+15. Do not commit or push unless the user asks.
 
 ## Validation
 

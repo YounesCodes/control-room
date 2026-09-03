@@ -87,6 +87,32 @@ pub struct HostCapabilities {
     pub detected_at: String,
 }
 
+/// One bounded sample of how loaded a Remote Host is at a moment in time.
+///
+/// This is deliberately a sample rather than a stream. Each field is `Option`
+/// because a host may expose part of `/proc` and not the rest, and a missing
+/// reading is reported as missing rather than as zero, which would read as an
+/// idle host. Samples are never persisted: the pane holds a short window of
+/// them in memory while it is open and drops them when it closes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostResources {
+    pub sampled_at: String,
+    /// Busy share of all cores across the sampling window, 0 to 100. `None`
+    /// when `/proc/stat` did not return two comparable readings.
+    pub cpu_percent: Option<f64>,
+    pub core_count: Option<u32>,
+    pub load1: Option<f64>,
+    pub load5: Option<f64>,
+    pub load15: Option<f64>,
+    pub memory_total_kib: Option<u64>,
+    /// What the kernel reports as available, not `free`. Used memory is total
+    /// minus this, so cache and reclaimable slab are not counted as in use.
+    pub memory_available_kib: Option<u64>,
+    pub swap_total_kib: Option<u64>,
+    pub swap_free_kib: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemdUnit {

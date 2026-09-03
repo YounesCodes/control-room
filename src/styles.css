@@ -2080,7 +2080,7 @@ code,
   grid-template-columns: 150px minmax(0, 1fr);
   align-items: baseline;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 13px 5px;
+  padding: 11px 5px;
 }
 
 .definition-grid > div:nth-child(odd) {
@@ -2176,6 +2176,77 @@ dd {
   font-size: 10.5px;
 }
 
+/* ==========================================================================
+   Live load meters
+   ========================================================================== */
+
+/* .overview-stats carries only a bottom margin, so without one here the meter
+   tiles and the facts strip below them meet border to border. */
+.overview-live {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.overview-live-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.overview-live-note {
+  margin: 2px 0 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.resource-meters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.resource-meter {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  padding: 14px 16px 12px;
+}
+
+.resource-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* The chart carries magnitude through length, so it stays neutral. A status
+   hue here would imply a verdict the app has no basis to give. */
+.resource-sparkline {
+  display: block;
+  width: 100%;
+  height: 40px;
+}
+
+.resource-sparkline-area {
+  fill: var(--fill-active);
+  stroke: none;
+}
+
+.resource-sparkline-line {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .overview-section {
   margin-top: 24px;
 }
@@ -2200,15 +2271,16 @@ dd {
   list-style: none;
 }
 
+/* No width cap of its own: the list spans the content column so its rows line
+   up with the definition grid above instead of stopping halfway across. */
 .capability-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  max-width: 520px;
+  min-height: 38px;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 10px 5px;
+  padding: 8px 5px;
 }
 
 .cap-dot {

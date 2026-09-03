@@ -10,7 +10,7 @@ use crate::{
         BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
         DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary, HostCapabilities,
-        LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
+        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
         SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
         SettingsContract, StreamStarted, SystemdUnit,
     },
@@ -262,6 +262,21 @@ pub fn refresh_capabilities(
     let capabilities = remote::discover_capabilities(&connection)?;
     database.save_capabilities(&capabilities)?;
     Ok(capabilities)
+}
+
+/// Samples current load. Deliberately not saved anywhere: unlike capabilities,
+/// which are cached so a Workspace can open without a round trip, a load sample
+/// is only true for the instant it was taken, and keeping a history of them
+/// would turn an on-demand read into monitoring.
+#[tauri::command(async)]
+pub fn sample_host_resources(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+) -> Result<HostResources, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    remote::collect_host_resources(&connection)
 }
 
 #[tauri::command(async)]
