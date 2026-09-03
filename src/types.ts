@@ -423,6 +423,17 @@ export interface EnvironmentInfo {
   platformSupported: boolean;
 }
 
+/// The local Windows shells Control Room can host. The id is the whole
+/// vocabulary the frontend may send back to Rust: there is no executable path,
+/// argument, or command string on this side of the boundary.
+export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash";
+
+export interface LocalShellProfile {
+  id: string;
+  label: string;
+  kind: LocalShellKind;
+}
+
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
   | "overview"
@@ -457,18 +468,25 @@ export interface LogSourceSelection {
   id: string;
 }
 
-export interface Workspace {
+/// What every Workspace has, whatever its terminal is attached to.
+interface WorkspaceBase {
   id: string;
   label: string | null;
-  connectionId: string;
-  connectionSnapshot: SavedConnection;
   sessionId: string | null;
   state: ConnectionState;
   reason: string | null;
   view: WorkspaceView;
-  historyPaused: boolean;
   reconnectToken: number;
   connectRequested: boolean;
+}
+
+/// A Workspace on a Remote Host. Inspection caches, Enhanced History, and the
+/// Saved Connection snapshot live here and nowhere else.
+export interface RemoteWorkspace extends WorkspaceBase {
+  kind: "remote";
+  connectionId: string;
+  connectionSnapshot: SavedConnection;
+  historyPaused: boolean;
   servicesCache: CachedList<SystemdUnit>;
   portsCache: CachedList<ListeningSocket>;
   containersCache: CachedList<DockerContainer>;
@@ -480,10 +498,26 @@ export interface Workspace {
   baselineSelectionId: string | null;
 }
 
+/// A Workspace on a local Windows shell. It is terminal-only: there is no
+/// Saved Connection, no host inspection, and no History.
+export interface LocalWorkspace extends WorkspaceBase {
+  kind: "local";
+  shell: LocalShellProfile;
+}
+
+export type Workspace = RemoteWorkspace | LocalWorkspace;
+
+/// The fields a caller may patch without knowing which kind of Workspace it
+/// holds. Remote-only fields are patched through the remote-only updater.
+export type WorkspacePatch = Partial<Omit<WorkspaceBase, "id">>;
+
+/// One restored tab. Exactly one target is set; a payload written before Local
+/// Terminal existed carries only `connectionId`.
 interface PersistedWorkspace {
   id: string;
   label: string | null;
-  connectionId: string;
+  connectionId: string | null;
+  localShellId: string | null;
   view: WorkspaceView;
   historyPaused: boolean;
 }
@@ -525,7 +559,10 @@ export interface SessionStateEvent {
     | "connection-lost"
     | "process"
     | "remote-exit"
-    | "user-disconnect";
+    | "user-disconnect"
+    // Local sessions: the shell exited on its own, or the user stopped it.
+    | "local-exit"
+    | "user-stop";
   reason: string | null;
 }
 

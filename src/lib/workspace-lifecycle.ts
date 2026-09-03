@@ -3,7 +3,8 @@ import {
   removeTerminalFromLayout,
   type TerminalLayout,
 } from "./terminal-layout";
-import type { Workspace } from "../types";
+import { isRemoteWorkspace, workspaceTargetKey, workspaceTargetName } from "./workspace-target";
+import type { SavedConnection, Workspace } from "../types";
 
 interface RemovedConnectionWorkspaces {
   remaining: Workspace[];
@@ -18,8 +19,12 @@ export function removeConnectionWorkspaces(
   activeWorkspaceId: string | null,
   terminalLayout: TerminalLayout | null,
 ): RemovedConnectionWorkspaces {
-  const removed = workspaces.filter((workspace) => workspace.connectionId === connectionId);
-  const remaining = workspaces.filter((workspace) => workspace.connectionId !== connectionId);
+  // Deleting a Saved Connection touches its own Workspaces only. Local
+  // Workspaces have no connection to lose and stay open.
+  const belongsToConnection = (workspace: Workspace) =>
+    isRemoteWorkspace(workspace) && workspace.connectionId === connectionId;
+  const removed = workspaces.filter(belongsToConnection);
+  const remaining = workspaces.filter((workspace) => !belongsToConnection(workspace));
   const activeIndex = workspaces.findIndex((workspace) => workspace.id === activeWorkspaceId);
   const activeWasRemoved = removed.some((workspace) => workspace.id === activeWorkspaceId);
   const nextLayout = removed.reduce<TerminalLayout | null>(
@@ -47,10 +52,10 @@ export function removeConnectionWorkspaces(
 
 export function updateWorkspaceConnectionSnapshots(
   workspaces: Workspace[],
-  connection: Workspace["connectionSnapshot"],
+  connection: SavedConnection,
 ): Workspace[] {
   return workspaces.map((workspace) =>
-    workspace.connectionId === connection.id
+    isRemoteWorkspace(workspace) && workspace.connectionId === connection.id
       ? { ...workspace, connectionSnapshot: { ...connection } }
       : workspace,
   );
@@ -59,9 +64,9 @@ export function updateWorkspaceConnectionSnapshots(
 export function workspaceDisplayLabel(workspace: Workspace, workspaces: Workspace[]): string {
   const custom = workspace.label?.trim();
   if (custom) return custom;
-  const siblings = workspaces.filter((item) => item.connectionId === workspace.connectionId);
+  const key = workspaceTargetKey(workspace);
+  const siblings = workspaces.filter((item) => workspaceTargetKey(item) === key);
   const position = siblings.findIndex((item) => item.id === workspace.id);
-  return position > 0
-    ? `${workspace.connectionSnapshot.displayName} ${position + 1}`
-    : workspace.connectionSnapshot.displayName;
+  const name = workspaceTargetName(workspace);
+  return position > 0 ? `${name} ${position + 1}` : name;
 }

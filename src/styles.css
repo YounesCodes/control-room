@@ -799,6 +799,76 @@ code,
   background: var(--accent-hover);
 }
 
+/* The Local Terminal launcher sits above Add connection: a secondary action,
+   since most work in Control Room is remote. */
+.local-shell-launcher {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.sidebar-secondary {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 11px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.sidebar-secondary:hover {
+  border-color: var(--border-strong);
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+
+.local-shell-menu {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 6px;
+}
+
+.local-shell-menu button {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.local-shell-menu button:hover {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+/* The terminal mark stands in for the host OS mark on a local tab, so it keeps
+   the same box the presence badge is positioned against. */
+.local-shell-mark {
+  flex: none;
+  color: var(--text-muted);
+}
+
 /* ==========================================================================
    Workspace shell
    ========================================================================== */

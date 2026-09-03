@@ -51,13 +51,19 @@ import {
   terminalLayoutContains,
 } from "./lib/terminal-layout";
 import type { TerminalLayout, TerminalSplitDirection } from "./lib/terminal-layout";
-import { emptyCachedList } from "./lib/workspace-cache";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
 import {
   removeConnectionWorkspaces,
   updateWorkspaceConnectionSnapshots,
   workspaceDisplayLabel,
 } from "./lib/workspace-lifecycle";
+import {
+  createLocalWorkspace,
+  createRemoteWorkspace,
+  isLocalWorkspace,
+  isRemoteWorkspace,
+  workspaceTargetName,
+} from "./lib/workspace-target";
 import { DockerPane } from "./pages/DockerPane";
 import { BootDiagnosticsPane } from "./pages/BootDiagnosticsPane";
 import { HistoryPane } from "./pages/HistoryPane";
@@ -79,12 +85,15 @@ import type {
   EnvironmentInfo,
   HostCapabilities,
   ListeningSocket,
+  LocalShellProfile,
   LogSourceSelection,
+  RemoteWorkspace,
   SavedConnection,
   SettingsContract,
   SystemdUnit,
   CachedValue,
   Workspace,
+  WorkspacePatch,
   WorkspaceView,
 } from "./types";
 
@@ -114,6 +123,8 @@ const TerminalPane = lazy(() =>
 
 export function App() {
   const [connections, setConnections] = useState<SavedConnection[]>([]);
+  const [localShells, setLocalShells] = useState<LocalShellProfile[]>([]);
+  const [localShellMenuOpen, setLocalShellMenuOpen] = useState(false);
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -155,6 +166,7 @@ export function App() {
       api.workspaceState(),
       api.listConnectionGroups(),
       api.listConnectionTags(),
+      api.listLocalShells(),
     ])
       .then(
         ([
@@ -164,14 +176,19 @@ export function App() {
           workspaceStateResult,
           groupsResult,
           tagsResult,
+          localShellsResult,
         ]) => {
           if (!current) return;
+          const detectedShells =
+            localShellsResult.status === "fulfilled" ? localShellsResult.value : [];
+          setLocalShells(detectedShells);
           if (connectionsResult.status === "fulfilled") {
             setConnections(connectionsResult.value);
             if (workspaceStateResult.status === "fulfilled") {
               const restored = restoreWorkspaceState(
                 connectionsResult.value,
                 workspaceStateResult.value,
+                detectedShells,
               );
               setWorkspaces(restored.workspaces);
               setActiveWorkspaceId(restored.activeWorkspaceId);
@@ -216,10 +233,20 @@ export function App() {
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
-  const activeConnection = activeWorkspace?.connectionSnapshot ?? null;
-  const activeSavedConnection = activeWorkspace
-    ? (connections.find((connection) => connection.id === activeWorkspace.connectionId) ?? null)
+  // Inspection views, Enhanced History, and Saved Connection actions belong to
+  // a remote Workspace. A local one is terminal-only.
+  const activeRemoteWorkspace =
+    activeWorkspace && isRemoteWorkspace(activeWorkspace) ? activeWorkspace : null;
+  const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
+  const activeSavedConnection = activeRemoteWorkspace
+    ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
+      null)
     : null;
+  // "New terminal" repeats whatever the active Workspace already is: another
+  // session on its Saved Connection, or another shell of the same profile.
+  const canOpenNewTerminal = Boolean(
+    activeWorkspace && (isLocalWorkspace(activeWorkspace) || activeSavedConnection),
+  );
   const focusedTerminalIds = terminalLayout ? getTerminalLayoutIds(terminalLayout) : [];
   const visibleTerminalIds = terminalFocusMode
     ? focusedTerminalIds
@@ -314,6 +341,27 @@ export function App() {
   }, [hostMenuConnectionId]);
 
   useEffect(() => {
+    if (!localShellMenuOpen) return;
+
+    function dismissMenu(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-local-shell-menu]")) return;
+      setLocalShellMenuOpen(false);
+    }
+
+    function dismissMenuWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setLocalShellMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", dismissMenu);
+    document.addEventListener("keydown", dismissMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("keydown", dismissMenuWithKeyboard);
+    };
+  }, [localShellMenuOpen]);
+
+  useEffect(() => {
     if (!splitMenuOpen) return;
 
     function dismissMenu(event: PointerEvent) {
@@ -345,6 +393,7 @@ export function App() {
     const priority: ConnectionState[] = ["connected", "connecting", "error", "disconnected"];
     const map: Record<string, ConnectionState> = {};
     for (const workspace of workspaces) {
+      if (!isRemoteWorkspace(workspace)) continue;
       const current = map[workspace.connectionId];
       if (!current || priority.indexOf(workspace.state) < priority.indexOf(current)) {
         map[workspace.connectionId] = workspace.state;
@@ -353,9 +402,22 @@ export function App() {
     return map;
   }, [workspaces]);
 
-  function updateWorkspace(id: string, patch: Partial<Workspace>) {
+  function updateWorkspace(id: string, patch: WorkspacePatch) {
     setWorkspaces((current) =>
       current.map((workspace) => (workspace.id === id ? { ...workspace, ...patch } : workspace)),
+    );
+  }
+
+  /// Patches the fields only a remote Workspace has: inspection caches,
+  /// selections, and Enhanced History state. A local Workspace is left alone
+  /// rather than given fields it has no use for.
+  function updateRemoteWorkspace(id: string, patch: Partial<Omit<RemoteWorkspace, "kind">>) {
+    setWorkspaces((current) =>
+      current.map((workspace) =>
+        workspace.id === id && isRemoteWorkspace(workspace)
+          ? { ...workspace, ...patch }
+          : workspace,
+      ),
     );
   }
 
@@ -440,15 +502,15 @@ export function App() {
   }
 
   function updateServicesCache(id: string, servicesCache: CachedList<SystemdUnit>) {
-    updateWorkspace(id, { servicesCache });
+    updateRemoteWorkspace(id, { servicesCache });
   }
 
   function updateContainersCache(id: string, containersCache: CachedList<DockerContainer>) {
-    updateWorkspace(id, { containersCache });
+    updateRemoteWorkspace(id, { containersCache });
   }
 
   function updatePortsCache(id: string, portsCache: CachedList<ListeningSocket>) {
-    updateWorkspace(id, { portsCache });
+    updateRemoteWorkspace(id, { portsCache });
   }
 
   function updateContainerDetailsCache(
@@ -457,8 +519,8 @@ export function App() {
     details: CachedValue<DockerContainerDetails>,
   ) {
     const workspace = workspaces.find((item) => item.id === id);
-    if (!workspace) return;
-    updateWorkspace(id, {
+    if (!workspace || !isRemoteWorkspace(workspace)) return;
+    updateRemoteWorkspace(id, {
       containerDetailsCache: {
         ...workspace.containerDetailsCache,
         [containerId]: details,
@@ -467,7 +529,7 @@ export function App() {
   }
 
   function updateBootDiagnostics(id: string, bootDiagnostics: BootDiagnostics) {
-    updateWorkspace(id, { bootDiagnostics });
+    updateRemoteWorkspace(id, { bootDiagnostics });
   }
 
   function rememberCapabilities(capabilities: HostCapabilities) {
@@ -487,37 +549,11 @@ export function App() {
   }
 
   function openLogs(id: string, logSource: LogSourceSelection) {
-    updateWorkspace(id, { view: "logs", logSource });
+    updateRemoteWorkspace(id, { view: "logs", logSource });
   }
 
-  function createWorkspace(connection: SavedConnection): Workspace {
-    return {
-      id: crypto.randomUUID(),
-      label: null,
-      connectionId: connection.id,
-      connectionSnapshot: { ...connection },
-      sessionId: null,
-      state: "connecting",
-      reason: null,
-      view: "terminal",
-      historyPaused: false,
-      reconnectToken: 0,
-      connectRequested: true,
-      servicesCache: emptyCachedList(),
-      portsCache: emptyCachedList(),
-      containersCache: emptyCachedList(),
-      systemdSelectionId: null,
-      containerSelectionId: null,
-      containerDetailsCache: {},
-      bootDiagnostics: null,
-      logSource: null,
-      baselineSelectionId: null,
-    };
-  }
-
-  function splitWithNewConnection(connection: SavedConnection) {
+  function splitWithNewWorkspace(workspace: Workspace) {
     if (!activeWorkspace) return;
-    const workspace = createWorkspace(connection);
     setWorkspaces((current) => [...current, workspace]);
     setTerminalLayout((current) =>
       splitTerminalLayout(
@@ -538,27 +574,52 @@ export function App() {
       if (!forceNew) {
         const existing = [...workspaces]
           .reverse()
-          .find((workspace) => workspace.connectionId === connection.id);
+          .find(
+            (workspace) => isRemoteWorkspace(workspace) && workspace.connectionId === connection.id,
+          );
         if (existing) {
           setActiveWorkspaceId(existing.id);
           return;
         }
       }
-      const workspace = createWorkspace(connection);
-      setWorkspaces((current) => [...current, workspace]);
-      setActiveWorkspaceId(workspace.id);
-      if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
+      openWorkspace(createRemoteWorkspace(connection));
     });
+  }
+
+  /// Opens a local Windows shell as its own Workspace. Each launch is a new
+  /// shell, so there is nothing to reuse, and no Saved Connection is involved.
+  function openLocalShell(shell: LocalShellProfile) {
+    setLocalShellMenuOpen(false);
+    closeSettings(() => openWorkspace(createLocalWorkspace(shell)));
+  }
+
+  function openWorkspace(workspace: Workspace) {
+    setWorkspaces((current) => [...current, workspace]);
+    setActiveWorkspaceId(workspace.id);
+    if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
+  }
+
+  /// Another terminal of whatever the active Workspace already is.
+  function openAnotherTerminal() {
+    if (!activeWorkspace) return;
+    if (isLocalWorkspace(activeWorkspace)) {
+      openLocalShell(activeWorkspace.shell);
+      return;
+    }
+    if (activeSavedConnection) openConnection(activeSavedConnection, true);
   }
 
   function closeWorkspace(id: string) {
     const workspace = workspaces.find((item) => item.id === id);
     if (!workspace) return;
     if (workspace.sessionId) {
+      const local = isLocalWorkspace(workspace);
       setConfirmState({
         title: "Close workspace",
-        message: "Disconnect the active SSH session and close this Workspace?",
-        confirmLabel: "Disconnect & close",
+        message: local
+          ? "Stop the local shell and close this Workspace?"
+          : "Disconnect the active SSH session and close this Workspace?",
+        confirmLabel: local ? "Stop & close" : "Disconnect & close",
         danger: true,
         onConfirm: () => void performCloseWorkspace(id),
       });
@@ -665,13 +726,17 @@ export function App() {
       current.map((connection) => ({ ...connection, tags: updateTags(connection.tags) })),
     );
     setWorkspaces((current) =>
-      current.map((workspace) => ({
-        ...workspace,
-        connectionSnapshot: {
-          ...workspace.connectionSnapshot,
-          tags: updateTags(workspace.connectionSnapshot.tags),
-        },
-      })),
+      current.map((workspace) =>
+        isRemoteWorkspace(workspace)
+          ? {
+              ...workspace,
+              connectionSnapshot: {
+                ...workspace.connectionSnapshot,
+                tags: updateTags(workspace.connectionSnapshot.tags),
+              },
+            }
+          : workspace,
+      ),
     );
   }
 
@@ -682,13 +747,17 @@ export function App() {
       current.map((connection) => ({ ...connection, tags: removeTag(connection.tags) })),
     );
     setWorkspaces((current) =>
-      current.map((workspace) => ({
-        ...workspace,
-        connectionSnapshot: {
-          ...workspace.connectionSnapshot,
-          tags: removeTag(workspace.connectionSnapshot.tags),
-        },
-      })),
+      current.map((workspace) =>
+        isRemoteWorkspace(workspace)
+          ? {
+              ...workspace,
+              connectionSnapshot: {
+                ...workspace.connectionSnapshot,
+                tags: removeTag(workspace.connectionSnapshot.tags),
+              },
+            }
+          : workspace,
+      ),
     );
   }
 
@@ -700,7 +769,7 @@ export function App() {
     );
     setWorkspaces((current) =>
       current.map((workspace) =>
-        workspace.connectionSnapshot.groupId === groupId
+        isRemoteWorkspace(workspace) && workspace.connectionSnapshot.groupId === groupId
           ? {
               ...workspace,
               connectionSnapshot: { ...workspace.connectionSnapshot, groupId: null },
@@ -737,15 +806,26 @@ export function App() {
   }
 
   function pasteIntoTerminal(command: string) {
-    if (!activeWorkspace?.sessionId) {
+    if (!activeRemoteWorkspace?.sessionId) {
       setActionError("Reconnect the Terminal Session before pasting a command.");
       return;
     }
     setActionError(null);
     void api
-      .writeSession(activeWorkspace.sessionId, new TextEncoder().encode(command))
+      .writeSession(activeRemoteWorkspace.sessionId, new TextEncoder().encode(command))
       .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
-    updateWorkspace(activeWorkspace.id, { view: "terminal" });
+    updateWorkspace(activeRemoteWorkspace.id, { view: "terminal" });
+  }
+
+  /// The identity mark for a Workspace: the host OS mark for a Remote Host, a
+  /// terminal mark for a local shell, since there is no operating system to
+  /// report about the machine the app is already running on.
+  function workspaceMark(workspace: Workspace) {
+    return isLocalWorkspace(workspace) ? (
+      <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark" />
+    ) : (
+      <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+    );
   }
 
   function renderConnectionRow(connection: SavedConnection) {
@@ -753,7 +833,7 @@ export function App() {
       <div
         className={[
           "host-row",
-          activeWorkspace?.connectionId === connection.id && !settingsOpen ? "active" : "",
+          activeRemoteWorkspace?.connectionId === connection.id && !settingsOpen ? "active" : "",
           hostMenuConnectionId === connection.id ? "menu-open" : "",
         ]
           .filter(Boolean)
@@ -905,17 +985,21 @@ export function App() {
             </p>
           )}
         </nav>
-        {activeWorkspace && activeConnection && (
+        {/* The view switcher belongs to a Remote Host. A local Workspace is
+            terminal-only, so it shows no inspection views at all. */}
+        {activeRemoteWorkspace && (
           <div className="workspace-navigation">
             <nav className="feature-nav" aria-label="Workspace features">
               {navigation.map(({ id, label, icon: Icon }) => (
                 <button
-                  className={activeWorkspace.view === id && !settingsOpen ? "active" : ""}
+                  className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
                   type="button"
                   key={id}
-                  aria-current={activeWorkspace.view === id && !settingsOpen ? "page" : undefined}
+                  aria-current={
+                    activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
+                  }
                   onClick={() =>
-                    closeSettings(() => updateWorkspace(activeWorkspace.id, { view: id }))
+                    closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
                   }
                 >
                   <Icon size={17} strokeWidth={1.8} /> {label}
@@ -925,6 +1009,35 @@ export function App() {
           </div>
         )}
         <div className="sidebar-footer">
+          {!!localShells.length && (
+            <div className="local-shell-launcher" data-local-shell-menu>
+              <button
+                className="sidebar-secondary"
+                type="button"
+                onClick={() => setLocalShellMenuOpen((current) => !current)}
+                aria-haspopup="menu"
+                aria-expanded={localShellMenuOpen}
+                title="Open a shell on this Windows machine"
+              >
+                <SquareTerminal size={16} /> Local terminal
+              </button>
+              {localShellMenuOpen && (
+                <div className="local-shell-menu" role="menu" aria-label="Local terminal">
+                  {localShells.map((shell) => (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      key={shell.id}
+                      onClick={() => openLocalShell(shell)}
+                    >
+                      <SquareTerminal size={14} strokeWidth={1.8} />
+                      <span>{shell.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button
             className="sidebar-primary"
             type="button"
@@ -961,7 +1074,7 @@ export function App() {
                     onClick={() => selectWorkspaceTab(workspace)}
                   >
                     <span className="os-badge">
-                      <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                      {workspaceMark(workspace)}
                       <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
                     </span>
                     <span>{duplicateLabel(workspace)}</span>
@@ -988,9 +1101,13 @@ export function App() {
               <button
                 className="session-new-terminal"
                 type="button"
-                onClick={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
-                disabled={!activeSavedConnection}
-                title="Open another terminal in this window"
+                onClick={openAnotherTerminal}
+                disabled={!canOpenNewTerminal}
+                title={
+                  activeWorkspace && isLocalWorkspace(activeWorkspace)
+                    ? `Open another ${activeWorkspace.shell.label} terminal`
+                    : "Open another terminal in this window"
+                }
               >
                 <Plus size={15} /> New terminal
               </button>
@@ -1003,7 +1120,11 @@ export function App() {
                       className="session-strip-button"
                       type="button"
                       onClick={() => setSplitMenuOpen((current) => !current)}
-                      disabled={!connections.length && !existingSplitCandidates.length}
+                      disabled={
+                        !connections.length &&
+                        !existingSplitCandidates.length &&
+                        !localShells.length
+                      }
                       aria-label="Split terminal"
                       aria-haspopup="dialog"
                       aria-expanded={splitMenuOpen}
@@ -1052,8 +1173,23 @@ export function App() {
                                 key={workspace.id}
                                 onClick={() => splitWithExistingTerminal(workspace)}
                               >
-                                <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                                {workspaceMark(workspace)}
                                 <span>{duplicateLabel(workspace)}</span>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {!!localShells.length && (
+                          <>
+                            <strong>New local terminal</strong>
+                            {localShells.map((shell) => (
+                              <button
+                                type="button"
+                                key={shell.id}
+                                onClick={() => splitWithNewWorkspace(createLocalWorkspace(shell))}
+                              >
+                                <SquareTerminal size={16} strokeWidth={1.8} />
+                                <span>{shell.label}</span>
                               </button>
                             ))}
                           </>
@@ -1063,7 +1199,7 @@ export function App() {
                           <button
                             type="button"
                             key={connection.id}
-                            onClick={() => splitWithNewConnection(connection)}
+                            onClick={() => splitWithNewWorkspace(createRemoteWorkspace(connection))}
                           >
                             <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
                             <span>{connection.displayName}</span>
@@ -1108,7 +1244,7 @@ export function App() {
           </div>
         )}
 
-        {activeWorkspace && activeConnection && activeSavedConnection && (
+        {activeWorkspace && (
           <section
             className={settingsOpen ? "workspace-view workspace-view-hidden" : "workspace-view"}
             aria-hidden={settingsOpen || undefined}
@@ -1155,7 +1291,7 @@ export function App() {
                             type="button"
                             onClick={() => setActiveWorkspaceId(workspace.id)}
                           >
-                            <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+                            {workspaceMark(workspace)}
                             <span className="terminal-pane-label">{label}</span>
                           </button>
                           <button
@@ -1170,7 +1306,6 @@ export function App() {
                         </header>
                       )}
                       <TerminalPane
-                        connection={workspace.connectionSnapshot}
                         workspace={workspace}
                         settings={settings}
                         visible={terminalVisible}
@@ -1186,7 +1321,9 @@ export function App() {
                                 ? false
                                 : workspace.connectRequested,
                           });
-                          if (state === "connected") {
+                          // Host capability discovery is a Remote Host read.
+                          // Nothing is detected about the local machine.
+                          if (state === "connected" && isRemoteWorkspace(workspace)) {
                             detectConnectionCapabilities(workspace.connectionId);
                           }
                         }}
@@ -1201,120 +1338,140 @@ export function App() {
                   );
                 })}
               </Suspense>
-              {activeWorkspace.view === "overview" && (
-                <OverviewPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  onCapabilitiesChange={rememberCapabilities}
-                />
-              )}
-              {activeWorkspace.view === "services" && (
-                <ServicesPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  cache={activeWorkspace.servicesCache}
-                  onCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
-                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
-                  focusId={activeWorkspace.systemdSelectionId}
-                />
-              )}
-              {activeWorkspace.view === "ports" && (
-                <PortsPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  capabilities={hostCapabilities[activeConnection.id] ?? null}
-                  globalSudoEnabled={settings.globalSudoEnabled}
-                  cache={activeWorkspace.portsCache}
-                  containersCache={activeWorkspace.containersCache}
-                  onCacheChange={(cache) => updatePortsCache(activeWorkspace.id, cache)}
-                  onContainersCacheChange={(cache) =>
-                    updateContainersCache(activeWorkspace.id, cache)
-                  }
-                  onOpenSystemd={(systemdSelectionId) =>
-                    updateWorkspace(activeWorkspace.id, { view: "services", systemdSelectionId })
-                  }
-                  onOpenContainer={(containerSelectionId) =>
-                    updateWorkspace(activeWorkspace.id, { view: "docker", containerSelectionId })
-                  }
-                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
-                />
-              )}
-              {activeWorkspace.view === "docker" && (
-                <DockerPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  cache={activeWorkspace.containersCache}
-                  detailsCache={activeWorkspace.containerDetailsCache}
-                  onCacheChange={(cache) => updateContainersCache(activeWorkspace.id, cache)}
-                  onDetailsCacheChange={(containerId, details) =>
-                    updateContainerDetailsCache(activeWorkspace.id, containerId, details)
-                  }
-                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
-                  focusId={activeWorkspace.containerSelectionId}
-                />
-              )}
-              {activeWorkspace.view === "boot" && (
-                <BootDiagnosticsPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  snapshot={activeWorkspace.bootDiagnostics}
-                  onSnapshotChange={(snapshot) =>
-                    updateBootDiagnostics(activeWorkspace.id, snapshot)
-                  }
-                  onViewLogs={(source) => openLogs(activeWorkspace.id, source)}
-                />
-              )}
-              {activeWorkspace.view === "logs" && (
-                <LogsPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  settings={settings}
-                  logTailOptions={settingsContract.logTailOptions}
-                  servicesCache={activeWorkspace.servicesCache}
-                  containersCache={activeWorkspace.containersCache}
-                  selectedSource={activeWorkspace.logSource}
-                  onServicesCacheChange={(cache) => updateServicesCache(activeWorkspace.id, cache)}
-                  onContainersCacheChange={(cache) =>
-                    updateContainersCache(activeWorkspace.id, cache)
-                  }
-                  onSourceChange={(logSource) => updateWorkspace(activeWorkspace.id, { logSource })}
-                />
-              )}
-              {activeWorkspace.view === "baselines" && (
-                <BaselinesPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  selectedId={activeWorkspace.baselineSelectionId}
-                  onSelect={(baselineSelectionId) =>
-                    updateWorkspace(activeWorkspace.id, { baselineSelectionId })
-                  }
-                />
-              )}
-              {activeWorkspace.view === "history" && (
-                <HistoryPane
-                  key={activeWorkspace.id}
-                  connection={activeConnection}
-                  paused={activeWorkspace.historyPaused}
-                  globalEnabled={settings.globalHistoryEnabled}
-                  onPausedChange={(historyPaused) =>
-                    updateWorkspace(activeWorkspace.id, { historyPaused })
-                  }
-                  onConnectionChanged={(saved) => {
-                    saveConnection(saved);
-                    updateWorkspace(activeWorkspace.id, {
-                      connectionSnapshot: {
-                        ...activeWorkspace.connectionSnapshot,
-                        historyEnabled: saved.historyEnabled,
-                        updatedAt: saved.updatedAt,
-                      },
-                    });
-                  }}
-                  onPaste={pasteIntoTerminal}
-                  canPaste={Boolean(activeWorkspace.sessionId)}
-                />
-              )}
-              {activeWorkspace.view === "scratchpad" && (
-                <ScratchpadPane key={activeWorkspace.id} connection={activeConnection} />
+              {/* Inspection views need a Remote Host and its Saved
+                  Connection. A local Workspace renders its terminal only. */}
+              {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
+                <>
+                  {activeRemoteWorkspace.view === "overview" && (
+                    <OverviewPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      onCapabilitiesChange={rememberCapabilities}
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "services" && (
+                    <ServicesPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      cache={activeRemoteWorkspace.servicesCache}
+                      onCacheChange={(cache) =>
+                        updateServicesCache(activeRemoteWorkspace.id, cache)
+                      }
+                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
+                      focusId={activeRemoteWorkspace.systemdSelectionId}
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "ports" && (
+                    <PortsPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      capabilities={hostCapabilities[activeConnection.id] ?? null}
+                      globalSudoEnabled={settings.globalSudoEnabled}
+                      cache={activeRemoteWorkspace.portsCache}
+                      containersCache={activeRemoteWorkspace.containersCache}
+                      onCacheChange={(cache) => updatePortsCache(activeRemoteWorkspace.id, cache)}
+                      onContainersCacheChange={(cache) =>
+                        updateContainersCache(activeRemoteWorkspace.id, cache)
+                      }
+                      onOpenSystemd={(systemdSelectionId) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
+                          view: "services",
+                          systemdSelectionId,
+                        })
+                      }
+                      onOpenContainer={(containerSelectionId) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
+                          view: "docker",
+                          containerSelectionId,
+                        })
+                      }
+                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "docker" && (
+                    <DockerPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      cache={activeRemoteWorkspace.containersCache}
+                      detailsCache={activeRemoteWorkspace.containerDetailsCache}
+                      onCacheChange={(cache) =>
+                        updateContainersCache(activeRemoteWorkspace.id, cache)
+                      }
+                      onDetailsCacheChange={(containerId, details) =>
+                        updateContainerDetailsCache(activeRemoteWorkspace.id, containerId, details)
+                      }
+                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
+                      focusId={activeRemoteWorkspace.containerSelectionId}
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "boot" && (
+                    <BootDiagnosticsPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      snapshot={activeRemoteWorkspace.bootDiagnostics}
+                      onSnapshotChange={(snapshot) =>
+                        updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
+                      }
+                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "logs" && (
+                    <LogsPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      settings={settings}
+                      logTailOptions={settingsContract.logTailOptions}
+                      servicesCache={activeRemoteWorkspace.servicesCache}
+                      containersCache={activeRemoteWorkspace.containersCache}
+                      selectedSource={activeRemoteWorkspace.logSource}
+                      onServicesCacheChange={(cache) =>
+                        updateServicesCache(activeRemoteWorkspace.id, cache)
+                      }
+                      onContainersCacheChange={(cache) =>
+                        updateContainersCache(activeRemoteWorkspace.id, cache)
+                      }
+                      onSourceChange={(logSource) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { logSource })
+                      }
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "baselines" && (
+                    <BaselinesPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      selectedId={activeRemoteWorkspace.baselineSelectionId}
+                      onSelect={(baselineSelectionId) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
+                      }
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "history" && (
+                    <HistoryPane
+                      key={activeRemoteWorkspace.id}
+                      connection={activeConnection}
+                      paused={activeRemoteWorkspace.historyPaused}
+                      globalEnabled={settings.globalHistoryEnabled}
+                      onPausedChange={(historyPaused) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { historyPaused })
+                      }
+                      onConnectionChanged={(saved) => {
+                        saveConnection(saved);
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
+                          connectionSnapshot: {
+                            ...activeRemoteWorkspace.connectionSnapshot,
+                            historyEnabled: saved.historyEnabled,
+                            updatedAt: saved.updatedAt,
+                          },
+                        });
+                      }}
+                      onPaste={pasteIntoTerminal}
+                      canPaste={Boolean(activeRemoteWorkspace.sessionId)}
+                    />
+                  )}
+                  {activeRemoteWorkspace.view === "scratchpad" && (
+                    <ScratchpadPane key={activeRemoteWorkspace.id} connection={activeConnection} />
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -1333,7 +1490,7 @@ export function App() {
             onClose={closeSettings}
             onDirtyChange={setSettingsDirty}
           />
-        ) : activeWorkspace && activeConnection && activeSavedConnection ? null : bootError ? (
+        ) : activeWorkspace ? null : bootError ? (
           <ErrorState message={bootError} />
         ) : (
           <section className="empty-workspace">
@@ -1342,6 +1499,7 @@ export function App() {
               {connections.length
                 ? "Choose a saved connection from the sidebar to open it."
                 : "Use Add connection in the sidebar to save an SSH destination."}
+              {!!localShells.length && " Local terminal opens a shell on this machine."}
             </p>
             <div className="empty-shortcuts">
               <span className="empty-shortcut">
@@ -1387,9 +1545,13 @@ export function App() {
         <PromptDialog
           title="Rename Workspace"
           label="Workspace label"
-          description="Leave it empty to use the connection name."
+          description={
+            isLocalWorkspace(renameTarget)
+              ? "Leave it empty to use the shell name."
+              : "Leave it empty to use the connection name."
+          }
           defaultValue={renameTarget.label ?? duplicateLabel(renameTarget)}
-          placeholder={renameTarget.connectionSnapshot.displayName}
+          placeholder={workspaceTargetName(renameTarget)}
           submitLabel="Rename"
           onSubmit={(value) => {
             updateWorkspace(renameTarget.id, { label: value.trim() || null });
@@ -1420,9 +1582,12 @@ export function App() {
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           activeView={activeWorkspace?.view ?? null}
-          hasActiveConnection={Boolean(activeSavedConnection)}
+          canOpenNewTerminal={canOpenNewTerminal}
+          activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
-          views={navigation}
+          // Inspection views exist on a Remote Host only, so a local Workspace
+          // offers none to go to.
+          views={activeRemoteWorkspace ? navigation : []}
           hostCapabilities={hostCapabilities}
           labelForWorkspace={duplicateLabel}
           onClose={() => setPaletteOpen(false)}
@@ -1432,7 +1597,7 @@ export function App() {
             if (!activeWorkspace) return;
             closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
           }}
-          onNewTerminal={() => activeSavedConnection && openConnection(activeSavedConnection, true)}
+          onNewTerminal={openAnotherTerminal}
           onReconnect={() =>
             activeWorkspace &&
             updateWorkspace(activeWorkspace.id, {

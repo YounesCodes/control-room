@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Plus, Search, Settings } from "lucide-react";
+import { Plus, Search, Settings, SquareTerminal } from "lucide-react";
 import { connectionTarget } from "../lib/format";
 import { HostOsIcon } from "./HostOsIcon";
 import type { HostCapabilities, SavedConnection, Workspace, WorkspaceView } from "../types";
@@ -23,7 +23,8 @@ interface CommandPaletteProps {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   activeView: WorkspaceView | null;
-  hasActiveConnection: boolean;
+  canOpenNewTerminal: boolean;
+  activeWorkspaceIsLocal: boolean;
   canFocusTerminal: boolean;
   views: { id: WorkspaceView; label: string; icon: IconType }[];
   hostCapabilities: Record<string, HostCapabilities>;
@@ -45,7 +46,8 @@ export function CommandPalette({
   workspaces,
   activeWorkspaceId,
   activeView,
-  hasActiveConnection,
+  canOpenNewTerminal,
+  activeWorkspaceIsLocal,
   canFocusTerminal,
   views,
   hostCapabilities,
@@ -75,15 +77,29 @@ export function CommandPalette({
 
     for (const workspace of workspaces) {
       if (workspace.id === activeWorkspaceId) continue;
-      result.push({
-        id: `ws-${workspace.id}`,
-        group: "Open terminals",
-        label: labelForWorkspace(workspace),
-        sublabel: connectionTarget(workspace.connectionSnapshot),
-        osId: hostCapabilities[workspace.connectionId]?.osId,
-        keywords: workspace.connectionSnapshot.destination,
-        run: run(() => onSelectWorkspace(workspace)),
-      });
+      // A local shell has no SSH target and no host OS to mark, so it carries
+      // its shell name and a terminal icon instead.
+      result.push(
+        workspace.kind === "local"
+          ? {
+              id: `ws-${workspace.id}`,
+              group: "Open terminals",
+              label: labelForWorkspace(workspace),
+              sublabel: "Local shell",
+              icon: SquareTerminal,
+              keywords: workspace.shell.label,
+              run: run(() => onSelectWorkspace(workspace)),
+            }
+          : {
+              id: `ws-${workspace.id}`,
+              group: "Open terminals",
+              label: labelForWorkspace(workspace),
+              sublabel: connectionTarget(workspace.connectionSnapshot),
+              osId: hostCapabilities[workspace.connectionId]?.osId,
+              keywords: workspace.connectionSnapshot.destination,
+              run: run(() => onSelectWorkspace(workspace)),
+            },
+      );
     }
 
     if (activeWorkspaceId) {
@@ -118,12 +134,14 @@ export function CommandPalette({
       icon: Plus,
       run: run(onAddConnection),
     });
-    if (hasActiveConnection) {
+    if (canOpenNewTerminal) {
       result.push({
         id: "act-new-terminal",
         group: "Actions",
         label: "New terminal",
-        sublabel: "Another session for this connection",
+        sublabel: activeWorkspaceIsLocal
+          ? "Another shell of the same kind"
+          : "Another session for this connection",
         run: run(onNewTerminal),
       });
     }
@@ -131,7 +149,7 @@ export function CommandPalette({
       result.push({
         id: "act-reconnect",
         group: "Actions",
-        label: "Reconnect terminal",
+        label: activeWorkspaceIsLocal ? "Restart terminal" : "Reconnect terminal",
         shortcut: "Ctrl+Shift+R",
         run: run(onReconnect),
       });
@@ -165,7 +183,8 @@ export function CommandPalette({
     workspaces,
     activeWorkspaceId,
     activeView,
-    hasActiveConnection,
+    canOpenNewTerminal,
+    activeWorkspaceIsLocal,
     canFocusTerminal,
     views,
     hostCapabilities,

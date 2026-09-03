@@ -609,6 +609,69 @@ pub struct SessionStarted {
     pub connection_id: String,
 }
 
+/// One local Windows shell Control Room is allowed to run. The frontend names a
+/// profile by `id` and never by executable path, so `LocalShellKind` is the
+/// whole vocabulary of what may be started locally.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocalShellKind {
+    #[serde(rename = "powershell-7")]
+    PowerShell7,
+    #[serde(rename = "windows-powershell")]
+    WindowsPowerShell,
+    #[serde(rename = "command-prompt")]
+    CommandPrompt,
+    #[serde(rename = "git-bash")]
+    GitBash,
+}
+
+impl LocalShellKind {
+    pub const ALL: [LocalShellKind; 4] = [
+        LocalShellKind::PowerShell7,
+        LocalShellKind::WindowsPowerShell,
+        LocalShellKind::CommandPrompt,
+        LocalShellKind::GitBash,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            LocalShellKind::PowerShell7 => "powershell-7",
+            LocalShellKind::WindowsPowerShell => "windows-powershell",
+            LocalShellKind::CommandPrompt => "command-prompt",
+            LocalShellKind::GitBash => "git-bash",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            LocalShellKind::PowerShell7 => "PowerShell 7",
+            LocalShellKind::WindowsPowerShell => "Windows PowerShell",
+            LocalShellKind::CommandPrompt => "Command Prompt",
+            LocalShellKind::GitBash => "Git Bash",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.id() == id)
+    }
+}
+
+/// A detected local shell, as offered to the frontend. `id` is the only part the
+/// frontend may send back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalShellProfile {
+    pub id: String,
+    pub label: String,
+    pub kind: LocalShellKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalSessionStarted {
+    pub session_id: String,
+    pub shell_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionStateEvent {
@@ -649,12 +712,18 @@ pub struct PersistedWorkspaceState {
     pub terminal_layout: Option<PersistedTerminalLayout>,
 }
 
+/// A restored Workspace tab. Exactly one target is set: `connection_id` for a
+/// remote Workspace, `local_shell_id` for a local one. Payloads written before
+/// Local Terminal existed carry only `connection_id`, which still deserializes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedWorkspace {
     pub id: String,
     pub label: Option<String>,
-    pub connection_id: String,
+    #[serde(default)]
+    pub connection_id: Option<String>,
+    #[serde(default)]
+    pub local_shell_id: Option<String>,
     pub view: String,
     pub history_paused: bool,
 }

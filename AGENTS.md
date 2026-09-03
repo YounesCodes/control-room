@@ -1,27 +1,48 @@
 # Control Room agent rules
 
 Control Room is a local Windows desktop tool for opening and inspecting Linux
-systems through SSH. The visual system, tokens, and UI conventions live in
-DESIGN.md.
+systems through SSH, and for opening shells on the Windows machine it runs on.
+The visual system, tokens, and UI conventions live in DESIGN.md.
 
 ## Scope
 
 - Target Windows 11 x64, the installed Windows OpenSSH client, and ConPTY.
+- Local Terminal covers four shell profiles: PowerShell 7, Windows PowerShell,
+  Command Prompt, and Git Bash. Control Room is the terminal emulator, so never
+  launch, embed, or parse Windows Terminal, and never open an external terminal
+  window. Keep the profile model extensible enough for WSL or custom profiles
+  without adding either now.
 - Structured inspection targets Debian and Ubuntu family hosts with systemd,
   journald, Bash, and optional Docker. Other Linux systems are terminal-only,
   best effort.
 - Do not add file transfer, remote file editing, service or container
   management, cloud accounts, collaboration, AI features, mobile support, host
   discovery, background monitoring, package updates, or private-key storage.
+- Do not add local machine inspection: no Windows services, process manager,
+  local ports, local Docker inspection, Event Log, WMI, or PowerShell
+  administration. A local Workspace is terminal-only.
 
 ## Architecture and data rules
 
-1. Rust owns native process management, SQLite, SSH argument construction, and
-   remote command construction. React never receives arbitrary shell execution.
+1. Rust owns native process management, SQLite, SSH argument construction,
+   remote command construction, and local shell discovery and construction.
+   React never receives arbitrary shell execution. React may name a validated
+   Local Shell Profile id and nothing else: the executable, its fixed arguments,
+   and its working directory are resolved in Rust, and no command takes a
+   program, script, or argument list from the frontend. There is no
+   `run_command`-style API, and the interactive terminal is the execution
+   surface.
 2. Keep system OpenSSH and ConPTY. Record a scope decision here before replacing
-   either.
+   either. SSH and local sessions share one pty lifecycle in `SessionManager`:
+   one reader thread, one flow-control path, one write, resize, and kill
+   implementation. Keep SSH-specific behavior (the connected marker, failure
+   classification, Saved Connection state, host capability discovery, shell
+   integration, Enhanced History) out of local sessions, and never let a local
+   shell borrow a Saved Connection or reach the machine over SSH to localhost.
 3. Give every Saved Connection, Workspace, Terminal Session, Structured
-   Operation, and Log Stream an ID.
+   Operation, and Log Stream an ID. A Workspace names exactly one target, a
+   Saved Connection or a Local Shell Profile, as a typed distinction rather than
+   a placeholder connection.
 4. Never persist terminal output, fetched logs, SSH or sudo passwords, or
    imported private keys.
 5. Keep remote operations read-only. Elevation never widens what a Structured
@@ -41,10 +62,14 @@ DESIGN.md.
 1. Keep several simultaneous Workspaces, including more than one for a single
    Saved Connection.
 2. Restore saved Workspace layout as disconnected after restart. Never
-   auto-reconnect.
+   auto-reconnect, and never auto-start a local shell. Restored local tabs come
+   back present and stopped. Workspace state written before Local Terminal
+   existed must keep restoring, and a local tab whose shell is no longer
+   installed is dropped the way one for a deleted Saved Connection is.
 3. Enhanced History is opt-in, Bash-only, reversible, and limited to commands the
    installed shell integration reports. Never infer commands from keystrokes or
-   import the host's shell history.
+   import the host's shell history. It is remote-only: local shells record no
+   history at all.
 4. Keep systemd unit and container inspection read-only. The Systemd view covers
    system-scope services, timers, mounts, and sockets, sorts failures first, and
    never treats zero failures as a complete health result. Keep each Log Stream
@@ -98,10 +123,19 @@ DESIGN.md.
     deterministically by domain identity and draw no causal conclusion. A
     comparison against live machine state is still an explicit, user-initiated
     read: never save it as a capture and never repeat it on its own.
-13. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-14. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+13. Local shells are offered only when installed, resolved deterministically
+    from standard Windows locations plus `PATH` for PowerShell 7 and Git for
+    Windows, and started with the user's own environment in the user profile
+    directory. Git Bash means `bash.exe`, never `git-bash.exe` or another
+    terminal frontend, and `bash.exe` is never taken from `PATH` directly,
+    because `System32\bash.exe` is the WSL launcher. Set `TERM` only for a shell
+    that reads it, and never invent Windows Terminal variables. Reject unknown
+    profile ids, and report a shell that disappeared after discovery as
+    unavailable rather than failing obscurely.
+14. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+15. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-15. Do not commit or push unless the user asks.
+16. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -119,10 +153,18 @@ account you control.
   filtering. Tags do not grant permissions or trigger operations.
 - **Remote Host**: the Linux system reached through a connection. Several
   connections can point at one host.
-- **Workspace**: an open view of one connection that groups a Terminal Session
-  with the inspection views. A connection can have several Workspaces.
-- **Terminal Session**: one interactive SSH shell inside a Workspace. Its state
-  belongs to the session, not the connection.
+- **Workspace**: an open view of one target that groups a Terminal Session with
+  whatever else that target supports. A remote Workspace is a Saved Connection
+  plus the inspection views; a local Workspace is a Local Shell Profile and its
+  terminal, and nothing else. One target can have several Workspaces.
+- **Local Shell Profile**: one of the four Windows shells Control Room can host,
+  identified by a stable id (`powershell-7`, `windows-powershell`,
+  `command-prompt`, `git-bash`). The id is the only part the frontend may send
+  back, and a profile that is not installed is never offered.
+- **Terminal Session**: one interactive shell inside a Workspace, an SSH shell on
+  a Remote Host or a local Windows shell. Its state belongs to the session, not
+  to the connection. A remote session connects and disconnects; a local one runs
+  and stops.
 - **Structured Operation**: a bounded, read-only inspection request that runs
   independently of Terminal Sessions.
 - **Systemd Unit**: a canonical system-scope service, timer, mount, or socket
