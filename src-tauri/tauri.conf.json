@@ -35,7 +35,9 @@
     "longDescription": "A local Windows desktop control room for Linux hosts over SSH.",
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
       }
     }
   }
