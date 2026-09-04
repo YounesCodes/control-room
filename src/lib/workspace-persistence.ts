@@ -1,6 +1,11 @@
-import { emptyCachedList } from "./workspace-cache";
 import type { TerminalLayout } from "./terminal-layout";
-import type { PersistedWorkspaceState, SavedConnection, Workspace } from "../types";
+import { createLocalWorkspace, createRemoteWorkspace, isRemoteWorkspace } from "./workspace-target";
+import type {
+  LocalShellProfile,
+  PersistedWorkspaceState,
+  SavedConnection,
+  Workspace,
+} from "../types";
 
 interface RestoredWorkspaceState {
   workspaces: Workspace[];
@@ -8,36 +13,40 @@ interface RestoredWorkspaceState {
   terminalLayout: TerminalLayout | null;
 }
 
+/// Rebuilds the saved tabs and split layout. Nothing is started here: every
+/// restored Workspace comes back disconnected with no session and no connect
+/// request, remote and local alike, so restarting the app never opens an SSH
+/// connection or a local process on its own.
 export function restoreWorkspaceState(
   connections: SavedConnection[],
   state: PersistedWorkspaceState,
+  localShells: LocalShellProfile[] = [],
 ): RestoredWorkspaceState {
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
+  const shellsById = new Map(localShells.map((shell) => [shell.id, shell]));
   const workspaces = state.workspaces.flatMap<Workspace>((saved) => {
-    const connection = connectionsById.get(saved.connectionId);
+    const dormant = {
+      id: saved.id,
+      label: saved.label,
+      state: "disconnected",
+      connectRequested: false,
+    } as const;
+    if (saved.localShellId) {
+      // A shell that is no longer installed is dropped, the way a Workspace for
+      // a deleted Saved Connection is.
+      const shell = shellsById.get(saved.localShellId);
+      if (!shell) return [];
+      // A local Workspace is terminal-only, whatever view the payload names.
+      return [{ ...createLocalWorkspace(shell), ...dormant, view: "terminal" }];
+    }
+    const connection = saved.connectionId ? connectionsById.get(saved.connectionId) : undefined;
     if (!connection) return [];
     return [
       {
-        id: saved.id,
-        label: saved.label,
-        connectionId: connection.id,
-        connectionSnapshot: { ...connection },
-        sessionId: null,
-        state: "disconnected",
-        reason: null,
+        ...createRemoteWorkspace(connection),
+        ...dormant,
         view: saved.view,
         historyPaused: saved.historyPaused,
-        reconnectToken: 0,
-        connectRequested: false,
-        servicesCache: emptyCachedList(),
-        portsCache: emptyCachedList(),
-        containersCache: emptyCachedList(),
-        systemdSelectionId: null,
-        containerSelectionId: null,
-        containerDetailsCache: {},
-        bootDiagnostics: null,
-        logSource: null,
-        baselineSelectionId: null,
       },
     ];
   });
@@ -63,9 +72,10 @@ export function persistWorkspaceState(
     workspaces: workspaces.map((workspace) => ({
       id: workspace.id,
       label: workspace.label,
-      connectionId: workspace.connectionId,
+      connectionId: isRemoteWorkspace(workspace) ? workspace.connectionId : null,
+      localShellId: isRemoteWorkspace(workspace) ? null : workspace.shell.id,
       view: workspace.view,
-      historyPaused: workspace.historyPaused,
+      historyPaused: isRemoteWorkspace(workspace) ? workspace.historyPaused : false,
     })),
     activeWorkspaceId: workspaceIds.has(activeWorkspaceId ?? "") ? activeWorkspaceId : null,
     terminalLayout: pruneTerminalLayout(terminalLayout, workspaceIds),

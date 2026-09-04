@@ -6,11 +6,13 @@
 
 Control Room is a local Windows desktop application for working with Linux machines over SSH. It gives you a real interactive shell and a set of bounded, read-only views for the same Remote Host: system details, boot evidence, systemd units, listening ports, journald, Docker containers, logs, and opt-in Bash command history.
 
+It also opens shells on the Windows machine it runs on. PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash appear as Local Terminal Workspaces in the same terminal, with the same fonts, colours, splits, and tabs as an SSH session.
+
 It is for people who manage Linux machines from Windows and want host context close to their terminal work. Control Room is not a monitoring service, RMM tool, server control panel, web dashboard, cloud platform, SSH replacement, or AI tool. The terminal remains the place where you perform administrative work.
 
 ## What the app looks like
 
-The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Boot, Logs, Baselines, and Enhanced History. A Workspace belongs to one Saved Connection. You can open several Workspaces, including several for the same connection, then focus or split terminal sessions when you need to compare hosts.
+The main window has a Connections rail on the left, Workspace tabs across the top, and a main pane that changes between Terminal, Overview, Systemd, Ports, Docker, Boot, Logs, Baselines, and Enhanced History. A Workspace belongs to either one Saved Connection or one local shell. You can open several Workspaces, including several for the same connection or the same shell, then focus or split terminal sessions when you need to compare hosts. A local shell and an SSH session can share one split.
 
 ## Why Control Room?
 
@@ -31,6 +33,11 @@ Saved Connection
          +-- journald and Docker logs
          +-- host baselines and comparisons
          +-- Enhanced History, when enabled
+
+Local shell
+    |
+    +-- Workspace
+         +-- Interactive Windows terminal
 ```
 
 The distinction matters. Control Room helps you inspect and move between related views. It does not try to replace OpenSSH or turn a local desktop client into a remote administration platform.
@@ -43,7 +50,17 @@ The distinction matters. Control Room helps you inspect and move between related
 - Open multiple independent Workspaces and multiple Terminal Sessions for one Saved Connection.
 - Use an interactive terminal backed by the Windows OpenSSH client and ConPTY, with resizing, scrollback, Unicode, ANSI and VT output, copy and paste, and control keys.
 - Reconnect a dropped Terminal Session, clear its local display, or focus and split terminal panes.
-- Restore Workspace tabs and layout after restarting the app. Restored Workspaces start disconnected and never reconnect automatically.
+- Restore Workspace tabs and layout after restarting the app. Restored Workspaces start disconnected and never reconnect automatically, and a restored local tab starts no process until you ask.
+
+### Local Terminal
+
+- Open a shell on the Windows machine running Control Room, in the same integrated terminal as an SSH session: interactive input and output, resize, Unicode, ANSI and VT output, copy and paste, scrollback, and your terminal font and colour settings.
+- Supported shell profiles: PowerShell 7 (`pwsh.exe`), Windows PowerShell, Command Prompt, and Git Bash (`bash.exe`, as a login shell).
+- Only shells that are actually installed are offered. Control Room looks in the standard Windows install locations, and on `PATH` for PowerShell 7 and for a Git for Windows directory.
+- Shells start with your normal Windows environment, in your user profile directory.
+- Run several local terminals at once, mix them with SSH terminals, split them side by side, rename their tabs, stop one without touching the others, and restart one after its shell exits.
+- Local Workspaces are terminal-only. There is no local host inspection, no Windows service or process view, and no local command history.
+- Control Room is the terminal emulator. It does not launch or embed Windows Terminal, and it never opens an external terminal window.
 
 ### Host inspection
 
@@ -143,7 +160,8 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 - Keep one plain-text Scratchpad note per Saved Connection and one global note shared across every
   connection and Workspace. Closing a Workspace does not delete either note.
 - Tune terminal font, size, scrollback, colors, right-click paste, log tail defaults, the global
-  Enhanced History setting, and whether Structured Operations may use sudo.
+  Enhanced History setting, and whether Structured Operations may use sudo. Terminal settings apply
+  to local and SSH terminals alike.
 
 ## Read-only by design
 
@@ -221,12 +239,12 @@ Allowing sudo stores a permission, never a credential. When a read-only request 
 | -------------- | ------------------------------------------- |
 | `Ctrl+Shift+P` | Open the command palette                    |
 | `Ctrl+Shift+T` | Switch the active Workspace to its Terminal |
-| `Ctrl+Shift+R` | Reconnect the active Terminal Session       |
+| `Ctrl+Shift+R` | Reconnect or restart the active Terminal    |
 | `Ctrl+Shift+W` | Close the active Workspace                  |
 
 ## Development
 
-Control Room uses a Tauri desktop shell, a React and TypeScript frontend, and a Rust backend. The backend owns native process management, SQLite, SSH argument construction, and remote command construction.
+Control Room uses a Tauri desktop shell, a React and TypeScript frontend, and a Rust backend. The backend owns native process management, SQLite, SSH argument construction, remote command construction, and local shell discovery and construction. React can ask for a validated Local Shell Profile id; there is no API for running an arbitrary command, locally or remotely.
 
 ### Prerequisites
 

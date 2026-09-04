@@ -3,7 +3,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { Eraser, PlugZap, RefreshCw } from "lucide-react";
+import { CircleStop, Eraser, PlugZap, RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { clearTerminalDisplay } from "../lib/terminal-display";
@@ -13,17 +13,11 @@ import {
   shouldPasteOnRightClick,
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
-import type {
-  AppSettings,
-  ConnectionState,
-  SavedConnection,
-  SessionStateEvent,
-  Workspace,
-} from "../types";
+import { isRemoteWorkspace, terminalStateLabel } from "../lib/workspace-target";
+import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
 import { StatusDot } from "./StatusDot";
 
 interface TerminalPaneProps {
-  connection: SavedConnection;
   workspace: Workspace;
   settings: AppSettings;
   visible: boolean;
@@ -42,8 +36,11 @@ interface PendingHistory {
 
 const MAX_EARLY_SESSION_EVENTS = 16;
 
+/// One xterm host and one session lifecycle for both kinds of Terminal Session.
+/// A Workspace never changes kind, so the remote-only part (the shell
+/// integration handler that feeds Enhanced History) is decided when the
+/// terminal is built, and a local shell never reaches it.
 export function TerminalPane({
-  connection,
   workspace,
   settings,
   visible,
@@ -53,6 +50,7 @@ export function TerminalPane({
   onState,
   onReconnect,
 }: TerminalPaneProps) {
+  const remote = isRemoteWorkspace(workspace) ? workspace : null;
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -62,22 +60,22 @@ export function TerminalPane({
   const acceptingInputRef = useRef(false);
   const pendingHistoryRef = useRef<PendingHistory | null>(null);
   const earlySessionEventsRef = useRef(new Map<string, SessionStateEvent>());
-  const historyPausedRef = useRef(workspace.historyPaused);
+  const historyPausedRef = useRef(remote?.historyPaused ?? false);
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
   const rightClickPasteRef = useRef(settings.terminalRightClickPaste);
   const visibleRef = useRef(visible);
-  const connectionIdRef = useRef(connection.id);
+  const connectionIdRef = useRef(remote?.connectionId ?? null);
   const onSessionRef = useRef(onSession);
   const onStateRef = useRef(onState);
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  historyPausedRef.current = workspace.historyPaused;
+  historyPausedRef.current = remote?.historyPaused ?? false;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
   rightClickPasteRef.current = settings.terminalRightClickPaste;
   visibleRef.current = visible;
-  connectionIdRef.current = connection.id;
+  connectionIdRef.current = remote?.connectionId ?? null;
   onSessionRef.current = onSession;
   onStateRef.current = onState;
 
@@ -98,11 +96,15 @@ export function TerminalPane({
       return;
     }
     if (!acceptingInputRef.current) {
-      setLocalError("Reconnect before sending terminal input.");
+      setLocalError(
+        workspace.kind === "local"
+          ? "Restart the shell before sending terminal input."
+          : "Reconnect before sending terminal input.",
+      );
       return;
     }
     if (!pendingInputRef.current.enqueue(bytes)) {
-      setLocalError("Terminal input is paused while the SSH session catches up.");
+      setLocalError("Terminal input is paused while the session catches up.");
     }
   };
 
@@ -174,51 +176,60 @@ export function TerminalPane({
     };
     container.addEventListener("contextmenu", handleContextMenu);
 
-    const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
-      if (!data.startsWith("ControlRoom;")) return false;
-      if (isControlRoomConnectedOsc(data)) return true;
-      try {
-        const event = parseHistoryOsc(data);
-        if (!event) {
-          pendingHistoryRef.current = null;
-          return true;
-        }
-        if (event.kind === "start") {
-          pendingHistoryRef.current = {
-            startedAt: event.startedAt,
-            cwd: event.cwd,
-            command: event.command,
-          };
-        } else {
-          const pending = pendingHistoryRef.current;
-          pendingHistoryRef.current = null;
-          const sessionId = sessionIdRef.current;
-          if (
-            pending &&
-            sessionId &&
-            globalHistoryEnabledRef.current &&
-            !historyPausedRef.current
-          ) {
-            void api
-              .addHistory({
-                connectionId: connectionIdRef.current,
-                sessionId,
-                command: pending.command,
-                cwd: event.cwd || pending.cwd,
-                startedAt: pending.startedAt,
-                finishedAt: event.finishedAt,
-                exitCode: event.exitCode,
-                shell: "bash",
-              })
-              .catch((error) => setLocalError(`History capture failed: ${errorMessage(error)}`));
+    // Enhanced History is remote, Bash-only, and opt-in, so the shell
+    // integration handler exists only for a Workspace with a Saved Connection
+    // to record against. A local shell has no history capture at all.
+    const oscDisposable = connectionIdRef.current
+      ? terminal.parser.registerOscHandler(633, (data) => {
+          if (!data.startsWith("ControlRoom;")) return false;
+          if (isControlRoomConnectedOsc(data)) return true;
+          try {
+            const event = parseHistoryOsc(data);
+            if (!event) {
+              pendingHistoryRef.current = null;
+              return true;
+            }
+            if (event.kind === "start") {
+              pendingHistoryRef.current = {
+                startedAt: event.startedAt,
+                cwd: event.cwd,
+                command: event.command,
+              };
+            } else {
+              const pending = pendingHistoryRef.current;
+              pendingHistoryRef.current = null;
+              const sessionId = sessionIdRef.current;
+              const connectionId = connectionIdRef.current;
+              if (
+                pending &&
+                sessionId &&
+                connectionId &&
+                globalHistoryEnabledRef.current &&
+                !historyPausedRef.current
+              ) {
+                void api
+                  .addHistory({
+                    connectionId,
+                    sessionId,
+                    command: pending.command,
+                    cwd: event.cwd || pending.cwd,
+                    startedAt: pending.startedAt,
+                    finishedAt: event.finishedAt,
+                    exitCode: event.exitCode,
+                    shell: "bash",
+                  })
+                  .catch((error) =>
+                    setLocalError(`History capture failed: ${errorMessage(error)}`),
+                  );
+              }
+            }
+          } catch (error) {
+            pendingHistoryRef.current = null;
+            setLocalError(`History capture failed: ${errorMessage(error)}`);
           }
-        }
-      } catch (error) {
-        pendingHistoryRef.current = null;
-        setLocalError(`History capture failed: ${errorMessage(error)}`);
-      }
-      return true;
-    });
+          return true;
+        })
+      : null;
 
     let listenerDisposed = false;
     let unlisten: (() => void) | undefined;
@@ -268,12 +279,15 @@ export function TerminalPane({
       window.clearTimeout(resizeTimer);
       dataDisposable.dispose();
       binaryDisposable.dispose();
-      oscDisposable.dispose();
+      oscDisposable?.dispose();
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
     };
   }, []);
+
+  // What this terminal is attached to: a Saved Connection or a local shell.
+  const targetId = workspace.kind === "local" ? workspace.shell.id : workspace.connectionId;
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -327,8 +341,14 @@ export function TerminalPane({
       terminal.write(bytes, () => acknowledge(bytes.byteLength));
     };
 
-    void api
-      .startSession(connection.id, terminal.cols, terminal.rows, output)
+    // A local session names a validated shell profile; a remote one names a
+    // Saved Connection. Everything after the start call is the same.
+    const started =
+      workspace.kind === "local"
+        ? api.startLocalSession(workspace.shell.id, terminal.cols, terminal.rows, output)
+        : api.startSession(workspace.connectionId, terminal.cols, terminal.rows, output);
+
+    void started
       .then(async ({ sessionId }) => {
         if (disposed || generation !== sessionGenerationRef.current) {
           await api.closeSession(sessionId).catch(() => undefined);
@@ -339,6 +359,10 @@ export function TerminalPane({
         acceptingInputRef.current = false;
         onSessionRef.current(sessionId);
         if (acknowledgedBytes > 0) flushAcknowledgements();
+        // A local shell is running the moment its process exists. An SSH
+        // session waits for the connected marker instead, because a spawned
+        // ssh has not authenticated yet.
+        if (workspace.kind === "local") onStateRef.current("connected", null);
 
         const earlyEvent = earlySessionEventsRef.current.get(sessionId);
         earlySessionEventsRef.current.delete(sessionId);
@@ -374,7 +398,7 @@ export function TerminalPane({
       }
       if (ownedSessionId) void api.closeSession(ownedSessionId).catch(() => undefined);
     };
-  }, [connection.id, workspace.connectRequested, workspace.reconnectToken]);
+  }, [targetId, workspace.connectRequested, workspace.reconnectToken]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -387,7 +411,7 @@ export function TerminalPane({
     if (active) terminal.focus();
   }, [settings, visible, active]);
 
-  async function disconnect() {
+  async function endSession() {
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
     try {
@@ -397,6 +421,11 @@ export function TerminalPane({
     }
   }
 
+  // A local shell is started and stopped; a remote one is connected and
+  // disconnected. Same lifecycle, different words for what it means.
+  const local = workspace.kind === "local";
+  const ended = workspace.state === "disconnected" || workspace.state === "error";
+
   return (
     <section
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
@@ -404,12 +433,12 @@ export function TerminalPane({
     >
       <header className="terminal-toolbar">
         <span className="toolbar-state">
-          <StatusDot state={workspace.state} /> {workspace.state}
+          <StatusDot state={workspace.state} /> {terminalStateLabel(workspace)}
         </span>
         <div className="toolbar-actions">
-          {(workspace.state === "disconnected" || workspace.state === "error") && (
+          {ended && (
             <button className="toolbar-button" type="button" onClick={onReconnect}>
-              <RefreshCw size={14} /> Reconnect
+              <RefreshCw size={14} /> {local ? "Restart" : "Reconnect"}
             </button>
           )}
           <button
@@ -425,10 +454,11 @@ export function TerminalPane({
           <button
             className="toolbar-button"
             type="button"
-            onClick={disconnect}
+            onClick={endSession}
             disabled={!workspace.sessionId}
           >
-            <PlugZap size={14} /> Disconnect
+            {local ? <CircleStop size={14} /> : <PlugZap size={14} />}{" "}
+            {local ? "Stop" : "Disconnect"}
           </button>
         </div>
       </header>
