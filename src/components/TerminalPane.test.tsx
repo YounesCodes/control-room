@@ -17,8 +17,12 @@ const api = vi.hoisted(() => ({
 /// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
+  clears: 0,
+  writes: [] as string[],
   reset() {
     this.oscHandlers = 0;
+    this.clears = 0;
+    this.writes = [];
   },
 }));
 
@@ -70,7 +74,12 @@ vi.mock("@xterm/xterm", () => ({
       return "";
     }
     reset() {}
-    write() {}
+    clear() {
+      xterm.clears += 1;
+    }
+    write(data: unknown) {
+      if (typeof data === "string") xterm.writes.push(data);
+    }
     focus() {}
     dispose() {}
   },
@@ -232,6 +241,19 @@ describe("TerminalPane sessions", () => {
     expect(screen.getByText("connected")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Disconnect/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
+  });
+
+  it("clears without erasing the prompt line or touching the shell", async () => {
+    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+
+    screen.getByRole("button", { name: /Clear/ }).click();
+
+    // Clearing around the cursor keeps the prompt on screen; erasing the
+    // display would leave the pane blank until the next keystroke.
+    expect(xterm.clears).toBe(1);
+    expect(xterm.writes).toEqual([]);
+    expect(api.writeSession).not.toHaveBeenCalled();
   });
 
   it("stops only its own session", async () => {

@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { clearTerminalDisplay } from "./terminal-display";
 
 describe("clearTerminalDisplay", () => {
-  it("erases the viewport and scrollback before moving the cursor home", () => {
-    const write = vi.fn();
+  it("clears around the cursor line so the prompt survives", () => {
+    const terminal = { clear: vi.fn(), write: vi.fn() };
 
-    clearTerminalDisplay({ write });
+    clearTerminalDisplay(terminal);
 
-    expect(write).toHaveBeenCalledOnce();
-    expect(write).toHaveBeenCalledWith("\u001b[2J\u001b[3J\u001b[H");
+    expect(terminal.clear).toHaveBeenCalledOnce();
+    // Erasing the display would take the prompt with it and leave the pane
+    // blank until the shell was given a reason to redraw it.
+    expect(terminal.write).not.toHaveBeenCalled();
   });
 });
