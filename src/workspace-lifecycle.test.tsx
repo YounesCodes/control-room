@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   listConnectionGroups: vi.fn(),
   listConnectionTags: vi.fn(),
   saveWorkspaceState: vi.fn(),
+  listLocalShells: vi.fn(),
   cachedCapabilities: vi.fn(),
   deleteConnection: vi.fn(),
   deleteScratchpadNote: vi.fn(),
@@ -79,6 +80,7 @@ function restoredState(connectionIds: string[]): PersistedWorkspaceState {
       id: `workspace-${index}`,
       label: null,
       connectionId,
+      localShellId: null,
       view: "terminal",
       historyPaused: false,
     })),
@@ -109,6 +111,7 @@ describe("App Workspace behavior", () => {
     api.listConnectionGroups.mockResolvedValue([]);
     api.listConnectionTags.mockResolvedValue([]);
     api.saveWorkspaceState.mockResolvedValue(undefined);
+    api.listLocalShells.mockResolvedValue([]);
     api.cachedCapabilities.mockResolvedValue(null);
     api.deleteConnection.mockResolvedValue(undefined);
     api.deleteScratchpadNote.mockResolvedValue(undefined);

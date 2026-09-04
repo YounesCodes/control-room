@@ -4,15 +4,15 @@ use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 use crate::{
     baselines::{self, BaselineCaptureRegistry, SectionReporter},
     database::{Database, validate_connection_input},
-    history,
+    history, local_shell,
     models::{
         AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
         BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
         DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary, HostCapabilities,
-        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, PersistedWorkspaceState, SavedConnection,
-        SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
-        SettingsContract, StreamStarted, SystemdUnit,
+        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted, LocalShellProfile,
+        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -205,6 +205,29 @@ pub fn start_session(
     }
     let started = sessions.start(app, &connection, cols, rows, output)?;
     Ok(started)
+}
+
+/// The local shells this machine actually has. An uninstalled shell is never
+/// offered, so the frontend cannot ask for one.
+#[tauri::command(async)]
+pub fn list_local_shells() -> Vec<LocalShellProfile> {
+    local_shell::installed_shells()
+}
+
+/// Starts a local Windows shell. `shell_id` is a Local Shell Profile id and
+/// nothing else: the executable, its arguments, and its working directory are
+/// resolved in Rust, so there is no way to ask for an arbitrary process here.
+#[tauri::command(async)]
+pub fn start_local_session(
+    app: AppHandle,
+    sessions: State<'_, SessionManager>,
+    shell_id: String,
+    cols: u16,
+    rows: u16,
+    output: Channel<Response>,
+) -> Result<LocalSessionStarted, String> {
+    let shell = local_shell::resolve_installed(&shell_id)?;
+    sessions.start_local(app, &shell, cols, rows, output)
 }
 
 #[tauri::command]
@@ -846,6 +869,8 @@ mod tests {
         for command in [
             "get_environment_info",
             "start_session",
+            "list_local_shells",
+            "start_local_session",
             "refresh_capabilities",
             "list_services",
             "list_containers",
@@ -880,6 +905,89 @@ mod tests {
         assert!(start.contains("connection_id: String"));
         assert!(start.contains("database.get_connection(&connection_id)"));
         assert!(!start.contains("connection: SavedConnection"));
+    }
+
+    #[test]
+    fn a_local_session_starts_from_a_profile_id_and_nothing_else() {
+        let source = include_str!("commands.rs");
+        let start = source
+            .split("pub fn start_local_session")
+            .nth(1)
+            .expect("start_local_session exists")
+            .split("#[tauri::command")
+            .next()
+            .expect("start_local_session body exists");
+
+        assert!(start.contains("shell_id: String"));
+        assert!(start.contains("local_shell::resolve_installed(&shell_id)"));
+        // Nothing about the process may come from the frontend: no path, no
+        // arguments, no environment, no working directory.
+        for rejected in [
+            "program",
+            "executable",
+            "arguments",
+            "args:",
+            "command:",
+            "Vec<String>",
+            "PathBuf",
+            "cwd",
+            "env",
+        ] {
+            assert!(
+                !start.contains(rejected),
+                "start_local_session must not accept {rejected:?} from the frontend"
+            );
+        }
+    }
+
+    #[test]
+    fn there_is_no_arbitrary_process_execution_command() {
+        // Only the commands themselves, not this test module, which names the
+        // very identifiers it forbids.
+        let commands = include_str!("commands.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("command definitions precede the tests");
+        let handlers = include_str!("lib.rs");
+
+        for forbidden in [
+            "run_command",
+            "spawn_process",
+            "run_shell",
+            "execute_command",
+            "run_local_command",
+            // Control Room is the terminal emulator; it never launches another.
+            "wt.exe",
+        ] {
+            assert!(!commands.contains(forbidden), "{forbidden} must not exist");
+            assert!(
+                !handlers.contains(forbidden),
+                "{forbidden} must not be registered"
+            );
+        }
+
+        // No command takes a program, a script, or an argument list from the
+        // frontend. The interactive terminal is the execution surface, and Rust
+        // owns what runs on it.
+        for block in commands.split("#[tauri::command").skip(1) {
+            let signature = block
+                .split(" {")
+                .next()
+                .expect("a command signature precedes its body");
+            for rejected in [
+                "program:",
+                "executable:",
+                "script:",
+                "arguments:",
+                "argv",
+                "command_line",
+            ] {
+                assert!(
+                    !signature.contains(rejected),
+                    "a command accepts {rejected:?}: {signature}"
+                );
+            }
+        }
     }
 
     #[test]

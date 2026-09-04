@@ -15,7 +15,8 @@ use uuid::Uuid;
 
 use crate::{
     database::Database,
-    models::{SavedConnection, SessionStarted, SessionStateEvent},
+    local_shell::{self, ResolvedLocalShell},
+    models::{LocalSessionStarted, SavedConnection, SessionStarted, SessionStateEvent},
     ssh::{connection_arguments, detect_ssh_path},
 };
 
@@ -25,9 +26,43 @@ struct ManagedSession {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     output_flow: OutputFlow,
     stop_requested: AtomicBool,
-    connected_emitted: AtomicBool,
     failure: Mutex<Option<String>>,
+    mode: SessionMode,
+}
+
+/// What a remote and a local Terminal Session do differently. The pty
+/// lifecycle is shared; everything SSH-specific lives in `RemoteSessionState`,
+/// so a local shell has no connected marker, no failure classification, and no
+/// Saved Connection to update.
+enum SessionMode {
+    Ssh(RemoteSessionState),
+    Local { label: &'static str },
+}
+
+struct RemoteSessionState {
+    connection_id: String,
+    connected_emitted: AtomicBool,
     failure_detector: Mutex<TerminalFailureDetector>,
+}
+
+impl SessionMode {
+    fn ssh(connection_id: &str) -> Self {
+        Self::Ssh(RemoteSessionState {
+            connection_id: connection_id.to_string(),
+            connected_emitted: AtomicBool::new(false),
+            failure_detector: Mutex::new(TerminalFailureDetector::default()),
+        })
+    }
+
+    /// A remote start failure names ssh, because the user can act on it. A local
+    /// one names the shell and stops there: the pty error behind it says nothing
+    /// the user can use.
+    fn spawn_error(&self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Ssh(_) => format!("SSH process could not start: {error}"),
+            Self::Local { label } => format!("{label} could not be started."),
+        }
+    }
 }
 
 const MAX_UNACKNOWLEDGED_OUTPUT_BYTES: usize = 512 * 1024;
@@ -134,6 +169,66 @@ impl SessionManager {
             "Windows OpenSSH client was not found. Install the OpenSSH Client optional feature."
                 .to_string()
         })?;
+        let mut command = CommandBuilder::new(ssh_path);
+        command.env("TERM", TERMINAL_TYPE);
+        command.args(connection_arguments(connection, true));
+        command.arg(interactive_shell_command(connection.history_enabled));
+        let session_id = self.spawn(
+            app,
+            command,
+            cols,
+            rows,
+            output,
+            SessionMode::ssh(&connection.id),
+        )?;
+
+        Ok(SessionStarted {
+            session_id,
+            connection_id: connection.id.clone(),
+        })
+    }
+
+    /// Starts a local Windows shell through the same pty lifecycle as an SSH
+    /// session. The profile was validated and resolved by `local_shell`, so
+    /// nothing here picks an executable or an argument.
+    pub fn start_local(
+        &self,
+        app: AppHandle,
+        shell: &ResolvedLocalShell,
+        cols: u16,
+        rows: u16,
+        output: Channel<Response>,
+    ) -> Result<LocalSessionStarted, String> {
+        let session_id = self.spawn(
+            app,
+            local_shell::command_for(shell),
+            cols,
+            rows,
+            output,
+            SessionMode::Local {
+                label: shell.label(),
+            },
+        )?;
+
+        Ok(LocalSessionStarted {
+            session_id,
+            shell_id: shell.kind.id().into(),
+        })
+    }
+
+    /// The shared pty lifecycle: one pty, one reader thread with flow control,
+    /// one wait thread, and one registration in this manager. Both session kinds
+    /// go through here so input, resize, acknowledgement, and cleanup have a
+    /// single implementation.
+    fn spawn(
+        &self,
+        app: AppHandle,
+        command: CommandBuilder,
+        cols: u16,
+        rows: u16,
+        output: Channel<Response>,
+        mode: SessionMode,
+    ) -> Result<String, String> {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: rows.clamp(2, 500),
@@ -143,14 +238,10 @@ impl SessionManager {
             })
             .map_err(|error| format!("PTY initialization failed: {error}"))?;
 
-        let mut command = CommandBuilder::new(ssh_path);
-        command.env("TERM", TERMINAL_TYPE);
-        command.args(connection_arguments(connection, true));
-        command.arg(interactive_shell_command(connection.history_enabled));
         let mut child = pair
             .slave
             .spawn_command(command)
-            .map_err(|error| format!("SSH process could not start: {error}"))?;
+            .map_err(|error| mode.spawn_error(error))?;
         drop(pair.slave);
 
         let mut reader = match pair.master.try_clone_reader() {
@@ -177,16 +268,14 @@ impl SessionManager {
             killer: Mutex::new(killer),
             output_flow: OutputFlow::new(),
             stop_requested: AtomicBool::new(false),
-            connected_emitted: AtomicBool::new(false),
             failure: Mutex::new(None),
-            failure_detector: Mutex::new(TerminalFailureDetector::default()),
+            mode,
         });
         self.sessions
             .lock()
             .insert(session_id.clone(), managed.clone());
 
         let output_session_id = session_id.clone();
-        let output_connection_id = connection.id.clone();
         let output_app = app.clone();
         let output_managed = managed.clone();
         thread::spawn(move || {
@@ -195,21 +284,30 @@ impl SessionManager {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(count) => {
-                        let (startup_failure, connected) = {
-                            let mut detector = output_managed.failure_detector.lock();
-                            detector.observe(&buffer[..count]);
-                            (detector.hint.is_some(), detector.connected)
-                        };
-                        if connected
-                            && !startup_failure
-                            && !output_managed
-                                .connected_emitted
-                                .swap(true, Ordering::AcqRel)
-                        {
-                            let _ = output_app
-                                .state::<Database>()
-                                .mark_connected(&output_connection_id);
-                            emit_state(&output_app, &output_session_id, "connected", None, None);
+                        // Reading the stream for a connected marker, and marking
+                        // the Saved Connection, is remote-only work. A local
+                        // shell is running the moment its process starts.
+                        if let SessionMode::Ssh(remote) = &output_managed.mode {
+                            let (startup_failure, connected) = {
+                                let mut detector = remote.failure_detector.lock();
+                                detector.observe(&buffer[..count]);
+                                (detector.hint.is_some(), detector.connected)
+                            };
+                            if connected
+                                && !startup_failure
+                                && !remote.connected_emitted.swap(true, Ordering::AcqRel)
+                            {
+                                let _ = output_app
+                                    .state::<Database>()
+                                    .mark_connected(&remote.connection_id);
+                                emit_state(
+                                    &output_app,
+                                    &output_session_id,
+                                    "connected",
+                                    None,
+                                    None,
+                                );
+                            }
                         }
                         if !output_managed.output_flow.reserve(count) {
                             break;
@@ -248,15 +346,24 @@ impl SessionManager {
             sessions.lock().remove(&wait_session_id);
             match result {
                 Ok(status) => {
+                    let stop_requested = wait_managed.stop_requested.load(Ordering::Acquire);
                     let failure = wait_managed.failure.lock().clone();
-                    let hint = wait_managed.failure_detector.lock().hint;
-                    let (state, category, reason) = classify_session_exit(
-                        wait_managed.stop_requested.load(Ordering::Acquire),
-                        failure,
-                        status.success(),
-                        status.exit_code(),
-                        hint,
-                    );
+                    let (state, category, reason) = match &wait_managed.mode {
+                        SessionMode::Ssh(remote) => classify_session_exit(
+                            stop_requested,
+                            failure,
+                            status.success(),
+                            status.exit_code(),
+                            remote.failure_detector.lock().hint,
+                        ),
+                        SessionMode::Local { label } => classify_local_exit(
+                            stop_requested,
+                            failure,
+                            status.success(),
+                            status.exit_code(),
+                            label,
+                        ),
+                    };
                     emit_state(&wait_app, &wait_session_id, state, category, reason);
                 }
                 Err(error) => emit_state(
@@ -264,15 +371,12 @@ impl SessionManager {
                     &wait_session_id,
                     "error",
                     Some("process".into()),
-                    Some(format!("SSH process wait failed: {error}")),
+                    Some(format!("Terminal process wait failed: {error}")),
                 ),
             }
         });
 
-        Ok(SessionStarted {
-            session_id,
-            connection_id: connection.id.clone(),
-        })
+        Ok(session_id)
     }
 
     pub fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
@@ -343,13 +447,20 @@ fn interactive_shell_command(history_enabled: bool) -> &'static str {
     }
 }
 
+/// `portable-pty`'s Windows child killer inverts its own result: a successful
+/// `TerminateProcess` is reported as `Err(GetLastError())`, which is whatever
+/// stale error the calling thread happened to carry, and a real failure is
+/// reported as `Ok(())`. So the value carries no information on Windows, and
+/// showing it would put a bogus error under a terminal that did stop. The
+/// session's exit event is what actually reports whether it ended.
 fn map_pty_kill_result(result: std::io::Result<()>) -> Result<(), String> {
-    match result {
-        Ok(()) => Ok(()),
-        #[cfg(windows)]
-        Err(error) if error.raw_os_error() == Some(0) => Ok(()),
-        Err(error) => Err(format!("Could not close SSH process: {error}")),
+    #[cfg(windows)]
+    {
+        let _ = result;
+        Ok(())
     }
+    #[cfg(not(windows))]
+    result.map_err(|error| format!("Could not close the terminal process: {error}"))
 }
 
 fn emit_state(
@@ -432,6 +543,31 @@ fn classify_session_exit(
     )
 }
 
+/// A local shell that exits is a shell that exited, not a failure: `exit 1`
+/// from a prompt is as ordinary as `exit`. Only Control Room's own pty or
+/// channel breaking is an error, so the Workspace stays open with a notice and
+/// a Restart either way.
+fn classify_local_exit(
+    stop_requested: bool,
+    process_failure: Option<String>,
+    success: bool,
+    exit_code: u32,
+    label: &str,
+) -> (&'static str, Option<String>, Option<String>) {
+    if stop_requested {
+        return ("disconnected", Some("user-stop".into()), None);
+    }
+    if let Some(reason) = process_failure {
+        return ("error", Some("process".into()), Some(reason));
+    }
+    let reason = if success {
+        format!("{label} exited.")
+    } else {
+        format!("{label} exited with code {exit_code}.")
+    };
+    ("disconnected", Some("local-exit".into()), Some(reason))
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -443,8 +579,9 @@ mod tests {
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
     use super::{
-        MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, TERMINAL_TYPE, TerminalFailureDetector,
-        TerminalFailureHint, classify_session_exit, interactive_shell_command, map_pty_kill_result,
+        MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, SessionMode, TERMINAL_TYPE,
+        TerminalFailureDetector, TerminalFailureHint, classify_local_exit, classify_session_exit,
+        interactive_shell_command, map_pty_kill_result,
     };
 
     // ssh forwards its own TERM, so an unset one leaves the remote depending on
@@ -469,8 +606,11 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn conpty_success_with_stale_last_error_is_not_shown_as_a_failure() {
-        let portable_pty_result = Err(std::io::Error::from_raw_os_error(0));
-        assert!(map_pty_kill_result(portable_pty_result).is_ok());
+        assert!(map_pty_kill_result(Err(std::io::Error::from_raw_os_error(0))).is_ok());
+        // A stale error from an unrelated earlier call is just as much a
+        // success: `TerminateProcess` reports success by returning the last
+        // error, whatever it currently is.
+        assert!(map_pty_kill_result(Err(std::io::Error::from_raw_os_error(6))).is_ok());
     }
 
     #[test]
@@ -618,6 +758,159 @@ mod tests {
             }
         }
         assert!(String::from_utf8_lossy(&output).contains("CONTROL_ROOM_CONPTY_OK"));
+    }
+
+    #[test]
+    fn a_local_shell_that_exits_keeps_the_workspace_and_reports_the_exit() {
+        assert_eq!(
+            classify_local_exit(false, None, true, 0, "PowerShell 7"),
+            (
+                "disconnected",
+                Some("local-exit".into()),
+                Some("PowerShell 7 exited.".into())
+            )
+        );
+        assert_eq!(
+            classify_local_exit(false, None, false, 1, "Git Bash"),
+            (
+                "disconnected",
+                Some("local-exit".into()),
+                Some("Git Bash exited with code 1.".into())
+            )
+        );
+    }
+
+    #[test]
+    fn stopping_a_local_shell_is_not_reported_as_a_failure() {
+        assert_eq!(
+            classify_local_exit(true, None, false, 1, "Command Prompt"),
+            ("disconnected", Some("user-stop".into()), None)
+        );
+    }
+
+    #[test]
+    fn a_broken_local_pty_is_the_only_local_error_state() {
+        let (state, category, reason) = classify_local_exit(
+            false,
+            Some("Terminal output failed: pipe closed".into()),
+            false,
+            1,
+            "Git Bash",
+        );
+        assert_eq!(state, "error");
+        assert_eq!(category.as_deref(), Some("process"));
+        assert_eq!(
+            reason.as_deref(),
+            Some("Terminal output failed: pipe closed")
+        );
+    }
+
+    #[test]
+    fn a_local_start_failure_names_the_shell_without_pty_internals() {
+        let local = SessionMode::Local {
+            label: "PowerShell 7",
+        };
+        let remote = SessionMode::ssh("11111111-1111-4111-8111-111111111111");
+
+        assert_eq!(
+            local.spawn_error("os error 267: the directory name is invalid"),
+            "PowerShell 7 could not be started."
+        );
+        assert!(
+            remote
+                .spawn_error("os error 2")
+                .starts_with("SSH process could not start")
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_resolved_local_shell_runs_and_stops_under_conpty() {
+        // The command processor is the one shell present on every supported
+        // Windows install, so the local launch path can be exercised for real.
+        let shell = crate::local_shell::resolve_installed("command-prompt").unwrap();
+        let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+        let mut child = pair
+            .slave
+            .spawn_command(crate::local_shell::command_for(&shell))
+            .unwrap();
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buffer = [0_u8; 4096];
+            while let Ok(count) = reader.read(&mut buffer) {
+                if count == 0 {
+                    break;
+                }
+                let _ = sender.send(buffer[..count].to_vec());
+            }
+        });
+
+        // An interactive shell prints its prompt and then waits, which is the
+        // proof that it is running rather than exiting immediately.
+        let first_output = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(!first_output.is_empty());
+
+        // The shell is interactive: typed input reaches it and its output comes
+        // back on the same pty. ConPTY asks the terminal where the cursor is and
+        // waits for the answer, which xterm sends on its own; this stands in for
+        // it.
+        let mut writer = pair.master.take_writer().unwrap();
+        let mut output = first_output.clone();
+        let mut answered_queries = 0;
+        let mut sent_command = false;
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !String::from_utf8_lossy(&output).contains("CONTROL_ROOM_LOCAL_OK")
+            && Instant::now() < deadline
+        {
+            let query_count = output
+                .windows(4)
+                .filter(|window| *window == b"\x1b[6n")
+                .count();
+            while answered_queries < query_count {
+                writer.write_all(b"\x1b[1;1R").unwrap();
+                writer.flush().unwrap();
+                answered_queries += 1;
+            }
+            if answered_queries > 0 && !sent_command {
+                writer.write_all(b"echo CONTROL_ROOM_LOCAL_OK\r\n").unwrap();
+                writer.flush().unwrap();
+                sent_command = true;
+            }
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(chunk) => output.extend(chunk),
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        assert!(
+            String::from_utf8_lossy(&output).contains("CONTROL_ROOM_LOCAL_OK"),
+            "local shell did not answer typed input: {}",
+            String::from_utf8_lossy(&output)
+        );
+
+        let mut killer = child.clone_killer();
+        assert!(map_pty_kill_result(killer.kill()).is_ok());
+        let (status_sender, status_receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = status_sender.send(child.wait());
+        });
+        let status = status_receiver
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        let (state, category, _) = classify_local_exit(
+            true,
+            None,
+            status.success(),
+            status.exit_code(),
+            shell.label(),
+        );
+        assert_eq!(
+            (state, category.as_deref()),
+            ("disconnected", Some("user-stop"))
+        );
     }
 
     #[test]

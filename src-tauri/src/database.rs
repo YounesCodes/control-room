@@ -9,7 +9,7 @@ use crate::{
     baselines,
     models::{
         AppSettings, BaselineTrace, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput,
-        HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS,
+        HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS, LocalShellKind,
         PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
         ScratchpadNote, ScratchpadNoteInput,
     },
@@ -981,11 +981,24 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
     }
     let mut ids = std::collections::HashSet::new();
     for workspace in &state.workspaces {
-        if Uuid::parse_str(&workspace.id).is_err()
-            || Uuid::parse_str(&workspace.connection_id).is_err()
-            || !ids.insert(workspace.id.as_str())
-        {
+        if Uuid::parse_str(&workspace.id).is_err() || !ids.insert(workspace.id.as_str()) {
             return Err("Workspace state contains invalid identifiers".into());
+        }
+        match (&workspace.connection_id, &workspace.local_shell_id) {
+            // A remote Workspace names the Saved Connection it belongs to.
+            (Some(connection_id), None) => {
+                if Uuid::parse_str(connection_id).is_err() {
+                    return Err("Workspace state contains invalid identifiers".into());
+                }
+            }
+            // A local Workspace names a Local Shell Profile, which is a fixed
+            // vocabulary rather than an id the app minted.
+            (None, Some(shell_id)) => {
+                if LocalShellKind::from_id(shell_id).is_none() {
+                    return Err("Workspace state names an unknown local shell".into());
+                }
+            }
+            _ => return Err("Workspace state must name one target per Workspace".into()),
         }
         if workspace
             .label
@@ -2499,7 +2512,8 @@ mod tests {
             workspaces: vec![crate::models::PersistedWorkspace {
                 id: workspace_id.clone(),
                 label: Some("Deploy".into()),
-                connection_id: saved.id,
+                connection_id: Some(saved.id),
+                local_shell_id: None,
                 view: "ports".into(),
                 history_paused: false,
             }],
@@ -2510,6 +2524,98 @@ mod tests {
         database.save_workspace_state(&state).unwrap();
 
         assert_eq!(database.get_workspace_state().unwrap(), state);
+    }
+
+    #[test]
+    fn local_terminal_workspaces_round_trip_without_a_saved_connection() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let workspace_id = Uuid::new_v4().to_string();
+        let state = PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: None,
+                connection_id: None,
+                local_shell_id: Some("powershell-7".into()),
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id.clone()),
+            terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
+        };
+
+        database.save_workspace_state(&state).unwrap();
+
+        assert_eq!(database.get_workspace_state().unwrap(), state);
+    }
+
+    #[test]
+    fn a_workspace_names_exactly_one_target() {
+        let workspace_id = Uuid::new_v4().to_string();
+        let workspace = |connection_id, local_shell_id| PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: None,
+                connection_id,
+                local_shell_id,
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id.clone()),
+            terminal_layout: None,
+        };
+
+        assert_eq!(
+            validate_workspace_state(&workspace(None, None)).unwrap_err(),
+            "Workspace state must name one target per Workspace"
+        );
+        assert_eq!(
+            validate_workspace_state(&workspace(
+                Some(Uuid::new_v4().to_string()),
+                Some("git-bash".into())
+            ))
+            .unwrap_err(),
+            "Workspace state must name one target per Workspace"
+        );
+        assert_eq!(
+            validate_workspace_state(&workspace(None, Some("wt.exe".into()))).unwrap_err(),
+            "Workspace state names an unknown local shell"
+        );
+        assert!(validate_workspace_state(&workspace(None, Some("git-bash".into()))).is_ok());
+    }
+
+    #[test]
+    fn workspace_state_written_before_local_terminals_still_restores() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let workspace_id = Uuid::new_v4().to_string();
+        let connection_id = Uuid::new_v4().to_string();
+        // Exactly the shape older releases persisted: a remote tab with no
+        // notion of a local shell.
+        let legacy = format!(
+            r#"{{"workspaces":[{{"id":"{workspace_id}","label":null,"connectionId":"{connection_id}","view":"terminal","historyPaused":false}}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"leaf","workspaceId":"{workspace_id}"}}}}"#
+        );
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES ('workspace_state', ?1)",
+                [legacy],
+            )
+            .unwrap();
+
+        let restored = database.get_workspace_state().unwrap();
+
+        assert_eq!(restored.workspaces.len(), 1);
+        assert_eq!(
+            restored.workspaces[0].connection_id.as_deref(),
+            Some(connection_id.as_str())
+        );
+        assert_eq!(restored.workspaces[0].local_shell_id, None);
+        assert_eq!(
+            restored.active_workspace_id.as_deref(),
+            Some(workspace_id.as_str())
+        );
     }
 
     #[test]
@@ -2542,7 +2648,8 @@ mod tests {
                 workspaces: vec![crate::models::PersistedWorkspace {
                     id: workspace_id.clone(),
                     label: None,
-                    connection_id: Uuid::new_v4().to_string(),
+                    connection_id: Some(Uuid::new_v4().to_string()),
+                    local_shell_id: None,
                     view: view.into(),
                     history_paused: false,
                 }],

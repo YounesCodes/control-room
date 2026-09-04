@@ -128,7 +128,11 @@ describe("application hierarchy", () => {
   });
 
   it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
-    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(5);
+    // Saved Connections carry the host OS mark directly. Workspace tabs, split
+    // entries, and split pane headers go through one mark helper, because a
+    // local shell has no host OS to report.
+    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(3);
+    expect(appSource.match(/workspaceMark\(workspace\)/g)).toHaveLength(3);
     expect(appSource).not.toContain("StatusDot");
     // Connection sidebar and Workspace tabs surface live session state as a
     // presence badge on the OS mark; the labelled status dot stays in Terminal.
@@ -153,6 +157,40 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain(
       "rightClickPasteRef.current = settings.terminalRightClickPaste",
     );
+  });
+
+  it("keeps a local Workspace terminal-only and off every remote code path", () => {
+    // The launcher lists detected shells beside Add connection, and a local
+    // Workspace gets no view switcher, because there is no host to inspect.
+    expect(appSource).toContain("api.listLocalShells()");
+    expect(appSource).toContain("Local terminal");
+    expect(appSource).toContain("{activeRemoteWorkspace && (");
+    expect(appSource).toContain(
+      "{activeRemoteWorkspace && activeConnection && activeSavedConnection && (",
+    );
+    // Host capability discovery is a Remote Host read and stays behind the
+    // remote guard.
+    expect(appSource).toMatch(
+      /state === "connected" && isRemoteWorkspace\(workspace\)[\s\S]{0,80}detectConnectionCapabilities/,
+    );
+    // Control Room is the terminal emulator, so nothing launches another one.
+    expect(appSource).not.toContain("wt.exe");
+    expect(terminalSource).not.toContain("wt.exe");
+  });
+
+  it("runs local and remote sessions through one terminal implementation", () => {
+    // One xterm host, one lifecycle: the pane picks the start call and nothing
+    // else, so resize, acknowledgement, and cleanup cannot drift apart.
+    expect(terminalSource).toContain("api.startLocalSession(");
+    expect(terminalSource).toContain("api.startSession(");
+    expect(terminalSource.match(/new Terminal\(/g)).toHaveLength(1);
+    expect(terminalSource.match(/new ResizeObserver\(/g)).toHaveLength(1);
+    // Enhanced History needs a Saved Connection, so the shell integration
+    // handler is registered only for a remote session.
+    expect(terminalSource).toMatch(
+      /connectionIdRef\.current\s*\?\s*terminal\.parser\.registerOscHandler/,
+    );
+    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(1);
   });
 
   it("detects a newly connected host without requiring an Overview visit", () => {

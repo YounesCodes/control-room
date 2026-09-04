@@ -2,6 +2,7 @@ mod baselines;
 mod commands;
 mod database;
 mod history;
+mod local_shell;
 mod models;
 mod remote;
 mod session;
@@ -45,6 +46,8 @@ pub fn run() {
             commands::set_connection_group_collapsed,
             commands::move_connection_group,
             commands::start_session,
+            commands::list_local_shells,
+            commands::start_local_session,
             commands::write_session,
             commands::resize_session,
             commands::acknowledge_session_output,

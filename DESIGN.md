@@ -100,16 +100,33 @@ facts, systemd units, listening sockets, containers) and Log Streams run indepen
 and Enhanced History is an opt-in local record of commands. AGENTS.md carries the
 exact term definitions.
 
+A Workspace has one of two targets, and the distinction runs through the whole
+model rather than being papered over:
+
+```text
+Workspace
+├── remote → Saved Connection
+└── local  → Local Shell Profile
+```
+
+A Local Shell Profile is one of the Windows shells Control Room can host:
+PowerShell 7, Windows PowerShell, Command Prompt, Git Bash. A local Workspace is
+terminal-only. It has no Saved Connection, no host facts, no Log Streams, and no
+History, so every remote-only field and action stays remote-only instead of
+being faked for a machine that is already local.
+
 ### Information architecture
 
 Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list is divided into manually ordered,
   collapsible groups plus a derived Ungrouped section. Search matches connection
-  names, SSH targets, groups, and tags. Once a Workspace is open, the rail also
-  holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Boot,
-  Logs, Baselines, History, Scratchpad), with "Add connection"
-  pinned at the bottom.
+  names, SSH targets, groups, and tags. Once a remote Workspace is open, the rail
+  also holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Boot,
+  Logs, Baselines, History, Scratchpad); a local Workspace shows none of it,
+  because there is no Remote Host to inspect. "Local terminal" and
+  "Add connection" are pinned at the bottom, the launcher listing only the shells
+  this machine actually has.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
   area, plus "New terminal" and the split and focus controls.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
@@ -142,12 +159,28 @@ Library (jsdom).
 `uuid`, and `windows-sys`. It shells out to the system OpenSSH client and drives
 ConPTY for the interactive terminal.
 
+Control Room is itself the terminal emulator: xterm on top of ConPTY through
+`portable-pty`. A local shell is the same pipeline with a different program at
+the end, so SSH and local sessions share one pty lifecycle (reader thread, flow
+control, input, resize, kill, cleanup) and differ only in how they start and how
+an exit is read. Windows Terminal is not launched, embedded, or parsed; `wt.exe`
+would be another emulator wrapped around the one already here.
+
+Rust owns local process construction as strictly as it owns SSH arguments.
+Discovery resolves each shell to a fixed executable and fixed arguments, React
+can name only a validated Local Shell Profile id, and there is no command,
+program, or argument anywhere in that call. Nothing in the app can execute an
+arbitrary process; the interactive terminal is the execution surface.
+
 The safety model shapes the UI. Remote operations are read-only, and the app
 never persists terminal output, fetched logs, passwords, or private keys. SQLite
 holds only connections and their local organization metadata, settings,
 capabilities, History, user-authored Scratchpad notes, and _disconnected_
 Workspace layout, so a restored Workspace always comes back disconnected and
-never auto-reconnects. Structured features need
+never auto-reconnects. A restored local tab is the same promise in local terms:
+the tab and its place in the split come back, the shell process does not start
+until the user asks. A persisted Workspace names exactly one target, so payloads
+written before Local Terminal existed still restore as remote Workspaces. Structured features need
 non-interactive public-key or agent auth, though the terminal still shows
 ordinary OpenSSH prompts. AGENTS.md carries the full architecture and data rules.
 
@@ -356,6 +389,16 @@ scrollback, copy and paste, and control keys (Vim, top, tmux, and the rest).
 Reconnect after a drop, or clear the local buffer without sending anything to the
 host. Several sessions per connection, with split panes and focus mode for
 tiling.
+
+A local shell uses that same pane and toolbar with local words: it is
+_running_ rather than _connected_, and it is _stopped_ and _restarted_ rather
+than disconnected and reconnected. A shell that exits on its own keeps its
+Workspace, says so in the pane notice, and offers Restart, because an exited
+shell is an ordinary event and losing the tab would be the surprise. "New
+terminal" repeats whatever the Workspace already is, another session on its
+Saved Connection or another shell of the same profile, and the split chooser
+offers existing terminals, new local shells, and new Saved Connections in that
+order.
 
 ---
 
