@@ -6,6 +6,7 @@ const settings: AppSettings = {
   terminalFontFamily: "Consolas",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
+  terminalRightClickPaste: false,
   terminalForeground: "#ffffff",
   terminalRed: "#ff0000",
   terminalGreen: "#00ff00",

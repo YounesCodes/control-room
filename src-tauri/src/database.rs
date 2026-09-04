@@ -2356,6 +2356,25 @@ mod tests {
             settings.terminal_green,
             AppSettings::default().terminal_green
         );
+        // A stored payload from before click-to-paste existed must not turn the
+        // gesture on for a user who never asked for it.
+        assert!(!settings.terminal_right_click_paste);
+    }
+
+    #[test]
+    fn right_click_paste_round_trips() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        assert!(!database.get_settings().unwrap().terminal_right_click_paste);
+
+        database
+            .save_settings(&AppSettings {
+                terminal_right_click_paste: true,
+                ..AppSettings::default()
+            })
+            .unwrap();
+
+        assert!(database.get_settings().unwrap().terminal_right_click_paste);
     }
 
     #[test]

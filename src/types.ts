@@ -397,6 +397,7 @@ export interface AppSettings {
   terminalFontFamily: string;
   terminalFontSize: number;
   terminalScrollback: number;
+  terminalRightClickPaste: boolean;
   terminalForeground: string;
   terminalRed: string;
   terminalGreen: string;

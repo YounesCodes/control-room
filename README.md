@@ -142,8 +142,8 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
 - Keep one plain-text Scratchpad note per Saved Connection and one global note shared across every
   connection and Workspace. Closing a Workspace does not delete either note.
-- Tune terminal font, size, scrollback, colors, log tail defaults, the global Enhanced History setting, and
-  whether Structured Operations may use sudo.
+- Tune terminal font, size, scrollback, colors, right-click paste, log tail defaults, the global
+  Enhanced History setting, and whether Structured Operations may use sudo.
 
 ## Read-only by design
 
