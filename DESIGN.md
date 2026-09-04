@@ -515,6 +515,11 @@ the app sees them. Those actions live on buttons and in the palette instead.
 The terminal lets these bubble up to the app and keeps copy and paste on
 `Ctrl+Shift+C` and `Ctrl+Shift+V`. Every other key goes to the remote shell.
 
+Settings can also add paste on a right click. It is off by default, so the
+webview menu keeps the gesture until the user asks for it. While it is on, the
+click is still left to a remote program that reads the mouse, and the menu key
+never pastes, because no button opened that menu.
+
 ---
 
 ## Accessibility

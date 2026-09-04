@@ -7,7 +7,11 @@ import { Eraser, PlugZap, RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { clearTerminalDisplay } from "../lib/terminal-display";
-import { BoundedByteQueue, isControlRoomShortcut } from "../lib/terminal-flow";
+import {
+  BoundedByteQueue,
+  isControlRoomShortcut,
+  shouldPasteOnRightClick,
+} from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import type {
   AppSettings,
@@ -60,6 +64,7 @@ export function TerminalPane({
   const earlySessionEventsRef = useRef(new Map<string, SessionStateEvent>());
   const historyPausedRef = useRef(workspace.historyPaused);
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
+  const rightClickPasteRef = useRef(settings.terminalRightClickPaste);
   const visibleRef = useRef(visible);
   const connectionIdRef = useRef(connection.id);
   const onSessionRef = useRef(onSession);
@@ -70,6 +75,7 @@ export function TerminalPane({
 
   historyPausedRef.current = workspace.historyPaused;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
+  rightClickPasteRef.current = settings.terminalRightClickPaste;
   visibleRef.current = visible;
   connectionIdRef.current = connection.id;
   onSessionRef.current = onSession;
@@ -126,6 +132,14 @@ export function TerminalPane({
     fitRef.current = fit;
 
     const send = (bytes: Uint8Array) => sendInputRef.current(bytes);
+    const pasteClipboard = () => {
+      void navigator.clipboard
+        .readText()
+        .then((text) => {
+          if (text) send(new TextEncoder().encode(text));
+        })
+        .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+    };
     const dataDisposable = terminal.onData((data) => send(new TextEncoder().encode(data)));
     const binaryDisposable = terminal.onBinary((data) =>
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
@@ -140,14 +154,25 @@ export function TerminalPane({
         return false;
       }
       if (event.key.toLowerCase() === "v") {
-        void navigator.clipboard
-          .readText()
-          .then((text) => send(new TextEncoder().encode(text)))
-          .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+        pasteClipboard();
         return false;
       }
       return true;
     });
+
+    // The right click is taken over only while the setting is on, so the
+    // webview menu keeps the gesture in every other case.
+    const handleContextMenu = (event: MouseEvent) => {
+      const paste = shouldPasteOnRightClick({
+        enabled: rightClickPasteRef.current,
+        button: event.button,
+        mouseTrackingMode: terminal.modes.mouseTrackingMode,
+      });
+      if (!paste) return;
+      event.preventDefault();
+      pasteClipboard();
+    };
+    container.addEventListener("contextmenu", handleContextMenu);
 
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) return false;
@@ -239,6 +264,7 @@ export function TerminalPane({
       listenerDisposed = true;
       unlisten?.();
       observer.disconnect();
+      container.removeEventListener("contextmenu", handleContextMenu);
       window.clearTimeout(resizeTimer);
       dataDisposable.dispose();
       binaryDisposable.dispose();

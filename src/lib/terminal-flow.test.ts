@@ -4,6 +4,7 @@ import {
   isControlRoomShortcut,
   isWorkspaceShortcutBlocked,
   MAX_PENDING_TERMINAL_INPUT_BYTES,
+  shouldPasteOnRightClick,
 } from "./terminal-flow";
 
 describe("BoundedByteQueue", () => {
@@ -80,5 +81,36 @@ describe("isWorkspaceShortcutBlocked", () => {
   it("keeps shortcuts available inside xterm and ordinary application controls", () => {
     expect(isWorkspaceShortcutBlocked(target([".xterm", "textarea"]), false)).toBe(false);
     expect(isWorkspaceShortcutBlocked(target([]), false)).toBe(false);
+  });
+});
+
+describe("shouldPasteOnRightClick", () => {
+  const menu = (overrides: Partial<Parameters<typeof shouldPasteOnRightClick>[0]> = {}) => ({
+    enabled: true,
+    button: 2,
+    mouseTrackingMode: "none",
+    ...overrides,
+  });
+
+  it("pastes on a right click once the setting is on", () => {
+    expect(shouldPasteOnRightClick(menu())).toBe(true);
+  });
+
+  it("stays off until the user turns it on", () => {
+    expect(shouldPasteOnRightClick(menu({ enabled: false }))).toBe(false);
+  });
+
+  it("ignores a context menu that no right button opened", () => {
+    // The menu key raises contextmenu with no button behind it, and reading that
+    // as a paste would fire the gesture from the keyboard.
+    expect(shouldPasteOnRightClick(menu({ button: 0 }))).toBe(false);
+    expect(shouldPasteOnRightClick(menu({ button: 1 }))).toBe(false);
+  });
+
+  it("leaves the click to a remote program that reads the mouse", () => {
+    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "x10" }))).toBe(false);
+    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "vt200" }))).toBe(false);
+    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "drag" }))).toBe(false);
+    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "any" }))).toBe(false);
   });
 });

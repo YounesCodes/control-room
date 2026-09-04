@@ -110,6 +110,21 @@ export function SettingsPane({
               />
             </label>
           </div>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={draft.terminalRightClickPaste}
+              onChange={(event) =>
+                setDraft({ ...draft, terminalRightClickPaste: event.target.checked })
+              }
+            />{" "}
+            Paste on right click in the terminal
+          </label>
+          <small>
+            A right click pastes the clipboard instead of opening the menu. The click still goes to
+            the remote program while it is reading the mouse, such as in Vim or top. Ctrl+Shift+C
+            and Ctrl+Shift+V keep working either way.
+          </small>
           <div className="terminal-color-heading">
             <div>
               <strong>ANSI colors</strong>
