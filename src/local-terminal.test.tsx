@@ -231,6 +231,25 @@ describe("Local Terminal", () => {
     expect(screen.getByRole("button", { name: "Systemd" })).toBeTruthy();
   });
 
+  it("gives the connection list the whole sidebar when a local shell is open", async () => {
+    const user = userEvent.setup();
+    const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
+    api.listConnections.mockResolvedValue([host]);
+    const { container } = render(<App />);
+
+    await openLocalShell(user, "PowerShell 7");
+
+    // The capped list only makes room for the Remote Host view switcher. A
+    // local Workspace has none, so capping it would leave the sidebar blank.
+    const sidebar = container.querySelector("aside.sidebar");
+    expect(sidebar?.className).not.toContain("workspace-open");
+
+    await openConnection(user, "prod-web");
+    await waitFor(() =>
+      expect(container.querySelector("aside.sidebar")?.className).toContain("workspace-open"),
+    );
+  });
+
   it("never runs host capability discovery for a local shell", async () => {
     const user = userEvent.setup();
     const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");

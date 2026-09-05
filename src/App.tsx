@@ -935,7 +935,10 @@ export function App() {
         </div>
       </header>
 
-      <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
+      {/* Only a Remote Host puts a view switcher under the list, so only it
+          needs the list capped to leave room. A local Workspace has no
+          switcher, so the list keeps the whole sidebar. */}
+      <aside className={activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
