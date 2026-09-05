@@ -77,6 +77,10 @@ jobs:
           releaseName: ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
+          # The updater feed takes its notes from the release body, so this is
+          # what puts anything in "What's new" after an update. Without it the
+          # body is empty and every update announces itself with nothing to say.
+          generateReleaseNotes: true
           # Only NSIS is built, so this is the bundle the updater feed must name.
           updaterJsonPreferNsis: true
           args: --config src-tauri/tauri.release.conf.json
