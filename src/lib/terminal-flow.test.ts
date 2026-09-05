@@ -4,7 +4,7 @@ import {
   isControlRoomShortcut,
   isWorkspaceShortcutBlocked,
   MAX_PENDING_TERMINAL_INPUT_BYTES,
-  shouldPasteOnRightClick,
+  terminalRightClickAction,
 } from "./terminal-flow";
 
 describe("BoundedByteQueue", () => {
@@ -84,33 +84,53 @@ describe("isWorkspaceShortcutBlocked", () => {
   });
 });
 
-describe("shouldPasteOnRightClick", () => {
-  const menu = (overrides: Partial<Parameters<typeof shouldPasteOnRightClick>[0]> = {}) => ({
-    enabled: true,
+describe("terminalRightClickAction", () => {
+  const click = (overrides: Partial<Parameters<typeof terminalRightClickAction>[0]> = {}) => ({
     button: 2,
+    hasSelection: false,
     mouseTrackingMode: "none",
     ...overrides,
   });
 
-  it("pastes on a right click once the setting is on", () => {
-    expect(shouldPasteOnRightClick(menu())).toBe(true);
+  it("copies whenever there is a selection", () => {
+    expect(terminalRightClickAction(click({ hasSelection: true }))).toBe("copy");
   });
 
-  it("stays off until the user turns it on", () => {
-    expect(shouldPasteOnRightClick(menu({ enabled: false }))).toBe(false);
+  it("pastes at an ordinary prompt", () => {
+    expect(terminalRightClickAction(click())).toBe("paste");
   });
 
-  it("ignores a context menu that no right button opened", () => {
-    // The menu key raises contextmenu with no button behind it, and reading that
-    // as a paste would fire the gesture from the keyboard.
-    expect(shouldPasteOnRightClick(menu({ button: 0 }))).toBe(false);
-    expect(shouldPasteOnRightClick(menu({ button: 1 }))).toBe(false);
+  it("hands the click to a program that reads the mouse", () => {
+    for (const mode of ["x10", "vt200", "drag", "any"]) {
+      expect(terminalRightClickAction(click({ mouseTrackingMode: mode }))).toBe("terminal");
+    }
   });
 
-  it("leaves the click to a remote program that reads the mouse", () => {
-    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "x10" }))).toBe(false);
-    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "vt200" }))).toBe(false);
-    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "drag" }))).toBe(false);
-    expect(shouldPasteOnRightClick(menu({ mouseTrackingMode: "any" }))).toBe(false);
+  it("keeps a selection even while a program reads the mouse", () => {
+    // The user has already said which text they mean, and a program reading the
+    // mouse never asked for that selection to be dropped.
+    expect(terminalRightClickAction(click({ hasSelection: true, mouseTrackingMode: "any" }))).toBe(
+      "copy",
+    );
+  });
+
+  it("ignores anything that is not a right button", () => {
+    // The context-menu key raises the same event with no button behind it.
+    // Claiming it would take away a keyboard route to the menu.
+    expect(terminalRightClickAction(click({ button: 0 }))).toBe("ignore");
+    expect(terminalRightClickAction(click({ button: 1 }))).toBe("ignore");
+    expect(terminalRightClickAction(click({ button: 0, hasSelection: true }))).toBe("ignore");
+  });
+
+  it("says nothing about the webview menu", () => {
+    // Suppressing that menu is decided at the event, for every pointer right
+    // click. Deriving it from this result is what let the menu appear whenever
+    // Control Room declined the gesture.
+    const results = [
+      terminalRightClickAction(click({ hasSelection: true })),
+      terminalRightClickAction(click()),
+      terminalRightClickAction(click({ mouseTrackingMode: "any" })),
+    ];
+    expect(results).toEqual(["copy", "paste", "terminal"]);
   });
 });

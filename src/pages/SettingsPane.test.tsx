@@ -20,7 +20,6 @@ const settings: AppSettings = {
   terminalFontFamily: "Cascadia Mono, Consolas, monospace",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
-  terminalRightClickPaste: false,
   terminalForeground: "#f2f2ee",
   terminalRed: "#ff6f7d",
   terminalGreen: "#52cf91",

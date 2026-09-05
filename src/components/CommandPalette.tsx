@@ -139,9 +139,7 @@ export function CommandPalette({
         id: "act-new-terminal",
         group: "Actions",
         label: "New terminal",
-        sublabel: activeWorkspaceIsLocal
-          ? "Another shell of the same kind"
-          : "Another session for this connection",
+        sublabel: "Choose a Saved Connection or a local shell",
         run: run(onNewTerminal),
       });
     }

@@ -19,10 +19,16 @@ const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
   clears: 0,
   writes: [] as string[],
+  // Drives the right-click policy: what is selected, and whether the program in
+  // the pty asked for the mouse.
+  selection: "",
+  mouseTrackingMode: "none",
   reset() {
     this.oscHandlers = 0;
     this.clears = 0;
     this.writes = [];
+    this.selection = "";
+    this.mouseTrackingMode = "none";
   },
 }));
 
@@ -67,11 +73,14 @@ vi.mock("@xterm/xterm", () => ({
       return { dispose: () => undefined };
     }
     attachCustomKeyEventHandler() {}
+    get modes() {
+      return { mouseTrackingMode: xterm.mouseTrackingMode };
+    }
     hasSelection() {
-      return false;
+      return xterm.selection.length > 0;
     }
     getSelection() {
-      return "";
+      return xterm.selection;
     }
     reset() {}
     clear() {
@@ -93,7 +102,6 @@ const settings: AppSettings = {
   terminalFontFamily: "Consolas",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
-  terminalRightClickPaste: false,
   terminalForeground: "#f2f2ee",
   terminalRed: "#ff6f7d",
   terminalGreen: "#52cf91",
@@ -148,12 +156,20 @@ function renderPane(
   return onState;
 }
 
+const clipboard = {
+  readText: vi.fn(async () => ""),
+  writeText: vi.fn(async () => undefined),
+};
+
 describe("TerminalPane sessions", () => {
   afterEach(cleanup);
 
   beforeEach(() => {
     vi.clearAllMocks();
     xterm.reset();
+    clipboard.readText.mockResolvedValue("");
+    clipboard.writeText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
     global.ResizeObserver = class {
       observe() {}
       disconnect() {}
@@ -223,8 +239,6 @@ describe("TerminalPane sessions", () => {
 
     renderPane({ ...running("connected"), sessionId: "local-session" });
     expect(screen.getByText("running")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Stop/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Disconnect/ })).toBeNull();
     cleanup();
 
     // An exited shell keeps its Workspace, reports the exit, and offers Restart.
@@ -240,28 +254,150 @@ describe("TerminalPane sessions", () => {
 
     renderPane({ ...createRemoteWorkspace(connection), state: "connected", sessionId: "ssh" });
     expect(screen.getByText("connected")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Disconnect/ })).toBeTruthy();
+  });
+
+  describe("right click", () => {
+    /** The pane attaches its handlers to the container xterm was opened into. */
+    function terminalContainer(): HTMLElement {
+      const container = document.querySelector(".terminal-container");
+      if (!container) throw new Error("terminal container was not rendered");
+      return container as HTMLElement;
+    }
+
+    function rightClick(container: HTMLElement) {
+      // The real gesture is a mousedown first, then contextmenu. xterm reports
+      // the mouse to the program on the mousedown, so the order matters.
+      const down = new MouseEvent("mousedown", { button: 2, bubbles: true, cancelable: true });
+      container.dispatchEvent(down);
+      const menu = new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+      container.dispatchEvent(menu);
+      return { down, menu };
+    }
+
+    async function openTerminal() {
+      renderPane({
+        ...createLocalWorkspace(shell),
+        state: "connected",
+        sessionId: "local-session",
+      });
+      await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+      api.writeSession.mockClear();
+      return terminalContainer();
+    }
+
+    it("copies the selection and pastes nothing", async () => {
+      xterm.selection = "hello";
+      const container = await openTerminal();
+
+      const { down, menu } = rightClick(container);
+
+      expect(clipboard.writeText).toHaveBeenCalledWith("hello");
+      expect(clipboard.readText).not.toHaveBeenCalled();
+      expect(api.writeSession).not.toHaveBeenCalled();
+      expect(menu.defaultPrevented).toBe(true);
+      // The click that copies must not also reach the program in the pty, or a
+      // copy inside tmux would open tmux's own menu at the same time.
+      expect(down.defaultPrevented).toBe(true);
+    });
+
+    it("pastes the clipboard into the pty at an ordinary prompt", async () => {
+      clipboard.readText.mockResolvedValue("ls -la");
+      const container = await openTerminal();
+
+      const { menu } = rightClick(container);
+
+      await vi.waitFor(() =>
+        expect(api.writeSession).toHaveBeenCalledWith("local-session", expect.anything()),
+      );
+      // Through the session, not written into the screen buffer.
+      const [, bytes] = api.writeSession.mock.calls[0];
+      expect(new TextDecoder().decode(bytes as Uint8Array)).toBe("ls -la");
+      expect(clipboard.writeText).not.toHaveBeenCalled();
+      expect(menu.defaultPrevented).toBe(true);
+    });
+
+    it("leaves the click to a program that reads the mouse", async () => {
+      xterm.mouseTrackingMode = "any";
+      const container = await openTerminal();
+
+      const { down, menu } = rightClick(container);
+
+      expect(clipboard.readText).not.toHaveBeenCalled();
+      expect(clipboard.writeText).not.toHaveBeenCalled();
+      expect(api.writeSession).not.toHaveBeenCalled();
+      // The menu is still suppressed, which is the whole point: declining the
+      // clipboard must not hand the gesture back to the webview.
+      expect(menu.defaultPrevented).toBe(true);
+      // xterm still gets the mousedown, so Vim or tmux receives its click.
+      expect(down.defaultPrevented).toBe(false);
+    });
+
+    it("still copies a selection made while a program reads the mouse", async () => {
+      xterm.selection = "chosen";
+      xterm.mouseTrackingMode = "any";
+      const container = await openTerminal();
+
+      const { menu } = rightClick(container);
+
+      expect(clipboard.writeText).toHaveBeenCalledWith("chosen");
+      expect(clipboard.readText).not.toHaveBeenCalled();
+      expect(menu.defaultPrevented).toBe(true);
+    });
+
+    it("never lets the webview menu open from a pointer right click", async () => {
+      // The reported bug: with the old setting off, right-click fell through to
+      // the webview's own Cut/Copy/Paste menu. Every path prevents it now, and
+      // none of it depends on a preference.
+      for (const state of [
+        { selection: "text", mouseTrackingMode: "none" },
+        { selection: "", mouseTrackingMode: "none" },
+        { selection: "", mouseTrackingMode: "any" },
+      ]) {
+        xterm.selection = state.selection;
+        xterm.mouseTrackingMode = state.mouseTrackingMode;
+        const container = await openTerminal();
+        expect(rightClick(container).menu.defaultPrevented).toBe(true);
+        cleanup();
+        vi.clearAllMocks();
+      }
+    });
+
+    it("leaves a context menu the keyboard raised alone", async () => {
+      // The menu key and Shift+F10 raise contextmenu with no button behind it.
+      // Suppressing those would remove a keyboard route for no reason.
+      const container = await openTerminal();
+
+      const menu = new MouseEvent("contextmenu", { button: 0, bubbles: true, cancelable: true });
+      container.dispatchEvent(menu);
+
+      expect(menu.defaultPrevented).toBe(false);
+      expect(clipboard.readText).not.toHaveBeenCalled();
+      expect(clipboard.writeText).not.toHaveBeenCalled();
+    });
+  });
+
+  it("gives a running terminal nothing to press", async () => {
+    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+
+    // Clearing is what the shell's own `clear` is for, and closing the
+    // Workspace is what stops a session. Neither needed a button here.
+    expect(screen.queryByRole("button", { name: /Clear/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Disconnect/ })).toBeNull();
+    // Recovery is the one control that earns its place, and only once the
+    // session has actually ended.
+    expect(screen.queryByRole("button", { name: /Restart/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reconnect/ })).toBeNull();
   });
 
-  it("clears without erasing the prompt line or touching the shell", async () => {
+  it("still closes its session when the pane goes away", async () => {
+    // Removing the Stop button must not remove the shutdown it used to reach.
+    // Unmounting is what a closing Workspace does to this pane.
     renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    screen.getByRole("button", { name: /Clear/ }).click();
-
-    // Clearing around the cursor keeps the prompt on screen; erasing the
-    // display would leave the pane blank until the next keystroke.
-    expect(xterm.clears).toBe(1);
-    expect(xterm.writes).toEqual([]);
-    expect(api.writeSession).not.toHaveBeenCalled();
-  });
-
-  it("stops only its own session", async () => {
-    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
-    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
-
-    screen.getByRole("button", { name: /Stop/ }).click();
+    cleanup();
 
     await vi.waitFor(() => expect(api.closeSession).toHaveBeenCalledWith("local-session"));
     expect(api.closeSession).toHaveBeenCalledTimes(1);

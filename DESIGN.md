@@ -128,7 +128,10 @@ Navigation is two levels and never nests deeper.
   "Add connection" are pinned at the bottom, the launcher listing only the shells
   this machine actually has.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
-  area, plus "New terminal" and the split and focus controls.
+  area, plus "New terminal" and the split and focus controls. "New terminal"
+  opens a chooser of Saved Connections and installed local shells, sharing its
+  list rendering with the split menu; each selection opens an independent
+  Workspace rather than repeating whatever happens to be active.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
   view switches, so navigation never tears a session down.
 
@@ -563,10 +566,23 @@ the app sees them. Those actions live on buttons and in the palette instead.
 The terminal lets these bubble up to the app and keeps copy and paste on
 `Ctrl+Shift+C` and `Ctrl+Shift+V`. Every other key goes to the remote shell.
 
-Settings can also add paste on a right click. It is off by default, so the
-webview menu keeps the gesture until the user asks for it. While it is on, the
-click is still left to a remote program that reads the mouse, and the menu key
-never pastes, because no button opened that menu.
+A mouse right click inside the terminal copies the selection, or pastes the
+clipboard when nothing is selected. When a program has asked for the mouse, that
+program receives the click instead. This is the terminal's own convention rather
+than a preference, because a clipboard gesture that half the users have turned
+off is a gesture nothing can rely on.
+
+Two decisions live behind that, and keeping them apart is the point. One decides
+who owns the clipboard. The other suppresses the webview's own menu, for every
+pointer right click, whatever the first decided: deriving the second from the
+first is exactly what used to let a Cut/Copy/Paste menu appear over the terminal
+whenever Control Room declined the gesture. A context-menu key press is left
+alone, because no button opened it and the keyboard route is worth keeping.
+
+The copy path also stops the click reaching the program in the pty, so copying a
+selection inside tmux cannot open tmux's own menu at the same time. Nothing is
+intercepted when there is no selection, which is what leaves a mouse-reporting
+program its click.
 
 ---
 

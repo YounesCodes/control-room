@@ -28,6 +28,8 @@ import {
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { UpdateIndicator } from "./components/UpdateIndicator";
+import { TerminalTargetMenu } from "./components/TerminalTargetMenu";
+import type { TerminalTargetGroup } from "./components/TerminalTargetMenu";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { useAppUpdater } from "./hooks/use-app-updater";
 import { updateInfo } from "./lib/app-update";
@@ -148,6 +150,10 @@ export function App() {
   const [terminalLayout, setTerminalLayout] = useState<TerminalLayout | null>(null);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
+  // Focus goes back to the control that opened the menu, so dismissing with
+  // Escape leaves the keyboard where it started.
+  const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   // One update lifecycle for the whole application: one timer, one in-flight
@@ -250,11 +256,10 @@ export function App() {
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
     : null;
-  // "New terminal" repeats whatever the active Workspace already is: another
-  // session on its Saved Connection, or another shell of the same profile.
-  const canOpenNewTerminal = Boolean(
-    activeWorkspace && (isLocalWorkspace(activeWorkspace) || activeSavedConnection),
-  );
+  // "New terminal" asks which target to open, so it needs a target to offer
+  // rather than a compatible Workspace to copy. Having nothing saved and no
+  // shell installed is the only case with nothing to choose from.
+  const canOpenNewTerminal = connections.length > 0 || localShells.length > 0;
   const focusedTerminalIds = terminalLayout ? getTerminalLayoutIds(terminalLayout) : [];
   const visibleTerminalIds = terminalFocusMode
     ? focusedTerminalIds
@@ -368,6 +373,17 @@ export function App() {
       document.removeEventListener("keydown", dismissMenuWithKeyboard);
     };
   }, [localShellMenuOpen]);
+
+  useEffect(() => {
+    if (!newTerminalMenuOpen) return;
+    function pointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-new-terminal-menu]")) return;
+      setNewTerminalMenuOpen(false);
+    }
+    document.addEventListener("mousedown", pointerDown);
+    return () => document.removeEventListener("mousedown", pointerDown);
+  }, [newTerminalMenuOpen]);
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -607,15 +623,68 @@ export function App() {
     if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
   }
 
-  /// Another terminal of whatever the active Workspace already is.
-  function openAnotherTerminal() {
-    if (!activeWorkspace) return;
-    if (isLocalWorkspace(activeWorkspace)) {
-      openLocalShell(activeWorkspace.shell);
-      return;
-    }
-    if (activeSavedConnection) openConnection(activeSavedConnection, true);
-  }
+  /// Split's targets. It keeps its own order and its own extra group: a split
+  /// can adopt a terminal that is already open, which "New terminal" cannot,
+  /// because opening is the whole point of that menu.
+  const splitTargetGroups: TerminalTargetGroup[] = [
+    {
+      label: "Existing terminals",
+      options: existingSplitCandidates.map((workspace) => ({
+        id: workspace.id,
+        label: duplicateLabel(workspace),
+        icon: workspaceMark(workspace),
+        onSelect: () => splitWithExistingTerminal(workspace),
+      })),
+    },
+    {
+      label: "New local terminal",
+      options: localShells.map((shell) => ({
+        id: shell.id,
+        label: shell.label,
+        icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
+      })),
+    },
+    {
+      label: "New from Saved Connections",
+      options: connections.map((connection) => ({
+        id: connection.id,
+        label: connection.displayName,
+        icon: <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />,
+        onSelect: () => splitWithNewWorkspace(createRemoteWorkspace(connection)),
+      })),
+    },
+  ];
+
+  /// The targets "New terminal" offers: everything saved, plus every shell this
+  /// machine actually has. Each one opens its own Workspace, so choosing the
+  /// active target again is a second independent terminal rather than a no-op.
+  const newTerminalGroups: TerminalTargetGroup[] = [
+    {
+      label: "Saved Connections",
+      options: connections.map((connection) => ({
+        id: connection.id,
+        label: connection.displayName,
+        icon: <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />,
+        onSelect: () => {
+          setNewTerminalMenuOpen(false);
+          openConnection(connection, true);
+        },
+      })),
+    },
+    {
+      label: "Local terminals",
+      options: localShells.map((shell) => ({
+        id: shell.id,
+        label: shell.label,
+        icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        onSelect: () => {
+          setNewTerminalMenuOpen(false);
+          openLocalShell(shell);
+        },
+      })),
+    },
+  ];
 
   function closeWorkspace(id: string) {
     const workspace = workspaces.find((item) => item.id === id);
@@ -1132,20 +1201,32 @@ export function App() {
                   </button>
                 </div>
               ))}
+            </div>
+            <span className="session-new-terminal-anchor" data-new-terminal-menu>
               <button
+                ref={newTerminalButtonRef}
                 className="session-new-terminal"
                 type="button"
-                onClick={openAnotherTerminal}
+                onClick={() => setNewTerminalMenuOpen((current) => !current)}
                 disabled={!canOpenNewTerminal}
-                title={
-                  activeWorkspace && isLocalWorkspace(activeWorkspace)
-                    ? `Open another ${activeWorkspace.shell.label} terminal`
-                    : "Open another terminal in this window"
-                }
+                aria-haspopup="dialog"
+                aria-expanded={newTerminalMenuOpen}
+                title="Open a terminal for a Saved Connection or a local shell"
               >
                 <Plus size={15} /> New terminal
               </button>
-            </div>
+              {newTerminalMenuOpen && (
+                <TerminalTargetMenu
+                  label="New terminal"
+                  className="new-terminal-menu"
+                  groups={newTerminalGroups}
+                  onClose={() => {
+                    setNewTerminalMenuOpen(false);
+                    newTerminalButtonRef.current?.focus();
+                  }}
+                />
+              )}
+            </span>
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
               <div className="session-tab-actions" data-terminal-split-menu>
                 {terminalFocusMode ? (
@@ -1167,10 +1248,11 @@ export function App() {
                       <Columns2 size={15} />
                     </button>
                     {splitMenuOpen && (
-                      <div
+                      <TerminalTargetMenu
+                        label="Split terminal"
                         className="terminal-split-menu"
-                        role="dialog"
-                        aria-label="Split terminal"
+                        groups={splitTargetGroups}
+                        onClose={() => setSplitMenuOpen(false)}
                       >
                         <div className="terminal-split-directions" aria-label="Split direction">
                           <button
@@ -1198,48 +1280,7 @@ export function App() {
                             </span>
                           </button>
                         </div>
-                        {!!existingSplitCandidates.length && (
-                          <>
-                            <strong>Existing terminals</strong>
-                            {existingSplitCandidates.map((workspace) => (
-                              <button
-                                type="button"
-                                key={workspace.id}
-                                onClick={() => splitWithExistingTerminal(workspace)}
-                              >
-                                {workspaceMark(workspace)}
-                                <span>{duplicateLabel(workspace)}</span>
-                              </button>
-                            ))}
-                          </>
-                        )}
-                        {!!localShells.length && (
-                          <>
-                            <strong>New local terminal</strong>
-                            {localShells.map((shell) => (
-                              <button
-                                type="button"
-                                key={shell.id}
-                                onClick={() => splitWithNewWorkspace(createLocalWorkspace(shell))}
-                              >
-                                <SquareTerminal size={16} strokeWidth={1.8} />
-                                <span>{shell.label}</span>
-                              </button>
-                            ))}
-                          </>
-                        )}
-                        <strong>New from Saved Connections</strong>
-                        {connections.map((connection) => (
-                          <button
-                            type="button"
-                            key={connection.id}
-                            onClick={() => splitWithNewWorkspace(createRemoteWorkspace(connection))}
-                          >
-                            <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
-                            <span>{connection.displayName}</span>
-                          </button>
-                        ))}
-                      </div>
+                      </TerminalTargetMenu>
                     )}
                     <button
                       className="session-strip-button"
@@ -1622,7 +1663,7 @@ export function App() {
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           activeView={activeWorkspace?.view ?? null}
-          canOpenNewTerminal={canOpenNewTerminal}
+          canOpenNewTerminal={canOpenNewTerminal && workspaces.length > 0}
           activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
           // Inspection views exist on a Remote Host only, so a local Workspace
@@ -1637,7 +1678,7 @@ export function App() {
             if (!activeWorkspace) return;
             closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
           }}
-          onNewTerminal={openAnotherTerminal}
+          onNewTerminal={() => setNewTerminalMenuOpen(true)}
           onReconnect={() =>
             activeWorkspace &&
             updateWorkspace(activeWorkspace.id, {

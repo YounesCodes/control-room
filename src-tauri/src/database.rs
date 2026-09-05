@@ -2490,25 +2490,33 @@ mod tests {
             settings.terminal_green,
             AppSettings::default().terminal_green
         );
-        // A stored payload from before click-to-paste existed must not turn the
-        // gesture on for a user who never asked for it.
-        assert!(!settings.terminal_right_click_paste);
     }
 
     #[test]
-    fn right_click_paste_round_trips() {
+    fn settings_saved_by_v0_7_0_still_load_after_a_field_was_removed() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
-        assert!(!database.get_settings().unwrap().terminal_right_click_paste);
 
-        database
-            .save_settings(&AppSettings {
-                terminal_right_click_paste: true,
-                ..AppSettings::default()
-            })
-            .unwrap();
+        // Exactly what v0.7.0 wrote, including terminalRightClickPaste, which no
+        // longer exists: right-click behaviour became built in rather than a
+        // preference. AppSettings does not deny unknown fields, so serde drops
+        // the retired key and every other value survives. Needing a migration
+        // for a removed boolean would have been the wrong shape of fix, and
+        // failing to parse would have silently reset the whole payload.
+        let stored = r##"{"terminalFontFamily":"Cascadia Mono","terminalFontSize":16,"terminalScrollback":7500,"terminalRightClickPaste":true,"terminalForeground":"#f2f2ee","terminalRed":"#ff6f7d","terminalGreen":"#52cf91","terminalYellow":"#e8c56c","terminalBlue":"#55aef2","terminalMagenta":"#c793ff","terminalCyan":"#65d4d1","defaultLogTail":1000,"globalHistoryEnabled":false,"globalSudoEnabled":true,"automaticUpdateChecks":false}"##;
+        database.set_app_metadata("settings", stored).unwrap();
 
-        assert!(database.get_settings().unwrap().terminal_right_click_paste);
+        let loaded = database.get_settings().unwrap();
+        assert_eq!(loaded.terminal_font_family, "Cascadia Mono");
+        assert_eq!(loaded.terminal_font_size, 16);
+        assert_eq!(loaded.terminal_scrollback, 7500);
+        assert_eq!(loaded.default_log_tail, 1000);
+        assert!(!loaded.global_history_enabled);
+        assert!(loaded.global_sudo_enabled);
+        assert!(
+            !loaded.automatic_update_checks,
+            "an unrelated preference must not be reset by removing another field"
+        );
     }
 
     #[test]

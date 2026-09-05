@@ -136,10 +136,11 @@ describe("application hierarchy", () => {
   });
 
   it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
-    // Saved Connections carry the host OS mark directly. Workspace tabs, split
-    // entries, and split pane headers go through one mark helper, because a
-    // local shell has no host OS to report.
-    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(3);
+    // Saved Connections carry the host OS mark directly: the sidebar, the split
+    // menu, and the New terminal menu all list connections. Workspace tabs,
+    // split entries, and split pane headers go through one mark helper instead,
+    // because a local shell has no host OS to report.
+    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(4);
     expect(appSource.match(/workspaceMark\(workspace\)/g)).toHaveLength(3);
     expect(appSource).not.toContain("StatusDot");
     // Connection sidebar and Workspace tabs surface live session state as a
@@ -155,16 +156,36 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("drawBoldTextInBrightColors: false");
   });
 
-  it("keeps click-to-paste an opt-in Terminal setting the pane reads live", () => {
-    expect(settingsSource).toContain("draft.terminalRightClickPaste");
-    expect(settingsSource).toContain("Paste on right click in the terminal");
-    // Ctrl+Shift+V stays the default paste, so the click gesture is the extra,
-    // and the pane reads the flag through a ref because the terminal is built
-    // once per pane.
-    expect(terminalSource).toContain("shouldPasteOnRightClick");
-    expect(terminalSource).toContain(
-      "rightClickPasteRef.current = settings.terminalRightClickPaste",
+  it("makes terminal right-click behaviour built in rather than a setting", () => {
+    // Copy-or-paste on right click is the terminal's own convention now, so
+    // there is no preference to read and none to show.
+    expect(settingsSource).not.toContain("terminalRightClickPaste");
+    expect(settingsSource).not.toContain("Paste on right click");
+    expect(terminalSource).not.toContain("shouldPasteOnRightClick");
+    expect(terminalSource).toContain("terminalRightClickAction");
+    // Suppressing the webview menu must not be conditional on who owns the
+    // clipboard: deciding it from the action is what let the menu appear
+    // whenever Control Room declined the gesture.
+    expect(terminalSource).toMatch(
+      /if \(action === "ignore"\) return;[\s\S]{0,80}event\.preventDefault\(\);/,
     );
+    // Ctrl+Shift+C and Ctrl+Shift+V stay the keyboard route.
+    expect(terminalSource).toContain('key.toLowerCase() === "c"');
+    expect(terminalSource).toContain('key.toLowerCase() === "v"');
+  });
+
+  it("keeps a running terminal free of Clear and Stop controls", () => {
+    // Clearing is what the shell's own `clear` is for, and closing the
+    // Workspace is the lifecycle action that stops a session.
+    expect(terminalSource).not.toContain("Eraser");
+    expect(terminalSource).not.toContain("CircleStop");
+    expect(terminalSource).not.toContain("clearTerminalDisplay");
+    expect(terminalSource).not.toContain("endSession");
+    // Removing the button must not remove the shutdown it used: unmount and
+    // Workspace close still reap the process.
+    expect(terminalSource).toContain("api.closeSession");
+    // Recovery stays, because it appears only when there is something to do.
+    expect(terminalSource).toContain("onReconnect");
   });
 
   it("keeps a local Workspace terminal-only and off every remote code path", () => {
