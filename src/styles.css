@@ -294,6 +294,185 @@ code,
   background: var(--fill-active);
 }
 
+/* ==========================================================================
+   Control Room updates
+   ========================================================================== */
+
+/* The titlebar control sits left of Settings and renders nothing at all while
+   the app is current, so an up-to-date titlebar is unchanged by this feature.
+   It is a plain button with no drag region, so pressing it never starts a
+   window drag. */
+.update-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.update-indicator-button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 7px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.update-indicator-button:hover,
+.update-indicator-button.active {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+
+/* Quiet but noticeable, and never the only signal: the label beside it says
+   the same thing in words. */
+.update-indicator-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.update-indicator-button:hover .update-indicator-dot,
+.update-indicator-button.active .update-indicator-dot {
+  background: var(--text-muted);
+}
+
+.update-indicator-dot[data-state="ready"] {
+  background: var(--success);
+}
+
+.update-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  width: 340px;
+  max-height: 420px;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 14px;
+}
+
+.update-panel-header h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.update-panel-header p {
+  margin: 3px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.update-panel-notes-title,
+.release-notes-heading {
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.update-panel-empty,
+.update-panel-error {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.update-panel-error {
+  border-left: 2px solid var(--failure);
+  padding-left: 9px;
+  color: var(--failure);
+}
+
+.update-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.update-panel-notes {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Release notes are external text rendered as text nodes, never as markup. */
+.release-notes {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.release-notes-list {
+  margin: 0 0 10px;
+  padding-left: 17px;
+}
+
+.release-notes-list li {
+  margin-bottom: 3px;
+}
+
+.release-notes-paragraph {
+  margin: 0 0 10px;
+}
+
+.release-notes > :last-child {
+  margin-bottom: 0;
+}
+
+.whats-new .release-notes {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.settings-version dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-update-actions {
+  display: flex;
+  min-height: 33px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-update-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.settings-update-status.failed {
+  color: var(--failure);
+}
+
+/* The technical reason sits under the plain sentence rather than replacing it,
+   so a network failure stays readable. */
+.settings-update-reason {
+  display: block;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
 .window-controls-divider {
   width: 1px;
   height: 22px;
@@ -1928,7 +2107,6 @@ code,
 }
 
 .overview-page,
-.settings-page,
 .history-page,
 .logs-page,
 .scratchpad-page,
@@ -3474,14 +3652,100 @@ dd {
    Settings
    ========================================================================== */
 
+/* Settings is a bar plus a scroll area rather than one scrolling page. The form
+   runs long enough that a submit button at its end is several screens from most
+   of the fields it applies to, so the bar keeps Back, the page identity, and
+   Save on screen the whole way down. */
 .settings-page {
+  --settings-measure: 790px;
+
   position: relative;
+  display: flex;
+  overflow: hidden;
   flex: 1;
+  flex-direction: column;
+  padding: 0;
+}
+
+.settings-heading {
+  flex: none;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-chrome);
+  padding: 13px 30px;
+}
+
+/* Capped to the form's own measure so Save lands on the same right edge as the
+   fields instead of drifting to the far side of a wide window. */
+.settings-heading-inner {
+  display: flex;
+  width: 100%;
+  max-width: var(--settings-measure);
+  align-items: center;
+  gap: 13px;
+}
+
+.settings-heading-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-heading-text h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.settings-heading-text p {
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-heading-actions {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The save result belongs next to the control that produced it, so it is a line
+   of text in the bar rather than a banner in the form. */
+.settings-status {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settings-status.saved {
+  color: var(--success);
+}
+
+.settings-status.failed {
+  color: var(--failure);
+}
+
+.settings-back {
+  flex: none;
+}
+
+.settings-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 30px 26px;
 }
 
 .settings-form {
   display: flow-root;
-  max-width: 790px;
+  max-width: var(--settings-measure);
   padding-bottom: 8px;
 }
 
@@ -3604,8 +3868,10 @@ dd {
   font-variant-numeric: tabular-nums;
 }
 
-.settings-save {
-  float: right;
+.settings-save:disabled {
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text-faint);
 }
 
 /* ==========================================================================
@@ -4269,10 +4535,17 @@ kbd {
   }
 
   .overview-page,
-  .settings-page,
   .history-page,
   .logs-page {
     padding: 22px;
+  }
+
+  .settings-heading {
+    padding: 11px 22px;
+  }
+
+  .settings-body {
+    padding: 20px 22px 22px;
   }
 
   .boot-page {

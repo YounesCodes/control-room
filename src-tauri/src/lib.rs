@@ -7,6 +7,7 @@ mod models;
 mod remote;
 mod session;
 mod ssh;
+mod updater;
 
 use baselines::BaselineCaptureRegistry;
 use database::Database;
@@ -17,7 +18,9 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SessionManager::default())
+        .manage(updater::UpdaterState::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
         .manage(BaselineCaptureRegistry::default())
@@ -91,6 +94,12 @@ pub fn run() {
             commands::get_history_integration_status,
             commands::install_history_integration,
             commands::uninstall_history_integration,
+            updater::check_for_update,
+            updater::download_update,
+            updater::install_update,
+            updater::pending_update_notice,
+            updater::dismiss_update_notice,
+            updater::current_app_version,
         ])
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {

@@ -569,6 +569,11 @@ pub struct AppSettings {
     /// Allows sudo for Structured Operations on every Saved Connection. While
     /// this is on, the per-connection flag has nothing left to decide.
     pub global_sudo_enabled: bool,
+    /// Checks GitHub Releases for a newer Control Room shortly after start and
+    /// twice a day after that. This updates Control Room itself and has nothing
+    /// to do with packages on a Remote Host, which Control Room never touches.
+    /// Turning it off leaves the manual check in Settings working.
+    pub automatic_update_checks: bool,
 }
 
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
@@ -598,6 +603,7 @@ impl Default for AppSettings {
             default_log_tail: 200,
             global_history_enabled: true,
             global_sudo_enabled: false,
+            automatic_update_checks: true,
         }
     }
 }

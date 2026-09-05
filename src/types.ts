@@ -408,7 +408,42 @@ export interface AppSettings {
   defaultLogTail: number;
   globalHistoryEnabled: boolean;
   globalSudoEnabled: boolean;
+  /** Checks GitHub Releases for a newer Control Room. This updates the app
+   *  itself and never touches a Remote Host. Off still leaves the manual check
+   *  in Settings working. */
+  automaticUpdateChecks: boolean;
 }
+
+/** An update Control Room could install, as reported by the signed updater
+ *  feed. Deliberately narrow: no URL and no signature reach the frontend,
+ *  because it has no decision to make with either. */
+export interface AppUpdateInfo {
+  currentVersion: string;
+  version: string;
+  notes: string | null;
+  publishedAt: string | null;
+}
+
+/** The one-time notice shown after an update has actually been installed. */
+export interface PendingUpdateNotice {
+  version: string;
+  notes: string | null;
+  publishedAt: string | null;
+}
+
+export type UpdateFailureKind = "check" | "download" | "signature" | "install";
+
+export interface UpdateFailure {
+  kind: UpdateFailureKind;
+  message: string;
+}
+
+/** Download progress. `total` stays null when the endpoint reports no content
+ *  length, rather than being faked as zero. */
+export type UpdateProgress =
+  | { event: "started"; contentLength: number | null }
+  | { event: "progress"; downloaded: number; total: number | null }
+  | { event: "finished" };
 
 export interface SettingsContract {
   current: AppSettings;

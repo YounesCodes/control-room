@@ -13,6 +13,14 @@ const terminalSource = readFileSync(
 const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
 const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+/** Source with comments removed, so a comment explaining a rule cannot be
+ *  mistaken for a violation of it. */
+function code(relativePath: string): string {
+  return readFileSync(new URL(relativePath, import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
 ) as { permissions: string[] };
@@ -202,6 +210,45 @@ describe("application hierarchy", () => {
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
     expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(5);
+  });
+
+  it("puts the update control left of Settings without touching the window controls", () => {
+    const updaterSource = code("./components/UpdateIndicator.tsx");
+    // Order in the titlebar: update status, Settings, divider, native controls.
+    expect(appSource).toMatch(
+      /<UpdateIndicator[\s\S]*?\/>\s*<button\s+className=\{settingsOpen[\s\S]*?<span className="window-controls-divider"[\s\S]*?<WindowControls \/>/,
+    );
+    // The control is an ordinary button: a drag region here would swallow the
+    // click and start moving the window instead.
+    expect(updaterSource).not.toContain("data-tauri-drag-region");
+    expect(updaterSource).toContain('type="button"');
+    expect(stylesSource).toMatch(/\.update-indicator-button\s*\{/);
+  });
+
+  it("renders release notes as text and never as markup", () => {
+    // Release notes come from GitHub through the updater feed, so they are text
+    // Control Room did not write. Nothing in the updater path may hand them to
+    // dangerouslySetInnerHTML.
+    for (const file of [
+      "./components/ReleaseNotes.tsx",
+      "./components/UpdateIndicator.tsx",
+      "./components/WhatsNewDialog.tsx",
+      "./lib/release-notes.ts",
+    ]) {
+      expect(code(file)).not.toContain("dangerouslySetInnerHTML");
+    }
+  });
+
+  it("keeps one application-wide update lifecycle", () => {
+    // Update checking is not per-Workspace work: one hook, mounted once, so the
+    // schedule cannot multiply with panes or connections.
+    expect(appSource.match(/useAppUpdater\(/g)).toHaveLength(1);
+    const panes = ["OverviewPane", "LogsPane", "ServicesPane", "PortsPane", "DockerPane"];
+    for (const pane of panes) {
+      const source = code(`./pages/${pane}.tsx`);
+      expect(source).not.toContain("useAppUpdater");
+      expect(source).not.toContain("checkForUpdate");
+    }
   });
 
   it("keeps only terminal tabs and the active terminal visible in focus mode", () => {

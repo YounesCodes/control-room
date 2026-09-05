@@ -18,6 +18,12 @@ const api = vi.hoisted(() => ({
   closeSession: vi.fn(),
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
+  // Control Room's own updater. Mounted once by App, so every test that renders
+  // App reaches it.
+  currentAppVersion: vi.fn(),
+  checkForUpdate: vi.fn(),
+  pendingUpdateNotice: vi.fn(),
+  dismissUpdateNotice: vi.fn(),
 }));
 
 vi.mock("./lib/api", () => ({
@@ -89,6 +95,7 @@ const settings: AppSettings = {
   defaultLogTail: 200,
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
+  automaticUpdateChecks: true,
 };
 
 const powershell: LocalShellProfile = {
@@ -164,6 +171,10 @@ describe("Local Terminal", () => {
     api.refreshCapabilities.mockResolvedValue({});
     api.closeSession.mockResolvedValue(undefined);
     api.scratchpadNote.mockResolvedValue(null);
+    api.currentAppVersion.mockResolvedValue("0.6.1");
+    api.checkForUpdate.mockResolvedValue(null);
+    api.pendingUpdateNotice.mockResolvedValue(null);
+    api.dismissUpdateNotice.mockResolvedValue(undefined);
   });
 
   it("offers only the shells the machine actually has", async () => {
@@ -229,6 +240,25 @@ describe("Local Terminal", () => {
     await openConnection(user, "prod-web");
     expect(await screen.findByRole("button", { name: "Overview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Systemd" })).toBeTruthy();
+  });
+
+  it("gives the connection list the whole sidebar when a local shell is open", async () => {
+    const user = userEvent.setup();
+    const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
+    api.listConnections.mockResolvedValue([host]);
+    const { container } = render(<App />);
+
+    await openLocalShell(user, "PowerShell 7");
+
+    // The capped list only makes room for the Remote Host view switcher. A
+    // local Workspace has none, so capping it would leave the sidebar blank.
+    const sidebar = container.querySelector("aside.sidebar");
+    expect(sidebar?.className).not.toContain("workspace-open");
+
+    await openConnection(user, "prod-web");
+    await waitFor(() =>
+      expect(container.querySelector("aside.sidebar")?.className).toContain("workspace-open"),
+    );
   });
 
   it("never runs host capability discovery for a local shell", async () => {

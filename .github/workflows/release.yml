@@ -25,20 +25,146 @@ jobs:
         with:
           tool: cargo-audit
           fallback: none
+
+      # Before the long build, not after it. A release that reaches the end and
+      # then cannot be signed has wasted forty minutes, and a release published
+      # without updater artifacts is worse: every installed copy would keep
+      # asking an endpoint that has nothing valid to serve.
+      - name: Verify updater signing is provisioned
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          $problems = @()
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            $problems += "The TAURI_SIGNING_PRIVATE_KEY repository secret is not set. Generate a key pair with 'npm run tauri signer generate -- -w .tauri/control-room.key' and store the private key as that secret."
+          }
+          $pubkey = (Get-Content -LiteralPath "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).plugins.updater.pubkey
+          if (-not $pubkey) {
+            $problems += "plugins.updater.pubkey is empty in src-tauri/tauri.conf.json. Commit the generated public key there so installed copies can verify what they download."
+          }
+          if ($problems.Count -gt 0) {
+            Write-Host "::error::Updater signing is not provisioned, so this release would be unusable by the in-app updater."
+            $problems | ForEach-Object { Write-Host "::error::$_" }
+            throw "Updater signing is not provisioned"
+          }
+
       - run: npm ci
+      # Includes check:version, which is what keeps package.json, Cargo.toml,
+      # and tauri.conf.json from disagreeing with the tag being released.
       - run: npm run check
       - name: Check Rust dependencies for known security issues
         shell: pwsh
         run: cargo audit --file src-tauri/Cargo.lock
-      - run: npm run tauri build
-      - name: Publish unsigned NSIS installer
+
+      # tauri-action builds, signs, creates the GitHub Release, and uploads the
+      # installer alongside its .sig and a latest.json describing them. Writing
+      # that JSON by hand would mean reimplementing the updater's own protocol
+      # and keeping it correct across plugin versions.
+      #
+      # createUpdaterArtifacts lives in a release-only config overlay rather
+      # than the main config, so an ordinary `npm run tauri build` on a
+      # developer machine never needs the signing key.
+      - name: Build, sign, and publish
+        uses: tauri-apps/tauri-action@v1.0.0
+        id: tauri
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseDraft: false
+          prerelease: false
+          # The updater feed takes its notes from the release body, so this is
+          # what puts anything in "What's new" after an update. Without it the
+          # body is empty and every update announces itself with nothing to say.
+          generateReleaseNotes: true
+          # Only NSIS is built, so this is the bundle the updater feed must name.
+          updaterJsonPreferNsis: true
+          args: --config src-tauri/tauri.release.conf.json
+
+      # SHA-256 is for a person downloading the installer by hand and checking
+      # it. The updater signature is for the application verifying an automatic
+      # update. Different audiences, different purposes, so the checksum stays.
+      - name: Attach the installer checksum
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $installer = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
+          $installer = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not produced" }
           $checksumPath = "$($installer.FullName).sha256"
           $checksum = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$checksum  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
-          gh release create $env:GITHUB_REF_NAME $installer.FullName $checksumPath --generate-notes --verify-tag
+          gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
+
+      # tauri-action composes latest.json from its own inputs, so notes GitHub
+      # generates while creating the release never reach the feed. The feed's
+      # notes field is the text the app shows under "What's new", so without
+      # this every update announces itself with nothing to say.
+      - name: Put the release notes into the updater feed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Parsed from the JSON object rather than taken as raw output: gh
+          # prints the body across several lines, and PowerShell would capture
+          # that as a string array, which serialises into the feed as a JSON
+          # array instead of the string the updater expects.
+          $body = (gh release view $env:GITHUB_REF_NAME --json body | ConvertFrom-Json).body
+          if (-not $body) { throw "The release has no body to use as update notes" }
+          gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir . --clobber
+          $feed = Get-Content -LiteralPath latest.json -Raw | ConvertFrom-Json
+          $feed.notes = $body
+          # Written as bytes rather than through Set-Content: a byte order mark
+          # would make the feed fail to parse, and which encodings avoid one
+          # differs between Windows PowerShell and PowerShell 7.
+          $json = $feed | ConvertTo-Json -Depth 10
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) "latest.json"),
+            $json,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          gh release upload $env:GITHUB_REF_NAME latest.json --clobber
+          Write-Host "Updater feed carries $($body.Length) characters of notes"
+
+      # A release that looks successful but cannot be consumed by the updater is
+      # the failure worth catching here, because it only shows up later as
+      # installed copies quietly never updating.
+      - name: Verify the release can actually be updated from
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $signature = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe.sig" | Select-Object -First 1
+          if (-not $signature) { throw "No .sig was produced: the updater could not verify this build" }
+
+          $assets = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[].name'
+          Write-Host "Published assets:`n$assets"
+
+          $required = @(
+            @{ Pattern = '-setup\.exe$';        Name = "NSIS installer" },
+            @{ Pattern = '-setup\.exe\.sig$';   Name = "updater signature" },
+            @{ Pattern = '-setup\.exe\.sha256$';Name = "SHA-256 checksum" },
+            @{ Pattern = '^latest\.json$';      Name = "updater feed (latest.json)" }
+          )
+          $missing = $required | Where-Object { -not ($assets -match $_.Pattern) } | ForEach-Object { $_.Name }
+          if ($missing) {
+            throw "The release is missing: $($missing -join ', ')"
+          }
+
+          # The feed must name this tag's version, or installed copies would be
+          # offered something other than what was just built.
+          $latest = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[] | select(.name == "latest.json") | .url'
+          $expected = $env:GITHUB_REF_NAME.TrimStart("v")
+          $feed = (gh api $latest --header "Accept: application/octet-stream" | ConvertFrom-Json)
+          if ($feed.version -ne $expected) {
+            throw "latest.json announces $($feed.version) but this tag is $expected"
+          }
+          if (-not $feed.notes) {
+            throw "latest.json carries no notes, so an update would have nothing to show under What's new"
+          }
+          Write-Host "latest.json announces $($feed.version) with $($feed.platforms.PSObject.Properties.Name -join ', ')"
+          Write-Host "notes: $($feed.notes.Length) characters"
