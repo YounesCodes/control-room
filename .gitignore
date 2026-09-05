@@ -1,5 +1,8 @@
 /node_modules/
 /dist/
+/docs/node_modules/
+/docs/dist/
+/docs/.astro/
 /src-tauri/target/
 /src-tauri/gen/
 /.idea/
