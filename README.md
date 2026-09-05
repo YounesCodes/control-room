@@ -8,7 +8,7 @@ Control Room is a local Windows desktop app for keeping and working with several
 
 ## Documentation
 
-Read the [Control Room documentation](https://younescodes.github.io/control-room/) for installation, first connection, terminal and Workspace usage, host inspection, security, troubleshooting, and development.
+Read the [Control Room documentation](https://younescodes.github.io/control-room/) for installation, first connection, terminal and Workspace usage, host inspection, security, and troubleshooting.
 
 ## What it includes
 
@@ -66,4 +66,4 @@ npm run dev
 npm run build
 ```
 
-See the [contributing guide](https://younescodes.github.io/control-room/development/contributing/) before changing product behavior. Keep `AGENTS.md` and `DESIGN.md` current, and do not commit or push changes without an explicit request.
+Read `AGENTS.md` and `DESIGN.md` in the repository before changing product behavior, and keep them current when the product changes. Do not commit or push changes without an explicit request.

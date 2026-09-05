@@ -93,15 +93,6 @@ export default defineConfig({
             { label: "Keyboard shortcuts", slug: "reference/keyboard-shortcuts" },
           ],
         },
-        {
-          label: "Development",
-          collapsed: true,
-          items: [
-            { label: "Setup", slug: "development/setup" },
-            { label: "Architecture", slug: "development/architecture" },
-            { label: "Contributing", slug: "development/contributing" },
-          ],
-        },
       ],
     }),
   ],
