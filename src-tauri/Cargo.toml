@@ -1,6 +1,6 @@
 [package]
 name = "control-room"
-version = "0.7.0"
+version = "0.7.1"
 description = "A local Windows control room for Linux hosts over SSH"
 authors = ["Younes"]
 edition = "2024"
