@@ -154,6 +154,12 @@ export function App() {
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
+  // The menu is positioned rather than anchored, because the tab strip scrolls
+  // horizontally and an absolutely positioned child would be clipped to one row.
+  const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   // One update lifecycle for the whole application: one timer, one in-flight
@@ -621,6 +627,28 @@ export function App() {
     setWorkspaces((current) => [...current, workspace]);
     setActiveWorkspaceId(workspace.id);
     if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
+  }
+
+  /// Opens the chooser under its own control, measured at the moment it opens.
+  /// Right-aligned to the button, then clamped so a control sitting near the
+  /// left edge cannot push the menu off screen.
+  const NEW_TERMINAL_MENU_WIDTH = 260;
+  function openNewTerminalMenu() {
+    if (newTerminalMenuOpen) {
+      setNewTerminalMenuOpen(false);
+      return;
+    }
+    const rect = newTerminalButtonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setNewTerminalMenuAt({
+        top: rect.bottom + 1,
+        right: Math.max(
+          8,
+          Math.min(window.innerWidth - rect.right, window.innerWidth - NEW_TERMINAL_MENU_WIDTH - 8),
+        ),
+      });
+    }
+    setNewTerminalMenuOpen(true);
   }
 
   /// Split's targets. It keeps its own order and its own extra group: a split
@@ -1201,32 +1229,33 @@ export function App() {
                   </button>
                 </div>
               ))}
+              <span className="session-new-terminal-anchor" data-new-terminal-menu>
+                <button
+                  ref={newTerminalButtonRef}
+                  className="session-new-terminal"
+                  type="button"
+                  onClick={openNewTerminalMenu}
+                  disabled={!canOpenNewTerminal}
+                  aria-haspopup="dialog"
+                  aria-expanded={newTerminalMenuOpen}
+                  title="Open a terminal for a Saved Connection or a local shell"
+                >
+                  <Plus size={15} /> New terminal
+                </button>
+                {newTerminalMenuOpen && (
+                  <TerminalTargetMenu
+                    label="New terminal"
+                    className="new-terminal-menu"
+                    groups={newTerminalGroups}
+                    style={newTerminalMenuAt ?? undefined}
+                    onClose={() => {
+                      setNewTerminalMenuOpen(false);
+                      newTerminalButtonRef.current?.focus();
+                    }}
+                  />
+                )}
+              </span>
             </div>
-            <span className="session-new-terminal-anchor" data-new-terminal-menu>
-              <button
-                ref={newTerminalButtonRef}
-                className="session-new-terminal"
-                type="button"
-                onClick={() => setNewTerminalMenuOpen((current) => !current)}
-                disabled={!canOpenNewTerminal}
-                aria-haspopup="dialog"
-                aria-expanded={newTerminalMenuOpen}
-                title="Open a terminal for a Saved Connection or a local shell"
-              >
-                <Plus size={15} /> New terminal
-              </button>
-              {newTerminalMenuOpen && (
-                <TerminalTargetMenu
-                  label="New terminal"
-                  className="new-terminal-menu"
-                  groups={newTerminalGroups}
-                  onClose={() => {
-                    setNewTerminalMenuOpen(false);
-                    newTerminalButtonRef.current?.focus();
-                  }}
-                />
-              )}
-            </span>
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
               <div className="session-tab-actions" data-terminal-split-menu>
                 {terminalFocusMode ? (

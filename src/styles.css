@@ -1480,14 +1480,16 @@ code,
 
 /* New terminal hangs off the tab strip, so it opens below and to the left of
    its own control rather than the right edge of the strip. */
+/* Contributes no box of its own: the button inside must stay a full-height
+   flex cell, or its hover shrinks to the size of the text. */
 .session-new-terminal-anchor {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-  align-self: center;
+  display: contents;
 }
 
 .new-terminal-menu {
+  position: fixed;
+  top: auto;
+  right: auto;
   width: 260px;
 }
 

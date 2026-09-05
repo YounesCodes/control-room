@@ -21,6 +21,8 @@ interface TerminalTargetMenuProps {
   children?: ReactNode;
   onClose: () => void;
   className?: string;
+  /** Set by a caller that positions the menu itself rather than anchoring it. */
+  style?: React.CSSProperties;
 }
 
 /**
@@ -41,6 +43,7 @@ export function TerminalTargetMenu({
   children,
   onClose,
   className,
+  style,
 }: TerminalTargetMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -78,6 +81,7 @@ export function TerminalTargetMenu({
     <div
       ref={menuRef}
       className={className ? `terminal-target-menu ${className}` : "terminal-target-menu"}
+      style={style}
       role="dialog"
       aria-label={label}
       onKeyDown={onKeyDown}
