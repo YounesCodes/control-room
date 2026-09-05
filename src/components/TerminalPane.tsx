@@ -3,14 +3,13 @@ import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { CircleStop, Eraser, PlugZap, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
-import { clearTerminalDisplay } from "../lib/terminal-display";
 import {
   BoundedByteQueue,
   isControlRoomShortcut,
-  shouldPasteOnRightClick,
+  terminalRightClickAction,
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { isRemoteWorkspace, terminalStateLabel } from "../lib/workspace-target";
@@ -62,7 +61,6 @@ export function TerminalPane({
   const earlySessionEventsRef = useRef(new Map<string, SessionStateEvent>());
   const historyPausedRef = useRef(remote?.historyPaused ?? false);
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
-  const rightClickPasteRef = useRef(settings.terminalRightClickPaste);
   const visibleRef = useRef(visible);
   const connectionIdRef = useRef(remote?.connectionId ?? null);
   const onSessionRef = useRef(onSession);
@@ -73,7 +71,6 @@ export function TerminalPane({
 
   historyPausedRef.current = remote?.historyPaused ?? false;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
-  rightClickPasteRef.current = settings.terminalRightClickPaste;
   visibleRef.current = visible;
   connectionIdRef.current = remote?.connectionId ?? null;
   onSessionRef.current = onSession;
@@ -162,17 +159,46 @@ export function TerminalPane({
       return true;
     });
 
-    // The right click is taken over only while the setting is on, so the
-    // webview menu keeps the gesture in every other case.
+    /* A selection is copied rather than reported to the program running in the
+       pty, so the click that copies it cannot also become a right click inside
+       Vim or tmux. Stopping propagation in the capture phase is what keeps it
+       from reaching xterm's own mousedown listener, which sits deeper in the
+       tree. With no selection nothing is intercepted here, which is what leaves
+       a mouse-reporting program its click. */
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 2 || !terminal.hasSelection()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    container.addEventListener("mousedown", handleMouseDown, { capture: true });
+
+    /* Suppressing the webview menu is decided here, separately from who owns
+       the clipboard. Every pointer right click inside the terminal prevents it,
+       including the one handed to a mouse-reporting program: leaving the menu
+       to appear whenever Control Room declined the gesture was the original
+       bug. A context-menu key press arrives as the same event with no button
+       behind it, reports "ignore", and is left alone so the keyboard route to
+       the menu survives.
+
+       By the time this fires, xterm has already seen the mousedown and sent any
+       mouse report the program asked for. Preventing the default here removes
+       the menu without taking the click away from the program. */
     const handleContextMenu = (event: MouseEvent) => {
-      const paste = shouldPasteOnRightClick({
-        enabled: rightClickPasteRef.current,
+      const action = terminalRightClickAction({
         button: event.button,
+        hasSelection: terminal.hasSelection(),
         mouseTrackingMode: terminal.modes.mouseTrackingMode,
       });
-      if (!paste) return;
+      if (action === "ignore") return;
+
       event.preventDefault();
-      pasteClipboard();
+      if (action === "copy") {
+        void navigator.clipboard
+          .writeText(terminal.getSelection())
+          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+        return;
+      }
+      if (action === "paste") pasteClipboard();
     };
     container.addEventListener("contextmenu", handleContextMenu);
 
@@ -275,6 +301,7 @@ export function TerminalPane({
       listenerDisposed = true;
       unlisten?.();
       observer.disconnect();
+      container.removeEventListener("mousedown", handleMouseDown, { capture: true });
       container.removeEventListener("contextmenu", handleContextMenu);
       window.clearTimeout(resizeTimer);
       dataDisposable.dispose();
@@ -411,16 +438,6 @@ export function TerminalPane({
     if (active) terminal.focus();
   }, [settings, visible, active]);
 
-  async function endSession() {
-    const sessionId = sessionIdRef.current;
-    if (!sessionId) return;
-    try {
-      await api.closeSession(sessionId);
-    } catch (error) {
-      setLocalError(errorMessage(error));
-    }
-  }
-
   // A local shell is started and stopped; a remote one is connected and
   // disconnected. Same lifecycle, different words for what it means.
   const local = workspace.kind === "local";
@@ -441,25 +458,6 @@ export function TerminalPane({
               <RefreshCw size={14} /> {local ? "Restart" : "Reconnect"}
             </button>
           )}
-          <button
-            className="toolbar-button"
-            type="button"
-            onClick={() => {
-              const terminal = terminalRef.current;
-              if (terminal) clearTerminalDisplay(terminal);
-            }}
-          >
-            <Eraser size={14} /> Clear
-          </button>
-          <button
-            className="toolbar-button"
-            type="button"
-            onClick={endSession}
-            disabled={!workspace.sessionId}
-          >
-            {local ? <CircleStop size={14} /> : <PlugZap size={14} />}{" "}
-            {local ? "Stop" : "Disconnect"}
-          </button>
         </div>
       </header>
       {(localError || workspace.reason) && (

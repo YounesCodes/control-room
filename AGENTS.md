@@ -127,7 +127,15 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
     deterministically by domain identity and draw no causal conclusion. A
     comparison against live machine state is still an explicit, user-initiated
     read: never save it as a capture and never repeat it on its own.
-13. Local shells are offered only when installed, resolved deterministically
+13. Keep the terminal's own gestures built in rather than optional. A mouse
+    right click copies a selection, pastes when there is none, and belongs to
+    the program in the pty while that program is reading the mouse. A pointer
+    right click inside the terminal never opens the webview menu, and that
+    suppression is decided separately from who owns the clipboard, because
+    deriving one from the other is what let the menu through. "New terminal"
+    chooses a target rather than repeating the active one, and never mutates
+    the Workspace it was opened from.
+14. Local shells are offered only when installed, resolved deterministically
     from standard Windows locations plus `PATH` for PowerShell 7 and Git for
     Windows, and started with the user's own environment in the user profile
     directory. Git Bash means `bash.exe`, never `git-bash.exe` or another
@@ -136,7 +144,7 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
     that reads it, and never invent Windows Terminal variables. Reject unknown
     profile ids, and report a shell that disappeared after discovery as
     unavailable rather than failing obscurely.
-14. Keep the in-app updater optional infrastructure, never a boot dependency.
+15. Keep the in-app updater optional infrastructure, never a boot dependency.
     Rust owns the endpoint, the signature check, and the installer; React names
     an intent and never receives a URL, installer bytes, or a way to skip
     verification. There is one application-level update lifecycle: one timer,
@@ -149,10 +157,10 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
     no "install anyway". Never persist installer bytes: the only stored updater
     data is the small one-time notice naming the version just installed, cleared
     once shown. Release notes are external text and are rendered as text.
-15. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-16. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+16. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+17. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-17. Do not commit or push unless the user asks.
+18. Do not commit or push unless the user asks.
 
 ## Validation
 

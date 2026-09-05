@@ -49,7 +49,9 @@ The distinction matters. Control Room helps you inspect and move between related
 - Save an SSH destination, required username, and optional port or existing identity-file override as a Saved Connection.
 - Open multiple independent Workspaces and multiple Terminal Sessions for one Saved Connection.
 - Use an interactive terminal backed by the Windows OpenSSH client and ConPTY, with resizing, scrollback, Unicode, ANSI and VT output, copy and paste, and control keys.
-- Reconnect a dropped Terminal Session, clear its local display, or focus and split terminal panes.
+- Open a terminal for anything: **New terminal** lists the Saved Connections and the local shells this machine has, and opening one creates its own Workspace. Picking the target that is already open gives you a second independent terminal for it.
+- Right-click in a terminal to copy the selected text, or to paste when nothing is selected. While a program such as Vim, top, or tmux is reading the mouse, the click goes to that program instead. `Ctrl+Shift+C` and `Ctrl+Shift+V` work everywhere.
+- Reconnect a dropped Terminal Session, or focus and split terminal panes.
 - Restore Workspace tabs and layout after restarting the app. Restored Workspaces start disconnected and never reconnect automatically, and a restored local tab starts no process until you ask.
 
 ### Local Terminal
@@ -58,7 +60,7 @@ The distinction matters. Control Room helps you inspect and move between related
 - Supported shell profiles: PowerShell 7 (`pwsh.exe`), Windows PowerShell, Command Prompt, and Git Bash (`bash.exe`, as a login shell).
 - Only shells that are actually installed are offered. Control Room looks in the standard Windows install locations, and on `PATH` for PowerShell 7 and for a Git for Windows directory.
 - Shells start with your normal Windows environment, in your user profile directory.
-- Run several local terminals at once, mix them with SSH terminals, split them side by side, rename their tabs, stop one without touching the others, and restart one after its shell exits.
+- Run several local terminals at once, mix them with SSH terminals, split them side by side, rename their tabs, close one without touching the others, and restart one after its shell exits.
 - Local Workspaces are terminal-only. There is no local host inspection, no Windows service or process view, and no local command history.
 - Control Room is the terminal emulator. It does not launch or embed Windows Terminal, and it never opens an external terminal window.
 
@@ -159,7 +161,7 @@ Capture starts only in sessions opened after you enable it. Control Room does no
 - Use the command palette to open connections, switch views, change Workspaces, reconnect, and open Settings.
 - Keep one plain-text Scratchpad note per Saved Connection and one global note shared across every
   connection and Workspace. Closing a Workspace does not delete either note.
-- Tune terminal font, size, scrollback, colors, right-click paste, log tail defaults, the global
+- Tune terminal font, size, scrollback, colors, log tail defaults, the global
   Enhanced History setting, and whether Structured Operations may use sudo. Terminal settings apply
   to local and SSH terminals alike.
 
