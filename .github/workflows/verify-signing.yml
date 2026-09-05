@@ -1,0 +1,79 @@
+name: Verify updater signing
+
+# Proves the updater signing secrets work, in about a minute, without building
+# an installer or publishing anything.
+#
+# It answers two questions the release workflow only answers after a long build:
+#   - does TAURI_SIGNING_PRIVATE_KEY decrypt with the stored password
+#   - is that key the pair of the public key committed in tauri.conf.json
+#
+# The second matters most. A mismatched pair publishes a release that looks
+# perfect and is then rejected by every installed copy, which only becomes
+# visible once users are already on it.
+
+on:
+  workflow_dispatch:
+  # So the check runs as soon as this lands on a branch, rather than waiting to
+  # reach the default branch before it can be dispatched.
+  push:
+    paths:
+      - ".github/workflows/verify-signing.yml"
+      - "scripts/verify-updater-signature.mjs"
+      - "src-tauri/tauri.conf.json"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Secrets are read through the environment rather than interpolated into
+      # the script text, so they never appear in a command line.
+      - name: Confirm the signing secrets are present
+        shell: pwsh
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if (-not $env:KEY) {
+            Write-Host "::error::TAURI_SIGNING_PRIVATE_KEY is not set"
+            exit 1
+          }
+          Write-Host "TAURI_SIGNING_PRIVATE_KEY is set ($($env:KEY.Length) characters)"
+          if (-not $env:KEY_PASSWORD) {
+            Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not set, which is correct only if the key has no password"
+          } else {
+            Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set"
+          }
+
+      # Signing a throwaway file exercises the same key handling a release does,
+      # without a Rust toolchain or a 4 MB installer.
+      - name: Sign a probe file with the repository secrets
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          "control-room updater signing probe" | Set-Content -LiteralPath probe.bin -Encoding ascii
+          npx tauri signer sign probe.bin
+          if (-not (Test-Path probe.bin.sig)) {
+            Write-Host "::error::No signature was produced. The key or its password was rejected."
+            exit 1
+          }
+
+      - name: Verify the signature against the committed public key
+        shell: pwsh
+        run: node scripts/verify-updater-signature.mjs probe.bin probe.bin.sig
+
+      - name: Result
+        shell: pwsh
+        run: Write-Host "Updater signing is provisioned. A release tag will produce an update installed copies can verify."
