@@ -4,7 +4,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/YounesCodes/control-room?display_name=tag)](https://github.com/YounesCodes/control-room/releases/latest) [![CI](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml)
 
-Control Room is a local Windows desktop app for working with Linux machines over SSH. It keeps a real interactive terminal beside bounded, read-only views of the same Remote Host.
+Control Room is a local Windows desktop app for keeping and working with several Linux machines over SSH. Save each host once, open it as a Workspace, and keep a real interactive terminal beside read-only views of that machine.
 
 ## Documentation
 
@@ -12,7 +12,7 @@ Read the [Control Room documentation](https://younescodes.github.io/control-room
 
 ## What it includes
 
-- Interactive SSH terminals backed by the Windows OpenSSH client and ConPTY.
+- Interactive SSH terminals that run through the Windows OpenSSH client and ConPTY.
 - Multiple remote Workspaces, terminal tabs, splits, and focus mode.
 - Local terminal Workspaces for installed PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash.
 - Read-only views for host capabilities, systemd units, listening ports, Docker, boot evidence, and logs.

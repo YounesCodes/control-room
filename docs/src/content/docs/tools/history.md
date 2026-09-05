@@ -28,6 +28,6 @@ Enhanced History is Bash-only and remote-only. It does not infer commands from k
 
 :::caution
 
-Command lines may include secrets. The entries are stored in the local database, which is not an encrypted secret store. Enable the integration only when that local record is appropriate.
+Command lines may include secrets. Control Room stores the entries in the local database, which is not an encrypted secret store. Enable the integration only when that local record is appropriate.
 
 :::

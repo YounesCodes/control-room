@@ -3,7 +3,27 @@ title: Baselines
 description: Capture normalized host facts on demand and compare them later.
 ---
 
-A Host Baseline is a user-requested capture of normalized facts for one Saved Connection. It gives you a deterministic record to compare later without saving raw command output.
+A Host Baseline answers a practical question. Something on the server looks or behaves
+differently, and you want to know what changed.
+
+```text
+Before changing your server
+        ↓
+Capture a baseline
+        ↓
+Upgrade or reconfigure something
+        ↓
+Something looks different
+        ↓
+Compare against the baseline
+        ↓
+See exactly which entries changed
+```
+
+A baseline is a capture you start yourself, for one Saved Connection. It stores normalized facts
+rather than raw command output, so a comparison matches entries by identity instead of guessing
+from text. A systemd unit is matched by its unit id, a container by its ID, a listener by address
+and protocol, a filesystem by its mount point.
 
 ## Capture sections
 
@@ -42,3 +62,5 @@ Host identity evidence tells you whether two captures appear to come from the sa
 ## Manage saved baselines
 
 Rename, pin, inspect, compare, export, or delete a baseline from the Baselines view. Control Room keeps up to 20 unpinned baselines per Saved Connection. Pinned baselines survive that routine retention limit.
+
+Related: [Security](/control-room/reference/security/#stored-locally) lists what Control Room stores locally, baselines included.

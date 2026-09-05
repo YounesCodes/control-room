@@ -3,7 +3,9 @@ title: Boot diagnostics
 description: Inspect bounded evidence for the current or a recent Linux boot.
 ---
 
-Boot Diagnostics is an on-demand, observational read. It lists up to ten boots reported by journald, then lets you select the current boot or one of the recent previous boots.
+A server reboots more slowly than usual, or a service fails after a restart, and you want the
+boot evidence in one place. Boot Diagnostics gathers it on demand: it lists up to ten boots
+reported by journald, then lets you select the current boot or one of the recent previous boots.
 
 ## Sections
 

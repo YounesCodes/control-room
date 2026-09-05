@@ -5,7 +5,10 @@ description: Inspect system-scope systemd services, timers, mounts, and sockets.
 
 import servicesScreenshot from "../../../assets/screenshots/services.png";
 
-The Systemd view reads system-scope units with a bounded `systemctl show` request. It covers services, timers, mounts, and sockets.
+The Systemd view shows which system-scope units the host is running, which failed, and what a
+unit's current state is. It covers services, timers, mounts, and sockets in one list.
+
+It reads the units with a bounded `systemctl show` request.
 
 <figure class="docs-screenshot">
   <a href={servicesScreenshot.src} target="_blank" rel="noreferrer">

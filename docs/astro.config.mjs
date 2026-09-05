@@ -52,13 +52,13 @@ export default defineConfig({
           ],
         },
         {
-          label: "Terminal & workspaces",
+          label: "Using Control Room",
           collapsed: true,
           items: [
             { label: "Connections", slug: "connections" },
+            { label: "Workspaces & splits", slug: "workspaces" },
             { label: "SSH terminal", slug: "terminal" },
             { label: "Local terminals", slug: "local-terminals" },
-            { label: "Workspaces & splits", slug: "workspaces" },
           ],
         },
         {
@@ -67,28 +67,21 @@ export default defineConfig({
           items: [
             { label: "Overview", slug: "inspection/overview" },
             { label: "Systemd", slug: "inspection/services" },
-            { label: "Logs", slug: "inspection/logs" },
             { label: "Ports", slug: "inspection/ports" },
             { label: "Docker", slug: "inspection/docker" },
+            { label: "Logs", slug: "inspection/logs" },
             { label: "Boot diagnostics", slug: "inspection/boot" },
             { label: "Baselines", slug: "inspection/baselines" },
           ],
         },
         {
-          label: "Tools",
+          label: "Advanced",
           collapsed: true,
           items: [
             { label: "Enhanced History", slug: "tools/history" },
             { label: "Scratchpad", slug: "tools/scratchpad" },
-          ],
-        },
-        {
-          label: "Reference",
-          collapsed: true,
-          items: [
-            { label: "Settings", slug: "reference/settings" },
-            { label: "Keyboard shortcuts", slug: "reference/keyboard-shortcuts" },
             { label: "Security", slug: "reference/security" },
+            { label: "Settings", slug: "reference/settings" },
           ],
         },
         {
@@ -97,6 +90,7 @@ export default defineConfig({
           items: [
             { label: "Troubleshooting", slug: "help/troubleshooting" },
             { label: "FAQ", slug: "help/faq" },
+            { label: "Keyboard shortcuts", slug: "reference/keyboard-shortcuts" },
           ],
         },
         {

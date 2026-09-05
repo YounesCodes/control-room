@@ -15,7 +15,7 @@ The interactive terminal is different. Commands typed there run with the permiss
 
 Sudo is off by default. You can allow it globally or for one Saved Connection. When an allowed operation runs, Control Room first checks for passwordless sudo. It uses elevation only when the account can run that read without a password. Otherwise it runs the read unelevated and reports the limitation.
 
-If a read fails because it needs a password, the pane may offer a one-shot sudo retry. The password is sent for that retry and discarded. It is never saved or placed on a command line. The allowance itself never stores a credential and never widens a structured operation beyond reading.
+If a read fails because it needs a password, the pane may offer a one-shot sudo retry. Control Room sends the password for that retry and discards it. It is never saved or placed on a command line. The allowance itself never stores a credential and never widens a structured operation beyond reading.
 
 Overview reports passwordless sudo capability separately from the setting that allows elevation. Docker access through sudo is also reported separately from ordinary Docker access.
 

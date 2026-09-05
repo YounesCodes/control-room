@@ -3,20 +3,20 @@ title: Introduction
 description: What Control Room is, who it is for, and where its boundary sits.
 ---
 
-Control Room is a Windows desktop app for working with Linux machines over SSH. It gives you a real interactive SSH terminal and a set of structured views for the Remote Host behind that connection.
+Control Room is a Windows desktop app for working with several Linux machines over SSH. Save each host once, open it as a Workspace, and use a real interactive SSH terminal next to structured views of that machine.
 
-## What it adds to SSH
+## What a Workspace includes
 
 Open a Saved Connection and you can move between:
 
 - an interactive SSH terminal
 - host capabilities and current load readings
 - system-scope systemd units
-- bounded TCP and UDP listener snapshots
+- listening ports and established connections
 - Docker containers and published ports
 - current and recent boot evidence
 - journald and Docker log streams
-- explicit host baselines and comparisons
+- host baselines you can compare over time
 - optional Bash command history
 
 The views share a Workspace, but they do not share terminal output or turn the terminal into a command runner. The terminal remains the place for administrative work.

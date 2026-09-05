@@ -5,7 +5,7 @@ description: Save, test, group, tag, and remove SSH destinations.
 
 import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
 
-A **Saved Connection** is the reusable target for remote Workspaces and structured inspections. It is stored locally and contains an SSH destination and username, with optional connection overrides.
+A **Saved Connection** is the reusable target for remote Workspaces and structured inspections. Control Room stores it locally with an SSH destination and username, plus optional connection overrides.
 
 ## Add or edit a connection
 
@@ -56,3 +56,5 @@ Use **Delete connection** to remove a Saved Connection. This also removes its re
 ## SSH configuration
 
 Control Room uses the Windows OpenSSH client and can display the detected client path, the `%USERPROFILE%\.ssh\config` path, and whether `ssh-agent` has an available identity. OpenSSH still owns its normal configuration and authentication behavior.
+
+If a connection or the structured test misbehaves, [Troubleshooting](/control-room/help/troubleshooting/) covers the common causes.

@@ -5,7 +5,12 @@ description: List Docker containers, group validated Compose labels, and inspect
 
 import dockerScreenshot from "../../../assets/screenshots/docker.png";
 
-The Docker view reads a bounded `docker ps -a --no-trunc` list. It keeps each container instance distinct and can show a grouped view or a flat view.
+The Docker view shows what is running on a host, how containers group into Compose projects, and
+what a single container looks like inside. You never leave the Workspace or type the `docker`
+commands yourself.
+
+It reads a bounded `docker ps -a --no-trunc` list and keeps each container instance distinct, in
+a grouped or flat view.
 
 <figure class="docs-screenshot">
   <a href={dockerScreenshot.src} target="_blank" rel="noreferrer">

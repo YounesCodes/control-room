@@ -3,7 +3,9 @@ title: Logs
 description: Read bounded journald or Docker log streams without storing fetched output.
 ---
 
-Logs opens an independent stream for one systemd unit or one Docker container. Choose the source, select a unit or container, and choose a tail size of 50, 100, 200, 500, or 1000 lines.
+A service is misbehaving and you want its recent output without leaving Control Room. Logs opens
+a stream for one systemd unit or one Docker container. Pick a tail of 50, 100, 200, 500, or 1000
+lines and follow new lines while you work. Closing the view stops the stream.
 
 ## Stream controls
 

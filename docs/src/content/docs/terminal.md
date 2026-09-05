@@ -3,7 +3,7 @@ title: Terminal
 description: Use the integrated SSH terminal, tabs, splits, and session controls.
 ---
 
-The terminal is an interactive shell backed by the Windows OpenSSH client and ConPTY. Type commands into it as you would in any other SSH client.
+The terminal is an interactive shell that runs through the Windows OpenSSH client and ConPTY. Type commands into it as you would in any other SSH client.
 
 ## Session behavior
 
