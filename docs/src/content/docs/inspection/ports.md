@@ -7,12 +7,12 @@ Ports reads a manual snapshot of listening TCP and UDP sockets on the current Re
 
 ## Four views
 
-| View | Shows |
-| --- | --- |
-| Overview | Listener topology with binding exposure, owner evidence, and firewall annotations. |
+| View        | Shows                                                                              |
+| ----------- | ---------------------------------------------------------------------------------- |
+| Overview    | Listener topology with binding exposure, owner evidence, and firewall annotations. |
 | Connections | Established connections aggregated by listening port, with bounded remote samples. |
-| Docker | Published host-to-container port mappings. |
-| Table | A searchable, precise listener table. |
+| Docker      | Published host-to-container port mappings.                                         |
+| Table       | A searchable, precise listener table.                                              |
 
 Filter listeners by TCP or UDP, all interfaces, local-only bindings, a specific address, or text. The snapshot records whether data was truncated and when it was collected.
 

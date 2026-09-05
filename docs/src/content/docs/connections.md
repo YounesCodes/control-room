@@ -9,16 +9,16 @@ A **Saved Connection** is a local record containing an SSH destination and usern
 
 The connection editor accepts:
 
-| Field | Details |
-| --- | --- |
-| Display name | Required in the UI, up to 80 characters. This is the name shown in the rail and Workspace tabs. |
-| SSH destination | Required, up to 255 characters. It is passed to OpenSSH as the destination after validation. |
-| Username | Required, up to 64 characters. |
-| Port | Optional, from 1 to 65535. |
-| Identity file | Optional path to an existing private key. Control Room never copies the file. |
-| Group | One local Connection Group, or derived Ungrouped. |
-| Tags | Existing local tags for filtering and organization. |
-| Sudo allowance | Optional per-host permission for passwordless sudo reads. |
+| Field           | Details                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------- |
+| Display name    | Required in the UI, up to 80 characters. This is the name shown in the rail and Workspace tabs. |
+| SSH destination | Required, up to 255 characters. It is passed to OpenSSH as the destination after validation.    |
+| Username        | Required, up to 64 characters.                                                                  |
+| Port            | Optional, from 1 to 65535.                                                                      |
+| Identity file   | Optional path to an existing private key. Control Room never copies the file.                   |
+| Group           | One local Connection Group, or derived Ungrouped.                                               |
+| Tags            | Existing local tags for filtering and organization.                                             |
+| Sudo allowance  | Optional per-host permission for passwordless sudo reads.                                       |
 
 Use **Test structured access** before saving when you want to confirm that noninteractive SSH can reach the host. The test does not create a Saved Connection.
 

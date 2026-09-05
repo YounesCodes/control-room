@@ -24,13 +24,13 @@ Structured views do not edit remote files, transfer files, manage services or co
 
 ## Support
 
-| Area | Support |
-| --- | --- |
-| Local machine | Windows 11 x64 |
-| SSH | The Windows OpenSSH Client already installed |
+| Area                         | Support                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| Local machine                | Windows 11 x64                                                                     |
+| SSH                          | The Windows OpenSSH Client already installed                                       |
 | Structured remote inspection | Debian or Ubuntu family Linux with systemd, journald, Bash, and `ss` from iproute2 |
-| Docker | Optional Docker installation on the Remote Host |
-| Other Linux hosts | Terminal-only, best effort |
+| Docker                       | Optional Docker installation on the Remote Host                                    |
+| Other Linux hosts            | Terminal-only, best effort                                                         |
 
 ## Install
 

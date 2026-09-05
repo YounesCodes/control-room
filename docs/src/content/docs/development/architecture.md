@@ -7,12 +7,12 @@ description: The boundaries between the Tauri shell, Rust backend, frontend, and
 
 The desktop app has four important layers:
 
-| Layer | Responsibility |
-| --- | --- |
-| Tauri | Owns the Windows desktop window and native app lifecycle. |
-| Rust | Owns native processes, SQLite, SSH arguments, remote commands, local shell discovery, pty lifecycle, bounds, and permission handling. |
-| React and TypeScript | Renders Workspaces and views, keeps view state, and calls typed Tauri commands. |
-| Remote Host | Answers bounded, read-only SSH operations or hosts the interactive shell. |
+| Layer                | Responsibility                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Tauri                | Owns the Windows desktop window and native app lifecycle.                                                                             |
+| Rust                 | Owns native processes, SQLite, SSH arguments, remote commands, local shell discovery, pty lifecycle, bounds, and permission handling. |
+| React and TypeScript | Renders Workspaces and views, keeps view state, and calls typed Tauri commands.                                                       |
+| Remote Host          | Answers bounded, read-only SSH operations or hosts the interactive shell.                                                             |
 
 ## One session lifecycle
 

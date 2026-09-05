@@ -7,12 +7,12 @@ Control Room can host local Windows shells in terminal-only Local Workspaces. Se
 
 ## Supported profiles
 
-| Profile | Executable |
-| --- | --- |
-| PowerShell 7 | `pwsh.exe` |
-| Windows PowerShell | `powershell.exe` |
-| Command Prompt | `cmd.exe` |
-| Git Bash | `bash.exe` from Git for Windows |
+| Profile            | Executable                      |
+| ------------------ | ------------------------------- |
+| PowerShell 7       | `pwsh.exe`                      |
+| Windows PowerShell | `powershell.exe`                |
+| Command Prompt     | `cmd.exe`                       |
+| Git Bash           | `bash.exe` from Git for Windows |
 
 Only profiles that are installed are offered. PowerShell 7 and Git for Windows use deterministic checks of standard install locations plus the allowed PATH lookup. Git Bash never uses `System32\bash.exe`, which is the WSL launcher.
 

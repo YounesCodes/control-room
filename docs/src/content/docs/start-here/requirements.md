@@ -5,12 +5,12 @@ description: Supported Windows, SSH, Linux, systemd, journald, and Docker enviro
 
 ## Local machine
 
-| Area | Support |
-| --- | --- |
-| Operating system | Windows 11 x64 |
-| SSH client | The Windows OpenSSH Client installed on the machine |
-| Terminal | Windows ConPTY through the app |
-| Local shells | Installed PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash |
+| Area             | Support                                                                  |
+| ---------------- | ------------------------------------------------------------------------ |
+| Operating system | Windows 11 x64                                                           |
+| SSH client       | The Windows OpenSSH Client installed on the machine                      |
+| Terminal         | Windows ConPTY through the app                                           |
+| Local shells     | Installed PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash |
 
 Control Room does not launch or embed Windows Terminal. Git Bash means the `bash.exe` shipped with Git for Windows, not the `System32\bash.exe` WSL launcher.
 

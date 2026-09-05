@@ -21,13 +21,13 @@ Capture runs one section at a time. The progress view shows the current section 
 
 Each section stores its own collection time, schema version, and one status:
 
-| Status | Meaning |
-| --- | --- |
-| Collected | The section returned its normalized facts. |
-| Partial | The section returned facts but hit a bound or limitation. |
-| Unsupported | The host does not provide that kind of inspection. |
-| Unavailable | The read failed or permission prevented it. |
-| Skipped | You stopped before the section ran or did not select it. |
+| Status      | Meaning                                                   |
+| ----------- | --------------------------------------------------------- |
+| Collected   | The section returned its normalized facts.                |
+| Partial     | The section returned facts but hit a bound or limitation. |
+| Unsupported | The host does not provide that kind of inspection.        |
+| Unavailable | The read failed or permission prevented it.               |
+| Skipped     | You stopped before the section ran or did not select it.  |
 
 Control Room never treats a section it did not read as unchanged.
 
