@@ -84,7 +84,6 @@ const settings: AppSettings = {
   terminalFontFamily: "Consolas",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
-  terminalRightClickPaste: false,
   terminalForeground: "#f2f2ee",
   terminalRed: "#ff6f7d",
   terminalGreen: "#52cf91",
@@ -140,6 +139,13 @@ async function openLocalShell(user: ReturnType<typeof userEvent.setup>, label: s
 
 /// Clicks a Saved Connection in the sidebar. Its row also carries an actions
 /// button, so this takes the first match, which is the row itself.
+/// Opens the New terminal chooser and picks one target by its accessible name,
+/// which is prefixed with the group so "PowerShell 7" cannot be ambiguous.
+async function openNewTerminal(user: ReturnType<typeof userEvent.setup>, target: string) {
+  await user.click(await screen.findByRole("button", { name: /New terminal/ }));
+  await user.click(await screen.findByRole("button", { name: target }));
+}
+
 async function openConnection(user: ReturnType<typeof userEvent.setup>, name: string) {
   const sidebar = await screen.findByLabelText("Saved connections");
   await user.click(within(sidebar).getAllByRole("button", { name: new RegExp(name) })[0]);
@@ -299,16 +305,171 @@ describe("Local Terminal", () => {
     expect(screen.getByRole("button", { name: /Close PowerShell 7 Workspace/ })).toBeTruthy();
   });
 
-  it("opens another terminal of the same shell from a local Workspace", async () => {
+  describe("New terminal chooser", () => {
+    const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
+    const other = connection("22222222-2222-4222-8222-222222222222", "database");
+
+    /** Every target of the chooser, by tab close label, in tab order. */
+    function openTabs(): string[] {
+      return screen
+        .getAllByRole("button", { name: /^Close .* Workspace$/ })
+        .map((button) => button.getAttribute("aria-label") ?? "");
+    }
+
+    it("offers Saved Connections and installed local shells together", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host, other]);
+      render(<App />);
+
+      await openLocalShell(user, "PowerShell 7");
+      await user.click(await screen.findByRole("button", { name: /New terminal/ }));
+
+      // Both kinds, whatever is active, under headings that say which is which.
+      expect(screen.getByRole("button", { name: "Saved Connections: prod-web" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Saved Connections: database" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Local terminals: PowerShell 7" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
+      // Only shells this machine actually has: the fixture reports two.
+      expect(screen.queryByRole("button", { name: "Local terminals: Command Prompt" })).toBeNull();
+    });
+
+    it("opens a Saved Connection from a local Workspace", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host]);
+      render(<App />);
+
+      await openLocalShell(user, "PowerShell 7");
+      await openNewTerminal(user, "Saved Connections: prod-web");
+
+      const terminals = await screen.findAllByTestId(/^terminal-/);
+      expect(terminals.map((terminal) => terminal.dataset.target)).toEqual([
+        "powershell-7",
+        host.id,
+      ]);
+      // The Workspace it was opened from stays exactly where it was.
+      expect(openTabs()).toEqual(["Close PowerShell 7 Workspace", "Close prod-web Workspace"]);
+      expect(terminals[1].dataset.kind).toBe("remote");
+    });
+
+    it("opens a different local shell from a local Workspace", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await openLocalShell(user, "PowerShell 7");
+      await openNewTerminal(user, "Local terminals: Git Bash");
+
+      const terminals = await screen.findAllByTestId(/^terminal-/);
+      expect(terminals.map((terminal) => terminal.dataset.target)).toEqual([
+        "powershell-7",
+        "git-bash",
+      ]);
+    });
+
+    it("opens a local shell from a remote Workspace", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host]);
+      render(<App />);
+
+      await openConnection(user, "prod-web");
+      await openNewTerminal(user, "Local terminals: PowerShell 7");
+
+      const terminals = await screen.findAllByTestId(/^terminal-/);
+      expect(terminals.map((terminal) => terminal.dataset.kind)).toEqual(["remote", "local"]);
+      expect(terminals[1].dataset.target).toBe("powershell-7");
+    });
+
+    it("opens a different Saved Connection from a remote Workspace", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host, other]);
+      render(<App />);
+
+      await openConnection(user, "prod-web");
+      await openNewTerminal(user, "Saved Connections: database");
+
+      const terminals = await screen.findAllByTestId(/^terminal-/);
+      expect(terminals.map((terminal) => terminal.dataset.target)).toEqual([host.id, other.id]);
+      expect(openTabs()).toEqual(["Close prod-web Workspace", "Close database Workspace"]);
+    });
+
+    it("opens a second independent Workspace for the active connection", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host]);
+      render(<App />);
+
+      await openConnection(user, "prod-web");
+      await openNewTerminal(user, "Saved Connections: prod-web");
+
+      // Not a focus change: picking what is already open still opens another.
+      const terminals = await screen.findAllByTestId(/^terminal-/);
+      expect(terminals).toHaveLength(2);
+      expect(openTabs()).toEqual(["Close prod-web Workspace", "Close prod-web 2 Workspace"]);
+    });
+
+    it("is available before any compatible Workspace exists", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host]);
+      render(<App />);
+
+      // Opened from a local Workspace with nothing remote in sight: the control
+      // used to be limited to repeating whatever was active.
+      await openLocalShell(user, "Git Bash");
+      const control = await screen.findByRole("button", { name: /New terminal/ });
+      expect(control.hasAttribute("disabled")).toBe(false);
+    });
+
+    it("closes on Escape and gives focus back to its control", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host]);
+      render(<App />);
+
+      await openLocalShell(user, "Git Bash");
+      const control = await screen.findByRole("button", { name: /New terminal/ });
+      await user.click(control);
+      expect(screen.getByRole("dialog", { name: "New terminal" })).toBeTruthy();
+
+      await user.keyboard("{Escape}");
+
+      expect(screen.queryByRole("dialog", { name: "New terminal" })).toBeNull();
+      expect(document.activeElement).toBe(control);
+    });
+
+    it("can be driven from the keyboard", async () => {
+      const user = userEvent.setup();
+      api.listConnections.mockResolvedValue([host]);
+      render(<App />);
+
+      await openLocalShell(user, "Git Bash");
+      await user.click(await screen.findByRole("button", { name: /New terminal/ }));
+
+      // Opens on the first target rather than on whatever is focusable first.
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Saved Connections: prod-web" }),
+      );
+      await user.keyboard("{ArrowDown}");
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Local terminals: PowerShell 7" }),
+      );
+      await user.keyboard("{Enter}");
+
+      const terminals = await screen.findAllByTestId(/^terminal-/);
+      expect(terminals.map((terminal) => terminal.dataset.target)).toEqual([
+        "git-bash",
+        "powershell-7",
+      ]);
+    });
+  });
+
+  it("opens the same shell again when that is what the user picks", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await openLocalShell(user, "Git Bash");
-    await user.click(screen.getByRole("button", { name: /New terminal/ }));
+    await openNewTerminal(user, "Local terminals: Git Bash");
 
     const terminals = await screen.findAllByTestId(/^terminal-/);
     expect(terminals.map((terminal) => terminal.dataset.target)).toEqual(["git-bash", "git-bash"]);
-    // The second tab is numbered against the first, as remote Workspaces are.
+    // Duplicating is still available, it is just chosen now rather than being
+    // the only thing the control could do.
     expect(screen.getByRole("button", { name: /Close Git Bash 2 Workspace/ })).toBeTruthy();
   });
 
@@ -321,7 +482,9 @@ describe("Local Terminal", () => {
     await openConnection(user, "prod-web");
     await user.click(await screen.findByLabelText("Focus terminal"));
     await user.click(await screen.findByLabelText("Split terminal"));
-    await user.click(await screen.findByRole("button", { name: "PowerShell 7" }));
+    await user.click(
+      await screen.findByRole("button", { name: "New local terminal: PowerShell 7" }),
+    );
 
     const terminals = await screen.findAllByTestId(/^terminal-/);
     expect(terminals.map((terminal) => terminal.dataset.kind)).toEqual(["remote", "local"]);

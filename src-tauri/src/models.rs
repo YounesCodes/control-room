@@ -556,7 +556,6 @@ pub struct AppSettings {
     pub terminal_scrollback: u32,
     /// Pastes the clipboard on a right click in the terminal. Off by default,
     /// because a right click otherwise belongs to the webview menu.
-    pub terminal_right_click_paste: bool,
     pub terminal_foreground: String,
     pub terminal_red: String,
     pub terminal_green: String,
@@ -592,7 +591,6 @@ impl Default for AppSettings {
             terminal_font_family: "Cascadia Mono, Consolas, monospace".into(),
             terminal_font_size: 14,
             terminal_scrollback: 10_000,
-            terminal_right_click_paste: false,
             terminal_foreground: "#f2f2ee".into(),
             terminal_red: "#ff6f7d".into(),
             terminal_green: "#52cf91".into(),
