@@ -1,0 +1,31 @@
+---
+title: Quick start
+description: Add a Saved Connection and open your first SSH Workspace.
+---
+
+## Add a connection
+
+1. Select **Add connection** in the left rail.
+2. Enter a display name, SSH destination, and username.
+3. Add a port only when it differs from the OpenSSH default.
+4. Add an existing identity-file path only when you need to override your SSH configuration.
+5. Select **Test structured access** if you want to check noninteractive inspection access before saving.
+6. Save the connection and select it in the rail.
+
+The test checks a noninteractive SSH connection and reports whether systemd, journald, Docker, and sudo are available. A successful interactive password login does not guarantee that structured access will work, because structured operations cannot stop to ask for an SSH password.
+
+## Open a Workspace
+
+Selecting a Saved Connection opens a remote Workspace with a terminal. The first session uses the Windows OpenSSH client and ConPTY. Use the view navigation to open Overview, Systemd, Ports, Docker, Boot, Logs, Baselines, History, or Scratchpad.
+
+You can open more than one Workspace for the same Saved Connection. Each Workspace owns its own terminal session and view state.
+
+## Try an inspection
+
+Open **Overview** first. It shows cached host capabilities and a live load sample while the pane is open. Use **Refresh** when you need current capability data.
+
+Then open **Systemd** or **Ports**. Both are manual, bounded snapshots. They do not scan the network and do not change the host.
+
+## Reconnect later
+
+Workspace tabs return after an app restart, but they return disconnected. Control Room never reconnects an SSH session or starts a local shell on its own. Select the Workspace and reconnect it when you are ready.

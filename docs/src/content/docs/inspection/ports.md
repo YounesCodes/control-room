@@ -1,0 +1,29 @@
+---
+title: Ports and networking
+description: Inspect bounded listener and established-connection snapshots without scanning the network.
+---
+
+Ports reads a manual snapshot of listening TCP and UDP sockets on the current Remote Host. It is a host snapshot, not a network scan and not a reachability test.
+
+## Four views
+
+| View | Shows |
+| --- | --- |
+| Overview | Listener topology with binding exposure, owner evidence, and firewall annotations. |
+| Connections | Established connections aggregated by listening port, with bounded remote samples. |
+| Docker | Published host-to-container port mappings. |
+| Table | A searchable, precise listener table. |
+
+Filter listeners by TCP or UDP, all interfaces, local-only bindings, a specific address, or text. The snapshot records whether data was truncated and when it was collected.
+
+## Ownership and navigation
+
+The view keeps kernel socket facts separate from process and systemd ownership. A process name is not treated as proof of ownership. Service navigation appears only when one unambiguous PID maps to a validated systemd unit. Container navigation requires an exact published address, port, and protocol.
+
+If the account cannot read owner information, the listener remains visible with an unavailable owner. **Resolve owners with sudo** can retry the read where allowed.
+
+## Firewall and exposure
+
+Binding exposure and firewall policy are separate facts. A listener on a broad address does not prove Internet reachability. The firewall snapshot is bounded and read-only. It may report UFW availability, default incoming policy, and up to its supported rule limit.
+
+Established connections are also bounded. Control Room aggregates them and caps both groups and remote samples. It does not collect a full process argument list, infer owners from names, scan ports, test reachability, or persist the snapshot.

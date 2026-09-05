@@ -1,0 +1,33 @@
+---
+title: Workspaces
+description: Understand remote and local Workspaces, persistence, tabs, and splits.
+---
+
+A Workspace is one open view of one target. A remote Workspace belongs to a Saved Connection. A local Workspace belongs to one Local Shell Profile.
+
+## Remote Workspaces
+
+A remote Workspace groups one SSH Terminal Session with the inspection views supported by the Remote Host. The navigation includes Overview, Terminal, Systemd, Ports, Docker, Boot, Logs, Baselines, History, and Scratchpad.
+
+You can open several Workspaces for the same Saved Connection. Their sessions, view choices, terminal layouts, and reconnect lifecycle stay separate.
+
+## Local Workspaces
+
+A local Workspace contains one Windows shell and the terminal. It has no Overview, Systemd, Ports, Docker, Boot, Logs, Baselines, or remote History view.
+
+## Restore after restart
+
+Control Room saves Workspace identity, active view, Enhanced History pause state, and the terminal split layout locally. On restart:
+
+- remote Workspaces return disconnected
+- local Workspaces return with their tabs present but stopped
+- no SSH connection or local shell starts automatically
+- a deleted Saved Connection removes its remote Workspace
+- a shell that is no longer installed is dropped
+- old saved state that predates Local Terminal still restores as a remote Workspace
+
+Select a restored Workspace and reconnect or start its terminal when you are ready.
+
+## Labels and focus
+
+When several Workspaces share a target, Control Room adds a number to their display labels. Focus mode hides the connection rail and title bar so terminal panes have more room.

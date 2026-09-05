@@ -1,0 +1,29 @@
+---
+title: Host overview
+description: Read cached capabilities and current load information for a connected Linux host.
+---
+
+Overview is the quickest way to check what the connected Remote Host can report. It shows cached capabilities such as hostname, operating system, kernel, architecture, uptime, default shell, systemd, journald, Docker, and service or container counts.
+
+## Refresh capability data
+
+Use **Refresh** when you need a new capability read. Control Room keeps the result locally and labels it stale after 24 hours. A stale cache is still shown as stale, not as current.
+
+The capability read can report:
+
+- hostname, OS name and version, kernel, architecture, uptime, and default shell
+- whether systemd and journald are available
+- whether Docker is available, accessible, or accessible with sudo
+- Docker version and running/total container counts
+- running service and total service counts
+- whether the account has passwordless sudo
+
+## Live load readings
+
+While Overview is open, Control Room samples CPU and memory at its displayed interval. The sample reads `/proc/stat`, `/proc/loadavg`, and `/proc/meminfo`. It does not use a monitoring agent.
+
+Sampling stops when you navigate away, close the pane, hide the window, or pause it. Requests do not overlap. The recent graph lives only in the Workspace memory and is discarded when the view stops. A missing host reading is shown as unavailable, never as zero.
+
+## Limits
+
+Overview is not a health check. A host with no failed services is not declared healthy, and one capability read cannot prove that every service or container is working.

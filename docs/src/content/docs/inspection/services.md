@@ -1,0 +1,28 @@
+---
+title: Services
+description: Inspect system-scope systemd services, timers, mounts, and sockets.
+---
+
+The Systemd view reads system-scope units with a bounded `systemctl show` request. It covers:
+
+- services
+- timers
+- mounts
+- sockets
+
+The list keeps each unit's canonical id, description, load state, active state, sub-state, and unit-file state.
+
+## Find a unit
+
+Use the text search and filters for:
+
+- all, failed, active, or inactive units
+- all units, services, timers, mounts, or sockets
+
+Failed units sort first. Failed and active totals remain visible. Select a unit to read its details or open its journal in Logs.
+
+## Scope and boundary
+
+This is the current system scope, not a complete host health check. Control Room does not start, stop, restart, enable, disable, mask, or reset a unit. It also does not inspect user-scoped units.
+
+If the account cannot read the unit list, the view reports the failure and may offer a one-shot sudo retry according to the [elevated reads](/control-room/reference/security/#elevated-reads) rules.
