@@ -1,0 +1,107 @@
+---
+title: Control Room
+description: A Windows SSH client with read-only Linux host inspection.
+---
+
+import { CardGrid, LinkButton, LinkCard, Steps } from "@astrojs/starlight/components";
+import overviewScreenshot from "../../assets/screenshots/overview.png";
+
+<div class="docs-home">
+
+<div class="docs-home-intro">
+
+<p class="docs-home-kicker">Windows desktop SSH client</p>
+
+<p class="docs-home-lede">
+  Work with Linux hosts through an interactive SSH terminal, then inspect bounded host facts in the
+  same Workspace.
+</p>
+
+<div class="docs-home-actions">
+  <LinkButton href="/control-room/start-here/quick-start/">Get started</LinkButton>
+  <LinkButton
+    href="https://github.com/YounesCodes/control-room/releases/latest"
+    variant="secondary"
+  >
+    Download
+  </LinkButton>
+</div>
+
+</div>
+
+<figure class="docs-screenshot docs-home-screenshot">
+  <img
+    src={overviewScreenshot.src}
+    alt="Control Room with the Connections rail, an open Edge 01 Workspace, and the Overview host-inspection pane."
+  />
+  <figcaption>
+    The main Workspace keeps connections, tabs, terminal access, and host views in one window.
+    Example host data shown.
+  </figcaption>
+</figure>
+
+## What do you want to do?
+
+<CardGrid>
+  <LinkCard
+    title="Connect to a Linux host"
+    description="Save an SSH destination, test structured access, and open a remote Workspace."
+    href="/control-room/connections/"
+  />
+  <LinkCard
+    title="Use the terminal"
+    description="Work in an interactive SSH session with tabs, splits, copy, paste, and focus mode."
+    href="/control-room/terminal/"
+  />
+  <LinkCard
+    title="Inspect a host"
+    description="Read systemd, logs, ports, Docker, boot evidence, and capabilities without changing the host."
+    href="/control-room/inspection/overview/"
+  />
+  <LinkCard
+    title="Open a local terminal"
+    description="Host an installed PowerShell, Command Prompt, or Git Bash profile in a terminal-only Workspace."
+    href="/control-room/local-terminals/"
+  />
+</CardGrid>
+
+## First time here?
+
+<Steps>
+
+1. **Install** the latest Windows release. The per-user installer does not require administrator access.
+2. **Add connection** with a display name, SSH destination, and username.
+3. **Open Workspace** by selecting the Saved Connection in the left rail.
+
+</Steps>
+
+See the [full Quick start](/control-room/start-here/quick-start/) for the first inspection read.
+
+## Learn the concepts
+
+<div class="docs-home-concepts">
+  <a href="/control-room/workspaces/">
+    <strong>Workspaces</strong>
+    <span>How sessions, views, tabs, splits, and restart restore fit together.</span>
+  </a>
+  <a href="/control-room/inspection/overview/">
+    <strong>Structured inspection</strong>
+    <span>What each bounded, read-only view reads and what it never claims.</span>
+  </a>
+  <a href="/control-room/reference/security/">
+    <strong>Security boundary</strong>
+    <span>Interactive shell behavior, sudo rules, and local storage.</span>
+  </a>
+  <a href="/control-room/start-here/requirements/">
+    <strong>Requirements</strong>
+    <span>Supported Windows, Linux, OpenSSH, and optional host capabilities.</span>
+  </a>
+</div>
+
+<div class="docs-home-boundary">
+
+**Scope:** structured inspection is bounded and read-only. Control Room does not transfer or edit remote files, manage services or containers, scan networks, run a background agent, or store private keys.
+
+</div>
+
+</div>

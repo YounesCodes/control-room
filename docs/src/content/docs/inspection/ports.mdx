@@ -3,7 +3,20 @@ title: Ports
 description: Inspect bounded listener and established-connection snapshots without scanning the network.
 ---
 
+import portsScreenshot from "../../../assets/screenshots/ports.png";
+
 Ports reads a manual snapshot of listening TCP and UDP sockets on the current Remote Host. It is a host snapshot, not a network scan and not a reachability test.
+
+<figure class="docs-screenshot">
+  <img
+    src={portsScreenshot.src}
+    alt="The Control Room Ports view showing listener topology, binding exposure, firewall policy, and owner evidence."
+  />
+  <figcaption>
+    Ports keeps listener facts, firewall policy, and ownership evidence separate. Example data
+    shown.
+  </figcaption>
+</figure>
 
 ## Four views
 

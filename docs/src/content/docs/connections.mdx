@@ -3,9 +3,24 @@ title: Connections
 description: Save, test, group, tag, and remove SSH destinations.
 ---
 
-A **Saved Connection** is a local record containing an SSH destination and username, with optional port and identity-file overrides. It is the reusable target for remote Workspaces and structured inspections.
+import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
 
-## Create or edit a connection
+A **Saved Connection** is the reusable target for remote Workspaces and structured inspections. It is stored locally and contains an SSH destination and username, with optional connection overrides.
+
+## Add or edit a connection
+
+Select **Add connection** in the left rail. To change an existing entry, open its context menu and choose **Edit connection**.
+
+<figure class="docs-screenshot">
+  <img
+    src={connectionScreenshot.src}
+    alt="The Control Room Add Saved Connection dialog with fields for the display name, SSH destination, username, port, key override, group, sudo allowance, and tags."
+  />
+  <figcaption>
+    The connection editor keeps SSH overrides explicit and leaves an existing private key in place.
+    Example data shown.
+  </figcaption>
+</figure>
 
 The connection editor accepts:
 
@@ -20,11 +35,13 @@ The connection editor accepts:
 | Tags            | Existing local tags for filtering and organization.                                             |
 | Sudo allowance  | Optional per-host permission for passwordless sudo reads.                                       |
 
-Use **Test structured access** before saving when you want to confirm that noninteractive SSH can reach the host. The test does not create a Saved Connection.
+Use **Test structured access** before saving when you want to confirm that noninteractive SSH can reach the host. The test reports capabilities and does not create or change a Saved Connection.
+
+The structured test is separate from the interactive terminal. A password prompt that works in the terminal can still make structured access unavailable, because inspection reads cannot stop to ask for an SSH password.
 
 ## Groups and tags
 
-Groups are local, manually ordered sections in the connection rail. A Saved Connection belongs to at most one group. Deleting a group returns its connections to Ungrouped and does not contact the Remote Host.
+Groups are local, manually ordered sections in the connection rail. A Saved Connection belongs to at most one group. Deleting a group returns its connections to **Ungrouped** and does not contact the Remote Host.
 
 Tags are local metadata used for filtering. They do not grant permissions and do not trigger an operation.
 
@@ -32,7 +49,7 @@ The rail search matches connection names, SSH targets, group names, and tags. Gr
 
 ## Remove a connection
 
-Removing a Saved Connection also removes its remote Workspaces, Enhanced History, and stored Host Baselines for that connection. It does not close or change local terminal Workspaces.
+Use **Delete connection** to remove a Saved Connection. This also removes its remote Workspaces, Enhanced History, and stored Host Baselines for that connection. It does not close or change local terminal Workspaces.
 
 ## SSH configuration
 

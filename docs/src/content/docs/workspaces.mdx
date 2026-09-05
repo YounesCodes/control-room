@@ -3,6 +3,8 @@ title: Workspaces
 description: Understand remote and local Workspaces, persistence, tabs, and splits.
 ---
 
+import terminalScreenshot from "../../assets/screenshots/terminal.png";
+
 A Workspace is one open view of one target. A remote Workspace belongs to a Saved Connection. A local Workspace belongs to one Local Shell Profile.
 
 ## Remote Workspaces
@@ -25,6 +27,17 @@ Control Room saves Workspace identity, active view, Enhanced History pause state
 - a deleted Saved Connection removes its remote Workspace
 - a shell that is no longer installed is dropped
 - old saved state that predates Local Terminal still restores as a remote Workspace
+
+<figure class="docs-screenshot">
+  <img
+    src={terminalScreenshot.src}
+    alt="A restored Control Room Terminal Workspace showing Disconnected and an explicit Reconnect control."
+  />
+  <figcaption>
+    A restored remote Workspace keeps its tab but waits for an explicit <strong>Reconnect</strong>.
+    Example data shown.
+  </figcaption>
+</figure>
 
 Select a restored Workspace and reconnect or start its terminal when you are ready.
 

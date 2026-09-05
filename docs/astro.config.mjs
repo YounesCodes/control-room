@@ -57,7 +57,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: "Overview", slug: "inspection/overview" },
-            { label: "Services", slug: "inspection/services" },
+            { label: "Systemd", slug: "inspection/services" },
             { label: "Logs", slug: "inspection/logs" },
             { label: "Ports", slug: "inspection/ports" },
             { label: "Docker", slug: "inspection/docker" },
@@ -80,6 +80,12 @@ export default defineConfig({
             { label: "Settings", slug: "reference/settings" },
             { label: "Keyboard shortcuts", slug: "reference/keyboard-shortcuts" },
             { label: "Security", slug: "reference/security" },
+          ],
+        },
+        {
+          label: "Help",
+          collapsed: true,
+          items: [
             { label: "Troubleshooting", slug: "help/troubleshooting" },
             { label: "FAQ", slug: "help/faq" },
           ],
