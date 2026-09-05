@@ -294,6 +294,185 @@ code,
   background: var(--fill-active);
 }
 
+/* ==========================================================================
+   Control Room updates
+   ========================================================================== */
+
+/* The titlebar control sits left of Settings and renders nothing at all while
+   the app is current, so an up-to-date titlebar is unchanged by this feature.
+   It is a plain button with no drag region, so pressing it never starts a
+   window drag. */
+.update-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.update-indicator-button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 7px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.update-indicator-button:hover,
+.update-indicator-button.active {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+
+/* Quiet but noticeable, and never the only signal: the label beside it says
+   the same thing in words. */
+.update-indicator-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.update-indicator-button:hover .update-indicator-dot,
+.update-indicator-button.active .update-indicator-dot {
+  background: var(--text-muted);
+}
+
+.update-indicator-dot[data-state="ready"] {
+  background: var(--success);
+}
+
+.update-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  width: 340px;
+  max-height: 420px;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 14px;
+}
+
+.update-panel-header h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.update-panel-header p {
+  margin: 3px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.update-panel-notes-title,
+.release-notes-heading {
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.update-panel-empty,
+.update-panel-error {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.update-panel-error {
+  border-left: 2px solid var(--failure);
+  padding-left: 9px;
+  color: var(--failure);
+}
+
+.update-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.update-panel-notes {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Release notes are external text rendered as text nodes, never as markup. */
+.release-notes {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.release-notes-list {
+  margin: 0 0 10px;
+  padding-left: 17px;
+}
+
+.release-notes-list li {
+  margin-bottom: 3px;
+}
+
+.release-notes-paragraph {
+  margin: 0 0 10px;
+}
+
+.release-notes > :last-child {
+  margin-bottom: 0;
+}
+
+.whats-new .release-notes {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.settings-version dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-update-actions {
+  display: flex;
+  min-height: 33px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-update-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.settings-update-status.failed {
+  color: var(--failure);
+}
+
+/* The technical reason sits under the plain sentence rather than replacing it,
+   so a network failure stays readable. */
+.settings-update-reason {
+  display: block;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
 .window-controls-divider {
   width: 1px;
   height: 22px;

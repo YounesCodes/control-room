@@ -17,6 +17,7 @@ const settings: AppSettings = {
   defaultLogTail: 200,
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
+  automaticUpdateChecks: true,
 };
 
 describe("Settings drafts", () => {

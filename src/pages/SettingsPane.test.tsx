@@ -31,6 +31,7 @@ const settings: AppSettings = {
   defaultLogTail: 200,
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
+  automaticUpdateChecks: true,
 };
 
 const environment: EnvironmentInfo = {
@@ -46,6 +47,8 @@ function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {})
     defaults: settings,
     logTailOptions: [50, 100, 200, 500, 1000],
     environment,
+    appVersion: "0.6.1",
+    onCheckForUpdates: vi.fn(async () => ({ outcome: "current" }) as const),
     onSaved: vi.fn(),
     onClose: vi.fn(() => true),
     onDirtyChange: vi.fn(),
@@ -108,6 +111,64 @@ describe("Settings actions", () => {
     // rather than leaving a stale "saved" beside a form that has since moved on.
     await user.type(fontSize, "0");
     expect(screen.queryByText("Settings saved.")).toBeNull();
+  });
+
+  it("shows the running version and the update preference", () => {
+    renderPane();
+    expect(screen.getByText("v0.6.1")).toBeTruthy();
+    const preference = screen.getByLabelText("Automatically check for updates") as HTMLInputElement;
+    expect(preference.checked).toBe(true);
+  });
+
+  it("checks manually even with automatic checks turned off", async () => {
+    const user = userEvent.setup();
+    const onCheckForUpdates = vi.fn(async () => ({ outcome: "current" }) as const);
+    renderPane({
+      settings: { ...settings, automaticUpdateChecks: false },
+      defaults: { ...settings, automaticUpdateChecks: false },
+      onCheckForUpdates,
+    });
+
+    const preference = screen.getByLabelText("Automatically check for updates") as HTMLInputElement;
+    expect(preference.checked).toBe(false);
+
+    // Turning the schedule off is not the same as refusing to look.
+    await user.click(screen.getByRole("button", { name: /Check for updates/ }));
+    expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("You're up to date.")).toBeTruthy();
+  });
+
+  it("names the available version after a manual check", async () => {
+    const user = userEvent.setup();
+    renderPane({
+      onCheckForUpdates: vi.fn(async () => ({ outcome: "available", version: "0.7.0" }) as const),
+    });
+    await user.click(screen.getByRole("button", { name: /Check for updates/ }));
+    expect(await screen.findByText("Version 0.7.0 is available.")).toBeTruthy();
+  });
+
+  it("reports a failed manual check concisely, with the reason beneath it", async () => {
+    const user = userEvent.setup();
+    renderPane({
+      onCheckForUpdates: vi.fn(
+        async () =>
+          ({
+            outcome: "failed",
+            failure: { kind: "check", message: "Could not reach the update endpoint." },
+          }) as const,
+      ),
+    });
+    await user.click(screen.getByRole("button", { name: /Check for updates/ }));
+    expect(await screen.findByText(/Could not check for updates\./)).toBeTruthy();
+    expect(screen.getByText("Could not reach the update endpoint.")).toBeTruthy();
+  });
+
+  it("keeps app updates verbally distinct from Remote Host packages", () => {
+    renderPane();
+    // AGENTS.md rules out remote package management entirely, so this section
+    // must not read as if it could update anything on a Linux host.
+    expect(screen.getByText("Control Room updates")).toBeTruthy();
+    expect(screen.queryByText(/Remote Host packages/i)).toBeNull();
   });
 
   it("surfaces a failed save without claiming it worked", async () => {

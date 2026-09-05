@@ -19,6 +19,12 @@ const api = vi.hoisted(() => ({
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
   closeSession: vi.fn(),
+  // Control Room's own updater. Mounted once by App, so every test that renders
+  // App reaches it.
+  currentAppVersion: vi.fn(),
+  checkForUpdate: vi.fn(),
+  pendingUpdateNotice: vi.fn(),
+  dismissUpdateNotice: vi.fn(),
 }));
 
 vi.mock("./lib/api", () => ({
@@ -54,6 +60,7 @@ const settings: AppSettings = {
   defaultLogTail: 200,
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
+  automaticUpdateChecks: true,
 };
 
 function connection(id: string, displayName: string): SavedConnection {
@@ -95,6 +102,10 @@ describe("App Workspace behavior", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    api.currentAppVersion.mockResolvedValue("0.6.1");
+    api.checkForUpdate.mockResolvedValue(null);
+    api.pendingUpdateNotice.mockResolvedValue(null);
+    api.dismissUpdateNotice.mockResolvedValue(undefined);
     api.listConnections.mockResolvedValue([]);
     api.settingsContract.mockResolvedValue({
       current: settings,

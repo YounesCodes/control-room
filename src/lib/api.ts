@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
+  AppUpdateInfo,
   BootDiagnostics,
   ConnectionGroup,
   ConnectionTag,
@@ -30,6 +31,8 @@ import type {
   BaselineSectionKind,
   BaselineTrace,
   SystemdUnit,
+  PendingUpdateNotice,
+  UpdateProgress,
 } from "../types";
 
 const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
@@ -209,6 +212,16 @@ export const api = {
   clearHistory: (connectionId: string) => invoke<void>("clear_history", { connectionId }),
   setConnectionHistoryEnabled: (connectionId: string, enabled: boolean) =>
     invoke<SavedConnection>("set_connection_history_enabled", { connectionId, enabled }),
+  /* Control Room updating itself. Rust owns the endpoint, the signature check,
+     and the installer; these four calls name an intent and carry no URL, no
+     bytes, and no way to skip verification. Nothing here touches a Remote Host. */
+  currentAppVersion: () => invoke<string>("current_app_version"),
+  checkForUpdate: () => invoke<AppUpdateInfo | null>("check_for_update"),
+  downloadUpdate: (progress: Channel<UpdateProgress>) =>
+    invoke<void>("download_update", { progress }),
+  installUpdate: () => invoke<void>("install_update"),
+  pendingUpdateNotice: () => invoke<PendingUpdateNotice | null>("pending_update_notice"),
+  dismissUpdateNotice: () => invoke<void>("dismiss_update_notice"),
   settingsContract: () => invoke<SettingsContract>("get_settings_contract"),
   saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
   workspaceState: () => invoke<PersistedWorkspaceState>("get_workspace_state"),

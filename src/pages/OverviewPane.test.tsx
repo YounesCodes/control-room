@@ -136,12 +136,15 @@ describe("OverviewPane", () => {
     renderPane();
     await waitFor(() => expect(api.sampleHostResources).toHaveBeenCalledTimes(1));
 
-    await user.click(screen.getByRole("button", { name: /Pause/ }));
+    // findByRole, not getByRole: the sample call resolving is not the same
+    // moment as React committing the render that shows the button, and under
+    // load the two can be far enough apart to fail a synchronous lookup.
+    await user.click(await screen.findByRole("button", { name: /Pause/ }));
     const afterPause = api.sampleHostResources.mock.calls.length;
     await vi.advanceTimersByTimeAsync(SAMPLE_INTERVAL_MS * 3);
     expect(api.sampleHostResources).toHaveBeenCalledTimes(afterPause);
 
-    await user.click(screen.getByRole("button", { name: /Resume/ }));
+    await user.click(await screen.findByRole("button", { name: /Resume/ }));
     await waitFor(() =>
       expect(api.sampleHostResources.mock.calls.length).toBeGreaterThan(afterPause),
     );

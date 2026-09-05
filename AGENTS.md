@@ -18,6 +18,10 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
 - Do not add file transfer, remote file editing, service or container
   management, cloud accounts, collaboration, AI features, mobile support, host
   discovery, background monitoring, package updates, or private-key storage.
+  "Package updates" means a Remote Host's packages. Control Room updating its own
+  installer on the Windows machine it runs on is a separate thing and is in
+  scope; keep the two verbally distinct wherever a user can see them, which is
+  why Settings says "Control Room updates" rather than "Updates".
 - Do not add local machine inspection: no Windows services, process manager,
   local ports, local Docker inspection, Event Log, WMI, or PowerShell
   administration. A local Workspace is terminal-only.
@@ -132,10 +136,23 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
     that reads it, and never invent Windows Terminal variables. Reject unknown
     profile ids, and report a shell that disappeared after discovery as
     unavailable rather than failing obscurely.
-14. Add tests for parsers, argument builders, lifecycle changes, and regressions.
-15. Keep README, DESIGN.md, and this file current when behavior changes. Do not
+14. Keep the in-app updater optional infrastructure, never a boot dependency.
+    Rust owns the endpoint, the signature check, and the installer; React names
+    an intent and never receives a URL, installer bytes, or a way to skip
+    verification. There is one application-level update lifecycle: one timer,
+    one in-flight check, no per-Workspace or per-pane checking. Automatic checks
+    are a Settings preference, default on, roughly ten seconds after start and
+    twelve hours apart, and a failed automatic check is silent. A manual check
+    stays available when the preference is off and may report why it failed.
+    Downloading never installs, installing is always confirmed because it ends
+    live sessions, and a signature that does not verify is a hard failure with
+    no "install anyway". Never persist installer bytes: the only stored updater
+    data is the small one-time notice naming the version just installed, cleared
+    once shown. Release notes are external text and are rendered as text.
+15. Add tests for parsers, argument builders, lifecycle changes, and regressions.
+16. Keep README, DESIGN.md, and this file current when behavior changes. Do not
     redesign unrelated UI.
-16. Do not commit or push unless the user asks.
+17. Do not commit or push unless the user asks.
 
 ## Validation
 
@@ -143,8 +160,18 @@ Run `npm ci` and `npm run check` before handoff. Build the installer with
 `npm run tauri build`. Live SSH tests are ignored by default and need a host and
 account you control.
 
+Neither command needs the updater signing key: updater artifacts are produced
+only by the release workflow, through `src-tauri/tauri.release.conf.json`. The
+release does need `TAURI_SIGNING_PRIVATE_KEY` and a public key committed in
+`src-tauri/tauri.conf.json`, and it fails rather than publishing a release the
+updater cannot verify.
+
 ## Project language
 
+- **Application Update**: a newer Control Room published to GitHub Releases,
+  cryptographically signed and verified before it is installed. It replaces the
+  app on this Windows machine and never touches a Remote Host. Distinct from
+  anything installed on a Linux host, which Control Room does not manage.
 - **Saved Connection**: a reusable SSH destination and username, with optional
   port or identity-file overrides.
 - **Connection Group**: a local, manually ordered Saved Connection section. A
