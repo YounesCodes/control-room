@@ -18,6 +18,12 @@ const api = vi.hoisted(() => ({
   closeSession: vi.fn(),
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
+  // Control Room's own updater. Mounted once by App, so every test that renders
+  // App reaches it.
+  currentAppVersion: vi.fn(),
+  checkForUpdate: vi.fn(),
+  pendingUpdateNotice: vi.fn(),
+  dismissUpdateNotice: vi.fn(),
 }));
 
 vi.mock("./lib/api", () => ({
@@ -89,6 +95,7 @@ const settings: AppSettings = {
   defaultLogTail: 200,
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
+  automaticUpdateChecks: true,
 };
 
 const powershell: LocalShellProfile = {
@@ -164,6 +171,10 @@ describe("Local Terminal", () => {
     api.refreshCapabilities.mockResolvedValue({});
     api.closeSession.mockResolvedValue(undefined);
     api.scratchpadNote.mockResolvedValue(null);
+    api.currentAppVersion.mockResolvedValue("0.6.1");
+    api.checkForUpdate.mockResolvedValue(null);
+    api.pendingUpdateNotice.mockResolvedValue(null);
+    api.dismissUpdateNotice.mockResolvedValue(undefined);
   });
 
   it("offers only the shells the machine actually has", async () => {

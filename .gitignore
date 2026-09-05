@@ -17,6 +17,8 @@
 /.env.*
 !/.env.example
 /scripts/local-test-host.json
+# Updater signing keys. The private key must never be committed.
+/.tauri/
 /vite.config.js
 /vite.config.d.ts
 

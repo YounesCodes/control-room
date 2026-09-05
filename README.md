@@ -163,6 +163,18 @@ Capture starts only in sessions opened after you enable it. Control Room does no
   Enhanced History setting, and whether Structured Operations may use sudo. Terminal settings apply
   to local and SSH terminals alike.
 
+### Updating Control Room
+
+Control Room checks its own GitHub Releases for a newer version about ten seconds after it starts, and twice a day while it stays open. When one exists, the titlebar shows a quiet **Update available** next to the Settings button. Nothing appears while you are up to date.
+
+Selecting it opens a small panel with the version and that release's notes. Nothing is downloaded until you ask. The download runs in the background, so SSH terminals, local terminals, and log streams keep working while it happens; the titlebar shows progress and then **Restart to update**.
+
+Installing is explicit and always confirmed, because it closes and reopens the app. Active Terminal Sessions and Log Streams end when it does, and restored Workspaces come back disconnected exactly as they do after any restart. Control Room never reconnects them for you. After the new version starts, it shows what changed once.
+
+Settings has a **Control Room updates** section with the running version, an **Automatically check for updates** preference that is on by default, and a manual **Check for updates** that keeps working when the automatic one is off.
+
+This updates Control Room on your Windows machine. It never installs, upgrades, or changes anything on a Remote Host.
+
 ## Read-only by design
 
 Structured Operations use bounded, noninteractive SSH commands to read the Remote Host. They do not edit remote files, transfer files, install packages, manage services, manage containers, or run a monitoring loop. If you need to change the machine, use the interactive terminal with the permissions of the connected account.
@@ -194,6 +206,8 @@ Because the allowance only bites where sudo asks no questions, Control Room tell
 The current published release is [v0.6.1](https://github.com/YounesCodes/control-room/releases/tag/v0.6.1). Download the latest Windows installer from [GitHub Releases](https://github.com/YounesCodes/control-room/releases/latest), run it, and start Control Room.
 
 The installer is an unsigned, per-user NSIS package. Windows may show an unrecognized-publisher warning. The release includes a SHA-256 checksum beside the installer.
+
+Control Room can update itself from inside the app, but only from a version that already has the updater. v0.6.1 and earlier were published before it existed, so they cannot learn about it: upgrading from one of those means downloading the newer installer from GitHub Releases and running it once, by hand. Every release after that one can be installed from inside the app.
 
 After launch:
 
@@ -230,6 +244,18 @@ It deliberately does not persist:
 - Terminal output.
 - Fetched journald or Docker logs.
 - Boot diagnostics and journal samples.
+- Update installers. A downloaded update is held in memory until you install it and is never written
+  to the database. Closing Control Room before installing simply means downloading it again.
+
+The one thing the updater stores is a small note recording the version and release notes of an update about to be installed, so the new version can show what changed once. It is written just before the installer runs, read only when its version matches the version now running, and deleted as soon as you dismiss the dialog or when it turns out not to match.
+
+### What "signed" means here
+
+Update packages are cryptographically signed, and Control Room verifies that signature against a public key built into the application before it installs anything. A package that fails verification is rejected outright; there is no way to install it anyway.
+
+That is not the same as Windows Authenticode code signing. The installer itself is still unsigned at the Windows publisher level, so Windows may still warn about an unrecognized publisher. The updater signature protects the update channel, not the reputation of the download.
+
+Control Room contains no GitHub token, API key, or release credential. The updater reads one fixed, public release URL and nothing else.
 
 Allowing sudo stores a permission, never a credential. When a read-only request needs a sudo password, Control Room sends it once for that retry and then discards it. The terminal itself is a normal SSH shell, so commands run there have the effects allowed by the remote account.
 
@@ -282,4 +308,27 @@ The build produces an unsigned per-user NSIS installer under `src-tauri/target/r
 
 GitHub Actions validates pushes and pull requests on Windows. CI runs the frontend and Rust checks, audits the locked Rust dependencies, builds the NSIS installer, and publishes a SHA-256 checksum as an artifact.
 
-Release tags use the `v*` pattern. The version in the tag must match `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`. A valid tag runs the release gate and publishes the unsigned installer and checksum to a GitHub release.
+Release tags use the `v*` pattern. The version in the tag must match `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`. A valid tag runs the release gate and publishes to a GitHub release:
+
+| Asset                                         | Purpose                                |
+| --------------------------------------------- | -------------------------------------- |
+| `Control.Room_<version>_x64-setup.exe`        | The per-user NSIS installer            |
+| `Control.Room_<version>_x64-setup.exe.sig`    | Updater signature, verified by the app |
+| `Control.Room_<version>_x64-setup.exe.sha256` | Checksum for a manual download         |
+| `latest.json`                                 | The updater feed installed copies read |
+
+The release workflow refuses to start when the updater signing key is missing or the public key is absent from `src-tauri/tauri.conf.json`, and it fails after the build if any of those four assets is missing or if `latest.json` announces a version other than the tag. A release that the updater cannot consume is treated as a failed release.
+
+### Updater signing key
+
+The signing key is a deployment prerequisite, generated once and never committed:
+
+```bash
+npm run tauri signer generate -- -w .tauri/control-room.key
+```
+
+- The **public** key it prints goes in `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`, committed. It is the trust anchor built into every installed copy, so keeping it in version control makes changes to it reviewable.
+- The **private** key goes in the `TAURI_SIGNING_PRIVATE_KEY` repository secret. It must never be committed, logged, or attached to a build.
+- If you set a password on the key, it goes in the `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repository secret.
+
+`.tauri/` is ignored by git. Ordinary development does not need any of this: `npm run check` and `npm run tauri build` never touch the signing key, because updater artifacts are produced only by the release workflow through `src-tauri/tauri.release.conf.json`.

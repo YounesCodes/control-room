@@ -416,6 +416,11 @@ Reusable primitives in `src/components/` that everything else composes.
 - **StatusDot and WindowControls.** The status indicator and the custom titlebar
   buttons.
 - **TerminalPane.** The xterm host and session lifecycle.
+- **UpdateIndicator.** The titlebar update control and its details popover. It
+  renders nothing at all while the app is current, so an up-to-date titlebar is
+  the titlebar that existed before the updater did.
+- **ReleaseNotes and WhatsNewDialog.** Release notes rendered as text, and the
+  one-time post-update notice built on Modal.
 
 Shared patterns: the split page (a dense list beside a detail panel) used by
 Systemd, Ports, and Docker; the definition grid and capability list on the Overview host
@@ -613,6 +618,32 @@ single-user inspector.
 
 ---
 
+### Updates
+
+Control Room updating itself is infrastructure, not a feature competing for
+attention, so it is designed to be missable. While the app is current the
+titlebar is untouched. When an update exists it earns two quiet words next to
+Settings and a small dot, never a banner, a toast, a badge, or a colour the
+palette does not already have. The dot turns `--success` only once an update is
+downloaded and waiting, because that is the one state where the user has
+something left to decide.
+
+Every step is something the user asks for. A check finds an update; it does not
+download one. A download finishes; it does not install. Installing closes the
+window and ends live Terminal Sessions and Log Streams, so it is always confirmed
+first, in the same ConfirmDialog every other interrupting action uses.
+
+Release notes come from GitHub and are therefore text Control Room did not write.
+They are parsed into headings, bullets, and paragraphs and rendered as text
+nodes. Nothing in that path may produce markup, which is why a heavier Markdown
+renderer is a non-goal rather than an improvement.
+
+A failed automatic check shows nothing at all. The updater is less important than
+the user's SSH work, and an unreachable release feed is not an application error.
+Only a check the user explicitly asked for may report that it failed.
+
+---
+
 ## Guardrails
 
 Two test files encode the design decisions that must not drift.
@@ -628,7 +659,11 @@ Two test files encode the design decisions that must not drift.
   element, focus-mode rules, session presence in navigation, the in-app (not
   native) discard confirm, the global elevation switch alongside the per-pane
   sudo retries, and the exact counts of host-OS marks, drag regions, and window
-  controls in the shell.
+  controls in the shell. It also pins the updater's place in that shell: the
+  update control sits left of Settings and before the window controls, carries no
+  drag region, no file in the updater path may reach for
+  `dangerouslySetInnerHTML`, and exactly one component may own the update
+  lifecycle.
 
 Both, plus the Rust suite, run under `npm run check` (format, lint, test, build)
 and in CI. When you change the UI, keep them green. If a change is a real design

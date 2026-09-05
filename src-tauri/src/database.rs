@@ -800,6 +800,45 @@ impl Database {
         Ok(())
     }
 
+    /// Small application metadata, stored in the same key/value table Settings
+    /// and Workspace state already use.
+    ///
+    /// The updater's one-time "What's new" notice is the only user of this so
+    /// far. It is a version string and its release notes, nothing else: no
+    /// installer bytes, no download URL, and no release history. Reusing this
+    /// table is deliberate, because a dedicated `app_metadata` table would have
+    /// meant a schema migration for a mechanism the database already has.
+    pub fn get_app_metadata(&self, key: &str) -> Result<Option<String>, String> {
+        self.connection
+            .lock()
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = ?1",
+                [key],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn set_app_metadata(&self, key: &str, value: &str) -> Result<(), String> {
+        self.connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [key, value],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_app_metadata(&self, key: &str) -> Result<(), String> {
+        self.connection
+            .lock()
+            .execute("DELETE FROM application_settings WHERE key = ?1", [key])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     pub fn get_workspace_state(&self) -> Result<PersistedWorkspaceState, String> {
         let payload: Option<String> = self
             .connection
@@ -1667,6 +1706,88 @@ mod tests {
                 }],
             }],
         }
+    }
+
+    #[test]
+    fn app_metadata_round_trips_and_clears() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+        assert_eq!(
+            database.get_app_metadata("pending_update_notice").unwrap(),
+            None
+        );
+
+        database
+            .set_app_metadata("pending_update_notice", r#"{"version":"0.7.0"}"#)
+            .unwrap();
+        assert_eq!(
+            database.get_app_metadata("pending_update_notice").unwrap(),
+            Some(r#"{"version":"0.7.0"}"#.to_string())
+        );
+
+        // Writing again replaces rather than accumulating: this is one notice,
+        // not a release history.
+        database
+            .set_app_metadata("pending_update_notice", r#"{"version":"0.8.0"}"#)
+            .unwrap();
+        assert_eq!(
+            database.get_app_metadata("pending_update_notice").unwrap(),
+            Some(r#"{"version":"0.8.0"}"#.to_string())
+        );
+
+        database
+            .delete_app_metadata("pending_update_notice")
+            .unwrap();
+        assert_eq!(
+            database.get_app_metadata("pending_update_notice").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn app_metadata_shares_the_settings_table_without_disturbing_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+        let settings = AppSettings {
+            terminal_font_size: 17,
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        database
+            .set_app_metadata("pending_update_notice", "{}")
+            .unwrap();
+
+        // The updater notice lives beside Settings and Workspace state under its
+        // own key, so neither can clobber the other.
+        assert_eq!(database.get_settings().unwrap().terminal_font_size, 17);
+        database
+            .delete_app_metadata("pending_update_notice")
+            .unwrap();
+        assert_eq!(database.get_settings().unwrap().terminal_font_size, 17);
+    }
+
+    #[test]
+    fn settings_written_before_the_updater_existed_still_load() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+
+        // A payload from a build with no automatic_update_checks field at all.
+        // AppSettings carries #[serde(default)], so the field fills in from
+        // Default rather than the whole payload being discarded.
+        let legacy = r##"{"terminalFontFamily":"Consolas","terminalFontSize":15,"terminalScrollback":9000,"terminalRightClickPaste":true,"terminalForeground":"#f2f2ee","terminalRed":"#ff6f7d","terminalGreen":"#52cf91","terminalYellow":"#e8c56c","terminalBlue":"#55aef2","terminalMagenta":"#c793ff","terminalCyan":"#65d4d1","defaultLogTail":500,"globalHistoryEnabled":false,"globalSudoEnabled":true}"##;
+        database.set_app_metadata("settings", legacy).unwrap();
+
+        let loaded = database.get_settings().unwrap();
+        assert_eq!(loaded.terminal_font_size, 15, "existing settings survive");
+        assert_eq!(loaded.default_log_tail, 500);
+        assert!(loaded.global_sudo_enabled);
+        assert!(
+            loaded.automatic_update_checks,
+            "a missing preference defaults to on rather than wiping the payload"
+        );
     }
 
     #[test]

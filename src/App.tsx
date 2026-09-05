@@ -27,6 +27,10 @@ import {
 } from "lucide-react";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { UpdateIndicator } from "./components/UpdateIndicator";
+import { WhatsNewDialog } from "./components/WhatsNewDialog";
+import { useAppUpdater } from "./hooks/use-app-updater";
+import { updateInfo } from "./lib/app-update";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
@@ -146,6 +150,10 @@ export function App() {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
+  // One update lifecycle for the whole application: one timer, one in-flight
+  // check, no matter how many Workspaces are open. Defaults to on while
+  // Settings is still loading so a slow first read never skips the first check.
+  const updater = useAppUpdater(settingsContract?.current.automaticUpdateChecks ?? true);
   const [confirmState, setConfirmState] = useState<{
     title: string;
     message: string;
@@ -913,6 +921,24 @@ export function App() {
     );
   }
 
+  /* Installing replaces this process, so the interruption is stated before it
+     happens rather than after. Whether sessions are live is read from the
+     Workspaces already in state; the updater adds no lifecycle tracker of its
+     own to answer this. Restored Workspaces come back disconnected as always,
+     and nothing is reconnected automatically after the restart. */
+  function requestUpdateInstall() {
+    const version = updateInfo(updater.state)?.version ?? "the new version";
+    const live = workspaces.some((workspace) => workspace.sessionId);
+    setConfirmState({
+      title: "Install update?",
+      message: live
+        ? `Control Room will close and reopen to install v${version}. Active terminal sessions and log streams will end.`
+        : `Control Room will close and reopen to install v${version}.`,
+      confirmLabel: "Restart and update",
+      onConfirm: () => void updater.install(),
+    });
+  }
+
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
   const settings = settingsContract.current;
@@ -921,6 +947,11 @@ export function App() {
     <div className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}>
       <header className="app-bar" data-tauri-drag-region>
         <div className="app-bar-actions">
+          <UpdateIndicator
+            state={updater.state}
+            onDownload={() => void updater.download()}
+            onRestart={requestUpdateInstall}
+          />
           <button
             className={settingsOpen ? "app-bar-button active" : "app-bar-button"}
             type="button"
@@ -1486,6 +1517,8 @@ export function App() {
             defaults={settingsContract.defaults}
             logTailOptions={settingsContract.logTailOptions}
             environment={environment}
+            appVersion={updater.currentVersion}
+            onCheckForUpdates={updater.checkNow}
             onSaved={(saved) => {
               setSettingsContract({ ...settingsContract, current: saved });
               setSettingsDirty(false);
@@ -1562,6 +1595,10 @@ export function App() {
           }}
           onClose={() => setRenameTarget(null)}
         />
+      )}
+
+      {updater.notice && (
+        <WhatsNewDialog notice={updater.notice} onDismiss={updater.dismissNotice} />
       )}
 
       {confirmState && (

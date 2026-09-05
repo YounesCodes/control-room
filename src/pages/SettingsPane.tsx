@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, RotateCcw, Save } from "lucide-react";
+import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo } from "../types";
+import type { ManualCheckResult } from "../hooks/use-app-updater";
 
 const terminalColorFields = [
   ["terminalForeground", "Text and cursor"],
@@ -19,6 +20,8 @@ export function SettingsPane({
   defaults,
   logTailOptions,
   environment,
+  appVersion,
+  onCheckForUpdates,
   onSaved,
   onClose,
   onDirtyChange,
@@ -27,6 +30,12 @@ export function SettingsPane({
   defaults: AppSettings;
   logTailOptions: number[];
   environment: EnvironmentInfo;
+  /** The running version, read from Tauri package metadata rather than any
+   *  constant in this file. */
+  appVersion: string | null;
+  /** Runs through the application's single update lifecycle, so a manual check
+   *  and the automatic one can never both be in flight. */
+  onCheckForUpdates: () => Promise<ManualCheckResult>;
   onSaved: (settings: AppSettings) => void;
   onClose: () => boolean;
   onDirtyChange: (dirty: boolean) => void;
@@ -35,6 +44,20 @@ export function SettingsPane({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
+
+  /* Manual checks stay available with the automatic preference off: turning the
+     schedule off is not the same as refusing to look. */
+  async function runManualCheck() {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      setCheckResult(await onCheckForUpdates());
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const dirty = settingsHaveChanges(settings, draft);
 
@@ -275,6 +298,64 @@ export function SettingsPane({
               overrides the per-connection setting while it is on. Control Room never stores a sudo
               password, and elevation never turns a read into a change.
             </small>
+          </fieldset>
+          <fieldset>
+            {/* Control Room updating itself. Named "Control Room updates" rather
+                than "Updates" so it can never be read as updating packages on a
+                Remote Host, which Control Room does not do. */}
+            <legend>Control Room updates</legend>
+            <dl className="detail-list settings-version">
+              <div>
+                <dt>Current version</dt>
+                <dd>{appVersion ? `v${appVersion}` : "Unknown"}</dd>
+              </div>
+            </dl>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={draft.automaticUpdateChecks}
+                onChange={(event) =>
+                  setDraft({ ...draft, automaticUpdateChecks: event.target.checked })
+                }
+              />{" "}
+              Automatically check for updates
+            </label>
+            <small>
+              Checks GitHub Releases shortly after Control Room starts and twice a day after that.
+              Update packages are cryptographically signed and verified before anything is
+              installed. This updates Control Room on this Windows machine only, and never a Remote
+              Host.
+            </small>
+            <div className="settings-update-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void runManualCheck()}
+                disabled={checking}
+              >
+                <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
+              </button>
+              {checkResult && (
+                <p
+                  className={
+                    checkResult.outcome === "failed"
+                      ? "settings-update-status failed"
+                      : "settings-update-status"
+                  }
+                  role="status"
+                >
+                  {checkResult.outcome === "current" && "You're up to date."}
+                  {checkResult.outcome === "available" &&
+                    `Version ${checkResult.version} is available.`}
+                  {checkResult.outcome === "failed" && (
+                    <>
+                      Could not check for updates.
+                      <span className="settings-update-reason">{checkResult.failure.message}</span>
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
           </fieldset>
           <fieldset>
             <legend>SSH environment</legend>
