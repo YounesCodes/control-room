@@ -3,7 +3,7 @@ title: Terminal
 description: Use the integrated SSH terminal, tabs, splits, and session controls.
 ---
 
-The terminal is an interactive shell backed by the Windows OpenSSH client and ConPTY. Control Room does not send arbitrary commands through a frontend API. Type commands into the terminal as you would in another SSH client.
+The terminal is an interactive shell backed by the Windows OpenSSH client and ConPTY. Type commands into it as you would in any other SSH client.
 
 ## Session behavior
 
@@ -33,7 +33,3 @@ Use **Reconnect** from the terminal controls or the `Ctrl+Shift+R` shortcut. Rec
 ## Click behavior
 
 Right-click paste is configurable in Settings. When a remote program such as Vim or `top` enables mouse reporting, the program receives the click instead of the paste action.
-
-## What the terminal can do
-
-The terminal is the place to perform administrative work with the remote account's own permissions. The read-only boundary applies to structured inspection operations. It does not turn an interactive shell into a sandbox.

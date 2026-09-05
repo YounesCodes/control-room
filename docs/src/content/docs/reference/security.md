@@ -1,5 +1,5 @@
 ---
-title: Security and data
+title: Security
 description: Understand the read-only boundary, sudo behavior, authentication, and local storage.
 ---
 

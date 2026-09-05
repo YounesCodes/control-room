@@ -25,7 +25,7 @@ Choose the default log tail from 50, 100, 200, 500, or 1000 lines. The global En
 
 The global sudo setting allows passwordless sudo reads for every Saved Connection. Each connection also has a per-host allowance. When the global setting is active, the per-host control is locked and explains why.
 
-Allowing the setting does not make Control Room prompt for a password. See [Security and data](/control-room/reference/security/) for the full behavior.
+Allowing the setting does not make Control Room prompt for a password. See [Security](/control-room/reference/security/) for the full behavior.
 
 ## SSH environment
 

@@ -1,5 +1,5 @@
 ---
-title: Development setup
+title: Setup
 description: Install the Control Room toolchain, run checks, and build the Windows installer.
 ---
 

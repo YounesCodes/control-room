@@ -1,38 +1,52 @@
 ---
 title: Control Room
 description: A Windows SSH client with read-only Linux host inspection.
-template: splash
-hero:
-  title: Work beside the machine
-  tagline: An integrated Windows terminal for SSH sessions, with bounded read-only views of the Linux host you are already connected to.
-  image:
-    file: ../../assets/app-icon.svg
-    alt: Control Room app icon
-  actions:
-    - text: Start here
-      link: /control-room/start-here/introduction/
-      icon: right-arrow
-    - text: View on GitHub
-      link: https://github.com/YounesCodes/control-room
-      icon: external
-      variant: minimal
 ---
 
-Control Room keeps the interactive shell. It adds host context around the same Saved Connection: services, ports, Docker, boot evidence, logs, baselines, and optional Bash command history.
+Control Room is a Windows desktop app for working with Linux hosts over SSH. It pairs a real interactive terminal with read-only views for services, ports, Docker, logs, boot diagnostics, and host state.
 
-It runs locally on Windows. Remote inspection stays read-only. When you need to change a machine, use the terminal with the permissions of the connected account.
+## Get started
 
-## Find your way around
+1. [Install Control Room](/control-room/start-here/installation/) from the latest GitHub release.
+2. [Add an SSH connection](/control-room/start-here/quick-start/) and test structured access.
+3. Open a Workspace and start in the terminal or an inspection view.
 
-| If you want to... | Start with... |
-| --- | --- |
-| Install the app and connect to a host | [Installation](/control-room/start-here/installation/) and [Quick start](/control-room/start-here/quick-start/) |
-| Understand what is supported | [Requirements and support](/control-room/start-here/requirements/) |
-| Open a local shell or split terminals | [Local terminals](/control-room/local-terminals/) and [Workspaces](/control-room/workspaces/) |
-| Inspect a Linux host | [Host overview](/control-room/inspection/overview/) |
-| Understand permissions and stored data | [Security and data](/control-room/reference/security/) |
-| Build the app or improve the docs | [Development setup](/control-room/development/setup/) |
+The [requirements](/control-room/start-here/requirements/) page lists the supported Windows, Linux, and Docker environments.
 
-## The boundary
+## Using Control Room
 
-Control Room does not copy files, edit remote files, manage services or containers, run a monitoring agent, store private keys, or open an external terminal window. Structured views query the connected Remote Host with bounded commands and keep fetched output in memory unless a feature says otherwise.
+- [Connections](/control-room/connections/) — save, group, tag, and test SSH destinations.
+- [Terminal](/control-room/terminal/) — the integrated SSH terminal, tabs, and splits.
+- [Local terminals](/control-room/local-terminals/) — PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash.
+- [Workspaces](/control-room/workspaces/) — sessions, layouts, and what returns after a restart.
+
+## Inspecting hosts
+
+- [Overview](/control-room/inspection/overview/) — host capabilities and live load.
+- [Services](/control-room/inspection/services/) — system-scope systemd units.
+- [Logs](/control-room/inspection/logs/) — journald and Docker log streams.
+- [Ports](/control-room/inspection/ports/) — listener and connection snapshots.
+- [Docker](/control-room/inspection/docker/) — containers, Compose groups, and inspection.
+- [Boot diagnostics](/control-room/inspection/boot/) — current and recent boot evidence.
+- [Baselines](/control-room/inspection/baselines/) — capture and compare normalized host state.
+
+## Tools
+
+- [Enhanced History](/control-room/inspection/history/) — an opt-in record of reported remote Bash commands.
+- [Scratchpad](/control-room/inspection/scratchpad/) — plain-text notes per connection or global.
+
+## Reference
+
+- [Settings](/control-room/reference/settings/)
+- [Keyboard shortcuts](/control-room/reference/keyboard-shortcuts/)
+- [Security](/control-room/reference/security/) — the read-only boundary, sudo behavior, and stored data.
+- [Troubleshooting](/control-room/help/troubleshooting/)
+- [FAQ](/control-room/help/faq/)
+
+## Development
+
+- [Setup](/control-room/development/setup/) — the toolchain, checks, and installer build.
+- [Architecture](/control-room/development/architecture/)
+- [Contributing](/control-room/development/contributing/)
+
+Structured inspection is bounded and read-only, and Control Room never persists terminal output, fetched logs, passwords, or private keys. [Security](/control-room/reference/security/) has the full boundary.

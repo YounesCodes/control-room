@@ -24,4 +24,10 @@ Remove the integration from the History view. Control Room removes only its mark
 
 ## Limits and risk
 
-Enhanced History is Bash-only and remote-only. It does not infer commands from keystrokes, read existing history, or record local shells. Command lines may include secrets. Treat the local database as sensitive user data even though it is not an encrypted secret store.
+Enhanced History is Bash-only and remote-only. It does not infer commands from keystrokes, read existing history, or record local shells.
+
+:::caution
+
+Command lines may include secrets. The entries are stored in the local database, which is not an encrypted secret store. Enable the integration only when that local record is appropriate.
+
+:::

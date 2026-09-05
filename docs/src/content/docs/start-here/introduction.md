@@ -25,10 +25,8 @@ The views share a Workspace, but they do not share terminal output or turn the t
 
 Control Room can host an installed PowerShell 7, Windows PowerShell, Command Prompt, or Git Bash session. These are terminal-only Local Workspaces. They use the same tabs, splits, font, colors, and scrollback as SSH sessions, but they never run remote inspection and never record command history.
 
-## What it is not
+## What Control Room does not do
 
 Control Room is not an RMM tool, monitoring service, server control panel, cloud dashboard, SSH replacement, or service manager. It has no file transfer, remote file editor, package updater, container lifecycle controls, host discovery, background agent, or private-key store.
 
-## Read next
-
-If this is your first run, follow [Installation](/control-room/start-here/installation/) and [Quick start](/control-room/start-here/quick-start/). For the support boundary, read [Requirements and support](/control-room/start-here/requirements/).
+Next: [Install Control Room](/control-room/start-here/installation/). For the support boundary, read [Requirements](/control-room/start-here/requirements/).

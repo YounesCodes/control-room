@@ -29,3 +29,5 @@ The inspector does not read environment values, command arguments, arbitrary lab
 ## Access and logs
 
 If the Docker daemon is reachable only with sudo, Overview identifies that state and the Docker view can offer a read-only retry. Select a container's logs to open an independent Docker Log Stream. See [Logs](/control-room/inspection/logs/) for stream behavior.
+
+Related: [Elevated reads](/control-room/reference/security/#elevated-reads) explains when a read can use sudo.

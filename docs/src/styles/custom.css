@@ -21,12 +21,20 @@
     U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/*
+  Control Room documentation — token overrides.
+
+  The desktop app is a restrained, monochrome system: near-black surfaces,
+  off-white text, subtle borders, small radii. Its accent is off-white, not a
+  hue; green, amber, and red are reserved for status. These overrides translate
+  that character into Starlight's tokens instead of copying the desktop chrome.
+*/
+
 :root {
   --sl-font: 'Space Grotesk Local', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --sl-font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
-  --sl-color-accent-low: #10291e;
-  --sl-color-accent: #42d17a;
-  --sl-color-accent-high: #b9f2ca;
+
+  /* Dark surfaces: page near-black, chrome a step above it, subtle borders. */
   --sl-color-white: #f2f2ee;
   --sl-color-gray-1: #deded9;
   --sl-color-gray-2: #b5b5b0;
@@ -34,14 +42,30 @@
   --sl-color-gray-4: #4b4b49;
   --sl-color-gray-5: #30302f;
   --sl-color-gray-6: #1c1c1b;
-  --sl-color-black: #080808;
-  --sl-content-width: 52rem;
+  --sl-color-black: #0a0a09;
+
+  /* Monochrome accent: off-white, like the app's interaction color. The active
+     sidebar pill reads as an off-white fill with near-black text. */
+  --sl-color-accent-low: #242423;
+  --sl-color-accent: #f2f2ee;
+  --sl-color-accent-high: #f2f2ee;
+
+  /* Chrome surfaces sit close to the page color; hairlines do the separating. */
+  --sl-color-bg-nav: #0d0d0c;
+  --sl-color-bg-sidebar: #0d0d0c;
+
+  --sl-color-text: #c9c9c4;
+
+  /* Restrained heading scale for a manual rather than a landing page. */
+  --sl-text-h1: 2.125rem;
+  --sl-text-h2: 1.625rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.125rem;
+
+  --sl-content-width: 48rem;
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #dff8e7;
-  --sl-color-accent: #13783c;
-  --sl-color-accent-high: #0b4e28;
   --sl-color-white: #171715;
   --sl-color-gray-1: #2d2d2a;
   --sl-color-gray-2: #50504b;
@@ -49,7 +73,42 @@
   --sl-color-gray-4: #a5a59e;
   --sl-color-gray-5: #d8d8d2;
   --sl-color-gray-6: #eeeeea;
-  --sl-color-black: #fafaf7;
+  --sl-color-gray-7: #f4f4f0;
+  --sl-color-black: #fbfbf9;
+
+  /* Light mode keeps the accent near-black so links and highlights stay
+     neutral; the active sidebar pill reads as near-black with light text.
+     Chrome surfaces are re-declared here because the dark values above are
+     unlayered and would otherwise win in light mode too. */
+  --sl-color-accent-low: #e9e9e4;
+  --sl-color-accent: #1c1c1a;
+  --sl-color-accent-high: #1c1c1a;
+
+  --sl-color-bg-nav: #f4f4f0;
+  --sl-color-bg-sidebar: #fbfbf9;
+
+  --sl-color-text: #3d3d39;
+}
+
+/* Links keep an underline so they read as interactive without leaning on a
+   bright accent color. */
+/* The note aside is the neutral variant here: Starlight's default blue would
+   read as a brand accent in a monochrome site. tip, caution, and danger keep
+   their status hues. */
+.starlight-aside--note {
+  --sl-color-asides-text-accent: var(--sl-color-white);
+  --sl-color-asides-border: var(--sl-color-gray-4);
+  background-color: var(--sl-color-gray-6);
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-decoration: underline;
+  text-decoration-color: var(--sl-color-gray-4);
+  text-underline-offset: 0.18em;
+}
+
+.sl-markdown-content a:hover:not(:where(.not-content *)) {
+  text-decoration-color: currentcolor;
 }
 
 .sl-markdown-content :is(code, pre) {
@@ -58,12 +117,4 @@
 
 .sl-markdown-content table {
   font-size: 0.95rem;
-}
-
-.sl-markdown-content a {
-  text-underline-offset: 0.18em;
-}
-
-.sl-markdown-content .action {
-  border-radius: 0.4rem;
 }

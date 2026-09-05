@@ -1,5 +1,5 @@
 ---
-title: Host baselines
+title: Baselines
 description: Capture normalized host facts on demand and compare them later.
 ---
 

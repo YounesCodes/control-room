@@ -3,7 +3,11 @@ title: Quick start
 description: Add a Saved Connection and open your first SSH Workspace.
 ---
 
+import { Steps } from '@astrojs/starlight/components';
+
 ## Add a connection
+
+<Steps>
 
 1. Select **Add connection** in the left rail.
 2. Enter a display name, SSH destination, and username.
@@ -11,6 +15,8 @@ description: Add a Saved Connection and open your first SSH Workspace.
 4. Add an existing identity-file path only when you need to override your SSH configuration.
 5. Select **Test structured access** if you want to check noninteractive inspection access before saving.
 6. Save the connection and select it in the rail.
+
+</Steps>
 
 The test checks a noninteractive SSH connection and reports whether systemd, journald, Docker, and sudo are available. A successful interactive password login does not guarantee that structured access will work, because structured operations cannot stop to ask for an SSH password.
 
@@ -29,3 +35,5 @@ Then open **Systemd** or **Ports**. Both are manual, bounded snapshots. They do 
 ## Reconnect later
 
 Workspace tabs return after an app restart, but they return disconnected. Control Room never reconnects an SSH session or starts a local shell on its own. Select the Workspace and reconnect it when you are ready.
+
+Next: [Workspaces and terminal splits](/control-room/workspaces/).

@@ -1,5 +1,5 @@
 ---
-title: Requirements and support
+title: Requirements
 description: Supported Windows, SSH, Linux, systemd, journald, and Docker environments.
 ---
 

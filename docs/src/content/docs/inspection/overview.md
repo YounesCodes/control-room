@@ -1,5 +1,5 @@
 ---
-title: Host overview
+title: Overview
 description: Read cached capabilities and current load information for a connected Linux host.
 ---
 

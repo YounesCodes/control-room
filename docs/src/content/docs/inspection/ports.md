@@ -1,5 +1,5 @@
 ---
-title: Ports and networking
+title: Ports
 description: Inspect bounded listener and established-connection snapshots without scanning the network.
 ---
 
@@ -24,6 +24,12 @@ If the account cannot read owner information, the listener remains visible with 
 
 ## Firewall and exposure
 
-Binding exposure and firewall policy are separate facts. A listener on a broad address does not prove Internet reachability. The firewall snapshot is bounded and read-only. It may report UFW availability, default incoming policy, and up to its supported rule limit.
+:::note
+
+A listener bound to a broad address such as `0.0.0.0` does not prove Internet reachability. Binding exposure and firewall policy are separate facts.
+
+:::
+
+The firewall snapshot is bounded and read-only. It may report UFW availability, default incoming policy, and up to its supported rule limit.
 
 Established connections are also bounded. Control Room aggregates them and caps both groups and remote samples. It does not collect a full process argument list, infer owners from names, scan ports, test reachability, or persist the snapshot.
