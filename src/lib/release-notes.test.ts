@@ -59,6 +59,33 @@ describe("release notes parsing", () => {
     ]);
   });
 
+  it("renders the notes GitHub actually generates", () => {
+    // The verbatim body of the v0.7.0 release. Generated notes are the real
+    // input to this parser, so their shape is worth pinning: a heading, one
+    // bullet per merged PR with a bare URL, and a bold changelog line.
+    const generated = [
+      "## What's Changed",
+      "* feat: add signed in-app updates by @YounesCodes in https://github.com/YounesCodes/control-room/pull/52",
+      "",
+      "",
+      "**Full Changelog**: https://github.com/YounesCodes/control-room/compare/v0.6.1...v0.7.0",
+    ].join("\n");
+
+    expect(parseReleaseNotes(generated)).toEqual([
+      { kind: "heading", text: "What's Changed" },
+      {
+        kind: "bullets",
+        items: [
+          "feat: add signed in-app updates by @YounesCodes in https://github.com/YounesCodes/control-room/pull/52",
+        ],
+      },
+      {
+        kind: "paragraph",
+        text: "Full Changelog: https://github.com/YounesCodes/control-room/compare/v0.6.1...v0.7.0",
+      },
+    ]);
+  });
+
   it("treats missing or blank notes as nothing to show", () => {
     expect(parseReleaseNotes(null)).toEqual([]);
     expect(parseReleaseNotes("")).toEqual([]);

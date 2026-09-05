@@ -100,6 +100,36 @@ jobs:
           "$checksum  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
           gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
 
+      # tauri-action composes latest.json from its own inputs, so notes GitHub
+      # generates while creating the release never reach the feed. The feed's
+      # notes field is the text the app shows under "What's new", so without
+      # this every update announces itself with nothing to say.
+      - name: Put the release notes into the updater feed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Parsed from the JSON object rather than taken as raw output: gh
+          # prints the body across several lines, and PowerShell would capture
+          # that as a string array, which serialises into the feed as a JSON
+          # array instead of the string the updater expects.
+          $body = (gh release view $env:GITHUB_REF_NAME --json body | ConvertFrom-Json).body
+          if (-not $body) { throw "The release has no body to use as update notes" }
+          gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir . --clobber
+          $feed = Get-Content -LiteralPath latest.json -Raw | ConvertFrom-Json
+          $feed.notes = $body
+          # Written as bytes rather than through Set-Content: a byte order mark
+          # would make the feed fail to parse, and which encodings avoid one
+          # differs between Windows PowerShell and PowerShell 7.
+          $json = $feed | ConvertTo-Json -Depth 10
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) "latest.json"),
+            $json,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          gh release upload $env:GITHUB_REF_NAME latest.json --clobber
+          Write-Host "Updater feed carries $($body.Length) characters of notes"
+
       # A release that looks successful but cannot be consumed by the updater is
       # the failure worth catching here, because it only shows up later as
       # installed copies quietly never updating.
@@ -133,4 +163,8 @@ jobs:
           if ($feed.version -ne $expected) {
             throw "latest.json announces $($feed.version) but this tag is $expected"
           }
+          if (-not $feed.notes) {
+            throw "latest.json carries no notes, so an update would have nothing to show under What's new"
+          }
           Write-Host "latest.json announces $($feed.version) with $($feed.platforms.PSObject.Properties.Name -join ', ')"
+          Write-Host "notes: $($feed.notes.Length) characters"
