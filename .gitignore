@@ -21,6 +21,3 @@
 /.tauri/
 /vite.config.js
 /vite.config.d.ts
-
-# Local future feature specifications
-docs/private-features/

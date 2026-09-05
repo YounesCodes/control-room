@@ -1,0 +1,105 @@
+---
+title: Documentation
+description: A Windows desktop workspace for working with Linux hosts over SSH.
+---
+
+import { LinkButton, Steps } from "@astrojs/starlight/components";
+import overviewScreenshot from "../../assets/screenshots/overview.png";
+
+<div class="docs-home">
+
+<div class="docs-home-intro">
+
+<p class="docs-home-lede">
+  Control Room gives you one place to keep and work with your Linux machines from Windows. Save each
+  host once, open it as a Workspace, and get a real SSH terminal next to views of that machine's
+  services, containers, ports, and logs.
+</p>
+
+<div class="docs-home-actions">
+  <LinkButton href="/control-room/start-here/quick-start/">Get started</LinkButton>
+  <LinkButton
+    href="https://github.com/YounesCodes/control-room/releases/latest"
+    variant="secondary"
+  >
+    Download
+  </LinkButton>
+</div>
+
+</div>
+
+<figure class="docs-screenshot docs-home-screenshot">
+  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={overviewScreenshot.src}
+      alt="Control Room with the Connections rail, an open Edge 01 Workspace, and the Overview host-inspection pane."
+    />
+  </a>
+  <figcaption>
+    The main Workspace keeps connections, tabs, terminal access, and host views in one window.
+    Example host data shown.
+  </figcaption>
+</figure>
+
+## Working on a homelab usually looks like this
+
+```text
+Windows Terminal
+> ssh root@192.168.1.20
+
+Another terminal
+> ssh root@192.168.1.31
+
+Another terminal
+> ssh root@192.168.1.42
+```
+
+Every host means another address to remember and another terminal window to keep track of.
+Control Room replaces that routine:
+
+```text
+Connections
+├── Proxmox
+├── Gitea
+├── Devbox
+└── Backup server
+```
+
+Select a host and its Workspace opens with an interactive terminal next to read-only views of
+that machine. The views report; the terminal is where you act.
+
+## What you can do
+
+- Save SSH destinations once in [Connections](/control-room/connections/), with optional port
+  and key overrides.
+- Work in [a real terminal](/control-room/terminal/) with tabs, splits, and focus mode.
+- Inspect [a host](/control-room/inspection/overview/) without changing it: systemd units,
+  listening ports, Docker, logs, and boot evidence.
+- Open [local terminals](/control-room/local-terminals/) for PowerShell, Command Prompt, or
+  Git Bash in the same window.
+- Run several [Workspaces](/control-room/workspaces/) per host, each with its own terminal
+  sessions and layout.
+
+## First time here?
+
+<Steps>
+
+1. **Install** the latest Windows release. The per-user installer does not require administrator
+   access.
+2. **Add connection**: for example `Proxmox`, `192.168.1.20`, and your username.
+3. **Open the Workspace** by selecting the Saved Connection in the left rail.
+
+</Steps>
+
+The [Quick start](/control-room/start-here/quick-start/) walks through the first connection and
+the first inspection read.
+
+<div class="docs-home-boundary">
+
+**Scope:** structured inspection is bounded and read-only. Control Room does not transfer or edit
+remote files, manage services or containers, scan networks, run a background agent, or store
+private keys.
+
+</div>
+
+</div>

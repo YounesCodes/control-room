@@ -1,0 +1,47 @@
+---
+title: Installation
+description: Install the current Windows release of Control Room.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Control Room ships as a per-user NSIS installer for Windows 11 x64.
+
+## Install Control Room
+
+<Steps>
+
+1. Open the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest).
+2. Download the `.exe` installer and its SHA-256 checksum.
+3. Verify the checksum if you want to check the file before running it.
+4. Run the installer for your Windows user.
+
+</Steps>
+
+The installer does not require administrator access.
+
+:::caution
+
+The release is unsigned. Windows may show an unrecognized-publisher warning when you run the installer.
+
+:::
+
+## After installation
+
+Start Control Room from the Start menu or its installed shortcut. The first screen opens with no Saved Connections. Select **Add connection** to create one.
+
+See [Connections](/control-room/connections/) for all connection fields.
+
+## Update Control Room
+
+From v0.7.0 on, Control Room checks GitHub Releases shortly after it starts and about twice a day while it stays open. When a newer version exists, the titlebar shows **Update available**. Nothing appears while you are up to date.
+
+Selecting it opens a panel with the new version and its release notes. Nothing downloads until you ask. The download runs in the background while you keep working, and the titlebar shows progress until **Restart to update** appears.
+
+Installing always asks for confirmation, because it closes and reopens the app. Active Terminal Sessions and Log Streams end with it, and restored Workspaces come back disconnected, exactly as after any restart. After the new version starts, a dialog shows what changed once.
+
+Update packages are signed, and Control Room verifies the signature before it installs anything. A downloaded update is held in memory and never written to local storage.
+
+Releases before v0.7.0 were published before the updater existed, so they cannot discover or install it. Upgrading from v0.6.1 or earlier means downloading the newer installer from GitHub Releases and running it once, by hand. Every release after that can update from inside the app.
+
+Next: [Add your first connection](/control-room/start-here/quick-start/).

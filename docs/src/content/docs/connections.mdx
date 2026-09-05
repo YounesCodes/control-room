@@ -1,0 +1,60 @@
+---
+title: Connections
+description: Save, test, group, tag, and remove SSH destinations.
+---
+
+import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
+
+A **Saved Connection** is the reusable target for remote Workspaces and structured inspections. Control Room stores it locally with an SSH destination and username, plus optional connection overrides.
+
+## Add or edit a connection
+
+Select **Add connection** in the left rail. To change an existing entry, open its context menu and choose **Edit connection**.
+
+<figure class="docs-screenshot">
+  <a href={connectionScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={connectionScreenshot.src}
+      alt="The Control Room Add Saved Connection dialog with fields for the display name, SSH destination, username, port, key override, group, sudo allowance, and tags."
+    />
+  </a>
+  <figcaption>
+    The connection editor keeps SSH overrides explicit and leaves an existing private key in place.
+    Example data shown.
+  </figcaption>
+</figure>
+
+The connection editor accepts:
+
+| Field           | Details                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------- |
+| Display name    | Required in the UI, up to 80 characters. This is the name shown in the rail and Workspace tabs. |
+| SSH destination | Required, up to 255 characters. It is passed to OpenSSH as the destination after validation.    |
+| Username        | Required, up to 64 characters.                                                                  |
+| Port            | Optional, from 1 to 65535.                                                                      |
+| Identity file   | Optional path to an existing private key. Control Room never copies the file.                   |
+| Group           | One local Connection Group, or derived Ungrouped.                                               |
+| Tags            | Existing local tags for filtering and organization.                                             |
+| Sudo allowance  | Optional per-host permission for passwordless sudo reads.                                       |
+
+Use **Test structured access** before saving when you want to confirm that noninteractive SSH can reach the host. The test reports capabilities and does not create or change a Saved Connection.
+
+The structured test is separate from the interactive terminal. A password prompt that works in the terminal can still make structured access unavailable, because inspection reads cannot stop to ask for an SSH password.
+
+## Groups and tags
+
+Groups are local, manually ordered sections in the connection rail. A Saved Connection belongs to at most one group. Deleting a group returns its connections to **Ungrouped** and does not contact the Remote Host.
+
+Tags are local metadata used for filtering. They do not grant permissions and do not trigger an operation.
+
+The rail search matches connection names, SSH targets, group names, and tags. Group collapse state and ordering stay on this Windows installation.
+
+## Remove a connection
+
+Use **Delete connection** to remove a Saved Connection. This also removes its remote Workspaces, Enhanced History, and stored Host Baselines for that connection. It does not close or change local terminal Workspaces.
+
+## SSH configuration
+
+Control Room uses the Windows OpenSSH client and can display the detected client path, the `%USERPROFILE%\.ssh\config` path, and whether `ssh-agent` has an available identity. OpenSSH still owns its normal configuration and authentication behavior.
+
+If a connection or the structured test misbehaves, [Troubleshooting](/control-room/help/troubleshooting/) covers the common causes.

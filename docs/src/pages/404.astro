@@ -1,0 +1,12 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+const home = import.meta.env.BASE_URL;
+---
+
+<StarlightPage frontmatter={{ title: 'Page not found', editUrl: false }}>
+  <p>
+    There is no page at this address. Use the search bar, or return to the{' '}
+    <a href={home}>documentation home</a>.
+  </p>
+</StarlightPage>

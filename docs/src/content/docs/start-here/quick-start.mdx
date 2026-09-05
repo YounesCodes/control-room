@@ -1,0 +1,94 @@
+---
+title: Quick start
+description: Install Control Room, add a Saved Connection, and open your first SSH Workspace.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import connectionScreenshot from "../../../assets/screenshots/connection-editor.png";
+import overviewScreenshot from "../../../assets/screenshots/overview.png";
+
+This page takes you from installation to a working SSH terminal. You need a reachable Linux host
+and an account that can log in over SSH.
+
+## 1. Install Control Room
+
+Download and run the [latest release](https://github.com/YounesCodes/control-room/releases/latest).
+The per-user installer does not require administrator access. [Installation](/control-room/start-here/installation/)
+covers checksum verification and the unrecognized-publisher warning.
+
+## 2. Add a connection
+
+<Steps>
+
+1. Select **Add connection** in the left rail.
+2. Fill in the three required fields, for example:
+
+   ```text
+   Display name    Proxmox
+   SSH destination 192.168.1.20
+   Username        root
+   ```
+
+3. Add a port only when the host does not use the OpenSSH default.
+4. Add an identity-file path only when you need to override your SSH configuration.
+5. Select **Test structured access** to check that inspection reads will work without an SSH
+   password prompt.
+6. Save the connection and select it in the rail.
+
+</Steps>
+
+<figure class="docs-screenshot">
+  <a href={connectionScreenshot.src} target="_blank" rel="noreferrer">
+    <img src={connectionScreenshot.src} alt="The Control Room Add Saved Connection dialog." />
+  </a>
+  <figcaption>
+    Use <strong>Test structured access</strong> before saving when you want to check noninteractive
+    inspection access. Example data shown.
+  </figcaption>
+</figure>
+
+The inspection views cannot stop to ask for an SSH password, so they need public-key
+authentication or an ssh-agent identity. A password login that works in the terminal is still
+fine for the terminal. If the test fails, [Troubleshooting](/control-room/help/troubleshooting/)
+has the common causes. [Connections](/control-room/connections/) documents every field, including
+groups, tags, and the sudo allowance.
+
+## 3. Open a Workspace
+
+Selecting a Saved Connection opens a remote Workspace with a terminal. The session runs through
+the Windows OpenSSH client and ConPTY, so it behaves like your usual SSH session. The view
+navigation beside the terminal opens Overview, Systemd, Ports, Docker, Boot, Logs, Baselines,
+History, or Scratchpad.
+
+You can open more than one Workspace for the same Saved Connection. Each Workspace owns its own
+terminal session and view state.
+
+<figure class="docs-screenshot">
+  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={overviewScreenshot.src}
+      alt="The Control Room Overview pane for an open Edge 01 Workspace."
+    />
+  </a>
+  <figcaption>
+    After selecting a Saved Connection, the Workspace opens with its host views beside the
+    connection rail. Example data shown.
+  </figcaption>
+</figure>
+
+## 4. Try an inspection
+
+Open **Overview** first. It shows the host's capabilities and a live load sample while the pane
+is open.
+
+Then open **Systemd** or **Ports**. Both are read-only snapshots: they report the host without
+changing it.
+
+## 5. Reconnect later
+
+Workspace tabs return after an app restart, but they return disconnected. Control Room never
+reconnects an SSH session or starts a local shell on its own. Select the Workspace and reconnect
+it when you are ready.
+
+Next: [Workspaces and terminal splits](/control-room/workspaces/) explains how sessions, tabs,
+and restarts fit together.

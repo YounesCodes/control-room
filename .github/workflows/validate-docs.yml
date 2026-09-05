@@ -1,0 +1,38 @@
+name: Validate documentation
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/deploy-docs.yml"
+      - ".github/workflows/validate-docs.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install documentation dependencies
+        run: npm ci
+      - name: Check documentation
+        run: npm run check
+      - name: Build documentation
+        run: npm run build
