@@ -12,10 +12,9 @@ Configure:
 - terminal font family
 - font size from 9 to 32
 - scrollback from 100 to 100,000 lines
-- right-click paste
 - ANSI foreground, red, green, yellow, blue, magenta, and cyan colors
 
-Reset returns the ANSI palette to the app defaults. Terminal settings apply to both local and SSH terminals.
+Reset returns the ANSI palette to the app defaults. Terminal settings apply to both local and SSH terminals. Right-click behavior is built in and is not listed here; see [SSH terminal](/control-room/terminal/#right-click-behavior).
 
 ## Logs and History
 
