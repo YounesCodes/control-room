@@ -21,7 +21,9 @@ import overviewScreenshot from "../../../assets/screenshots/overview.png";
 </Steps>
 
 <figure class="docs-screenshot">
-  <img src={connectionScreenshot.src} alt="The Control Room Add Saved Connection dialog." />
+  <a href={connectionScreenshot.src} target="_blank" rel="noreferrer">
+    <img src={connectionScreenshot.src} alt="The Control Room Add Saved Connection dialog." />
+  </a>
   <figcaption>
     Use <strong>Test structured access</strong> before saving when you want to check noninteractive
     inspection access. Example data shown.
@@ -37,10 +39,12 @@ Selecting a Saved Connection opens a remote Workspace with a terminal. The first
 You can open more than one Workspace for the same Saved Connection. Each Workspace owns its own terminal session and view state.
 
 <figure class="docs-screenshot">
-  <img
-    src={overviewScreenshot.src}
-    alt="The Control Room Overview pane for an open Edge 01 Workspace."
-  />
+  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={overviewScreenshot.src}
+      alt="The Control Room Overview pane for an open Edge 01 Workspace."
+    />
+  </a>
   <figcaption>
     After selecting a Saved Connection, the Workspace opens with its host views beside the
     connection rail. Example data shown.

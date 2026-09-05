@@ -8,10 +8,12 @@ import overviewScreenshot from "../../../assets/screenshots/overview.png";
 Overview is the quickest way to check what the connected Remote Host can report. It shows cached capabilities such as hostname, operating system, kernel, architecture, uptime, default shell, systemd, journald, Docker, and service or container counts.
 
 <figure class="docs-screenshot">
-  <img
-    src={overviewScreenshot.src}
-    alt="Control Room Overview showing host capability rows and live CPU and memory readings."
-  />
+  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={overviewScreenshot.src}
+      alt="Control Room Overview showing host capability rows and live CPU and memory readings."
+    />
+  </a>
   <figcaption>
     Overview combines cached capabilities with a temporary live load sample. Example data shown.
   </figcaption>

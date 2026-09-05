@@ -8,10 +8,12 @@ import dockerScreenshot from "../../../assets/screenshots/docker.png";
 The Docker view reads a bounded `docker ps -a --no-trunc` list. It keeps each container instance distinct and can show a grouped view or a flat view.
 
 <figure class="docs-screenshot">
-  <img
-    src={dockerScreenshot.src}
-    alt="The Control Room Docker view with grouped containers and a selected container detail panel."
-  />
+  <a href={dockerScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={dockerScreenshot.src}
+      alt="The Control Room Docker view with grouped containers and a selected container detail panel."
+    />
+  </a>
   <figcaption>
     Grouped containers remain distinct, with the selected record showing typed details on the right.
     Example data shown.

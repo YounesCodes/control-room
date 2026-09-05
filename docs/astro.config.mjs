@@ -1,6 +1,8 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
+import { codeStyle } from "./src/code-style.mjs";
+
 export default defineConfig({
   site: "https://younescodes.github.io",
   base: "/control-room",
@@ -8,9 +10,15 @@ export default defineConfig({
     starlight({
       title: "Control Room",
       description: "Documentation for the Windows SSH client with read-only Linux host inspection.",
+      // The shipped app tile carries its own near-black fill and border, which
+      // reads as a floating button in the nav and as the heaviest object on the
+      // page in light mode. The header gets the bare glyph instead; the tile
+      // stays the favicon, where a filled icon is what the format wants. An
+      // <img> cannot inherit the page colour, so the ink ships per theme.
       logo: {
-        src: "./src/assets/app-icon.svg",
-        alt: "Control Room app icon",
+        light: "./src/assets/control-room-mark-light.svg",
+        dark: "./src/assets/control-room-mark-dark.svg",
+        alt: "Control Room",
       },
       favicon: "/app-icon.svg",
       social: [
@@ -20,6 +28,7 @@ export default defineConfig({
           href: "https://github.com/YounesCodes/control-room",
         },
       ],
+      expressiveCode: codeStyle,
       customCss: ["./src/styles/custom.css"],
       editLink: {
         baseUrl: "https://github.com/YounesCodes/control-room/edit/main/docs/",

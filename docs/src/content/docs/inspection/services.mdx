@@ -8,10 +8,12 @@ import servicesScreenshot from "../../../assets/screenshots/services.png";
 The Systemd view reads system-scope units with a bounded `systemctl show` request. It covers services, timers, mounts, and sockets.
 
 <figure class="docs-screenshot">
-  <img
-    src={servicesScreenshot.src}
-    alt="The Control Room Systemd view with failed units first and a selected service detail panel."
-  />
+  <a href={servicesScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={servicesScreenshot.src}
+      alt="The Control Room Systemd view with failed units first and a selected service detail panel."
+    />
+  </a>
   <figcaption>
     Failed units sort first, while the selected unit's state stays visible on the right. Example
     data shown.
