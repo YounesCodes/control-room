@@ -82,6 +82,7 @@ export default defineConfig({
             { label: "Scratchpad", slug: "tools/scratchpad" },
             { label: "Security", slug: "reference/security" },
             { label: "Settings", slug: "reference/settings" },
+            { label: "Development", slug: "reference/development" },
           ],
         },
         {

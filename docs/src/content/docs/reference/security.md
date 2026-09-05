@@ -29,6 +29,7 @@ The SQLite database stores:
 - cached host capability data
 - Enhanced History entries when you opt in
 - normalized Host Baselines that you capture
+- a small one-time note recording the version an update just installed, so the app can show what changed once
 
 ## Never stored
 
@@ -39,5 +40,6 @@ Control Room does not persist:
 - terminal output
 - fetched journald or Docker logs
 - Boot Diagnostic evidence or journal samples
+- update installers, which are held in memory until you install them
 
 Scratchpad notes and connection metadata are local data, not encrypted secret storage. Enhanced History can contain command lines with secrets, so enable it only when that local record is appropriate.

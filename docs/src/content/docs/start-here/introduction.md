@@ -27,6 +27,6 @@ Control Room can host an installed PowerShell 7, Windows PowerShell, Command Pro
 
 ## What Control Room does not do
 
-Control Room is not an RMM tool, monitoring service, server control panel, cloud dashboard, SSH replacement, or service manager. It has no file transfer, remote file editor, package updater, container lifecycle controls, host discovery, background agent, or private-key store.
+Control Room is not an RMM tool, monitoring service, server control panel, cloud dashboard, SSH replacement, or service manager. It has no file transfer, remote file editor, container lifecycle controls, host discovery, background agent, or private-key store. It can update itself on Windows; it never installs or updates packages on a Remote Host.
 
 Next: [Install Control Room](/control-room/start-here/installation/). For the support boundary, read [Requirements](/control-room/start-here/requirements/).

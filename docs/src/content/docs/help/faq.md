@@ -23,6 +23,10 @@ No. Terminal output, fetched logs, and Boot Diagnostic evidence stay in memory a
 
 No. Overview load sampling runs only while the Overview pane is mounted and visible. There is no agent, schedule, alert, or stored time series.
 
+### Does it update itself?
+
+Yes, on Windows. Control Room checks GitHub Releases and installs an update only after you confirm the restart. It never installs or updates packages on a Remote Host.
+
 ### Can I use local terminals?
 
 Yes, if the profile is installed. Control Room supports PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash. Local Workspaces are terminal-only and do not record History.

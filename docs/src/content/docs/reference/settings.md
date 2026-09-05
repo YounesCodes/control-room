@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: Configure terminal display, logs, Enhanced History, sudo reads, and SSH environment details.
+description: Configure terminal display, logs, Enhanced History, sudo reads, Control Room updates, and SSH environment details.
 ---
 
 Open Settings from the top bar. Changes apply after you save them.
@@ -26,6 +26,14 @@ Choose the default log tail from 50, 100, 200, 500, or 1000 lines. The global En
 The global sudo setting allows passwordless sudo reads for every Saved Connection. Each connection also has a per-host allowance. When the global setting is active, the per-host control is locked and explains why.
 
 Allowing the setting does not make Control Room prompt for a password. See [Security](/control-room/reference/security/) for the full behavior.
+
+## Control Room updates
+
+Settings shows the running version under **Current version**. **Automatically check for updates** is on by default and makes Control Room check GitHub Releases shortly after start and about twice a day afterward. **Check for updates** runs a manual check at any time, even with the automatic preference off, and reports that you are up to date, the available version, or why the check failed.
+
+Update packages are cryptographically signed and verified before anything is installed. This updates Control Room on this Windows machine only. It never installs or updates anything on a Remote Host.
+
+[Updating Control Room](/control-room/start-here/installation/#update-control-room) describes what happens between download and restart.
 
 ## SSH environment
 
