@@ -57,7 +57,7 @@ jobs:
           workspaces: "./src-tauri -> target"
           cache-bin: false
       - name: Install cargo-audit from a prebuilt release
-        uses: taiki-e/install-action@v2.87.2
+        uses: taiki-e/install-action@v2.87.3
         with:
           tool: cargo-audit
           fallback: none
