@@ -230,6 +230,236 @@ mod tests {
         assert!(UNINSTALL_SCRIPT.contains("incomplete or duplicated"));
     }
 
+    /// Runs a wrapper around the real scripts under Git Bash, which is one of
+    /// the shells Control Room hosts and so is resolved the way the app
+    /// resolves it. The scripts only ever run on a Remote Host, but they are
+    /// ordinary POSIX shell and their behaviour does not depend on which
+    /// machine the shell is on.
+    fn run_under_bash(script: &str) -> std::process::Output {
+        use std::io::Write;
+
+        let bash = crate::local_shell::resolve_installed("git-bash")
+            .expect("Git Bash is required to exercise the shell integration scripts");
+        let mut child = crate::ssh::background_command(bash.program())
+            .args(["--noprofile", "--norc", "-s"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("Git Bash could not be started");
+        child
+            .stdin
+            .take()
+            .expect("stdin")
+            .write_all(script.as_bytes())
+            .expect("the script could not be written");
+        child.wait_with_output().expect("Git Bash did not finish")
+    }
+
+    /// Reads the `key=value` lines the wrapper prints, so a scenario reports
+    /// what it observed instead of the test parsing shell output by position.
+    fn observations(output: &std::process::Output) -> std::collections::HashMap<String, String> {
+        assert!(
+            output.status.success(),
+            "the wrapper failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .map(|(key, value)| (key.trim().to_string(), value.trim().to_string()))
+            .collect()
+    }
+
+    /// A `.bashrc` is the user's own file, and Control Room writes into it.
+    /// Installing twice must not leave two copies of the block, uninstalling
+    /// must take exactly the block and nothing around it, and uninstalling
+    /// something that is not installed has to succeed rather than fail.
+    ///
+    /// The source-text guard beside this says the markers exist. It cannot say
+    /// what running the script does to a file that already has content in it.
+    #[test]
+    #[cfg(windows)]
+    fn installing_history_twice_leaves_one_reversible_block() {
+        let script = format!(
+            r##"set -eu
+root="$(mktemp -d)"
+export HOME="$root"
+printf 'export EDITOR=vim\n# a comment of my own\nalias ll="ls -la"\n' > "$HOME/.bashrc"
+before_nonblank="$(grep -cve '^[[:space:]]*$' "$HOME/.bashrc" || true)"
+
+( {INSTALL_SCRIPT} ) > /dev/null
+( {INSTALL_SCRIPT} ) > /dev/null
+
+printf 'start_markers=%s\n' "$(grep -Fxc '# >>> Control Room shell integration >>>' "$HOME/.bashrc" || true)"
+printf 'end_markers=%s\n' "$(grep -Fxc '# <<< Control Room shell integration <<<' "$HOME/.bashrc" || true)"
+printf 'integration_file=%s\n' "$(test -r "$HOME/.local/share/control-room/shell-integration.bash" && echo 1 || echo 0)"
+printf 'history_file_read=%s\n' "$(test -e "$HOME/.bash_history" && echo 1 || echo 0)"
+
+( {UNINSTALL_SCRIPT} ) > /dev/null
+
+printf 'after_start_markers=%s\n' "$(grep -Fxc '# >>> Control Room shell integration >>>' "$HOME/.bashrc" || true)"
+printf 'after_editor=%s\n' "$(grep -Fxc 'export EDITOR=vim' "$HOME/.bashrc" || true)"
+printf 'after_comment=%s\n' "$(grep -Fxc '# a comment of my own' "$HOME/.bashrc" || true)"
+printf 'after_alias=%s\n' "$(grep -Fxc 'alias ll="ls -la"' "$HOME/.bashrc" || true)"
+printf 'after_nonblank=%s\n' "$(grep -cve '^[[:space:]]*$' "$HOME/.bashrc" || true)"
+printf 'before_nonblank=%s\n' "$before_nonblank"
+printf 'after_control_room=%s\n' "$(grep -Fic 'control room' "$HOME/.bashrc" || true)"
+printf 'after_control_room_path=%s\n' "$(grep -Fc 'control-room' "$HOME/.bashrc" || true)"
+printf 'after_integration_file=%s\n' "$(test -e "$HOME/.local/share/control-room/shell-integration.bash" && echo 1 || echo 0)"
+
+# Removing what is already gone is what a user who never installed it does.
+( {UNINSTALL_SCRIPT} ) > /dev/null
+printf 'second_uninstall=ok\n'
+
+rm -rf "$root"
+"##
+        );
+
+        let found = observations(&run_under_bash(&script));
+
+        assert_eq!(found.get("start_markers").map(String::as_str), Some("1"));
+        assert_eq!(found.get("end_markers").map(String::as_str), Some("1"));
+        assert_eq!(found.get("integration_file").map(String::as_str), Some("1"));
+        assert_eq!(
+            found.get("history_file_read").map(String::as_str),
+            Some("0"),
+            "Enhanced History records what the integration reports, and never \
+             reads the host's own shell history"
+        );
+
+        assert_eq!(
+            found.get("after_start_markers").map(String::as_str),
+            Some("0")
+        );
+        assert_eq!(
+            found.get("after_integration_file").map(String::as_str),
+            Some("0")
+        );
+        for line in ["after_editor", "after_comment", "after_alias"] {
+            assert_eq!(
+                found.get(line).map(String::as_str),
+                Some("1"),
+                "{line}: uninstall took something that was not its own"
+            );
+        }
+        // The block is appended after a blank line, and uninstall removes the
+        // marked lines rather than the separator, so the file can keep a blank
+        // line it did not start with. Everything with content in it is back to
+        // what it was, and nothing of Control Room's is left.
+        assert_eq!(
+            found.get("after_nonblank"),
+            found.get("before_nonblank"),
+            "a line with content in it was added or lost"
+        );
+        assert_eq!(
+            found.get("after_control_room").map(String::as_str),
+            Some("0")
+        );
+        assert_eq!(
+            found.get("after_control_room_path").map(String::as_str),
+            Some("0")
+        );
+        assert_eq!(
+            found.get("second_uninstall").map(String::as_str),
+            Some("ok")
+        );
+    }
+
+    /// Markers a user half-deleted, or duplicated by an older bug, mean the
+    /// script cannot tell which lines are its own. Editing anyway would take
+    /// somebody's shell configuration with it, so both scripts refuse and say
+    /// so, and leave the file exactly as they found it.
+    #[test]
+    #[cfg(windows)]
+    fn damaged_markers_stop_both_scripts_before_they_edit_anything() {
+        for (name, bashrc) in [
+            (
+                "an opening marker with no closing one",
+                "export EDITOR=vim\n# >>> Control Room shell integration >>>\n",
+            ),
+            (
+                "a closing marker with no opening one",
+                "export EDITOR=vim\n# <<< Control Room shell integration <<<\n",
+            ),
+            (
+                "the block written twice",
+                "# >>> Control Room shell integration >>>\n\
+                 # <<< Control Room shell integration <<<\n\
+                 # >>> Control Room shell integration >>>\n\
+                 # <<< Control Room shell integration <<<\n",
+            ),
+        ] {
+            for (action, body) in [("install", INSTALL_SCRIPT), ("uninstall", UNINSTALL_SCRIPT)] {
+                let script = format!(
+                    r##"set -eu
+root="$(mktemp -d)"
+export HOME="$root"
+printf '%s' '{bashrc}' > "$HOME/.bashrc"
+digest_before="$(cksum < "$HOME/.bashrc")"
+status=0
+( {body} ) > /dev/null 2> "$root/stderr" || status=$?
+printf 'status=%s\n' "$status"
+printf 'unchanged=%s\n' "$(test "$digest_before" = "$(cksum < "$HOME/.bashrc")" && echo 1 || echo 0)"
+printf 'explained=%s\n' "$(grep -Fc 'incomplete or duplicated' "$root/stderr" || true)"
+rm -rf "$root"
+"##
+                );
+
+                let found = observations(&run_under_bash(&script));
+                assert_eq!(
+                    found.get("status").map(String::as_str),
+                    Some("2"),
+                    "{action} with {name} should refuse"
+                );
+                assert_eq!(
+                    found.get("unchanged").map(String::as_str),
+                    Some("1"),
+                    "{action} with {name} edited the file anyway"
+                );
+                assert_eq!(
+                    found.get("explained").map(String::as_str),
+                    Some("1"),
+                    "{action} with {name} refused without saying why"
+                );
+            }
+        }
+    }
+
+    /// The integration only loads for a session Control Room started with the
+    /// flag set. Sourcing it in an ordinary interactive shell has to be a
+    /// no-op, or opting in on one host would follow the user into every shell
+    /// on that machine.
+    #[test]
+    #[cfg(windows)]
+    fn the_integration_stays_inert_in_a_shell_control_room_did_not_start() {
+        let script = format!(
+            r##"set -eu
+root="$(mktemp -d)"
+export HOME="$root"
+touch "$HOME/.bashrc"
+( {INSTALL_SCRIPT} ) > /dev/null
+integration="$HOME/.local/share/control-room/shell-integration.bash"
+
+# Not an interactive shell, and no opt-in.
+unset CONTROL_ROOM_SHELL_INTEGRATION
+loaded=$( . "$integration"; printf '%s' "${{__CONTROL_ROOM_LOADED:-0}}" )
+printf 'without_optin=%s\n' "$loaded"
+
+# Opted in, but this shell is still not interactive, which is what a
+# Structured Operation's own ssh invocation looks like.
+loaded=$( CONTROL_ROOM_SHELL_INTEGRATION=1; . "$integration"; printf '%s' "${{__CONTROL_ROOM_LOADED:-0}}" )
+printf 'noninteractive=%s\n' "$loaded"
+
+rm -rf "$root"
+"##
+        );
+
+        let found = observations(&run_under_bash(&script));
+        assert_eq!(found.get("without_optin").map(String::as_str), Some("0"));
+        assert_eq!(found.get("noninteractive").map(String::as_str), Some("0"));
+    }
+
     #[test]
     #[ignore = "requires the explicitly configured Debian SSH fixture"]
     fn live_history_install_is_reversible_in_an_isolated_home() {
