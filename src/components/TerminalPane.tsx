@@ -398,9 +398,15 @@ export function TerminalPane({
           if (earlyEvent.state === "disconnected" || earlyEvent.state === "error") return;
         }
 
+        // Queued input goes out through the path a live keystroke takes, so
+        // both are issued in the order they were typed. Awaiting each write
+        // here left the queue draining across await points while the session
+        // id was already published, so a keystroke landing mid-drain took the
+        // direct path and was issued between two queued bytes. In a terminal
+        // that is not a delay, it is different input.
         for (const bytes of pendingInputRef.current.drain()) {
           if (disposed || generation !== sessionGenerationRef.current) break;
-          await api.writeSession(sessionId, bytes);
+          sendInputRef.current(bytes);
         }
       })
       .catch((error) => {
