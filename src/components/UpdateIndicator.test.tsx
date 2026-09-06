@@ -143,6 +143,59 @@ describe("titlebar update indicator", () => {
     expect(within(panel).queryByRole("button", { name: /install/i })).toBeNull();
     expect(within(panel).getByRole("button", { name: /Try again/ })).toBeTruthy();
   });
+
+  it("reports an ordinary download failure and retries on request", async () => {
+    const user = userEvent.setup();
+    const { onDownload } = renderIndicator({
+      status: "failed",
+      info,
+      failure: { kind: "download", message: "The connection dropped mid-download." },
+    });
+    await user.click(screen.getByRole("button", { name: /Update available/ }));
+    const panel = screen.getByRole("dialog");
+    expect(within(panel).getByText("The connection dropped mid-download.")).toBeTruthy();
+
+    await user.click(within(panel).getByRole("button", { name: /Try again/ }));
+    expect(onDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes its panel once the update moves to installing", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <UpdateIndicator
+        state={{ status: "downloaded", info }}
+        onDownload={vi.fn()}
+        onRestart={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Restart to update/ }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    // Installing replaces this process; a panel describing an offer that has
+    // been accepted has nothing left to say.
+    rerender(
+      <UpdateIndicator
+        state={{ status: "installing", info }}
+        onDownload={vi.fn()}
+        onRestart={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps its download control busy while progress runs", async () => {
+    const user = userEvent.setup();
+    const { onDownload } = renderIndicator({
+      status: "downloading",
+      info,
+      downloaded: 120,
+      total: 1000,
+    });
+    await user.click(screen.getByRole("button", { name: /Downloading/ }));
+    const button = within(screen.getByRole("dialog")).getByRole("button", { name: /Downloading/ });
+    expect(button).toHaveProperty("disabled", true);
+    expect(onDownload).not.toHaveBeenCalled();
+  });
 });
 
 describe("what's new dialog", () => {

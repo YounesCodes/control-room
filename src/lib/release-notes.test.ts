@@ -41,9 +41,47 @@ describe("release notes parsing", () => {
     ]);
   });
 
+  it("compacts a GitHub pull URL to its number", () => {
+    expect(
+      parseReleaseNotes(
+        "- fix: a thing by @someone in https://github.com/someone/some-repo/pull/53",
+      ),
+    ).toEqual([{ kind: "bullets", items: ["fix: a thing by @someone in #53"] }]);
+  });
+
+  it("compacts a GitHub issue URL like a pull URL", () => {
+    expect(parseReleaseNotes("- Fixes https://github.com/someone/some-repo/issues/12")).toEqual([
+      { kind: "bullets", items: ["Fixes #12"] },
+    ]);
+  });
+
+  it("compacts a GitHub compare URL to its range", () => {
+    expect(
+      parseReleaseNotes(
+        "**Full Changelog**: https://github.com/someone/some-repo/compare/v0.7.0...v0.7.1",
+      ),
+    ).toEqual([{ kind: "paragraph", text: "Full Changelog: v0.7.0 → v0.7.1" }]);
+  });
+
+  it("leaves sentence punctuation glued to a compacted URL in place", () => {
+    expect(parseReleaseNotes("See https://github.com/someone/some-repo/pull/53.")).toEqual([
+      { kind: "paragraph", text: "See #53." },
+    ]);
+  });
+
   it("strips the inline markers that survive into generated notes", () => {
     expect(parseReleaseNotes("- **bold** and `code` and _quiet_")).toEqual([
       { kind: "bullets", items: ["bold and code and quiet"] },
+    ]);
+  });
+
+  it("leaves unknown and non-GitHub URLs as they arrived", () => {
+    const line = "- Hosted at https://example.com/pull/53 and https://github.com/someone";
+    expect(parseReleaseNotes(line)).toEqual([
+      {
+        kind: "bullets",
+        items: ["Hosted at https://example.com/pull/53 and https://github.com/someone"],
+      },
     ]);
   });
 
@@ -59,30 +97,34 @@ describe("release notes parsing", () => {
     ]);
   });
 
+  it("keeps even a URL crafted to look like markup inert", () => {
+    // Compaction produces text, and text is all it can ever produce: the
+    // result still renders as characters, not elements.
+    expect(parseReleaseNotes("https://github.com/a/b/compare/<script>...alert(1)")).toEqual([
+      { kind: "paragraph", text: "<script> → alert(1)" },
+    ]);
+  });
+
   it("renders the notes GitHub actually generates", () => {
-    // The verbatim body of the v0.7.0 release. Generated notes are the real
+    // The verbatim body of the v0.7.1 release. Generated notes are the real
     // input to this parser, so their shape is worth pinning: a heading, one
-    // bullet per merged PR with a bare URL, and a bold changelog line.
+    // bullet per merged PR with a bare URL, and a bold changelog line — with
+    // the GitHub URLs compacted to short text.
     const generated = [
       "## What's Changed",
-      "* feat: add signed in-app updates by @YounesCodes in https://github.com/YounesCodes/control-room/pull/52",
+      "* fix: streamline terminal creation and clipboard UX by @YounesCodes in https://github.com/YounesCodes/control-room/pull/53",
       "",
       "",
-      "**Full Changelog**: https://github.com/YounesCodes/control-room/compare/v0.6.1...v0.7.0",
+      "**Full Changelog**: https://github.com/YounesCodes/control-room/compare/v0.7.0...v0.7.1",
     ].join("\n");
 
     expect(parseReleaseNotes(generated)).toEqual([
       { kind: "heading", text: "What's Changed" },
       {
         kind: "bullets",
-        items: [
-          "feat: add signed in-app updates by @YounesCodes in https://github.com/YounesCodes/control-room/pull/52",
-        ],
+        items: ["fix: streamline terminal creation and clipboard UX by @YounesCodes in #53"],
       },
-      {
-        kind: "paragraph",
-        text: "Full Changelog: https://github.com/YounesCodes/control-room/compare/v0.6.1...v0.7.0",
-      },
+      { kind: "paragraph", text: "Full Changelog: v0.7.0 → v0.7.1" },
     ]);
   });
 

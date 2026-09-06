@@ -2,13 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { api } from "../lib/api";
 import {
-  CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
+  FOREGROUND_REFRESH_AFTER_MS,
+  PERIODIC_CHECK_INTERVAL_MS,
+  SCHEDULER_TICK_INTERVAL_MS,
   idleUpdateState,
   shouldRunAutomaticCheck,
+  shouldRunForegroundRefresh,
   type AppUpdateState,
 } from "../lib/app-update";
-import type { AppUpdateInfo, PendingUpdateNotice, UpdateFailure, UpdateProgress } from "../types";
+import type { PendingUpdateNotice, UpdateFailure, UpdateProgress } from "../types";
 
 /** What a manual check from Settings reports back, separately from the
  *  application-wide state. A failed manual check is worth a sentence in
@@ -58,34 +61,47 @@ export function useAppUpdater(automaticChecks: boolean) {
   const lastCheckedAt = useRef<number | null>(null);
   const automaticRef = useRef(automaticChecks);
   automaticRef.current = automaticChecks;
+  // Set synchronously around every network check, automatic and manual alike.
+  // Eligibility reads state that React updates asynchronously, so two triggers
+  // — a timer tick and a focus event arriving together — could both see an
+  // idle state and both pass a pure eligibility check; this ref is what keeps
+  // "one in-flight check" literally true.
+  const checkInFlight = useRef(false);
 
-  /** A check that reports nothing on failure. Used by the scheduler. */
-  const runCheck = useCallback(async (): Promise<AppUpdateInfo | null | "failed"> => {
+  /**
+   * Runs one automatic check if `eligible`, and never two at once.
+   *
+   * Everything here is best effort: a check that fails leaves the state idle
+   * and says nothing, and stays eligible for the next scheduled pass, so a
+   * bad moment never becomes a permanent failed state or a tight retry loop.
+   */
+  const runCheck = useCallback(async (eligible: boolean) => {
+    if (!eligible || checkInFlight.current) return;
+    checkInFlight.current = true;
     setState({ status: "checking" });
     try {
       const info = await api.checkForUpdate();
       lastCheckedAt.current = Date.now();
       setState(info ? { status: "available", info } : idleUpdateState);
-      return info;
     } catch {
       // Deliberately swallowed. An automatic check that fails says nothing: the
       // reason is only actionable for a manual check, which reports its own.
-      // It is eligible again at the next interval, so this never becomes a
-      // permanent failed state and never retries in a tight loop.
       lastCheckedAt.current = Date.now();
       setState(idleUpdateState);
-      return "failed";
+    } finally {
+      checkInFlight.current = false;
     }
   }, []);
 
   /** The manual Settings check, which does report its outcome. */
   const checkNow = useCallback(async (): Promise<ManualCheckResult> => {
-    if (stateRef.current.status === "checking") {
+    if (checkInFlight.current) {
       return {
         outcome: "failed",
         failure: { kind: "check", message: "A check is already running." },
       };
     }
+    checkInFlight.current = true;
     setState({ status: "checking" });
     try {
       const info = await api.checkForUpdate();
@@ -96,6 +112,8 @@ export function useAppUpdater(automaticChecks: boolean) {
       lastCheckedAt.current = Date.now();
       setState(idleUpdateState);
       return { outcome: "failed", failure: asFailure(error, "check") };
+    } finally {
+      checkInFlight.current = false;
     }
   }, []);
 
@@ -188,33 +206,62 @@ export function useAppUpdater(automaticChecks: boolean) {
     };
   }, []);
 
-  // One timer for the life of the application. The first check waits so it
-  // never competes with connection loading and workspace restore, and later
-  // checks are twelve hours apart.
+  // One scheduler for the life of the application. The first check waits so it
+  // never competes with connection loading and workspace restore. After that a
+  // five minute tick re-evaluates a roughly hourly schedule, and returning to
+  // the foreground refreshes a stale feed, so a release published while
+  // Control Room sits open is found without restarting the app. Every decision
+  // is a pure function in app-update.ts; this effect only wires events to them.
   useEffect(() => {
     let cancelled = false;
 
     const maybeCheck = () => {
       if (cancelled) return;
-      const runnable = shouldRunAutomaticCheck({
-        enabled: automaticRef.current,
-        state: stateRef.current,
-        lastCheckedAt: lastCheckedAt.current,
-        now: Date.now(),
-        intervalMs: CHECK_INTERVAL_MS,
-      });
-      if (runnable) void runCheck();
+      void runCheck(
+        shouldRunAutomaticCheck({
+          enabled: automaticRef.current,
+          state: stateRef.current,
+          lastCheckedAt: lastCheckedAt.current,
+          now: Date.now(),
+          intervalMs: PERIODIC_CHECK_INTERVAL_MS,
+        }),
+      );
+    };
+
+    const maybeRefreshOnForeground = () => {
+      if (cancelled) return;
+      void runCheck(
+        shouldRunForegroundRefresh({
+          enabled: automaticRef.current,
+          state: stateRef.current,
+          lastCheckedAt: lastCheckedAt.current,
+          now: Date.now(),
+          thresholdMs: FOREGROUND_REFRESH_AFTER_MS,
+        }),
+      );
     };
 
     const first = window.setTimeout(maybeCheck, FIRST_CHECK_DELAY_MS);
-    // Ticking hourly and deciding in `shouldRunAutomaticCheck` keeps the twelve
-    // hour spacing honest across a machine that slept, without the timer itself
-    // needing to know anything about time drift.
-    const repeat = window.setInterval(maybeCheck, 60 * 60 * 1000);
+    // Ticking well under the hourly spacing keeps the spacing honest across a
+    // machine that slept, without the timer itself needing to know anything
+    // about time drift.
+    const tick = window.setInterval(maybeCheck, SCHEDULER_TICK_INTERVAL_MS);
+    // visibilitychange fires for both directions; only coming back is a
+    // foreground return, so hiding the window must not spend the refresh that
+    // restoring it will need. Minimize/restore and Alt-Tab back can each fire
+    // both events; the in-flight guard in `runCheck` collapses them into at
+    // most one request.
+    window.addEventListener("focus", maybeRefreshOnForeground);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") maybeRefreshOnForeground();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
       window.clearTimeout(first);
-      window.clearInterval(repeat);
+      window.clearInterval(tick);
+      window.removeEventListener("focus", maybeRefreshOnForeground);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [runCheck]);
 

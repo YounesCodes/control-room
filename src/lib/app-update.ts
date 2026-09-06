@@ -90,7 +90,7 @@ export function canOpenUpdateDetails(state: AppUpdateState): boolean {
 }
 
 /**
- * Whether an automatic check should run now.
+ * Whether a scheduled automatic check should run now.
  *
  * Kept pure so the schedule is testable without timers. A check is skipped
  * while the preference is off, while anything is already in flight, and while
@@ -110,6 +110,38 @@ export function shouldRunAutomaticCheck(options: {
   return now - lastCheckedAt >= intervalMs;
 }
 
-/** How long the app waits before its first check, and between later ones. */
+/**
+ * Whether returning to the foreground should refresh the feed.
+ *
+ * The user coming back after the app sat in the background is the moment a
+ * stale feed is most likely, and a threshold keeps a round of Alt-Tab from
+ * becoming a request per keystroke. A check that has never happened is not
+ * refreshed here: the startup delay owns the first check, so focusing the
+ * window during it cannot pull the check earlier than the restore work it
+ * deliberately waits for.
+ */
+export function shouldRunForegroundRefresh(options: {
+  enabled: boolean;
+  state: AppUpdateState;
+  lastCheckedAt: number | null;
+  now: number;
+  thresholdMs: number;
+}): boolean {
+  const { enabled, state, lastCheckedAt, now, thresholdMs } = options;
+  if (!enabled) return false;
+  if (state.status !== "idle") return false;
+  if (lastCheckedAt === null) return false;
+  return now - lastCheckedAt >= thresholdMs;
+}
+
+/** How long the app waits before its first check after startup. */
 export const FIRST_CHECK_DELAY_MS = 10_000;
-export const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
+/** Minimum spacing between automatic checks while the app stays open. */
+export const PERIODIC_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+/** How often the scheduler wakes to re-evaluate the schedule. Ticking well
+ *  under the periodic interval keeps the spacing honest across a machine that
+ *  slept, without the timer needing to know anything about time drift. */
+export const SCHEDULER_TICK_INTERVAL_MS = 5 * 60 * 1000;
+/** A check at least this old is refreshed when the app returns to the
+ *  foreground. */
+export const FOREGROUND_REFRESH_AFTER_MS = 15 * 60 * 1000;
