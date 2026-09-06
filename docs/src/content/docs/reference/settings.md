@@ -28,7 +28,7 @@ Allowing the setting does not make Control Room prompt for a password. See [Secu
 
 ## Control Room updates
 
-Settings shows the running version under **Current version**. **Automatically check for updates** is on by default and makes Control Room check GitHub Releases shortly after start and about twice a day afterward. **Check for updates** runs a manual check at any time, even with the automatic preference off, and reports that you are up to date, the available version, or why the check failed.
+Settings shows the running version under **Current version**. **Automatically check for updates** is on by default and makes Control Room check GitHub Releases shortly after start, periodically while it stays open, and when you return to the app after it has been in the background long enough. **Check for updates** runs a manual check at any time, even with the automatic preference off, and reports that you are up to date, the available version, or why the check failed.
 
 Update packages are cryptographically signed and verified before anything is installed. This updates Control Room on this Windows machine only. It never installs or updates anything on a Remote Host.
 

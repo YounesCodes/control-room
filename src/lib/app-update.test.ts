@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  CHECK_INTERVAL_MS,
+  FOREGROUND_REFRESH_AFTER_MS,
+  PERIODIC_CHECK_INTERVAL_MS,
   canOpenUpdateDetails,
   downloadLabel,
   downloadPercent,
   idleUpdateState,
   shouldRunAutomaticCheck,
+  shouldRunForegroundRefresh,
   updateIndicatorAccessibleName,
   updateIndicatorLabel,
   updateInfo,
@@ -19,6 +21,20 @@ const info: AppUpdateInfo = {
   notes: "- Added a thing",
   publishedAt: "2026-09-05T17:00:00Z",
 };
+
+/** Every state that has an update attached, including the failed one. */
+const busyStates: AppUpdateState[] = [
+  { status: "checking" },
+  { status: "available", info },
+  { status: "downloading", info, downloaded: 1, total: 2 },
+  { status: "downloaded", info },
+  { status: "installing", info },
+  {
+    status: "failed",
+    info,
+    failure: { kind: "download", message: "Could not reach the update endpoint." },
+  },
+];
 
 describe("update indicator label", () => {
   it("shows nothing at all while up to date or checking", () => {
@@ -96,48 +112,45 @@ describe("update details", () => {
 
 describe("automatic check schedule", () => {
   const base = {
+    enabled: true,
     state: idleUpdateState,
     lastCheckedAt: null,
     now: 1_000_000,
-    intervalMs: CHECK_INTERVAL_MS,
+    intervalMs: PERIODIC_CHECK_INTERVAL_MS,
   };
 
   it("respects the Settings preference", () => {
-    expect(shouldRunAutomaticCheck({ ...base, enabled: true })).toBe(true);
+    expect(shouldRunAutomaticCheck(base)).toBe(true);
     expect(shouldRunAutomaticCheck({ ...base, enabled: false })).toBe(false);
   });
 
-  it("waits twelve hours between checks", () => {
+  it("runs the first check whenever the scheduler first asks", () => {
+    // The 10 second startup delay lives in the scheduler; eligibility itself
+    // only sees that no check has happened yet.
+    expect(shouldRunAutomaticCheck(base)).toBe(true);
+  });
+
+  it("rechecks about once an hour, and not a minute sooner", () => {
     const lastCheckedAt = 1_000_000;
     expect(
       shouldRunAutomaticCheck({
         ...base,
-        enabled: true,
         lastCheckedAt,
-        now: lastCheckedAt + CHECK_INTERVAL_MS - 1,
+        now: lastCheckedAt + PERIODIC_CHECK_INTERVAL_MS - 1,
       }),
     ).toBe(false);
     expect(
       shouldRunAutomaticCheck({
         ...base,
-        enabled: true,
         lastCheckedAt,
-        now: lastCheckedAt + CHECK_INTERVAL_MS,
+        now: lastCheckedAt + PERIODIC_CHECK_INTERVAL_MS,
       }),
     ).toBe(true);
   });
 
   it("never starts a second check on top of live update work", () => {
-    for (const state of [
-      { status: "checking" } as const,
-      { status: "available", info } as const,
-      { status: "downloading", info, downloaded: 1, total: 2 } as const,
-      { status: "downloaded", info } as const,
-      { status: "installing", info } as const,
-    ]) {
-      expect(shouldRunAutomaticCheck({ ...base, enabled: true, state, lastCheckedAt: null })).toBe(
-        false,
-      );
+    for (const state of busyStates) {
+      expect(shouldRunAutomaticCheck({ ...base, state, lastCheckedAt: null })).toBe(false);
     }
   });
 
@@ -148,7 +161,6 @@ describe("automatic check schedule", () => {
     expect(
       shouldRunAutomaticCheck({
         ...base,
-        enabled: true,
         lastCheckedAt: failedAt,
         now: failedAt + 1000,
       }),
@@ -156,10 +168,46 @@ describe("automatic check schedule", () => {
     expect(
       shouldRunAutomaticCheck({
         ...base,
-        enabled: true,
         lastCheckedAt: failedAt,
-        now: failedAt + CHECK_INTERVAL_MS,
+        now: failedAt + PERIODIC_CHECK_INTERVAL_MS,
       }),
     ).toBe(true);
+  });
+});
+
+describe("foreground refresh schedule", () => {
+  const stale = FOREGROUND_REFRESH_AFTER_MS;
+  const base = {
+    enabled: true,
+    state: idleUpdateState as AppUpdateState,
+    now: 1_000_000,
+    thresholdMs: stale,
+  };
+
+  it("refreshes a feed that went stale in the background", () => {
+    expect(shouldRunForegroundRefresh({ ...base, lastCheckedAt: base.now - stale })).toBe(true);
+    expect(shouldRunForegroundRefresh({ ...base, lastCheckedAt: base.now - stale + 1 })).toBe(
+      false,
+    );
+  });
+
+  it("does not refresh when no check has ever happened", () => {
+    // The startup delay owns the first check; focusing the window while it is
+    // pending must not pull the check ahead of the restore work it waits for.
+    expect(shouldRunForegroundRefresh({ ...base, lastCheckedAt: null })).toBe(false);
+  });
+
+  it("respects the Settings preference", () => {
+    expect(
+      shouldRunForegroundRefresh({ ...base, enabled: false, lastCheckedAt: base.now - stale }),
+    ).toBe(false);
+  });
+
+  it("leaves live update work alone", () => {
+    for (const state of busyStates) {
+      expect(shouldRunForegroundRefresh({ ...base, state, lastCheckedAt: base.now - stale })).toBe(
+        false,
+      );
+    }
   });
 });

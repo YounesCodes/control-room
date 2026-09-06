@@ -311,10 +311,10 @@ export function SettingsPane({
               Automatically check for updates
             </label>
             <small>
-              Checks GitHub Releases shortly after Control Room starts and twice a day after that.
-              Update packages are cryptographically signed and verified before anything is
-              installed. This updates Control Room on this Windows machine only, and never a Remote
-              Host.
+              Checks GitHub Releases shortly after Control Room starts, then periodically while it
+              stays open and when you return to it after being away. Update packages are
+              cryptographically signed and verified before anything is installed. This updates
+              Control Room on this Windows machine only, and never a Remote Host.
             </small>
             <div className="settings-update-actions">
               <button

@@ -246,6 +246,22 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(/\.update-indicator-button\s*\{/);
   });
 
+  it("paints the titlebar above the session strip so the update popover clears it", () => {
+    // The popover is a child of the titlebar, so its own z-index only matters
+    // inside the titlebar's stacking context. The relationship that decides
+    // whether the Workspace strip can paint over it lives between the titlebar
+    // and the strip. Fixed dialogs stay above both.
+    const layerOf = (selector: string) => {
+      const match = stylesSource.match(new RegExp(`${selector}\\s*\\{[^}]*?z-index:\\s*(\\d+)`));
+      expect(match, selector).not.toBeNull();
+      return Number(match![1]);
+    };
+    const titlebar = layerOf("\\.app-bar");
+    expect(titlebar).toBeGreaterThan(layerOf("\\.session-tabs"));
+    expect(layerOf("\\.modal-backdrop")).toBeGreaterThan(titlebar);
+    expect(layerOf("\\.command-palette-backdrop")).toBeGreaterThan(titlebar);
+  });
+
   it("renders release notes as text and never as markup", () => {
     // Release notes come from GitHub through the updater feed, so they are text
     // Control Room did not write. Nothing in the updater path may hand them to

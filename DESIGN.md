@@ -649,10 +649,18 @@ download one. A download finishes; it does not install. Installing closes the
 window and ends live Terminal Sessions and Log Streams, so it is always confirmed
 first, in the same ConfirmDialog every other interrupting action uses.
 
+Discovery keeps up with an app that stays open for days: the first check waits
+out startup, then repeats about once an hour, and returning to a backgrounded
+Control Room refreshes a feed that went stale in its absence. The details panel
+is anchored to the titlebar, which layers above the session strip, so the strip
+can never paint over the panel that drops out of it.
+
 Release notes come from GitHub and are therefore text Control Room did not write.
 They are parsed into headings, bullets, and paragraphs and rendered as text
 nodes. Nothing in that path may produce markup, which is why a heavier Markdown
-renderer is a non-goal rather than an improvement.
+renderer is a non-goal rather than an improvement. The GitHub URLs generated
+notes are full of are compacted to short text; every other URL stays as it
+arrived, still inert.
 
 A failed automatic check shows nothing at all. The updater is less important than
 the user's SSH work, and an unreachable release feed is not an application error.

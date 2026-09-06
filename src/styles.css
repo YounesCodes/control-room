@@ -256,8 +256,13 @@ code,
   background: var(--app-bg);
 }
 
+/* Layer order for the shell, lowest to highest: page content, the sidebar
+   (6), the session tab strip (10), in-page popovers and toasts (20–30), the
+   titlebar (35). The titlebar must paint above the strip because the update
+   popover is anchored to it and drops into the row below; fixed dialogs
+   (1000) and the command palette (1100) sit above everything here. */
 .app-bar {
-  z-index: 5;
+  z-index: 35;
   grid-column: 2 / -1;
   display: flex;
   align-items: center;
@@ -349,12 +354,21 @@ code,
 
 .update-panel {
   position: absolute;
+  /* Scoped inside the titlebar's stacking context, which the layer order at
+     .app-bar puts above everything in the page; the value itself only has to
+     win within the titlebar. */
   z-index: 40;
   top: calc(100% + 6px);
   right: 0;
   display: flex;
-  width: 340px;
-  max-height: 420px;
+  /* Wide enough that generated GitHub notes and their compare lines do not
+     wrap mid-word. The max-width subtracts the Settings button, divider, and
+     window controls right of the panel's anchor (191px) plus a 16px margin,
+     so the panel stays inside the window at any width. */
+  width: 420px;
+  max-width: calc(100vw - 208px);
+  /* 48px of titlebar and gap above, 24px of margin below. */
+  max-height: min(460px, calc(100vh - 72px));
   flex-direction: column;
   gap: 12px;
   overflow: hidden;
@@ -363,6 +377,16 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 14px;
+}
+
+.update-panel-header,
+.update-panel-empty,
+.update-panel-error,
+.update-panel-actions {
+  /* The header, status lines, and actions own their rows; only the notes
+     flex and scroll, so the version and the buttons can never be pushed out
+     of view by long notes. */
+  flex: none;
 }
 
 .update-panel-header h3 {
@@ -419,6 +443,9 @@ code,
   color: var(--text);
   font-size: 12px;
   line-height: 1.55;
+  /* A URL that is not one of the compacted GitHub shapes must wrap instead
+     of forcing the panel wider or scrolling sideways. */
+  overflow-wrap: anywhere;
 }
 
 .release-notes-list {
@@ -1117,6 +1144,8 @@ code,
    ========================================================================== */
 
 .session-tabs {
+  /* Below the titlebar (see the layer order at .app-bar), so the update
+     popover that drops out of the titlebar paints over this strip. */
   position: relative;
   z-index: 10;
   display: flex;

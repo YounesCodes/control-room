@@ -149,8 +149,10 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
     an intent and never receives a URL, installer bytes, or a way to skip
     verification. There is one application-level update lifecycle: one timer,
     one in-flight check, no per-Workspace or per-pane checking. Automatic checks
-    are a Settings preference, default on, roughly ten seconds after start and
-    twelve hours apart, and a failed automatic check is silent. A manual check
+    are a Settings preference, default on: roughly ten seconds after start,
+    then roughly hourly while the app stays open, plus a refresh when it
+    returns to the foreground after being away long enough. A failed automatic
+    check is silent. A manual check
     stays available when the preference is off and may report why it failed.
     Downloading never installs, installing is always confirmed because it ends
     live sessions, and a signature that does not verify is a hard failure with

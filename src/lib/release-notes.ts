@@ -9,8 +9,10 @@
  * for this file: the notes never stop being data.
  *
  * The formatting understood is the small subset that `--generate-notes` and
- * hand-written notes actually use. Anything else degrades to a paragraph rather
- * than pulling in a Markdown renderer for one panel.
+ * hand-written notes actually use, plus one normalization: the GitHub URLs
+ * generated notes are full of are compacted to short text. Anything else
+ * degrades to a paragraph rather than pulling in a Markdown renderer for one
+ * panel.
  */
 
 export type ReleaseNoteBlock =
@@ -46,8 +48,33 @@ function stripInlineMarkers(line: string): string {
     .replace(/(^|\s)_([^_]+)_/g, "$1$2");
 }
 
+/**
+ * Compacts the GitHub URLs generated release notes are full of.
+ *
+ * `https://github.com/owner/repo/pull/53` reads as `#53` and
+ * `https://github.com/owner/repo/compare/v0.7.0...v0.7.1` as
+ * `v0.7.0 → v0.7.1`. The shapes are generic GitHub paths, not
+ * Control-Room-specific, and every other URL passes through untouched — still
+ * plain text, never made clickable.
+ */
+function compactGitHubUrls(line: string): string {
+  return line.replace(/https:\/\/github\.com\/\S+/g, (raw) => {
+    // Prose can glue punctuation onto the end of a URL; match without it and
+    // keep the punctuation where it was.
+    const url = raw.replace(/[.,;:!?)\]}'"]+$/, "");
+    const tail = raw.slice(url.length);
+    const pull = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/(\d+)$/.exec(url);
+    if (pull) return `#${pull[1]}${tail}`;
+    const compare = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/compare\/(.+)\.\.\.(.+)$/.exec(url);
+    if (compare) return `${compare[1]} → ${compare[2]}${tail}`;
+    return raw;
+  });
+}
+
 function clean(line: string): string {
-  return stripInlineMarkers(flattenLinks(line)).slice(0, MAX_LINE_LENGTH).trimEnd();
+  return compactGitHubUrls(stripInlineMarkers(flattenLinks(line)))
+    .slice(0, MAX_LINE_LENGTH)
+    .trimEnd();
 }
 
 const BULLET = /^\s{0,3}([-*+•])\s+(.*)$/;
