@@ -246,16 +246,22 @@ export function useAppUpdater(automaticChecks: boolean) {
     // machine that slept, without the timer itself needing to know anything
     // about time drift.
     const tick = window.setInterval(maybeCheck, SCHEDULER_TICK_INTERVAL_MS);
-    // Minimize/restore and Alt-Tab back can each fire both events; the
-    // in-flight guard in `runCheck` collapses them into at most one request.
+    // visibilitychange fires for both directions; only coming back is a
+    // foreground return, so hiding the window must not spend the refresh that
+    // restoring it will need. Minimize/restore and Alt-Tab back can each fire
+    // both events; the in-flight guard in `runCheck` collapses them into at
+    // most one request.
     window.addEventListener("focus", maybeRefreshOnForeground);
-    document.addEventListener("visibilitychange", maybeRefreshOnForeground);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") maybeRefreshOnForeground();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
       window.clearTimeout(first);
       window.clearInterval(tick);
       window.removeEventListener("focus", maybeRefreshOnForeground);
-      document.removeEventListener("visibilitychange", maybeRefreshOnForeground);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [runCheck]);
 

@@ -23,6 +23,16 @@ vi.mock("../lib/api", () => ({
 
 const checkForUpdate = vi.mocked(api.checkForUpdate);
 
+/** jsdom's visibilityState is a prototype getter; an own configurable property
+ *  shadows it per test and is deleted to restore the real one. */
+function setVisibilityState(value: DocumentVisibilityState) {
+  Object.defineProperty(document, "visibilityState", { value, configurable: true });
+}
+
+function restoreVisibilityState() {
+  delete (document as unknown as { visibilityState?: DocumentVisibilityState }).visibilityState;
+}
+
 const info: AppUpdateInfo = {
   currentVersion: "0.7.0",
   version: "0.7.1",
@@ -37,6 +47,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  restoreVisibilityState();
   cleanup();
   vi.useRealTimers();
 });
@@ -135,6 +146,44 @@ describe("automatic update scheduler", () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not refresh on the visibilitychange that hides the document", async () => {
+    renderHook(() => useAppUpdater(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FIRST_CHECK_DELAY_MS);
+    });
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+
+    setVisibilityState("hidden");
+    await act(async () => {
+      // The feed went stale on the way out, but minimizing is the opposite of
+      // a foreground return; spending the refresh here would miss a release
+      // published while the window sat hidden.
+      await vi.advanceTimersByTimeAsync(FOREGROUND_REFRESH_AFTER_MS);
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes on the visibilitychange that makes the document visible", async () => {
+    renderHook(() => useAppUpdater(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FIRST_CHECK_DELAY_MS);
+    });
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+
+    // Stale well before the event, so only the direction decides.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FOREGROUND_REFRESH_AFTER_MS);
+    });
+    setVisibilityState("visible");
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(checkForUpdate).toHaveBeenCalledTimes(2);
   });
 
   it("refreshes on focus once the last check is stale", async () => {
