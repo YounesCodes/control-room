@@ -67,6 +67,17 @@ impl SessionMode {
 
 const MAX_UNACKNOWLEDGED_OUTPUT_BYTES: usize = 512 * 1024;
 
+/// One pty read's buffer, and the largest amount `reserve` is ever asked for.
+///
+/// It has to stay below `MAX_UNACKNOWLEDGED_OUTPUT_BYTES`. `reserve` waits
+/// until the outstanding total plus the new count fits under the cap, and the
+/// only thing that lowers the outstanding total is the frontend acknowledging
+/// bytes it already received. A single read larger than the whole cap could
+/// never fit however much is acknowledged, so the reader thread would wait for
+/// an acknowledgement that cannot arrive and the session would go silent with
+/// its child still running.
+const OUTPUT_READ_BUFFER_BYTES: usize = 16 * 1024;
+
 struct OutputFlow {
     state: Mutex<OutputFlowState>,
     available: Condvar,
@@ -301,7 +312,7 @@ impl SessionManager {
         let output_app = app.clone();
         let output_managed = managed.clone();
         thread::spawn(move || {
-            let mut buffer = vec![0_u8; 16 * 1024];
+            let mut buffer = vec![0_u8; OUTPUT_READ_BUFFER_BYTES];
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
@@ -627,10 +638,51 @@ mod tests {
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
     use super::{
-        CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, SessionMode, TERMINAL_TYPE,
-        TerminalFailureDetector, TerminalFailureHint, classify_local_exit, classify_session_exit,
-        interactive_shell_command, map_pty_kill_result,
+        CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OUTPUT_READ_BUFFER_BYTES, OutputFlow,
+        SessionManager, SessionMode, TERMINAL_TYPE, TerminalFailureDetector, TerminalFailureHint,
+        classify_local_exit, classify_session_exit, interactive_shell_command, map_pty_kill_result,
     };
+
+    /// What the detector concluded about one logical stream: the failure hint
+    /// and whether the session counts as established.
+    type Classification = (Option<TerminalFailureHint>, bool);
+
+    /// Feeds one logical byte stream to a fresh detector, cut at the given
+    /// offsets, and reports what it concluded.
+    fn observe_chunked(stream: &[u8], boundaries: &[usize]) -> Classification {
+        let mut detector = TerminalFailureDetector::default();
+        let mut start = 0;
+        for &end in boundaries {
+            detector.observe(&stream[start..end]);
+            start = end;
+        }
+        detector.observe(&stream[start..]);
+        (detector.hint, detector.established())
+    }
+
+    /// A pty read is however many bytes happened to be available, so the same
+    /// logical stream arrives cut in a different place every run. Classification
+    /// has to depend on the byte stream and not on where those cuts land.
+    ///
+    /// Checks the stream whole, cut at every single offset, and one byte at a
+    /// time, and returns the classification they all agree on.
+    fn classification_independent_of_chunking(name: &str, stream: &[u8]) -> Classification {
+        let whole = observe_chunked(stream, &[]);
+        for split in 1..stream.len() {
+            assert_eq!(
+                observe_chunked(stream, &[split]),
+                whole,
+                "{name}: a cut after byte {split} changed the classification"
+            );
+        }
+        let every_byte = (1..stream.len()).collect::<Vec<_>>();
+        assert_eq!(
+            observe_chunked(stream, &every_byte),
+            whole,
+            "{name}: reading one byte at a time changed the classification"
+        );
+        whole
+    }
 
     // ssh forwards its own TERM, so an unset one leaves the remote depending on
     // the launch environment and the ssh build. Setting it must not disturb the
@@ -872,6 +924,289 @@ mod tests {
         assert!(reason.unwrap().starts_with("SSH authentication failed"));
     }
 
+    /// The campaign this table exists for: CR-AUDIT-002 was a real bug caused
+    /// by treating one pty read as one logical message. Every stream here is
+    /// checked whole, at every single cut point, and one byte at a time, so a
+    /// detector that only looks at the chunk it was handed, or that keeps too
+    /// small a tail to bridge a cut, fails here rather than on a user's host.
+    #[test]
+    fn classification_does_not_depend_on_where_pty_reads_are_cut() {
+        let long_banner = "motd line\r\n".repeat(60);
+        assert!(
+            long_banner.len() > 512,
+            "this case exists to cross the detector's tail window"
+        );
+
+        let cases: [(&str, String, Classification); 8] = [
+            ("marker alone", CONNECTED_MARKER.into(), (None, true)),
+            (
+                // The same-buffer case from #63, now pinned under every cut
+                // rather than only the one the fix was written against.
+                "marker beside a failing motd script",
+                format!(
+                    "{CONNECTED_MARKER}Welcome to Debian\r\n\
+                     run-parts: /etc/update-motd.d/50-motd-news: Permission denied\r\n"
+                ),
+                (Some(TerminalFailureHint::Authentication), true),
+            ),
+            (
+                "marker after a banner longer than the tail window",
+                format!("{long_banner}{CONNECTED_MARKER}"),
+                (None, true),
+            ),
+            (
+                "connection lost in the marker's own chunk",
+                format!("{CONNECTED_MARKER}client_loop: send disconnect: Connection reset\r\n"),
+                (Some(TerminalFailureHint::ConnectionLost), true),
+            ),
+            (
+                "refused before any marker",
+                "ssh: connect to host laptop port 22: Connection refused\r\n".into(),
+                (Some(TerminalFailureHint::ConnectionRefused), false),
+            ),
+            (
+                "host key rejected before any marker",
+                "@@@@@@@@@@\r\nHost key verification failed.\r\n".into(),
+                (Some(TerminalFailureHint::HostKey), false),
+            ),
+            (
+                "name resolution failed before any marker",
+                "ssh: Could not resolve hostname laptop: Name or service not known\r\n".into(),
+                (Some(TerminalFailureHint::HostResolution), false),
+            ),
+            (
+                // The hint is sticky and the marker is authoritative, so an
+                // established session that keeps printing the phrase stays
+                // established and keeps the first hint it saw.
+                "repeated misleading output after the marker",
+                format!(
+                    "{CONNECTED_MARKER}$ ls /root\r\n\
+                     ls: cannot open directory '/root': Permission denied\r\n\
+                     $ ls /root\r\n\
+                     ls: cannot open directory '/root': Permission denied\r\n"
+                ),
+                (Some(TerminalFailureHint::Authentication), true),
+            ),
+        ];
+
+        for (name, stream, expected) in cases {
+            assert_eq!(
+                classification_independent_of_chunking(name, stream.as_bytes()),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
+    /// A pty read can cut a multi-byte character in half, and each half decodes
+    /// lossily on its own. The marker and the diagnostics are ASCII, so a
+    /// replacement character next to them must not hide either. This is what
+    /// stops the lossy decode from being "tightened" into a strict one that
+    /// drops the whole chunk a split character lands in.
+    #[test]
+    fn a_split_multibyte_character_hides_neither_the_marker_nor_a_diagnostic() {
+        // "Bienvenue à l'hôte" carries two-byte characters on both sides of the
+        // marker; the box-drawing arrow is three bytes.
+        let stream = format!("Bienvenue à l'hôte →{CONNECTED_MARKER}ls: Permission denied\r\n");
+        let bytes = stream.as_bytes();
+
+        for split in 1..bytes.len() {
+            assert_eq!(
+                observe_chunked(bytes, &[split]),
+                (Some(TerminalFailureHint::Authentication), true),
+                "a cut after byte {split} changed the classification"
+            );
+        }
+
+        // Bytes that are not valid UTF-8 in any arrangement, which is what a
+        // binary file catted into the terminal looks like.
+        let mut hostile = vec![0xff, 0xfe, 0x80];
+        hostile.extend_from_slice(CONNECTED_MARKER.as_bytes());
+        hostile.extend_from_slice(&[0x80, 0xff]);
+        assert_eq!(
+            classification_independent_of_chunking("invalid utf-8 around the marker", &hostile),
+            (None, true)
+        );
+    }
+
+    /// The marker proves the remote command ran. Nothing printed before it can
+    /// stand in for it, including a shell that echoes the marker's own text
+    /// without the control bytes that make it a marker.
+    #[test]
+    fn only_the_full_marker_establishes_a_session() {
+        for near_miss in [
+            "633;ControlRoom;connected",
+            "\u{1b}]633;ControlRoom;connected",
+            "]633;ControlRoom;connected\u{7}",
+            "\u{1b}]633;ControlRoom;connecting\u{7}",
+            "\u{1b}]633;ControlRoom;connected\u{8}",
+        ] {
+            let mut detector = TerminalFailureDetector::default();
+            detector.observe(near_miss.as_bytes());
+            assert!(
+                !detector.established(),
+                "{near_miss:?} is not the connected marker"
+            );
+        }
+    }
+
+    /// Closing a session tears down the pty, and the reader thread sees that as
+    /// a broken channel. `close` records the user's intent before it kills
+    /// anything, so the wreckage of a deliberate disconnect must not outrank
+    /// the intent and reach the user as an error.
+    #[test]
+    fn a_user_disconnect_outranks_the_failure_its_own_teardown_causes() {
+        assert_eq!(
+            classify_session_exit(
+                true,
+                Some("Terminal output channel closed".into()),
+                false,
+                255,
+                Some(TerminalFailureHint::ConnectionLost),
+                true,
+            ),
+            ("disconnected", Some("user-disconnect".into()), None)
+        );
+        assert_eq!(
+            classify_local_exit(
+                true,
+                Some("Terminal output channel closed".into()),
+                false,
+                255,
+                "Git Bash",
+            ),
+            ("disconnected", Some("user-stop".into()), None)
+        );
+    }
+
+    /// Once the frontend has been told a session connected, ssh's startup
+    /// diagnostics are behind it and the stream belongs to the remote shell.
+    /// Every startup hint therefore stops counting, and only losing the
+    /// connection survives. Before #63 each of these ended an ordinary session
+    /// with an SSH-layer error the user could not act on.
+    #[test]
+    fn startup_hints_stop_counting_once_a_session_is_established() {
+        let startup_only = [
+            TerminalFailureHint::Authentication,
+            TerminalFailureHint::HostResolution,
+            TerminalFailureHint::ConnectionRefused,
+            TerminalFailureHint::ConnectionTimeout,
+            TerminalFailureHint::HostKey,
+        ];
+
+        for hint in startup_only {
+            let (state, category, reason) =
+                classify_session_exit(false, None, false, 42, Some(hint), true);
+            assert_eq!(state, "disconnected", "{hint:?}");
+            assert_eq!(category.as_deref(), Some("remote-exit"), "{hint:?}");
+            assert_eq!(
+                reason.as_deref(),
+                Some("The remote shell exited with code 42."),
+                "{hint:?}"
+            );
+
+            // The same hint on a session that never connected is exactly what
+            // the startup categories are for, so it must still be reported.
+            let (state, category, _) =
+                classify_session_exit(false, None, false, 42, Some(hint), false);
+            assert_eq!(state, "error", "{hint:?}");
+            assert_ne!(category.as_deref(), Some("remote-exit"), "{hint:?}");
+        }
+
+        let (state, category, _) = classify_session_exit(
+            false,
+            None,
+            false,
+            42,
+            Some(TerminalFailureHint::ConnectionLost),
+            true,
+        );
+        assert_eq!(
+            (state, category.as_deref()),
+            ("error", Some("connection-lost"))
+        );
+    }
+
+    /// ssh can fail before printing anything the detector recognises. The user
+    /// still gets an error with the exit status rather than a silent disconnect.
+    #[test]
+    fn a_failed_startup_with_no_recognised_diagnostic_is_still_an_error() {
+        let (state, category, reason) = classify_session_exit(false, None, false, 255, None, false);
+        assert_eq!(state, "error");
+        assert_eq!(category.as_deref(), Some("remote-exit"));
+        assert_eq!(
+            reason.as_deref(),
+            Some("SSH session ended unexpectedly (exit code 255)")
+        );
+    }
+
+    /// Every classified failure names the exit status, because "it failed" with
+    /// no number is the report the user cannot do anything with.
+    #[test]
+    fn every_ssh_failure_category_reports_the_exit_status() {
+        for hint in [
+            None,
+            Some(TerminalFailureHint::Authentication),
+            Some(TerminalFailureHint::HostResolution),
+            Some(TerminalFailureHint::ConnectionRefused),
+            Some(TerminalFailureHint::ConnectionTimeout),
+            Some(TerminalFailureHint::HostKey),
+            Some(TerminalFailureHint::ConnectionLost),
+        ] {
+            let (state, category, reason) =
+                classify_session_exit(false, None, false, 77, hint, false);
+            assert_eq!(state, "error", "{hint:?}");
+            assert!(category.is_some(), "{hint:?}");
+            assert!(
+                reason
+                    .as_deref()
+                    .is_some_and(|reason| reason.contains("77")),
+                "{hint:?}: {reason:?}"
+            );
+        }
+    }
+
+    /// A local shell never runs the SSH classifier, so its exit can never be
+    /// reported as an authentication or host-key failure however its output
+    /// read. The two paths stay separate.
+    #[test]
+    fn a_local_shell_exit_is_never_classified_as_an_ssh_failure() {
+        for success in [true, false] {
+            let (state, category, _) =
+                classify_local_exit(false, None, success, 1, "Windows PowerShell");
+            assert_eq!(state, "disconnected", "success: {success}");
+            assert_eq!(
+                category.as_deref(),
+                Some("local-exit"),
+                "success: {success}"
+            );
+        }
+    }
+
+    /// The frontend can name a session that has already gone. Writing, resizing
+    /// and closing it have to say so rather than panic or report success, and
+    /// acknowledging output for it is a no-op.
+    #[test]
+    fn operations_on_a_session_that_is_gone_report_it_rather_than_panicking() {
+        let sessions = SessionManager::default();
+        let missing = "11111111-1111-4111-8111-111111111111";
+
+        for result in [
+            sessions.write(missing, b"whoami\r"),
+            sessions.resize(missing, 80, 24),
+            sessions.close(missing),
+        ] {
+            assert_eq!(
+                result.unwrap_err(),
+                "Terminal Session is no longer active",
+                "a stale session id has to be reported, not silently accepted"
+            );
+        }
+
+        sessions.acknowledge_output(missing, 4096);
+        sessions.close_all();
+    }
+
     #[test]
     fn terminal_output_waits_for_frontend_acknowledgement() {
         let flow = Arc::new(OutputFlow::new());
@@ -900,6 +1235,136 @@ mod tests {
         assert!(receiver.recv_timeout(Duration::from_millis(50)).is_err());
         flow.close();
         assert!(!receiver.recv_timeout(Duration::from_secs(1)).unwrap());
+    }
+
+    /// The cap is a ceiling on outstanding bytes, not on the reader's progress.
+    /// Filling it exactly still succeeds; one byte past it is what has to wait.
+    #[test]
+    fn the_output_cap_admits_exactly_its_limit() {
+        let flow = OutputFlow::new();
+        assert!(flow.reserve(MAX_UNACKNOWLEDGED_OUTPUT_BYTES - 1));
+        flow.acknowledge(MAX_UNACKNOWLEDGED_OUTPUT_BYTES - 1);
+        assert!(flow.reserve(MAX_UNACKNOWLEDGED_OUTPUT_BYTES));
+
+        // At the cap, a further byte would exceed it, so it waits. Proven by
+        // the blocking tests; here the point is that the cap itself was
+        // admitted rather than rejected or blocked.
+        flow.acknowledge(1);
+        assert!(flow.reserve(1));
+    }
+
+    /// The reader never asks for more than one buffer, and one buffer has to
+    /// fit under the cap. A read larger than the whole cap could never fit
+    /// however much the frontend acknowledges, so `reserve` would wait forever
+    /// and the session would go silent with its child still running.
+    #[test]
+    fn one_pty_read_always_fits_under_the_output_cap() {
+        // Both are constants, so raising the buffer past the cap is a build
+        // failure rather than a session that goes quiet on a user's machine.
+        const {
+            assert!(OUTPUT_READ_BUFFER_BYTES < MAX_UNACKNOWLEDGED_OUTPUT_BYTES);
+        }
+
+        // And the flow agrees at run time: a full buffer on an empty flow is
+        // admitted rather than parked.
+        let flow = Arc::new(OutputFlow::new());
+        let reader = flow.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(reader.reserve(OUTPUT_READ_BUFFER_BYTES));
+        });
+        assert_eq!(receiver.recv_timeout(Duration::from_secs(5)), Ok(true));
+    }
+
+    /// Acknowledgements come from the frontend, so the count is not trusted.
+    /// Acknowledging more than is outstanding must clamp at zero rather than
+    /// wrap a `usize` around to a total that never drains again.
+    #[test]
+    fn over_acknowledgement_cannot_underflow_the_outstanding_total() {
+        let flow = Arc::new(OutputFlow::new());
+        assert!(flow.reserve(1_024));
+        flow.acknowledge(usize::MAX);
+        flow.acknowledge(4_096);
+
+        // A wrapped total sits astronomically over the cap and nothing can
+        // bring it back down, so the reader would wait here forever. Run it off
+        // the test thread so that shows up as a failure rather than a hang.
+        let drained = flow.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(drained.reserve(MAX_UNACKNOWLEDGED_OUTPUT_BYTES));
+        });
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(5)),
+            Ok(true),
+            "the flow has to be empty again after being over-acknowledged"
+        );
+    }
+
+    /// Closing happens on the reader's error path, on the channel's error path,
+    /// on `close`, on `close_all`, and again when the child is reaped. Every one
+    /// of those can run for the same session, so closing has to stay a no-op
+    /// after the first time.
+    #[test]
+    fn closing_the_output_flow_repeatedly_is_harmless() {
+        let flow = OutputFlow::new();
+        flow.close();
+        flow.close();
+        flow.acknowledge(4_096);
+        assert!(
+            !flow.reserve(1),
+            "a closed flow refuses new bytes rather than blocking the reader"
+        );
+        flow.close();
+        assert!(!flow.reserve(1));
+    }
+
+    /// A producer already blocked at the cap is woken by the close, and one
+    /// that arrives afterwards must not start waiting on a flow nothing will
+    /// ever drain.
+    #[test]
+    fn a_producer_arriving_after_close_does_not_block() {
+        let flow = Arc::new(OutputFlow::new());
+        assert!(flow.reserve(MAX_UNACKNOWLEDGED_OUTPUT_BYTES));
+        flow.close();
+
+        let late = flow.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(late.reserve(1));
+        });
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(5)),
+            Ok(false),
+            "reserve after close has to return, not wait"
+        );
+    }
+
+    /// Acknowledgements arrive per chunk, so a producer waiting on a large
+    /// reservation is woken repeatedly before enough has drained. Each wake
+    /// re-checks the total instead of assuming a notification means room.
+    #[test]
+    fn a_blocked_producer_resumes_only_once_enough_has_drained() {
+        let flow = Arc::new(OutputFlow::new());
+        assert!(flow.reserve(MAX_UNACKNOWLEDGED_OUTPUT_BYTES));
+
+        let blocked = flow.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(blocked.reserve(4_096));
+        });
+
+        // Not enough room yet, however many times the producer is woken.
+        for _ in 0..8 {
+            flow.acknowledge(256);
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(20)).is_err(),
+                "2048 acknowledged bytes cannot admit a 4096-byte reservation"
+            );
+        }
+
+        flow.acknowledge(4_096);
+        assert_eq!(receiver.recv_timeout(Duration::from_secs(5)), Ok(true));
     }
 
     #[test]

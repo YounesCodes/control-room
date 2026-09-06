@@ -47,12 +47,44 @@ const MAX_CONNECTION_REMOTES: usize = 20;
 #[derive(Default)]
 pub struct RemoteOperationLimiter {
     hosts: Arc<Mutex<HashMap<String, Arc<HostOperationLimit>>>>,
+    /// Test-only seam. Runs between looking a connection's limit up in the map
+    /// and claiming a slot on it, which is the one interleaving in here that
+    /// cannot be reached by ordinary scheduling pressure on demand. The field
+    /// does not exist outside `cfg(test)`, so production has neither the hook
+    /// nor the branch that reads it.
+    #[cfg(test)]
+    after_host_lookup: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Default)]
 struct HostOperationLimit {
-    active: Mutex<usize>,
+    slots: Mutex<HostSlots>,
     available: Condvar,
+}
+
+#[derive(Default)]
+struct HostSlots {
+    /// Permits currently held for this connection.
+    active: usize,
+    /// Callers that have taken this limit out of the map and have not yet
+    /// either claimed a slot or given up.
+    ///
+    /// Looking the limit up and claiming a slot on it are two steps, and
+    /// without this the entry could be evicted in between: a caller holding an
+    /// `Arc` to an evicted limit finds it idle and claims a slot, while the
+    /// next request for the same connection creates a second limit and admits
+    /// two more. Three reads then run against a host whose cap is two. The
+    /// count is registered while the map lock is held, so a release that runs
+    /// afterwards sees the arrival and leaves the entry alone.
+    arriving: usize,
+}
+
+impl HostSlots {
+    /// Whether the limit can be forgotten: nothing holds a slot and nothing is
+    /// on its way to one.
+    fn is_forgettable(&self) -> bool {
+        self.active == 0 && self.arriving == 0
+    }
 }
 
 pub struct RemoteOperationPermit {
@@ -72,12 +104,15 @@ impl RemoteOperationLimiter {
         maximum_wait: Duration,
     ) -> Result<RemoteOperationPermit, String> {
         let connection_id = connection_id.to_owned();
-        let host = self
-            .hosts
-            .lock()
-            .entry(connection_id.clone())
-            .or_default()
-            .clone();
+        let mut hosts = self.hosts.lock();
+        let host = hosts.entry(connection_id.clone()).or_default().clone();
+        // Registered under the map lock, before anything can evict the entry.
+        host.slots.lock().arriving += 1;
+        drop(hosts);
+        #[cfg(test)]
+        if let Some(hook) = &self.after_host_lookup {
+            hook();
+        }
         // One deadline for the whole attempt, so `maximum_wait` is the total
         // time spent queued rather than the time between two wake-ups. Waking
         // early is normal here: a permit is released, and another waiter can
@@ -85,17 +120,18 @@ impl RemoteOperationLimiter {
         // each time left total queue time unbounded, which let the frontend
         // backstop fire before Rust could report why the operation failed.
         let deadline = Instant::now() + maximum_wait;
-        let mut active = host.active.lock();
-        while *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
+        let mut slots = host.slots.lock();
+        while slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
             // A deadline already in the past returns `timed_out` immediately,
             // so a spent budget never starts another wait.
-            if host.available.wait_until(&mut active, deadline).timed_out()
-                && *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
+            if host.available.wait_until(&mut slots, deadline).timed_out()
+                && slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
             {
-                drop(active);
+                slots.arriving -= 1;
+                drop(slots);
                 let mut hosts = self.hosts.lock();
                 let remove = hosts.get(&connection_id).is_some_and(|tracked| {
-                    Arc::ptr_eq(tracked, &host) && *tracked.active.lock() == 0
+                    Arc::ptr_eq(tracked, &host) && tracked.slots.lock().is_forgettable()
                 });
                 if remove {
                     hosts.remove(&connection_id);
@@ -106,8 +142,9 @@ impl RemoteOperationLimiter {
                 ));
             }
         }
-        *active += 1;
-        drop(active);
+        slots.active += 1;
+        slots.arriving -= 1;
+        drop(slots);
         Ok(RemoteOperationPermit {
             connection_id,
             host,
@@ -120,6 +157,14 @@ impl RemoteOperationLimiter {
         self.hosts.lock().len()
     }
 
+    #[cfg(test)]
+    fn with_lookup_hook(hook: Arc<dyn Fn() + Send + Sync>) -> Self {
+        Self {
+            hosts: Arc::default(),
+            after_host_lookup: Some(hook),
+        }
+    }
+
     /// Wakes everything queued on one connection without freeing a slot, so a
     /// test can reproduce the wake-up that finds the queue still full.
     #[cfg(test)]
@@ -130,19 +175,33 @@ impl RemoteOperationLimiter {
     }
 }
 
+#[cfg(test)]
+impl RemoteOperationPermit {
+    /// How many permits are live on the limit this one was issued against.
+    fn live_on_its_limit(&self) -> usize {
+        self.host.slots.lock().active
+    }
+
+    /// Whether two permits are counted against the same limit. Two live permits
+    /// for one connection that answer `false` here are not bounded by anything.
+    fn shares_a_limit_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.host, &other.host)
+    }
+}
+
 impl Drop for RemoteOperationPermit {
     fn drop(&mut self) {
-        let mut active = self.host.active.lock();
-        *active = active.saturating_sub(1);
-        let idle = *active == 0;
+        let mut slots = self.host.slots.lock();
+        slots.active = slots.active.saturating_sub(1);
+        let idle = slots.is_forgettable();
         self.host.available.notify_one();
-        drop(active);
+        drop(slots);
 
         if idle {
             let mut hosts = self.hosts.lock();
-            let remove = hosts
-                .get(&self.connection_id)
-                .is_some_and(|host| Arc::ptr_eq(host, &self.host) && *host.active.lock() == 0);
+            let remove = hosts.get(&self.connection_id).is_some_and(|host| {
+                Arc::ptr_eq(host, &self.host) && host.slots.lock().is_forgettable()
+            });
             if remove {
                 hosts.remove(&self.connection_id);
             }
@@ -2136,7 +2195,7 @@ mod tests {
     use std::io::Cursor;
     use std::sync::{
         Barrier,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
     use super::*;
@@ -3247,6 +3306,337 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
         drop(limiter.acquire_for("connection-a", WAIT).unwrap());
         assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    /// The cap is per connection, so a host being read hard must not stall a
+    /// read of a different host. A single global limit would pass every other
+    /// limiter test and fail this one.
+    #[test]
+    fn a_saturated_connection_does_not_delay_a_different_one() {
+        const WAIT: Duration = Duration::from_millis(50);
+        let limiter = RemoteOperationLimiter::default();
+
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+        assert!(
+            limiter.acquire_for("connection-a", WAIT).is_err(),
+            "connection-a is saturated"
+        );
+
+        // Another connection is unaffected, and gets its own full allowance.
+        let third = limiter.acquire_for("connection-b", Duration::ZERO).unwrap();
+        let fourth = limiter.acquire_for("connection-b", Duration::ZERO).unwrap();
+        assert!(!third.shares_a_limit_with(&first));
+        assert!(limiter.acquire_for("connection-b", WAIT).is_err());
+        assert_eq!(limiter.tracked_connections(), 2);
+
+        // Draining one leaves the other exactly as it was.
+        drop(third);
+        drop(fourth);
+        assert_eq!(limiter.tracked_connections(), 1);
+        assert!(limiter.acquire_for("connection-a", WAIT).is_err());
+
+        drop(first);
+        drop(second);
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    /// Every Structured Operation takes and releases a permit, so a Workspace
+    /// left open for a day runs thousands of these. Nothing may accumulate.
+    #[test]
+    fn repeated_operations_leave_no_trace_of_the_connections_they_used() {
+        let limiter = RemoteOperationLimiter::default();
+        for round in 0..200 {
+            let id = format!("connection-{}", round % 5);
+            let first = limiter.acquire_for(&id, Duration::ZERO).unwrap();
+            let second = limiter.acquire_for(&id, Duration::ZERO).unwrap();
+            assert_eq!(second.live_on_its_limit(), 2, "round {round}");
+            drop(first);
+            drop(second);
+            assert_eq!(
+                limiter.tracked_connections(),
+                0,
+                "round {round} left an entry behind"
+            );
+        }
+    }
+
+    /// CR-AUDIT-003. Looking a connection's limit up in the map and claiming a
+    /// slot on it are two steps, and the entry can be dropped from the map in
+    /// between.
+    ///
+    /// A caller reads the map, gets the limit both live permits are counted
+    /// against, and is descheduled. Both permits are released. The second
+    /// release sees the count at zero, finds its own limit still in the map,
+    /// and removes it. The caller resumes holding an `Arc` to a limit nothing
+    /// else can reach, finds it idle, and claims a slot on it. The next request
+    /// for the same connection finds no entry and creates a second limit, which
+    /// admits two more.
+    ///
+    /// Three Structured Operations then run against one host with a cap of two,
+    /// and the cap is what keeps a bounded read from becoming load on someone's
+    /// machine. The hook only decides *when* the caller resumes; the window it
+    /// pauses in is ordinary scheduling.
+    #[test]
+    fn a_connection_cannot_exceed_its_operation_limit_across_a_map_eviction() {
+        const WAIT: Duration = Duration::from_secs(5);
+
+        // The hook pauses exactly one lookup, the third caller's.
+        let armed = Arc::new(AtomicBool::new(false));
+        let (reached_lookup, lookup_reached) = mpsc::channel();
+        let (release_lookup, lookup_released) = mpsc::channel::<()>();
+        let lookup_released = Arc::new(Mutex::new(lookup_released));
+        let limiter = Arc::new(RemoteOperationLimiter::with_lookup_hook(Arc::new({
+            let armed = armed.clone();
+            move || {
+                if armed.swap(false, Ordering::SeqCst) {
+                    reached_lookup.send(()).unwrap();
+                    lookup_released.lock().recv().unwrap();
+                }
+            }
+        })));
+
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+
+        armed.store(true, Ordering::SeqCst);
+        let queued = thread::spawn({
+            let limiter = limiter.clone();
+            move || limiter.acquire_for("connection-a", WAIT).unwrap()
+        });
+
+        // The third caller now holds the same limit the two permits are counted
+        // against, and has not yet claimed a slot on it.
+        lookup_reached.recv_timeout(WAIT).unwrap();
+
+        // The release path runs while that caller is still in the window. It
+        // sees no permits held, and used to evict the entry on that alone.
+        drop(first);
+        drop(second);
+
+        release_lookup.send(()).unwrap();
+        let third = queued.join().unwrap();
+
+        // A fresh request for the same connection. If the third permit is
+        // counted against an evicted limit, this one starts from zero.
+        let fourth = limiter.acquire_for("connection-a", WAIT).unwrap();
+
+        assert!(
+            third.shares_a_limit_with(&fourth),
+            "two live permits for connection-a are counted against different \
+             limits, so the per-connection cap bounds neither"
+        );
+        let live = if third.shares_a_limit_with(&fourth) {
+            third.live_on_its_limit()
+        } else {
+            third.live_on_its_limit() + fourth.live_on_its_limit()
+        };
+        assert!(
+            live <= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION,
+            "connection-a has {live} Structured Operations live at once, and the \
+             cap is {MAX_STRUCTURED_OPERATIONS_PER_CONNECTION}"
+        );
+    }
+
+    /// Unit names a Remote Host printed. The Systemd view lists what it was
+    /// told, and opening a Log Stream sends that name back as the thing to
+    /// read, so a host that answers with a name of its own choosing is
+    /// choosing part of the next command.
+    const HOSTILE_UNIT_NAMES: [&str; 20] = [
+        "nginx.service; reboot",
+        "nginx.service && reboot",
+        "nginx.service | cat /etc/shadow",
+        "nginx.service`id`",
+        "nginx.service$(id)",
+        "nginx'.service",
+        "nginx\".service",
+        "nginx .service",
+        "nginx\t.service",
+        "nginx\n.service",
+        "nginx\r.service",
+        "nginx\\.service",
+        "../../etc/shadow.service",
+        "*.service",
+        "?.service",
+        "$HOME.service",
+        "nginx.service\u{0}",
+        "nginx.service\u{7}",
+        "nginx.servicé",
+        "nginx.unknown",
+    ];
+
+    /// The full chain for a host-controlled identifier: the host prints it, a
+    /// parser reads it, the model carries it, the user opens its logs, and a
+    /// command is built around it. The guard sits at the parser and again at
+    /// the request, and this pins both ends at once.
+    ///
+    /// Parser tests and command-builder tests each cover half of this. Neither
+    /// says that the value one produces is a value the other accepts.
+    #[test]
+    fn a_unit_name_a_host_invented_never_reaches_a_journal_command() {
+        for unit in HOSTILE_UNIT_NAMES {
+            // The listing parser filters on the unit type rather than the
+            // character class, so a name like this can reach the Systemd view
+            // and be clicked. The view repeats what the host said.
+            let listed = parse_systemd_units(&format!(
+                "Id={unit}\nDescription=x\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n"
+            ));
+
+            // Listed or not, opening its logs is refused, so it never becomes
+            // part of a command. This is the door the whole chain rests on.
+            assert!(
+                validate_systemd_unit_id(unit).is_err(),
+                "the log request accepted {unit:?} (listed: {})",
+                !listed.is_empty()
+            );
+
+            // The boot parser validates as it reads, because a slow-unit row is
+            // carried straight into a journal request for that unit. Its rows
+            // are `duration unit`, split on the last whitespace, so a name with
+            // whitespace in it is not a name that format can carry and is left
+            // out here rather than asserted about.
+            if unit.contains(char::is_whitespace) {
+                continue;
+            }
+            let slow = parse_slow_boot_units(&format!("__CR_SLOW__\n1.5s {unit}\n__CR_END__\n"));
+            assert!(
+                slow.map(|units| units.is_empty()).unwrap_or(true),
+                "slow boot units kept {unit:?}"
+            );
+        }
+    }
+
+    /// The command puts the identifier inside single quotes, so the property
+    /// that matters is that nothing the validator accepts can leave them. A
+    /// value with a quote in it would end the quoted word and turn the rest
+    /// into shell syntax.
+    #[test]
+    fn every_accepted_unit_id_stays_one_quoted_word_in_its_journal_command() {
+        let accepted = [
+            "nginx.service",
+            "ssh.service",
+            "user@1000.service",
+            "getty@tty1.service",
+            "systemd-journald.service",
+            "multi-user.target",
+            "dev-sda1.device",
+            "swapfile.swap",
+            "srv-data\\x2darchive.mount",
+            "docker.socket",
+            "logrotate.timer",
+            "system-getty.slice",
+            "session-3.scope",
+            "proc-sys-fs-binfmt_misc.automount",
+            "systemd-ask-password-wall.path",
+            "a.service",
+            // A unit name may start with a hyphen, and one that does is safe
+            // here for the same reason a hyphenated username is safe after
+            // ssh's `-l`: it sits inside the quoted argument of `-u`, and
+            // getopt consumes that entry whatever it looks like. Refusing
+            // these would make the validator the thing that blocks real units.
+            "--user.service",
+            "-u.service",
+        ];
+        // The longest name the validator allows, so the bound is exercised by
+        // the same property rather than only by a length check.
+        let longest = format!("{}.service", "n".repeat(255 - ".service".len()));
+
+        for unit in accepted
+            .iter()
+            .map(|unit| unit.to_string())
+            .chain([longest])
+        {
+            assert!(
+                validate_systemd_unit_id(&unit).is_ok(),
+                "{unit:?} is an ordinary unit name"
+            );
+            assert!(
+                !unit.contains('\''),
+                "{unit:?} would close the quoted word around it"
+            );
+
+            let command = journal_command(&unit, 200, false);
+            assert!(
+                command.contains(&format!("-u '{unit}'")),
+                "the unit is not the quoted argument of -u: {command}"
+            );
+            // Two quotes in the whole command, which are the ones this builder
+            // wrote around the identifier.
+            assert_eq!(
+                command.matches('\'').count(),
+                2,
+                "the command has quoting the builder did not write: {command}"
+            );
+        }
+    }
+
+    /// The same chain for containers. A container's own name is chosen by
+    /// whoever ran it, and Docker's listing repeats it back.
+    #[test]
+    fn a_container_id_a_host_invented_never_reaches_a_docker_command() {
+        for container in [
+            "abc123; reboot",
+            "abc123 && reboot",
+            "abc123`id`",
+            "abc123$(id)",
+            "abc'123",
+            "abc\"123",
+            "abc 123",
+            "abc\n123",
+            "-abc123",
+            "--rm",
+            "../abc123",
+            "*",
+            "$HOME",
+            "",
+        ] {
+            assert!(
+                validate_container_id(container).is_err(),
+                "the container request accepted {container:?}"
+            );
+        }
+
+        for container in [
+            "3f2b1c8a9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8",
+            "3F2B1C8A9D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8",
+            "web-1",
+            "my_app.service_1",
+            "a",
+        ] {
+            assert!(
+                validate_container_id(container).is_ok(),
+                "{container:?} is an ordinary container identifier"
+            );
+            let command = docker_log_command(container, 200, true);
+            assert!(
+                command.contains(&format!("'{container}'")),
+                "the container is not the quoted argument: {command}"
+            );
+            assert_eq!(command.matches('\'').count(), 2, "{command}");
+        }
+    }
+
+    /// The tail count is a fixed list the Settings page offers, not a number
+    /// the caller picks, so the request takes exactly that list and the
+    /// neighbours of each entry are refused. An unbounded tail is what turns a
+    /// bounded read into a transfer.
+    #[test]
+    fn a_log_tail_is_one_of_the_counts_the_app_offers() {
+        assert!(!LOG_TAIL_OPTIONS.is_empty());
+        for offered in LOG_TAIL_OPTIONS {
+            assert!(validate_tail(offered).is_ok(), "{offered} is offered");
+            for neighbour in [offered - 1, offered + 1] {
+                if LOG_TAIL_OPTIONS.contains(&neighbour) {
+                    continue;
+                }
+                assert!(
+                    validate_tail(neighbour).is_err(),
+                    "{neighbour} is not a count the app offers"
+                );
+            }
+        }
+        assert!(validate_tail(0).is_err());
+        assert!(validate_tail(u16::MAX).is_err());
     }
 
     #[test]

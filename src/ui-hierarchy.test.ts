@@ -21,6 +21,25 @@ function code(relativePath: string): string {
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
+/**
+ * Methods the app calls on the app window, found by following whatever the
+ * `getCurrentWindow()` result was bound to in each file that imports it.
+ */
+function calledWindowMethods(): string[] {
+  const called = new Set<string>();
+  for (const file of productionSources()) {
+    const source = readFileSync(file, "utf8");
+    if (!source.includes('from "@tauri-apps/api/window"')) continue;
+    for (const [, binding] of source.matchAll(/(\w+)\s*=[^;]*getCurrentWindow\(\)/g)) {
+      const call = new RegExp(String.raw`\b${binding}\.(\w+)\s*\(`, "g");
+      for (const [, method] of source.matchAll(call)) {
+        called.add(method);
+      }
+    }
+  }
+  return [...called].sort();
+}
+
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
 ) as { permissions: string[] };
@@ -257,6 +276,23 @@ describe("application hierarchy", () => {
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
     expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(5);
+  });
+
+  it("grants a native permission for every window control the frontend uses", () => {
+    // The same deny-by-default ACL that made baseline export dead on arrival.
+    // A window method with no matching permission fails only in a built app,
+    // and the tests here render the controls with a stub. Following the
+    // binding rather than naming the methods means a fourth control fails here
+    // instead of doing nothing when a user clicks it.
+    const called = calledWindowMethods();
+    expect(called).toEqual(["close", "minimize", "toggleMaximize"]);
+    for (const method of called) {
+      const permission = `core:window:allow-${method.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+      expect(
+        windowCapabilities.permissions,
+        `window.${method} is called but not permitted`,
+      ).toContain(permission);
+    }
   });
 
   it("grants a native permission for every dialog the frontend opens", () => {

@@ -23,7 +23,10 @@ const xterm = vi.hoisted(() => ({
   // the pty asked for the mouse.
   selection: "",
   mouseTrackingMode: "none",
+  // The handler xterm calls for typed input, so a test can type.
+  onData: null as ((data: string) => void) | null,
   reset() {
+    this.onData = null;
     this.oscHandlers = 0;
     this.clears = 0;
     this.writes = [];
@@ -66,7 +69,8 @@ vi.mock("@xterm/xterm", () => ({
     };
     loadAddon() {}
     open() {}
-    onData() {
+    onData(handler: (data: string) => void) {
+      xterm.onData = handler;
       return { dispose: () => undefined };
     }
     onBinary() {
@@ -374,6 +378,104 @@ describe("TerminalPane sessions", () => {
       expect(clipboard.readText).not.toHaveBeenCalled();
       expect(clipboard.writeText).not.toHaveBeenCalled();
     });
+  });
+
+  /// What reached `write_session`, in the order the calls were issued.
+  function writtenText(): string[] {
+    return api.writeSession.mock.calls.map(([, bytes]) =>
+      new TextDecoder().decode(bytes as Uint8Array),
+    );
+  }
+
+  // CR-AUDIT-004 asked whether terminal input can be reordered. It can, in the
+  // frontend, at the one moment the pane has two write paths open at once.
+  //
+  // Input typed before the session exists is queued. When the session starts,
+  // the queue is drained one awaited write at a time, but the session id is
+  // published first, so a keystroke landing mid-drain takes the direct path and
+  // is issued between two queued bytes. In a terminal, order is the whole
+  // contract: `rm -rf x` typed as three queued bytes and one live one is not
+  // the command the user typed.
+  it("delivers input typed during the pending drain after the input it queued", async () => {
+    let startSession: (started: { sessionId: string }) => void = () => {};
+    api.startSession.mockImplementation(
+      () => new Promise((resolve) => (startSession = resolve as typeof startSession)),
+    );
+    const writes: Array<() => void> = [];
+    api.writeSession.mockImplementation(
+      () => new Promise<void>((resolve) => writes.push(() => resolve())),
+    );
+
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(xterm.onData).toBeTruthy());
+
+    // Typed before the session exists, so both are queued.
+    xterm.onData?.("a");
+    xterm.onData?.("b");
+    expect(api.writeSession).not.toHaveBeenCalled();
+
+    startSession({ sessionId: "session-1" });
+    // The queue has started going out and none of its writes have come back.
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
+
+    // A keystroke now has a live session id and takes the direct path. It has
+    // to land behind everything already queued, whether or not those writes
+    // have been acknowledged yet.
+    xterm.onData?.("z");
+    for (const resolve of [...writes]) resolve();
+    await vi.waitFor(() => expect(writtenText().length).toBe(3));
+
+    expect(writtenText()).toEqual(["a", "b", "z"]);
+  });
+
+  /// Terminal bytes are the user's own keystrokes. Nothing between xterm and
+  /// the pty may normalise, re-encode, or drop them, so the exact bytes are
+  /// what the API is called with.
+  it("sends terminal input as its exact UTF-8 bytes", async () => {
+    api.startSession.mockResolvedValue({ sessionId: "session-1" });
+    api.writeSession.mockResolvedValue(undefined);
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
+    await vi.waitFor(() => expect(xterm.onData).toBeTruthy());
+
+    const typed = [
+      "a",
+      "\r",
+      "\n",
+      "", // Ctrl-C, which has to arrive as one byte and not a word
+      "[A", // an arrow key's escape sequence
+      "é",
+      "→",
+      "🙂",
+      " ",
+    ];
+    for (const data of typed) xterm.onData?.(data);
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(typed.length));
+
+    expect(writtenText()).toEqual(typed);
+    // And the encoding is UTF-8 rather than UTF-16 code units, which is what
+    // the pty on the other side reads.
+    const emoji = api.writeSession.mock.calls.at(-2)?.[1] as Uint8Array;
+    expect(Array.from(emoji)).toEqual([0xf0, 0x9f, 0x99, 0x82]);
+  });
+
+  /// A large paste is one write, not one per character. Splitting it would put
+  /// the pty's own line discipline between the pieces.
+  it("sends a large paste as a single write", async () => {
+    const pasted = "echo ".concat("x".repeat(20_000), "\r");
+    clipboard.readText.mockResolvedValue(pasted);
+    api.startSession.mockResolvedValue({ sessionId: "session-1" });
+    api.writeSession.mockResolvedValue(undefined);
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
+
+    const container = document.querySelector(".terminal-container") as HTMLElement;
+    container.dispatchEvent(new MouseEvent("mousedown", { button: 2, bubbles: true }));
+    container.dispatchEvent(
+      new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true }),
+    );
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
+    expect(writtenText()).toEqual([pasted]);
   });
 
   it("gives a running terminal nothing to press", async () => {

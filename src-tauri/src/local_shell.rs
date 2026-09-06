@@ -28,6 +28,15 @@ impl ResolvedLocalShell {
     pub fn label(&self) -> &'static str {
         self.kind.label()
     }
+
+    /// The resolved executable, for tests that need to run a discovered shell
+    /// outside the pty. Test-only on purpose: in a real build there is still no
+    /// way for anything to read or choose the program, which is what keeps
+    /// `command_for` the only way a local shell is started.
+    #[cfg(test)]
+    pub(crate) fn program(&self) -> &Path {
+        &self.program
+    }
 }
 
 /// The Windows locations discovery is allowed to look at, captured once so

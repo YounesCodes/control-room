@@ -2757,6 +2757,579 @@ mod tests {
         );
     }
 
+    /// A downgrade must not touch a database a newer release wrote. Its tables
+    /// can hold columns and shapes this build does not understand, and the
+    /// migration steps would run against them. Refusing outright is what keeps
+    /// a downgrade from being a data loss.
+    #[test]
+    fn a_database_from_a_newer_release_is_refused_rather_than_migrated() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(&format!(
+                    "CREATE TABLE saved_connections (id TEXT PRIMARY KEY);
+                     PRAGMA user_version = {};",
+                    LATEST_SCHEMA_VERSION + 1
+                ))
+                .unwrap();
+        }
+
+        let error = Database::open(&path)
+            .err()
+            .expect("a newer schema must not open");
+        assert!(
+            error.contains("newer than this app supports"),
+            "unexpected error: {error}"
+        );
+
+        // And it left the file alone.
+        let connection = Connection::open(&path).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_SCHEMA_VERSION + 1);
+    }
+
+    /// Opening the same database twice runs the migration twice. The second
+    /// pass has to be a no-op: a step that re-ran would drop or reset whatever
+    /// it created the first time.
+    #[test]
+    fn opening_an_up_to_date_database_again_changes_nothing() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+
+        let first = Database::open(&path).unwrap();
+        let saved = first.create_connection(input("Laptop")).unwrap();
+        first
+            .save_host_baseline(&baseline_for(
+                &saved.id,
+                "baseline-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        let schema = schema_of(&path);
+        drop(first);
+
+        let second = Database::open(&path).unwrap();
+        assert_eq!(
+            schema_of(&path),
+            schema,
+            "the second open altered the schema"
+        );
+        assert_eq!(second.list_connections().unwrap().len(), 1);
+        assert_eq!(second.list_host_baselines(&saved.id).unwrap().len(), 1);
+        drop(second);
+
+        let third = Database::open(&path).unwrap();
+        assert_eq!(third.list_connections().unwrap().len(), 1);
+        assert_eq!(third.list_host_baselines(&saved.id).unwrap().len(), 1);
+    }
+
+    /// `user_version` 7 was held for a feature that never merged. Renumbering a
+    /// later step into the gap would re-run it on every install already past
+    /// it, and for step 8 that means recreating the baseline table. The gap is
+    /// permanent, and this is what says so to whoever tries to tidy it.
+    #[test]
+    fn the_unused_schema_version_stays_unused() {
+        let migrations = include_str!("database.rs")
+            .split_once("fn migrate(")
+            .expect("migrate is missing")
+            .1
+            .split_once("fn map_connection(")
+            .expect("migrate is not terminated")
+            .0;
+
+        assert!(
+            !migrations.contains("PRAGMA user_version = 7"),
+            "step 7 was never released, so no database reports it"
+        );
+        for released in [1, 2, 3, 4, 5, 6, 8, 9] {
+            assert!(
+                migrations.contains(&format!("PRAGMA user_version = {released}")),
+                "migration step {released} disappeared"
+            );
+        }
+        assert_eq!(LATEST_SCHEMA_VERSION, 9);
+    }
+
+    /// A Saved Connection owns everything collected about that host. Deleting
+    /// it has to take all of it, or a later connection could surface a
+    /// stranger's history and baselines.
+    #[test]
+    fn deleting_a_connection_takes_everything_collected_about_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+
+        database
+            .add_history(HistoryInput {
+                connection_id: saved.id.clone(),
+                session_id: "session-a".into(),
+                command: "uptime".into(),
+                cwd: Some("/srv".into()),
+                started_at: "2026-09-01T10:00:00Z".into(),
+                finished_at: None,
+                exit_code: Some(0),
+                shell: "bash".into(),
+            })
+            .unwrap();
+        database
+            .save_capabilities(&HostCapabilities {
+                connection_id: saved.id.clone(),
+                ..HostCapabilities::default()
+            })
+            .unwrap();
+        database
+            .save_host_baseline(&baseline_for(
+                &saved.id,
+                "baseline-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "connection".into(),
+                owner_id: saved.id.clone(),
+                connection_id: Some(saved.id.clone()),
+                text: "restart notes".into(),
+            })
+            .unwrap();
+
+        database.delete_connection(&saved.id).unwrap();
+
+        assert!(
+            database
+                .list_history(&saved.id, None, 50)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+        assert!(database.list_host_baselines(&saved.id).unwrap().is_empty());
+
+        // Every table that names a connection is drained, not only the ones
+        // this test happens to write to.
+        let connection = database.connection.lock();
+        let tables = tables_referencing_connections(&connection);
+        assert!(
+            tables.len() >= 4,
+            "expected several owned tables: {tables:?}"
+        );
+        for table in tables {
+            let rows: i64 = connection
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(rows, 0, "{table} kept rows for a deleted connection");
+        }
+    }
+
+    /// Restore reads whatever is on disk, including what an interrupted write
+    /// or an older bug left there. A payload it cannot trust is dropped and the
+    /// app starts with no Workspaces, rather than failing to start at all.
+    #[test]
+    fn workspace_state_that_cannot_be_trusted_is_discarded_rather_than_fatal() {
+        let workspace_id = Uuid::new_v4().to_string();
+        let other_id = Uuid::new_v4().to_string();
+        let connection_id = Uuid::new_v4().to_string();
+        let remote = |id: &str| {
+            format!(
+                r#"{{"id":"{id}","label":null,"connectionId":"{connection_id}","view":"terminal","historyPaused":false}}"#
+            )
+        };
+
+        let corrupt = [
+            ("truncated json", "{\"workspaces\":[".to_string()),
+            ("not json at all", "\u{1}\u{2}garbage".to_string()),
+            (
+                "a layout naming a Workspace that is gone",
+                format!(
+                    r#"{{"workspaces":[{}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"leaf","workspaceId":"{other_id}"}}}}"#,
+                    remote(&workspace_id)
+                ),
+            ),
+            (
+                "an active Workspace that is gone",
+                format!(
+                    r#"{{"workspaces":[{}],"activeWorkspaceId":"{other_id}","terminalLayout":null}}"#,
+                    remote(&workspace_id)
+                ),
+            ),
+            (
+                "two Workspaces sharing an id",
+                format!(
+                    r#"{{"workspaces":[{},{}],"activeWorkspaceId":"{workspace_id}","terminalLayout":null}}"#,
+                    remote(&workspace_id),
+                    remote(&workspace_id)
+                ),
+            ),
+            (
+                "a split direction the app does not have",
+                format!(
+                    r#"{{"workspaces":[{}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"split","direction":"diagonal","first":{{"kind":"leaf","workspaceId":"{workspace_id}"}},"second":{{"kind":"leaf","workspaceId":"{workspace_id}"}}}}}}"#,
+                    remote(&workspace_id)
+                ),
+            ),
+        ];
+
+        for (name, payload) in corrupt {
+            let directory = tempfile::tempdir().unwrap();
+            let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+            database
+                .connection
+                .lock()
+                .execute(
+                    "INSERT INTO application_settings (key, value) VALUES ('workspace_state', ?1)",
+                    [payload],
+                )
+                .unwrap();
+
+            assert_eq!(
+                database.get_workspace_state().unwrap(),
+                PersistedWorkspaceState::default(),
+                "{name} should restore as no Workspaces"
+            );
+
+            // And the unusable payload is gone, so it is not re-read on every
+            // start for the life of the install.
+            let remaining: i64 = database
+                .connection
+                .lock()
+                .query_row(
+                    "SELECT COUNT(*) FROM application_settings WHERE key = 'workspace_state'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(
+                remaining, 0,
+                "{name} was left on disk, so it is re-read on every start"
+            );
+        }
+
+        // An empty JSON array is the one payload that is not rejected: serde
+        // reads a struct from a sequence, so it fills every field with its
+        // default. That is a valid empty state, and restoring as no Workspaces
+        // is the right answer for it too.
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES ('workspace_state', '[]')",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            database.get_workspace_state().unwrap(),
+            PersistedWorkspaceState::default()
+        );
+    }
+
+    /// Split nesting is bounded because restore walks it recursively. The bound
+    /// is checked at its edges, since an off-by-one here is either a stack
+    /// overflow on load or a layout the user built and cannot reopen.
+    #[test]
+    fn split_nesting_is_accepted_up_to_its_bound_and_refused_past_it() {
+        let workspace_id = Uuid::new_v4().to_string();
+        let nested = |depth: usize| {
+            let mut layout = PersistedTerminalLayout::Leaf {
+                workspace_id: workspace_id.clone(),
+            };
+            for _ in 0..depth {
+                layout = PersistedTerminalLayout::Split {
+                    direction: "vertical".into(),
+                    first: Box::new(PersistedTerminalLayout::Leaf {
+                        workspace_id: workspace_id.clone(),
+                    }),
+                    second: Box::new(layout),
+                };
+            }
+            PersistedWorkspaceState {
+                workspaces: vec![crate::models::PersistedWorkspace {
+                    id: workspace_id.clone(),
+                    label: None,
+                    connection_id: Some(Uuid::new_v4().to_string()),
+                    local_shell_id: None,
+                    view: "terminal".into(),
+                    history_paused: false,
+                }],
+                active_workspace_id: Some(workspace_id.clone()),
+                terminal_layout: Some(layout),
+            }
+        };
+
+        assert!(validate_workspace_state(&nested(15)).is_ok());
+        assert!(validate_workspace_state(&nested(16)).is_ok());
+        assert_eq!(
+            validate_workspace_state(&nested(17)).unwrap_err(),
+            "Terminal split layout is too deeply nested"
+        );
+    }
+
+    /// Both split directions round-trip, because a horizontal split that came
+    /// back vertical would rearrange a saved Workspace without saying so.
+    #[test]
+    fn both_split_directions_survive_a_restart() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let left = Uuid::new_v4().to_string();
+        let right = Uuid::new_v4().to_string();
+        let pane = |id: &str, connection_id: Option<String>, shell: Option<String>| {
+            crate::models::PersistedWorkspace {
+                id: id.into(),
+                label: None,
+                connection_id,
+                local_shell_id: shell,
+                view: "terminal".into(),
+                history_paused: false,
+            }
+        };
+
+        for direction in ["horizontal", "vertical"] {
+            let state = PersistedWorkspaceState {
+                // One remote and one local pane in the same split, which is the
+                // mixed Workspace the tab strip actually produces.
+                workspaces: vec![
+                    pane(&left, Some(saved.id.clone()), None),
+                    pane(&right, None, Some("git-bash".into())),
+                ],
+                active_workspace_id: Some(right.clone()),
+                terminal_layout: Some(PersistedTerminalLayout::Split {
+                    direction: direction.into(),
+                    first: Box::new(PersistedTerminalLayout::Leaf {
+                        workspace_id: left.clone(),
+                    }),
+                    second: Box::new(PersistedTerminalLayout::Split {
+                        direction: direction.into(),
+                        first: Box::new(PersistedTerminalLayout::Leaf {
+                            workspace_id: right.clone(),
+                        }),
+                        second: Box::new(PersistedTerminalLayout::Leaf {
+                            workspace_id: left.clone(),
+                        }),
+                    }),
+                }),
+            };
+
+            database.save_workspace_state(&state).unwrap();
+            assert_eq!(
+                database.get_workspace_state().unwrap(),
+                state,
+                "{direction}"
+            );
+        }
+    }
+
+    /// Restored Workspaces come back disconnected, so nothing persisted may
+    /// describe a Terminal Session. A session id or a live state on disk is
+    /// what an auto-reconnect would be built out of.
+    #[test]
+    fn nothing_a_workspace_persists_describes_a_running_session() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let workspace_id = Uuid::new_v4().to_string();
+        database
+            .save_workspace_state(&PersistedWorkspaceState {
+                workspaces: vec![crate::models::PersistedWorkspace {
+                    id: workspace_id.clone(),
+                    label: Some("Deploy".into()),
+                    connection_id: Some(saved.id),
+                    local_shell_id: None,
+                    view: "terminal".into(),
+                    history_paused: false,
+                }],
+                active_workspace_id: Some(workspace_id.clone()),
+                terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
+            })
+            .unwrap();
+
+        let payload: String = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'workspace_state'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        for forbidden in ["sessionId", "session_id", "connected", "running", "pid"] {
+            assert!(
+                !payload.contains(forbidden),
+                "persisted Workspace state carries {forbidden:?}: {payload}"
+            );
+        }
+    }
+
+    /// Nothing Control Room stores is a credential or a transcript. This reads
+    /// the schema rather than the code, so a column added to hold one fails
+    /// here whatever the comment above it says.
+    #[test]
+    fn no_persisted_column_exists_to_hold_a_secret_or_a_transcript() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let connection = database.connection.lock();
+
+        let mut statement = connection
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .unwrap();
+        let tables: Vec<String> = statement
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert!(tables.len() > 5, "the schema did not load: {tables:?}");
+
+        for table in &tables {
+            let mut columns = connection
+                .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+                .unwrap();
+            for column in columns
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+            {
+                let name = column.to_ascii_lowercase();
+                for forbidden in [
+                    "password",
+                    "passphrase",
+                    "secret",
+                    "credential",
+                    "private_key",
+                    "key_material",
+                    "terminal_output",
+                    "log_output",
+                    "installer",
+                ] {
+                    assert!(
+                        !name.contains(forbidden),
+                        "{table}.{column} looks like storage for something \
+                         Control Room must never persist"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A one-shot sudo password reaches Rust as a request argument and dies
+    /// with the request. This walks the raw database file after every write
+    /// path has run, because a value that never reached a column can still sit
+    /// in a page a delete left behind.
+    #[test]
+    fn a_full_round_of_writes_leaves_no_credential_in_the_database_file() {
+        const SECRET: &str = "CONTROL-ROOM-FAKE-SUDO-PASSWORD";
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+
+        // Everything a Workspace writes while the user works. None of these
+        // take a credential, which is the point.
+        database
+            .add_history(HistoryInput {
+                connection_id: saved.id.clone(),
+                session_id: "session-a".into(),
+                command: "sudo -v".into(),
+                cwd: Some("/root".into()),
+                started_at: "2026-09-01T10:00:00Z".into(),
+                finished_at: Some("2026-09-01T10:00:01Z".into()),
+                exit_code: Some(0),
+                shell: "bash".into(),
+            })
+            .unwrap();
+        database
+            .save_capabilities(&HostCapabilities {
+                connection_id: saved.id.clone(),
+                ..HostCapabilities::default()
+            })
+            .unwrap();
+        database
+            .save_host_baseline(&baseline_for(
+                &saved.id,
+                "baseline-a",
+                "2026-09-01T10:00:00Z",
+            ))
+            .unwrap();
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "global".into(),
+                owner_id: "global".into(),
+                connection_id: None,
+                text: "deploy checklist".into(),
+            })
+            .unwrap();
+        database.save_settings(&AppSettings::default()).unwrap();
+        database
+            .set_app_metadata("pending_update_version", "0.7.2")
+            .unwrap();
+        drop(database);
+
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(
+            !bytes
+                .windows(SECRET.len())
+                .any(|window| window == SECRET.as_bytes()),
+            "a credential reached the database file"
+        );
+        // The fixture is real, so a search that could never match is not what
+        // made this pass.
+        assert!(
+            bytes.windows(6).any(|window| window == b"Laptop"),
+            "the file did not contain what was written to it"
+        );
+    }
+
+    fn schema_of(path: &std::path::Path) -> Vec<String> {
+        let connection = Connection::open(path).unwrap();
+        let mut statement = connection
+            .prepare("SELECT type, name, sql FROM sqlite_master ORDER BY type, name")
+            .unwrap();
+        statement
+            .query_map([], |row| {
+                Ok(format!(
+                    "{}:{}:{}",
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?.unwrap_or_default()
+                ))
+            })
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    }
+
+    fn tables_referencing_connections(connection: &Connection) -> Vec<String> {
+        let mut statement = connection
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .unwrap();
+        let tables: Vec<String> = statement
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        tables
+            .into_iter()
+            .filter(|table| {
+                let mut keys = connection
+                    .prepare(&format!(
+                        "SELECT \"table\" FROM pragma_foreign_key_list('{table}')"
+                    ))
+                    .unwrap();
+                keys.query_map([], |row| row.get::<_, String>(0))
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .any(|target| target == "saved_connections")
+            })
+            .collect()
+    }
+
     #[test]
     fn every_frontend_workspace_view_is_accepted() {
         let types = std::fs::read_to_string(
