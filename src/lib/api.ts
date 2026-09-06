@@ -37,12 +37,19 @@ import type {
 
 /// A last-resort guard so a Structured Operation that never answers cannot
 /// leave a pane loading forever. Rust owns the real budget: a command waits up
-/// to `MAX_STRUCTURED_QUEUE_WAIT` for a per-connection slot and then runs for at
-/// most `COMMAND_TIMEOUT`. This has to stay above that sum, or the generic
-/// message below replaces the classified failure Rust would have returned and
-/// the user loses the reason. `api-timeout.test.ts` pins the relationship
-/// against the Rust constants.
-export const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
+/// to `MAX_STRUCTURED_QUEUE_WAIT` (4s) for a per-connection slot and then runs
+/// for at most `COMMAND_TIMEOUT` (20s). This has to stay above that sum, or the
+/// generic message below replaces the classified failure Rust would have
+/// returned and the user loses the reason.
+///
+/// The extra six seconds are deliberate, not rounding. Rust's 24s is the
+/// nominal budget; reaching the caller also costs process spawn, and on the
+/// timeout path `run_ssh` kills the child, waits for it, and joins both reader
+/// threads, which finish only once the OS closes the pipes. None of that
+/// cleanup is itself bounded, so the backstop leaves room for it and for
+/// scheduling variance instead of racing it.
+/// `api-timeout.test.ts` pins the relationship against the Rust constants.
+export const REMOTE_INSPECTION_TIMEOUT_MS = 30_000;
 const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
 const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
 

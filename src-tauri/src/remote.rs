@@ -78,12 +78,18 @@ impl RemoteOperationLimiter {
             .entry(connection_id.clone())
             .or_default()
             .clone();
+        // One deadline for the whole attempt, so `maximum_wait` is the total
+        // time spent queued rather than the time between two wake-ups. Waking
+        // early is normal here: a permit is released, and another waiter can
+        // take the freed slot first. Waiting again for a fresh `maximum_wait`
+        // each time left total queue time unbounded, which let the frontend
+        // backstop fire before Rust could report why the operation failed.
+        let deadline = Instant::now() + maximum_wait;
         let mut active = host.active.lock();
         while *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
-            if host
-                .available
-                .wait_for(&mut active, maximum_wait)
-                .timed_out()
+            // A deadline already in the past returns `timed_out` immediately,
+            // so a spent budget never starts another wait.
+            if host.available.wait_until(&mut active, deadline).timed_out()
                 && *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
             {
                 drop(active);
@@ -94,7 +100,10 @@ impl RemoteOperationLimiter {
                 if remove {
                     hosts.remove(&connection_id);
                 }
-                return Err("Remote operation queue was busy for 4 seconds".into());
+                return Err(format!(
+                    "Remote operation queue was busy for {} seconds",
+                    MAX_STRUCTURED_QUEUE_WAIT.as_secs()
+                ));
             }
         }
         *active += 1;
@@ -109,6 +118,15 @@ impl RemoteOperationLimiter {
     #[cfg(test)]
     fn tracked_connections(&self) -> usize {
         self.hosts.lock().len()
+    }
+
+    /// Wakes everything queued on one connection without freeing a slot, so a
+    /// test can reproduce the wake-up that finds the queue still full.
+    #[cfg(test)]
+    fn wake_waiters(&self, connection_id: &str) {
+        if let Some(host) = self.hosts.lock().get(connection_id) {
+            host.available.notify_all();
+        }
     }
 }
 
@@ -3133,9 +3151,101 @@ __CONTROL_ROOM_PROCESS_UNITS__
             .err()
             .expect("the third operation should time out");
 
+        // The message names the bound callers actually get, which is always
+        // `MAX_STRUCTURED_QUEUE_WAIT`. Only tests shorten the wait.
         assert_eq!(error, "Remote operation queue was busy for 4 seconds");
         drop(first);
         drop(second);
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    /// `MAX_STRUCTURED_QUEUE_WAIT` is a total budget, not a gap between
+    /// wake-ups. Waiting again for a full budget after every notification left
+    /// queue time unbounded, so a caller could sit here far longer than the
+    /// frontend backstop allows and lose Rust's real error. Waking the queue
+    /// repeatedly while both slots stay held reproduces exactly that.
+    #[test]
+    fn waking_a_queued_operation_does_not_extend_its_deadline() {
+        const WAIT: Duration = Duration::from_millis(200);
+        let limiter = Arc::new(RemoteOperationLimiter::default());
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+
+        let finished = Arc::new(AtomicBool::new(false));
+        let waiter = thread::spawn({
+            let limiter = limiter.clone();
+            let finished = finished.clone();
+            move || {
+                let started = Instant::now();
+                let outcome = limiter.acquire_for("connection-a", WAIT);
+                finished.store(true, Ordering::SeqCst);
+                (outcome.is_err(), started.elapsed())
+            }
+        });
+
+        // Wake far longer than one budget, at a gap well under it. The old
+        // implementation restarted the wait on every notification and only
+        // expired once these stopped.
+        let churn_until = Instant::now() + WAIT * 8;
+        while Instant::now() < churn_until && !finished.load(Ordering::SeqCst) {
+            thread::sleep(WAIT / 5);
+            limiter.wake_waiters("connection-a");
+        }
+
+        let (timed_out, elapsed) = waiter.join().unwrap();
+        assert!(timed_out, "the queued operation should have timed out");
+        // Generous against CI scheduling, still far below the old behaviour,
+        // which could not finish before the churn window closed at 8 budgets.
+        assert!(
+            elapsed < WAIT * 4,
+            "queue wait was not bounded by its deadline: {elapsed:?}"
+        );
+
+        drop(first);
+        drop(second);
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    #[test]
+    fn a_queued_operation_acquires_a_slot_freed_before_its_deadline() {
+        const WAIT: Duration = Duration::from_secs(5);
+        let limiter = Arc::new(RemoteOperationLimiter::default());
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+
+        let waiter = thread::spawn({
+            let limiter = limiter.clone();
+            move || limiter.acquire_for("connection-a", WAIT).is_ok()
+        });
+
+        thread::sleep(Duration::from_millis(50));
+        drop(first);
+
+        assert!(
+            waiter.join().unwrap(),
+            "a slot freed inside the budget should be handed to the waiter"
+        );
+        drop(second);
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    /// A connection that timed out must not stay in the map once its permits
+    /// are released, and reusing the id afterwards must not leak an entry.
+    #[test]
+    fn the_limiter_forgets_a_connection_after_a_timeout_and_a_success() {
+        const WAIT: Duration = Duration::from_millis(50);
+        let limiter = RemoteOperationLimiter::default();
+
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+        assert!(limiter.acquire_for("connection-a", WAIT).is_err());
+        assert_eq!(limiter.tracked_connections(), 1);
+
+        drop(first);
+        drop(second);
+        assert_eq!(limiter.tracked_connections(), 0);
+
+        drop(limiter.acquire_for("connection-a", WAIT).unwrap());
         assert_eq!(limiter.tracked_connections(), 0);
     }
 
