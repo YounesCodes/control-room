@@ -3,7 +3,7 @@ use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
 use crate::{
     baselines::{self, BaselineCaptureRegistry, SectionReporter},
-    database::{Database, validate_connection_input},
+    database::{Database, normalize_optional, validate_connection_input},
     history, local_shell,
     models::{
         AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
@@ -60,15 +60,9 @@ fn validated_test_connection(input: SavedConnectionInput) -> Result<SavedConnect
         id: "connection-test".into(),
         display_name: input.display_name.trim().into(),
         destination: input.destination.trim().into(),
-        username: input
-            .username
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty()),
+        username: normalize_optional(input.username),
         port: input.port,
-        identity_file: input
-            .identity_file
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty()),
+        identity_file: normalize_optional(input.identity_file),
         history_enabled: false,
         sudo_enabled: false,
         group_id: None,
@@ -1009,6 +1003,29 @@ mod tests {
         assert_eq!(connection.destination, "host-alias");
         assert_eq!(connection.username.as_deref(), Some("user"));
         assert!(!connection.history_enabled);
+    }
+
+    /// Testing an unsaved connection has to normalize exactly the way saving
+    /// one does, or the destination the user tested is not the destination
+    /// stored a moment later. Blank optional fields collapse to `None` rather
+    /// than to an empty string that would reach SSH argument construction.
+    #[test]
+    fn testing_a_connection_blanks_optional_fields_the_way_saving_does() {
+        let connection = validated_test_connection(SavedConnectionInput {
+            display_name: "Test host".into(),
+            destination: "host-alias".into(),
+            username: Some("user".into()),
+            port: None,
+            identity_file: Some("   ".into()),
+            history_enabled: false,
+            sudo_enabled: false,
+            group_id: None,
+            tag_names: Vec::new(),
+        })
+        .unwrap();
+
+        assert_eq!(connection.identity_file, None);
+        assert_eq!(connection.port, None);
     }
 
     #[test]

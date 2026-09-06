@@ -554,8 +554,6 @@ pub struct AppSettings {
     pub terminal_font_family: String,
     pub terminal_font_size: u16,
     pub terminal_scrollback: u32,
-    /// Pastes the clipboard on a right click in the terminal. Off by default,
-    /// because a right click otherwise belongs to the webview menu.
     pub terminal_foreground: String,
     pub terminal_red: String,
     pub terminal_green: String,
@@ -568,8 +566,10 @@ pub struct AppSettings {
     /// Allows sudo for Structured Operations on every Saved Connection. While
     /// this is on, the per-connection flag has nothing left to decide.
     pub global_sudo_enabled: bool,
-    /// Checks GitHub Releases for a newer Control Room shortly after start and
-    /// twice a day after that. This updates Control Room itself and has nothing
+    /// Checks GitHub Releases for a newer Control Room shortly after start,
+    /// roughly hourly while the app stays open, and when the window returns to
+    /// the foreground after a long enough absence. The schedule itself lives in
+    /// `src/lib/app-update.ts`. This updates Control Room itself and has nothing
     /// to do with packages on a Remote Host, which Control Room never touches.
     /// Turning it off leaves the manual check in Settings working.
     pub automatic_update_checks: bool,
