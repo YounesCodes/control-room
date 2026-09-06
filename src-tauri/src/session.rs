@@ -111,6 +111,28 @@ impl TerminalFailureDetector {
             .rev()
             .collect();
     }
+
+    /// Whether the frontend should be told this session connected.
+    ///
+    /// The marker settles this on its own. Only the remote command can print
+    /// it, so reaching it proves ssh authenticated, opened its channel, and
+    /// started the shell, and no phrase found alongside it can unsay that.
+    ///
+    /// This used to also require `hint` to be empty, which a pty read makes
+    /// unsafe: reads carry no message boundary, so one chunk routinely holds
+    /// the marker together with the login banner and the shell's first output.
+    /// An MOTD script failing with "Permission denied" lands in the same
+    /// `observe` call as the marker and matches the same phrase ssh uses for a
+    /// rejected key. Because `hint` is sticky, that left the session
+    /// unestablished for its whole life: never reported connected, and its
+    /// ordinary exit classified through the SSH startup categories.
+    ///
+    /// Establishment is not health. A hint still decides how the session ends,
+    /// and `classify_session_exit` is where a startup-only hint stops counting
+    /// once this returns true.
+    fn established(&self) -> bool {
+        self.connected
+    }
 }
 
 impl OutputFlow {
@@ -288,14 +310,12 @@ impl SessionManager {
                         // the Saved Connection, is remote-only work. A local
                         // shell is running the moment its process starts.
                         if let SessionMode::Ssh(remote) = &output_managed.mode {
-                            let (startup_failure, connected) = {
+                            let established = {
                                 let mut detector = remote.failure_detector.lock();
                                 detector.observe(&buffer[..count]);
-                                (detector.hint.is_some(), detector.connected)
+                                detector.established()
                             };
-                            if connected
-                                && !startup_failure
-                                && !remote.connected_emitted.swap(true, Ordering::AcqRel)
+                            if established && !remote.connected_emitted.swap(true, Ordering::AcqRel)
                             {
                                 let _ = output_app
                                     .state::<Database>()
@@ -682,6 +702,101 @@ mod tests {
             ),
             ("disconnected", Some("user-disconnect".into()), None)
         );
+    }
+
+    /// A pty read carries no message boundary, so one chunk routinely holds the
+    /// marker together with the login banner and the shell's first output. On a
+    /// Debian host an MOTD script that cannot read something fails with
+    /// "Permission denied" right there, in the same `observe` call that sees the
+    /// marker.
+    ///
+    /// Gating the transition on `hint` therefore lost the whole session: the
+    /// hint is sticky, so `established` stayed false for its entire life, the
+    /// frontend was never told it connected, and its ordinary exit went back
+    /// through the SSH startup categories. That is the case CR-AUDIT-002 exists
+    /// to prevent.
+    #[test]
+    fn a_startup_phrase_in_the_marker_chunk_does_not_block_establishment() {
+        let mut detector = TerminalFailureDetector::default();
+        detector.observe(
+            format!(
+                "{CONNECTED_MARKER}Welcome to Debian\r\n\
+                 run-parts: /etc/update-motd.d/50-motd-news: Permission denied\r\n"
+            )
+            .as_bytes(),
+        );
+
+        assert!(detector.connected, "the marker is in this chunk");
+        assert_eq!(
+            detector.hint,
+            Some(TerminalFailureHint::Authentication),
+            "the phrase still matches, which is exactly why the marker has to win"
+        );
+        assert!(
+            detector.established(),
+            "reaching the marker proves ssh authenticated and ran the remote command"
+        );
+
+        let (state, category, _) =
+            classify_session_exit(false, None, false, 1, detector.hint, detector.established());
+        assert_eq!(state, "disconnected");
+        assert_eq!(category.as_deref(), Some("remote-exit"));
+    }
+
+    /// The marker settles establishment, not health. A connection lost in that
+    /// same chunk still has to reach the user as a failure.
+    #[test]
+    fn losing_the_connection_in_the_marker_chunk_is_still_an_error() {
+        let mut detector = TerminalFailureDetector::default();
+        detector.observe(
+            format!("{CONNECTED_MARKER}client_loop: send disconnect: Connection reset\r\n")
+                .as_bytes(),
+        );
+
+        assert!(detector.established());
+        assert_eq!(detector.hint, Some(TerminalFailureHint::ConnectionLost));
+
+        let (state, category, _) = classify_session_exit(
+            false,
+            None,
+            false,
+            255,
+            detector.hint,
+            detector.established(),
+        );
+        assert_eq!(state, "error");
+        assert_eq!(category.as_deref(), Some("connection-lost"));
+    }
+
+    /// A shell that exits cleanly says so whether or not it was established,
+    /// because success short-circuits ahead of every hint.
+    #[test]
+    fn a_clean_remote_shell_exit_is_a_plain_disconnect() {
+        for connected in [true, false] {
+            assert_eq!(
+                classify_session_exit(false, None, true, 0, None, connected),
+                ("disconnected", Some("remote-exit".into()), None),
+                "connected: {connected}"
+            );
+        }
+    }
+
+    /// A session that never reaches the marker is never established, whatever
+    /// else the stream contains.
+    #[test]
+    fn a_failed_startup_is_never_established() {
+        for diagnostic in [
+            "user@host: Permission denied (publickey).",
+            "ssh: Could not resolve hostname host: Name or service not known",
+            "ssh: connect to host port 22: Connection refused",
+            "ssh: connect to host port 22: Connection timed out",
+            "Host key verification failed.",
+        ] {
+            let mut detector = TerminalFailureDetector::default();
+            detector.observe(diagnostic.as_bytes());
+            assert!(!detector.established(), "{diagnostic}");
+            assert!(detector.hint.is_some(), "{diagnostic}");
+        }
     }
 
     /// A shell that reached the connected marker authenticated and started.
