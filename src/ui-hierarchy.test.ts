@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
@@ -24,6 +24,32 @@ function code(relativePath: string): string {
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
 ) as { permissions: string[] };
+
+/** Every production `.ts`/`.tsx` file under `src`, tests excluded. */
+function productionSources(directory = new URL("./", import.meta.url)): URL[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory()) return productionSources(new URL(`${entry.name}/`, directory));
+    if (!/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) return [];
+    return [new URL(entry.name, directory)];
+  });
+}
+
+/** Dialog-plugin functions the frontend actually imports, across all of `src`. */
+function importedDialogFunctions(): string[] {
+  const named = new Set<string>();
+  for (const file of productionSources()) {
+    const source = readFileSync(file, "utf8");
+    for (const [, clause] of source.matchAll(
+      /import\s*\{([^}]*)\}\s*from\s*"@tauri-apps\/plugin-dialog"/g,
+    )) {
+      for (const specifier of clause.split(",")) {
+        const name = specifier.split(/\bas\b/)[0].trim();
+        if (name) named.add(name);
+      }
+    }
+  }
+  return [...named].sort();
+}
 
 describe("application hierarchy", () => {
   it("does not repeat Workspace identity in extra headers or a status rail", () => {
@@ -231,6 +257,23 @@ describe("application hierarchy", () => {
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
     expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(5);
+  });
+
+  it("grants a native permission for every dialog the frontend opens", () => {
+    // Tauri's ACL is deny-by-default, so a plugin call with no matching
+    // permission fails at runtime rather than at build time and nothing in the
+    // test suite notices: the frontend mocks the plugin, and Rust never sees
+    // the call. Baseline export shipped that way, calling `save` while only
+    // `open` was granted. Deriving the expectation from the imports means the
+    // next dialog added to the app fails here instead of in the user's hands.
+    const imported = importedDialogFunctions();
+    expect(imported.length).toBeGreaterThan(0);
+    for (const name of imported) {
+      expect(
+        windowCapabilities.permissions,
+        `dialog.${name} is called but not permitted`,
+      ).toContain(`dialog:allow-${name}`);
+    }
   });
 
   it("puts the update control left of Settings without touching the window controls", () => {
