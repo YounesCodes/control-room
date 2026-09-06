@@ -17,6 +17,21 @@ updates:
         update-types:
           - minor
           - patch
+    # Targeted compatibility boundaries, not a blanket major-version freeze.
+    # Minor and patch updates for both still flow through npm-routine, and
+    # every other dependency still gets its own major-update pull request.
+    # Remove each fence when its migration is done deliberately:
+    #   @types/node - tied to the Node 22 baseline the workflows run on, so
+    #     the types major moves with the runtime rather than ahead of it.
+    #   typescript  - typescript-eslint 8.69.0 requires >=4.8.4 <6.1.0, so a
+    #     TypeScript major fails npm ci until the lint toolchain supports it.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: cargo
     directory: /src-tauri
