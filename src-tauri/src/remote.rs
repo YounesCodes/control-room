@@ -3438,6 +3438,207 @@ __CONTROL_ROOM_PROCESS_UNITS__
         );
     }
 
+    /// Unit names a Remote Host printed. The Systemd view lists what it was
+    /// told, and opening a Log Stream sends that name back as the thing to
+    /// read, so a host that answers with a name of its own choosing is
+    /// choosing part of the next command.
+    const HOSTILE_UNIT_NAMES: [&str; 20] = [
+        "nginx.service; reboot",
+        "nginx.service && reboot",
+        "nginx.service | cat /etc/shadow",
+        "nginx.service`id`",
+        "nginx.service$(id)",
+        "nginx'.service",
+        "nginx\".service",
+        "nginx .service",
+        "nginx\t.service",
+        "nginx\n.service",
+        "nginx\r.service",
+        "nginx\\.service",
+        "../../etc/shadow.service",
+        "*.service",
+        "?.service",
+        "$HOME.service",
+        "nginx.service\u{0}",
+        "nginx.service\u{7}",
+        "nginx.servicé",
+        "nginx.unknown",
+    ];
+
+    /// The full chain for a host-controlled identifier: the host prints it, a
+    /// parser reads it, the model carries it, the user opens its logs, and a
+    /// command is built around it. The guard sits at the parser and again at
+    /// the request, and this pins both ends at once.
+    ///
+    /// Parser tests and command-builder tests each cover half of this. Neither
+    /// says that the value one produces is a value the other accepts.
+    #[test]
+    fn a_unit_name_a_host_invented_never_reaches_a_journal_command() {
+        for unit in HOSTILE_UNIT_NAMES {
+            // The listing parser filters on the unit type rather than the
+            // character class, so a name like this can reach the Systemd view
+            // and be clicked. The view repeats what the host said.
+            let listed = parse_systemd_units(&format!(
+                "Id={unit}\nDescription=x\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n"
+            ));
+
+            // Listed or not, opening its logs is refused, so it never becomes
+            // part of a command. This is the door the whole chain rests on.
+            assert!(
+                validate_systemd_unit_id(unit).is_err(),
+                "the log request accepted {unit:?} (listed: {})",
+                !listed.is_empty()
+            );
+
+            // The boot parser validates as it reads, because a slow-unit row is
+            // carried straight into a journal request for that unit. Its rows
+            // are `duration unit`, split on the last whitespace, so a name with
+            // whitespace in it is not a name that format can carry and is left
+            // out here rather than asserted about.
+            if unit.contains(char::is_whitespace) {
+                continue;
+            }
+            let slow = parse_slow_boot_units(&format!("__CR_SLOW__\n1.5s {unit}\n__CR_END__\n"));
+            assert!(
+                slow.map(|units| units.is_empty()).unwrap_or(true),
+                "slow boot units kept {unit:?}"
+            );
+        }
+    }
+
+    /// The command puts the identifier inside single quotes, so the property
+    /// that matters is that nothing the validator accepts can leave them. A
+    /// value with a quote in it would end the quoted word and turn the rest
+    /// into shell syntax.
+    #[test]
+    fn every_accepted_unit_id_stays_one_quoted_word_in_its_journal_command() {
+        let accepted = [
+            "nginx.service",
+            "ssh.service",
+            "user@1000.service",
+            "getty@tty1.service",
+            "systemd-journald.service",
+            "multi-user.target",
+            "dev-sda1.device",
+            "swapfile.swap",
+            "srv-data\\x2darchive.mount",
+            "docker.socket",
+            "logrotate.timer",
+            "system-getty.slice",
+            "session-3.scope",
+            "proc-sys-fs-binfmt_misc.automount",
+            "systemd-ask-password-wall.path",
+            "a.service",
+            // A unit name may start with a hyphen, and one that does is safe
+            // here for the same reason a hyphenated username is safe after
+            // ssh's `-l`: it sits inside the quoted argument of `-u`, and
+            // getopt consumes that entry whatever it looks like. Refusing
+            // these would make the validator the thing that blocks real units.
+            "--user.service",
+            "-u.service",
+        ];
+        // The longest name the validator allows, so the bound is exercised by
+        // the same property rather than only by a length check.
+        let longest = format!("{}.service", "n".repeat(255 - ".service".len()));
+
+        for unit in accepted
+            .iter()
+            .map(|unit| unit.to_string())
+            .chain([longest])
+        {
+            assert!(
+                validate_systemd_unit_id(&unit).is_ok(),
+                "{unit:?} is an ordinary unit name"
+            );
+            assert!(
+                !unit.contains('\''),
+                "{unit:?} would close the quoted word around it"
+            );
+
+            let command = journal_command(&unit, 200, false);
+            assert!(
+                command.contains(&format!("-u '{unit}'")),
+                "the unit is not the quoted argument of -u: {command}"
+            );
+            // Two quotes in the whole command, which are the ones this builder
+            // wrote around the identifier.
+            assert_eq!(
+                command.matches('\'').count(),
+                2,
+                "the command has quoting the builder did not write: {command}"
+            );
+        }
+    }
+
+    /// The same chain for containers. A container's own name is chosen by
+    /// whoever ran it, and Docker's listing repeats it back.
+    #[test]
+    fn a_container_id_a_host_invented_never_reaches_a_docker_command() {
+        for container in [
+            "abc123; reboot",
+            "abc123 && reboot",
+            "abc123`id`",
+            "abc123$(id)",
+            "abc'123",
+            "abc\"123",
+            "abc 123",
+            "abc\n123",
+            "-abc123",
+            "--rm",
+            "../abc123",
+            "*",
+            "$HOME",
+            "",
+        ] {
+            assert!(
+                validate_container_id(container).is_err(),
+                "the container request accepted {container:?}"
+            );
+        }
+
+        for container in [
+            "3f2b1c8a9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8",
+            "3F2B1C8A9D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8",
+            "web-1",
+            "my_app.service_1",
+            "a",
+        ] {
+            assert!(
+                validate_container_id(container).is_ok(),
+                "{container:?} is an ordinary container identifier"
+            );
+            let command = docker_log_command(container, 200, true);
+            assert!(
+                command.contains(&format!("'{container}'")),
+                "the container is not the quoted argument: {command}"
+            );
+            assert_eq!(command.matches('\'').count(), 2, "{command}");
+        }
+    }
+
+    /// The tail count is a fixed list the Settings page offers, not a number
+    /// the caller picks, so the request takes exactly that list and the
+    /// neighbours of each entry are refused. An unbounded tail is what turns a
+    /// bounded read into a transfer.
+    #[test]
+    fn a_log_tail_is_one_of_the_counts_the_app_offers() {
+        assert!(!LOG_TAIL_OPTIONS.is_empty());
+        for offered in LOG_TAIL_OPTIONS {
+            assert!(validate_tail(offered).is_ok(), "{offered} is offered");
+            for neighbour in [offered - 1, offered + 1] {
+                if LOG_TAIL_OPTIONS.contains(&neighbour) {
+                    continue;
+                }
+                assert!(
+                    validate_tail(neighbour).is_err(),
+                    "{neighbour} is not a count the app offers"
+                );
+            }
+        }
+        assert!(validate_tail(0).is_err());
+        assert!(validate_tail(u16::MAX).is_err());
+    }
+
     #[test]
     #[ignore = "requires the explicitly configured Debian SSH fixture"]
     fn live_fixture_supports_structured_features() {
