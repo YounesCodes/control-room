@@ -355,6 +355,10 @@ impl SessionManager {
                             status.success(),
                             status.exit_code(),
                             remote.failure_detector.lock().hint,
+                            // What the frontend was actually told, so the exit
+                            // is classified the same way the session was
+                            // presented while it ran.
+                            remote.connected_emitted.load(Ordering::Acquire),
                         ),
                         SessionMode::Local { label } => classify_local_exit(
                             stop_requested,
@@ -503,12 +507,24 @@ fn detect_terminal_failure(output: &str) -> Option<TerminalFailureHint> {
     }
 }
 
+/// `connected` is whether this session was reported to the frontend as
+/// connected, which happens only once the remote shell emits the marker.
+///
+/// Past that point the exit status belongs to that shell rather than to ssh:
+/// `exec bash -l` ends on Ctrl-D with the status of the last command, so a
+/// session where `grep` found nothing exits non-zero for an entirely ordinary
+/// reason. The startup hints cannot apply either. They are detected from
+/// whatever passes through the pty and are sticky, so an ordinary
+/// "Permission denied" from `ls` used to survive to here and label a normal
+/// exit as an authentication failure. Only losing an established connection is
+/// still a hint worth acting on after the marker.
 fn classify_session_exit(
     stop_requested: bool,
     process_failure: Option<String>,
     success: bool,
     exit_code: u32,
     hint: Option<TerminalFailureHint>,
+    connected: bool,
 ) -> (&'static str, Option<String>, Option<String>) {
     if stop_requested {
         return ("disconnected", Some("user-disconnect".into()), None);
@@ -518,6 +534,18 @@ fn classify_session_exit(
     }
     if success {
         return ("disconnected", Some("remote-exit".into()), None);
+    }
+    let hint = if connected {
+        hint.filter(|hint| *hint == TerminalFailureHint::ConnectionLost)
+    } else {
+        hint
+    };
+    if connected && hint.is_none() {
+        return (
+            "disconnected",
+            Some("remote-exit".into()),
+            Some(format!("The remote shell exited with code {exit_code}.")),
+        );
     }
     let (category, reason) = match hint {
         Some(TerminalFailureHint::Authentication) => {
@@ -579,7 +607,7 @@ mod tests {
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
     use super::{
-        MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, SessionMode, TERMINAL_TYPE,
+        CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OutputFlow, SessionMode, TERMINAL_TYPE,
         TerminalFailureDetector, TerminalFailureHint, classify_local_exit, classify_session_exit,
         interactive_shell_command, map_pty_kill_result,
     };
@@ -642,15 +670,76 @@ mod tests {
     #[test]
     fn user_disconnect_is_not_reported_as_a_failure() {
         assert_eq!(
+            // Disconnecting a session that had connected: the user's own action
+            // outranks every hint and every exit status.
             classify_session_exit(
                 true,
                 None,
                 false,
                 1,
                 Some(TerminalFailureHint::ConnectionLost),
+                true,
             ),
             ("disconnected", Some("user-disconnect".into()), None)
         );
+    }
+
+    /// A shell that reached the connected marker authenticated and started.
+    /// Its exit status is the remote shell's, and bash exits on Ctrl-D with the
+    /// status of the last command, so an ordinary session that ended after a
+    /// failing command must not be reported as an SSH-layer failure.
+    #[test]
+    fn a_connected_session_that_exits_nonzero_reports_the_shell_exit() {
+        let mut detector = TerminalFailureDetector::default();
+        detector.observe(CONNECTED_MARKER.as_bytes());
+        // Ordinary session output. `detect_terminal_failure` matches this the
+        // same way it matches ssh's own startup diagnostics, and the hint is
+        // sticky, so before the fix it survived to classification.
+        detector.observe(b"ls: cannot open directory '/root': Permission denied\r\n");
+        assert!(detector.connected);
+        assert_eq!(detector.hint, Some(TerminalFailureHint::Authentication));
+
+        let (state, category, reason) =
+            classify_session_exit(false, None, false, 1, detector.hint, true);
+
+        assert_eq!(state, "disconnected");
+        assert_eq!(category.as_deref(), Some("remote-exit"));
+        assert!(
+            reason.as_deref().is_some_and(|reason| reason.contains("1")),
+            "the shell's exit status is still worth reporting: {reason:?}"
+        );
+    }
+
+    /// The startup categories still have to work. A session that never reported
+    /// connected is exactly the case they were written for.
+    #[test]
+    fn a_session_that_never_connected_keeps_its_startup_category() {
+        let mut detector = TerminalFailureDetector::default();
+        detector.observe(b"user@host: Permission denied (publickey).\r\n");
+        assert!(!detector.connected);
+
+        let (state, category, _) =
+            classify_session_exit(false, None, false, 255, detector.hint, false);
+
+        assert_eq!(state, "error");
+        assert_eq!(category.as_deref(), Some("authentication"));
+    }
+
+    /// Losing an established connection is still a failure. It is the one hint
+    /// that can legitimately arrive after the marker.
+    #[test]
+    fn a_connected_session_that_loses_its_connection_is_still_an_error() {
+        let (state, category, _) = classify_session_exit(
+            false,
+            None,
+            false,
+            255,
+            Some(TerminalFailureHint::ConnectionLost),
+            true,
+        );
+
+        assert_eq!(state, "error");
+        assert_eq!(category.as_deref(), Some("connection-lost"));
     }
 
     #[test]
@@ -661,6 +750,7 @@ mod tests {
             false,
             255,
             Some(TerminalFailureHint::Authentication),
+            false,
         );
         assert_eq!(state, "error");
         assert_eq!(category.as_deref(), Some("authentication"));
