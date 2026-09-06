@@ -177,6 +177,19 @@ export function App() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [workspacePersistenceReady, setWorkspacePersistenceReady] = useState(false);
   const capabilityDetectionsRef = useRef(new Set<string>());
+
+  // What the asynchronous close and delete paths read once they have awaited
+  // the backend. Both replace the whole Workspace list rather than patching
+  // one entry, and both start from a confirmation callback created in an
+  // earlier render, so reading these from the closure wrote back whatever they
+  // held when the dialog opened. A Workspace opened, or a session state that
+  // changed, while the request was in flight was inside neither the old list
+  // nor the replacement, and disappeared.
+  const workspaceStateRef = useRef({ workspaces, activeWorkspaceId, terminalLayout });
+  useEffect(() => {
+    workspaceStateRef.current = { workspaces, activeWorkspaceId, terminalLayout };
+  }, [workspaces, activeWorkspaceId, terminalLayout]);
+
   useEffect(() => {
     let current = true;
     void Promise.allSettled([
@@ -738,11 +751,16 @@ export function App() {
     if (!workspace) return;
     setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
-    const index = workspaces.findIndex((item) => item.id === id);
-    const remaining = workspaces.filter((item) => item.id !== id);
-    const nextLayout = terminalLayout ? removeTerminalFromLayout(terminalLayout, id) : null;
+    // Whatever the list holds now, not what it held when the confirmation was
+    // set up or before the close round trip.
+    const current = workspaceStateRef.current;
+    const index = current.workspaces.findIndex((item) => item.id === id);
+    const remaining = current.workspaces.filter((item) => item.id !== id);
+    const nextLayout = current.terminalLayout
+      ? removeTerminalFromLayout(current.terminalLayout, id)
+      : null;
     const remainingSplitIds = nextLayout ? getTerminalLayoutIds(nextLayout) : [];
-    const closingActiveWorkspace = activeWorkspaceId === id;
+    const closingActiveWorkspace = current.activeWorkspaceId === id;
     const nextActive = closingActiveWorkspace
       ? ((terminalFocusMode ? remaining.find((item) => item.id === remainingSplitIds[0]) : null) ??
         remaining[Math.min(index, remaining.length - 1)] ??
@@ -783,11 +801,14 @@ export function App() {
       return;
     }
     clearScratchpadDraft("connection", connection.id);
+    // Same reason as `performCloseWorkspace`: the delete round trip is long
+    // enough for the user to open another host's Workspace behind it.
+    const current = workspaceStateRef.current;
     const removal = removeConnectionWorkspaces(
-      workspaces,
+      current.workspaces,
       connection.id,
-      activeWorkspaceId,
-      terminalLayout,
+      current.activeWorkspaceId,
+      current.terminalLayout,
     );
     for (const workspace of removal.removed) {
       if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);

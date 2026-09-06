@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,8 +37,30 @@ vi.mock("./components/WindowControls", () => ({
 }));
 
 vi.mock("./components/TerminalPane", () => ({
-  TerminalPane: ({ workspace }: { workspace: { id: string; reconnectToken: number } }) => (
-    <div data-testid={`terminal-${workspace.id}`} data-reconnect-token={workspace.reconnectToken} />
+  TerminalPane: ({
+    workspace,
+    onSession,
+    onState,
+  }: {
+    workspace: { id: string; reconnectToken: number };
+    onSession: (sessionId: string) => void;
+    onState: (state: string, reason?: string | null) => void;
+  }) => (
+    <div data-testid={`terminal-${workspace.id}`} data-reconnect-token={workspace.reconnectToken}>
+      {/* The pty reporting a started session and a state change. That is the
+          only way a Workspace acquires either, and both arrive whenever the
+          host answers rather than when the UI is ready for them. */}
+      <button
+        type="button"
+        className="test-pty"
+        onClick={() => onSession(`session-${workspace.id}`)}
+      >
+        {`start ${workspace.id}`}
+      </button>
+      <button type="button" className="test-pty" onClick={() => onState("connected")}>
+        {`connect ${workspace.id}`}
+      </button>
+    </div>
   ),
 }));
 
@@ -93,6 +115,40 @@ function restoredState(connectionIds: string[]): PersistedWorkspaceState {
     activeWorkspaceId: connectionIds.length ? "workspace-0" : null,
     terminalLayout: connectionIds.length ? { kind: "leaf", workspaceId: "workspace-0" } : null,
   };
+}
+
+/// A hidden Workspace's pane is `aria-hidden`, so role queries skip it. The
+/// stand-in pty controls are reached through the pane itself.
+function ptyButton(workspaceId: string, action: "start" | "connect"): HTMLElement {
+  return within(screen.getByTestId(`terminal-${workspaceId}`)).getByText(
+    `${action} ${workspaceId}`,
+  );
+}
+
+/// The rail entry that opens a Saved Connection, as distinct from its actions
+/// menu and from a Workspace tab carrying the same name.
+function railEntry(displayName: string): HTMLElement {
+  const entry = screen
+    .getAllByRole("button")
+    .find(
+      (button) =>
+        button.className.includes("host-main") &&
+        (button.textContent ?? "").startsWith(displayName),
+    );
+  if (!entry) throw new Error(`no rail entry for ${displayName}`);
+  return entry;
+}
+
+/// Open Workspace tabs for one connection, counted from the tab strip rather
+/// than the rail, so a Saved Connection that is merely listed does not read as
+/// one that is open.
+function workspaceTabCount(displayName: string): number {
+  return screen
+    .getAllByRole("button")
+    .filter(
+      (button) =>
+        button.className.includes("session-tab-main") && button.textContent === displayName,
+    ).length;
 }
 
 describe("App Workspace behavior", () => {
@@ -186,6 +242,93 @@ describe("App Workspace behavior", () => {
     fireEvent.keyDown(displayName, { key: "r", ctrlKey: true, shiftKey: true });
 
     expect(terminal.getAttribute("data-reconnect-token")).toBe("0");
+  });
+
+  // CR-AUDIT-005. `performDeleteConnection` reads `workspaces` from the render
+  // that created the confirmation callback, awaits the backend, and then writes
+  // a whole array back. Anything that changed the Workspace list while it was
+  // waiting is inside neither copy, so the write puts the older list back and
+  // the change is gone.
+  //
+  // Deleting a Saved Connection is the reachable version: the dialog closes
+  // before the work starts, so the rail stays live and opening another host's
+  // Workspace during a slow delete is an ordinary thing to do.
+  it("keeps a Workspace opened while a connection deletion is in flight", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    api.listConnections.mockResolvedValue([first, second]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id]));
+
+    let finishDelete = () => {};
+    api.deleteConnection.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDelete = () => resolve();
+        }),
+    );
+
+    render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+
+    await user.click(screen.getByLabelText("Open actions for Host A"));
+    await user.click(screen.getByRole("menuitem", { name: /Delete connection/i }));
+    await user.click(screen.getByRole("button", { name: /Delete connection/i }));
+    await waitFor(() => expect(api.deleteConnection).toHaveBeenCalled());
+
+    // The delete has not come back yet. Open the other host's Workspace.
+    await user.click(railEntry("Host B"));
+    await waitFor(() => expect(workspaceTabCount("Host B")).toBe(1));
+
+    finishDelete();
+
+    // Host A's Workspace goes, and Host B's stays.
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
+    expect(
+      workspaceTabCount("Host B"),
+      "the Workspace opened during the delete was rolled back",
+    ).toBe(1);
+  });
+
+  // The other half of CR-AUDIT-005. Closing a Workspace with a live session
+  // asks first, then awaits the pty teardown, and only then replaces the whole
+  // list. A session that reported connected in that window belongs to a
+  // Workspace the replacement does not know about.
+  it("keeps a session state that arrives while another Workspace is closing", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    api.listConnections.mockResolvedValue([first, second]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id]));
+
+    let finishClose = () => {};
+    api.closeSession.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishClose = () => resolve();
+        }),
+    );
+
+    const { container } = render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+
+    // Host A's Workspace has a live session, so closing it asks first.
+    await user.click(ptyButton("workspace-0", "start"));
+    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
+    await user.click(screen.getByRole("button", { name: "Disconnect & close" }));
+    await waitFor(() => expect(api.closeSession).toHaveBeenCalled());
+
+    // Host B connects while the teardown is still in flight.
+    await user.click(ptyButton("workspace-1", "connect"));
+    await waitFor(() => expect(container.querySelector(".presence-connected")).toBeTruthy());
+
+    finishClose();
+
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
+    expect(
+      container.querySelector(".presence-connected"),
+      "Host B's session state was rolled back by the close that followed it",
+    ).toBeTruthy();
   });
 
   it("closes a Workspace without deleting connection or global Scratchpad notes", async () => {
