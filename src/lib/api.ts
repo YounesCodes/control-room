@@ -35,8 +35,16 @@ import type {
   UpdateProgress,
 } from "../types";
 
-const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
-const REMOTE_INSPECTION_TIMEOUT_MESSAGE = "Remote inspection did not respond after 25 seconds";
+/// A last-resort guard so a Structured Operation that never answers cannot
+/// leave a pane loading forever. Rust owns the real budget: a command waits up
+/// to `MAX_STRUCTURED_QUEUE_WAIT` for a per-connection slot and then runs for at
+/// most `COMMAND_TIMEOUT`. This has to stay above that sum, or the generic
+/// message below replaces the classified failure Rust would have returned and
+/// the user loses the reason. `api-timeout.test.ts` pins the relationship
+/// against the Rust constants.
+export const REMOTE_INSPECTION_TIMEOUT_MS = 25_000;
+const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
+const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
 
 function invokeRemoteInspection<T>(command: string, args: Record<string, unknown>): Promise<T> {
   return new Promise<T>((resolve, reject) => {

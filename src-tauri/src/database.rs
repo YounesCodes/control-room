@@ -24,6 +24,7 @@ const MAX_GROUP_NAME_CHARS: usize = 60;
 const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 12;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
+const MAX_HISTORY_CWD_BYTES: usize = 32_767;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
 /// Baselines are kept manually. This cap only stops an unbounded local file:
 /// when it is reached, the oldest capture for that connection is dropped.
@@ -1359,8 +1360,10 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
-    // 7 belongs to command snippets (#37). This branch starts at 8 so both can
-    // land without either migration being skipped.
+    // There is no step 7. It was held for command snippets (#37), which was
+    // closed without merging, so the number was never used and no database
+    // reports `user_version = 7`. The gap stays: renumbering this step to 7
+    // would re-run it on installs already at 8 or 9.
     if version < 8 {
         let transaction = connection
             .transaction()
@@ -1558,7 +1561,10 @@ fn map_organization_error(error: rusqlite::Error, kind: &str) -> String {
     }
 }
 
-fn normalize_optional(value: Option<String>) -> Option<String> {
+/// Trims an optional field and treats an all-whitespace value as absent. Saving
+/// a connection and testing an unsaved one both go through this, so the
+/// destination the user tested is the one that gets stored.
+pub(crate) fn normalize_optional(value: Option<String>) -> Option<String> {
     value.and_then(|value| {
         let trimmed = value.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_string())
@@ -1638,7 +1644,11 @@ fn validate_history_input(input: &HistoryInput) -> Result<(), String> {
     if input.command.len() > MAX_HISTORY_COMMAND_BYTES {
         return Err("History command exceeds the 1 MiB limit".into());
     }
-    if input.cwd.as_ref().is_some_and(|cwd| cwd.len() > 32_767) {
+    if input
+        .cwd
+        .as_ref()
+        .is_some_and(|cwd| cwd.len() > MAX_HISTORY_CWD_BYTES)
+    {
         return Err("History working directory is too long".into());
     }
     let started = chrono::DateTime::parse_from_rfc3339(&input.started_at)
