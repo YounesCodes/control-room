@@ -783,7 +783,7 @@ pub fn uninstall_history_integration(
 
 #[cfg(test)]
 mod tests {
-    use super::{elevation_for, validated_test_connection};
+    use super::{elevation_for, export_text_file, validated_test_connection};
     use crate::database::Database;
     use crate::models::SavedConnectionInput;
     use crate::remote::Elevation;
@@ -932,6 +932,162 @@ mod tests {
                 "start_local_session must not accept {rejected:?} from the frontend"
             );
         }
+    }
+
+    /// #63 found that Export had never worked, because the window capability
+    /// granted `dialog:allow-open` and not `dialog:allow-save`. The guard added
+    /// there ties a dialog import to its permission. This is the other end of
+    /// the same path: the command that takes the path the user picked and
+    /// writes the file.
+    ///
+    /// It writes real files, because the failure #63 found only existed once
+    /// something actually ran.
+    #[test]
+    fn an_export_writes_only_the_two_document_formats_it_offers() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = |name: &str| directory.path().join(name).to_string_lossy().to_string();
+
+        for name in [
+            "baseline.md",
+            "baseline.json",
+            "BASELINE.MD",
+            "BASELINE.JSON",
+        ] {
+            let written = path(name);
+            export_text_file(written.clone(), "# Baseline\n".into()).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&written).unwrap(),
+                "# Baseline\n",
+                "{name}"
+            );
+        }
+
+        for name in [
+            "baseline.txt",
+            "baseline.exe",
+            "baseline.ps1",
+            "baseline.bat",
+            "baseline.md.exe",
+            "baseline",
+            "baseline.",
+            ".md",
+        ] {
+            let refused = path(name);
+            let error = export_text_file(refused.clone(), "# Baseline\n".into())
+                .err()
+                .unwrap_or_else(|| panic!("{name} should not be written"));
+            assert_eq!(error, "Exports are written as .md or .json only", "{name}");
+            assert!(
+                !std::path::Path::new(&refused).exists(),
+                "{name} was created before it was refused"
+            );
+        }
+
+        // A path with no name at all, which is what an empty save dialog
+        // result looks like.
+        assert!(export_text_file(String::new(), "x".into()).is_err());
+    }
+
+    /// An export is a document a person opens later, so its bytes have to be
+    /// exactly what the view showed. Markdown carries host names and unit
+    /// names, and JSON carries the whole capture.
+    #[test]
+    fn an_export_writes_its_content_byte_for_byte() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory
+            .path()
+            .join("baseline.md")
+            .to_string_lossy()
+            .to_string();
+        let contents = "# Baseline für „prod-web“\n\n\
+             | Unit | État |\n| --- | --- |\n| nginx.service | actif ✅ |\n\n\
+             Ligne avec un émoji 🙂 et une tabulation\tici.\r\n\
+             Trailing space \n";
+
+        export_text_file(path.clone(), contents.into()).unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), contents.as_bytes());
+    }
+
+    /// The write is capped so a runaway export cannot fill a disk. The bound is
+    /// checked at its edges, and a refusal must not leave a partial file where
+    /// the user expected a whole one.
+    #[test]
+    fn an_export_is_bounded_and_refuses_without_leaving_a_partial_file() {
+        const LIMIT: usize = 8 * 1024 * 1024;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory
+            .path()
+            .join("baseline.json")
+            .to_string_lossy()
+            .to_string();
+
+        export_text_file(path.clone(), "x".repeat(LIMIT - 1)).unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), (LIMIT - 1) as u64);
+
+        export_text_file(path.clone(), "y".repeat(LIMIT)).unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), LIMIT as u64);
+
+        let error = export_text_file(path.clone(), "z".repeat(LIMIT + 1)).unwrap_err();
+        assert_eq!(error, "That export is too large to write");
+        // The refused write left the previous file exactly as it was.
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), LIMIT as u64);
+        assert!(std::fs::read_to_string(&path).unwrap().starts_with("y"));
+    }
+
+    /// A path the user picked can still be unwritable by the time the write
+    /// happens. The reason reaches the frontend rather than a silent success.
+    #[test]
+    fn an_export_reports_why_the_filesystem_refused_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory
+            .path()
+            .join("no-such-folder")
+            .join("baseline.md")
+            .to_string_lossy()
+            .to_string();
+
+        let error = export_text_file(missing, "# Baseline\n".into()).unwrap_err();
+        assert!(
+            !error.is_empty() && error != "Exports are written as .md or .json only",
+            "the filesystem's own reason should reach the user: {error}"
+        );
+    }
+
+    /// Exporting is the only thing in the app that writes a file the frontend
+    /// named. Everything else writes to paths Rust chose, so a second writer
+    /// taking a path from a command would be a new trust boundary rather than
+    /// a new feature.
+    #[test]
+    fn exporting_is_the_only_command_that_writes_a_frontend_named_path() {
+        let sources = [
+            include_str!("commands.rs"),
+            include_str!("database.rs"),
+            include_str!("remote.rs"),
+            include_str!("session.rs"),
+            include_str!("baselines.rs"),
+            include_str!("history.rs"),
+            include_str!("updater.rs"),
+            include_str!("local_shell.rs"),
+            include_str!("ssh.rs"),
+        ];
+        let writes: usize = sources
+            .iter()
+            .map(|source| {
+                // The test module of this file names these while asserting
+                // about them, so only the code above `mod tests` counts.
+                let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+                production.matches("fs::write(").count()
+                    + production.matches("File::create(").count()
+                    + production.matches("OpenOptions::").count()
+            })
+            .sum();
+
+        assert_eq!(
+            writes, 1,
+            "a second filesystem writer appeared; if it takes a path from the \
+             frontend it needs the same extension and size checks export_text_file has"
+        );
     }
 
     #[test]
