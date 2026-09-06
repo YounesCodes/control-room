@@ -1259,16 +1259,21 @@ mod tests {
     /// and the session would go silent with its child still running.
     #[test]
     fn one_pty_read_always_fits_under_the_output_cap() {
-        assert!(
-            OUTPUT_READ_BUFFER_BYTES < MAX_UNACKNOWLEDGED_OUTPUT_BYTES,
-            "a single read must be admissible on an empty flow"
-        );
+        // Both are constants, so raising the buffer past the cap is a build
+        // failure rather than a session that goes quiet on a user's machine.
+        const {
+            assert!(OUTPUT_READ_BUFFER_BYTES < MAX_UNACKNOWLEDGED_OUTPUT_BYTES);
+        }
 
-        let flow = OutputFlow::new();
-        assert!(
-            flow.reserve(OUTPUT_READ_BUFFER_BYTES),
-            "a full buffer on an empty flow must not block"
-        );
+        // And the flow agrees at run time: a full buffer on an empty flow is
+        // admitted rather than parked.
+        let flow = Arc::new(OutputFlow::new());
+        let reader = flow.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(reader.reserve(OUTPUT_READ_BUFFER_BYTES));
+        });
+        assert_eq!(receiver.recv_timeout(Duration::from_secs(5)), Ok(true));
     }
 
     /// Acknowledgements come from the frontend, so the count is not trusted.

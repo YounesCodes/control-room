@@ -47,12 +47,44 @@ const MAX_CONNECTION_REMOTES: usize = 20;
 #[derive(Default)]
 pub struct RemoteOperationLimiter {
     hosts: Arc<Mutex<HashMap<String, Arc<HostOperationLimit>>>>,
+    /// Test-only seam. Runs between looking a connection's limit up in the map
+    /// and claiming a slot on it, which is the one interleaving in here that
+    /// cannot be reached by ordinary scheduling pressure on demand. The field
+    /// does not exist outside `cfg(test)`, so production has neither the hook
+    /// nor the branch that reads it.
+    #[cfg(test)]
+    after_host_lookup: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Default)]
 struct HostOperationLimit {
-    active: Mutex<usize>,
+    slots: Mutex<HostSlots>,
     available: Condvar,
+}
+
+#[derive(Default)]
+struct HostSlots {
+    /// Permits currently held for this connection.
+    active: usize,
+    /// Callers that have taken this limit out of the map and have not yet
+    /// either claimed a slot or given up.
+    ///
+    /// Looking the limit up and claiming a slot on it are two steps, and
+    /// without this the entry could be evicted in between: a caller holding an
+    /// `Arc` to an evicted limit finds it idle and claims a slot, while the
+    /// next request for the same connection creates a second limit and admits
+    /// two more. Three reads then run against a host whose cap is two. The
+    /// count is registered while the map lock is held, so a release that runs
+    /// afterwards sees the arrival and leaves the entry alone.
+    arriving: usize,
+}
+
+impl HostSlots {
+    /// Whether the limit can be forgotten: nothing holds a slot and nothing is
+    /// on its way to one.
+    fn is_forgettable(&self) -> bool {
+        self.active == 0 && self.arriving == 0
+    }
 }
 
 pub struct RemoteOperationPermit {
@@ -72,12 +104,15 @@ impl RemoteOperationLimiter {
         maximum_wait: Duration,
     ) -> Result<RemoteOperationPermit, String> {
         let connection_id = connection_id.to_owned();
-        let host = self
-            .hosts
-            .lock()
-            .entry(connection_id.clone())
-            .or_default()
-            .clone();
+        let mut hosts = self.hosts.lock();
+        let host = hosts.entry(connection_id.clone()).or_default().clone();
+        // Registered under the map lock, before anything can evict the entry.
+        host.slots.lock().arriving += 1;
+        drop(hosts);
+        #[cfg(test)]
+        if let Some(hook) = &self.after_host_lookup {
+            hook();
+        }
         // One deadline for the whole attempt, so `maximum_wait` is the total
         // time spent queued rather than the time between two wake-ups. Waking
         // early is normal here: a permit is released, and another waiter can
@@ -85,17 +120,18 @@ impl RemoteOperationLimiter {
         // each time left total queue time unbounded, which let the frontend
         // backstop fire before Rust could report why the operation failed.
         let deadline = Instant::now() + maximum_wait;
-        let mut active = host.active.lock();
-        while *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
+        let mut slots = host.slots.lock();
+        while slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
             // A deadline already in the past returns `timed_out` immediately,
             // so a spent budget never starts another wait.
-            if host.available.wait_until(&mut active, deadline).timed_out()
-                && *active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
+            if host.available.wait_until(&mut slots, deadline).timed_out()
+                && slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
             {
-                drop(active);
+                slots.arriving -= 1;
+                drop(slots);
                 let mut hosts = self.hosts.lock();
                 let remove = hosts.get(&connection_id).is_some_and(|tracked| {
-                    Arc::ptr_eq(tracked, &host) && *tracked.active.lock() == 0
+                    Arc::ptr_eq(tracked, &host) && tracked.slots.lock().is_forgettable()
                 });
                 if remove {
                     hosts.remove(&connection_id);
@@ -106,8 +142,9 @@ impl RemoteOperationLimiter {
                 ));
             }
         }
-        *active += 1;
-        drop(active);
+        slots.active += 1;
+        slots.arriving -= 1;
+        drop(slots);
         Ok(RemoteOperationPermit {
             connection_id,
             host,
@@ -120,6 +157,14 @@ impl RemoteOperationLimiter {
         self.hosts.lock().len()
     }
 
+    #[cfg(test)]
+    fn with_lookup_hook(hook: Arc<dyn Fn() + Send + Sync>) -> Self {
+        Self {
+            hosts: Arc::default(),
+            after_host_lookup: Some(hook),
+        }
+    }
+
     /// Wakes everything queued on one connection without freeing a slot, so a
     /// test can reproduce the wake-up that finds the queue still full.
     #[cfg(test)]
@@ -130,19 +175,33 @@ impl RemoteOperationLimiter {
     }
 }
 
+#[cfg(test)]
+impl RemoteOperationPermit {
+    /// How many permits are live on the limit this one was issued against.
+    fn live_on_its_limit(&self) -> usize {
+        self.host.slots.lock().active
+    }
+
+    /// Whether two permits are counted against the same limit. Two live permits
+    /// for one connection that answer `false` here are not bounded by anything.
+    fn shares_a_limit_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.host, &other.host)
+    }
+}
+
 impl Drop for RemoteOperationPermit {
     fn drop(&mut self) {
-        let mut active = self.host.active.lock();
-        *active = active.saturating_sub(1);
-        let idle = *active == 0;
+        let mut slots = self.host.slots.lock();
+        slots.active = slots.active.saturating_sub(1);
+        let idle = slots.is_forgettable();
         self.host.available.notify_one();
-        drop(active);
+        drop(slots);
 
         if idle {
             let mut hosts = self.hosts.lock();
-            let remove = hosts
-                .get(&self.connection_id)
-                .is_some_and(|host| Arc::ptr_eq(host, &self.host) && *host.active.lock() == 0);
+            let remove = hosts.get(&self.connection_id).is_some_and(|host| {
+                Arc::ptr_eq(host, &self.host) && host.slots.lock().is_forgettable()
+            });
             if remove {
                 hosts.remove(&self.connection_id);
             }
@@ -2136,7 +2195,7 @@ mod tests {
     use std::io::Cursor;
     use std::sync::{
         Barrier,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
     use super::*;
@@ -3247,6 +3306,136 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
         drop(limiter.acquire_for("connection-a", WAIT).unwrap());
         assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    /// The cap is per connection, so a host being read hard must not stall a
+    /// read of a different host. A single global limit would pass every other
+    /// limiter test and fail this one.
+    #[test]
+    fn a_saturated_connection_does_not_delay_a_different_one() {
+        const WAIT: Duration = Duration::from_millis(50);
+        let limiter = RemoteOperationLimiter::default();
+
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+        assert!(
+            limiter.acquire_for("connection-a", WAIT).is_err(),
+            "connection-a is saturated"
+        );
+
+        // Another connection is unaffected, and gets its own full allowance.
+        let third = limiter.acquire_for("connection-b", Duration::ZERO).unwrap();
+        let fourth = limiter.acquire_for("connection-b", Duration::ZERO).unwrap();
+        assert!(!third.shares_a_limit_with(&first));
+        assert!(limiter.acquire_for("connection-b", WAIT).is_err());
+        assert_eq!(limiter.tracked_connections(), 2);
+
+        // Draining one leaves the other exactly as it was.
+        drop(third);
+        drop(fourth);
+        assert_eq!(limiter.tracked_connections(), 1);
+        assert!(limiter.acquire_for("connection-a", WAIT).is_err());
+
+        drop(first);
+        drop(second);
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
+    /// Every Structured Operation takes and releases a permit, so a Workspace
+    /// left open for a day runs thousands of these. Nothing may accumulate.
+    #[test]
+    fn repeated_operations_leave_no_trace_of_the_connections_they_used() {
+        let limiter = RemoteOperationLimiter::default();
+        for round in 0..200 {
+            let id = format!("connection-{}", round % 5);
+            let first = limiter.acquire_for(&id, Duration::ZERO).unwrap();
+            let second = limiter.acquire_for(&id, Duration::ZERO).unwrap();
+            assert_eq!(second.live_on_its_limit(), 2, "round {round}");
+            drop(first);
+            drop(second);
+            assert_eq!(
+                limiter.tracked_connections(),
+                0,
+                "round {round} left an entry behind"
+            );
+        }
+    }
+
+    /// CR-AUDIT-003. Looking a connection's limit up in the map and claiming a
+    /// slot on it are two steps, and the entry can be dropped from the map in
+    /// between.
+    ///
+    /// A caller reads the map, gets the limit both live permits are counted
+    /// against, and is descheduled. Both permits are released. The second
+    /// release sees the count at zero, finds its own limit still in the map,
+    /// and removes it. The caller resumes holding an `Arc` to a limit nothing
+    /// else can reach, finds it idle, and claims a slot on it. The next request
+    /// for the same connection finds no entry and creates a second limit, which
+    /// admits two more.
+    ///
+    /// Three Structured Operations then run against one host with a cap of two,
+    /// and the cap is what keeps a bounded read from becoming load on someone's
+    /// machine. The hook only decides *when* the caller resumes; the window it
+    /// pauses in is ordinary scheduling.
+    #[test]
+    fn a_connection_cannot_exceed_its_operation_limit_across_a_map_eviction() {
+        const WAIT: Duration = Duration::from_secs(5);
+
+        // The hook pauses exactly one lookup, the third caller's.
+        let armed = Arc::new(AtomicBool::new(false));
+        let (reached_lookup, lookup_reached) = mpsc::channel();
+        let (release_lookup, lookup_released) = mpsc::channel::<()>();
+        let lookup_released = Arc::new(Mutex::new(lookup_released));
+        let limiter = Arc::new(RemoteOperationLimiter::with_lookup_hook(Arc::new({
+            let armed = armed.clone();
+            move || {
+                if armed.swap(false, Ordering::SeqCst) {
+                    reached_lookup.send(()).unwrap();
+                    lookup_released.lock().recv().unwrap();
+                }
+            }
+        })));
+
+        let first = limiter.acquire_for("connection-a", WAIT).unwrap();
+        let second = limiter.acquire_for("connection-a", WAIT).unwrap();
+
+        armed.store(true, Ordering::SeqCst);
+        let queued = thread::spawn({
+            let limiter = limiter.clone();
+            move || limiter.acquire_for("connection-a", WAIT).unwrap()
+        });
+
+        // The third caller now holds the same limit the two permits are counted
+        // against, and has not yet claimed a slot on it.
+        lookup_reached.recv_timeout(WAIT).unwrap();
+
+        // The release path runs while that caller is still in the window. It
+        // sees no permits held, and used to evict the entry on that alone.
+        drop(first);
+        drop(second);
+
+        release_lookup.send(()).unwrap();
+        let third = queued.join().unwrap();
+
+        // A fresh request for the same connection. If the third permit is
+        // counted against an evicted limit, this one starts from zero.
+        let fourth = limiter.acquire_for("connection-a", WAIT).unwrap();
+
+        assert!(
+            third.shares_a_limit_with(&fourth),
+            "two live permits for connection-a are counted against different \
+             limits, so the per-connection cap bounds neither"
+        );
+        let live = if third.shares_a_limit_with(&fourth) {
+            third.live_on_its_limit()
+        } else {
+            third.live_on_its_limit() + fourth.live_on_its_limit()
+        };
+        assert!(
+            live <= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION,
+            "connection-a has {live} Structured Operations live at once, and the \
+             cap is {MAX_STRUCTURED_OPERATIONS_PER_CONNECTION}"
+        );
     }
 
     #[test]
