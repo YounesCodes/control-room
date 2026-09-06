@@ -801,8 +801,35 @@ export function App() {
       return;
     }
     clearScratchpadDraft("connection", connection.id);
-    // Same reason as `performCloseWorkspace`: the delete round trip is long
-    // enough for the user to open another host's Workspace behind it.
+    // The record is gone from the database, so take it out of the rail before
+    // anything else awaits. That also closes the only door a new Workspace for
+    // it could still come through while its sessions are being torn down, which
+    // is what lets the loop below be a single pass.
+    setConnections((current) => current.filter((item) => item.id !== connection.id));
+    setHostCapabilities((current) => {
+      const next = { ...current };
+      delete next[connection.id];
+      return next;
+    });
+
+    // Tearing down a pty is a round trip, and there is one per Workspace this
+    // connection owns. The sessions to close are read from the list as it is
+    // now; the removal is not, because the list can change while they close.
+    const beforeTeardown = workspaceStateRef.current;
+    const owned = removeConnectionWorkspaces(
+      beforeTeardown.workspaces,
+      connection.id,
+      beforeTeardown.activeWorkspaceId,
+      beforeTeardown.terminalLayout,
+    ).removed;
+    for (const workspace of owned) {
+      if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
+    }
+
+    // Read again now that every teardown has finished. A Workspace opened, or
+    // a session state that arrived, while they ran is in this list and in no
+    // snapshot taken before them. Everything from here is synchronous, so this
+    // is the list the writes below are derived from.
     const current = workspaceStateRef.current;
     const removal = removeConnectionWorkspaces(
       current.workspaces,
@@ -810,15 +837,6 @@ export function App() {
       current.activeWorkspaceId,
       current.terminalLayout,
     );
-    for (const workspace of removal.removed) {
-      if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
-    }
-    setConnections((current) => current.filter((item) => item.id !== connection.id));
-    setHostCapabilities((current) => {
-      const next = { ...current };
-      delete next[connection.id];
-      return next;
-    });
     setWorkspaces(removal.remaining);
     setTerminalLayout(removal.nextLayout);
     setActiveWorkspaceId(removal.nextActiveId);
