@@ -1,55 +1,15 @@
 # Control Room design
 
-The design reference for Control Room: what it is, the principles behind it, and
-the visual and interaction decisions that hold it together. This is where design
-intent is written down. If the code and this document disagree, one of them is
-wrong.
+The design reference for Control Room: the principles behind the interface and
+the visual and interaction decisions that hold it together. If the code and this
+document disagree, one of them is wrong.
+
+Scope, trust boundaries, and architecture invariants live in AGENTS.md. What each
+view does for a user lives in the manual under `docs/`. This file covers how the
+interface looks and behaves.
 
 > The palette and layout rules below are not aspirational. Automated tests check
 > them on every commit (see [Guardrails](#guardrails)).
-
----
-
-## Contents
-
-1. [What Control Room is](#what-control-room-is)
-2. [Design principles](#design-principles)
-3. [Product architecture](#product-architecture)
-4. [Technical foundation](#technical-foundation)
-5. [Visual language](#visual-language)
-6. [Design tokens](#design-tokens)
-7. [Interaction and state](#interaction-and-state)
-8. [Components](#components)
-9. [Keyboard model](#keyboard-model)
-10. [Accessibility](#accessibility)
-11. [Influences](#influences)
-12. [Guardrails](#guardrails)
-13. [Non-goals and future](#non-goals-and-future)
-
----
-
-## What Control Room is
-
-Control Room is a local Windows desktop app for opening interactive SSH sessions
-and inspecting Linux hosts. It drives the machine's own Windows OpenSSH client
-and ConPTY instead of shipping a second SSH stack, so it reuses your existing
-keys, `~/.ssh/config`, and agent.
-
-The first release targets Windows 11 x64 and Debian/Ubuntu-family hosts with
-systemd, journald, Bash, and optional Docker. Other Linux systems still work as
-terminal-only destinations.
-
-Who it's for: developers and operators who keep a handful of Linux servers and
-want a fast, keyboard-driven cockpit. Open a shell, inspect current unit state, read
-containers, tail logs, recall exact commands. No web console, no
-agent on the host, no second credential store.
-
-The core loop: pick a saved connection and a Workspace opens with a live
-terminal. From there you jump to Overview, Systemd, Ports, Docker, Boot, Logs, Baselines, or
-History as
-you need, open more sessions, split them, or move on. Everything the app does to
-a remote host is read-only. The terminal is the only place arbitrary commands
-run, and you type those yourself.
 
 ---
 
@@ -70,13 +30,10 @@ run, and you type those yourself.
    discoverable shortcuts, split panes, focus mode. Nothing important is
    mouse-only, and nothing important is a hidden keyboard-only trick.
 
-4. **Safe by construction.** Remote operations are read-only, elevated or not.
-   The app never persists terminal output, fetched logs, SSH or sudo passwords,
-   or private keys. Sudo is off until the user allows it, per host or for every
-   host, and an allowance only reaches accounts that already have passwordless
-   sudo. A one-shot sudo password is offered after a permission error and is
-   never saved. Rust owns process and argument construction. React never
-   receives arbitrary shell execution.
+4. **Safe by construction.** Remote operations are read-only, sudo is off until
+   the user allows it, and nothing sensitive is persisted. The UI never implies
+   more reach than the boundaries in AGENTS.md allow, and it says when a fact is
+   missing rather than drawing a zero.
 
 5. **Honest feedback.** Every asynchronous view has explicit loading, empty, and
    error states. Destructive actions look distinct and get confirmed in the
@@ -89,49 +46,25 @@ run, and you type those yourself.
 
 ---
 
-## Product architecture
+## Layout and information architecture
 
-### Domain model
-
-The vocabulary is small, and every entity has an ID. A Saved Connection (a
-reusable SSH destination) opens one or more Workspaces, each pairing a live
-Terminal Session with read-only inspection views. Structured Operations (host
-facts, systemd units, listening sockets, containers) and Log Streams run independently of the terminal,
-and Enhanced History is an opt-in local record of commands. AGENTS.md carries the
-exact term definitions.
-
-A Workspace has one of two targets, and the distinction runs through the whole
-model rather than being papered over:
-
-```text
-Workspace
-├── remote → Saved Connection
-└── local  → Local Shell Profile
-```
-
-A Local Shell Profile is one of the Windows shells Control Room can host:
-PowerShell 7, Windows PowerShell, Command Prompt, Git Bash. A local Workspace is
-terminal-only. It has no Saved Connection, no host facts, no Log Streams, and no
-History, so every remote-only field and action stays remote-only instead of
-being faked for a machine that is already local.
-
-### Information architecture
+A CSS grid with a 42 px custom titlebar row and a 244 px sidebar column. The
+window enforces a 960 x 640 minimum, below 1120 px the sidebar and page padding
+tighten, and page content is capped at 980 px so a wide window does not stretch
+a dense list into a banner.
 
 Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list is divided into manually ordered,
   collapsible groups plus a derived Ungrouped section. Search matches connection
-  names, SSH targets, groups, and tags. Once a remote Workspace is open, the rail
-  also holds the view switcher (Overview, Terminal, Systemd, Ports, Docker, Boot,
-  Logs, Baselines, History, Scratchpad); a local Workspace shows none of it,
-  because there is no Remote Host to inspect. "Local terminal" and
-  "Add connection" are pinned at the bottom, the launcher listing only the shells
-  this machine actually has.
+  names, SSH targets, group names, and tags. Once a remote Workspace is open, the
+  rail also holds the view switcher (Overview, Terminal, Systemd, Ports, Docker,
+  Boot, Logs, Baselines, History, Scratchpad); a local Workspace shows none of
+  it, because there is no Remote Host to inspect. "Local terminal" and "Add
+  connection" are pinned at the bottom, the launcher listing only the shells this
+  machine actually has.
 - **Workspace tab strip.** One tab per open Workspace across the top of the main
-  area, plus "New terminal" and the split and focus controls. "New terminal"
-  opens a chooser of Saved Connections and installed local shells, sharing its
-  list rendering with the split menu; each selection opens an independent
-  Workspace rather than repeating whatever happens to be active.
+  area, plus "New terminal" and the split and focus controls.
 - **Main area.** The active view. Terminal panes stay mounted but hidden across
   view switches, so navigation never tears a session down.
 
@@ -139,58 +72,8 @@ Identity shows once per place, never duplicated into a redundant "status rail".
 The host OS mark and a session presence dot carry identity and liveness in the
 rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
-### Shell layout
-
-A CSS grid with a 42 px custom titlebar row and a ~244 px sidebar column. The
-window enforces a 960 x 640 minimum, and below ~1120 px the sidebar and page
-padding tighten. A distraction-free terminal focus mode (toggled by button)
-hides the rail and titlebar and can tile several sessions as split panes.
-
----
-
-## Technical foundation
-
-Control Room is a Tauri 2 app: a Rust core behind a WebView2 frontend on
-Windows.
-
-**Frontend.** React 19 and TypeScript, built with Vite 8. The terminal is
-`@xterm/xterm` v6 with the fit addon, and icons come from `lucide-react`. State
-is plain React state, with no global store. Tests run on Vitest and Testing
-Library (jsdom).
-
-**Backend.** Rust (edition 2024) with `rusqlite` (bundled SQLite), `chrono`,
-`uuid`, and `windows-sys`. It shells out to the system OpenSSH client and drives
-ConPTY for the interactive terminal.
-
-Control Room is itself the terminal emulator: xterm on top of ConPTY through
-`portable-pty`. A local shell is the same pipeline with a different program at
-the end, so SSH and local sessions share one pty lifecycle (reader thread, flow
-control, input, resize, kill, cleanup) and differ only in how they start and how
-an exit is read. Windows Terminal is not launched, embedded, or parsed; `wt.exe`
-would be another emulator wrapped around the one already here.
-
-Rust owns local process construction as strictly as it owns SSH arguments.
-Discovery resolves each shell to a fixed executable and fixed arguments, React
-can name only a validated Local Shell Profile id, and there is no command,
-program, or argument anywhere in that call. Nothing in the app can execute an
-arbitrary process; the interactive terminal is the execution surface.
-
-The safety model shapes the UI. Remote operations are read-only, and the app
-never persists terminal output, fetched logs, passwords, or private keys. SQLite
-holds only connections and their local organization metadata, settings,
-capabilities, History, user-authored Scratchpad notes, and _disconnected_
-Workspace layout, so a restored Workspace always comes back disconnected and
-never auto-reconnects. A restored local tab is the same promise in local terms:
-the tab and its place in the split come back, the shell process does not start
-until the user asks. A persisted Workspace names exactly one target, so payloads
-written before Local Terminal existed still restore as remote Workspaces. Structured features need
-non-interactive public-key or agent auth, though the terminal still shows
-ordinary OpenSSH prompts. AGENTS.md carries the full architecture and data rules.
-
-One xterm detail worth knowing: xterm draws bold text with weight, not from the
-bright palette (`drawBoldTextInBrightColors: false`). So a bold `01;34` directory
-shows exactly the "Blue" you configured, which keeps the terminal and the
-Settings colour preview in agreement.
+A distraction-free terminal focus mode, toggled by button, hides the rail and
+titlebar and can tile several sessions as split panes.
 
 ---
 
@@ -202,12 +85,8 @@ A greyscale system on a near-black ground. Depth comes from making surfaces
 lighter as they rise, the standard move for dark UIs, not from heavy shadows.
 
 The only built-in non-neutral colours in the UI are three status hues. They carry
-meaning (connection and session state, systemd unit and container state, command exit
-status, inline messages) and never act as accents. Connection Tag badges may use a
-color selected by the user. The badge uses that hue for its text, a translucent
-version for its background, and a stronger translucent version for its border.
-The renderer lightens selections that would not remain legible on Control Room's
-dark surfaces. A tag color never communicates runtime state.
+meaning (connection and session state, systemd unit and container state, command
+exit status, inline messages) and never act as accents.
 
 | Role    | Hex       | Meaning                                           |
 | ------- | --------- | ------------------------------------------------- |
@@ -217,8 +96,13 @@ dark surfaces. A tag color never communicates runtime state.
 
 The accent is off-white (`#f2f2ee`): the primary button, the "you are here" bar
 and underline, and focus rings. Even error and warning surfaces stay neutral
-grey, and the status hue shows only in the border and text. The tests enforce
-this (see [Guardrails](#guardrails)).
+grey, and the status hue shows only in the border and text.
+
+Connection Tag badges may use a color selected by the user. The badge uses that
+hue for its text, a translucent version for its background, and a stronger
+translucent version for its border. The renderer lightens selections that would
+not stay legible on Control Room's dark surfaces. A tag color never communicates
+runtime state.
 
 ### Typography
 
@@ -230,8 +114,8 @@ Two families, one for chrome and one for anything technical.
   look. It ships as `woff2` so the desktop build works offline with no fallback
   flash, and the system stack is the fallback.
 - **Cascadia Mono, then Consolas, then monospace** for the terminal, logs, code,
-  systemd unit and container names, Compose project and service identities, container IDs,
-  and history commands.
+  unit and container names, Compose identities, container IDs, and history
+  commands.
 
 The type scale is small: 20 px section headings, ~17 px stat values, 12.5 px
 body, 11.5 px controls, and 10 px uppercase labels with tracking. Numeric columns
@@ -243,7 +127,7 @@ use `tabular-nums`.
   grid `gap`, not per-element margins that collapse.
 - **Radius.** A three-step scale, 4/6/8 px (small controls, then menus and cards,
   then modals). Connection Tag badges and their color wells are the circular
-  exceptions. The scale replaced an earlier scatter of 2/3/5.
+  exceptions.
 - **Elevation.** The surface ramp below, plus two neutral shadow tokens for
   popovers and modals.
 - **Motion.** Quiet on purpose. Roughly 110 ms on interactions, 160 ms on overlay
@@ -339,213 +223,111 @@ grey for disconnected. Live sessions read at a glance. The dot's ring colour
 matches the row or tab background, so it looks cut out of the icon.
 
 **Connection organization.** A Saved Connection can belong to one group and carry
-up to twelve case-insensitive, color-coded tags. Group order and
-collapse state persist locally. Deleting a group returns its connections to the
-derived Ungrouped section and never opens, reconnects, or contacts a host. The
-organization dialog owns tag creation, renaming, color selection, and deletion.
-The Saved Connection editor only assigns existing tags. Deleting a tag removes
-its local associations from every connection.
-
-**Elevated commands.** Structured Operations run as the connecting account until
-the user allows sudo. Settings has one switch for every Saved Connection; the
-Saved Connection editor has one for a single host. The global switch is an
-override rather than a default, so while it is on the per-host checkbox is
-checked, disabled, and captioned with the reason. The host keeps its own value
-underneath, so turning the global switch off restores what each host chose.
-
-An allowance is not a password prompt. An allowed read probes sudo on the host
-and elevates only when the account has passwordless sudo; otherwise the same read
-runs unelevated in the same round trip. When that unelevated read hits a
-permission wall, the pane offers "Retry with sudo" exactly as before, and the
-password is used once and dropped. That affordance never depends on the switch:
-elevating one request stays possible on a host that allows nothing.
-
-Permission and capability are separate, and the UI says both. Whether the account
-has passwordless sudo is a host fact, reported in Overview beside systemd,
-journald, and Docker, and under the connection editor's checkbox once "Test
-structured access" has run. Without that, allowing sudo on an account that sudo
-questions looks like it did nothing. Docker gets the same treatment: a daemon
-that answers only under sudo reads as "reachable with sudo" rather than being
-folded into "sudo required".
+up to twelve case-insensitive, color-coded tags. The organization dialog owns tag
+creation, renaming, color selection, and deletion; the Saved Connection editor
+only assigns existing tags.
 
 **Panel states.** Every data view separates loading (spinner and label), empty
-(icon and guidance, such as the Logs and History empty states), and error (icon,
-message, and retry, with a "Retry with sudo" affordance where a permission error
-allows it). Cached lists show stale data with a warning rather than going blank.
+(icon and guidance), and error (icon, message, and retry). Cached lists show
+stale data with a warning rather than going blank, and past a day old a cached
+pane says how old the facts are instead of presenting them as current.
+
+**Elevated commands.** Permission and capability are separate, and the UI says
+both. The global switch in Settings is an override, so while it is on the
+per-host checkbox is checked, disabled, and captioned with the reason, and the
+host keeps its own value underneath. Whether the account has passwordless sudo is
+a host fact, reported in Overview beside systemd, journald, and Docker, and under
+the editor's checkbox once "Test structured access" has run; without it, allowing
+sudo on an account that sudo questions looks like it did nothing. A pane that
+hits a permission wall offers "Retry with sudo" whatever the switch says, because
+elevating one request stays possible on a host that allows nothing.
 
 **Dialogs are in-app, never native.** A shared `Modal` backs `PromptDialog` (text
 input, used for renaming a Workspace) and `ConfirmDialog` (message with
 confirm/cancel, and a red danger variant for destructive actions). Deleting a
 connection, closing a connected Workspace, discarding Settings, clearing History,
-and removing the integration all route through these. No native `prompt` or
-`confirm` survives anywhere.
+removing the integration, and installing an update all route through these. No
+native `prompt` or `confirm` survives anywhere.
 
 **Command palette.** `Ctrl+Shift+P` opens a palette that searches open terminals,
 connections, workspace views, and contextual actions. It follows the
 combobox/listbox pattern with `aria-activedescendant`, arrow, Home, End, Enter,
 and Escape keys, a focus trap, and focus restoration. It is the fastest way
-through a multi-connection setup. If I had to keep one keyboard feature, this is
-the one.
+through a multi-connection setup.
 
-**Terminal.** ConPTY-backed xterm with Unicode, ANSI, and VT output, resize,
-scrollback, copy and paste, and control keys (Vim, top, tmux, and the rest).
-Reconnect after a drop, or clear the local buffer without sending anything to the
-host. Several sessions per connection, with split panes and focus mode for
-tiling.
+**Terminal.** One pane and toolbar serve every session, with split panes and
+focus mode for tiling. xterm draws bold text with weight rather than from the
+bright palette (`drawBoldTextInBrightColors: false`), so a bold `01;34` directory
+shows exactly the "Blue" configured in Settings and the colour preview stays
+honest.
 
-A local shell uses that same pane and toolbar with local words: it is
-_running_ rather than _connected_, and it is _stopped_ and _restarted_ rather
-than disconnected and reconnected. A shell that exits on its own keeps its
-Workspace, says so in the pane notice, and offers Restart, because an exited
-shell is an ordinary event and losing the tab would be the surprise. "New
-terminal" repeats whatever the Workspace already is, another session on its
-Saved Connection or another shell of the same profile, and the split chooser
-offers existing terminals, new local shells, and new Saved Connections in that
-order.
+A local shell borrows that pane with local words: it is _running_ rather than
+_connected_, and _stopped_ and _restarted_ rather than disconnected and
+reconnected. A shell that exits on its own keeps its Workspace, says so in the
+pane notice, and offers Restart, because an exited shell is an ordinary event and
+losing the tab would be the surprise.
+
+**Opening terminals.** "New terminal" and Split share one grouped,
+keyboard-navigable target list and differ in what they do with the answer. "New
+terminal" offers every Saved Connection and every installed local shell, and each
+selection opens its own Workspace, so picking the active target gives a second
+independent terminal instead of changing the Workspace the menu came from. Split
+adds the group "New terminal" cannot have, the terminals already open, and lists
+existing terminals, new local shells, then new Saved Connections. Empty groups
+are dropped, so a machine with no local shells shows no heading for them.
 
 ---
 
 ## Components
 
-Reusable primitives in `src/components/` that everything else composes.
+New UI composes the primitives in `src/components/` rather than restyling their
+insides: `Modal` (the accessible dialog shell behind every dialog, labelled, with
+Esc and backdrop close and focus trap and restore), `PromptDialog` and
+`ConfirmDialog`, `CommandPalette`, `PanelState` (`LoadingState`, `EmptyState`,
+`ErrorState`), `HostOsIcon`, `StatusDot`, `WindowControls`, `TerminalPane`,
+`TerminalTargetMenu` (the shared list behind "New terminal" and Split),
+`ResourceMeter`, `UpdateIndicator`, and `ReleaseNotes` with `WhatsNewDialog`.
 
-- **Modal.** The accessible dialog shell (labelled, Esc and backdrop close, focus
-  trap and restore). It backs ConnectionDialog, CredentialDialog, PromptDialog,
-  and ConfirmDialog.
-- **PromptDialog and ConfirmDialog.** The in-app replacements for native dialogs.
-- **CommandPalette.** The command palette.
-- **PanelState.** `LoadingState`, `EmptyState`, and `ErrorState`.
-- **HostOsIcon.** The OS mark with its presence badge.
-- **StatusDot and WindowControls.** The status indicator and the custom titlebar
-  buttons.
-- **TerminalPane.** The xterm host and session lifecycle.
-- **UpdateIndicator.** The titlebar update control and its details popover. It
-  renders nothing at all while the app is current, so an up-to-date titlebar is
-  the titlebar that existed before the updater did.
-- **ReleaseNotes and WhatsNewDialog.** Release notes rendered as text, and the
-  one-time post-update notice built on Modal.
+Shared layout patterns: the split page (a dense list beside a detail panel) used
+by Systemd, Ports, Docker, and Baselines; the definition grid and capability list
+on the Overview host dashboard; the dense row with a leading status indicator;
+and the compact chip for exit codes, counts, and section states.
 
-Shared patterns: the split page (a dense list beside a detail panel) used by
-Systemd, Ports, and Docker; the definition grid and capability list on the Overview host
-dashboard; the dense row with a leading status indicator; and the compact chip
-for exit codes and counts.
+---
 
-Overview leads with what a host cannot tell you from a cached fact: two live
-meters for CPU busy share and memory in use, each a current reading over a
-sparkline of the recent window. The chart is neutral grey on purpose. Length
-carries magnitude, and a status hue would imply a verdict on whether 80% is bad,
-which depends on the host and not on the app. Used memory is measured against
-`MemAvailable`, so a host caching aggressively is not drawn as full. A reading
-the host did not return says so rather than showing zero, because a flat line at
-the bottom is indistinguishable from an idle machine.
+## Displaying host data
 
-These meters are the one repeating read in the app, and the boundaries are the
-point: sampling runs only while the pane is open, pauses on request, stops while
-the window is hidden, never overlaps round trips, and stores nothing. Closing the
-pane forgets the window. The line under the heading says the cadence and says
-nothing is kept, because a chart that appears to be recording invites the
-question of where the recording went.
+These rules apply wherever a pane shows what a host reported. What each pane
+collects is in AGENTS.md and its tests; what it means for a user is in `docs/`.
 
-The facts below the meters are cached, since they change when someone changes
-the host rather than on a clock. Past a day old the pane says how old they are
-instead of presenting them as current. Uptime is shown as its two largest units,
-with `uptime -p`'s full prose on hover, because the prose wraps a stat value to
-two lines and buries the number.
+- **Magnitude, not verdict.** The Overview load meters are neutral grey. Length
+  carries the value, and a status hue would imply a judgement on whether 80% is
+  bad, which depends on the host and not on the app.
+- **Absence looks like absence.** A reading the host did not return says so
+  instead of drawing a zero, because a flat line at the bottom is
+  indistinguishable from an idle machine. The same holds for a baseline section
+  that was never captured and for a listener whose owner could not be resolved.
+- **States stay distinct.** The five baseline section states use the three status
+  hues plus a neutral dashed chip, and each chip carries the sentence that
+  separates it from its neighbours, because the difference between an absent
+  subsystem and an unreadable one decides what the user does next.
+- **Say the boundary in the pane.** Panes that repeat a read or discard one say
+  so in place: the Overview meters name their cadence and say nothing is kept,
+  and a live baseline comparison names that side Live state and says the read was
+  discarded. A chart that appears to be recording invites the question of where
+  the recording went.
+- **Bounded views stay searchable.** Long lists get a filter, failures sort
+  first, and copy and export write exactly what the panel shows, filter included.
 
-The Docker list derives Compose project groups from the official project and service
-labels returned by the bounded container listing. It keeps every instance as its own row,
-including replicas and one-off containers, and puts missing or malformed identities in
-Ungrouped. The user can switch to the flat list without changing the cached data.
-
-Selecting a container loads a separate timestamped inspection by its full Docker ID. The detail
-panel has Overview, Ports, Networks, Mounts, and Metadata sections. Rust emits only approved typed
-records, and React never receives raw `docker inspect` JSON. Image references and content IDs stay
-separate. Mounts omit host sources, while metadata is limited to the validated Compose project,
-service, instance, and one-off fields. Environment values, command arguments, arbitrary labels,
-and health logs are not collected.
-
-Baselines is a split page: saved captures on the left, one capture or one comparison on the right.
-Capture is a button, never a schedule, and a checkbox row above it narrows which sections run. While
-it runs, each finished section appears with its own status chip, and Stop ends the run once the
-section in flight returns. Stopping keeps what was already read: the sections that never ran are
-recorded as not captured, because discarding finished work would contradict the button. The five
-section states (collected, partial, not present, not readable, not captured) use the three status
-hues plus a neutral dashed chip and stay distinct in every view, because collapsing them would let
-missing evidence read as an unchanged host. Each chip carries the sentence that separates it from
-its neighbours, since the difference between an absent subsystem and an unreadable one decides what
-the user does next.
-
-Each row on the left says how far that capture moved from the one below it, so the list points at
-where something happened instead of making the user diff pairs to find it. A pinned capture is kept
-past the retention limit and does not use one of its slots, because a baseline someone named on
-purpose should not be evicted by routine captures.
-
-A capture on its own opens: any section that read something expands to the entries it recorded, with
-a filter once the list runs long. Host facts report their status and nothing else, because the
-identity behind them is what the comparison and the identity warning are for. From any entry, one
-button reads that unit, port, or mount down the whole stored history, which answers when a value
-moved rather than only whether it did.
-
-Compare with offers Live machine state alongside every other capture. Live reads the host through
-the same bounded collection a capture runs and is never saved, so the list still only grows from
-Capture baseline; the panel names that side Live state and says the read was discarded. Read again
-repeats it, Stop ends it once the section in flight returns, and section progress appears in the
-panel while it runs. Choosing another capture instead orders the comparison earlier to later
-regardless of which row is selected. Each section shows both statuses, then additions, removals,
-and changed facts with the old and new value side by side. A section that could not be compared
-shows why in place of a diff and is excluded from the change count. Sections version their fact
-shape separately, so changing one section never makes the others incomparable against older
-captures. Facts that move on a healthy host are hidden behind one checkbox that appears only when
-such a change exists, and an entry left with nothing to show is counted as unchanged rather than
-listed as changed with an empty body. Copy and the two export buttons write exactly what the panel
-shows, filter included. A mismatched or unreadable machine fingerprint is called out at the top of
-the comparison.
-
-The Systemd list covers system-scope services, timers, mounts, and sockets through one
-bounded property query. Failed units sort first, while state and type filters keep the full
-list usable. The header reports current active and failed totals without presenting zero
-failures as a complete host health result.
-
-Ports is a manual TCP and UDP snapshot with four tabs: Overview, Connections, Docker, and Table.
-Overview is the default: an architecture diagram on a pan-and-zoom canvas (drag to pan, wheel or the
-toolbar to zoom, Fit, and Fullscreen). A generic host node sits at the left with its detected OS as a
-small badge, and curved connectors fan out to a vertical column of boundary boxes — one per owning
-container, service, or process — each holding that owner's listener chips with port, protocol,
-exposure (all interfaces, local only, or specific address), and firewall annotation. Process
-ownership that needs elevation (for example `sshd` on port 22) is offered through the standard sudo
-retry. Selecting a chip opens a read-only detail panel; it never navigates away. Connections aggregates established TCP
-connections by owning listener rather than drawing a node per client, with established and remote
-counts and a bounded remote-endpoint sample. Docker draws published-port topology (host port to
-container to container port), grouped by Compose project with an Ungrouped fallback and kept out of
-the host graph. Table keeps the precise, searchable, sortable list for exact addresses and large
-listener sets.
-
-Everything comes from bounded, read-only queries: one `ss` listener snapshot, one `ss` established
-snapshot, and `ufw status` for firewall policy (offered with the standard sudo retry when it needs
-root). Rows keep protocol, address family, bind address, and port separate from application
-ownership; a single visible PID may correlate to a validated systemd unit through `ps`, and an exact
-published host address, port, and protocol to one Docker container. Binding exposure and firewall
-policy are shown separately — a broad bind is never presented as proof of Internet reachability.
-Missing or conflicting evidence stays unavailable or ambiguous. The single
-exception is systemd's claim on a socket it activates: pid 1 holds the listening
-descriptor for every `.socket` unit, which would otherwise make ssh, docker, and
-their kind report no owner at all. That claim is dropped when a real holder
-remains. Two services that genuinely disagree still stay ambiguous. Firewall and connection data live in
-Workspace memory only. The view does not include Unix sockets, scan networks, test reachability, or
-collect full process arguments.
-
-Scratchpad is a plain-text local editor with connection and global scopes. Each
-Saved Connection has its own note; the global note appears from every connection. It
-autosaves through typed SQLite commands after a short debounce and keeps a
-WebView-local fallback draft until SQLite confirms the same text. It never
-captures terminal or log output, renders Markdown or raw HTML, contacts a Remote
-Host, or claims to protect secrets. Closing a Workspace deletes neither note.
-
-Boot Diagnostics is an on-demand investigation, not a health score or causal diagnosis. It
-combines independently fallible systemd timing, bounded slow and failed unit facts, the ten most
-recent boot identities, and a 30-line warning-through-alert journal sample. Previous boots keep
-their own identity and explicitly mark current-only timing and unit sections unavailable. Results
-remain in Workspace memory, and only a permission failure offers a transient read-only sudo retry.
+**Updates are designed to be missable.** Control Room updating itself is
+infrastructure, not a feature competing for attention. While the app is current
+the titlebar is untouched. When an update exists it earns two quiet words next to
+Settings and a small dot, never a banner, a toast, a badge, or a colour the
+palette does not already have. The dot turns `--success` only once an update is
+downloaded and waiting, the one state where something is left to decide. Its
+details popover drops out of the titlebar, which layers above the session strip
+so the strip can never paint over the panel. A failed automatic check shows
+nothing at all, because an unreachable release feed is not an application error.
 
 ---
 
@@ -560,29 +342,17 @@ the app sees them. Those actions live on buttons and in the palette instead.
 | -------------- | ------------------------------------------- |
 | `Ctrl+Shift+P` | Open the command palette                    |
 | `Ctrl+Shift+T` | Switch the active Workspace to its Terminal |
-| `Ctrl+Shift+R` | Reconnect the active Terminal Session       |
+| `Ctrl+Shift+R` | Reconnect or restart the active session     |
 | `Ctrl+Shift+W` | Close the active Workspace                  |
 
 The terminal lets these bubble up to the app and keeps copy and paste on
-`Ctrl+Shift+C` and `Ctrl+Shift+V`. Every other key goes to the remote shell.
+`Ctrl+Shift+C` and `Ctrl+Shift+V`. Every other key goes to the shell.
 
-A mouse right click inside the terminal copies the selection, or pastes the
-clipboard when nothing is selected. When a program has asked for the mouse, that
-program receives the click instead. This is the terminal's own convention rather
-than a preference, because a clipboard gesture that half the users have turned
-off is a gesture nothing can rely on.
-
-Two decisions live behind that, and keeping them apart is the point. One decides
-who owns the clipboard. The other suppresses the webview's own menu, for every
-pointer right click, whatever the first decided: deriving the second from the
-first is exactly what used to let a Cut/Copy/Paste menu appear over the terminal
-whenever Control Room declined the gesture. A context-menu key press is left
-alone, because no button opened it and the keyboard route is worth keeping.
-
-The copy path also stops the click reaching the program in the pty, so copying a
-selection inside tmux cannot open tmux's own menu at the same time. Nothing is
-intercepted when there is no selection, which is what leaves a mouse-reporting
-program its click.
+Right click inside the terminal is the terminal's own convention rather than a
+preference, because a clipboard gesture that half the users have turned off is a
+gesture nothing can rely on. AGENTS.md holds the rule; the design consequence is
+that Settings offers no switch for it, and that a context-menu key press is left
+alone because no button opened it.
 
 ---
 
@@ -606,88 +376,22 @@ program its click.
 
 ---
 
-## Influences
-
-The design borrows specific, proven patterns instead of cloning any one product.
-
-- **Session and terminal managers.**
-  [Termius](https://termai.sh/blog/termius-vs-warp/) and
-  [Tabby](https://sourceforge.net/software/product/Tabby.sh/alternatives) for
-  connection lists, per-session state, and tab grouping and search, plus the
-  modern expectation that live sessions are visible at a glance.
-- **Terminals.** [Warp](https://docs.warp.dev/terminal/windows/tabs/) and
-  [Windows Terminal](https://learn.microsoft.com/windows/terminal/) for tab
-  strips with hover-revealed controls, split panes, a fast terminal, and session
-  restoration.
-- **[VS Code](https://code.visualstudio.com/)** for the command palette on
-  `Ctrl+Shift+P` and a dense, calm dark chrome.
-- **Host consoles.** Lens, Portainer, and Cockpit for the Overview as a real host
-  dashboard: a stat strip over grouped facts and semantic capability status.
-- **Guidance.** WCAG 2.2 (focus appearance, target size, non-text contrast),
-  Refactoring UI and dark-UI elevation practice (depth from lighter surfaces, not
-  shadows), and Nielsen Norman Group on feedback, empty and error states, and
-  keyboard navigation.
-
-What we skipped, on purpose: the AI-terminal direction (Warp), mobile and cloud
-sync (Termius), and SaaS-dashboard styling. None of it fits a local, read-only,
-single-user inspector.
-
----
-
-### Updates
-
-Control Room updating itself is infrastructure, not a feature competing for
-attention, so it is designed to be missable. While the app is current the
-titlebar is untouched. When an update exists it earns two quiet words next to
-Settings and a small dot, never a banner, a toast, a badge, or a colour the
-palette does not already have. The dot turns `--success` only once an update is
-downloaded and waiting, because that is the one state where the user has
-something left to decide.
-
-Every step is something the user asks for. A check finds an update; it does not
-download one. A download finishes; it does not install. Installing closes the
-window and ends live Terminal Sessions and Log Streams, so it is always confirmed
-first, in the same ConfirmDialog every other interrupting action uses.
-
-Discovery keeps up with an app that stays open for days: the first check waits
-out startup, then repeats about once an hour, and returning to a backgrounded
-Control Room refreshes a feed that went stale in its absence. The details panel
-is anchored to the titlebar, which layers above the session strip, so the strip
-can never paint over the panel that drops out of it.
-
-Release notes come from GitHub and are therefore text Control Room did not write.
-They are parsed into headings, bullets, and paragraphs and rendered as text
-nodes. Nothing in that path may produce markup, which is why a heavier Markdown
-renderer is a non-goal rather than an improvement. The GitHub URLs generated
-notes are full of are compacted to short text; every other URL stays as it
-arrived, still inert.
-
-A failed automatic check shows nothing at all. The updater is less important than
-the user's SSH work, and an unreachable release feed is not an application error.
-Only a check the user explicitly asked for may report that it failed.
-
----
-
 ## Guardrails
 
 Two test files encode the design decisions that must not drift.
 
 - **`src/color-palette.test.ts`** scans every built-in hex and rgb literal in
-  `src/styles.css` and fails unless the only non-neutral colours are exactly
-  `#42d17a`, `#d6a84a`, and `#ef5b6b`. Runtime Connection Tag colors are stored
-  data, not stylesheet literals. The test also checks WCAG contrast for the text
-  hierarchy, the accent, and the status colours, and it pins the terminal ANSI
-  defaults.
-- **`src/ui-hierarchy.test.ts`** locks the structure: the 42 px titlebar row, the
-  bounded connection list and 980 px content cap, terminal padding on the xterm
-  element, focus-mode rules, session presence in navigation, the in-app (not
-  native) discard confirm, the global elevation switch alongside the per-pane
-  sudo retries, and the exact counts of host-OS marks, drag regions, and window
-  controls in the shell. It also pins the updater's place in that shell: the
-  update control sits left of Settings and before the window controls, carries no
-  drag region, no file in the updater path may reach for
-  `dangerouslySetInnerHTML`, and exactly one component may own the update
-  lifecycle.
+  `src/styles.css` and fails unless the only non-neutral colours are exactly the
+  three status hues. Runtime Connection Tag colors are stored data, not
+  stylesheet literals. It also checks WCAG contrast for the text hierarchy, the
+  accent, and the status colours, and pins the terminal ANSI defaults.
+- **`src/ui-hierarchy.test.ts`** locks the structure: the titlebar row, the
+  bounded connection list and content cap, terminal padding on the xterm element,
+  focus-mode rules, session presence in navigation, in-app rather than native
+  confirms, the global elevation switch alongside the per-pane sudo retries, the
+  update control's place left of Settings, one owner for the update lifecycle, no
+  `dangerouslySetInnerHTML` anywhere in the updater path, and the exact counts of
+  host-OS marks, drag regions, and window controls in the shell.
 
 Both, plus the Rust suite, run under `npm run check` (format, lint, test, build)
 and in CI. When you change the UI, keep them green. If a change is a real design
@@ -695,13 +399,10 @@ decision, update the guardrail in the same commit and say why.
 
 ---
 
-## Non-goals and future
+## Non-goals
 
-Control Room stays a focused inspector. The features it leaves out (file
-transfer, container management, cloud sync, AI, and the rest) are the scope
-exclusions in AGENTS.md. New work should sharpen the existing features and their
-contextual actions before it adds another panel.
-
-Worth doing later, still in scope: recent and pinned ordering in the palette,
-and more density and responsive tuning. Each one additive, each one measured
-against the principles above.
+Control Room stays a focused inspector, and the scope exclusions in AGENTS.md are
+the list. Skipped on purpose: the AI-terminal direction, mobile and cloud sync,
+and SaaS-dashboard styling. None of it fits a local, read-only, single-user
+inspector. New work should sharpen the existing views and their contextual
+actions, measured against the principles above, before it adds another panel.
