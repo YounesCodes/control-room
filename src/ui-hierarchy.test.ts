@@ -83,6 +83,10 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(/\.overview-content\s*\{[^}]*max-width: 980px/s);
     expect(stylesSource).toMatch(/\.session-tabs\s*\{[^}]*padding-left: 0;/s);
     expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*padding-bottom: 8px;/s);
+    // The settings bar and the form centre on the same axis, so a wide window
+    // leaves an even margin either side rather than a growing empty half.
+    expect(stylesSource).toMatch(/\.settings-heading-inner\s*\{[^}]*margin-inline: auto;/s);
+    expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*margin-inline: auto;/s);
   });
 
   it("keeps connection search in the sidebar and gives the workspace a compact titlebar", () => {

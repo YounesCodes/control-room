@@ -3711,6 +3711,12 @@ dd {
    Save on screen the whole way down. */
 .settings-page {
   --settings-measure: 790px;
+  --settings-gutter: 30px;
+  /* The classic scrollbar Chromium gives the body, sized by the
+     `::-webkit-scrollbar` rule near the top of this file. The bar reserves the
+     same strip the scrolling body loses to it, so the two boxes are the same
+     width and centre their column on one axis. */
+  --settings-scrollbar: 11px;
 
   position: relative;
   display: flex;
@@ -3724,16 +3730,18 @@ dd {
   flex: none;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-chrome);
-  padding: 13px 30px;
+  padding: 13px calc(var(--settings-gutter) + var(--settings-scrollbar)) 13px var(--settings-gutter);
 }
 
 /* Capped to the form's own measure so Save lands on the same right edge as the
-   fields instead of drifting to the far side of a wide window. */
+   fields, and centred with it so a wide window leaves an even margin on both
+   sides instead of a growing hole to the right of the content. */
 .settings-heading-inner {
   display: flex;
   width: 100%;
   max-width: var(--settings-measure);
   align-items: center;
+  margin-inline: auto;
   gap: 13px;
 }
 
@@ -3793,12 +3801,14 @@ dd {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 24px 30px 26px;
+  padding: 24px var(--settings-gutter) 26px;
+  scrollbar-gutter: stable;
 }
 
 .settings-form {
   display: flow-root;
   max-width: var(--settings-measure);
+  margin-inline: auto;
   padding-bottom: 8px;
 }
 
@@ -4593,12 +4603,16 @@ kbd {
     padding: 22px;
   }
 
+  .settings-page {
+    --settings-gutter: 22px;
+  }
+
   .settings-heading {
-    padding: 11px 22px;
+    padding-block: 11px;
   }
 
   .settings-body {
-    padding: 20px 22px 22px;
+    padding-block: 20px 22px;
   }
 
   .boot-page {
