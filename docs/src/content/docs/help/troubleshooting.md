@@ -23,7 +23,7 @@ Containers without validated Compose project and service labels appear under Ung
 
 ## A local shell is not offered
 
-Only installed profiles appear. Check that PowerShell 7, Windows PowerShell, Command Prompt, or Git for Windows is installed. Control Room resolves the known shell profiles itself and rejects unknown ids. It does not use `System32\bash.exe` as Git Bash.
+Only installed profiles appear. On Windows, check PowerShell 7, Windows PowerShell, Command Prompt, or Git for Windows. On macOS, check zsh, Bash, or fish. Control Room resolves known shell profiles itself and rejects unknown ids. It does not use `System32\bash.exe` as Git Bash.
 
 ## A restored Workspace is disconnected
 
@@ -35,4 +35,4 @@ Structured reads have bounds and independent sections. A missing timestamp, perm
 
 ## The app cannot find OpenSSH
 
-Control Room checks the Windows OpenSSH client in its standard location and then uses the available fallback. Install or enable the Windows OpenSSH Client, then restart Control Room so environment discovery runs again.
+On Windows, Control Room checks the standard OpenSSH Client location and then PATH. Install or enable the Windows OpenSSH Client if neither is available. On macOS, it checks `/usr/bin/ssh` before PATH. Restore the system client if that path is missing. Restart Control Room after changing the client environment so discovery runs again.

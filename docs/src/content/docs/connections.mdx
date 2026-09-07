@@ -47,7 +47,7 @@ Groups are local, manually ordered sections in the connection rail. A Saved Conn
 
 Tags are local metadata used for filtering. They do not grant permissions and do not trigger an operation.
 
-The rail search matches connection names, SSH targets, group names, and tags. Group collapse state and ordering stay on this Windows installation.
+The rail search matches connection names, SSH targets, group names, and tags. Group collapse state and ordering stay on this Control Room installation.
 
 ## Remove a connection
 
@@ -55,6 +55,6 @@ Use **Delete connection** to remove a Saved Connection. This also removes its re
 
 ## SSH configuration
 
-Control Room uses the Windows OpenSSH client and can display the detected client path, the `%USERPROFILE%\.ssh\config` path, and whether `ssh-agent` has an available identity. OpenSSH still owns its normal configuration and authentication behavior.
+Control Room uses the system OpenSSH client and displays its detected path, the client SSH config path, and whether `ssh-agent` has an available identity. The config path is `%USERPROFILE%\.ssh\config` on Windows and `~/.ssh/config` on macOS. OpenSSH still owns its normal configuration and authentication behavior.
 
 If a connection or the structured test misbehaves, [Troubleshooting](/control-room/help/troubleshooting/) covers the common causes.

@@ -1,18 +1,18 @@
 ---
 title: Requirements
-description: Supported Windows, SSH, Linux, systemd, journald, and Docker environments.
+description: Supported client platforms, SSH, Linux, systemd, journald, and Docker environments.
 ---
 
 ## Local machine
 
-| Area             | Support                                                                  |
-| ---------------- | ------------------------------------------------------------------------ |
-| Operating system | Windows 11 x64                                                           |
-| SSH client       | The Windows OpenSSH Client installed on the machine                      |
-| Terminal         | Windows ConPTY through the app                                           |
-| Local shells     | Installed PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash |
+| Client                   | SSH and terminal                                                   | Local shells                                                   |
+| ------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| Windows 11 x64           | Windows OpenSSH Client and ConPTY                                  | PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash |
+| macOS 12+, Apple silicon | `/usr/bin/ssh` with a PATH fallback, hosted in the native Unix PTY | zsh, Bash, and fish when installed                             |
 
-Control Room does not launch or embed Windows Terminal. Git Bash means the `bash.exe` shipped with Git for Windows, not the `System32\bash.exe` WSL launcher.
+Control Room does not launch or embed Windows Terminal. Git Bash means the `bash.exe` shipped with Git for Windows, not the `System32\bash.exe` WSL launcher. On macOS, zsh and Bash are discovered in their system locations before PATH; fish also checks the Homebrew locations for Apple silicon and Intel Macs.
+
+The source supports Intel macOS, but the current CI and release workflow produce Apple silicon packages only.
 
 ## Structured remote inspection
 
@@ -38,4 +38,4 @@ Docker inspection works when the connected account can query the Docker daemon. 
 
 ## Known boundaries
 
-Control Room does not inspect Windows services, processes, ports, Docker, or Event Log. It does not scan hosts, test reachability, manage remote services or containers, install packages, or collect a remote environment dump.
+Control Room does not inspect local services, processes, ports, Docker, Windows Event Log, or macOS system logs. It does not scan hosts, test reachability, manage remote services or containers, install packages, or collect a remote environment dump.

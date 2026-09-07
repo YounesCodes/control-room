@@ -30,14 +30,15 @@ wrong.
 
 ## What Control Room is
 
-Control Room is a local Windows desktop app for opening interactive SSH sessions
-and inspecting Linux hosts. It drives the machine's own Windows OpenSSH client
-and ConPTY instead of shipping a second SSH stack, so it reuses your existing
-keys, `~/.ssh/config`, and agent.
+Control Room is a local Windows and macOS desktop app for opening interactive SSH
+sessions and inspecting Linux hosts. It drives the machine's own OpenSSH client
+and native pty instead of shipping a second SSH stack, so it reuses your existing
+keys, SSH config, and agent.
 
-The first release targets Windows 11 x64 and Debian/Ubuntu-family hosts with
-systemd, journald, Bash, and optional Docker. Other Linux systems still work as
-terminal-only destinations.
+The client targets Windows 11 x64 and macOS 12 or later. macOS release packages
+target Apple silicon. Structured inspection targets Debian/Ubuntu-family hosts
+with systemd, journald, Bash, and optional Docker. Other Linux systems still
+work as terminal-only destinations.
 
 Who it's for: developers and operators who keep a handful of Linux servers and
 want a fast, keyboard-driven cockpit. Open a shell, inspect current unit state, read
@@ -109,11 +110,11 @@ Workspace
 └── local  → Local Shell Profile
 ```
 
-A Local Shell Profile is one of the Windows shells Control Room can host:
-PowerShell 7, Windows PowerShell, Command Prompt, Git Bash. A local Workspace is
-terminal-only. It has no Saved Connection, no host facts, no Log Streams, and no
-History, so every remote-only field and action stays remote-only instead of
-being faked for a machine that is already local.
+A Local Shell Profile is one of the shells Control Room can host: PowerShell 7,
+Windows PowerShell, Command Prompt, or Git Bash on Windows; zsh, Bash, or fish on
+macOS. A local Workspace is terminal-only. It has no Saved Connection, no host
+facts, no Log Streams, and no History, so every remote-only field and action
+stays remote-only instead of being faked for a machine that is already local.
 
 ### Information architecture
 
@@ -141,17 +142,19 @@ rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
 ### Shell layout
 
-A CSS grid with a 42 px custom titlebar row and a ~244 px sidebar column. The
-window enforces a 960 x 640 minimum, and below ~1120 px the sidebar and page
-padding tighten. A distraction-free terminal focus mode (toggled by button)
-hides the rail and titlebar and can tile several sessions as split panes.
+A CSS grid with a 42 px titlebar row and a ~244 px sidebar column. Windows uses
+the existing custom window controls; macOS keeps the native decorated titlebar
+and traffic lights. The window enforces a 960 x 640 minimum, and below ~1120 px
+the sidebar and page padding tighten. A distraction-free terminal focus mode
+(toggled by button) hides the rail and titlebar and can tile several sessions as
+split panes.
 
 ---
 
 ## Technical foundation
 
-Control Room is a Tauri 2 app: a Rust core behind a WebView2 frontend on
-Windows.
+Control Room is a Tauri 2 app: a Rust core behind WebView2 on Windows and
+WKWebView on macOS.
 
 **Frontend.** React 19 and TypeScript, built with Vite 8. The terminal is
 `@xterm/xterm` v6 with the fit addon, and icons come from `lucide-react`. State
@@ -159,11 +162,12 @@ is plain React state, with no global store. Tests run on Vitest and Testing
 Library (jsdom).
 
 **Backend.** Rust (edition 2024) with `rusqlite` (bundled SQLite), `chrono`,
-`uuid`, and `windows-sys`. It shells out to the system OpenSSH client and drives
-ConPTY for the interactive terminal.
+`uuid`, and a small target-selected platform boundary. It shells out to the
+system OpenSSH client and drives the native pty for the interactive terminal.
 
-Control Room is itself the terminal emulator: xterm on top of ConPTY through
-`portable-pty`. A local shell is the same pipeline with a different program at
+Control Room is itself the terminal emulator: xterm on top of `portable-pty`,
+which uses ConPTY on Windows and a Unix pty on macOS. A local shell is the same
+pipeline with a different program at
 the end, so SSH and local sessions share one pty lifecycle (reader thread, flow
 control, input, resize, kill, cleanup) and differ only in how they start and how
 an exit is read. Windows Terminal is not launched, embedded, or parsed; `wt.exe`
@@ -380,14 +384,14 @@ connection, closing a connected Workspace, discarding Settings, clearing History
 and removing the integration all route through these. No native `prompt` or
 `confirm` survives anywhere.
 
-**Command palette.** `Ctrl+Shift+P` opens a palette that searches open terminals,
+**Command palette.** `Ctrl+Shift+P` on Windows or `Cmd+Shift+P` on macOS opens a palette that searches open terminals,
 connections, workspace views, and contextual actions. It follows the
 combobox/listbox pattern with `aria-activedescendant`, arrow, Home, End, Enter,
 and Escape keys, a focus trap, and focus restoration. It is the fastest way
 through a multi-connection setup. If I had to keep one keyboard feature, this is
 the one.
 
-**Terminal.** ConPTY-backed xterm with Unicode, ANSI, and VT output, resize,
+**Terminal.** Native-pty-backed xterm with Unicode, ANSI, and VT output, resize,
 scrollback, copy and paste, and control keys (Vim, top, tmux, and the rest).
 Reconnect after a drop, or clear the local buffer without sending anything to the
 host. Several sessions per connection, with split panes and focus mode for
@@ -553,18 +557,19 @@ remain in Workspace memory, and only a permission failure offers a transient rea
 
 Shortcuts exist only where they earn their place, and each one is discoverable
 through the palette, tooltips, or empty-state hints. We skip browser and WebView
-combinations like `Ctrl+Shift+N` and `F11`, because the WebView eats them before
+combinations like `Ctrl+Shift+N` and `F11`, because the WebView can eat them before
 the app sees them. Those actions live on buttons and in the palette instead.
 
-| Shortcut       | Action                                      |
-| -------------- | ------------------------------------------- |
-| `Ctrl+Shift+P` | Open the command palette                    |
-| `Ctrl+Shift+T` | Switch the active Workspace to its Terminal |
-| `Ctrl+Shift+R` | Reconnect the active Terminal Session       |
-| `Ctrl+Shift+W` | Close the active Workspace                  |
+| Windows        | macOS         | Action                                      |
+| -------------- | ------------- | ------------------------------------------- |
+| `Ctrl+Shift+P` | `Cmd+Shift+P` | Open the command palette                    |
+| `Ctrl+Shift+T` | `Cmd+Shift+T` | Switch the active Workspace to its Terminal |
+| `Ctrl+Shift+R` | `Cmd+Shift+R` | Reconnect the active Terminal Session       |
+| `Ctrl+Shift+W` | `Cmd+Shift+W` | Close the active Workspace                  |
 
 The terminal lets these bubble up to the app and keeps copy and paste on
-`Ctrl+Shift+C` and `Ctrl+Shift+V`. Every other key goes to the remote shell.
+`Ctrl+Shift+C` and `Ctrl+Shift+V` on Windows, or `Cmd+Shift+C` and
+`Cmd+Shift+V` on macOS. Every other key goes to the remote shell.
 
 A mouse right click inside the terminal copies the selection, or pastes the
 clipboard when nothing is selected. When a program has asked for the mouse, that

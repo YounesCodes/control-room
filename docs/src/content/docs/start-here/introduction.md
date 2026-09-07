@@ -3,7 +3,7 @@ title: Introduction
 description: What Control Room is, who it is for, and where its boundary sits.
 ---
 
-Control Room is a Windows desktop app for working with several Linux machines over SSH. Save each host once, open it as a Workspace, and use a real interactive SSH terminal next to structured views of that machine.
+Control Room is a Windows and macOS desktop app for working with several Linux machines over SSH. Save each host once, open it as a Workspace, and use a real interactive SSH terminal next to structured views of that machine.
 
 ## What a Workspace includes
 
@@ -23,10 +23,10 @@ The views share a Workspace, but they do not share terminal output or turn the t
 
 ## Local terminals too
 
-Control Room can host an installed PowerShell 7, Windows PowerShell, Command Prompt, or Git Bash session. These are terminal-only Local Workspaces. They use the same tabs, splits, font, colors, and scrollback as SSH sessions, but they never run remote inspection and never record command history.
+Control Room can host an installed PowerShell 7, Windows PowerShell, Command Prompt, or Git Bash session on Windows. On macOS it can host zsh, Bash, or fish. These are terminal-only Local Workspaces. They use the same tabs, splits, font, colors, and scrollback as SSH sessions, but they never run remote inspection and never record command history.
 
 ## What Control Room does not do
 
-Control Room is not an RMM tool, monitoring service, server control panel, cloud dashboard, SSH replacement, or service manager. It has no file transfer, remote file editor, container lifecycle controls, host discovery, background agent, or private-key store. It can update itself on Windows; it never installs or updates packages on a Remote Host.
+Control Room is not an RMM tool, monitoring service, server control panel, cloud dashboard, SSH replacement, or service manager. It has no file transfer, remote file editor, container lifecycle controls, host discovery, background agent, or private-key store. It can update itself on the client machine; it never installs or updates packages on a Remote Host.
 
 Next: [Install Control Room](/control-room/start-here/installation/). For the support boundary, read [Requirements](/control-room/start-here/requirements/).

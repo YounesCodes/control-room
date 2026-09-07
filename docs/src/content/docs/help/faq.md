@@ -5,7 +5,7 @@ description: Short answers about scope, storage, permissions, and supported host
 
 ### Does Control Room replace SSH?
 
-No. It hosts the Windows OpenSSH client inside its own terminal and adds read-only views around the same Saved Connection.
+No. It hosts the system OpenSSH client inside its own terminal and adds read-only views around the same Saved Connection.
 
 ### Does it change my Linux host?
 
@@ -25,11 +25,11 @@ No. Overview load sampling runs only while the Overview pane is mounted and visi
 
 ### Does it update itself?
 
-Yes, on Windows. Control Room checks GitHub Releases and installs an update only after you confirm the restart. It never installs or updates packages on a Remote Host.
+Yes, on Windows and macOS. Control Room checks GitHub Releases and installs an update only after you confirm the restart. It never installs or updates packages on a Remote Host.
 
 ### Can I use local terminals?
 
-Yes, if the profile is installed. Control Room supports PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash. Local Workspaces are terminal-only and do not record History.
+Yes, if the profile is installed. Windows supports PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash. macOS supports zsh, Bash, and fish. Local Workspaces are terminal-only and do not record History.
 
 ### Can I manage services or containers?
 

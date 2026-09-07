@@ -30,10 +30,10 @@ Allowing the setting does not make Control Room prompt for a password. See [Secu
 
 Settings shows the running version under **Current version**. **Automatically check for updates** is on by default and makes Control Room check GitHub Releases shortly after start, periodically while it stays open, and when you return to the app after it has been in the background long enough. **Check for updates** runs a manual check at any time, even with the automatic preference off, and reports that you are up to date, the available version, or why the check failed.
 
-Update packages are cryptographically signed and verified before anything is installed. This updates Control Room on this Windows machine only. It never installs or updates anything on a Remote Host.
+Update packages are cryptographically signed and verified before anything is installed. This updates Control Room on the client machine only. It never installs or updates anything on a Remote Host.
 
 [Updating Control Room](/control-room/start-here/installation/#update-control-room) describes what happens between download and restart.
 
 ## SSH environment
 
-Settings shows the detected Windows OpenSSH executable, the OpenSSH config path, and ssh-agent availability. These values describe the local environment. Control Room does not replace OpenSSH configuration or store agent keys.
+Settings shows the client platform, detected OpenSSH executable, OpenSSH config path, and ssh-agent availability. These values describe the local environment. Control Room does not replace OpenSSH configuration or store agent keys.

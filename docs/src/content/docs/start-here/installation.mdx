@@ -1,34 +1,36 @@
 ---
 title: Installation
-description: Install the current Windows release of Control Room.
+description: Install the current Windows or macOS release of Control Room.
 ---
 
 import { Steps } from "@astrojs/starlight/components";
 
-Control Room ships as a per-user NSIS installer for Windows 11 x64.
+Control Room ships as a per-user NSIS installer for Windows 11 x64 and as a signed, notarized disk image for Apple silicon Macs running macOS 12 or later.
 
 ## Install Control Room
 
 <Steps>
 
 1. Open the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest).
-2. Download the `.exe` installer and its SHA-256 checksum.
-3. Verify the checksum if you want to check the file before running it.
-4. Run the installer for your Windows user.
+2. Download the package for your client and its SHA-256 checksum:
+   - Windows: the x64 `.exe` installer
+   - macOS: the Apple silicon `.dmg`
+3. Verify the checksum if you want to check the file before opening it.
+4. Run the Windows installer, or open the macOS disk image and move Control Room to Applications.
 
 </Steps>
 
-The installer does not require administrator access.
+The Windows installer does not require administrator access.
 
 :::caution
 
-The release is unsigned. Windows may show an unrecognized-publisher warning when you run the installer.
+The current Windows package is not Authenticode-signed, so Windows may show an unrecognized-publisher warning. The macOS package is signed with a Developer ID Application certificate and notarized by Apple before the release is published.
 
 :::
 
 ## After installation
 
-Start Control Room from the Start menu or its installed shortcut. The first screen opens with no Saved Connections. Select **Add connection** to create one.
+Start Control Room from the Windows Start menu or the macOS Applications folder. The first screen opens with no Saved Connections. Select **Add connection** to create one.
 
 See [Connections](/control-room/connections/) for all connection fields.
 

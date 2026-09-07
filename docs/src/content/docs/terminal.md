@@ -3,7 +3,7 @@ title: Terminal
 description: Use the integrated SSH terminal, tabs, splits, and session controls.
 ---
 
-The terminal is an interactive shell that runs through the Windows OpenSSH client and ConPTY. Type commands into it as you would in any other SSH client.
+The terminal is an interactive shell that runs through the system OpenSSH client and the client's native PTY: ConPTY on Windows and a Unix PTY on macOS. Type commands into it as you would in any other SSH client.
 
 ## New terminal
 
@@ -32,10 +32,10 @@ Use the tab or pane controls to select a terminal, close it, or restart it. Clos
 
 ## Reconnect and restart
 
-When a remote session ends, the terminal toolbar offers **Reconnect**; when a local shell exits, it offers **Restart**. The `Ctrl+Shift+R` shortcut does the same for the active Workspace. Either action starts a fresh session for the current Workspace. Control Room does not retry on a timer or reconnect after restart without your action.
+When a remote session ends, the terminal toolbar offers **Reconnect**; when a local shell exits, it offers **Restart**. `Ctrl+Shift+R` on Windows or `Cmd+Shift+R` on macOS does the same for the active Workspace. Either action starts a fresh session for the current Workspace. Control Room does not retry on a timer or reconnect after restart without your action.
 
 ## Right-click behavior
 
 Right-click is built in rather than a setting. With text selected, a right-click copies the selection. With no selection at an ordinary prompt, it pastes the clipboard. While a program such as Vim, `top`, or tmux is reading the mouse, that program receives the click instead. A right-click inside the terminal never opens the WebView context menu.
 
-`Ctrl+Shift+C` copies the current selection and `Ctrl+Shift+V` pastes.
+`Ctrl+Shift+C` and `Ctrl+Shift+V` copy and paste on Windows. Use `Cmd+Shift+C` and `Cmd+Shift+V` on macOS.

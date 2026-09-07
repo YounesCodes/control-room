@@ -1,6 +1,6 @@
 ---
 title: Documentation
-description: A Windows desktop workspace for working with Linux hosts over SSH.
+description: A Windows and macOS desktop workspace for working with Linux hosts over SSH.
 ---
 
 import { LinkButton, Steps } from "@astrojs/starlight/components";
@@ -11,9 +11,9 @@ import overviewScreenshot from "../../assets/screenshots/overview.png";
 <div class="docs-home-intro">
 
 <p class="docs-home-lede">
-  Control Room gives you one place to keep and work with your Linux machines from Windows. Save each
-  host once, open it as a Workspace, and get a real SSH terminal next to views of that machine's
-  services, containers, ports, and logs.
+  Control Room gives you one place to keep and work with your Linux machines from Windows or macOS.
+  Save each host once, open it as a Workspace, and get a real SSH terminal next to views of that
+  machine's services, containers, ports, and logs.
 </p>
 
 <div class="docs-home-actions">
@@ -44,14 +44,14 @@ import overviewScreenshot from "../../assets/screenshots/overview.png";
 ## Working on a homelab usually looks like this
 
 ```text
-Windows Terminal
-> ssh root@192.168.1.20
+Terminal
+$ ssh root@192.168.1.20
 
 Another terminal
-> ssh root@192.168.1.31
+$ ssh root@192.168.1.31
 
 Another terminal
-> ssh root@192.168.1.42
+$ ssh root@192.168.1.42
 ```
 
 Every host means another address to remember and another terminal window to keep track of.
@@ -75,8 +75,7 @@ that machine. The views report; the terminal is where you act.
 - Work in [a real terminal](/control-room/terminal/) with tabs, splits, and focus mode.
 - Inspect [a host](/control-room/inspection/overview/) without changing it: systemd units,
   listening ports, Docker, logs, and boot evidence.
-- Open [local terminals](/control-room/local-terminals/) for PowerShell, Command Prompt, or
-  Git Bash in the same window.
+- Open [local terminals](/control-room/local-terminals/) for the supported shells on your client.
 - Run several [Workspaces](/control-room/workspaces/) per host, each with its own terminal
   sessions and layout.
 
@@ -84,8 +83,7 @@ that machine. The views report; the terminal is where you act.
 
 <Steps>
 
-1. **Install** the latest Windows release. The per-user installer does not require administrator
-   access.
+1. **Install** the latest package for Windows or macOS.
 2. **Add connection**: for example `Proxmox`, `192.168.1.20`, and your username.
 3. **Open the Workspace** by selecting the Saved Connection in the left rail.
 

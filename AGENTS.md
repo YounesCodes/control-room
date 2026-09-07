@@ -1,17 +1,19 @@
 # Control Room agent rules
 
-Control Room is a local Windows desktop tool for opening and inspecting Linux
-systems through SSH, and for opening shells on the Windows machine it runs on.
+Control Room is a local Windows and macOS desktop tool for opening and inspecting
+Linux systems through SSH, and for opening shells on the client machine.
 The visual system, tokens, and UI conventions live in DESIGN.md.
 
 ## Scope
 
-- Target Windows 11 x64, the installed Windows OpenSSH client, and ConPTY.
-- Local Terminal covers four shell profiles: PowerShell 7, Windows PowerShell,
-  Command Prompt, and Git Bash. Control Room is the terminal emulator, so never
-  launch, embed, or parse Windows Terminal, and never open an external terminal
-  window. Keep the profile model extensible enough for WSL or custom profiles
-  without adding either now.
+- Target Windows 11 x64 with Windows OpenSSH and ConPTY, plus macOS 12 or later
+  with system OpenSSH and the native Unix pty. Release macOS packages for Apple
+  silicon. Keep Intel macOS source-compatible without claiming a release package.
+- Local Terminal covers PowerShell 7, Windows PowerShell, Command Prompt, and Git
+  Bash on Windows, and zsh, Bash, and fish on macOS. Control Room is the terminal
+  emulator, so never launch, embed, or parse an external terminal application.
+  Keep the profile model extensible enough for WSL or custom profiles without
+  adding either now.
 - Structured inspection targets Debian and Ubuntu family hosts with systemd,
   journald, Bash, and optional Docker. Other Linux systems are terminal-only,
   best effort.
@@ -19,11 +21,11 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
   management, cloud accounts, collaboration, AI features, mobile support, host
   discovery, background monitoring, package updates, or private-key storage.
   "Package updates" means a Remote Host's packages. Control Room updating its own
-  installer on the Windows machine it runs on is a separate thing and is in
+  package on the client machine it runs on is a separate thing and is in
   scope; keep the two verbally distinct wherever a user can see them, which is
   why Settings says "Control Room updates" rather than "Updates".
-- Do not add local machine inspection: no Windows services, process manager,
-  local ports, local Docker inspection, Event Log, WMI, or PowerShell
+- Do not add local machine inspection: no local services, process manager,
+  ports, Docker inspection, Windows Event Log, WMI, macOS system logs, or shell
   administration. A local Workspace is terminal-only.
 
 ## Architecture and data rules
@@ -36,8 +38,9 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
    program, script, or argument list from the frontend. There is no
    `run_command`-style API, and the interactive terminal is the execution
    surface.
-2. Keep system OpenSSH and ConPTY. Record a scope decision here before replacing
-   either. SSH and local sessions share one pty lifecycle in `SessionManager`:
+2. Keep system OpenSSH and the client-native pty: ConPTY on Windows and a Unix
+   pty on macOS. Record a scope decision here before replacing either. SSH and
+   local sessions share one pty lifecycle in `SessionManager`:
    one reader thread, one flow-control path, one write, resize, and kill
    implementation. Keep SSH-specific behavior (the connected marker, failure
    classification, Saved Connection state, host capability discovery, shell
@@ -135,15 +138,17 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
     deriving one from the other is what let the menu through. "New terminal"
     chooses a target rather than repeating the active one, and never mutates
     the Workspace it was opened from.
-14. Local shells are offered only when installed, resolved deterministically
-    from standard Windows locations plus `PATH` for PowerShell 7 and Git for
-    Windows, and started with the user's own environment in the user profile
-    directory. Git Bash means `bash.exe`, never `git-bash.exe` or another
-    terminal frontend, and `bash.exe` is never taken from `PATH` directly,
-    because `System32\bash.exe` is the WSL launcher. Set `TERM` only for a shell
-    that reads it, and never invent Windows Terminal variables. Reject unknown
-    profile ids, and report a shell that disappeared after discovery as
-    unavailable rather than failing obscurely.
+14. Local shells are offered only when installed, resolved deterministically,
+    and started with the user's own environment in the home directory. Windows
+    checks standard locations plus the allowed `PATH` lookup for PowerShell 7
+    and Git for Windows. Git Bash means `bash.exe`, never `git-bash.exe` or
+    another terminal frontend, and `bash.exe` is never taken from `PATH`
+    directly because `System32\bash.exe` is the WSL launcher. macOS checks the
+    system zsh and Bash locations and the Homebrew fish locations before `PATH`.
+    Start zsh and fish as login shells and Bash as an interactive login shell.
+    Set `TERM` only for a shell that reads it, and never invent terminal-host
+    variables. Reject unknown profile ids, and report a shell that disappeared
+    after discovery as unavailable rather than failing obscurely.
 15. Keep the in-app updater optional infrastructure, never a boot dependency.
     Rust owns the endpoint, the signature check, and the installer; React names
     an intent and never receives a URL, installer bytes, or a way to skip
@@ -166,21 +171,23 @@ The visual system, tokens, and UI conventions live in DESIGN.md.
 
 ## Validation
 
-Run `npm ci` and `npm run check` before handoff. Build the installer with
+Run `npm ci` and `npm run check` before handoff. Build the native packages with
 `npm run tauri build`. Live SSH tests are ignored by default and need a host and
 account you control.
 
 Neither command needs the updater signing key: updater artifacts are produced
 only by the release workflow, through `src-tauri/tauri.release.conf.json`. The
-release does need `TAURI_SIGNING_PRIVATE_KEY` and a public key committed in
-`src-tauri/tauri.conf.json`, and it fails rather than publishing a release the
-updater cannot verify.
+release needs `TAURI_SIGNING_PRIVATE_KEY` and a public key committed in
+`src-tauri/tauri.conf.json`. macOS releases also need the Apple certificate,
+certificate password, signing identity, Apple ID, app-specific password, and
+team ID secrets documented in the release guide. The workflow fails rather than
+publishing an unsigned, unnotarized, or updater-unverifiable release.
 
 ## Project language
 
 - **Application Update**: a newer Control Room published to GitHub Releases,
   cryptographically signed and verified before it is installed. It replaces the
-  app on this Windows machine and never touches a Remote Host. Distinct from
+  app on the client machine and never touches a Remote Host. Distinct from
   anything installed on a Linux host, which Control Room does not manage.
 - **Saved Connection**: a reusable SSH destination and username, with optional
   port or identity-file overrides.
@@ -194,12 +201,13 @@ updater cannot verify.
   whatever else that target supports. A remote Workspace is a Saved Connection
   plus the inspection views; a local Workspace is a Local Shell Profile and its
   terminal, and nothing else. One target can have several Workspaces.
-- **Local Shell Profile**: one of the four Windows shells Control Room can host,
-  identified by a stable id (`powershell-7`, `windows-powershell`,
-  `command-prompt`, `git-bash`). The id is the only part the frontend may send
-  back, and a profile that is not installed is never offered.
+- **Local Shell Profile**: one of the shells Control Room can host, identified by
+  a stable id. Windows uses `powershell-7`, `windows-powershell`,
+  `command-prompt`, and `git-bash`; macOS uses `zsh`, `bash`, and `fish`. The id
+  is the only part the frontend may send back, and a profile that is not
+  installed is never offered.
 - **Terminal Session**: one interactive shell inside a Workspace, an SSH shell on
-  a Remote Host or a local Windows shell. Its state belongs to the session, not
+  a Remote Host or a local client shell. Its state belongs to the session, not
   to the connection. A remote session connects and disconnects; a local one runs
   and stops.
 - **Structured Operation**: a bounded, read-only inspection request that runs
