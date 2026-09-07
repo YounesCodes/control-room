@@ -14,6 +14,12 @@ const powershell: LocalShellProfile = {
   kind: "powershell-7",
 };
 
+const zsh: LocalShellProfile = {
+  id: "zsh",
+  label: "zsh",
+  kind: "zsh",
+};
+
 function connection(id: string): SavedConnection {
   return {
     id,
@@ -33,6 +39,35 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
+  it("restores a macOS shell Workspace only when that profile is installed", () => {
+    const state: PersistedWorkspaceState = {
+      workspaces: [
+        {
+          id: "workspace-zsh",
+          label: null,
+          connectionId: null,
+          localShellId: "zsh",
+          view: "overview",
+          historyPaused: true,
+        },
+      ],
+      activeWorkspaceId: "workspace-zsh",
+      terminalLayout: createTerminalLayout("workspace-zsh"),
+    };
+
+    const restored = restoreWorkspaceState([], state, [zsh]);
+
+    expect(restored.workspaces).toHaveLength(1);
+    expect(restored.workspaces[0]).toMatchObject({
+      kind: "local",
+      view: "terminal",
+      state: "disconnected",
+      connectRequested: false,
+      shell: zsh,
+    });
+    expect(restoreWorkspaceState([], state, []).workspaces).toEqual([]);
+  });
+
   it("restores tabs and splits as disconnected without session IDs", () => {
     const state: PersistedWorkspaceState = {
       workspaces: [

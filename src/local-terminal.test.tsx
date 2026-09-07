@@ -163,6 +163,7 @@ describe("Local Terminal", () => {
       logTailOptions: [50, 100, 200, 500, 1000],
     });
     api.environment.mockResolvedValue({
+      platform: "windows",
       sshPath: "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
       sshConfigPath: "C:\\Users\\test\\.ssh\\config",
       sshAgentAvailable: true,

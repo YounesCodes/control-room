@@ -13,11 +13,18 @@ import {
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { isRemoteWorkspace, terminalStateLabel } from "../lib/workspace-target";
-import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
+import type {
+  AppSettings,
+  ConnectionState,
+  EnvironmentInfo,
+  SessionStateEvent,
+  Workspace,
+} from "../types";
 import { StatusDot } from "./StatusDot";
 
 interface TerminalPaneProps {
   workspace: Workspace;
+  platform: EnvironmentInfo["platform"];
   settings: AppSettings;
   visible: boolean;
   active: boolean;
@@ -41,6 +48,7 @@ const MAX_EARLY_SESSION_EVENTS = 16;
 /// terminal is built, and a local shell never reaches it.
 export function TerminalPane({
   workspace,
+  platform,
   settings,
   visible,
   active,
@@ -144,8 +152,14 @@ export function TerminalPane({
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
     );
     terminal.attachCustomKeyEventHandler((event) => {
-      if (isControlRoomShortcut(event)) return false;
-      if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey) return true;
+      const useMetaKey = platform === "macos";
+      if (isControlRoomShortcut(event, useMetaKey ? "meta" : "control")) return false;
+      if (
+        event.type !== "keydown" ||
+        (useMetaKey ? !event.metaKey : !event.ctrlKey) ||
+        !event.shiftKey
+      )
+        return true;
       if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
         void navigator.clipboard
           .writeText(terminal.getSelection())
@@ -442,7 +456,7 @@ export function TerminalPane({
     terminal.options.theme = buildTerminalTheme(settings);
     if (visible) fitRef.current?.fit();
     if (active) terminal.focus();
-  }, [settings, visible, active]);
+  }, [platform, settings, visible, active]);
 
   // A local shell is started and stopped; a remote one is connected and
   // disconnected. Same lifecycle, different words for what it means.

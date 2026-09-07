@@ -10,6 +10,10 @@ const terminalSource = readFileSync(
   new URL("./components/TerminalPane.tsx", import.meta.url),
   "utf8",
 );
+const windowControlsSource = readFileSync(
+  new URL("./components/WindowControls.tsx", import.meta.url),
+  "utf8",
+);
 const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
 const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
@@ -314,9 +318,9 @@ describe("application hierarchy", () => {
 
   it("puts the update control left of Settings without touching the window controls", () => {
     const updaterSource = code("./components/UpdateIndicator.tsx");
-    // Order in the titlebar: update status, Settings, divider, native controls.
+    // Order in the titlebar: update status, Settings, then platform-owned controls.
     expect(appSource).toMatch(
-      /<UpdateIndicator[\s\S]*?\/>\s*<button\s+className=\{settingsOpen[\s\S]*?<span className="window-controls-divider"[\s\S]*?<WindowControls \/>/,
+      /<UpdateIndicator[\s\S]*?\/>\s*<button\s+className=\{settingsOpen[\s\S]*?<WindowControls platform=\{environment\.platform\} \/>/,
     );
     // The control is an ordinary button: a drag region here would swallow the
     // click and start moving the window instead.
@@ -380,7 +384,10 @@ describe("application hierarchy", () => {
   });
 
   it("keeps window controls and labeled terminal panes in the focused tab strip", () => {
-    expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
+    expect(appSource.match(/<WindowControls platform=\{environment\.platform\} \/>/g)).toHaveLength(
+      2,
+    );
+    expect(windowControlsSource).toContain('if (platform !== "windows") return null');
     expect(appSource).toContain('aria-label="Split terminal"');
     expect(appSource).toContain("Split vertically");
     expect(appSource).toContain("Split horizontally");

@@ -104,8 +104,9 @@ import type {
 } from "./types";
 
 const emptyEnvironment: EnvironmentInfo = {
+  platform: "unsupported",
   sshPath: null,
-  sshConfigPath: "%USERPROFILE%\\.ssh\\config",
+  sshConfigPath: "~/.ssh/config",
   sshAgentAvailable: false,
   platformSupported: true,
 };
@@ -308,15 +309,16 @@ export function App() {
       ) {
         return;
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
+      const appModifier = environment.platform === "macos" ? event.metaKey : event.ctrlKey;
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
         event.preventDefault();
         void closeWorkspace(activeWorkspace.id);
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, {
           connectRequested: true,
@@ -326,11 +328,16 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, settingsOpen]);
+  }, [activeWorkspace, dialogConnection, environment.platform, hostMenuConnectionId, settingsOpen]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p" && !event.repeat) {
+      if (
+        (environment.platform === "macos" ? event.metaKey : event.ctrlKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "p" &&
+        !event.repeat
+      ) {
         if (paletteOpen) {
           event.preventDefault();
           setPaletteOpen(false);
@@ -344,7 +351,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [paletteOpen, dialogConnection]);
+  }, [dialogConnection, environment.platform, paletteOpen]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -629,7 +636,7 @@ export function App() {
     });
   }
 
-  /// Opens a local Windows shell as its own Workspace. Each launch is a new
+  /// Opens a local shell as its own Workspace. Each launch is a new
   /// shell, so there is nothing to reuse, and no Saved Connection is involved.
   function openLocalShell(shell: LocalShellProfile) {
     setLocalShellMenuOpen(false);
@@ -1097,8 +1104,7 @@ export function App() {
           >
             <Settings size={18} />
           </button>
-          <span className="window-controls-divider" aria-hidden="true" />
-          <WindowControls />
+          <WindowControls platform={environment.platform} />
         </div>
       </header>
 
@@ -1187,7 +1193,7 @@ export function App() {
                 onClick={() => setLocalShellMenuOpen((current) => !current)}
                 aria-haspopup="menu"
                 aria-expanded={localShellMenuOpen}
-                title="Open a shell on this Windows machine"
+                title="Open a shell on this machine"
               >
                 <SquareTerminal size={16} /> Local terminal
               </button>
@@ -1359,8 +1365,7 @@ export function App() {
                     >
                       <Minimize2 size={15} />
                     </button>
-                    <span className="window-controls-divider" aria-hidden="true" />
-                    <WindowControls />
+                    <WindowControls platform={environment.platform} />
                   </>
                 ) : (
                   <button
@@ -1450,6 +1455,7 @@ export function App() {
                       )}
                       <TerminalPane
                         workspace={workspace}
+                        platform={environment.platform}
                         settings={settings}
                         visible={terminalVisible}
                         active={terminalVisible && workspace.id === activeWorkspace.id}
@@ -1648,14 +1654,18 @@ export function App() {
             </p>
             <div className="empty-shortcuts">
               <span className="empty-shortcut">
-                <kbd>Ctrl</kbd>
+                <kbd>{environment.platform === "macos" ? "Cmd" : "Ctrl"}</kbd>
                 <kbd>Shift</kbd>
                 <kbd>P</kbd> Command palette
               </span>
             </div>
             {!environment.sshPath && (
               <p className="inline-warning">
-                Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
+                {environment.platform === "windows"
+                  ? "Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first."
+                  : environment.platform === "macos"
+                    ? "The macOS OpenSSH client was not found at /usr/bin/ssh or on PATH."
+                    : "Control Room supports Windows and macOS clients."}
               </p>
             )}
           </section>
@@ -1727,6 +1737,7 @@ export function App() {
 
       {paletteOpen && (
         <CommandPalette
+          shortcutModifier={environment.platform === "macos" ? "Cmd" : "Ctrl"}
           connections={connections}
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}

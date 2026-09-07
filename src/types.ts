@@ -451,16 +451,18 @@ export interface SettingsContract {
 }
 
 export interface EnvironmentInfo {
+  platform: "windows" | "macos" | "unsupported";
   sshPath: string | null;
   sshConfigPath: string;
   sshAgentAvailable: boolean;
   platformSupported: boolean;
 }
 
-/// The local Windows shells Control Room can host. The id is the whole
+/// The allowlisted local shells Control Room can host. The id is the whole
 /// vocabulary the frontend may send back to Rust: there is no executable path,
 /// argument, or command string on this side of the boundary.
-export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash";
+export type LocalShellKind =
+  "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash" | "zsh" | "bash" | "fish";
 
 export interface LocalShellProfile {
   id: string;
@@ -532,7 +534,7 @@ export interface RemoteWorkspace extends WorkspaceBase {
   baselineSelectionId: string | null;
 }
 
-/// A Workspace on a local Windows shell. It is terminal-only: there is no
+/// A Workspace on a local shell. It is terminal-only: there is no
 /// Saved Connection, no host inspection, and no History.
 export interface LocalWorkspace extends WorkspaceBase {
   kind: "local";

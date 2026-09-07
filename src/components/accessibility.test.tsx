@@ -34,7 +34,9 @@ describe("shared accessibility markup", () => {
       minimize: async () => undefined,
       toggleMaximize: async () => undefined,
     };
-    const markup = renderToStaticMarkup(<WindowControls windowActions={windowActions} />);
+    const markup = renderToStaticMarkup(
+      <WindowControls platform="windows" windowActions={windowActions} />,
+    );
 
     expect(markup).toContain('aria-label="Minimize window"');
     expect(markup).toContain('aria-label="Maximize or restore window"');

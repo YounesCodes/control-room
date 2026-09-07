@@ -4,6 +4,7 @@ mod database;
 mod history;
 mod local_shell;
 mod models;
+mod platform;
 mod remote;
 mod session;
 mod ssh;

@@ -147,9 +147,9 @@ export function useAppUpdater(automaticChecks: boolean) {
   }, []);
 
   /**
-   * Installs and does not return on Windows: the NSIS installer replaces this
-   * process. Anything that must survive has already been persisted by Rust
-   * before the installer starts.
+   * The installer may replace this process. Anything that must survive has
+   * already been persisted by Rust before installation starts. Platforms whose
+   * installer returns restart through the Rust command.
    */
   const install = useCallback(async () => {
     const current = stateRef.current;

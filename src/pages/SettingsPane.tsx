@@ -46,6 +46,12 @@ export function SettingsPane({
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
+  const platformLabel =
+    environment.platform === "windows"
+      ? "Windows"
+      : environment.platform === "macos"
+        ? "macOS"
+        : "Unsupported platform";
 
   /* Manual checks stay available with the automatic preference off: turning the
      schedule off is not the same as refusing to look. */
@@ -172,7 +178,8 @@ export function SettingsPane({
             <small>
               A right click copies the selected text, or pastes the clipboard when nothing is
               selected. While a program is reading the mouse, such as Vim or top, the click goes to
-              that program instead. Ctrl+Shift+C and Ctrl+Shift+V work everywhere.
+              that program instead. Use Ctrl+Shift+C and Ctrl+Shift+V on Windows, or Cmd+Shift+C and
+              Cmd+Shift+V on macOS.
             </small>
             <div className="terminal-color-heading">
               <div>
@@ -314,7 +321,7 @@ export function SettingsPane({
               Checks GitHub Releases shortly after Control Room starts, then periodically while it
               stays open and when you return to it after being away. Update packages are
               cryptographically signed and verified before anything is installed. This updates
-              Control Room on this Windows machine only, and never a Remote Host.
+              Control Room on this client machine only, and never a Remote Host.
             </small>
             <div className="settings-update-actions">
               <button
@@ -351,15 +358,19 @@ export function SettingsPane({
             <legend>SSH environment</legend>
             <dl className="detail-list">
               <div>
-                <dt>ssh.exe</dt>
+                <dt>Platform</dt>
+                <dd>{platformLabel}</dd>
+              </div>
+              <div>
+                <dt>SSH executable</dt>
                 <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
               </div>
               <div>
-                <dt>OpenSSH config</dt>
+                <dt>SSH config</dt>
                 <dd className="technical">{environment.sshConfigPath}</dd>
               </div>
               <div>
-                <dt>ssh-agent</dt>
+                <dt>SSH agent</dt>
                 <dd>
                   {environment.sshAgentAvailable
                     ? "Available with loaded identities"

@@ -73,7 +73,7 @@ export function createRemoteWorkspace(connection: SavedConnection): RemoteWorksp
   };
 }
 
-/// A new Workspace on a local Windows shell, asked to start. It carries no
+/// A new Workspace on a local shell, asked to start. It carries no
 /// Saved Connection, no inspection caches, and no History state, because a
 /// local shell has none of those.
 export function createLocalWorkspace(shell: LocalShellProfile): LocalWorkspace {

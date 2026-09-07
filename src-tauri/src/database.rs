@@ -2721,6 +2721,7 @@ mod tests {
             "Workspace state names an unknown local shell"
         );
         assert!(validate_workspace_state(&workspace(None, Some("git-bash".into()))).is_ok());
+        assert!(validate_workspace_state(&workspace(None, Some("zsh".into()))).is_ok());
     }
 
     #[test]

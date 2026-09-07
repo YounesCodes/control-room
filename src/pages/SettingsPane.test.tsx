@@ -34,6 +34,7 @@ const settings: AppSettings = {
 };
 
 const environment: EnvironmentInfo = {
+  platform: "windows",
   sshPath: "C:/Windows/System32/OpenSSH/ssh.exe",
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: true,
@@ -117,6 +118,29 @@ describe("Settings actions", () => {
     expect(screen.getByText("v0.6.1")).toBeTruthy();
     const preference = screen.getByLabelText("Automatically check for updates") as HTMLInputElement;
     expect(preference.checked).toBe(true);
+  });
+
+  it("uses platform-neutral SSH labels and reports the client platform", () => {
+    renderPane();
+    expect(screen.getByText("Platform")).toBeTruthy();
+    expect(screen.getByText("Windows")).toBeTruthy();
+    expect(screen.getByText("SSH executable")).toBeTruthy();
+    expect(screen.getByText("SSH config")).toBeTruthy();
+    expect(screen.getByText("SSH agent")).toBeTruthy();
+    expect(screen.queryByText("ssh.exe")).toBeNull();
+
+    cleanup();
+    renderPane({
+      environment: {
+        platform: "macos",
+        sshPath: "/usr/bin/ssh",
+        sshConfigPath: "/Users/test/.ssh/config",
+        sshAgentAvailable: true,
+        platformSupported: true,
+      },
+    });
+    expect(screen.getByText("macOS")).toBeTruthy();
+    expect(screen.getByText("/usr/bin/ssh")).toBeTruthy();
   });
 
   it("checks manually even with automatic checks turned off", async () => {

@@ -1,75 +1,31 @@
 use std::{
-    env,
     ffi::OsStr,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    time::Duration,
+    process::Command,
 };
 
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-#[cfg(windows)]
-use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
-
 use regex::Regex;
-use wait_timeout::ChildExt;
 
-use crate::models::SavedConnection;
+use crate::{models::SavedConnection, platform};
 
 pub fn background_command<S: AsRef<OsStr>>(program: S) -> Command {
-    let mut command = Command::new(program);
-    #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
-    command
+    platform::background_command(program)
 }
 
 pub fn detect_ssh_path() -> Option<PathBuf> {
-    let system = PathBuf::from(r"C:\Windows\System32\OpenSSH\ssh.exe");
-    if system.is_file() {
-        return Some(system);
-    }
-    env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths)
-            .map(|path| path.join("ssh.exe"))
-            .find(|path| path.is_file())
-    })
+    platform::detect_ssh_path()
 }
 
 pub fn ssh_agent_available(ssh_path: Option<&Path>) -> bool {
-    let Some(ssh_path) = ssh_path else {
-        return false;
-    };
-    let ssh_add = ssh_path.with_file_name("ssh-add.exe");
-    if !ssh_add.is_file() {
-        return false;
-    }
-    let Ok(mut child) = background_command(ssh_add)
-        .arg("-l")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return false;
-    };
-    match child.wait_timeout(Duration::from_secs(2)) {
-        Ok(Some(status)) => status.success(),
-        Ok(None) | Err(_) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            false
-        }
-    }
+    platform::probe_ssh_agent(ssh_path)
 }
 
 pub fn ssh_config_path() -> String {
-    env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .unwrap_or_default()
-        .join(".ssh")
-        .join("config")
-        .to_string_lossy()
-        .to_string()
+    platform::ssh_config_path().to_string_lossy().to_string()
+}
+
+pub fn ssh_not_found_message() -> String {
+    platform::ssh_not_found_message()
 }
 
 pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec<String> {
@@ -176,7 +132,7 @@ mod tests {
         assert!(!remote.contains("Command::new("));
         assert!(!commands.contains("Command::new("));
         assert!(remote.matches("background_command(").count() >= 2);
-        assert!(ssh.contains("background_command(ssh_add)"));
+        assert!(ssh.contains("platform::background_command(program)"));
     }
 
     #[test]

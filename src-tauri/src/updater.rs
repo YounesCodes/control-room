@@ -2,7 +2,7 @@
 //!
 //! This is the application replacing its own installer. It never touches a
 //! Remote Host, never runs a package manager, and never reaches SSH. The name
-//! "update" in this module always means Control Room on this Windows machine.
+//! "update" in this module always means Control Room on this client machine.
 //!
 //! Rust owns the whole native side, following the same rule as sessions and SSH
 //! arguments: React names an intent and nothing else. It cannot choose a URL,
@@ -328,9 +328,9 @@ pub async fn download_update(
 
 /// Records the one-time notice, then installs.
 ///
-/// The notice is written first on purpose: the NSIS installer replaces this
-/// process, so anything held in memory at this point is gone. On Windows this
-/// call does not return.
+/// The notice is written first because an installer may replace this process,
+/// so anything held only in memory at this point can disappear. On Windows the
+/// NSIS install does not return; macOS may return and use the restart below.
 #[tauri::command]
 pub async fn install_update(
     app: AppHandle,

@@ -147,7 +147,7 @@ export function ConnectionDialog({
             required
             spellCheck={false}
           />
-          <small>OpenSSH resolves this value using your normal Windows configuration.</small>
+          <small>OpenSSH resolves this value using your normal local configuration.</small>
         </label>
         <div className="form-row">
           <label>

@@ -17,7 +17,7 @@ use crate::{
     database::Database,
     local_shell::{self, ResolvedLocalShell},
     models::{LocalSessionStarted, SavedConnection, SessionStarted, SessionStateEvent},
-    ssh::{connection_arguments, detect_ssh_path},
+    ssh::{connection_arguments, detect_ssh_path, ssh_not_found_message},
 };
 
 struct ManagedSession {
@@ -198,10 +198,7 @@ impl SessionManager {
         rows: u16,
         output: Channel<Response>,
     ) -> Result<SessionStarted, String> {
-        let ssh_path = detect_ssh_path().ok_or_else(|| {
-            "Windows OpenSSH client was not found. Install the OpenSSH Client optional feature."
-                .to_string()
-        })?;
+        let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
         let mut command = CommandBuilder::new(ssh_path);
         command.env("TERM", TERMINAL_TYPE);
         command.args(connection_arguments(connection, true));
@@ -221,7 +218,7 @@ impl SessionManager {
         })
     }
 
-    /// Starts a local Windows shell through the same pty lifecycle as an SSH
+    /// Starts a local shell through the same pty lifecycle as an SSH
     /// session. The profile was validated and resolved by `local_shell`, so
     /// nothing here picks an executable or an argument.
     pub fn start_local(
@@ -1368,6 +1365,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn conpty_runs_a_console_process() {
         let pair = native_pty_system().openpty(PtySize::default()).unwrap();
         let mut command = CommandBuilder::new("cmd.exe");
@@ -1428,6 +1426,22 @@ mod tests {
             }
         }
         assert!(String::from_utf8_lossy(&output).contains("CONTROL_ROOM_CONPTY_OK"));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn unix_pty_runs_a_shell_process() {
+        let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.args(["-c", "printf CONTROL_ROOM_UNIX_PTY_OK"]);
+        let mut child = pair.slave.spawn_command(command).unwrap();
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let status = child.wait().unwrap();
+        let mut output = Vec::new();
+        reader.read_to_end(&mut output).unwrap();
+        assert!(status.success());
+        assert!(String::from_utf8_lossy(&output).contains("CONTROL_ROOM_UNIX_PTY_OK"));
     }
 
     #[test]
@@ -1585,7 +1599,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires the explicitly configured Debian SSH fixture"]
-    fn conpty_hosts_windows_ssh_against_live_fixture() {
+    fn native_pty_hosts_ssh_against_live_fixture() {
         let ssh_path = crate::ssh::detect_ssh_path().unwrap();
         let host = std::env::var("CONTROL_ROOM_TEST_HOST").unwrap();
         let user = std::env::var("CONTROL_ROOM_TEST_USER").unwrap();
@@ -1642,7 +1656,7 @@ mod tests {
             if Instant::now() >= deadline {
                 let _ = killer.kill();
                 panic!(
-                    "ConPTY SSH fixture timed out: {}",
+                    "Native PTY SSH fixture timed out: {}",
                     String::from_utf8_lossy(&output)
                 );
             }
