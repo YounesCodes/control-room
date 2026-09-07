@@ -29,8 +29,8 @@ use crate::{
         SavedConnection, SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
-        background_command, connection_arguments, detect_ssh_path, validate_container_id,
-        validate_systemd_unit_id,
+        background_command, connection_arguments, detect_ssh_path, ssh_not_found_message,
+        validate_container_id, validate_systemd_unit_id,
     },
 };
 
@@ -936,7 +936,7 @@ fn run_ssh(
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
     let ssh_path =
-        detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
+        detect_ssh_path().ok_or_else(ssh_not_found_message)?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
     let mut command = background_command(ssh_path);
@@ -2216,8 +2216,7 @@ impl StreamManager {
         elevation: Elevation,
         output: Channel<Response>,
     ) -> Result<StreamStarted, String> {
-        let ssh_path =
-            detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
+        let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
         let mut arguments = connection_arguments(connection, false);
         arguments.push(elevated_command(&command, &elevation));
         let mut child = background_command(ssh_path)

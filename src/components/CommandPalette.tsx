@@ -35,6 +35,7 @@ interface CommandItem {
 }
 
 interface CommandPaletteProps {
+  shortcutModifier: "Ctrl" | "Cmd";
   connections: SavedConnection[];
   localShells: LocalShellProfile[];
   workspaces: Workspace[];
@@ -67,6 +68,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({
+  shortcutModifier,
   connections,
   localShells,
   workspaces,
@@ -210,7 +212,7 @@ export function CommandPalette({
         id: "act-reconnect",
         group: "Actions",
         label: activeWorkspaceIsLocal ? "Restart terminal" : "Reconnect terminal",
-        shortcut: "Ctrl+Shift+R",
+        shortcut: `${shortcutModifier}+Shift+R`,
         run: run(onReconnect),
       });
       if (canFocusTerminal) {
@@ -242,7 +244,7 @@ export function CommandPalette({
         id: "act-close",
         group: "Actions",
         label: "Close workspace",
-        shortcut: "Ctrl+Shift+W",
+        shortcut: `${shortcutModifier}+Shift+W`,
         run: run(onCloseWorkspace),
       });
     }

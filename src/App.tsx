@@ -156,8 +156,9 @@ import type {
 } from "./types";
 
 const emptyEnvironment: EnvironmentInfo = {
+  platform: "unsupported",
   sshPath: null,
-  sshConfigPath: "%USERPROFILE%\\.ssh\\config",
+  sshConfigPath: "~/.ssh/config",
   sshAgentAvailable: false,
   platformSupported: true,
 };
@@ -607,15 +608,16 @@ export function App() {
       ) {
         return;
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
+      const appModifier = environment.platform === "macos" ? event.metaKey : event.ctrlKey;
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
         event.preventDefault();
         void closeWorkspace(activeWorkspace.id);
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, {
           connectRequested: true,
@@ -638,11 +640,16 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, settingsOpen]);
+  }, [activeWorkspace, dialogConnection, environment.platform, hostMenuConnectionId, settingsOpen]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p" && !event.repeat) {
+      if (
+        (environment.platform === "macos" ? event.metaKey : event.ctrlKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "p" &&
+        !event.repeat
+      ) {
         if (paletteOpen) {
           event.preventDefault();
           setPaletteOpen(false);
@@ -656,7 +663,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [paletteOpen, dialogConnection]);
+  }, [dialogConnection, environment.platform, paletteOpen]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -1941,7 +1948,7 @@ export function App() {
             {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         )}
-        <WindowControls />
+        <WindowControls platform={environment.platform} />
       </div>
 
       <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
@@ -2563,6 +2570,7 @@ export function App() {
                           else terminalHandlesRef.current.delete(workspace.id);
                         }}
                         workspace={workspace}
+                        platform={environment.platform}
                         settings={settings}
                         visible={terminalVisible}
                         active={terminalVisible && workspace.id === activeWorkspace.id}
@@ -2848,14 +2856,18 @@ export function App() {
             )}
             <div className="empty-shortcuts">
               <span className="empty-shortcut">
-                <kbd>Ctrl</kbd>
+                <kbd>{environment.platform === "macos" ? "Cmd" : "Ctrl"}</kbd>
                 <kbd>Shift</kbd>
                 <kbd>P</kbd> Command palette
               </span>
             </div>
             {!environment.sshPath && (
               <p className="inline-warning">
-                Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
+                {environment.platform === "windows"
+                  ? "Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first."
+                  : environment.platform === "macos"
+                    ? "The macOS OpenSSH client was not found at /usr/bin/ssh or on PATH."
+                    : "Control Room supports Windows and macOS clients."}
               </p>
             )}
           </section>
@@ -2953,6 +2965,7 @@ export function App() {
 
       {paletteOpen && (
         <CommandPalette
+          shortcutModifier={environment.platform === "macos" ? "Cmd" : "Ctrl"}
           connections={connections}
           localShells={offeredShells}
           workspaces={workspaces}

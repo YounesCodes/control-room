@@ -15,7 +15,7 @@ import {
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { isRemoteWorkspace } from "../lib/workspace-target";
-import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
+import type { AppSettings, ConnectionState, EnvironmentInfo, SessionStateEvent, Workspace } from "../types";
 
 export interface TerminalPaneHandle {
   copySelection: () => void;
@@ -25,6 +25,7 @@ export interface TerminalPaneHandle {
 interface TerminalPaneProps {
   ref?: Ref<TerminalPaneHandle>;
   workspace: Workspace;
+  platform: EnvironmentInfo["platform"];
   settings: AppSettings;
   visible: boolean;
   active: boolean;
@@ -51,6 +52,7 @@ const MAX_EARLY_SESSION_EVENTS = 16;
 export function TerminalPane({
   ref,
   workspace,
+  platform,
   settings,
   visible,
   active,
@@ -220,8 +222,14 @@ export function TerminalPane({
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
     );
     terminal.attachCustomKeyEventHandler((event) => {
-      if (isControlRoomShortcut(event)) return false;
-      if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey) return true;
+      const useMetaKey = platform === "macos";
+      if (isControlRoomShortcut(event, useMetaKey ? "meta" : "control")) return false;
+      if (
+        event.type !== "keydown" ||
+        (useMetaKey ? !event.metaKey : !event.ctrlKey) ||
+        !event.shiftKey
+      )
+        return true;
       if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
         void navigator.clipboard
           .writeText(terminal.getSelection())

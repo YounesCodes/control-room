@@ -244,6 +244,7 @@ function renderPane(
   render(
     <TerminalPane
       workspace={workspace}
+      platform="windows"
       settings={settings}
       visible
       active

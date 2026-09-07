@@ -16,6 +16,12 @@ const powershell: LocalShellProfile = {
   elevated: false,
 };
 
+const zsh: LocalShellProfile = {
+  id: "zsh",
+  label: "zsh",
+  kind: "zsh",
+};
+
 function connection(id: string): SavedConnection {
   return {
     id,

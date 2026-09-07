@@ -503,6 +503,7 @@ export interface SettingsContract {
 }
 
 export interface EnvironmentInfo {
+  platform: "windows" | "macos" | "unsupported";
   sshPath: string | null;
   sshConfigPath: string;
   sshAgentAvailable: boolean;
@@ -513,7 +514,7 @@ export interface EnvironmentInfo {
 /// administrator variant, is the whole vocabulary the frontend may send back
 /// to Rust: there is no executable path, argument, or command string on this
 /// side of the boundary.
-export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash";
+export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash" | "zsh" | "bash" | "fish";
 
 export interface LocalShellProfile {
   id: string;

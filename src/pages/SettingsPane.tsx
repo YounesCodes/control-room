@@ -116,6 +116,7 @@ export function SettingsPane({
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
+  const platformLabel = environment.platform === "windows" ? "Windows" : environment.platform === "macos" ? "macOS" : "Unsupported platform";
   const lowContrastColors = terminalColorFields
     .filter(([field]) => contrastRatio(draft[field], TERMINAL_BACKGROUND) < 4.5)
     .map(([, label]) => label);
@@ -596,19 +597,23 @@ export function SettingsPane({
           <fieldset>
             <legend>SSH environment</legend>
             <small>
-              Detected Windows SSH tools and configuration. These details are read-only.
+              Detected local SSH tools and configuration. These details are read-only.
             </small>
             <dl className="detail-list">
               <div>
-                <dt>ssh.exe</dt>
+                <dt>Platform</dt>
+                <dd>{platformLabel}</dd>
+              </div>
+              <div>
+                <dt>SSH executable</dt>
                 <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
               </div>
               <div>
-                <dt>OpenSSH config</dt>
+                <dt>SSH config</dt>
                 <dd className="technical">{environment.sshConfigPath}</dd>
               </div>
               <div>
-                <dt>ssh-agent</dt>
+                <dt>SSH agent</dt>
                 <dd>
                   {environment.sshAgentAvailable
                     ? "Available, identity loaded"

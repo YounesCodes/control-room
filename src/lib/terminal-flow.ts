@@ -1,6 +1,6 @@
 export const MAX_PENDING_TERMINAL_INPUT_BYTES = 64 * 1024;
 
-type TerminalKeyEvent = Pick<KeyboardEvent, "type" | "ctrlKey" | "shiftKey" | "key">;
+type TerminalKeyEvent = Pick<KeyboardEvent, "type" | "ctrlKey" | "metaKey" | "shiftKey" | "key">;
 
 type ShortcutTarget = {
   closest?: (selectors: string) => unknown;
@@ -19,9 +19,12 @@ export function isWorkspaceShortcutBlocked(
   );
 }
 
-export function isControlRoomShortcut(event: TerminalKeyEvent): boolean {
+export function isControlRoomShortcut(
+  event: TerminalKeyEvent,
+  modifier: "control" | "meta" = "control",
+): boolean {
   if (event.type !== "keydown") return false;
-  if (!event.ctrlKey) return false;
+  if (modifier === "meta" ? !event.metaKey : !event.ctrlKey) return false;
   const key = event.key.toLowerCase();
   if (!event.shiftKey) return false;
   return key === "t" || key === "w" || key === "r" || key === "p";

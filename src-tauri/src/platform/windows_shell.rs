@@ -1,0 +1,682 @@
+//! Windows shell discovery, including Sudo for Windows profiles.
+use std::{env, path::{Path, PathBuf}};
+use super::*;
+/// The Windows locations discovery is allowed to look at, captured once so
+/// detection can be tested without depending on what the machine has installed.
+#[derive(Debug, Clone, Default)]
+pub struct ShellEnvironment {
+    pub system_root: Option<PathBuf>,
+    pub program_files: Vec<PathBuf>,
+    pub local_app_data: Option<PathBuf>,
+    pub path_entries: Vec<PathBuf>,
+    pub user_profile: Option<PathBuf>,
+}
+
+impl ShellEnvironment {
+    pub fn from_process_env() -> Self {
+        let mut program_files = Vec::new();
+        for variable in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
+            if let Some(value) = env::var_os(variable).map(PathBuf::from)
+                && !program_files.contains(&value)
+            {
+                program_files.push(value);
+            }
+        }
+        Self {
+            system_root: env::var_os("SystemRoot").map(PathBuf::from),
+            program_files,
+            local_app_data: env::var_os("LOCALAPPDATA").map(PathBuf::from),
+            path_entries: env::var_os("PATH")
+                .map(|paths| env::split_paths(&paths).collect())
+                .unwrap_or_default(),
+            user_profile: env::var_os("USERPROFILE").map(PathBuf::from),
+        }
+    }
+}
+
+/// The fixed arguments each shell is started with. They are constants, never
+/// user input: a startup argument is not something the frontend may choose.
+fn fixed_arguments(kind: LocalShellKind) -> &'static [&'static str] {
+    match kind {
+        // Both PowerShells are interactive by default; the banner is the only
+        // thing worth suppressing, since Control Room already names the shell.
+        LocalShellKind::PowerShell7 | LocalShellKind::WindowsPowerShell => &["-NoLogo"],
+        LocalShellKind::CommandPrompt => &[],
+        // Git Bash is `bash.exe` itself, as a login shell so the user's profile
+        // scripts run, and interactive so it behaves like a terminal shell.
+        LocalShellKind::GitBash => &["--login", "-i"],
+        LocalShellKind::Zsh | LocalShellKind::Bash | LocalShellKind::Fish => &[],
+    }
+}
+
+/// `TERM` is set only where the shell reads it. The PowerShells and the command
+/// processor use the Windows console API instead, and inventing a value for them
+/// would describe an environment they do not have.
+fn terminal_type(kind: LocalShellKind) -> Option<&'static str> {
+    match kind {
+        LocalShellKind::GitBash => Some("xterm-256color"),
+        _ => None,
+    }
+}
+
+pub(super) fn configure_terminal_environment(command: &mut CommandBuilder, kind: LocalShellKind) {
+    if let Some(terminal) = terminal_type(kind) {
+        command.env("TERM", terminal);
+    }
+    // OpenTUI's alternate-screen cleanup can close the enclosing ConPTY pipes
+    // when OpenCode exits, leaving Bash alive with no usable terminal. Its
+    // main-screen mode returns to the same shell without breaking those pipes.
+    // Keep this local to Git Bash and honor an explicit inherited preference.
+    if kind == LocalShellKind::GitBash && command.get_env("OTUI_USE_ALTERNATE_SCREEN").is_none() {
+        command.env("OTUI_USE_ALTERNATE_SCREEN", "0");
+    }
+}
+
+/// Every place a shell may legitimately live, most specific first. Nothing here
+/// depends on a listing or a registry read, so the same input always produces
+/// the same candidates.
+fn candidate_programs(kind: LocalShellKind, environment: &ShellEnvironment) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    match kind {
+        LocalShellKind::PowerShell7 => {
+            for entry in &environment.path_entries {
+                candidates.push(entry.join("pwsh.exe"));
+            }
+            for root in &environment.program_files {
+                candidates.push(root.join("PowerShell").join("7").join("pwsh.exe"));
+            }
+            if let Some(local) = &environment.local_app_data {
+                candidates.push(local.join("Microsoft").join("WindowsApps").join("pwsh.exe"));
+            }
+        }
+        // The built-in shell has one canonical path. Searching PATH for
+        // `powershell.exe` could pick up a shim and report it as the Windows
+        // PowerShell that ships with the OS.
+        LocalShellKind::WindowsPowerShell => {
+            if let Some(system_root) = &environment.system_root {
+                candidates.push(
+                    system_root
+                        .join("System32")
+                        .join("WindowsPowerShell")
+                        .join("v1.0")
+                        .join("powershell.exe"),
+                );
+            }
+        }
+        LocalShellKind::CommandPrompt => {
+            if let Some(system_root) = &environment.system_root {
+                candidates.push(system_root.join("System32").join("cmd.exe"));
+            }
+        }
+        LocalShellKind::GitBash => {
+            for root in &environment.program_files {
+                candidates.push(root.join("Git").join("bin").join("bash.exe"));
+            }
+            if let Some(local) = &environment.local_app_data {
+                candidates.push(
+                    local
+                        .join("Programs")
+                        .join("Git")
+                        .join("bin")
+                        .join("bash.exe"),
+                );
+            }
+            // A Git install that is only on PATH is found through its own
+            // directory. `bash.exe` is never taken from PATH directly, because
+            // `System32\bash.exe` is the WSL launcher, which is out of scope.
+            for entry in &environment.path_entries {
+                if !entry.to_string_lossy().to_lowercase().contains("git") {
+                    continue;
+                }
+                candidates.push(entry.join("bash.exe"));
+                if let Some(parent) = entry.parent() {
+                    candidates.push(parent.join("bin").join("bash.exe"));
+                }
+            }
+        }
+        LocalShellKind::Zsh | LocalShellKind::Bash | LocalShellKind::Fish => {}
+    }
+    candidates
+}
+
+/// Resolves one profile to the first candidate that exists, or `None` when the
+/// shell is not installed.
+pub fn resolve(
+    kind: LocalShellKind,
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+) -> Option<ResolvedLocalShell> {
+    let program = candidate_programs(kind, environment)
+        .into_iter()
+        .find(|candidate| exists(candidate))?;
+    Some(ResolvedLocalShell {
+        kind,
+        program,
+        arguments: fixed_arguments(kind),
+        // A local shell starts where the user's own shell would, not in the
+        // directory Control Room happens to be installed in.
+        working_directory: environment
+            .user_profile
+            .as_ref()
+            .filter(|profile| exists(profile) || profile.is_dir())
+            .cloned(),
+        administrator_launcher: None,
+    })
+}
+
+/// The profiles that are actually available. An uninstalled shell is left out
+/// rather than offered and then failing on launch.
+pub fn discover(
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+) -> Vec<LocalShellProfile> {
+    LocalShellKind::ALL
+        .iter()
+        .filter(|kind| resolve(**kind, environment, exists).is_some())
+        .map(|kind| LocalShellProfile {
+            id: kind.id().into(),
+            label: kind.label().into(),
+            kind: *kind,
+            elevated: false,
+        })
+        .collect()
+}
+
+pub fn installed_shells() -> LocalShellCatalog {
+    let environment = ShellEnvironment::from_process_env();
+    let exists = |path: &Path| path.is_file();
+    let status = administrator_terminal_status(&environment, &exists);
+    catalog(&environment, &exists, status)
+}
+
+pub fn catalog(
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+    administrator_status: AdministratorTerminalStatus,
+) -> LocalShellCatalog {
+    let mut profiles = discover(environment, exists);
+    if administrator_status == AdministratorTerminalStatus::Available {
+        let elevated = profiles
+            .iter()
+            .filter_map(|profile| {
+                profile.kind.administrator_id().map(|id| LocalShellProfile {
+                    id: id.into(),
+                    label: profile.label.clone(),
+                    kind: profile.kind,
+                    elevated: true,
+                })
+            })
+            .collect::<Vec<_>>();
+        profiles.extend(elevated);
+    }
+    LocalShellCatalog {
+        profiles,
+        administrator_status,
+    }
+}
+
+/// Validates a Local Shell Profile id from the frontend and resolves it against
+/// the machine as it is right now. An unknown id and a shell that disappeared
+/// after discovery are both refused here.
+pub fn resolve_installed(shell_id: &str) -> Result<ResolvedLocalShell, String> {
+    let (kind, elevated) =
+        LocalShellKind::from_profile_id(shell_id).ok_or("Unknown local shell")?;
+    let environment = ShellEnvironment::from_process_env();
+    let exists = |path: &Path| path.is_file();
+    let mut shell = resolve(kind, &environment, &exists)
+        .ok_or_else(|| format!("{} is no longer available.", kind.label()))?;
+    if elevated {
+        if administrator_terminal_status(&environment, &exists)
+            != AdministratorTerminalStatus::Available
+        {
+            return Err(
+                "Administrator terminals require Sudo for Windows in inline mode. Enable it in Windows Settings, then reopen the Local terminal menu."
+                    .into(),
+            );
+        }
+        shell.administrator_launcher = environment
+            .system_root
+            .as_ref()
+            .map(|root| root.join("System32").join("sudo.exe"));
+    }
+    Ok(shell)
+}
+
+fn effective_sudo_mode(user_mode: Option<u32>, policy_mode: Option<u32>) -> Option<u32> {
+    match (user_mode, policy_mode) {
+        (Some(user), Some(policy)) => Some(user.min(policy)),
+        (user, None) => user,
+        (None, _) => None,
+    }
+}
+
+fn administrator_terminal_status(
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+) -> AdministratorTerminalStatus {
+    let Some(system_root) = &environment.system_root else {
+        return AdministratorTerminalStatus::UnsupportedWindows;
+    };
+    if !exists(&system_root.join("System32").join("sudo.exe")) {
+        return AdministratorTerminalStatus::UnsupportedWindows;
+    }
+    match effective_sudo_mode(read_sudo_mode(false), read_sudo_mode(true)) {
+        Some(3) => AdministratorTerminalStatus::Available,
+        Some(1 | 2) => AdministratorTerminalStatus::UnsupportedMode,
+        _ => AdministratorTerminalStatus::Disabled,
+    }
+}
+
+#[cfg(windows)]
+fn read_sudo_mode(policy: bool) -> Option<u32> {
+    use std::{ffi::c_void, ptr};
+    use windows_sys::Win32::System::Registry::{
+        HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
+    };
+
+    let key = if policy {
+        "SOFTWARE\\Policies\\Microsoft\\Windows\\Sudo\0"
+    } else {
+        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Sudo\0"
+    };
+    let key = key.encode_utf16().collect::<Vec<_>>();
+    let value = "Enabled\0".encode_utf16().collect::<Vec<_>>();
+    let mut mode = 0_u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    // The OS owns this machine-level setting. Control Room reads one DWORD and
+    // never changes it; Windows Settings remains the only configuration UI.
+    let result = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            key.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            ptr::null_mut(),
+            (&mut mode as *mut u32).cast::<c_void>(),
+            &mut size,
+        )
+    };
+    (result == 0 && size == std::mem::size_of::<u32>() as u32).then_some(mode)
+}
+
+#[cfg(not(windows))]
+fn read_sudo_mode(_policy: bool) -> Option<u32> {
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    fn environment() -> ShellEnvironment {
+        ShellEnvironment {
+            system_root: Some(PathBuf::from(r"C:\Windows")),
+            program_files: vec![
+                PathBuf::from(r"C:\Program Files"),
+                PathBuf::from(r"C:\Program Files (x86)"),
+            ],
+            local_app_data: Some(PathBuf::from(r"C:\Users\dev\AppData\Local")),
+            path_entries: vec![PathBuf::from(r"C:\Program Files\Git\cmd")],
+            user_profile: Some(PathBuf::from(r"C:\Users\dev")),
+        }
+    }
+
+    fn installed(paths: &[&str]) -> impl Fn(&Path) -> bool + use<> {
+        let present: HashSet<String> = paths
+            .iter()
+            .map(|path| path.to_lowercase())
+            .chain(std::iter::once(r"c:\users\dev".to_string()))
+            .collect();
+        move |path: &Path| present.contains(&path.to_string_lossy().to_lowercase())
+    }
+
+    #[test]
+    fn every_supported_shell_is_detected_at_its_standard_location() {
+        let exists = installed(&[
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            r"C:\Windows\System32\cmd.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+        ]);
+
+        let discovered = discover(&environment(), &exists);
+
+        assert_eq!(
+            discovered
+                .iter()
+                .map(|profile| (profile.id.as_str(), profile.label.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("powershell-7", "PowerShell 7"),
+                ("windows-powershell", "Windows PowerShell"),
+                ("command-prompt", "Command Prompt"),
+                ("git-bash", "Git Bash"),
+            ]
+        );
+    }
+
+    #[test]
+    fn shells_that_are_not_installed_are_not_offered() {
+        let exists = installed(&[r"C:\Windows\System32\cmd.exe"]);
+
+        let discovered = discover(&environment(), &exists);
+
+        assert_eq!(
+            discovered
+                .iter()
+                .map(|profile| profile.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["command-prompt"]
+        );
+        assert!(resolve(LocalShellKind::GitBash, &environment(), &exists).is_none());
+        assert!(resolve(LocalShellKind::PowerShell7, &environment(), &exists).is_none());
+    }
+
+    #[test]
+    fn administrator_profiles_are_separate_and_limited_to_requested_shells() {
+        let exists = installed(&[
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            r"C:\Windows\System32\cmd.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+        ]);
+
+        let available = catalog(
+            &environment(),
+            &exists,
+            AdministratorTerminalStatus::Available,
+        );
+        let administrator_ids = available
+            .profiles
+            .iter()
+            .filter(|profile| profile.elevated)
+            .map(|profile| profile.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            administrator_ids,
+            vec![
+                "powershell-7-administrator",
+                "windows-powershell-administrator",
+                "command-prompt-administrator",
+            ]
+        );
+        assert_eq!(
+            available.administrator_status,
+            AdministratorTerminalStatus::Available
+        );
+
+        let disabled = catalog(
+            &environment(),
+            &exists,
+            AdministratorTerminalStatus::Disabled,
+        );
+        assert!(disabled.profiles.iter().all(|profile| !profile.elevated));
+    }
+
+    #[test]
+    fn powershell_7_is_found_on_path_and_is_not_the_built_in_shell() {
+        let mut environment = environment();
+        environment
+            .path_entries
+            .push(PathBuf::from(r"C:\Users\dev\pwsh"));
+        let exists = installed(&[
+            r"C:\Users\dev\pwsh\pwsh.exe",
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+        ]);
+
+        let seven = resolve(LocalShellKind::PowerShell7, &environment, &exists).unwrap();
+        let built_in = resolve(LocalShellKind::WindowsPowerShell, &environment, &exists).unwrap();
+
+        assert_eq!(seven.program, PathBuf::from(r"C:\Users\dev\pwsh\pwsh.exe"));
+        assert_eq!(
+            built_in.program,
+            PathBuf::from(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+        );
+        assert_ne!(seven.program, built_in.program);
+    }
+
+    #[test]
+    fn windows_powershell_is_not_taken_from_path() {
+        let mut environment = environment();
+        environment.path_entries.push(PathBuf::from(r"C:\shims"));
+        let exists = installed(&[r"C:\shims\powershell.exe"]);
+
+        assert!(resolve(LocalShellKind::WindowsPowerShell, &environment, &exists).is_none());
+    }
+
+    #[test]
+    fn git_bash_runs_bash_rather_than_a_terminal_wrapper() {
+        let exists = installed(&[
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\git-bash.exe",
+            r"C:\Program Files\Git\usr\bin\mintty.exe",
+        ]);
+
+        let shell = resolve(LocalShellKind::GitBash, &environment(), &exists).unwrap();
+        let command = command_for(&shell);
+        let argv = command.get_argv().join(std::ffi::OsStr::new(" "));
+
+        assert_eq!(
+            shell.program,
+            PathBuf::from(r"C:\Program Files\Git\bin\bash.exe")
+        );
+        let rendered = argv.to_string_lossy().to_lowercase();
+        assert!(!rendered.contains("git-bash"));
+        assert!(!rendered.contains("mintty"));
+        assert!(!rendered.contains("wt.exe"));
+    }
+
+    #[test]
+    fn git_bash_is_found_through_a_git_directory_on_path() {
+        let exists = installed(&[r"C:\Program Files\Git\bin\bash.exe"]);
+        let environment = ShellEnvironment {
+            program_files: Vec::new(),
+            path_entries: vec![PathBuf::from(r"C:\Program Files\Git\cmd")],
+            ..environment()
+        };
+
+        let shell = resolve(LocalShellKind::GitBash, &environment, &exists).unwrap();
+
+        assert_eq!(
+            shell.program,
+            PathBuf::from(r"C:\Program Files\Git\bin\bash.exe")
+        );
+    }
+
+    #[test]
+    fn bash_is_never_taken_from_the_wsl_launcher_on_path() {
+        // System32\bash.exe starts WSL, which this feature does not cover.
+        let exists = installed(&[r"C:\Windows\System32\bash.exe"]);
+        let environment = ShellEnvironment {
+            program_files: Vec::new(),
+            path_entries: vec![PathBuf::from(r"C:\Windows\System32")],
+            ..environment()
+        };
+
+        assert!(resolve(LocalShellKind::GitBash, &environment, &exists).is_none());
+    }
+
+    #[test]
+    fn each_shell_carries_its_own_fixed_arguments() {
+        let exists = installed(&[
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            r"C:\Windows\System32\cmd.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+        ]);
+        let arguments = |kind| {
+            let shell = resolve(kind, &environment(), &exists).unwrap();
+            command_for(&shell)
+                .get_argv()
+                .iter()
+                .skip(1)
+                .map(|argument| argument.to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(arguments(LocalShellKind::PowerShell7), vec!["-NoLogo"]);
+        assert_eq!(
+            arguments(LocalShellKind::WindowsPowerShell),
+            vec!["-NoLogo"]
+        );
+        assert!(arguments(LocalShellKind::CommandPrompt).is_empty());
+        assert_eq!(arguments(LocalShellKind::GitBash), vec!["--login", "-i"]);
+    }
+
+    #[test]
+    fn an_administrator_shell_uses_only_system_sudo_and_the_resolved_shell() {
+        let exists = installed(&[r"C:\Windows\System32\cmd.exe"]);
+        let mut shell = resolve(LocalShellKind::CommandPrompt, &environment(), &exists).unwrap();
+        shell.administrator_launcher = Some(PathBuf::from(r"C:\Windows\System32\sudo.exe"));
+
+        let argv = command_for(&shell)
+            .get_argv()
+            .iter()
+            .map(|argument| argument.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            argv,
+            vec![
+                r"C:\Windows\System32\sudo.exe",
+                r"C:\Windows\System32\cmd.exe"
+            ]
+        );
+        assert_eq!(shell.id(), "command-prompt-administrator");
+        assert_eq!(shell.label(), "Command Prompt (Administrator)");
+    }
+
+    #[test]
+    fn policy_can_only_restrict_the_users_sudo_mode() {
+        assert_eq!(effective_sudo_mode(Some(3), None), Some(3));
+        assert_eq!(effective_sudo_mode(Some(3), Some(1)), Some(1));
+        assert_eq!(effective_sudo_mode(Some(2), Some(3)), Some(2));
+        assert_eq!(effective_sudo_mode(None, Some(3)), None);
+    }
+
+    #[test]
+    fn local_shells_start_in_the_user_profile_with_term_only_where_it_is_read() {
+        let exists = installed(&[
+            r"C:\Windows\System32\cmd.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+        ]);
+        let prompt =
+            command_for(&resolve(LocalShellKind::CommandPrompt, &environment(), &exists).unwrap());
+        let bash = command_for(&resolve(LocalShellKind::GitBash, &environment(), &exists).unwrap());
+        // Only the variables Control Room sets itself; the rest of the user's
+        // Windows environment is inherited untouched.
+        let overrides = |command: &CommandBuilder| {
+            command
+                .iter_extra_env_as_str()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            prompt.get_cwd().map(PathBuf::from),
+            Some(PathBuf::from(r"C:\Users\dev"))
+        );
+        assert!(overrides(&prompt).is_empty());
+        let mut expected = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        if env::var_os("OTUI_USE_ALTERNATE_SCREEN").is_none() {
+            expected.insert(0, ("OTUI_USE_ALTERNATE_SCREEN".into(), "0".into()));
+        }
+        assert_eq!(overrides(&bash), expected);
+        // No Windows Terminal variable is invented for a shell Control Room
+        // hosts itself.
+        assert!(
+            !overrides(&bash)
+                .iter()
+                .any(|(key, _)| key.starts_with("WT_"))
+        );
+    }
+
+    #[test]
+    fn only_known_profile_ids_resolve() {
+        assert_eq!(
+            LocalShellKind::from_id("powershell-7"),
+            Some(LocalShellKind::PowerShell7)
+        );
+        assert_eq!(LocalShellKind::from_id("wt.exe"), None);
+        assert_eq!(LocalShellKind::from_id("cmd.exe /c calc"), None);
+        assert_eq!(
+            LocalShellKind::from_id(r"C:\Windows\System32\cmd.exe"),
+            None
+        );
+        assert_eq!(LocalShellKind::from_id(""), None);
+        assert_eq!(
+            LocalShellKind::from_profile_id("windows-powershell-administrator"),
+            Some((LocalShellKind::WindowsPowerShell, true))
+        );
+        assert_eq!(
+            LocalShellKind::from_profile_id("git-bash-administrator"),
+            None
+        );
+        assert_eq!(
+            resolve_installed("../../evil.exe").unwrap_err(),
+            "Unknown local shell"
+        );
+    }
+
+    #[test]
+    fn git_bash_defaults_opentui_to_the_main_screen() {
+        let mut command = CommandBuilder::new("bash.exe");
+        command.env_clear();
+        configure_terminal_environment(&mut command, LocalShellKind::GitBash);
+        assert_eq!(
+            command.get_env("OTUI_USE_ALTERNATE_SCREEN"),
+            Some(std::ffi::OsStr::new("0"))
+        );
+    }
+
+    #[test]
+    fn an_explicit_opentui_screen_preference_is_preserved() {
+        let mut command = CommandBuilder::new("bash.exe");
+        command.env("OTUI_USE_ALTERNATE_SCREEN", "1");
+        configure_terminal_environment(&mut command, LocalShellKind::GitBash);
+        assert_eq!(
+            command.get_env("OTUI_USE_ALTERNATE_SCREEN"),
+            Some(std::ffi::OsStr::new("1"))
+        );
+    }
+
+    #[test]
+    fn other_shells_do_not_receive_the_git_bash_opentui_workaround() {
+        for kind in [
+            LocalShellKind::PowerShell7,
+            LocalShellKind::WindowsPowerShell,
+            LocalShellKind::CommandPrompt,
+        ] {
+            let mut command = CommandBuilder::new("shell.exe");
+            command.env_clear();
+            configure_terminal_environment(&mut command, kind);
+            assert!(command.get_env("OTUI_USE_ALTERNATE_SCREEN").is_none());
+        }
+    }
+
+    #[test]
+    fn profile_ids_match_their_serialized_form() {
+        for kind in LocalShellKind::ALL {
+            let serialized = serde_json::to_string(&kind).unwrap();
+            assert_eq!(serialized, format!("\"{}\"", kind.id()));
+            assert_eq!(LocalShellKind::from_id(kind.id()), Some(kind));
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_command_processor_resolves_on_this_machine() {
+        // cmd.exe ships with every supported Windows install, so this is the one
+        // resolution that can be asserted against the real environment.
+        let shell = resolve_installed("command-prompt").unwrap();
+        assert!(shell.program.ends_with("cmd.exe"));
+        assert!(
+            installed_shells()
+                .profiles
+                .iter()
+                .any(|profile| profile.id == "command-prompt")
+        );
+    }
+}

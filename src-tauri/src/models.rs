@@ -674,9 +674,9 @@ pub struct SessionStarted {
     pub connection_id: String,
 }
 
-/// One local Windows shell Control Room is allowed to run. The frontend names a
-/// profile by `id` and never by executable path, so `LocalShellKind` is the
-/// whole vocabulary of what may be started locally.
+/// One local shell Control Room is allowed to run. The frontend names a profile
+/// by `id` and never by executable path, so `LocalShellKind` is the whole
+/// vocabulary of what may be started locally on supported client platforms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LocalShellKind {
     #[serde(rename = "powershell-7")]
@@ -687,14 +687,23 @@ pub enum LocalShellKind {
     CommandPrompt,
     #[serde(rename = "git-bash")]
     GitBash,
+    #[serde(rename = "zsh")]
+    Zsh,
+    #[serde(rename = "bash")]
+    Bash,
+    #[serde(rename = "fish")]
+    Fish,
 }
 
 impl LocalShellKind {
-    pub const ALL: [LocalShellKind; 4] = [
+    pub const ALL: [LocalShellKind; 7] = [
         LocalShellKind::PowerShell7,
         LocalShellKind::WindowsPowerShell,
         LocalShellKind::CommandPrompt,
         LocalShellKind::GitBash,
+        LocalShellKind::Zsh,
+        LocalShellKind::Bash,
+        LocalShellKind::Fish,
     ];
 
     pub fn id(self) -> &'static str {
@@ -703,6 +712,9 @@ impl LocalShellKind {
             LocalShellKind::WindowsPowerShell => "windows-powershell",
             LocalShellKind::CommandPrompt => "command-prompt",
             LocalShellKind::GitBash => "git-bash",
+            LocalShellKind::Zsh => "zsh",
+            LocalShellKind::Bash => "bash",
+            LocalShellKind::Fish => "fish",
         }
     }
 
@@ -712,7 +724,20 @@ impl LocalShellKind {
             LocalShellKind::WindowsPowerShell => "Windows PowerShell",
             LocalShellKind::CommandPrompt => "Command Prompt",
             LocalShellKind::GitBash => "Git Bash",
+            LocalShellKind::Zsh => "zsh",
+            LocalShellKind::Bash => "Bash",
+            LocalShellKind::Fish => "fish",
         }
+    }
+
+    pub(crate) fn uses_terminal_type(self) -> bool {
+        matches!(
+            self,
+            LocalShellKind::GitBash
+                | LocalShellKind::Zsh
+                | LocalShellKind::Bash
+                | LocalShellKind::Fish
+        )
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
@@ -724,7 +749,7 @@ impl LocalShellKind {
             LocalShellKind::PowerShell7 => Some("powershell-7-administrator"),
             LocalShellKind::WindowsPowerShell => Some("windows-powershell-administrator"),
             LocalShellKind::CommandPrompt => Some("command-prompt-administrator"),
-            LocalShellKind::GitBash => None,
+            LocalShellKind::GitBash | LocalShellKind::Zsh | LocalShellKind::Bash | LocalShellKind::Fish => None,
         }
     }
 
@@ -798,6 +823,7 @@ pub struct StreamStateEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentInfo {
+    pub platform: String,
     pub ssh_path: Option<String>,
     pub ssh_config_path: String,
     pub ssh_agent_available: bool,
