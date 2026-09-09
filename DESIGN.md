@@ -326,6 +326,11 @@ collects is in AGENTS.md and its tests; what it means for a user is in `docs/`.
   and a live baseline comparison names that side Live state and says the read was
   discarded. A chart that appears to be recording invites the question of where
   the recording went.
+- **Name the live state.** Overview says Reading while its first sample is in
+  flight and shows when the latest sample arrived. A Logs viewport follows the
+  newest line until the reader scrolls up; it then stays put, counts unseen
+  lines, and offers Jump to latest. Receiving lines, following the viewport,
+  pausing rendering, and wrapping long lines remain distinct controls.
 - **Bounded views stay searchable.** Long lists get a filter, failures sort
   first, and copy and export write exactly what the panel shows, filter included.
 - **Overview graphics stay legible.** Ports Fit never shrinks topology labels

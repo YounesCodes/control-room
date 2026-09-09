@@ -201,6 +201,7 @@ export function OverviewPane({
               <p className="overview-live-note">
                 Sampled every {Math.round(SAMPLE_INTERVAL_MS / 1000)}s while this pane is open, and
                 never stored.
+                {latest ? ` Last sample ${relativeTime(latest.sampledAt)}.` : ""}
               </p>
             </div>
             <button
@@ -224,6 +225,7 @@ export function OverviewPane({
               detail={loadDetail}
               history={resources.samples.map((sample) => sample.cpuPercent ?? 0)}
               unavailable="/proc/stat was not readable"
+              pending={resources.sampling && !latest}
             />
             <ResourceMeter
               label="Memory"
@@ -231,6 +233,7 @@ export function OverviewPane({
               detail={memoryDetail}
               history={resources.samples.map((sample) => memoryUsage(sample)?.percent ?? 0)}
               unavailable="/proc/meminfo was not readable"
+              pending={resources.sampling && !latest}
             />
           </div>
         </section>

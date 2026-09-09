@@ -11,6 +11,7 @@ export function ResourceMeter({
   detail,
   history,
   unavailable,
+  pending = false,
 }: {
   label: string;
   /** Current reading, 0 to 100. Null when the host did not report one. */
@@ -20,6 +21,8 @@ export function ResourceMeter({
   history: number[];
   /** Why there is no reading, when there is none. */
   unavailable?: string;
+  /** The first sample is in flight, so absence is not yet a failure. */
+  pending?: boolean;
 }) {
   const line = sparklinePath(history, VIEW_WIDTH, VIEW_HEIGHT);
   const area = sparklineAreaPath(history, VIEW_WIDTH, VIEW_HEIGHT);
@@ -29,7 +32,9 @@ export function ResourceMeter({
     <div className="resource-meter">
       <div className="resource-meter-head">
         <span className="overview-stat-label">{label}</span>
-        <strong className="overview-stat-value">{reading ?? "Unavailable"}</strong>
+        <strong className="overview-stat-value">
+          {reading ?? (pending ? "Reading…" : "Unavailable")}
+        </strong>
       </div>
       {/* The chart is decoration over numbers already stated in text, so it is
           hidden from assistive tech rather than described twice. */}
@@ -46,7 +51,11 @@ export function ResourceMeter({
         )}
       </svg>
       <span className="overview-stat-hint">
-        {reading === null ? (unavailable ?? detail) : detail}
+        {reading === null
+          ? pending
+            ? "Waiting for the first sample"
+            : (unavailable ?? detail)
+          : detail}
       </span>
     </div>
   );

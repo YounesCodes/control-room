@@ -95,6 +95,21 @@ afterEach(() => {
 });
 
 describe("OverviewPane", () => {
+  it("labels the first live read as pending instead of unavailable", async () => {
+    let resolveSample: ((value: HostResources) => void) | undefined;
+    api.sampleHostResources.mockReturnValue(
+      new Promise<HostResources>((resolve) => {
+        resolveSample = resolve;
+      }),
+    );
+    renderPane();
+
+    expect(await screen.findAllByText("Reading…")).toHaveLength(3);
+    expect(screen.getAllByText("Waiting for the first sample")).toHaveLength(2);
+    resolveSample?.(sample());
+    expect(await screen.findByText("13%")).toBeTruthy();
+  });
+
   it("shows current load and shortens the prose uptime", async () => {
     renderPane();
 

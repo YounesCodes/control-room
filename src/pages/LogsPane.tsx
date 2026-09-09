@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Eraser, FileClock, Pause, Play, Search, Square } from "lucide-react";
+import { ArrowDown, Eraser, FileClock, Pause, Play, Search, Square, WrapText } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
@@ -52,6 +52,9 @@ export function LogsPane({
   const [logs, setLogs] = useState("");
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [atLatest, setAtLatest] = useState(true);
+  const [unreadLines, setUnreadLines] = useState(0);
+  const [wrapLines, setWrapLines] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sudoPurpose, setSudoPurpose] = useState<SudoPurpose | null>(null);
 
@@ -66,6 +69,8 @@ export function LogsPane({
   const disposedRef = useRef(false);
   const startingRef = useRef(false);
   const earlyStateRef = useRef(new Map<string, StreamStateEvent>());
+  const outputRef = useRef<HTMLPreElement>(null);
+  const previousLineCountRef = useRef(0);
   const servicesCacheRef = useRef(servicesCache);
   const containersCacheRef = useRef(containersCache);
   servicesCacheRef.current = servicesCache;
@@ -332,6 +337,8 @@ export function LogsPane({
     activeBufferRef.current.clear();
     pausedBufferRef.current.clear();
     flushNow();
+    setAtLatest(true);
+    setUnreadLines(0);
   }
 
   const displayedLogs = useMemo(() => {
@@ -342,6 +349,35 @@ export function LogsPane({
       .filter((line) => line.toLowerCase().includes(query))
       .join("\n");
   }, [logs, searchQuery]);
+
+  useLayoutEffect(() => {
+    const lineCount = logs ? logs.split("\n").length : 0;
+    const added = Math.max(0, lineCount - previousLineCountRef.current);
+    previousLineCountRef.current = lineCount;
+    const output = outputRef.current;
+    if (!output || searchQuery.trim()) return;
+    if (atLatest) {
+      output.scrollTop = output.scrollHeight;
+      setUnreadLines(0);
+    } else if (added > 0) {
+      setUnreadLines((current) => current + added);
+    }
+  }, [logs, searchQuery, atLatest]);
+
+  function handleOutputScroll() {
+    const output = outputRef.current;
+    if (!output) return;
+    const latest = output.scrollHeight - output.scrollTop - output.clientHeight <= 24;
+    setAtLatest(latest);
+    if (latest) setUnreadLines(0);
+  }
+
+  function jumpToLatest() {
+    const output = outputRef.current;
+    if (output) output.scrollTop = output.scrollHeight;
+    setAtLatest(true);
+    setUnreadLines(0);
+  }
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
   const sourceOptions = sourceCache.items;
@@ -472,7 +508,7 @@ export function LogsPane({
             onChange={(event) => setFollow(event.target.checked)}
             disabled={controlsLocked}
           />{" "}
-          Follow
+          Receive new lines
         </label>
         <label className="search-field log-search">
           <Search size={15} />
@@ -482,6 +518,14 @@ export function LogsPane({
             placeholder="Search loaded lines"
           />
         </label>
+        <button
+          className="secondary-button compact-button"
+          type="button"
+          aria-pressed={wrapLines}
+          onClick={() => setWrapLines((current) => !current)}
+        >
+          <WrapText size={14} /> Wrap lines
+        </button>
       </div>
       {sourceCache.error && (
         <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
@@ -501,7 +545,21 @@ export function LogsPane({
         </div>
       )}
       {displayedLogs ? (
-        <pre className="log-output">{displayedLogs}</pre>
+        <div className="log-output-shell">
+          <pre
+            ref={outputRef}
+            className={wrapLines ? "log-output log-output-wrapped" : "log-output"}
+            onScroll={handleOutputScroll}
+          >
+            {displayedLogs}
+          </pre>
+          {!searchQuery.trim() && !atLatest && (
+            <button className="log-jump-latest" type="button" onClick={jumpToLatest}>
+              <ArrowDown size={14} />
+              Jump to latest{unreadLines > 0 ? ` · ${unreadLines} new` : ""}
+            </button>
+          )}
+        </div>
       ) : (
         <div className="log-output log-empty">
           <FileClock size={24} aria-hidden="true" />

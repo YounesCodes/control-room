@@ -186,6 +186,13 @@ to the code, its tests, and the user manual under `docs/`, not here.
 10. Keep primary navigation and dialog actions reachable at the supported
     minimum window height. Dialog headers and action rows stay visible while
     their body scrolls.
+11. A Log Stream receiving new lines and its viewport staying at the newest line
+    are separate states. Scrolling up must preserve the reading position, count
+    newer lines, and offer a direct jump back to the latest line. Log wrapping is
+    a view choice and never changes what the stream collects.
+12. Live Overview meters call the first request Reading, then distinguish a
+    missing reading from a failed refresh. Keep the latest sample time visible and
+    never replace a missing reading with zero.
 
 ## Agent workflow
 
