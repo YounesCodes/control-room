@@ -63,6 +63,7 @@ export function TerminalPane({
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
   const visibleRef = useRef(visible);
   const connectionIdRef = useRef(remote?.connectionId ?? null);
+  const workspaceReasonRef = useRef(workspace.reason);
   const onSessionRef = useRef(onSession);
   const onStateRef = useRef(onState);
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
@@ -73,6 +74,7 @@ export function TerminalPane({
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
   visibleRef.current = visible;
   connectionIdRef.current = remote?.connectionId ?? null;
+  workspaceReasonRef.current = workspace.reason;
   onSessionRef.current = onSession;
   onStateRef.current = onState;
 
@@ -93,11 +95,11 @@ export function TerminalPane({
       return;
     }
     if (!acceptingInputRef.current) {
-      setLocalError(
-        workspace.kind === "local"
-          ? "Restart the shell before sending terminal input."
-          : "Reconnect before sending terminal input.",
-      );
+      if (workspace.kind === "local") {
+        setLocalError("Restart the shell before sending terminal input.");
+      } else if (!workspaceReasonRef.current) {
+        setLocalError("Reconnect before sending terminal input.");
+      }
       return;
     }
     if (!pendingInputRef.current.enqueue(bytes)) {
@@ -152,10 +154,11 @@ export function TerminalPane({
           .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
         return false;
       }
-      if (event.key.toLowerCase() === "v") {
-        pasteClipboard();
-        return false;
-      }
+      // xterm owns keyboard paste through its textarea's native paste event.
+      // Reading the clipboard here as well sends the same text twice: once
+      // from this keydown handler and once when xterm emits the paste through
+      // `onData`. Right-click paste still uses `pasteClipboard` below because
+      // that pointer gesture never reaches xterm's textarea.
       return true;
     });
 

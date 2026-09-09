@@ -25,8 +25,10 @@ const xterm = vi.hoisted(() => ({
   mouseTrackingMode: "none",
   // The handler xterm calls for typed input, so a test can type.
   onData: null as ((data: string) => void) | null,
+  customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
     this.onData = null;
+    this.customKeyHandler = null;
     this.oscHandlers = 0;
     this.clears = 0;
     this.writes = [];
@@ -76,7 +78,9 @@ vi.mock("@xterm/xterm", () => ({
     onBinary() {
       return { dispose: () => undefined };
     }
-    attachCustomKeyEventHandler() {}
+    attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
+      xterm.customKeyHandler = handler;
+    }
     get modes() {
       return { mouseTrackingMode: xterm.mouseTrackingMode };
     }
@@ -476,6 +480,46 @@ describe("TerminalPane sessions", () => {
     );
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
     expect(writtenText()).toEqual([pasted]);
+  });
+
+  it("leaves Ctrl+Shift+V to xterm's single native paste path", async () => {
+    clipboard.readText.mockResolvedValue("echo once");
+    api.startSession.mockResolvedValue({ sessionId: "session-1" });
+    api.writeSession.mockResolvedValue(undefined);
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(xterm.customKeyHandler).toBeTruthy());
+
+    const handledByXterm = xterm.customKeyHandler?.(
+      new KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+        shiftKey: true,
+      }),
+    );
+
+    expect(handledByXterm).toBe(true);
+    expect(clipboard.readText).not.toHaveBeenCalled();
+    expect(api.writeSession).not.toHaveBeenCalled();
+
+    // xterm emits the browser paste once through the same `onData` path as
+    // ordinary terminal input.
+    xterm.onData?.("echo once");
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
+    expect(writtenText()).toEqual(["echo once"]);
+  });
+
+  it("keeps the original connection failure when input is attempted", () => {
+    renderPane({
+      ...createRemoteWorkspace(connection),
+      state: "error",
+      connectRequested: false,
+      reason: "Connection refused by prod-web.",
+    });
+
+    xterm.onData?.("x");
+
+    expect(screen.getByText("Connection refused by prod-web.")).toBeTruthy();
+    expect(screen.queryByText("Reconnect before sending terminal input.")).toBeNull();
   });
 
   it("gives a running terminal nothing to press", async () => {
