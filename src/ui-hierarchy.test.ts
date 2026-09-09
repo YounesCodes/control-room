@@ -227,9 +227,11 @@ describe("application hierarchy", () => {
     expect(terminalSource).toMatch(
       /if \(action === "ignore"\) return;[\s\S]{0,80}event\.preventDefault\(\);/,
     );
-    // Ctrl+Shift+C and Ctrl+Shift+V stay the keyboard route.
+    // Copy stays explicit. Paste is xterm's native event so one clipboard
+    // gesture cannot be handled once here and once through onData.
     expect(terminalSource).toContain('key.toLowerCase() === "c"');
-    expect(terminalSource).toContain('key.toLowerCase() === "v"');
+    expect(terminalSource).not.toContain('key.toLowerCase() === "v"');
+    expect(terminalSource).toContain("xterm owns keyboard paste");
   });
 
   it("keeps a running terminal free of Clear and Stop controls", () => {
