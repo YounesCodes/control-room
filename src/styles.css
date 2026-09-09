@@ -217,6 +217,38 @@ code,
   font-family: "Cascadia Mono", Consolas, monospace;
 }
 
+.log-output-shell {
+  position: relative;
+  height: calc(100% - 122px);
+  min-height: 260px;
+}
+
+.log-output-shell .log-output {
+  height: 100%;
+  min-height: 0;
+}
+
+.log-output.log-output-wrapped {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.log-jump-latest {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-overlay);
+  padding: 0 12px;
+  color: var(--text);
+  box-shadow: var(--shadow-popover);
+}
+
 ::-webkit-scrollbar {
   width: 11px;
   height: 11px;
@@ -3579,7 +3611,7 @@ dd {
   font-size: 11.5px;
   line-height: 1.6;
   user-select: text;
-  white-space: pre-wrap;
+  white-space: pre;
 }
 
 .log-empty {
