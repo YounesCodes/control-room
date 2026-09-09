@@ -125,11 +125,12 @@ export function ConnectionDialog({
 
   return (
     <Modal title={connection ? "Edit Saved Connection" : "Add Saved Connection"} onClose={onClose}>
-      <form className="form-stack" onSubmit={submit}>
+      <form className="form-stack" onSubmit={submit} noValidate>
         <label>
-          <span>Display name</span>
+          <span>Display name (required)</span>
           <input
             autoFocus
+            aria-label="Display name"
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="e.g. Production server"
@@ -138,8 +139,9 @@ export function ConnectionDialog({
           />
         </label>
         <label>
-          <span>SSH destination</span>
+          <span>SSH destination (required)</span>
           <input
+            aria-label="SSH destination"
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
             placeholder="e.g. 192.0.2.10 or my-server"
@@ -151,8 +153,9 @@ export function ConnectionDialog({
         </label>
         <div className="form-row">
           <label>
-            <span>Username</span>
+            <span>Username (required)</span>
             <input
+              aria-label="Username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               placeholder="e.g. root"

@@ -87,7 +87,9 @@ export function BootDiagnosticsPane({
     );
   }
 
-  const boots = snapshot?.boots.data ?? [];
+  const boots = [...(snapshot?.boots.data ?? [])].sort(
+    (left, right) => Number(right.current) - Number(left.current) || right.index - left.index,
+  );
   const selectedBoot = boots.find((boot) => boot.id === snapshot?.selectedBootId) ?? null;
   const currentSelected = selectedBoot?.current ?? snapshot?.selectedBootId === null;
 
@@ -227,7 +229,7 @@ export function BootDiagnosticsPane({
               )}
             </section>
 
-            <section className="boot-section">
+            <section className="boot-section boot-section-slow">
               <SectionHeading title="Slow units" collectedAt={snapshot.slowUnits.collectedAt} />
               {snapshot.slowUnits.error ? (
                 <SectionError section={snapshot.slowUnits} action={sudoRetry(snapshot.slowUnits)} />

@@ -107,6 +107,25 @@ export function BaselineComparisonView({
 
 function SectionDiffView({ diff }: { diff: BaselineSectionDiff }) {
   const changes = changeCount(diff);
+  if (diff.comparable && changes === 0 && !diff.note) {
+    return (
+      <details className="baseline-section baseline-section-unchanged">
+        <summary>
+          <span className="baseline-unchanged-title">{sectionLabel(diff.kind)}</span>
+          <StatusChip status={diff.baseStatus} />
+          <span aria-hidden="true">→</span>
+          <StatusChip status={diff.targetStatus} />
+          <span className="baseline-unchanged-count">
+            {diff.unchangedCount} compared, no changes
+          </span>
+        </summary>
+        <p className="baseline-section-count">
+          No stored fact changed in this section. Expand changed sections first when reviewing a
+          comparison.
+        </p>
+      </details>
+    );
+  }
   return (
     <section className="baseline-section">
       <header>

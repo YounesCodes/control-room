@@ -133,6 +133,7 @@ export function DockerPane({
     ? groups.reduce((total, group) => total + group.containers.length, 0)
     : filtered.length;
   const selected = cache.items.find((container) => container.id === selectedId) ?? null;
+  const selectedVisible = filtered.some((container) => container.id === selectedId);
   const permissionError = cache.error?.toLowerCase().includes("permission denied");
 
   function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -267,7 +268,23 @@ export function DockerPane({
         </div>
       </div>
       <aside className="detail-panel container-inspector-panel">
-        {selected ? (
+        {!cache.items.length ? (
+          <EmptyState title="No containers found">
+            Docker returned an empty container list.
+          </EmptyState>
+        ) : !filtered.length ? (
+          <EmptyState title="No matching containers">
+            <button className="secondary-button" type="button" onClick={() => setSearch("")}>
+              Clear search
+            </button>
+          </EmptyState>
+        ) : selected && !selectedVisible ? (
+          <EmptyState title="Selected container is outside this search">
+            <button className="secondary-button" type="button" onClick={() => setSearch("")}>
+              Show selected container
+            </button>
+          </EmptyState>
+        ) : selected ? (
           <DockerContainerInspector
             key={selected.id}
             summary={selected}

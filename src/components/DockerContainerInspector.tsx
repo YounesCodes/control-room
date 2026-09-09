@@ -27,53 +27,62 @@ function Overview({ details }: { details: DockerContainerDetails }) {
     details.dead && "dead",
   ].filter(Boolean);
   return (
-    <dl className="detail-list container-detail-list">
-      <div>
-        <dt>Container ID</dt>
-        <dd className="technical">{details.id}</dd>
-      </div>
-      <div>
-        <dt>Image reference</dt>
-        <dd className="technical">{details.imageReference || "Unknown"}</dd>
-      </div>
-      <div>
-        <dt>Image content ID</dt>
-        <dd className="technical">{details.imageContentId || "Unknown"}</dd>
-      </div>
-      <div>
-        <dt>State</dt>
-        <dd>
-          {details.state}
-          {flags.length ? ` · ${flags.join(", ")}` : ""}
-        </dd>
-      </div>
-      <div>
-        <dt>Health</dt>
-        <dd>
-          {details.healthStatus ?? "No health check"}
-          {details.failingStreak ? ` · ${details.failingStreak} failures` : ""}
-        </dd>
-      </div>
-      <div>
-        <dt>Exit code</dt>
-        <dd>{details.exitCode}</dd>
-      </div>
-      <div>
-        <dt>Started</dt>
-        <dd>{displayTime(details.startedAt)}</dd>
-      </div>
-      <div>
-        <dt>Finished</dt>
-        <dd>{displayTime(details.finishedAt)}</dd>
-      </div>
-      <div>
-        <dt>Restart policy</dt>
-        <dd>
-          {details.restartPolicy || "None"}
-          {details.restartMaximumRetryCount ? ` · ${details.restartMaximumRetryCount} retries` : ""}
-        </dd>
-      </div>
-    </dl>
+    <>
+      <dl className="detail-list container-detail-list">
+        <div>
+          <dt>State</dt>
+          <dd>
+            {details.state}
+            {flags.length ? ` · ${flags.join(", ")}` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Health</dt>
+          <dd>
+            {details.healthStatus ?? "No health check"}
+            {details.failingStreak ? ` · ${details.failingStreak} failures` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Exit code</dt>
+          <dd>{details.exitCode}</dd>
+        </div>
+        <div>
+          <dt>Started</dt>
+          <dd>{displayTime(details.startedAt)}</dd>
+        </div>
+        <div>
+          <dt>{details.running ? "Previous stop" : "Finished"}</dt>
+          <dd>{displayTime(details.finishedAt)}</dd>
+        </div>
+        <div>
+          <dt>Restart policy</dt>
+          <dd>
+            {details.restartPolicy || "None"}
+            {details.restartMaximumRetryCount
+              ? ` · ${details.restartMaximumRetryCount} retries`
+              : ""}
+          </dd>
+        </div>
+      </dl>
+      <details className="container-technical-details">
+        <summary>Technical identifiers</summary>
+        <dl className="detail-list container-detail-list">
+          <div>
+            <dt>Container ID</dt>
+            <dd className="technical">{details.id}</dd>
+          </div>
+          <div>
+            <dt>Image reference</dt>
+            <dd className="technical">{details.imageReference || "Unknown"}</dd>
+          </div>
+          <div>
+            <dt>Image content ID</dt>
+            <dd className="technical">{details.imageContentId || "Unknown"}</dd>
+          </div>
+        </dl>
+      </details>
+    </>
   );
 }
 

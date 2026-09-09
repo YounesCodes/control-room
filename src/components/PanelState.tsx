@@ -15,7 +15,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
     <div className="panel-state">
       <Inbox size={22} />
       <h3>{title}</h3>
-      {children && <p>{children}</p>}
+      {children && <div className="panel-state-content">{children}</div>}
     </div>
   );
 }

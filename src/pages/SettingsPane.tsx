@@ -4,6 +4,7 @@ import { api, errorMessage } from "../lib/api";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
+import { contrastRatio } from "../lib/color-contrast";
 
 const terminalColorFields = [
   ["terminalForeground", "Text and cursor"],
@@ -46,6 +47,9 @@ export function SettingsPane({
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
+  const lowContrastColors = terminalColorFields
+    .map(([field, label]) => ({ label, ratio: contrastRatio(draft[field], "#050505") }))
+    .filter(({ ratio }) => ratio < 4.5);
 
   /* Manual checks stay available with the automatic preference off: turning the
      schedule off is not the same as refusing to look. */
@@ -229,6 +233,15 @@ export function SettingsPane({
                 denied
               </div>
             </div>
+            {lowContrastColors.length > 0 && (
+              <p className="inline-warning" role="status">
+                Hard to read on the terminal background:{" "}
+                {lowContrastColors
+                  .map(({ label, ratio }) => `${label} (${ratio.toFixed(1)}:1)`)
+                  .join(", ")}
+                . Aim for 4.5:1 contrast or reset the colors.
+              </p>
+            )}
             <div className="terminal-color-grid">
               {terminalColorFields.map(([field, label]) => (
                 <label className="terminal-color-control" key={field}>
@@ -362,8 +375,8 @@ export function SettingsPane({
                 <dt>ssh-agent</dt>
                 <dd>
                   {environment.sshAgentAvailable
-                    ? "Available with loaded identities"
-                    : "Unavailable or no loaded identities"}
+                    ? "Available, identity loaded"
+                    : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
                 </dd>
               </div>
             </dl>

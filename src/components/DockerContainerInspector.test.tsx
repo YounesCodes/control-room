@@ -78,6 +78,9 @@ describe("DockerContainerInspector", () => {
       />,
     );
 
+    const technical = screen.getByText("Technical identifiers").closest("details");
+    expect(technical?.open).toBe(false);
+    expect(screen.getByText("Previous stop")).toBeTruthy();
     expect(screen.getByText("sha256:abc")).toBeTruthy();
     await user.click(screen.getByRole("tab", { name: "Ports" }));
     expect(screen.getByText("0.0.0.0:443")).toBeTruthy();

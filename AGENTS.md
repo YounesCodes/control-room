@@ -174,6 +174,13 @@ to the code, its tests, and the user manual under `docs/`, not here.
    it returns to the foreground with a stale result. A failed automatic check is
    silent. A manual check stays available when the preference is off and may
    report why it failed.
+9. In split list/detail views, a filter must never leave a hidden item looking
+   current. Keep the selection visible, or replace its details with an explicit
+   filtered-selection state and a one-step way to reveal it. Empty lists and
+   their detail panes must describe the same state.
+10. Keep primary navigation and dialog actions reachable at the supported
+    minimum window height. Dialog headers and action rows stay visible while
+    their body scrolls.
 
 ## Agent workflow
 

@@ -229,6 +229,7 @@ describe("BootDiagnosticsPane", () => {
 
     const options = [...(screen.getByLabelText("Boot") as HTMLSelectElement).options];
     const labels = options.map((option) => option.textContent ?? "");
+    expect(labels[0]).toMatch(/^Current boot/);
     expect(labels.some((label) => label.startsWith("1 boot ago"))).toBe(true);
     expect(labels.some((label) => label.startsWith("Current boot"))).toBe(true);
     expect(labels.join(" ")).not.toContain("-1");

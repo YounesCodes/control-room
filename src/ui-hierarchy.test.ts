@@ -83,12 +83,25 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(/\.overview-content\s*\{[^}]*max-width: 980px/s);
     expect(stylesSource).toMatch(/\.session-tabs\s*\{[^}]*padding-left: 0;/s);
     expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*padding-bottom: 8px;/s);
+    // The settings bar and the form centre on the same axis, so a wide window
+    // leaves an even margin either side rather than a growing empty half.
+    expect(stylesSource).toMatch(/\.settings-heading-inner\s*\{[^}]*margin-inline: auto;/s);
+    expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*margin-inline: auto;/s);
   });
 
   it("keeps connection search in the sidebar and gives the workspace a compact titlebar", () => {
     expect(appSource).toContain('className="search-field sidebar-search"');
     expect(appSource).not.toContain('className="search-field app-search"');
     expect(stylesSource).toMatch(/\.app-shell\s*\{[^}]*grid-template-rows: 42px/s);
+  });
+
+  it("keeps the short-window sidebar actions the same height", () => {
+    expect(stylesSource).toMatch(
+      /@media \(max-height: 720px\)[\s\S]*?\.sidebar-footer \.local-shell-launcher\s*\{[^}]*margin-bottom: 0;/,
+    );
+    expect(stylesSource).toMatch(
+      /\.sidebar-footer \.sidebar-secondary,\s*\.sidebar-footer \.sidebar-primary\s*\{[^}]*height: 34px;/s,
+    );
   });
 
   it("does not reserve a dead favorites column beside the connection filter", () => {

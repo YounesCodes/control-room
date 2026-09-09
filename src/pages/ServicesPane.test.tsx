@@ -100,4 +100,27 @@ describe("ServicesPane failed units view", () => {
     expect(screen.getByText(/0 failed/)).toBeTruthy();
     expect(screen.getByText(/not a complete host health check/i)).toBeTruthy();
   });
+
+  it("does not leave details visible when filters hide the selected unit", async () => {
+    const user = userEvent.setup();
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([
+          unit("data.mount", "mount", "active", "mounted"),
+          unit("ssh.service", "service", "active", "running"),
+        ])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
+    await user.type(screen.getByPlaceholderText("Search units"), "ssh");
+
+    expect(screen.queryByRole("heading", { name: "data.mount" })).toBeNull();
+    expect(screen.getByText("Selected unit is outside this filter")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Show selected unit" }));
+    expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
+  });
 });

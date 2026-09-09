@@ -77,6 +77,14 @@ export function ServicesPane({
     [cache.items, search, stateFilter, typeFilter],
   );
   const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
+  const selectedVisible = filtered.some((unit) => unit.id === selectedId);
+  const filtersActive = search.length > 0 || stateFilter !== "all" || typeFilter !== "all";
+
+  function clearFilters() {
+    setSearch("");
+    setStateFilter("all");
+    setTypeFilter("all");
+  }
 
   if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
   if (cache.error && !cache.items.length) {
@@ -171,7 +179,21 @@ export function ServicesPane({
         </div>
       </div>
       <aside className="detail-panel">
-        {selected ? (
+        {!cache.items.length ? (
+          <EmptyState title="No units found" />
+        ) : !filtered.length ? (
+          <EmptyState title="No matching units">
+            <button className="secondary-button" type="button" onClick={clearFilters}>
+              Clear filters
+            </button>
+          </EmptyState>
+        ) : selected && !selectedVisible ? (
+          <EmptyState title="Selected unit is outside this filter">
+            <button className="secondary-button" type="button" onClick={clearFilters}>
+              Show selected unit
+            </button>
+          </EmptyState>
+        ) : selected ? (
           <>
             <header>
               <h2>{selected.id}</h2>
@@ -205,6 +227,8 @@ export function ServicesPane({
               <FileClock size={15} /> View journal
             </button>
           </>
+        ) : filtersActive ? (
+          <EmptyState title="Select a matching unit" />
         ) : (
           <EmptyState title="Select a unit" />
         )}
