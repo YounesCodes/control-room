@@ -4660,8 +4660,13 @@ kbd {
     gap: 7px;
   }
 
+  .sidebar-footer .local-shell-launcher {
+    margin-bottom: 0;
+  }
+
   .sidebar-footer .sidebar-secondary,
   .sidebar-footer .sidebar-primary {
+    height: 34px;
     min-height: 34px;
     padding-inline: 7px;
     font-size: 10.5px;

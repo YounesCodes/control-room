@@ -95,6 +95,15 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(/\.app-shell\s*\{[^}]*grid-template-rows: 42px/s);
   });
 
+  it("keeps the short-window sidebar actions the same height", () => {
+    expect(stylesSource).toMatch(
+      /@media \(max-height: 720px\)[\s\S]*?\.sidebar-footer \.local-shell-launcher\s*\{[^}]*margin-bottom: 0;/,
+    );
+    expect(stylesSource).toMatch(
+      /\.sidebar-footer \.sidebar-secondary,\s*\.sidebar-footer \.sidebar-primary\s*\{[^}]*height: 34px;/s,
+    );
+  });
+
   it("does not reserve a dead favorites column beside the connection filter", () => {
     expect(appSource).toContain('placeholder="Name, group, tag"');
     expect(appSource).toContain('aria-label="Filter connections by name, group, or tag"');
