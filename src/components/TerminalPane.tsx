@@ -137,7 +137,7 @@ export function TerminalPane({
       void navigator.clipboard
         .readText()
         .then((text) => {
-          if (text) send(new TextEncoder().encode(text));
+          if (text) terminal.paste(text);
         })
         .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
     };

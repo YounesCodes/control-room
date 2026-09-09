@@ -19,6 +19,7 @@ const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
   clears: 0,
   writes: [] as string[],
+  pastes: [] as string[],
   // Drives the right-click policy: what is selected, and whether the program in
   // the pty asked for the mouse.
   selection: "",
@@ -32,6 +33,7 @@ const xterm = vi.hoisted(() => ({
     this.oscHandlers = 0;
     this.clears = 0;
     this.writes = [];
+    this.pastes = [];
     this.selection = "";
     this.mouseTrackingMode = "none";
   },
@@ -96,6 +98,11 @@ vi.mock("@xterm/xterm", () => ({
     }
     write(data: unknown) {
       if (typeof data === "string") xterm.writes.push(data);
+    }
+    paste(data: string) {
+      xterm.pastes.push(data);
+      const normalized = data.replace(/\r?\n/g, "\r");
+      xterm.onData?.(`\u001b[200~${normalized}\u001b[201~`);
     }
     focus() {}
     dispose() {}
@@ -319,7 +326,8 @@ describe("TerminalPane sessions", () => {
       );
       // Through the session, not written into the screen buffer.
       const [, bytes] = api.writeSession.mock.calls[0];
-      expect(new TextDecoder().decode(bytes as Uint8Array)).toBe("ls -la");
+      expect(xterm.pastes).toEqual(["ls -la"]);
+      expect(new TextDecoder().decode(bytes as Uint8Array)).toBe("\u001b[200~ls -la\u001b[201~");
       expect(clipboard.writeText).not.toHaveBeenCalled();
       expect(menu.defaultPrevented).toBe(true);
     });
@@ -479,7 +487,31 @@ describe("TerminalPane sessions", () => {
       new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true }),
     );
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
-    expect(writtenText()).toEqual([pasted]);
+    expect(xterm.pastes).toEqual([pasted]);
+    expect(writtenText()).toEqual([`\u001b[200~${pasted}\u001b[201~`]);
+  });
+
+  it("routes multiline right-click paste through xterm's bracketed paste handling", async () => {
+    const pasted =
+      "cd /c/Users/X13/Documents/Projects/control-room-terminal-paste\r\nnpm run tauri dev";
+    clipboard.readText.mockResolvedValue(pasted);
+    api.startSession.mockResolvedValue({ sessionId: "session-1" });
+    api.writeSession.mockResolvedValue(undefined);
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
+
+    const container = document.querySelector(".terminal-container") as HTMLElement;
+    container.dispatchEvent(new MouseEvent("mousedown", { button: 2, bubbles: true }));
+    container.dispatchEvent(
+      new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => expect(clipboard.readText).toHaveBeenCalledTimes(1));
+    expect(xterm.pastes).toEqual([pasted]);
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
+    expect(writtenText()).toEqual([
+      "\u001b[200~cd /c/Users/X13/Documents/Projects/control-room-terminal-paste\rnpm run tauri dev\u001b[201~",
+    ]);
   });
 
   it("leaves Ctrl+Shift+V to xterm's single native paste path", async () => {

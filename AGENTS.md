@@ -166,8 +166,10 @@ to the code, its tests, and the user manual under `docs/`, not here.
    click inside the terminal never opens the webview menu, and that suppression
    is decided separately from who owns the clipboard. Let xterm handle
    `Ctrl+Shift+V` through its native paste event; never read the clipboard again
-   from the shortcut handler. After a failed connection, preserve the original
-   failure beside Reconnect even if the user tries to type.
+   from the shortcut handler. Pointer paste reads the clipboard once, then hands
+   its text to xterm so multiline input respects the shell's bracketed-paste
+   mode. After a failed connection, preserve the original failure beside
+   Reconnect even if the user tries to type.
 7. "New terminal" chooses a target, any Saved Connection or installed local
    shell, and opens an independent Workspace for it. Choosing the active target
    opens a second terminal rather than reusing or mutating the Workspace the menu

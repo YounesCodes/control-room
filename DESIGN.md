@@ -370,7 +370,10 @@ The terminal lets these bubble up to the app and keeps copy and paste on
 xterm owns `Ctrl+Shift+V` through its native paste event. Control Room does not
 read the clipboard again from the shortcut handler, since both paths would send
 the same text to the pty. Pointer right-click paste remains Control Room's own
-gesture because it does not go through xterm's textarea.
+gesture because it does not go through xterm's textarea. After Control Room
+reads the clipboard, it gives the text to xterm's paste API so Windows line
+endings are normalized and shells that enable bracketed paste receive one
+editable multiline block.
 
 A failed remote session keeps the specific connection error beside Reconnect.
 Typing into the stopped terminal does not replace that evidence with a generic
