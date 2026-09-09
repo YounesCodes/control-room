@@ -492,8 +492,7 @@ describe("TerminalPane sessions", () => {
   });
 
   it("routes multiline right-click paste through xterm's bracketed paste handling", async () => {
-    const pasted =
-      "cd /c/Users/X13/Documents/Projects/control-room-terminal-paste\r\nnpm run tauri dev";
+    const pasted = "echo first\r\necho second";
     clipboard.readText.mockResolvedValue(pasted);
     api.startSession.mockResolvedValue({ sessionId: "session-1" });
     api.writeSession.mockResolvedValue(undefined);
@@ -509,9 +508,7 @@ describe("TerminalPane sessions", () => {
     await vi.waitFor(() => expect(clipboard.readText).toHaveBeenCalledTimes(1));
     expect(xterm.pastes).toEqual([pasted]);
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
-    expect(writtenText()).toEqual([
-      "\u001b[200~cd /c/Users/X13/Documents/Projects/control-room-terminal-paste\rnpm run tauri dev\u001b[201~",
-    ]);
+    expect(writtenText()).toEqual(["\u001b[200~echo first\recho second\u001b[201~"]);
   });
 
   it("leaves Ctrl+Shift+V to xterm's single native paste path", async () => {
