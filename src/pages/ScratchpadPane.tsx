@@ -379,6 +379,7 @@ function ScratchpadEditor({
             type="button"
             disabled={!text}
             onClick={() => setEditedText("")}
+            title="Empty the editor and save a blank note"
           >
             <Eraser size={14} /> Clear text
           </button>
@@ -387,6 +388,7 @@ function ScratchpadEditor({
             type="button"
             disabled={!hasRecord && !text}
             onClick={() => setDeleteOpen(true)}
+            title="Delete the stored note and its recovery draft"
           >
             <Trash2 size={14} /> Delete note
           </button>

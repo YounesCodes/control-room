@@ -46,7 +46,7 @@ describe("release notes parsing", () => {
       parseReleaseNotes(
         "- fix: a thing by @someone in https://github.com/someone/some-repo/pull/53",
       ),
-    ).toEqual([{ kind: "bullets", items: ["fix: a thing by @someone in #53"] }]);
+    ).toEqual([{ kind: "bullets", items: ["A thing (#53)"] }]);
   });
 
   it("compacts a GitHub issue URL like a pull URL", () => {
@@ -122,7 +122,7 @@ describe("release notes parsing", () => {
       { kind: "heading", text: "What's Changed" },
       {
         kind: "bullets",
-        items: ["fix: streamline terminal creation and clipboard UX by @YounesCodes in #53"],
+        items: ["Streamline terminal creation and clipboard UX (#53)"],
       },
       { kind: "paragraph", text: "Full Changelog: v0.7.0 → v0.7.1" },
     ]);

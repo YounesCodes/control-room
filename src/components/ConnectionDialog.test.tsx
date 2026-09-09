@@ -70,6 +70,25 @@ describe("ConnectionDialog tags", () => {
       expect.objectContaining({ tagNames: ["Docker"] }),
     );
   });
+
+  it("uses the app validation message instead of a browser-language popup", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectionDialog
+        groups={[]}
+        knownTags={[]}
+        globalSudoEnabled={false}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add connection" }));
+
+    expect(screen.getByText("Display name is required")).toBeTruthy();
+    expect(api.createConnection).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog").querySelector("form")?.noValidate).toBe(true);
+  });
 });
 
 const elevationLabel = "Allow sudo for Structured Operations on this host";

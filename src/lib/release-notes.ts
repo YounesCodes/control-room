@@ -71,8 +71,19 @@ function compactGitHubUrls(line: string): string {
   });
 }
 
+function compactGeneratedContribution(line: string): string {
+  const contribution = /\s+by\s+@\S+\s+in\s+(#\d+)\s*$/i.exec(line);
+  if (!contribution) return line;
+  const title = line
+    .slice(0, contribution.index)
+    .replace(/^(?:feat|fix|docs|refactor|perf|test|build|ci|chore)(?:\([^)]+\))?!?:\s*/i, "")
+    .trim();
+  if (!title) return contribution[1];
+  return `${title[0]?.toUpperCase() ?? ""}${title.slice(1)} (${contribution[1]})`;
+}
+
 function clean(line: string): string {
-  return compactGitHubUrls(stripInlineMarkers(flattenLinks(line)))
+  return compactGeneratedContribution(compactGitHubUrls(stripInlineMarkers(flattenLinks(line))))
     .slice(0, MAX_LINE_LENGTH)
     .trimEnd();
 }

@@ -293,6 +293,16 @@ by Systemd, Ports, Docker, and Baselines; the definition grid and capability lis
 on the Overview host dashboard; the dense row with a leading status indicator;
 and the compact chip for exit codes, counts, and section states.
 
+A split page has one visible context. If filtering removes the selected row, the
+detail side names that mismatch and offers to clear the filter. A truly empty
+list produces the same empty state on both sides. Active tabs, scope switches,
+and view toggles use readable text and a filled selected state; muted text is
+reserved for supporting information and disabled controls.
+
+Dialogs keep their header and action row in view while the form or detail body
+scrolls. At short laptop heights, the connection list gives enough space back to
+the feature navigation that every main destination remains discoverable.
+
 ---
 
 ## Displaying host data
@@ -318,6 +328,15 @@ collects is in AGENTS.md and its tests; what it means for a user is in `docs/`.
   the recording went.
 - **Bounded views stay searchable.** Long lists get a filter, failures sort
   first, and copy and export write exactly what the panel shows, filter included.
+- **Overview graphics stay legible.** Ports Fit never shrinks topology labels
+  below 55%; a large graph starts readable and can be panned. Docker details put
+  operational state first and keep full identifiers in a collapsed technical
+  section. Baseline comparisons collapse unchanged sections so changes lead.
+- **User colour choices get feedback.** Settings previews the terminal palette
+  and warns when a chosen colour falls below 4.5:1 against the terminal
+  background. Saving remains available because the palette belongs to the user.
+- **Boot evidence leads with action.** The current boot is first, and failed
+  units and warning evidence appear before the longer slow-unit list.
 
 **Updates are designed to be missable.** Control Room updating itself is
 infrastructure, not a feature competing for attention. While the app is current

@@ -122,7 +122,7 @@ export function PortsOverview({
     if (!contentWidth || !contentHeight) return;
     const padding = 48;
     const scale = Math.max(
-      0.3,
+      0.55,
       Math.min(
         1,
         (viewport.clientWidth - padding) / contentWidth,

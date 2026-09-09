@@ -207,6 +207,7 @@ export function HistoryPane({
             type="button"
             onClick={() => onPausedChange(!paused)}
             disabled={!globalEnabled || !connection.historyEnabled}
+            title="Pause recording for this Workspace"
           >
             {paused ? <Play size={14} /> : <Pause size={14} />}
             {paused ? "Resume" : "Pause"}
@@ -220,7 +221,7 @@ export function HistoryPane({
             onClick={clear}
             disabled={!entries.length}
           >
-            <Eraser size={14} /> Clear
+            <Eraser size={14} /> Clear saved history
           </button>
         </div>
       </header>
@@ -277,8 +278,8 @@ export function HistoryPane({
               {working
                 ? "Saving…"
                 : connection.historyEnabled
-                  ? "Disable capture"
-                  : "Enable capture"}
+                  ? "Disable on this connection"
+                  : "Enable on this connection"}
             </button>
             <button
               className="danger-button"
@@ -286,7 +287,7 @@ export function HistoryPane({
               onClick={removeIntegration}
               disabled={working}
             >
-              Remove integration
+              Remove from remote Bash
             </button>
           </div>
         )}

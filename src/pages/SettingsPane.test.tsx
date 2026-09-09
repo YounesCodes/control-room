@@ -119,6 +119,12 @@ describe("Settings actions", () => {
     expect(preference.checked).toBe(true);
   });
 
+  it("warns about a terminal colour that is hard to read", () => {
+    renderPane({ settings: { ...settings, terminalBlue: "#111111" } });
+
+    expect(screen.getByText(/Blue and directories.*Aim for 4.5:1 contrast/)).toBeTruthy();
+  });
+
   it("checks manually even with automatic checks turned off", async () => {
     const user = userEvent.setup();
     const onCheckForUpdates = vi.fn(async () => ({ outcome: "current" }) as const);

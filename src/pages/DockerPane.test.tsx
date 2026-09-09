@@ -118,4 +118,44 @@ describe("DockerPane container inspection", () => {
     await waitFor(() => expect(api.inspectContainer).toHaveBeenCalledTimes(2));
     expect(api.inspectContainer).toHaveBeenLastCalledWith(connection.id, id, null);
   });
+
+  it("hides stale details while the selected container is outside the search", async () => {
+    const user = userEvent.setup();
+    render(
+      <DockerPane
+        connection={connection}
+        cache={{ items: [container], fetchedAt: Date.now(), loading: false, error: null }}
+        detailsCache={{
+          [id]: { value: details, fetchedAt: Date.now(), loading: false, error: null },
+        }}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "gateway-1" })).toBeTruthy();
+    await user.type(screen.getByPlaceholderText(/Search projects/), "database");
+
+    expect(screen.queryByRole("heading", { name: "gateway-1" })).toBeNull();
+    expect(screen.getAllByText("No matching containers")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.getByRole("heading", { name: "gateway-1" })).toBeTruthy();
+  });
+
+  it("coordinates the empty list and detail states", () => {
+    render(
+      <DockerPane
+        connection={connection}
+        cache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("No containers found")).toHaveLength(2);
+    expect(screen.queryByText("Select a container")).toBeNull();
+  });
 });
