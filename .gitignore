@@ -21,5 +21,3 @@
 /.tauri/
 /vite.config.js
 /vite.config.d.ts
-# Temporary local audit explainer.
-/audit-report.html

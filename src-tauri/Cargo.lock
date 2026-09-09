@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "control-room"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "chrono",
  "parking_lot",
