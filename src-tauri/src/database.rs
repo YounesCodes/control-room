@@ -1034,7 +1034,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             // A local Workspace names a Local Shell Profile, which is a fixed
             // vocabulary rather than an id the app minted.
             (None, Some(shell_id)) => {
-                if LocalShellKind::from_id(shell_id).is_none() {
+                if LocalShellKind::from_profile_id(shell_id).is_none() {
                     return Err("Workspace state names an unknown local shell".into());
                 }
             }
@@ -2721,6 +2721,18 @@ mod tests {
             "Workspace state names an unknown local shell"
         );
         assert!(validate_workspace_state(&workspace(None, Some("git-bash".into()))).is_ok());
+        assert!(
+            validate_workspace_state(&workspace(
+                None,
+                Some("command-prompt-administrator".into())
+            ))
+            .is_ok()
+        );
+        assert_eq!(
+            validate_workspace_state(&workspace(None, Some("git-bash-administrator".into())))
+                .unwrap_err(),
+            "Workspace state names an unknown local shell"
+        );
     }
 
     #[test]

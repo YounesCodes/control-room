@@ -10,7 +10,7 @@ use crate::{
         BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
         DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary, HostCapabilities,
-        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted, LocalShellProfile,
+        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted, LocalShellCatalog,
         PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
         ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
@@ -201,16 +201,18 @@ pub fn start_session(
     Ok(started)
 }
 
-/// The local shells this machine actually has. An uninstalled shell is never
-/// offered, so the frontend cannot ask for one.
+/// The local shells this machine actually has, plus whether administrator
+/// terminals can stay attached to Control Room. An uninstalled or unsupported
+/// profile is never offered, so the frontend cannot ask for one.
 #[tauri::command(async)]
-pub fn list_local_shells() -> Vec<LocalShellProfile> {
+pub fn list_local_shells() -> LocalShellCatalog {
     local_shell::installed_shells()
 }
 
 /// Starts a local Windows shell. `shell_id` is a Local Shell Profile id and
-/// nothing else: the executable, its arguments, and its working directory are
-/// resolved in Rust, so there is no way to ask for an arbitrary process here.
+/// nothing else: the executable, its arguments, privilege mode, and working
+/// directory are resolved in Rust, so there is no way to ask for an arbitrary
+/// process here.
 #[tauri::command(async)]
 pub fn start_local_session(
     app: AppHandle,

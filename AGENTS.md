@@ -12,7 +12,9 @@ to the code, its tests, and the user manual under `docs/`, not here.
 
 - Target Windows 11 x64, the installed Windows OpenSSH client, and ConPTY.
 - Local Terminal covers four shell profiles: PowerShell 7, Windows PowerShell,
-  Command Prompt, and Git Bash. Control Room is the terminal emulator, so never
+  Command Prompt, and Git Bash. It also offers administrator variants of both
+  PowerShell profiles and Command Prompt when Sudo for Windows is enabled in
+  inline mode. Control Room is the terminal emulator, so never
   launch, embed, or parse Windows Terminal, and never open an external terminal
   window. Keep the profile model extensible enough for WSL or custom profiles
   without adding either now.
@@ -38,7 +40,10 @@ to the code, its tests, and the user manual under `docs/`, not here.
    Local Shell Profile id and nothing else: the executable, its fixed arguments,
    and its working directory are resolved in Rust. No command takes a program,
    script, or argument list from the frontend, there is no `run_command`-style
-   API, and the interactive terminal is the execution surface.
+   API, and the interactive terminal is the execution surface. Administrator
+   profile ids are fixed too: Rust resolves the system `sudo.exe`, confirms its
+   effective policy permits inline input, and places the already validated shell
+   behind it. React cannot request elevation for an arbitrary program.
 2. Never persist terminal output, fetched logs, SSH or sudo passwords, or
    imported private keys.
 3. Keep remote operations read-only. Elevation never widens what a Structured
@@ -159,7 +164,12 @@ to the code, its tests, and the user manual under `docs/`, not here.
    another terminal frontend, and `bash.exe` is never taken from `PATH` directly,
    because `System32\bash.exe` is the WSL launcher. Set `TERM` only for a shell
    that reads it. Reject unknown profile ids, and report a shell that disappeared
-   after discovery as unavailable rather than failing obscurely.
+   after discovery as unavailable rather than failing obscurely. Administrator
+   terminals stay inside Control Room through ConPTY and are offered only for
+   PowerShell 7, Windows PowerShell, and Command Prompt when the system
+   `sudo.exe` exists and its effective user and policy mode permits inline input.
+   Starting one invokes Windows UAC. Control Room reads this machine setting but
+   never changes it.
 6. Keep the terminal's own gestures built in rather than optional. A mouse right
    click copies a selection, pastes when there is none, and belongs to the
    program in the pty while that program is reading the mouse. A pointer right
@@ -224,8 +234,10 @@ updater cannot verify.
   terminal, and nothing else. One target can have several Workspaces.
 - **Local Shell Profile**: one of the four Windows shells Control Room can host,
   identified by a stable id (`powershell-7`, `windows-powershell`,
-  `command-prompt`, `git-bash`). The id is the only part the frontend may send
-  back.
+  `command-prompt`, `git-bash`). PowerShell and Command Prompt may also have a
+  fixed `-administrator` profile id when Sudo for Windows supports inline input.
+  The id is the only part the frontend may send back, and an unavailable profile
+  is never offered.
 - **Terminal Session**: one interactive shell inside a Workspace, remote or
   local. Its state belongs to the session, not to the connection: a remote
   session connects and disconnects, a local one runs and stops.

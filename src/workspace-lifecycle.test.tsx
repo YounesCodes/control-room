@@ -177,7 +177,10 @@ describe("App Workspace behavior", () => {
     api.listConnectionGroups.mockResolvedValue([]);
     api.listConnectionTags.mockResolvedValue([]);
     api.saveWorkspaceState.mockResolvedValue(undefined);
-    api.listLocalShells.mockResolvedValue([]);
+    api.listLocalShells.mockResolvedValue({
+      profiles: [],
+      administratorStatus: "unsupportedWindows",
+    });
     api.cachedCapabilities.mockResolvedValue(null);
     api.deleteConnection.mockResolvedValue(undefined);
     api.deleteScratchpadNote.mockResolvedValue(undefined);

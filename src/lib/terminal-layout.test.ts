@@ -3,6 +3,7 @@ import {
   createTerminalLayout,
   getTerminalLayoutIds,
   getTerminalPaneRects,
+  getResponsiveTerminalPaneRects,
   removeTerminalFromLayout,
   selectTerminalTab,
   splitTerminalLayout,
@@ -37,6 +38,38 @@ describe("terminal pane tree", () => {
       debian: { left: 0, top: 0, width: 50, height: 100 },
       ubuntu: { left: 50, top: 0, width: 50, height: 50 },
       docker: { left: 50, top: 50, width: 50, height: 50 },
+    });
+  });
+
+  it("stacks a nested side-by-side split before either terminal becomes too narrow", () => {
+    const vertical = splitTerminalLayout(
+      createTerminalLayout("debian"),
+      "debian",
+      "ubuntu",
+      "vertical",
+    );
+    const nested = splitTerminalLayout(vertical, "ubuntu", "docker", "vertical");
+
+    expect(getResponsiveTerminalPaneRects(nested, { width: 744, height: 560 })).toEqual({
+      debian: { left: 0, top: 0, width: 50, height: 100 },
+      ubuntu: { left: 50, top: 0, width: 50, height: 50 },
+      docker: { left: 50, top: 50, width: 50, height: 50 },
+    });
+  });
+
+  it("restores the requested side-by-side split when the window has room", () => {
+    const vertical = splitTerminalLayout(
+      createTerminalLayout("debian"),
+      "debian",
+      "ubuntu",
+      "vertical",
+    );
+    const nested = splitTerminalLayout(vertical, "ubuntu", "docker", "vertical");
+
+    expect(getResponsiveTerminalPaneRects(nested, { width: 1400, height: 700 })).toEqual({
+      debian: { left: 0, top: 0, width: 50, height: 100 },
+      ubuntu: { left: 50, top: 0, width: 25, height: 100 },
+      docker: { left: 75, top: 0, width: 25, height: 100 },
     });
   });
 

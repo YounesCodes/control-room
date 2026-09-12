@@ -13,6 +13,9 @@ const terminalSource = readFileSync(
 const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
 const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const tauriConfig = JSON.parse(
+  readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"),
+) as { app: { windows: { minWidth: number; minHeight: number }[] } };
 /** Source with comments removed, so a comment explaining a rule cannot be
  *  mistaken for a violation of it. */
 function code(relativePath: string): string {
@@ -102,6 +105,13 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(
       /\.sidebar-footer \.sidebar-secondary,\s*\.sidebar-footer \.sidebar-primary\s*\{[^}]*height: 34px;/s,
     );
+  });
+
+  it("lets the WebView fit fractional native sizing without clipping the outer border", () => {
+    expect(stylesSource).toMatch(
+      /html,\s*body,\s*#root\s*\{[^}]*min-width: 0;[^}]*min-height: 0;/s,
+    );
+    expect(tauriConfig.app.windows[0]).toMatchObject({ minWidth: 960, minHeight: 640 });
   });
 
   it("does not reserve a dead favorites column beside the connection filter", () => {

@@ -19,6 +19,14 @@ If a read fails because it needs a password, the pane may offer a one-shot sudo 
 
 Overview reports passwordless sudo capability separately from the setting that allows elevation. Docker access through sudo is also reported separately from ordinary Docker access.
 
+## Administrator local terminals
+
+Administrator PowerShell and Command Prompt Workspaces use Sudo for Windows in inline mode. Windows shows its UAC prompt before starting the shell. Control Room reads the effective user and machine-policy mode and never enables or reconfigures Sudo.
+
+Inline mode connects the elevated shell to Control Room's existing ConPTY. This also means the unelevated Control Room process can send input to that administrator shell. Only enable inline mode when you accept that trust boundary. The fixed profile id remains the only frontend input. Rust resolves both `sudo.exe` and the selected shell from known Windows locations.
+
+Administrator local terminals are separate from SSH sudo. They can change this Windows machine through commands you type. The read-only Structured Operation rules apply only to Remote Host inspection.
+
 ## Stored locally
 
 The SQLite database stores:

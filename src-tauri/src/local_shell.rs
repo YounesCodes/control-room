@@ -2,8 +2,9 @@
 //!
 //! Rust owns which executables may run and with which arguments. React can name
 //! a Local Shell Profile id and nothing else, so there is no path, argument, or
-//! command string anywhere in this module's public input. A profile that is not
-//! installed is never offered and never resolves.
+//! command string anywhere in this module's public input. Administrator variants
+//! are another fixed id and resolve only through Sudo for Windows in inline
+//! mode. A profile that is not installed or usable is never offered.
 
 use std::{
     env,
@@ -12,7 +13,9 @@ use std::{
 
 use portable_pty::CommandBuilder;
 
-use crate::models::{LocalShellKind, LocalShellProfile};
+use crate::models::{
+    AdministratorTerminalStatus, LocalShellCatalog, LocalShellKind, LocalShellProfile,
+};
 
 /// A validated local shell that is ready to spawn. Only this module builds one,
 /// so a caller cannot substitute a program or an argument of its own.
@@ -22,11 +25,31 @@ pub struct ResolvedLocalShell {
     program: PathBuf,
     arguments: &'static [&'static str],
     working_directory: Option<PathBuf>,
+    administrator_launcher: Option<PathBuf>,
 }
 
 impl ResolvedLocalShell {
     pub fn label(&self) -> &'static str {
-        self.kind.label()
+        match (self.kind, self.is_elevated()) {
+            (LocalShellKind::PowerShell7, true) => "PowerShell 7 (Administrator)",
+            (LocalShellKind::WindowsPowerShell, true) => "Windows PowerShell (Administrator)",
+            (LocalShellKind::CommandPrompt, true) => "Command Prompt (Administrator)",
+            _ => self.kind.label(),
+        }
+    }
+
+    pub fn id(&self) -> &'static str {
+        if self.is_elevated() {
+            self.kind
+                .administrator_id()
+                .expect("only administrator-capable shells can be elevated")
+        } else {
+            self.kind.id()
+        }
+    }
+
+    pub fn is_elevated(&self) -> bool {
+        self.administrator_launcher.is_some()
     }
 
     /// The resolved executable, for tests that need to run a discovered shell
@@ -183,6 +206,7 @@ pub fn resolve(
             .as_ref()
             .filter(|profile| exists(profile) || profile.is_dir())
             .cloned(),
+        administrator_launcher: None,
     })
 }
 
@@ -199,32 +223,82 @@ pub fn discover(
             id: kind.id().into(),
             label: kind.label().into(),
             kind: *kind,
+            elevated: false,
         })
         .collect()
 }
 
-pub fn installed_shells() -> Vec<LocalShellProfile> {
-    discover(&ShellEnvironment::from_process_env(), &|path| {
-        path.is_file()
-    })
+pub fn installed_shells() -> LocalShellCatalog {
+    let environment = ShellEnvironment::from_process_env();
+    let exists = |path: &Path| path.is_file();
+    let status = administrator_terminal_status(&environment, &exists);
+    catalog(&environment, &exists, status)
+}
+
+pub fn catalog(
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+    administrator_status: AdministratorTerminalStatus,
+) -> LocalShellCatalog {
+    let mut profiles = discover(environment, exists);
+    if administrator_status == AdministratorTerminalStatus::Available {
+        let elevated = profiles
+            .iter()
+            .filter_map(|profile| {
+                profile.kind.administrator_id().map(|id| LocalShellProfile {
+                    id: id.into(),
+                    label: profile.label.clone(),
+                    kind: profile.kind,
+                    elevated: true,
+                })
+            })
+            .collect::<Vec<_>>();
+        profiles.extend(elevated);
+    }
+    LocalShellCatalog {
+        profiles,
+        administrator_status,
+    }
 }
 
 /// Validates a Local Shell Profile id from the frontend and resolves it against
 /// the machine as it is right now. An unknown id and a shell that disappeared
 /// after discovery are both refused here.
 pub fn resolve_installed(shell_id: &str) -> Result<ResolvedLocalShell, String> {
-    let kind = LocalShellKind::from_id(shell_id).ok_or("Unknown local shell")?;
-    resolve(kind, &ShellEnvironment::from_process_env(), &|path| {
-        path.is_file()
-    })
-    .ok_or_else(|| format!("{} is no longer available.", kind.label()))
+    let (kind, elevated) =
+        LocalShellKind::from_profile_id(shell_id).ok_or("Unknown local shell")?;
+    let environment = ShellEnvironment::from_process_env();
+    let exists = |path: &Path| path.is_file();
+    let mut shell = resolve(kind, &environment, &exists)
+        .ok_or_else(|| format!("{} is no longer available.", kind.label()))?;
+    if elevated {
+        if administrator_terminal_status(&environment, &exists)
+            != AdministratorTerminalStatus::Available
+        {
+            return Err(
+                "Administrator terminals require Sudo for Windows in inline mode. Enable it in Windows Settings, then reopen the Local terminal menu."
+                    .into(),
+            );
+        }
+        shell.administrator_launcher = environment
+            .system_root
+            .as_ref()
+            .map(|root| root.join("System32").join("sudo.exe"));
+    }
+    Ok(shell)
 }
 
 /// Builds the pty command for a resolved shell. The local shell inherits the
 /// user's normal Windows environment; only `TERM` is added, and only for a shell
 /// that reads it.
 pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
-    let mut command = CommandBuilder::new(&shell.program);
+    let mut command = if let Some(sudo) = &shell.administrator_launcher {
+        let mut command = CommandBuilder::new(sudo);
+        command.arg(&shell.program);
+        command
+    } else {
+        CommandBuilder::new(&shell.program)
+    };
     command.args(shell.arguments);
     if let Some(terminal) = terminal_type(shell.kind) {
         command.env("TERM", terminal);
@@ -233,6 +307,68 @@ pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
         command.cwd(directory);
     }
     command
+}
+
+fn effective_sudo_mode(user_mode: Option<u32>, policy_mode: Option<u32>) -> Option<u32> {
+    match (user_mode, policy_mode) {
+        (Some(user), Some(policy)) => Some(user.min(policy)),
+        (user, None) => user,
+        (None, _) => None,
+    }
+}
+
+fn administrator_terminal_status(
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+) -> AdministratorTerminalStatus {
+    let Some(system_root) = &environment.system_root else {
+        return AdministratorTerminalStatus::UnsupportedWindows;
+    };
+    if !exists(&system_root.join("System32").join("sudo.exe")) {
+        return AdministratorTerminalStatus::UnsupportedWindows;
+    }
+    match effective_sudo_mode(read_sudo_mode(false), read_sudo_mode(true)) {
+        Some(3) => AdministratorTerminalStatus::Available,
+        Some(1 | 2) => AdministratorTerminalStatus::UnsupportedMode,
+        _ => AdministratorTerminalStatus::Disabled,
+    }
+}
+
+#[cfg(windows)]
+fn read_sudo_mode(policy: bool) -> Option<u32> {
+    use std::{ffi::c_void, ptr};
+    use windows_sys::Win32::System::Registry::{
+        HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
+    };
+
+    let key = if policy {
+        "SOFTWARE\\Policies\\Microsoft\\Windows\\Sudo\0"
+    } else {
+        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Sudo\0"
+    };
+    let key = key.encode_utf16().collect::<Vec<_>>();
+    let value = "Enabled\0".encode_utf16().collect::<Vec<_>>();
+    let mut mode = 0_u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    // The OS owns this machine-level setting. Control Room reads one DWORD and
+    // never changes it; Windows Settings remains the only configuration UI.
+    let result = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            key.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            ptr::null_mut(),
+            (&mut mode as *mut u32).cast::<c_void>(),
+            &mut size,
+        )
+    };
+    (result == 0 && size == std::mem::size_of::<u32>() as u32).then_some(mode)
+}
+
+#[cfg(not(windows))]
+fn read_sudo_mode(_policy: bool) -> Option<u32> {
+    None
 }
 
 #[cfg(test)]
@@ -303,6 +439,47 @@ mod tests {
         );
         assert!(resolve(LocalShellKind::GitBash, &environment(), &exists).is_none());
         assert!(resolve(LocalShellKind::PowerShell7, &environment(), &exists).is_none());
+    }
+
+    #[test]
+    fn administrator_profiles_are_separate_and_limited_to_requested_shells() {
+        let exists = installed(&[
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            r"C:\Windows\System32\cmd.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+        ]);
+
+        let available = catalog(
+            &environment(),
+            &exists,
+            AdministratorTerminalStatus::Available,
+        );
+        let administrator_ids = available
+            .profiles
+            .iter()
+            .filter(|profile| profile.elevated)
+            .map(|profile| profile.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            administrator_ids,
+            vec![
+                "powershell-7-administrator",
+                "windows-powershell-administrator",
+                "command-prompt-administrator",
+            ]
+        );
+        assert_eq!(
+            available.administrator_status,
+            AdministratorTerminalStatus::Available
+        );
+
+        let disabled = catalog(
+            &environment(),
+            &exists,
+            AdministratorTerminalStatus::Disabled,
+        );
+        assert!(disabled.profiles.iter().all(|profile| !profile.elevated));
     }
 
     #[test]
@@ -416,6 +593,37 @@ mod tests {
     }
 
     #[test]
+    fn an_administrator_shell_uses_only_system_sudo_and_the_resolved_shell() {
+        let exists = installed(&[r"C:\Windows\System32\cmd.exe"]);
+        let mut shell = resolve(LocalShellKind::CommandPrompt, &environment(), &exists).unwrap();
+        shell.administrator_launcher = Some(PathBuf::from(r"C:\Windows\System32\sudo.exe"));
+
+        let argv = command_for(&shell)
+            .get_argv()
+            .iter()
+            .map(|argument| argument.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            argv,
+            vec![
+                r"C:\Windows\System32\sudo.exe",
+                r"C:\Windows\System32\cmd.exe"
+            ]
+        );
+        assert_eq!(shell.id(), "command-prompt-administrator");
+        assert_eq!(shell.label(), "Command Prompt (Administrator)");
+    }
+
+    #[test]
+    fn policy_can_only_restrict_the_users_sudo_mode() {
+        assert_eq!(effective_sudo_mode(Some(3), None), Some(3));
+        assert_eq!(effective_sudo_mode(Some(3), Some(1)), Some(1));
+        assert_eq!(effective_sudo_mode(Some(2), Some(3)), Some(2));
+        assert_eq!(effective_sudo_mode(None, Some(3)), None);
+    }
+
+    #[test]
     fn local_shells_start_in_the_user_profile_with_term_only_where_it_is_read() {
         let exists = installed(&[
             r"C:\Windows\System32\cmd.exe",
@@ -465,6 +673,14 @@ mod tests {
         );
         assert_eq!(LocalShellKind::from_id(""), None);
         assert_eq!(
+            LocalShellKind::from_profile_id("windows-powershell-administrator"),
+            Some((LocalShellKind::WindowsPowerShell, true))
+        );
+        assert_eq!(
+            LocalShellKind::from_profile_id("git-bash-administrator"),
+            None
+        );
+        assert_eq!(
             resolve_installed("../../evil.exe").unwrap_err(),
             "Unknown local shell"
         );
@@ -488,6 +704,7 @@ mod tests {
         assert!(shell.program.ends_with("cmd.exe"));
         assert!(
             installed_shells()
+                .profiles
                 .iter()
                 .any(|profile| profile.id == "command-prompt")
         );

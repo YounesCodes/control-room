@@ -657,6 +657,24 @@ impl LocalShellKind {
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.id() == id)
     }
+
+    pub fn administrator_id(self) -> Option<&'static str> {
+        match self {
+            LocalShellKind::PowerShell7 => Some("powershell-7-administrator"),
+            LocalShellKind::WindowsPowerShell => Some("windows-powershell-administrator"),
+            LocalShellKind::CommandPrompt => Some("command-prompt-administrator"),
+            LocalShellKind::GitBash => None,
+        }
+    }
+
+    pub fn from_profile_id(id: &str) -> Option<(Self, bool)> {
+        if let Some(kind) = Self::from_id(id) {
+            return Some((kind, false));
+        }
+        Self::ALL
+            .into_iter()
+            .find_map(|kind| (kind.administrator_id() == Some(id)).then_some((kind, true)))
+    }
 }
 
 /// A detected local shell, as offered to the frontend. `id` is the only part the
@@ -667,6 +685,23 @@ pub struct LocalShellProfile {
     pub id: String,
     pub label: String,
     pub kind: LocalShellKind,
+    pub elevated: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AdministratorTerminalStatus {
+    Available,
+    Disabled,
+    UnsupportedMode,
+    UnsupportedWindows,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalShellCatalog {
+    pub profiles: Vec<LocalShellProfile>,
+    pub administrator_status: AdministratorTerminalStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

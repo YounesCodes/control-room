@@ -134,6 +134,7 @@ const shell: LocalShellProfile = {
   id: "powershell-7",
   label: "PowerShell 7",
   kind: "powershell-7",
+  elevated: false,
 };
 
 const connection: SavedConnection = {

@@ -21,6 +21,14 @@ interface TerminalPaneRect {
   height: number;
 }
 
+export interface TerminalLayoutViewport {
+  width: number;
+  height: number;
+}
+
+const MIN_TERMINAL_PANE_WIDTH = 280;
+const MIN_TERMINAL_PANE_HEIGHT = 180;
+
 export function createTerminalLayout(workspaceId: string): TerminalLayout {
   return { kind: "leaf", workspaceId };
 }
@@ -80,26 +88,57 @@ export function selectTerminalTab(layout: TerminalLayout, workspaceId: string): 
 }
 
 export function getTerminalPaneRects(layout: TerminalLayout): Record<string, TerminalPaneRect> {
+  return getResponsiveTerminalPaneRects(layout, {
+    width: Number.POSITIVE_INFINITY,
+    height: Number.POSITIVE_INFINITY,
+  });
+}
+
+/**
+ * Keeps the saved split directions at ordinary sizes, but turns an individual
+ * split ninety degrees when halving its current rectangle would make either
+ * child unusably narrow or short. The saved tree is untouched, so growing the
+ * window restores the directions the user chose.
+ */
+export function getResponsiveTerminalPaneRects(
+  layout: TerminalLayout,
+  viewport: TerminalLayoutViewport,
+): Record<string, TerminalPaneRect> {
   const rectangles: Record<string, TerminalPaneRect> = {};
 
-  function visit(node: TerminalLayout, rectangle: TerminalPaneRect) {
+  function visit(
+    node: TerminalLayout,
+    rectangle: TerminalPaneRect,
+    available: TerminalLayoutViewport,
+  ) {
     if (node.kind === "leaf") {
       rectangles[node.workspaceId] = rectangle;
       return;
     }
 
-    if (node.direction === "vertical") {
+    const verticalRoom = available.width / 2 / MIN_TERMINAL_PANE_WIDTH;
+    const horizontalRoom = available.height / 2 / MIN_TERMINAL_PANE_HEIGHT;
+    const direction =
+      node.direction === "vertical" && verticalRoom < 1 && horizontalRoom > verticalRoom
+        ? "horizontal"
+        : node.direction === "horizontal" && horizontalRoom < 1 && verticalRoom > horizontalRoom
+          ? "vertical"
+          : node.direction;
+
+    if (direction === "vertical") {
       const width = rectangle.width / 2;
-      visit(node.first, { ...rectangle, width });
-      visit(node.second, { ...rectangle, left: rectangle.left + width, width });
+      const childSpace = { ...available, width: available.width / 2 };
+      visit(node.first, { ...rectangle, width }, childSpace);
+      visit(node.second, { ...rectangle, left: rectangle.left + width, width }, childSpace);
       return;
     }
 
     const height = rectangle.height / 2;
-    visit(node.first, { ...rectangle, height });
-    visit(node.second, { ...rectangle, top: rectangle.top + height, height });
+    const childSpace = { ...available, height: available.height / 2 };
+    visit(node.first, { ...rectangle, height }, childSpace);
+    visit(node.second, { ...rectangle, top: rectangle.top + height, height }, childSpace);
   }
 
-  visit(layout, { left: 0, top: 0, width: 100, height: 100 });
+  visit(layout, { left: 0, top: 0, width: 100, height: 100 }, viewport);
   return rectangles;
 }

@@ -114,8 +114,11 @@
 html,
 body,
 #root {
-  min-width: 960px;
-  min-height: 640px;
+  /* Tauri owns the native 960 x 640 minimum. WebView2 can report a fractional
+     content size just below that boundary after Windows scaling, so the web
+     root must follow the actual viewport instead of forcing one extra pixel. */
+  min-width: 0;
+  min-height: 0;
   height: 100%;
   margin: 0;
 }
@@ -1047,17 +1050,17 @@ code,
 .sidebar-secondary {
   display: flex;
   width: 100%;
-  min-height: 32px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
   padding: 0 11px;
   color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .sidebar-secondary:hover {
@@ -1072,7 +1075,8 @@ code,
   bottom: calc(100% + 6px);
   left: 0;
   display: flex;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   flex-direction: column;
   gap: 2px;
   border: 1px solid var(--border-strong);
@@ -1080,6 +1084,26 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 6px;
+}
+
+.local-shell-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.local-shell-menu-group + .local-shell-menu-group {
+  border-top: 1px solid var(--border);
+  margin-top: 5px;
+  padding-top: 5px;
+}
+
+.local-shell-menu-group > strong {
+  padding: 4px 9px 5px;
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .local-shell-menu button {
@@ -1093,11 +1117,35 @@ code,
   color: var(--text-muted);
   font-size: 11.5px;
   text-align: left;
+  white-space: nowrap;
 }
 
 .local-shell-menu button:hover {
   background: var(--fill-active);
   color: var(--text-strong);
+}
+
+.administrator-terminal-icon,
+.local-shell-admin-mark {
+  color: var(--warning);
+}
+
+.local-shell-administrator-note {
+  display: grid;
+  width: 208px;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  margin: 0;
+  padding: 3px 9px 7px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.local-shell-administrator-note svg {
+  margin-top: 1px;
+  color: var(--warning);
 }
 
 /* The terminal mark stands in for the host OS mark on a local tab, so it keeps

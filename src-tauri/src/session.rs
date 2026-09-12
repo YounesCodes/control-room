@@ -245,7 +245,7 @@ impl SessionManager {
 
         Ok(LocalSessionStarted {
             session_id,
-            shell_id: shell.kind.id().into(),
+            shell_id: shell.id().into(),
         })
     }
 

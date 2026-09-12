@@ -267,6 +267,15 @@ reconnected. A shell that exits on its own keeps its Workspace, says so in the
 pane notice, and offers Restart, because an exited shell is an ordinary event and
 losing the tab would be the surprise.
 
+Administrator variants of PowerShell 7, Windows PowerShell, and Command Prompt
+appear in the same local-shell target list when Windows exposes `sudo.exe` in
+inline mode. The elevated shell stays inside Control Room, and its administrator
+label makes the UAC boundary explicit before launch.
+
+When a nested side-by-side split would make a terminal narrower than 280 px,
+that branch stacks while the window is narrow and returns to the requested
+direction when space is available again.
+
 **Opening terminals.** "New terminal" and Split share one grouped,
 keyboard-navigable target list and differ in what they do with the answer. "New
 terminal" offers every Saved Connection and every installed local shell, and each

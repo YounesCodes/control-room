@@ -20,6 +20,8 @@ import {
   Search,
   Server,
   Settings,
+  Shield,
+  ShieldAlert,
   SquareTerminal,
   StickyNote,
   Trash2,
@@ -50,7 +52,7 @@ import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib
 import {
   createTerminalLayout,
   getTerminalLayoutIds,
-  getTerminalPaneRects,
+  getResponsiveTerminalPaneRects,
   removeTerminalFromLayout,
   selectTerminalTab,
   splitTerminalLayout,
@@ -91,6 +93,7 @@ import type {
   EnvironmentInfo,
   HostCapabilities,
   ListeningSocket,
+  AdministratorTerminalStatus,
   LocalShellProfile,
   LogSourceSelection,
   RemoteWorkspace,
@@ -109,6 +112,19 @@ const emptyEnvironment: EnvironmentInfo = {
   sshAgentAvailable: false,
   platformSupported: true,
 };
+
+function administratorTerminalNote(status: AdministratorTerminalStatus): string {
+  switch (status) {
+    case "disabled":
+      return "One-time setup: in Windows Settings, open System > Advanced, turn on Enable sudo, and choose Inline. Then reopen this menu.";
+    case "unsupportedMode":
+      return "In Windows Settings, open System > Advanced and change the sudo option to Inline. Then reopen this menu.";
+    case "unsupportedWindows":
+      return "Requires Windows 11 version 24H2 or later.";
+    case "available":
+      return "No supported administrator shell is installed.";
+  }
+}
 
 const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "overview", label: "Overview", icon: Gauge },
@@ -130,6 +146,8 @@ const TerminalPane = lazy(() =>
 export function App() {
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [localShells, setLocalShells] = useState<LocalShellProfile[]>([]);
+  const [administratorTerminalStatus, setAdministratorTerminalStatus] =
+    useState<AdministratorTerminalStatus>("unsupportedWindows");
   const [localShellMenuOpen, setLocalShellMenuOpen] = useState(false);
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
@@ -154,6 +172,11 @@ export function App() {
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
+  const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
+  const [terminalLayoutViewport, setTerminalLayoutViewport] = useState({
+    width: Number.POSITIVE_INFINITY,
+    height: Number.POSITIVE_INFINITY,
+  });
   // The menu is positioned rather than anchored, because the tab strip scrolls
   // horizontally and an absolutely positioned child would be clipped to one row.
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<{
@@ -212,9 +235,13 @@ export function App() {
           localShellsResult,
         ]) => {
           if (!current) return;
-          const detectedShells =
-            localShellsResult.status === "fulfilled" ? localShellsResult.value : [];
+          const localShellCatalog =
+            localShellsResult.status === "fulfilled"
+              ? localShellsResult.value
+              : { profiles: [], administratorStatus: "unsupportedWindows" as const };
+          const detectedShells = localShellCatalog.profiles;
           setLocalShells(detectedShells);
+          setAdministratorTerminalStatus(localShellCatalog.administratorStatus);
           if (connectionsResult.status === "fulfilled") {
             setConnections(connectionsResult.value);
             if (workspaceStateResult.status === "fulfilled") {
@@ -279,6 +306,8 @@ export function App() {
   // rather than a compatible Workspace to copy. Having nothing saved and no
   // shell installed is the only case with nothing to choose from.
   const canOpenNewTerminal = connections.length > 0 || localShells.length > 0;
+  const standardLocalShells = localShells.filter((shell) => !shell.elevated);
+  const administratorLocalShells = localShells.filter((shell) => shell.elevated);
   const focusedTerminalIds = terminalLayout ? getTerminalLayoutIds(terminalLayout) : [];
   const visibleTerminalIds = terminalFocusMode
     ? focusedTerminalIds
@@ -286,7 +315,9 @@ export function App() {
       ? [activeWorkspace.id]
       : [];
   const terminalSplitMode = terminalFocusMode && focusedTerminalIds.length > 1;
-  const terminalPaneRects = terminalLayout ? getTerminalPaneRects(terminalLayout) : {};
+  const terminalPaneRects = terminalLayout
+    ? getResponsiveTerminalPaneRects(terminalLayout, terminalLayoutViewport)
+    : {};
   const existingSplitCandidates = workspaces.filter(
     (workspace) => !focusedTerminalIds.includes(workspace.id),
   );
@@ -297,6 +328,24 @@ export function App() {
     terminalLayout,
     onError: setActionError,
   });
+
+  useEffect(() => {
+    const element = terminalLayoutViewportRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+
+    function rememberSize(width: number, height: number) {
+      setTerminalLayoutViewport((current) =>
+        current.width === width && current.height === height ? current : { width, height },
+      );
+    }
+
+    rememberSize(element.clientWidth, element.clientHeight);
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) rememberSize(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [loading, activeWorkspace?.id]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
@@ -636,6 +685,21 @@ export function App() {
     closeSettings(() => openWorkspace(createLocalWorkspace(shell)));
   }
 
+  function toggleLocalShellMenu() {
+    if (localShellMenuOpen) {
+      setLocalShellMenuOpen(false);
+      return;
+    }
+    setLocalShellMenuOpen(true);
+    void api
+      .listLocalShells()
+      .then((catalog) => {
+        setLocalShells(catalog.profiles);
+        setAdministratorTerminalStatus(catalog.administratorStatus);
+      })
+      .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
+  }
+
   function openWorkspace(workspace: Workspace) {
     setWorkspaces((current) => [...current, workspace]);
     setActiveWorkspaceId(workspace.id);
@@ -679,10 +743,19 @@ export function App() {
     },
     {
       label: "New local terminal",
-      options: localShells.map((shell) => ({
+      options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
         icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
+      })),
+    },
+    {
+      label: "Run as administrator",
+      options: administratorLocalShells.map((shell) => ({
+        id: shell.id,
+        label: shell.label,
+        icon: <Shield size={16} strokeWidth={1.8} className="administrator-terminal-icon" />,
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -715,10 +788,22 @@ export function App() {
     },
     {
       label: "Local terminals",
-      options: localShells.map((shell) => ({
+      options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
         icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        onSelect: () => {
+          setNewTerminalMenuOpen(false);
+          openLocalShell(shell);
+        },
+      })),
+    },
+    {
+      label: "Run as administrator",
+      options: administratorLocalShells.map((shell) => ({
+        id: shell.id,
+        label: shell.label,
+        icon: <Shield size={16} strokeWidth={1.8} className="administrator-terminal-icon" />,
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -966,7 +1051,11 @@ export function App() {
   /// report about the machine the app is already running on.
   function workspaceMark(workspace: Workspace) {
     return isLocalWorkspace(workspace) ? (
-      <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark" />
+      workspace.shell.elevated ? (
+        <Shield size={17} strokeWidth={1.8} className="local-shell-mark local-shell-admin-mark" />
+      ) : (
+        <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark" />
+      )
     ) : (
       <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
     );
@@ -1184,7 +1273,7 @@ export function App() {
               <button
                 className="sidebar-secondary"
                 type="button"
-                onClick={() => setLocalShellMenuOpen((current) => !current)}
+                onClick={toggleLocalShellMenu}
                 aria-haspopup="menu"
                 aria-expanded={localShellMenuOpen}
                 title="Open a shell on this Windows machine"
@@ -1193,17 +1282,46 @@ export function App() {
               </button>
               {localShellMenuOpen && (
                 <div className="local-shell-menu" role="menu" aria-label="Local terminal">
-                  {localShells.map((shell) => (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      key={shell.id}
-                      onClick={() => openLocalShell(shell)}
-                    >
-                      <SquareTerminal size={14} strokeWidth={1.8} />
-                      <span>{shell.label}</span>
-                    </button>
-                  ))}
+                  <div className="local-shell-menu-group">
+                    <strong>Local terminals</strong>
+                    {standardLocalShells.map((shell) => (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        key={shell.id}
+                        onClick={() => openLocalShell(shell)}
+                      >
+                        <SquareTerminal size={14} strokeWidth={1.8} />
+                        <span>{shell.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="local-shell-menu-group local-shell-administrator-group">
+                    <strong>Run as administrator</strong>
+                    {administratorLocalShells.length ? (
+                      administratorLocalShells.map((shell) => (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          key={shell.id}
+                          onClick={() => openLocalShell(shell)}
+                          aria-label={`${shell.label}, run as administrator`}
+                        >
+                          <Shield
+                            size={14}
+                            strokeWidth={1.8}
+                            className="administrator-terminal-icon"
+                          />
+                          <span>{shell.label}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="local-shell-administrator-note">
+                        <ShieldAlert size={14} strokeWidth={1.8} />
+                        <span>{administratorTerminalNote(administratorTerminalStatus)}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1393,6 +1511,7 @@ export function App() {
             aria-hidden={settingsOpen || undefined}
           >
             <div
+              ref={terminalLayoutViewportRef}
               className={
                 terminalSplitMode ? "workspace-content terminal-pane-layout" : "workspace-content"
               }

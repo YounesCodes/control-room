@@ -17,7 +17,7 @@ import type {
   HostBaselineSummary,
   HostResources,
   ListeningSocket,
-  LocalShellProfile,
+  LocalShellCatalog,
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
@@ -107,7 +107,7 @@ export const api = {
       rows,
       output,
     }),
-  listLocalShells: () => invoke<LocalShellProfile[]>("list_local_shells"),
+  listLocalShells: () => invoke<LocalShellCatalog>("list_local_shells"),
   // The shell id is a Local Shell Profile id. Rust resolves the executable, its
   // fixed arguments, and its working directory; none of them cross this call.
   startLocalSession: (shellId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>

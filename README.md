@@ -9,7 +9,7 @@ Control Room gives you one place to keep and work with your Linux machines from 
 - A real terminal with tabs and splits. It runs through the Windows OpenSSH client and ConPTY already on your machine, so your existing keys, `~/.ssh/config`, and ssh-agent keep working.
 - Saved connections with groups and tags, and several Workspaces per host.
 - Read-only views for systemd units, listening ports, Docker containers, logs, boot evidence, and baselines you can compare over time.
-- Local terminals for PowerShell, Command Prompt, and Git Bash, in the same window.
+- Local terminals for PowerShell, Command Prompt, and Git Bash, including administrator PowerShell and Command Prompt sessions when Sudo for Windows is in inline mode.
 - Signed in-app updates: Control Room checks GitHub Releases, downloads only when you ask, and installs after a restart you confirm.
 
 The views report. The terminal is where you act.

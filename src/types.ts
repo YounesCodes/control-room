@@ -457,15 +457,25 @@ export interface EnvironmentInfo {
   platformSupported: boolean;
 }
 
-/// The local Windows shells Control Room can host. The id is the whole
-/// vocabulary the frontend may send back to Rust: there is no executable path,
-/// argument, or command string on this side of the boundary.
+/// The local Windows shells Control Room can host. The id, including its fixed
+/// administrator variant, is the whole vocabulary the frontend may send back
+/// to Rust: there is no executable path, argument, or command string on this
+/// side of the boundary.
 export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash";
 
 export interface LocalShellProfile {
   id: string;
   label: string;
   kind: LocalShellKind;
+  elevated: boolean;
+}
+
+export type AdministratorTerminalStatus =
+  "available" | "disabled" | "unsupportedMode" | "unsupportedWindows";
+
+export interface LocalShellCatalog {
+  profiles: LocalShellProfile[];
+  administratorStatus: AdministratorTerminalStatus;
 }
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";

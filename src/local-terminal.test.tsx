@@ -101,11 +101,19 @@ const powershell: LocalShellProfile = {
   id: "powershell-7",
   label: "PowerShell 7",
   kind: "powershell-7",
+  elevated: false,
 };
 const gitBash: LocalShellProfile = {
   id: "git-bash",
   label: "Git Bash",
   kind: "git-bash",
+  elevated: false,
+};
+const administratorPowerShell: LocalShellProfile = {
+  id: "powershell-7-administrator",
+  label: "PowerShell 7",
+  kind: "powershell-7",
+  elevated: true,
 };
 
 function connection(id: string, displayName: string): SavedConnection {
@@ -171,7 +179,10 @@ describe("Local Terminal", () => {
     api.workspaceState.mockResolvedValue(emptyState);
     api.listConnectionGroups.mockResolvedValue([]);
     api.listConnectionTags.mockResolvedValue([]);
-    api.listLocalShells.mockResolvedValue([powershell, gitBash]);
+    api.listLocalShells.mockResolvedValue({
+      profiles: [powershell, gitBash],
+      administratorStatus: "disabled",
+    });
     api.saveWorkspaceState.mockResolvedValue(undefined);
     api.cachedCapabilities.mockResolvedValue(null);
     api.refreshCapabilities.mockResolvedValue({});
@@ -194,10 +205,58 @@ describe("Local Terminal", () => {
     // Windows PowerShell and Command Prompt were not detected on this machine.
     expect(screen.queryByRole("menuitem", { name: "Windows PowerShell" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Command Prompt" })).toBeNull();
+    expect(
+      screen.getByText(
+        "One-time setup: in Windows Settings, open System > Advanced, turn on Enable sudo, and choose Inline. Then reopen this menu.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("separates administrator terminals and labels the elevated action", async () => {
+    const user = userEvent.setup();
+    api.listLocalShells.mockResolvedValue({
+      profiles: [powershell, gitBash, administratorPowerShell],
+      administratorStatus: "available",
+    });
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+
+    expect(screen.getByText("Run as administrator")).toBeTruthy();
+    const elevated = screen.getByRole("menuitem", {
+      name: "PowerShell 7, run as administrator",
+    });
+    expect(elevated).toBeTruthy();
+
+    await user.click(elevated);
+    expect(
+      await screen.findByRole("button", { name: /Close PowerShell 7 \(Administrator\)/ }),
+    ).toBeTruthy();
+  });
+
+  it("refreshes administrator availability when the shell menu reopens", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("button", { name: /Local terminal/ });
+    api.listLocalShells.mockResolvedValue({
+      profiles: [powershell, gitBash, administratorPowerShell],
+      administratorStatus: "available",
+    });
+
+    await user.click(screen.getByRole("button", { name: /Local terminal/ }));
+
+    expect(
+      await screen.findByRole("menuitem", {
+        name: "PowerShell 7, run as administrator",
+      }),
+    ).toBeTruthy();
   });
 
   it("hides the launcher when no supported shell was detected", async () => {
-    api.listLocalShells.mockResolvedValue([]);
+    api.listLocalShells.mockResolvedValue({
+      profiles: [],
+      administratorStatus: "unsupportedWindows",
+    });
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: /No connections yet/ })).toBeTruthy();

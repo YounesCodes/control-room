@@ -53,7 +53,7 @@ function localWorkspace(id: string, shellId: string, label: string): LocalWorksp
     kind: "local",
     id,
     label: null,
-    shell: { id: shellId, label, kind: "powershell-7" },
+    shell: { id: shellId, label, kind: "powershell-7", elevated: false },
     sessionId: `${id}-session`,
     state: "connected",
     reason: null,

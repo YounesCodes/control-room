@@ -14,6 +14,7 @@ const shell: LocalShellProfile = {
   id: "powershell-7",
   label: "PowerShell 7",
   kind: "powershell-7",
+  elevated: false,
 };
 
 const connection: SavedConnection = {
@@ -81,6 +82,17 @@ describe("Workspace targets", () => {
     expect(workspaceTargetKey(remote)).not.toBe(workspaceTargetKey(local));
     expect(workspaceTargetName(local)).toBe("PowerShell 7");
     expect(workspaceTargetName(remote)).toBe("prod-web");
+  });
+
+  it("marks an elevated local Workspace as Administrator", () => {
+    const elevated = createLocalWorkspace({
+      ...shell,
+      id: "powershell-7-administrator",
+      elevated: true,
+    });
+
+    expect(workspaceTargetName(elevated)).toBe("PowerShell 7 (Administrator)");
+    expect(workspaceTargetKey(elevated)).toBe("local:powershell-7-administrator");
   });
 
   it("says a local shell runs and a remote session connects", () => {

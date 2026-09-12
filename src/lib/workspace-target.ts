@@ -27,7 +27,9 @@ export function workspaceTargetKey(workspace: Workspace): string {
 export function workspaceTargetName(workspace: Workspace): string {
   return isRemoteWorkspace(workspace)
     ? workspace.connectionSnapshot.displayName
-    : workspace.shell.label;
+    : workspace.shell.elevated
+      ? `${workspace.shell.label} (Administrator)`
+      : workspace.shell.label;
 }
 
 /// A local shell runs and stops; a remote session connects and disconnects.
