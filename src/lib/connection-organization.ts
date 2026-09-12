@@ -50,17 +50,20 @@ export function organizeConnections(
       )
       .sort(connectionSort),
   }));
-  sections.push({
-    id: null,
-    name: "Ungrouped",
-    collapsed: ungroupedCollapsed,
-    connections: connections
-      .filter(
-        (connection) =>
-          (!connection.groupId || !knownGroups.has(connection.groupId)) &&
-          connectionMatchesFilter(connection, null, query),
-      )
-      .sort(connectionSort),
-  });
+  const ungroupedConnections = connections
+    .filter(
+      (connection) =>
+        (!connection.groupId || !knownGroups.has(connection.groupId)) &&
+        connectionMatchesFilter(connection, null, query),
+    )
+    .sort(connectionSort);
+  if (ungroupedConnections.length) {
+    sections.push({
+      id: null,
+      name: "Ungrouped",
+      collapsed: ungroupedCollapsed,
+      connections: ungroupedConnections,
+    });
+  }
   return sections;
 }

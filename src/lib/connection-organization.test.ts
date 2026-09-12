@@ -27,7 +27,7 @@ const groups: ConnectionGroup[] = [
 ];
 
 describe("connection organization", () => {
-  it("groups deterministically by name and retains Ungrouped", () => {
+  it("groups deterministically by name and includes nonempty Ungrouped", () => {
     const sections = organizeConnections(
       [
         connection("worker", { groupId: "group-a" }),
@@ -43,6 +43,19 @@ describe("connection organization", () => {
     expect(sections[0].connections.map((item) => item.id)).toEqual(["api", "worker"]);
     expect(sections[1].collapsed).toBe(true);
     expect(sections[2].connections[0].id).toBe("orphan");
+  });
+
+  it("omits Ungrouped when it has no matching connections", () => {
+    const grouped = connection("api", { groupId: "group-a" });
+
+    expect(
+      organizeConnections([grouped], groups, "", false).map((section) => section.name),
+    ).toEqual(["Production", "Staging"]);
+    expect(
+      organizeConnections([grouped, connection("orphan")], groups, "api", false).map(
+        (section) => section.name,
+      ),
+    ).toEqual(["Production", "Staging"]);
   });
 
   it("filters locally across names, targets, groups, and tags", () => {

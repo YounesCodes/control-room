@@ -56,8 +56,9 @@ a dense list into a banner.
 Navigation is two levels and never nests deeper.
 
 - **Left rail.** The connection list is divided into manually ordered,
-  collapsible groups plus a derived Ungrouped section. Search matches connection
-  names, SSH targets, group names, and tags. Once a remote Workspace is open, the
+  collapsible groups plus a derived Ungrouped section when it has a visible
+  connection. Search matches connection names, SSH targets, group names, and
+  tags. Once a remote Workspace is open, the
   rail also holds the view switcher (Overview, Terminal, Systemd, Ports, Docker,
   Boot, Logs, Baselines, History, Scratchpad); a local Workspace shows none of
   it, because there is no Remote Host to inspect. "Local terminal" and "Add
