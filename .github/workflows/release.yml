@@ -13,6 +13,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -25,6 +27,13 @@ jobs:
         with:
           tool: cargo-audit
           fallback: none
+
+      - name: Prepare complete release notes
+        id: release-notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/generate-release-notes.mjs
 
       # Before the long build, not after it. A release that reaches the end and
       # then cannot be signed has wasted forty minutes, and a release published
@@ -75,12 +84,12 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
+          releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: false
           prerelease: false
-          # The updater feed takes its notes from the release body, so this is
-          # what puts anything in "What's new" after an update. Without it the
-          # body is empty and every update announces itself with nothing to say.
-          generateReleaseNotes: true
+          # The preparation step combines GitHub's generated PR notes with
+          # direct commits, which GitHub leaves out of generated notes.
+          generateReleaseNotes: false
           # Only NSIS is built, so this is the bundle the updater feed must name.
           updaterJsonPreferNsis: true
           args: --config src-tauri/tauri.release.conf.json
@@ -127,6 +136,7 @@ jobs:
             $json,
             [System.Text.UTF8Encoding]::new($false)
           )
+          node scripts/generate-release-notes.mjs --validate-feed latest.json
           gh release upload $env:GITHUB_REF_NAME latest.json --clobber
           Write-Host "Updater feed carries $($body.Length) characters of notes"
 
