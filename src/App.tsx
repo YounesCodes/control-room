@@ -1087,23 +1087,21 @@ export function App() {
           <span className="host-row-details">
             <strong>{connection.displayName}</strong>
             <small>{connectionTarget(connection)}</small>
-            {!!connection.tags.length && (
-              <span className="host-tag-summary">
-                {connection.tags.slice(0, 2).map((tag) => (
-                  <span
-                    className="connection-tag-badge"
-                    style={tagBadgeStyle(tag.color)}
-                    key={tag.id}
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-                {connection.tags.length > 2 && (
-                  <span className="host-tag-overflow">+{connection.tags.length - 2}</span>
-                )}
-              </span>
-            )}
           </span>
+          {!!connection.tags.length && (
+            <span className="host-tag-summary">
+              {connection.tags.map((tag) => (
+                <span
+                  className="connection-tag-badge"
+                  style={tagBadgeStyle(tag.color)}
+                  title={tag.name}
+                  key={tag.id}
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </span>
+          )}
         </button>
         <button
           className="host-menu"
@@ -1205,7 +1203,7 @@ export function App() {
             <input
               value={hostSearch}
               onChange={(event) => setHostSearch(event.target.value)}
-              placeholder="Name, group, tag"
+              placeholder="Find a connection"
               aria-label="Filter connections by name, group, or tag"
             />
           </label>

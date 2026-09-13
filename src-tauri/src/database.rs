@@ -22,7 +22,7 @@ const MAX_USERNAME_CHARS: usize = 64;
 const MAX_IDENTITY_PATH_CHARS: usize = 32_767;
 const MAX_GROUP_NAME_CHARS: usize = 60;
 const MAX_TAG_NAME_CHARS: usize = 32;
-const MAX_TAGS_PER_CONNECTION: usize = 12;
+const MAX_TAGS_PER_CONNECTION: usize = 5;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_HISTORY_CWD_BYTES: usize = 32_767;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
@@ -2222,7 +2222,7 @@ mod tests {
             .collect();
         assert_eq!(
             database.create_connection(too_many_tags).unwrap_err(),
-            "A Saved Connection can have at most 12 tags"
+            "A Saved Connection can have at most 5 tags"
         );
     }
 

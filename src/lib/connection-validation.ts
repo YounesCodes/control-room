@@ -1,6 +1,7 @@
 import type { SavedConnectionInput } from "../types";
 
 const USERNAME = /^[A-Za-z0-9._-]+$/;
+export const MAX_TAGS_PER_CONNECTION = 5;
 
 function hasControlCharacter(value: string): boolean {
   return [...value].some((character) => {
@@ -41,6 +42,10 @@ export function validateConnectionDraft(input: SavedConnectionInput): string | n
   const identityFile = input.identityFile?.trim();
   if (identityFile && ([...identityFile].length > 32_767 || hasControlCharacter(identityFile))) {
     return "Identity-file path is invalid";
+  }
+  const tagCount = new Set(input.tagNames.map((name) => name.trim().toLocaleLowerCase())).size;
+  if (tagCount > MAX_TAGS_PER_CONNECTION) {
+    return `A Saved Connection can have at most ${MAX_TAGS_PER_CONNECTION} tags`;
   }
   return null;
 }

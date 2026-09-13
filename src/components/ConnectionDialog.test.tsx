@@ -71,6 +71,38 @@ describe("ConnectionDialog tags", () => {
     );
   });
 
+  it("allows at most five tags on one connection", async () => {
+    const user = userEvent.setup();
+    const tags = Array.from({ length: 6 }, (_, index) => ({
+      id: `tag-${index + 1}`,
+      name: `Tag ${index + 1}`,
+      color: "#3a3a3a",
+    }));
+    api.updateConnection.mockResolvedValue({ ...connection, tags: tags.slice(0, 5) });
+    render(
+      <ConnectionDialog
+        connection={{ ...connection, tags: [] }}
+        groups={[]}
+        knownTags={tags}
+        globalSudoEnabled={false}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    for (const tag of tags.slice(0, 5)) {
+      await user.click(screen.getByRole("button", { name: tag.name }));
+    }
+
+    expect(screen.getByRole("button", { name: "Tag 6" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Select up to 5 local tags.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(api.updateConnection).toHaveBeenCalledWith(
+      connection.id,
+      expect.objectContaining({ tagNames: tags.slice(0, 5).map((tag) => tag.name) }),
+    );
+  });
+
   it("uses the app validation message instead of a browser-language popup", async () => {
     const user = userEvent.setup();
     render(

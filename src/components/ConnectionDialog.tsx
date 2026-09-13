@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FileKey, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { tagBadgeStyle } from "../lib/connection-tag-color";
-import { validateConnectionDraft } from "../lib/connection-validation";
+import { MAX_TAGS_PER_CONNECTION, validateConnectionDraft } from "../lib/connection-validation";
 import { elevationCapabilityNote, elevationSource, elevationSummary } from "../lib/sudo-elevation";
 import type {
   ConnectionGroup,
@@ -60,7 +60,11 @@ export function ConnectionDialog({
 
   function toggleTag(id: string) {
     setSelectedTagIds((current) =>
-      current.includes(id) ? current.filter((tagId) => tagId !== id) : [...current, id],
+      current.includes(id)
+        ? current.filter((tagId) => tagId !== id)
+        : current.length < MAX_TAGS_PER_CONNECTION
+          ? [...current, id]
+          : current,
     );
   }
 
@@ -233,6 +237,10 @@ export function ConnectionDialog({
                   style={tagBadgeStyle(tag.color)}
                   type="button"
                   aria-pressed={selectedTagIds.includes(tag.id)}
+                  disabled={
+                    !selectedTagIds.includes(tag.id) &&
+                    selectedTagIds.length >= MAX_TAGS_PER_CONNECTION
+                  }
                   key={tag.id}
                   onClick={() => toggleTag(tag.id)}
                 >
@@ -243,7 +251,13 @@ export function ConnectionDialog({
           ) : (
             <small>Create tags from Manage groups and tags, then assign them here.</small>
           )}
-          {!!knownTags.length && <small>Select up to 12 local tags.</small>}
+          {!!knownTags.length && (
+            <small>
+              {selectedTagIds.length > MAX_TAGS_PER_CONNECTION
+                ? `Remove ${selectedTagIds.length - MAX_TAGS_PER_CONNECTION} ${selectedTagIds.length - MAX_TAGS_PER_CONNECTION === 1 ? "tag" : "tags"} to continue.`
+                : `Select up to ${MAX_TAGS_PER_CONNECTION} local tags.`}
+            </small>
+          )}
         </div>
         {testResult && (
           <p className="inline-message" role="status">

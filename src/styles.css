@@ -679,6 +679,10 @@ code,
   margin: 0;
 }
 
+.sidebar-search input {
+  font-size: 13px;
+}
+
 .sidebar-filter-row > .icon-button {
   width: 32px;
   height: 32px;
@@ -791,12 +795,17 @@ code,
   height: 58px;
 }
 
+.host-row.menu-open .host-tag-summary {
+  display: none;
+}
+
 .host-main {
-  display: flex;
+  display: grid;
   min-width: 0;
   flex: 1;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 5px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
   padding: 6px 36px 6px 11px;
@@ -833,10 +842,10 @@ code,
 .host-tag-summary {
   display: flex;
   min-width: 0;
+  grid-column: 1 / -1;
   align-items: center;
   gap: 4px;
-  overflow: hidden;
-  white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 .connection-tag-badge {
@@ -856,19 +865,15 @@ code,
 }
 
 .host-tag-summary .connection-tag-badge {
-  max-width: 72px;
-}
-
-.host-tag-overflow {
-  flex: none;
-  color: var(--text-muted);
-  font-size: 9.5px;
-  font-weight: 650;
+  min-height: 21px;
+  max-width: 92px;
+  padding: 2px 8px;
+  font-size: 10.5px;
 }
 
 .host-menu {
   position: absolute;
-  top: 29px;
+  top: 50%;
   right: 6px;
   display: grid;
   width: 26px;
@@ -880,6 +885,10 @@ code,
   color: var(--text-muted);
   opacity: 0;
   pointer-events: none;
+}
+
+.host-row.menu-open .host-menu {
+  top: 29px;
 }
 
 .host-row:hover .host-menu,
@@ -4284,7 +4293,10 @@ dd {
 }
 
 .connection-tag-manage-row > .connection-tag-badge {
+  min-height: 24px;
   max-width: 180px;
+  padding: 3px 10px;
+  font-size: 11px;
 }
 
 .connection-group-manage-row > span {

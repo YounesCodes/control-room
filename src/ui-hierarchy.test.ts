@@ -114,8 +114,8 @@ describe("application hierarchy", () => {
     expect(tauriConfig.app.windows[0]).toMatchObject({ minWidth: 960, minHeight: 640 });
   });
 
-  it("does not reserve a dead favorites column beside the connection filter", () => {
-    expect(appSource).toContain('placeholder="Name, group, tag"');
+  it("keeps the connection filter copy visible beside the groups button", () => {
+    expect(appSource).toContain('placeholder="Find a connection"');
     expect(appSource).toContain('aria-label="Filter connections by name, group, or tag"');
     expect(appSource).toContain("<FolderCog size={18} />");
     expect(stylesSource).toMatch(
@@ -124,6 +124,30 @@ describe("application hierarchy", () => {
     expect(stylesSource).toMatch(
       /\.sidebar-filter-row > \.icon-button\s*\{[^}]*width: 32px;[^}]*height: 32px;/s,
     );
+    expect(stylesSource).toMatch(/\.sidebar-search input\s*\{[^}]*font-size: 13px;/s);
+  });
+
+  it("gives tags room in the tag-management list", () => {
+    expect(stylesSource).toMatch(
+      /\.connection-tag-manage-row > \.connection-tag-badge\s*\{[^}]*min-height: 24px;[^}]*padding: 3px 10px;[^}]*font-size: 11px;/s,
+    );
+  });
+
+  it("shows every connection tag in a larger full-width wrapping row", () => {
+    expect(appSource).not.toContain("connection.tags.slice(0, 2)");
+    expect(appSource).not.toContain("host-tag-overflow");
+    expect(stylesSource).toMatch(/\.host-main\s*\{[^}]*display: grid;/s);
+    expect(stylesSource).toMatch(
+      /\.host-tag-summary\s*\{[^}]*grid-column: 1 \/ -1;[^}]*flex-wrap: wrap;/s,
+    );
+    expect(stylesSource).toMatch(
+      /\.host-tag-summary \.connection-tag-badge\s*\{[^}]*min-height: 21px;[^}]*font-size: 10\.5px;/s,
+    );
+  });
+
+  it("centres the connection menu in rows of every responsive height", () => {
+    expect(stylesSource).toMatch(/\.host-menu\s*\{[^}]*top: 50%;/s);
+    expect(stylesSource).toMatch(/\.host-row\.menu-open \.host-menu\s*\{[^}]*top: 29px;/s);
   });
 
   it("keeps baseline capture manual and never schedules it", () => {

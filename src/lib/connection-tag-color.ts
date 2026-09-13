@@ -2,8 +2,8 @@ import type { CSSProperties } from "react";
 
 type Rgb = [number, number, number];
 
-const TAG_FILL_PERCENT = 14;
-const TAG_BORDER_PERCENT = 58;
+const TAG_FILL_PERCENT = 18;
+const TAG_BORDER_PERCENT = 65;
 const TAG_FILL_ALPHA = TAG_FILL_PERCENT / 100;
 const MINIMUM_TAG_CONTRAST = 4.5;
 const TAG_SURFACES: Rgb[] = [
@@ -41,15 +41,14 @@ function blend(foreground: Rgb, background: Rgb, alpha: number): Rgb {
   ) as Rgb;
 }
 
-export function tagDisplayColor(color: string) {
-  const original = parseHex(color);
+function tagTextColor(color: Rgb) {
   for (let percentage = 0; percentage <= 100; percentage += 1) {
-    const candidate = original.map((channel) =>
+    const candidate = color.map((channel) =>
       Math.round(channel + (255 - channel) * (percentage / 100)),
     ) as Rgb;
     const readable = TAG_SURFACES.every(
       (surface) =>
-        contrastRatio(candidate, blend(candidate, surface, TAG_FILL_ALPHA)) >= MINIMUM_TAG_CONTRAST,
+        contrastRatio(candidate, blend(color, surface, TAG_FILL_ALPHA)) >= MINIMUM_TAG_CONTRAST,
     );
     if (readable) return toHex(candidate);
   }
@@ -57,11 +56,10 @@ export function tagDisplayColor(color: string) {
 }
 
 export function tagBadgeStyle(color: string): CSSProperties {
-  const displayColor = tagDisplayColor(color);
-  const channels = parseHex(displayColor).join(" ");
+  const channels = parseHex(color);
   return {
-    color: displayColor,
-    backgroundColor: `rgb(${channels} / ${TAG_FILL_PERCENT}%)`,
-    borderColor: `rgb(${channels} / ${TAG_BORDER_PERCENT}%)`,
+    color: tagTextColor(channels),
+    backgroundColor: `rgb(${channels.join(" ")} / ${TAG_FILL_PERCENT}%)`,
+    borderColor: `rgb(${channels.join(" ")} / ${TAG_BORDER_PERCENT}%)`,
   };
 }

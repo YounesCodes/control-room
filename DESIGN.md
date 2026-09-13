@@ -224,7 +224,7 @@ grey for disconnected. Live sessions read at a glance. The dot's ring colour
 matches the row or tab background, so it looks cut out of the icon.
 
 **Connection organization.** A Saved Connection can belong to one group and carry
-up to twelve case-insensitive, color-coded tags. The organization dialog owns tag
+up to five case-insensitive, color-coded tags. The organization dialog owns tag
 creation, renaming, color selection, and deletion; the Saved Connection editor
 only assigns existing tags.
 

@@ -38,4 +38,12 @@ describe("validateConnectionDraft", () => {
     expect(validateConnectionDraft(input({ username: "user name" }))).toContain("Username");
     expect(validateConnectionDraft(input({ port: 0 }))).toContain("Port");
   });
+
+  it("rejects more than five tags without changing the supplied list", () => {
+    const tagNames = ["one", "two", "three", "four", "five", "six"];
+    expect(validateConnectionDraft(input({ tagNames }))).toBe(
+      "A Saved Connection can have at most 5 tags",
+    );
+    expect(tagNames).toHaveLength(6);
+  });
 });
