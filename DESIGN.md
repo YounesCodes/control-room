@@ -141,7 +141,10 @@ use `tabular-nums`.
 
 `lucide-react`, sized 13-18 px by context, `strokeWidth` ~1.8 for nav and marks.
 Host OS marks use the Debian and Ubuntu logos (Simple Icons, CC0) with a generic
-server glyph as fallback, overlaid with the session presence dot.
+server glyph for every other supported distribution, overlaid with the session
+presence dot. The generic mark is an intentional neutral identity, not a claim
+that the operating system was not detected; its accessible label still names
+the detected distribution when that name is available nearby.
 
 ---
 

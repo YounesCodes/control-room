@@ -1584,7 +1584,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the explicitly configured Debian SSH fixture"]
+    #[ignore = "requires an explicitly configured Linux SSH fixture"]
     fn conpty_hosts_windows_ssh_against_live_fixture() {
         let ssh_path = crate::ssh::detect_ssh_path().unwrap();
         let host = std::env::var("CONTROL_ROOM_TEST_HOST").unwrap();

@@ -47,6 +47,6 @@ A listener bound to a broad address such as `0.0.0.0` does not prove Internet re
 
 :::
 
-The firewall snapshot is bounded and read-only. It may report UFW availability, default incoming policy, and up to its supported rule limit.
+The firewall snapshot is bounded and read-only. It reads UFW availability, its default incoming policy, and bounded rules. On firewalld hosts it reads active zones and explicit numeric port rules. firewalld service-name rules, rich rules, and direct rules are not resolved, and nftables-only or iptables-only configurations remain unavailable.
 
 Established connections are also bounded. Control Room aggregates them and caps both groups and remote samples. It does not collect a full process argument list, infer owners from names, scan ports, test reachability, or persist the snapshot.
