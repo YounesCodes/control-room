@@ -22,3 +22,5 @@ Switch between **Overview**, **Connections**, **Docker**, and **Table**. Filter 
 Some accounts cannot read which process owns a socket. The listener still appears, with its owner marked unavailable. **Resolve owners with sudo** can retry the read where allowed. Control Room links to a service or container only when it can match it reliably.
 
 A listener on `0.0.0.0` accepts connections on more than one local interface, but that alone does not tell you whether it is reachable from the Internet. Firewall rules and network access are separate. Ports does not scan other machines or test reachability.
+
+The firewall snapshot reads UFW or firewalld. UFW includes its incoming default policy. firewalld reports active zones and explicit numeric port rules, without deciding which zone governs a listener. Service-name rules, rich rules, direct rules, and nftables-only or iptables-only configurations remain unavailable. A missing numeric rule does not mean a port is blocked.

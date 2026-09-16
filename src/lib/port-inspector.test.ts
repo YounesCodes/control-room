@@ -93,6 +93,7 @@ describe("port inspector", () => {
 
   it("maps firewall policy separately from binding and never assumes reachability", () => {
     const firewall = (overrides: Partial<FirewallStatus> = {}): FirewallStatus => ({
+      backend: "ufw",
       available: true,
       active: true,
       defaultIncoming: "deny",
@@ -144,6 +145,25 @@ describe("port inspector", () => {
     expect(
       firewallForSocket(allowAnywhere, socket({ addressFamily: "ipv6", localAddress: "::" })).state,
     ).toBe("no-rule");
+    expect(
+      firewallForSocket(
+        firewall({
+          backend: "firewalld",
+          defaultIncoming: null,
+          rules: [
+            {
+              to: "443/tcp",
+              action: "ALLOW",
+              from: "zone public",
+              port: 443,
+              protocol: "tcp",
+              ipv6: false,
+            },
+          ],
+        }),
+        socket(),
+      ).label,
+    ).toBe("firewalld: open in zone public");
   });
 
   it("groups listeners by owner and orders containers, services, then unknowns", () => {

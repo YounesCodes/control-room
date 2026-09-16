@@ -11,6 +11,7 @@ vi.mock("../lib/api", () => ({
     listPorts: vi.fn(),
     listContainers: vi.fn(),
     inspectFirewall: vi.fn().mockResolvedValue({
+      backend: "ufw",
       available: true,
       active: true,
       defaultIncoming: "deny",

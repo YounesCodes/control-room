@@ -256,8 +256,7 @@ function isPrivateSource(value: string): boolean {
 }
 
 /**
- * Firewall disposition for one listener. This reflects UFW policy only and is
- * deliberately separate from where the socket binds: a broad bind does not imply
+ * Firewall disposition for one listener. This is deliberately separate from where the socket binds: a broad bind does not imply
  * Internet reachability, and a firewall rule does not change the binding.
  */
 export function firewallForSocket(
@@ -270,6 +269,8 @@ export function firewallForSocket(
   if (firewall.active === false) return { state: "inactive", label: "Firewall inactive" };
   if (firewall.active !== true) return { state: "unknown", label: "Firewall status unknown" };
 
+  const backend = firewall.backend === "firewalld" ? "firewalld" : "UFW";
+
   const match = firewall.rules.find(
     (rule) =>
       rule.port === socket.port &&
@@ -278,19 +279,29 @@ export function firewallForSocket(
   );
   if (!match) {
     return firewall.defaultIncoming
-      ? { state: "no-rule", label: `UFW default: ${firewall.defaultIncoming} incoming` }
-      : { state: "no-rule", label: "UFW: no matching rule" };
+      ? { state: "no-rule", label: `${backend} default: ${firewall.defaultIncoming} incoming` }
+      : { state: "no-rule", label: `${backend}: no matching numeric port rule` };
+  }
+
+  // A firewalld rule belongs to a zone, not directly to a bind address. Ports
+  // does not collect interface membership, so keep the rule as policy evidence
+  // without claiming that it governs this listener.
+  if (firewall.backend === "firewalld") {
+    return {
+      state: "unknown",
+      label: `firewalld: open in ${match.from}`,
+    };
   }
 
   const action = match.action.toUpperCase();
-  if (action === "DENY") return { state: "denied", label: "UFW: denied" };
-  if (action === "REJECT") return { state: "rejected", label: "UFW: rejected" };
-  if (action === "LIMIT") return { state: "limited", label: "UFW: rate-limited" };
+  if (action === "DENY") return { state: "denied", label: `${backend}: denied` };
+  if (action === "REJECT") return { state: "rejected", label: `${backend}: rejected` };
+  if (action === "LIMIT") return { state: "limited", label: `${backend}: rate-limited` };
 
   const from = match.from.replace(/\(v6\)/i, "").trim();
-  if (!from || /^anywhere$/i.test(from)) return { state: "allowed", label: "UFW: allowed" };
-  if (isPrivateSource(from)) return { state: "allowed", label: "UFW: LAN only" };
-  return { state: "allowed", label: `UFW: from ${from}` };
+  if (!from || /^anywhere$/i.test(from)) return { state: "allowed", label: `${backend}: allowed` };
+  if (isPrivateSource(from)) return { state: "allowed", label: `${backend}: LAN only` };
+  return { state: "allowed", label: `${backend}: ${from}` };
 }
 
 export function filterAndSortSockets(

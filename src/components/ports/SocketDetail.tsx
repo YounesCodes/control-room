@@ -58,7 +58,7 @@ export function SocketDetail({
       <h3 className="detail-section-heading">Firewall</h3>
       <dl className="detail-list">
         <div>
-          <dt>UFW</dt>
+          <dt>{firewall?.backend === "firewalld" ? "firewalld" : "UFW"}</dt>
           <dd>{disposition.label}</dd>
         </div>
       </dl>
