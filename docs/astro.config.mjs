@@ -53,7 +53,7 @@ export default defineConfig({
         },
         {
           label: "Using Control Room",
-          collapsed: true,
+          collapsed: false,
           items: [
             { label: "Connections", slug: "connections" },
             { label: "Workspaces & splits", slug: "workspaces" },
@@ -63,7 +63,7 @@ export default defineConfig({
         },
         {
           label: "Host inspection",
-          collapsed: true,
+          collapsed: false,
           items: [
             { label: "Overview", slug: "inspection/overview" },
             { label: "Systemd", slug: "inspection/services" },
@@ -76,7 +76,7 @@ export default defineConfig({
         },
         {
           label: "Advanced",
-          collapsed: true,
+          collapsed: false,
           items: [
             { label: "Enhanced History", slug: "tools/history" },
             { label: "Scratchpad", slug: "tools/scratchpad" },
@@ -86,7 +86,7 @@ export default defineConfig({
         },
         {
           label: "Help",
-          collapsed: true,
+          collapsed: false,
           items: [
             { label: "Troubleshooting", slug: "help/troubleshooting" },
             { label: "FAQ", slug: "help/faq" },
