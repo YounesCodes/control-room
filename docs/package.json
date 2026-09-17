@@ -6,7 +6,8 @@
     "dev": "astro dev",
     "check": "astro check",
     "build": "astro build --force",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test:ui": "playwright test"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.11",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@playwright/test": "^1.63.0",
     "typescript": "^5.9.3"
   }
 }

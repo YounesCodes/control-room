@@ -72,7 +72,7 @@ function monochrome({ name, type, bg, titleBar, fg, comment, keyword, string, fu
 const dark = monochrome({
   name: "control-room-dark",
   type: "dark",
-  bg: "#1c1c1b",
+  bg: "#20201f",
   titleBar: "#242423",
   fg: "#d2d2cd",
   comment: "#989893",
@@ -85,7 +85,7 @@ const dark = monochrome({
 const light = monochrome({
   name: "control-room-light",
   type: "light",
-  bg: "#eeeeea",
+  bg: "#eeeee9",
   titleBar: "#e5e5e0",
   fg: "#33332f",
   comment: "#5b5b55",
@@ -102,6 +102,10 @@ export const codeStyle = {
     borderRadius: "4px",
     borderColor: "var(--sl-color-gray-5)",
     codeFontFamily: "var(--sl-font-mono)",
+    codeFontSize: "0.875rem",
+    codeLineHeight: "1.65",
+    codePaddingBlock: "1rem",
+    codePaddingInline: "1rem",
     uiFontFamily: "var(--sl-font)",
     frames: {
       // macOS window dots, on the docs for a Windows-only tool.
