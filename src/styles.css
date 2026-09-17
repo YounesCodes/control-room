@@ -1384,7 +1384,8 @@ code,
 }
 
 .session-tab-close,
-.session-tab-rename {
+.session-tab-rename,
+.session-tab-layout-remove {
   display: grid;
   width: 28px;
   flex: none;
@@ -1402,21 +1403,26 @@ code,
 
 .session-tab-wrap:hover .session-tab-close,
 .session-tab-wrap:hover .session-tab-rename,
+.session-tab-wrap:hover .session-tab-layout-remove,
 .session-tab-wrap.active .session-tab-close,
 .session-tab-wrap.active .session-tab-rename,
+.session-tab-wrap.active .session-tab-layout-remove,
 .session-tab-close:focus-visible,
-.session-tab-rename:focus-visible {
+.session-tab-rename:focus-visible,
+.session-tab-layout-remove:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
 
 .session-tab-close:hover,
-.session-tab-rename:hover {
+.session-tab-rename:hover,
+.session-tab-layout-remove:hover {
   background: var(--fill-active);
   color: var(--text-strong);
 }
 
-.session-tab-rename {
+.session-tab-rename,
+.session-tab-layout-remove {
   width: 24px;
 }
 
@@ -2137,6 +2143,12 @@ code,
   border-bottom: 1px solid var(--border);
 }
 
+.terminal-pane-layout .terminal-workspace-pane.active {
+  z-index: 1;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
 .terminal-pane-layout .terminal-workspace-pane-visible {
   display: flex;
   flex-direction: column;
@@ -2147,53 +2159,6 @@ code,
   inset: auto;
   min-height: 0;
   flex: 1;
-}
-
-.terminal-pane-header {
-  display: flex;
-  min-height: 31px;
-  flex: none;
-  align-items: stretch;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-chrome);
-  color: var(--text-muted);
-}
-
-.terminal-workspace-pane.active .terminal-pane-header {
-  border-bottom-color: var(--accent);
-  color: var(--text-strong);
-}
-
-.terminal-pane-identity {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  padding: 0 11px;
-  color: inherit;
-}
-
-.terminal-pane-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.terminal-pane-remove {
-  display: grid;
-  width: 31px;
-  flex: none;
-  place-items: center;
-  background: transparent;
-  color: var(--text-faint);
-}
-
-.terminal-pane-remove:hover {
-  background: var(--fill-active);
-  color: var(--text-strong);
 }
 
 .terminal-pane,

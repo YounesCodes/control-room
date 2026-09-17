@@ -74,7 +74,9 @@ The host OS mark and a session presence dot carry identity and liveness in the
 rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
 A distraction-free terminal focus mode, toggled by button, hides the rail and
-titlebar and can tile several sessions as split panes.
+titlebar and can tile several sessions as split panes. The tab strip names each
+Workspace once. Split panes do not repeat those names, and an inset accent
+outline marks the active terminal.
 
 ---
 

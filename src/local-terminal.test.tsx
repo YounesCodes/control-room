@@ -547,9 +547,19 @@ describe("Local Terminal", () => {
 
     const terminals = await screen.findAllByTestId(/^terminal-/);
     expect(terminals.map((terminal) => terminal.dataset.kind)).toEqual(["remote", "local"]);
-    // Both panes are laid out in the split, each labelled by its own target.
-    const paneLabels = document.querySelectorAll(".terminal-pane-label");
-    expect([...paneLabels].map((label) => label.textContent)).toEqual(["prod-web", "PowerShell 7"]);
+    // The tab strip names each Workspace once. The split keeps both terminals
+    // visible and marks one active without repeating those names above them.
+    expect(
+      [...document.querySelectorAll(".session-tab-main")].map((tab) => tab.textContent),
+    ).toEqual(["prod-web", "PowerShell 7"]);
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+    expect(document.querySelectorAll(".terminal-workspace-pane.active")).toHaveLength(1);
+    expect(document.querySelector(".terminal-pane-header")).toBeNull();
+    expect(screen.getByLabelText("Remove prod-web from split")).toBeTruthy();
+    expect(screen.getByLabelText("Remove PowerShell 7 from split")).toBeTruthy();
+
+    await user.click(screen.getByLabelText("Remove prod-web from split"));
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
   });
 
   it("restores a local tab without starting its shell", async () => {

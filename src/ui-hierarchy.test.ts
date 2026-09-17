@@ -229,11 +229,11 @@ describe("application hierarchy", () => {
 
   it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
     // Saved Connections carry the host OS mark directly: the sidebar, the split
-    // menu, and the New terminal menu all list connections. Workspace tabs,
-    // split entries, and split pane headers go through one mark helper instead,
-    // because a local shell has no host OS to report.
+    // menu, and the New terminal menu all list connections. Workspace tabs and
+    // split entries go through one mark helper instead, because a local shell
+    // has no host OS to report. Split panes leave identity to the tab strip.
     expect(appSource.match(/<HostOsIcon/g)).toHaveLength(4);
-    expect(appSource.match(/workspaceMark\(workspace\)/g)).toHaveLength(3);
+    expect(appSource.match(/workspaceMark\(workspace\)/g)).toHaveLength(2);
     expect(appSource).not.toContain("StatusDot");
     // Connection sidebar and Workspace tabs surface live session state as a
     // presence badge on the OS mark; the labelled status dot stays in Terminal.
@@ -428,14 +428,18 @@ describe("application hierarchy", () => {
     );
   });
 
-  it("keeps window controls and labeled terminal panes in the focused tab strip", () => {
+  it("keeps Workspace identity in the focus-mode tab strip and outlines the active pane", () => {
     expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
     expect(appSource).toContain('aria-label="Split terminal"');
     expect(appSource).toContain("Split vertically");
     expect(appSource).toContain("Split horizontally");
     expect(appSource).toContain("New from Saved Connections");
-    expect(appSource).toContain("terminal-pane-label");
     expect(appSource).toContain("Remove from split");
+    expect(appSource).not.toContain("terminal-pane-header");
+    expect(stylesSource).not.toContain(".terminal-pane-header");
+    expect(stylesSource).toMatch(
+      /\.terminal-pane-layout \.terminal-workspace-pane\.active\s*\{[^}]*outline:\s*1px solid var\(--accent\);[^}]*outline-offset:\s*-1px;/s,
+    );
     expect(stylesSource).toContain(".terminal-pane-layout");
   });
 

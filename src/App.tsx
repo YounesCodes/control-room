@@ -12,6 +12,7 @@ import {
   Maximize2,
   MoreHorizontal,
   Minimize2,
+  Minus,
   Network,
   Pencil,
   Power,
@@ -1365,15 +1366,27 @@ export function App() {
                     </span>
                     <span>{duplicateLabel(workspace)}</span>
                   </button>
-                  <button
-                    className="session-tab-rename"
-                    type="button"
-                    onClick={() => renameWorkspace(workspace)}
-                    aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
-                    title="Rename Workspace"
-                  >
-                    <Pencil size={12} />
-                  </button>
+                  {terminalSplitMode && focusedTerminalIds.includes(workspace.id) ? (
+                    <button
+                      className="session-tab-layout-remove"
+                      type="button"
+                      onClick={() => removeTerminalFromSplit(workspace.id)}
+                      aria-label={`Remove ${duplicateLabel(workspace)} from split`}
+                      title="Remove from split"
+                    >
+                      <Minus size={13} />
+                    </button>
+                  ) : (
+                    <button
+                      className="session-tab-rename"
+                      type="button"
+                      onClick={() => renameWorkspace(workspace)}
+                      aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
+                      title="Rename Workspace"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
                   <button
                     className="session-tab-close"
                     type="button"
@@ -1520,7 +1533,6 @@ export function App() {
                     !settingsOpen &&
                     activeWorkspace.view === "terminal" &&
                     visibleTerminalIds.includes(workspace.id);
-                  const label = duplicateLabel(workspace);
                   const paneRect = terminalPaneRects[workspace.id];
                   return (
                     <div
@@ -1544,27 +1556,6 @@ export function App() {
                           : undefined
                       }
                     >
-                      {terminalSplitMode && terminalVisible && (
-                        <header className="terminal-pane-header">
-                          <button
-                            className="terminal-pane-identity"
-                            type="button"
-                            onClick={() => setActiveWorkspaceId(workspace.id)}
-                          >
-                            {workspaceMark(workspace)}
-                            <span className="terminal-pane-label">{label}</span>
-                          </button>
-                          <button
-                            className="terminal-pane-remove"
-                            type="button"
-                            onClick={() => removeTerminalFromSplit(workspace.id)}
-                            aria-label={`Remove from split: ${label}`}
-                            title="Remove from split"
-                          >
-                            <X size={13} />
-                          </button>
-                        </header>
-                      )}
                       <TerminalPane
                         workspace={workspace}
                         settings={settings}
