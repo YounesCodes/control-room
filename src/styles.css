@@ -1257,6 +1257,33 @@ code,
   height: 0;
 }
 
+.session-tab-group {
+  display: flex;
+  min-width: max-content;
+  flex: none;
+  align-items: stretch;
+  overflow: hidden;
+  margin: 3px 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.session-tab-group-label {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  border-right: 1px solid var(--border-strong);
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .session-tab-wrap {
   position: relative;
   display: flex;
@@ -1433,9 +1460,13 @@ code,
 }
 
 .session-tab-wrap.in-layout:not(.active) {
-  border-bottom-color: #565656;
-  background: #111;
+  border-bottom-color: var(--border-strong);
+  background: var(--surface-sunken);
   color: #c9c9c5;
+}
+
+.session-tab-group .session-tab-wrap:last-child {
+  border-right: 0;
 }
 
 .session-new-terminal {

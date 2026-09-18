@@ -75,8 +75,9 @@ rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
 A distraction-free terminal focus mode, toggled by button, hides the rail and
 titlebar and can tile several sessions as split panes. The tab strip names each
-Workspace once. Split panes do not repeat those names, and an inset accent
-outline marks the active terminal.
+Workspace once. Tiled terminals sit inside a labelled split group in that strip,
+separate from standalone tabs. Split panes do not repeat those names, and an
+inset accent outline marks the active terminal.
 
 ---
 

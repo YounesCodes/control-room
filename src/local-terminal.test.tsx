@@ -538,7 +538,8 @@ describe("Local Terminal", () => {
     api.listConnections.mockResolvedValue([host]);
     render(<App />);
 
-    await openConnection(user, "prod-web");
+    await openLocalShell(user, "Git Bash");
+    await openNewTerminal(user, "Saved Connections: prod-web");
     await user.click(await screen.findByLabelText("Focus terminal"));
     await user.click(await screen.findByLabelText("Split terminal"));
     await user.click(
@@ -546,12 +547,16 @@ describe("Local Terminal", () => {
     );
 
     const terminals = await screen.findAllByTestId(/^terminal-/);
-    expect(terminals.map((terminal) => terminal.dataset.kind)).toEqual(["remote", "local"]);
-    // The tab strip names each Workspace once. The split keeps both terminals
-    // visible and marks one active without repeating those names above them.
-    expect(
-      [...document.querySelectorAll(".session-tab-main")].map((tab) => tab.textContent),
-    ).toEqual(["prod-web", "PowerShell 7"]);
+    expect(terminals.map((terminal) => terminal.dataset.kind)).toEqual([
+      "local",
+      "remote",
+      "local",
+    ]);
+    const splitGroup = screen.getByRole("group", { name: "Split group, 2 terminals" });
+    expect(within(splitGroup).getByText("Split 2")).toBeTruthy();
+    expect(within(splitGroup).getByText("prod-web")).toBeTruthy();
+    expect(within(splitGroup).getByText("PowerShell 7")).toBeTruthy();
+    expect(within(splitGroup).queryByText("Git Bash")).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
     expect(document.querySelectorAll(".terminal-workspace-pane.active")).toHaveLength(1);
     expect(document.querySelector(".terminal-pane-header")).toBeNull();
@@ -559,6 +564,7 @@ describe("Local Terminal", () => {
     expect(screen.getByLabelText("Remove PowerShell 7 from split")).toBeTruthy();
 
     await user.click(screen.getByLabelText("Remove prod-web from split"));
+    expect(screen.queryByRole("group", { name: /Split group/ })).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
   });
 

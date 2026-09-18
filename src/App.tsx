@@ -316,6 +316,15 @@ export function App() {
       ? [activeWorkspace.id]
       : [];
   const terminalSplitMode = terminalFocusMode && focusedTerminalIds.length > 1;
+  const splitGroupWorkspaces = terminalSplitMode
+    ? focusedTerminalIds.flatMap((workspaceId) => {
+        const workspace = workspaces.find((item) => item.id === workspaceId);
+        return workspace ? [workspace] : [];
+      })
+    : [];
+  const standaloneWorkspaceTabs = terminalSplitMode
+    ? workspaces.filter((workspace) => !focusedTerminalIds.includes(workspace.id))
+    : workspaces;
   const terminalPaneRects = terminalLayout
     ? getResponsiveTerminalPaneRects(terminalLayout, terminalLayoutViewport)
     : {};
@@ -1163,6 +1172,64 @@ export function App() {
     });
   }
 
+  function renderWorkspaceTab(workspace: Workspace) {
+    const inSplitGroup = terminalSplitMode && focusedTerminalIds.includes(workspace.id);
+    return (
+      <div
+        className={[
+          "session-tab-wrap",
+          workspace.id === activeWorkspaceId && !settingsOpen ? "active" : "",
+          terminalFocusMode && focusedTerminalIds.includes(workspace.id) ? "in-layout" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        key={workspace.id}
+      >
+        <button
+          className="session-tab-main"
+          type="button"
+          aria-current={workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined}
+          onClick={() => selectWorkspaceTab(workspace)}
+        >
+          <span className="os-badge">
+            {workspaceMark(workspace)}
+            <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
+          </span>
+          <span>{duplicateLabel(workspace)}</span>
+        </button>
+        {inSplitGroup ? (
+          <button
+            className="session-tab-layout-remove"
+            type="button"
+            onClick={() => removeTerminalFromSplit(workspace.id)}
+            aria-label={`Remove ${duplicateLabel(workspace)} from split`}
+            title="Remove from split"
+          >
+            <Minus size={13} />
+          </button>
+        ) : (
+          <button
+            className="session-tab-rename"
+            type="button"
+            onClick={() => renameWorkspace(workspace)}
+            aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
+            title="Rename Workspace"
+          >
+            <Pencil size={12} />
+          </button>
+        )}
+        <button
+          className="session-tab-close"
+          type="button"
+          onClick={() => void closeWorkspace(workspace.id)}
+          aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
   const settings = settingsContract.current;
@@ -1339,64 +1406,20 @@ export function App() {
         {workspaces.length > 0 && (
           <nav className="session-tabs" aria-label="Open Workspaces">
             <div className="session-tab-list" data-tauri-drag-region>
-              {workspaces.map((workspace) => (
+              {terminalSplitMode && (
                 <div
-                  className={[
-                    "session-tab-wrap",
-                    workspace.id === activeWorkspaceId && !settingsOpen ? "active" : "",
-                    terminalFocusMode && focusedTerminalIds.includes(workspace.id)
-                      ? "in-layout"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  key={workspace.id}
+                  className="session-tab-group"
+                  role="group"
+                  aria-label={`Split group, ${splitGroupWorkspaces.length} terminals`}
                 >
-                  <button
-                    className="session-tab-main"
-                    type="button"
-                    aria-current={
-                      workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined
-                    }
-                    onClick={() => selectWorkspaceTab(workspace)}
-                  >
-                    <span className="os-badge">
-                      {workspaceMark(workspace)}
-                      <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
-                    </span>
-                    <span>{duplicateLabel(workspace)}</span>
-                  </button>
-                  {terminalSplitMode && focusedTerminalIds.includes(workspace.id) ? (
-                    <button
-                      className="session-tab-layout-remove"
-                      type="button"
-                      onClick={() => removeTerminalFromSplit(workspace.id)}
-                      aria-label={`Remove ${duplicateLabel(workspace)} from split`}
-                      title="Remove from split"
-                    >
-                      <Minus size={13} />
-                    </button>
-                  ) : (
-                    <button
-                      className="session-tab-rename"
-                      type="button"
-                      onClick={() => renameWorkspace(workspace)}
-                      aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
-                      title="Rename Workspace"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                  )}
-                  <button
-                    className="session-tab-close"
-                    type="button"
-                    onClick={() => void closeWorkspace(workspace.id)}
-                    aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
-                  >
-                    <X size={14} />
-                  </button>
+                  <span className="session-tab-group-label" aria-hidden="true">
+                    <Columns2 size={13} strokeWidth={1.8} />
+                    Split {splitGroupWorkspaces.length}
+                  </span>
+                  {splitGroupWorkspaces.map(renderWorkspaceTab)}
                 </div>
-              ))}
+              )}
+              {standaloneWorkspaceTabs.map(renderWorkspaceTab)}
               <span className="session-new-terminal-anchor" data-new-terminal-menu>
                 <button
                   ref={newTerminalButtonRef}
