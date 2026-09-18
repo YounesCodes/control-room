@@ -73,11 +73,16 @@ Identity shows once per place, never duplicated into a redundant "status rail".
 The host OS mark and a session presence dot carry identity and liveness in the
 rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
-A distraction-free terminal focus mode, toggled by button, hides the rail and
-titlebar and can tile several sessions as split panes. The tab strip names each
-Workspace once. Tiled terminals sit inside a labelled split group in that strip,
-separate from standalone tabs. Split panes do not repeat those names, and an
-inset accent outline marks the active terminal.
+A terminal group is a named, persistent split layout. Groups work in the normal
+Workspace view as well as focus mode, stay intact when either mode is toggled,
+and remain in the tab strip until the user deletes them. Deleting a group keeps
+its Workspaces and sessions open as standalone tabs. A default name uses the
+first Workspace as context (for example, "Git Bash group"), adds a numeric
+suffix only to avoid a collision, and can be renamed. Focus mode only hides the
+rail and titlebar. Split panes do not repeat Workspace names, and an inset
+accent outline marks the active terminal. Group membership has no incidental
+remove action: it changes only when another terminal is split into the group, a
+member Workspace is closed, or the group itself is deleted.
 
 ---
 
@@ -259,8 +264,8 @@ combobox/listbox pattern with `aria-activedescendant`, arrow, Home, End, Enter,
 and Escape keys, a focus trap, and focus restoration. It is the fastest way
 through a multi-connection setup.
 
-**Terminal.** One pane and toolbar serve every session, with split panes and
-focus mode for tiling. xterm draws bold text with weight rather than from the
+**Terminal.** One pane and toolbar serve every session. Named groups own split
+layouts, while focus mode changes only the surrounding chrome. xterm draws bold text with weight rather than from the
 bright palette (`drawBoldTextInBrightColors: false`), so a bold `01;34` directory
 shows exactly the "Blue" configured in Settings and the colour preview stays
 honest.

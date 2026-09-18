@@ -74,17 +74,14 @@ describe("Saved Connection workspace removal", () => {
       "vertical",
     );
 
-    const result = removeConnectionWorkspaces(
-      [first, second],
-      first.connectionId,
-      first.id,
-      layout,
-    );
+    const result = removeConnectionWorkspaces([first, second], first.connectionId, first.id, [
+      { id: "group", name: "Terminal group", layout },
+    ]);
 
     expect(result.removed).toEqual([first]);
     expect(result.remaining).toEqual([second]);
     expect(result.nextActiveId).toBe(second.id);
-    expect(result.nextLayout).toEqual(createTerminalLayout(second.id));
+    expect(result.nextGroups[0].layout).toEqual(createTerminalLayout(second.id));
   });
 
   it("leaves local Workspaces open when a Saved Connection is deleted", () => {
@@ -93,12 +90,18 @@ describe("Saved Connection workspace removal", () => {
     const remote = workspace("remote", "connection-a");
     const local = localWorkspace("local", "powershell-7", "PowerShell 7");
 
-    const result = removeConnectionWorkspaces(
-      [remote, local],
-      remote.connectionId,
-      remote.id,
-      splitTerminalLayout(createTerminalLayout(remote.id), remote.id, local.id, "vertical"),
-    );
+    const result = removeConnectionWorkspaces([remote, local], remote.connectionId, remote.id, [
+      {
+        id: "group",
+        name: "Terminal group",
+        layout: splitTerminalLayout(
+          createTerminalLayout(remote.id),
+          remote.id,
+          local.id,
+          "vertical",
+        ),
+      },
+    ]);
 
     expect(result.removed).toEqual([remote]);
     expect(result.remaining).toEqual([local]);
@@ -110,12 +113,9 @@ describe("Saved Connection workspace removal", () => {
     const first = workspace("first", "connection-a");
     const second = workspace("second", "connection-b");
 
-    const result = removeConnectionWorkspaces(
-      [first, second],
-      second.connectionId,
-      first.id,
-      createTerminalLayout(first.id),
-    );
+    const result = removeConnectionWorkspaces([first, second], second.connectionId, first.id, [
+      { id: "group", name: "Terminal group", layout: createTerminalLayout(first.id) },
+    ]);
 
     expect(result.nextActiveId).toBe(first.id);
     expect(result.remaining).toEqual([first]);

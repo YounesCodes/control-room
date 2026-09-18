@@ -1,4 +1,5 @@
-import type { TerminalLayout } from "./terminal-layout";
+import { pruneTerminalLayout } from "./terminal-layout";
+import { pruneTerminalGroups, type TerminalGroup } from "./terminal-groups";
 import { createLocalWorkspace, createRemoteWorkspace, isRemoteWorkspace } from "./workspace-target";
 import type {
   LocalShellProfile,
@@ -10,8 +11,10 @@ import type {
 interface RestoredWorkspaceState {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  terminalLayout: TerminalLayout | null;
+  terminalGroups: TerminalGroup[];
 }
+
+const LEGACY_TERMINAL_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 
 /// Rebuilds the saved tabs and split layout. Nothing is started here: every
 /// restored Workspace comes back disconnected with no session and no connect
@@ -55,17 +58,25 @@ export function restoreWorkspaceState(
     ? state.activeWorkspaceId
     : (workspaces[0]?.id ?? null);
 
+  const terminalGroups =
+    state.terminalGroups === undefined
+      ? (() => {
+          const layout = pruneTerminalLayout(state.terminalLayout, workspaceIds);
+          return layout ? [{ id: LEGACY_TERMINAL_GROUP_ID, name: "Terminal group", layout }] : [];
+        })()
+      : pruneTerminalGroups(state.terminalGroups, workspaceIds);
+
   return {
     workspaces,
     activeWorkspaceId,
-    terminalLayout: pruneTerminalLayout(state.terminalLayout, workspaceIds),
+    terminalGroups,
   };
 }
 
 export function persistWorkspaceState(
   workspaces: Workspace[],
   activeWorkspaceId: string | null,
-  terminalLayout: TerminalLayout | null,
+  terminalGroups: TerminalGroup[],
 ): PersistedWorkspaceState {
   const workspaceIds = new Set(workspaces.map((workspace) => workspace.id));
   return {
@@ -78,19 +89,7 @@ export function persistWorkspaceState(
       historyPaused: isRemoteWorkspace(workspace) ? workspace.historyPaused : false,
     })),
     activeWorkspaceId: workspaceIds.has(activeWorkspaceId ?? "") ? activeWorkspaceId : null,
-    terminalLayout: pruneTerminalLayout(terminalLayout, workspaceIds),
+    terminalGroups: pruneTerminalGroups(terminalGroups, workspaceIds),
+    terminalLayout: null,
   };
-}
-
-function pruneTerminalLayout(
-  layout: TerminalLayout | null,
-  workspaceIds: Set<string>,
-): TerminalLayout | null {
-  if (!layout) return null;
-  if (layout.kind === "leaf") return workspaceIds.has(layout.workspaceId) ? layout : null;
-  const first = pruneTerminalLayout(layout.first, workspaceIds);
-  const second = pruneTerminalLayout(layout.second, workspaceIds);
-  if (!first) return second;
-  if (!second) return first;
-  return { ...layout, first, second };
 }

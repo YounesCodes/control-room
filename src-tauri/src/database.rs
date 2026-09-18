@@ -1074,7 +1074,39 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
     if let Some(layout) = &state.terminal_layout {
         validate_persisted_layout(layout, &ids, 0)?;
     }
+    if state.terminal_groups.len() > 100 {
+        return Err("Workspace state cannot contain more than 100 terminal groups".into());
+    }
+    let mut group_ids = std::collections::HashSet::new();
+    let mut grouped_workspaces = std::collections::HashSet::new();
+    for group in &state.terminal_groups {
+        if Uuid::parse_str(&group.id).is_err() || !group_ids.insert(group.id.as_str()) {
+            return Err("Terminal group contains an invalid identifier".into());
+        }
+        let name = group.name.trim();
+        if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
+            return Err("Terminal group name is invalid".into());
+        }
+        validate_persisted_layout(&group.layout, &ids, 0)?;
+        let mut members = Vec::new();
+        collect_persisted_layout_ids(&group.layout, &mut members);
+        for member in members {
+            if !grouped_workspaces.insert(member) {
+                return Err("A Workspace cannot belong to more than one terminal group".into());
+            }
+        }
+    }
     Ok(())
+}
+
+fn collect_persisted_layout_ids<'a>(layout: &'a PersistedTerminalLayout, ids: &mut Vec<&'a str>) {
+    match layout {
+        PersistedTerminalLayout::Leaf { workspace_id } => ids.push(workspace_id),
+        PersistedTerminalLayout::Split { first, second, .. } => {
+            collect_persisted_layout_ids(first, ids);
+            collect_persisted_layout_ids(second, ids);
+        }
+    }
 }
 
 fn validate_persisted_layout(
@@ -2657,6 +2689,7 @@ mod tests {
                 history_paused: false,
             }],
             active_workspace_id: Some(workspace_id.clone()),
+            terminal_groups: Vec::new(),
             terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
         };
 
@@ -2680,6 +2713,7 @@ mod tests {
                 history_paused: false,
             }],
             active_workspace_id: Some(workspace_id.clone()),
+            terminal_groups: Vec::new(),
             terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
         };
 
@@ -2701,6 +2735,7 @@ mod tests {
                 history_paused: false,
             }],
             active_workspace_id: Some(workspace_id.clone()),
+            terminal_groups: Vec::new(),
             terminal_layout: None,
         };
 
@@ -3070,6 +3105,7 @@ mod tests {
                     history_paused: false,
                 }],
                 active_workspace_id: Some(workspace_id.clone()),
+                terminal_groups: Vec::new(),
                 terminal_layout: Some(layout),
             }
         };
@@ -3103,6 +3139,15 @@ mod tests {
         };
 
         for direction in ["horizontal", "vertical"] {
+            let layout = PersistedTerminalLayout::Split {
+                direction: direction.into(),
+                first: Box::new(PersistedTerminalLayout::Leaf {
+                    workspace_id: left.clone(),
+                }),
+                second: Box::new(PersistedTerminalLayout::Leaf {
+                    workspace_id: right.clone(),
+                }),
+            };
             let state = PersistedWorkspaceState {
                 // One remote and one local pane in the same split, which is the
                 // mixed Workspace the tab strip actually produces.
@@ -3111,21 +3156,12 @@ mod tests {
                     pane(&right, None, Some("git-bash".into())),
                 ],
                 active_workspace_id: Some(right.clone()),
-                terminal_layout: Some(PersistedTerminalLayout::Split {
-                    direction: direction.into(),
-                    first: Box::new(PersistedTerminalLayout::Leaf {
-                        workspace_id: left.clone(),
-                    }),
-                    second: Box::new(PersistedTerminalLayout::Split {
-                        direction: direction.into(),
-                        first: Box::new(PersistedTerminalLayout::Leaf {
-                            workspace_id: right.clone(),
-                        }),
-                        second: Box::new(PersistedTerminalLayout::Leaf {
-                            workspace_id: left.clone(),
-                        }),
-                    }),
-                }),
+                terminal_groups: vec![crate::models::PersistedTerminalGroup {
+                    id: Uuid::new_v4().to_string(),
+                    name: "Build".into(),
+                    layout,
+                }],
+                terminal_layout: None,
             };
 
             database.save_workspace_state(&state).unwrap();
@@ -3157,6 +3193,7 @@ mod tests {
                     history_paused: false,
                 }],
                 active_workspace_id: Some(workspace_id.clone()),
+                terminal_groups: Vec::new(),
                 terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
             })
             .unwrap();
@@ -3378,6 +3415,7 @@ mod tests {
                     history_paused: false,
                 }],
                 active_workspace_id: Some(workspace_id),
+                terminal_groups: Vec::new(),
                 terminal_layout: None,
             };
             assert!(

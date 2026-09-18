@@ -69,7 +69,13 @@ describe("Workspace restoration", () => {
     );
 
     expect(restored.activeWorkspaceId).toBe("workspace-b");
-    expect(restored.terminalLayout).toEqual(state.terminalLayout);
+    expect(restored.terminalGroups).toEqual([
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Terminal group",
+        layout: state.terminalLayout,
+      },
+    ]);
     expect(
       restored.workspaces.map(({ state, sessionId, connectRequested }) => ({
         state,
@@ -115,14 +121,50 @@ describe("Workspace restoration", () => {
 
     expect(restored.workspaces).toHaveLength(1);
     expect(restored.activeWorkspaceId).toBe("workspace-a");
-    expect(restored.terminalLayout).toEqual(createTerminalLayout("workspace-a"));
+    expect(restored.terminalGroups[0].layout).toEqual(createTerminalLayout("workspace-a"));
     expect(
       persistWorkspaceState(
         restored.workspaces,
         restored.activeWorkspaceId,
-        restored.terminalLayout,
+        restored.terminalGroups,
       ),
     ).toMatchObject({ activeWorkspaceId: "workspace-a" });
+  });
+
+  it("restores multiple groups and keeps the first claim for duplicate membership", () => {
+    const state: PersistedWorkspaceState = {
+      workspaces: ["a", "b", "c"].map((id) => ({
+        id,
+        label: null,
+        connectionId: `connection-${id}`,
+        localShellId: null,
+        view: "terminal",
+        historyPaused: false,
+      })),
+      activeWorkspaceId: "c",
+      terminalGroups: [
+        {
+          id: "first",
+          name: "Build",
+          layout: splitTerminalLayout(createTerminalLayout("a"), "a", "b", "vertical"),
+        },
+        {
+          id: "second",
+          name: "Logs",
+          layout: splitTerminalLayout(createTerminalLayout("b"), "b", "c", "horizontal"),
+        },
+      ],
+    };
+
+    const restored = restoreWorkspaceState(
+      [connection("connection-a"), connection("connection-b"), connection("connection-c")],
+      state,
+    );
+
+    expect(restored.terminalGroups).toEqual([
+      state.terminalGroups?.[0],
+      { id: "second", name: "Logs", layout: createTerminalLayout("c") },
+    ]);
   });
 
   it("restores a local terminal tab without starting its shell", () => {
@@ -170,9 +212,9 @@ describe("Workspace restoration", () => {
       { state: "disconnected", sessionId: null, connectRequested: false },
     ]);
     expect(restored.workspaces[0].label).toBe("Build shell");
-    expect(restored.terminalLayout).toEqual(state.terminalLayout);
+    expect(restored.terminalGroups[0].layout).toEqual(state.terminalLayout);
     // A local and a remote tab persist side by side, each naming one target.
-    expect(persistWorkspaceState(restored.workspaces, "workspace-a", null).workspaces).toEqual([
+    expect(persistWorkspaceState(restored.workspaces, "workspace-a", []).workspaces).toEqual([
       {
         id: "workspace-a",
         label: "Build shell",
@@ -226,7 +268,7 @@ describe("Workspace restoration", () => {
 
     expect(restored.workspaces).toHaveLength(1);
     expect(restored.activeWorkspaceId).toBe("workspace-b");
-    expect(restored.terminalLayout).toEqual(createTerminalLayout("workspace-b"));
+    expect(restored.terminalGroups[0].layout).toEqual(createTerminalLayout("workspace-b"));
   });
 
   it("restores Workspace state written before Local Terminal existed", () => {
@@ -244,7 +286,13 @@ describe("Workspace restoration", () => {
     expect(remote.view).toBe("logs");
     expect(remote.historyPaused).toBe(true);
     expect(remote.state).toBe("disconnected");
-    expect(restored.terminalLayout).toEqual(createTerminalLayout("workspace-a"));
+    expect(restored.terminalGroups).toEqual([
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Terminal group",
+        layout: createTerminalLayout("workspace-a"),
+      },
+    ]);
   });
 
   it("keeps Boot Diagnostics and journal evidence out of persisted Workspace state", () => {
@@ -300,7 +348,7 @@ describe("Workspace restoration", () => {
       },
     };
 
-    const persisted = persistWorkspaceState(restored.workspaces, "workspace-a", null);
+    const persisted = persistWorkspaceState(restored.workspaces, "workspace-a", []);
 
     expect(persisted.workspaces[0]).not.toHaveProperty("bootDiagnostics");
     expect(JSON.stringify(persisted)).not.toContain("sensitive journal evidence");

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { api, errorMessage } from "../lib/api";
-import type { TerminalLayout } from "../lib/terminal-layout";
+import type { TerminalGroup } from "../lib/terminal-groups";
 import { persistWorkspaceState } from "../lib/workspace-persistence";
 import type { Workspace } from "../types";
 
@@ -8,18 +8,18 @@ export function useWorkspacePersistence({
   ready,
   workspaces,
   activeWorkspaceId,
-  terminalLayout,
+  terminalGroups,
   onError,
 }: {
   ready: boolean;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  terminalLayout: TerminalLayout | null;
+  terminalGroups: TerminalGroup[];
   onError: (message: string) => void;
 }) {
   const state = useMemo(
-    () => persistWorkspaceState(workspaces, activeWorkspaceId, terminalLayout),
-    [activeWorkspaceId, terminalLayout, workspaces],
+    () => persistWorkspaceState(workspaces, activeWorkspaceId, terminalGroups),
+    [activeWorkspaceId, terminalGroups, workspaces],
   );
   const serializedState = JSON.stringify(state);
 

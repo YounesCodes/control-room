@@ -434,8 +434,9 @@ describe("application hierarchy", () => {
     expect(appSource).toContain("Split vertically");
     expect(appSource).toContain("Split horizontally");
     expect(appSource).toContain("New from Saved Connections");
-    expect(appSource).toContain("Remove from split");
-    expect(appSource).toContain("Split group,");
+    expect(appSource).not.toContain("Remove from terminal group");
+    expect(appSource).toContain("Delete group; terminals stay open");
+    expect(appSource).toContain("nextTerminalGroupName");
     expect(appSource).toContain("session-tab-group-label");
     expect(stylesSource).toContain(".session-tab-group");
     expect(appSource).not.toContain("terminal-pane-header");

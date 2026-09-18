@@ -748,7 +748,16 @@ pub struct EnvironmentInfo {
 pub struct PersistedWorkspaceState {
     pub workspaces: Vec<PersistedWorkspace>,
     pub active_workspace_id: Option<String>,
+    pub terminal_groups: Vec<PersistedTerminalGroup>,
     pub terminal_layout: Option<PersistedTerminalLayout>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedTerminalGroup {
+    pub id: String,
+    pub name: String,
+    pub layout: PersistedTerminalLayout,
 }
 
 /// A restored Workspace tab. Exactly one target is set: `connection_id` for a

@@ -1284,6 +1284,29 @@ code,
   white-space: nowrap;
 }
 
+.session-tab-group-label > span {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-tab-group-label button {
+  display: inline-flex;
+  width: 24px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+}
+
+.session-tab-group-label button:hover {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+
 .session-tab-wrap {
   position: relative;
   display: flex;
@@ -1411,8 +1434,7 @@ code,
 }
 
 .session-tab-close,
-.session-tab-rename,
-.session-tab-layout-remove {
+.session-tab-rename {
   display: grid;
   width: 28px;
   flex: none;
@@ -1430,26 +1452,21 @@ code,
 
 .session-tab-wrap:hover .session-tab-close,
 .session-tab-wrap:hover .session-tab-rename,
-.session-tab-wrap:hover .session-tab-layout-remove,
 .session-tab-wrap.active .session-tab-close,
 .session-tab-wrap.active .session-tab-rename,
-.session-tab-wrap.active .session-tab-layout-remove,
 .session-tab-close:focus-visible,
-.session-tab-rename:focus-visible,
-.session-tab-layout-remove:focus-visible {
+.session-tab-rename:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
 
 .session-tab-close:hover,
-.session-tab-rename:hover,
-.session-tab-layout-remove:hover {
+.session-tab-rename:hover {
   background: var(--fill-active);
   color: var(--text-strong);
 }
 
-.session-tab-rename,
-.session-tab-layout-remove {
+.session-tab-rename {
   width: 24px;
 }
 

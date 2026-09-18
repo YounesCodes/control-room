@@ -569,7 +569,8 @@ interface PersistedWorkspace {
 export interface PersistedWorkspaceState {
   workspaces: PersistedWorkspace[];
   activeWorkspaceId: string | null;
-  terminalLayout: import("./lib/terminal-layout").TerminalLayout | null;
+  terminalGroups?: import("./lib/terminal-groups").TerminalGroup[];
+  terminalLayout?: import("./lib/terminal-layout").TerminalLayout | null;
 }
 
 export type ScratchpadScope = "connection" | "global";

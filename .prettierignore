@@ -5,3 +5,4 @@ src-tauri/target/
 docs/.astro/
 docs/dist/
 docs/node_modules/
+**/.terraform/
