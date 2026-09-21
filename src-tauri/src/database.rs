@@ -10,8 +10,8 @@ use crate::{
     models::{
         AppSettings, BaselineTrace, ConnectionGroup, ConnectionTag, HistoryEntry, HistoryInput,
         HostBaseline, HostBaselineSummary, HostCapabilities, LOG_TAIL_OPTIONS, LocalShellKind,
-        PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
-        ScratchpadNote, ScratchpadNoteInput,
+        PersistedTerminalGroup, PersistedTerminalLayout, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput,
     },
 };
 
@@ -854,10 +854,28 @@ impl Database {
         let Some(payload) = payload else {
             return Ok(PersistedWorkspaceState::default());
         };
-        if let Ok(state) = serde_json::from_str::<PersistedWorkspaceState>(&payload)
-            && validate_workspace_state(&state).is_ok()
-        {
-            return Ok(state);
+        let is_legacy_terminal_layout = serde_json::from_str::<serde_json::Value>(&payload)
+            .ok()
+            .and_then(|value| {
+                value
+                    .as_object()
+                    .map(|object| !object.contains_key("terminalGroups"))
+            })
+            .unwrap_or(false);
+        if let Ok(mut state) = serde_json::from_str::<PersistedWorkspaceState>(&payload) {
+            if is_legacy_terminal_layout
+                && state.terminal_groups.is_empty()
+                && let Some(layout) = state.terminal_layout.clone()
+            {
+                state.terminal_groups.push(PersistedTerminalGroup {
+                    id: "00000000-0000-4000-8000-000000000001".into(),
+                    name: "Terminal group".into(),
+                    layout,
+                });
+            }
+            if validate_workspace_state(&state).is_ok() {
+                return Ok(state);
+            }
         }
         self.connection
             .lock()
@@ -2801,6 +2819,16 @@ mod tests {
         assert_eq!(
             restored.active_workspace_id.as_deref(),
             Some(workspace_id.as_str())
+        );
+        assert_eq!(restored.terminal_groups.len(), 1);
+        assert_eq!(
+            restored.terminal_groups[0].id,
+            "00000000-0000-4000-8000-000000000001"
+        );
+        assert_eq!(restored.terminal_groups[0].name, "Terminal group");
+        assert_eq!(
+            restored.terminal_groups[0].layout,
+            PersistedTerminalLayout::Leaf { workspace_id }
         );
     }
 
