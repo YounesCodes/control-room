@@ -13,6 +13,9 @@ export default defineConfig({
   },
   webServer: {
     command: "npm run preview -- --host 127.0.0.1 --port 4322",
+    env: {
+      ASTRO_PREVIEW_BACKGROUND: "0",
+    },
     url: "http://127.0.0.1:4322/control-room/",
     reuseExistingServer: !process.env.CI,
   },
