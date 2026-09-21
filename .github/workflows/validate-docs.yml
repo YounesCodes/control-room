@@ -36,3 +36,7 @@ jobs:
         run: npm run check
       - name: Build documentation
         run: npm run build
+      - name: Install browser for documentation UI tests
+        run: npx playwright install --with-deps chromium
+      - name: Test documentation UI
+        run: npm run test:ui
