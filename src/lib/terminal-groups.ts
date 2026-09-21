@@ -41,7 +41,7 @@ export function pruneTerminalGroups(
   for (const [index, group] of (groups ?? []).entries()) {
     const available = new Set([...workspaceIds].filter((id) => !claimed.has(id)));
     const layout = pruneTerminalLayout(group.layout, available);
-    if (!layout) continue;
+    if (!layout || getTerminalLayoutIds(layout).length < 2) continue;
     for (const id of getTerminalLayoutIds(layout)) claimed.add(id);
 
     const baseId = group.id.trim() || `terminal-group-${index + 1}`;

@@ -81,7 +81,7 @@ describe("Saved Connection workspace removal", () => {
     expect(result.removed).toEqual([first]);
     expect(result.remaining).toEqual([second]);
     expect(result.nextActiveId).toBe(second.id);
-    expect(result.nextGroups[0].layout).toEqual(createTerminalLayout(second.id));
+    expect(result.nextGroups).toEqual([]);
   });
 
   it("leaves local Workspaces open when a Saved Connection is deleted", () => {

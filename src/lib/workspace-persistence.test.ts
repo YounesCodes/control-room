@@ -121,7 +121,7 @@ describe("Workspace restoration", () => {
 
     expect(restored.workspaces).toHaveLength(1);
     expect(restored.activeWorkspaceId).toBe("workspace-a");
-    expect(restored.terminalGroups[0].layout).toEqual(createTerminalLayout("workspace-a"));
+    expect(restored.terminalGroups).toEqual([]);
     expect(
       persistWorkspaceState(
         restored.workspaces,
@@ -161,10 +161,7 @@ describe("Workspace restoration", () => {
       state,
     );
 
-    expect(restored.terminalGroups).toEqual([
-      state.terminalGroups?.[0],
-      { id: "second", name: "Logs", layout: createTerminalLayout("c") },
-    ]);
+    expect(restored.terminalGroups).toEqual([state.terminalGroups?.[0]]);
   });
 
   it("restores a local terminal tab without starting its shell", () => {
@@ -268,7 +265,7 @@ describe("Workspace restoration", () => {
 
     expect(restored.workspaces).toHaveLength(1);
     expect(restored.activeWorkspaceId).toBe("workspace-b");
-    expect(restored.terminalGroups[0].layout).toEqual(createTerminalLayout("workspace-b"));
+    expect(restored.terminalGroups).toEqual([]);
   });
 
   it("restores Workspace state written before Local Terminal existed", () => {
@@ -286,13 +283,7 @@ describe("Workspace restoration", () => {
     expect(remote.view).toBe("logs");
     expect(remote.historyPaused).toBe(true);
     expect(remote.state).toBe("disconnected");
-    expect(restored.terminalGroups).toEqual([
-      {
-        id: "00000000-0000-4000-8000-000000000001",
-        name: "Terminal group",
-        layout: createTerminalLayout("workspace-a"),
-      },
-    ]);
+    expect(restored.terminalGroups).toEqual([]);
   });
 
   it("keeps Boot Diagnostics and journal evidence out of persisted Workspace state", () => {

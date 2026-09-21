@@ -73,16 +73,18 @@ Identity shows once per place, never duplicated into a redundant "status rail".
 The host OS mark and a session presence dot carry identity and liveness in the
 rail and tabs. The labelled connection status stays in the Terminal toolbar.
 
-A terminal group is a named, persistent split layout. Groups work in the normal
-Workspace view as well as focus mode, stay intact when either mode is toggled,
-and remain in the tab strip until the user deletes them. Deleting a group keeps
-its Workspaces and sessions open as standalone tabs. A default name uses the
-first Workspace as context (for example, "Git Bash group"), adds a numeric
-suffix only to avoid a collision, and can be renamed. Focus mode only hides the
-rail and titlebar. Split panes do not repeat Workspace names, and an inset
-accent outline marks the active terminal. Group membership has no incidental
-remove action: it changes only when another terminal is split into the group, a
-member Workspace is closed, or the group itself is deleted.
+A terminal group is a named, persistent split layout for focus mode. A single
+terminal stays an ordinary Workspace tab. Splitting it with another terminal
+creates the group, which can tile remote or local Workspaces from different
+targets. Switching groups changes the whole terminal layout without closing a
+session. The active group has an accent border and the active pane has an inset
+accent outline. Exiting focus mode returns to the active Workspace, where its
+host-specific views remain available. Normal mode always shows every Workspace
+as its own tab and never replaces a host view with a group layout. Deleting a
+group keeps its Workspaces and sessions open as ordinary tabs. A default name
+uses the first Workspace as context (for example, "Git Bash group"), adds a
+numeric suffix only to avoid a collision, and can be renamed. A group dissolves
+when closing a member leaves only one terminal.
 
 ---
 
@@ -264,11 +266,11 @@ combobox/listbox pattern with `aria-activedescendant`, arrow, Home, End, Enter,
 and Escape keys, a focus trap, and focus restoration. It is the fastest way
 through a multi-connection setup.
 
-**Terminal.** One pane and toolbar serve every session. Named groups own split
-layouts, while focus mode changes only the surrounding chrome. xterm draws bold text with weight rather than from the
-bright palette (`drawBoldTextInBrightColors: false`), so a bold `01;34` directory
-shows exactly the "Blue" configured in Settings and the colour preview stays
-honest.
+**Terminal.** One pane and toolbar serve every session. Focus mode owns split
+layouts and named terminal groups; normal mode keeps one Workspace in context.
+xterm draws bold text with weight rather than from the bright palette
+(`drawBoldTextInBrightColors: false`), so a bold `01;34` directory shows exactly
+the "Blue" configured in Settings and the colour preview stays honest.
 
 A local shell borrows that pane with local words: it is _running_ rather than
 _connected_, and _stopped_ and _restarted_ rather than disconnected and
@@ -285,14 +287,14 @@ When a nested side-by-side split would make a terminal narrower than 280 px,
 that branch stacks while the window is narrow and returns to the requested
 direction when space is available again.
 
-**Opening terminals.** "New terminal" and Split share one grouped,
-keyboard-navigable target list and differ in what they do with the answer. "New
-terminal" offers every Saved Connection and every installed local shell, and each
-selection opens its own Workspace, so picking the active target gives a second
-independent terminal instead of changing the Workspace the menu came from. Split
-adds the group "New terminal" cannot have, the terminals already open, and lists
-existing terminals, new local shells, then new Saved Connections. Empty groups
-are dropped, so a machine with no local shells shows no heading for them.
+**Opening terminals.** In normal mode, "New terminal" offers every Saved
+Connection and installed local shell. Each selection opens its own Workspace, so
+picking the active target gives a second independent terminal. This remains
+"New terminal" in focus mode and opens an ordinary ungrouped tab. Split appears
+only in focus mode. Splitting an ungrouped terminal creates a group with the two
+terminals; later splits add to that group. The split target can be an ungrouped
+open terminal, a new local shell, or a new Saved Connection. Both menus use the
+same grouped, keyboard-navigable target list and drop empty sections.
 
 ---
 

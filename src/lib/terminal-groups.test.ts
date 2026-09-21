@@ -35,9 +35,12 @@ describe("terminal groups", () => {
     );
     expect(result.map((item) => [item.name, ...getTerminalLayoutIds(item.layout)])).toEqual([
       ["First", "one", "two"],
-      ["Second", "three"],
     ]);
     expect(terminalGroupForWorkspace(result, "two")?.id).toBe("a");
-    expect(terminalGroupForWorkspace(result, "three")?.id).toBe("b");
+    expect(terminalGroupForWorkspace(result, "three")).toBeNull();
+  });
+
+  it("drops groups that have fewer than two open terminals", () => {
+    expect(pruneTerminalGroups([group("a", "Solo", "one")], new Set(["one"]))).toEqual([]);
   });
 });

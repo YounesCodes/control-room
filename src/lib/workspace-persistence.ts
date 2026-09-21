@@ -62,7 +62,10 @@ export function restoreWorkspaceState(
     state.terminalGroups === undefined
       ? (() => {
           const layout = pruneTerminalLayout(state.terminalLayout, workspaceIds);
-          return layout ? [{ id: LEGACY_TERMINAL_GROUP_ID, name: "Terminal group", layout }] : [];
+          return pruneTerminalGroups(
+            layout ? [{ id: LEGACY_TERMINAL_GROUP_ID, name: "Terminal group", layout }] : [],
+            workspaceIds,
+          );
         })()
       : pruneTerminalGroups(state.terminalGroups, workspaceIds);
 
