@@ -12,7 +12,6 @@ import {
   Maximize2,
   MoreHorizontal,
   Minimize2,
-  Minus,
   Network,
   Pencil,
   Power,
@@ -54,12 +53,17 @@ import {
   createTerminalLayout,
   getTerminalLayoutIds,
   getResponsiveTerminalPaneRects,
-  removeTerminalFromLayout,
-  selectTerminalTab,
   splitTerminalLayout,
-  terminalLayoutContains,
 } from "./lib/terminal-layout";
-import type { TerminalLayout, TerminalSplitDirection } from "./lib/terminal-layout";
+import type { TerminalSplitDirection } from "./lib/terminal-layout";
+import {
+  deleteTerminalGroup,
+  nextTerminalGroupName,
+  pruneTerminalGroups,
+  renameTerminalGroup,
+  terminalGroupForWorkspace,
+  type TerminalGroup,
+} from "./lib/terminal-groups";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
 import {
   removeConnectionWorkspaces,
@@ -166,13 +170,14 @@ export function App() {
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
-  const [terminalLayout, setTerminalLayout] = useState<TerminalLayout | null>(null);
+  const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
+  const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
   const [terminalLayoutViewport, setTerminalLayoutViewport] = useState({
     width: Number.POSITIVE_INFINITY,
@@ -186,6 +191,7 @@ export function App() {
   } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
+  const [renameGroupTarget, setRenameGroupTarget] = useState<TerminalGroup | null>(null);
   // One update lifecycle for the whole application: one timer, one in-flight
   // check, no matter how many Workspaces are open. Defaults to on while
   // Settings is still loading so a slow first read never skips the first check.
@@ -209,10 +215,20 @@ export function App() {
   // held when the dialog opened. A Workspace opened, or a session state that
   // changed, while the request was in flight was inside neither the old list
   // nor the replacement, and disappeared.
-  const workspaceStateRef = useRef({ workspaces, activeWorkspaceId, terminalLayout });
+  const workspaceStateRef = useRef({
+    workspaces,
+    activeWorkspaceId,
+    terminalGroups,
+    terminalFocusMode,
+  });
   useEffect(() => {
-    workspaceStateRef.current = { workspaces, activeWorkspaceId, terminalLayout };
-  }, [workspaces, activeWorkspaceId, terminalLayout]);
+    workspaceStateRef.current = {
+      workspaces,
+      activeWorkspaceId,
+      terminalGroups,
+      terminalFocusMode,
+    };
+  }, [workspaces, activeWorkspaceId, terminalGroups, terminalFocusMode]);
 
   useEffect(() => {
     let current = true;
@@ -253,7 +269,7 @@ export function App() {
               );
               setWorkspaces(restored.workspaces);
               setActiveWorkspaceId(restored.activeWorkspaceId);
-              setTerminalLayout(restored.terminalLayout);
+              setTerminalGroups(restored.terminalGroups);
               setWorkspacePersistenceReady(true);
             } else {
               setActionError(
@@ -309,35 +325,46 @@ export function App() {
   const canOpenNewTerminal = connections.length > 0 || localShells.length > 0;
   const standardLocalShells = localShells.filter((shell) => !shell.elevated);
   const administratorLocalShells = localShells.filter((shell) => shell.elevated);
-  const focusedTerminalIds = terminalLayout ? getTerminalLayoutIds(terminalLayout) : [];
-  const visibleTerminalIds = terminalFocusMode
-    ? focusedTerminalIds
-    : activeWorkspace
-      ? [activeWorkspace.id]
-      : [];
-  const terminalSplitMode = terminalFocusMode && focusedTerminalIds.length > 1;
-  const splitGroupWorkspaces = terminalSplitMode
-    ? focusedTerminalIds.flatMap((workspaceId) => {
-        const workspace = workspaces.find((item) => item.id === workspaceId);
-        return workspace ? [workspace] : [];
-      })
+  const activeTerminalGroup = terminalFocusMode
+    ? terminalGroupForWorkspace(terminalGroups, activeWorkspaceId)
+    : null;
+  const activeTerminalIds = activeTerminalGroup
+    ? getTerminalLayoutIds(activeTerminalGroup.layout)
     : [];
-  const standaloneWorkspaceTabs = terminalSplitMode
-    ? workspaces.filter((workspace) => !focusedTerminalIds.includes(workspace.id))
-    : workspaces;
-  const terminalPaneRects = terminalLayout
-    ? getResponsiveTerminalPaneRects(terminalLayout, terminalLayoutViewport)
-    : {};
-  const existingSplitCandidates = workspaces.filter(
-    (workspace) => !focusedTerminalIds.includes(workspace.id),
+  const terminalSplitMode = activeTerminalGroup !== null && activeTerminalIds.length > 1;
+  const visibleTerminalIds =
+    terminalFocusMode && activeTerminalGroup
+      ? activeTerminalIds
+      : activeWorkspace
+        ? [activeWorkspace.id]
+        : [];
+  const groupedWorkspaceIds = new Set(
+    terminalGroups.flatMap((group) => getTerminalLayoutIds(group.layout)),
   );
+  const ungroupedWorkspaces = workspaces.filter(
+    (workspace) => !groupedWorkspaceIds.has(workspace.id),
+  );
+  const terminalPaneRects =
+    terminalSplitMode && activeTerminalGroup
+      ? getResponsiveTerminalPaneRects(activeTerminalGroup.layout, terminalLayoutViewport)
+      : {};
+  const existingSplitCandidates = terminalFocusMode
+    ? ungroupedWorkspaces.filter((workspace) => workspace.id !== activeWorkspaceId)
+    : [];
   useWorkspacePersistence({
     ready: workspacePersistenceReady,
     workspaces,
     activeWorkspaceId,
-    terminalLayout,
+    terminalGroups,
     onError: setActionError,
   });
+
+  useEffect(() => {
+    const group = terminalGroupForWorkspace(terminalGroups, activeWorkspaceId);
+    if (group && activeWorkspaceId) {
+      terminalGroupActiveWorkspaceRef.current.set(group.id, activeWorkspaceId);
+    }
+  }, [activeWorkspaceId, terminalGroups]);
 
   useEffect(() => {
     const element = terminalLayoutViewportRef.current;
@@ -549,58 +576,75 @@ export function App() {
 
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
-    setTerminalLayout((current) =>
-      current && terminalLayoutContains(current, activeWorkspace.id)
-        ? current
-        : createTerminalLayout(activeWorkspace.id),
-    );
     setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
     setTerminalFocusMode(true);
   }
 
   function exitTerminalFocus() {
     setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
     setTerminalFocusMode(false);
+  }
+
+  function selectTerminalGroup(group: TerminalGroup) {
+    const ids = getTerminalLayoutIds(group.layout);
+    const remembered = terminalGroupActiveWorkspaceRef.current.get(group.id);
+    const nextId = remembered && ids.includes(remembered) ? remembered : ids[0];
+    if (!nextId) return;
+    terminalGroupActiveWorkspaceRef.current.set(group.id, nextId);
+    setActiveWorkspaceId(nextId);
+    updateWorkspace(nextId, { view: "terminal" });
+    setSplitMenuOpen(false);
   }
 
   function selectWorkspaceTab(workspace: Workspace) {
     closeSettings(() => {
       setActiveWorkspaceId(workspace.id);
-      if (!terminalFocusMode) return;
-      updateWorkspace(workspace.id, { view: "terminal" });
-      setTerminalLayout((current) =>
-        current ? selectTerminalTab(current, workspace.id) : createTerminalLayout(workspace.id),
-      );
+      if (terminalFocusMode) {
+        const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
+        if (group) terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
+        updateWorkspace(workspace.id, { view: "terminal" });
+      }
     });
   }
 
   function splitWithExistingTerminal(workspace: Workspace) {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !terminalFocusMode) return;
     updateWorkspace(workspace.id, { view: "terminal" });
-    setTerminalLayout((current) =>
-      splitTerminalLayout(
-        current && terminalLayoutContains(current, activeWorkspace.id)
-          ? current
-          : createTerminalLayout(activeWorkspace.id),
-        activeWorkspace.id,
-        workspace.id,
-        splitDirection,
-      ),
+    const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
+    setTerminalGroups((current) =>
+      activeTerminalGroup
+        ? current.map((item) =>
+            item.id === activeTerminalGroup.id
+              ? {
+                  ...item,
+                  layout: splitTerminalLayout(
+                    item.layout,
+                    activeWorkspace.id,
+                    workspace.id,
+                    splitDirection,
+                  ),
+                }
+              : item,
+          )
+        : [
+            ...current,
+            {
+              id: groupId,
+              name: nextTerminalGroupName(current, duplicateLabel(activeWorkspace)),
+              layout: splitTerminalLayout(
+                createTerminalLayout(activeWorkspace.id),
+                activeWorkspace.id,
+                workspace.id,
+                splitDirection,
+              ),
+            },
+          ],
     );
+    terminalGroupActiveWorkspaceRef.current.set(groupId, workspace.id);
     setActiveWorkspaceId(workspace.id);
     setSplitMenuOpen(false);
-  }
-
-  function removeTerminalFromSplit(workspaceId: string) {
-    if (!terminalLayout) return;
-    const nextLayout = removeTerminalFromLayout(terminalLayout, workspaceId);
-    if (!nextLayout) return;
-    const remaining = getTerminalLayoutIds(nextLayout);
-    setTerminalLayout(nextLayout);
-    if (activeWorkspaceId === workspaceId) {
-      setActiveWorkspaceId(remaining[0]);
-      updateWorkspace(remaining[0], { view: "terminal" });
-    }
   }
 
   function updateServicesCache(id: string, servicesCache: CachedList<SystemdUnit>) {
@@ -655,20 +699,52 @@ export function App() {
   }
 
   function splitWithNewWorkspace(workspace: Workspace) {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !terminalFocusMode) return;
     setWorkspaces((current) => [...current, workspace]);
-    setTerminalLayout((current) =>
-      splitTerminalLayout(
-        current && terminalLayoutContains(current, activeWorkspace.id)
-          ? current
-          : createTerminalLayout(activeWorkspace.id),
-        activeWorkspace.id,
-        workspace.id,
-        splitDirection,
-      ),
+    const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
+    setTerminalGroups((current) =>
+      activeTerminalGroup
+        ? current.map((item) =>
+            item.id === activeTerminalGroup.id
+              ? {
+                  ...item,
+                  layout: splitTerminalLayout(
+                    item.layout,
+                    activeWorkspace.id,
+                    workspace.id,
+                    splitDirection,
+                  ),
+                }
+              : item,
+          )
+        : [
+            ...current,
+            {
+              id: groupId,
+              name: nextTerminalGroupName(current, duplicateLabel(activeWorkspace)),
+              layout: splitTerminalLayout(
+                createTerminalLayout(activeWorkspace.id),
+                activeWorkspace.id,
+                workspace.id,
+                splitDirection,
+              ),
+            },
+          ],
     );
+    terminalGroupActiveWorkspaceRef.current.set(groupId, workspace.id);
     setActiveWorkspaceId(workspace.id);
     setSplitMenuOpen(false);
+  }
+
+  function removeTerminalGroup(groupId: string) {
+    if (!terminalGroups.some((group) => group.id === groupId)) return;
+    const removingActiveGroup = activeTerminalGroup?.id === groupId;
+    const nextGroups = deleteTerminalGroup(terminalGroups, groupId);
+    terminalGroupActiveWorkspaceRef.current.delete(groupId);
+    setTerminalGroups(nextGroups);
+    if (terminalFocusMode && removingActiveGroup && activeWorkspaceId) {
+      updateWorkspace(activeWorkspaceId, { view: "terminal" });
+    }
   }
 
   function openConnection(connection: SavedConnection, forceNew = false) {
@@ -713,7 +789,6 @@ export function App() {
   function openWorkspace(workspace: Workspace) {
     setWorkspaces((current) => [...current, workspace]);
     setActiveWorkspaceId(workspace.id);
-    if (terminalFocusMode) setTerminalLayout(createTerminalLayout(workspace.id));
   }
 
   /// Opens the chooser under its own control, measured at the moment it opens.
@@ -851,18 +926,24 @@ export function App() {
     const current = workspaceStateRef.current;
     const index = current.workspaces.findIndex((item) => item.id === id);
     const remaining = current.workspaces.filter((item) => item.id !== id);
-    const nextLayout = current.terminalLayout
-      ? removeTerminalFromLayout(current.terminalLayout, id)
+    const previousGroup = terminalGroupForWorkspace(current.terminalGroups, id);
+    const nextGroups = pruneTerminalGroups(
+      current.terminalGroups,
+      new Set(remaining.map((item) => item.id)),
+    );
+    const remainingGroup = previousGroup
+      ? nextGroups.find((group) => group.id === previousGroup.id)
       : null;
-    const remainingSplitIds = nextLayout ? getTerminalLayoutIds(nextLayout) : [];
+    const remainingSplitIds = remainingGroup ? getTerminalLayoutIds(remainingGroup.layout) : [];
     const closingActiveWorkspace = current.activeWorkspaceId === id;
+    const keepFocusGroup = current.terminalFocusMode && previousGroup;
     const nextActive = closingActiveWorkspace
-      ? ((terminalFocusMode ? remaining.find((item) => item.id === remainingSplitIds[0]) : null) ??
+      ? ((keepFocusGroup ? remaining.find((item) => item.id === remainingSplitIds[0]) : null) ??
         remaining[Math.min(index, remaining.length - 1)] ??
         null)
       : null;
     setWorkspaces(
-      terminalFocusMode && nextActive
+      keepFocusGroup && nextActive
         ? remaining.map((item) =>
             item.id === nextActive.id ? { ...item, view: "terminal" } : item,
           )
@@ -871,7 +952,7 @@ export function App() {
     if (closingActiveWorkspace) {
       setActiveWorkspaceId(nextActive?.id ?? null);
     }
-    setTerminalLayout(nextLayout ?? (nextActive ? createTerminalLayout(nextActive.id) : null));
+    setTerminalGroups(nextGroups);
     if (!remaining.length) exitTerminalFocus();
   }
 
@@ -915,7 +996,7 @@ export function App() {
       beforeTeardown.workspaces,
       connection.id,
       beforeTeardown.activeWorkspaceId,
-      beforeTeardown.terminalLayout,
+      beforeTeardown.terminalGroups,
     ).removed;
     for (const workspace of owned) {
       if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
@@ -930,10 +1011,10 @@ export function App() {
       current.workspaces,
       connection.id,
       current.activeWorkspaceId,
-      current.terminalLayout,
+      current.terminalGroups,
     );
     setWorkspaces(removal.remaining);
-    setTerminalLayout(removal.nextLayout);
+    setTerminalGroups(removal.nextGroups);
     setActiveWorkspaceId(removal.nextActiveId);
     if (!removal.nextActiveId) exitTerminalFocus();
   }
@@ -1172,14 +1253,13 @@ export function App() {
     });
   }
 
-  function renderWorkspaceTab(workspace: Workspace) {
-    const inSplitGroup = terminalSplitMode && focusedTerminalIds.includes(workspace.id);
+  function renderWorkspaceTab(workspace: Workspace, grouped = false) {
     return (
       <div
         className={[
           "session-tab-wrap",
           workspace.id === activeWorkspaceId && !settingsOpen ? "active" : "",
-          terminalFocusMode && focusedTerminalIds.includes(workspace.id) ? "in-layout" : "",
+          grouped ? "in-layout" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -1197,17 +1277,7 @@ export function App() {
           </span>
           <span>{duplicateLabel(workspace)}</span>
         </button>
-        {inSplitGroup ? (
-          <button
-            className="session-tab-layout-remove"
-            type="button"
-            onClick={() => removeTerminalFromSplit(workspace.id)}
-            aria-label={`Remove ${duplicateLabel(workspace)} from split`}
-            title="Remove from split"
-          >
-            <Minus size={13} />
-          </button>
-        ) : (
+        {!grouped ? (
           <button
             className="session-tab-rename"
             type="button"
@@ -1217,7 +1287,7 @@ export function App() {
           >
             <Pencil size={12} />
           </button>
-        )}
+        ) : null}
         <button
           className="session-tab-close"
           type="button"
@@ -1406,20 +1476,61 @@ export function App() {
         {workspaces.length > 0 && (
           <nav className="session-tabs" aria-label="Open Workspaces">
             <div className="session-tab-list" data-tauri-drag-region>
-              {terminalSplitMode && (
-                <div
-                  className="session-tab-group"
-                  role="group"
-                  aria-label={`Split group, ${splitGroupWorkspaces.length} terminals`}
-                >
-                  <span className="session-tab-group-label" aria-hidden="true">
-                    <Columns2 size={13} strokeWidth={1.8} />
-                    Split {splitGroupWorkspaces.length}
-                  </span>
-                  {splitGroupWorkspaces.map(renderWorkspaceTab)}
-                </div>
-              )}
-              {standaloneWorkspaceTabs.map(renderWorkspaceTab)}
+              {terminalFocusMode
+                ? (() => {
+                    const renderedGroups = new Set<string>();
+                    return workspaces.flatMap((workspace) => {
+                      const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
+                      if (!group) return [renderWorkspaceTab(workspace)];
+                      if (renderedGroups.has(group.id)) return [];
+                      renderedGroups.add(group.id);
+                      const members = getTerminalLayoutIds(group.layout).flatMap((workspaceId) => {
+                        const workspace = workspaces.find((item) => item.id === workspaceId);
+                        return workspace ? [workspace] : [];
+                      });
+                      const active = activeTerminalGroup?.id === group.id;
+                      return (
+                        <div
+                          className={active ? "session-tab-group active" : "session-tab-group"}
+                          role="group"
+                          aria-label={group.name}
+                          key={group.id}
+                        >
+                          <span className="session-tab-group-label">
+                            <button
+                              className="session-tab-group-main"
+                              type="button"
+                              onClick={() => selectTerminalGroup(group)}
+                              aria-current={active ? "page" : undefined}
+                              aria-label={`Open ${group.name}, ${members.length} ${members.length === 1 ? "terminal" : "terminals"}`}
+                            >
+                              <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                              <span>{group.name}</span>
+                              <small>{members.length}</small>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRenameGroupTarget(group)}
+                              aria-label={`Rename ${group.name}`}
+                              title="Rename terminal group"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeTerminalGroup(group.id)}
+                              aria-label={`Delete ${group.name}; terminals stay open`}
+                              title="Delete group; terminals stay open"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </span>
+                          {members.map((workspace) => renderWorkspaceTab(workspace, true))}
+                        </div>
+                      );
+                    });
+                  })()
+                : workspaces.map((workspace) => renderWorkspaceTab(workspace))}
               <span className="session-new-terminal-anchor" data-new-terminal-menu>
                 <button
                   ref={newTerminalButtonRef}
@@ -1449,7 +1560,7 @@ export function App() {
             </div>
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
               <div className="session-tab-actions" data-terminal-split-menu>
-                {terminalFocusMode ? (
+                {terminalFocusMode && (
                   <>
                     <button
                       className="session-strip-button"
@@ -1463,7 +1574,11 @@ export function App() {
                       aria-label="Split terminal"
                       aria-haspopup="dialog"
                       aria-expanded={splitMenuOpen}
-                      title="Split the focused terminal pane"
+                      title={
+                        activeTerminalGroup
+                          ? "Add a terminal to this group"
+                          : "Create a group with another terminal"
+                      }
                     >
                       <Columns2 size={15} />
                     </button>
@@ -1502,6 +1617,10 @@ export function App() {
                         </div>
                       </TerminalTargetMenu>
                     )}
+                  </>
+                )}
+                {terminalFocusMode ? (
+                  <>
                     <button
                       className="session-strip-button"
                       type="button"
@@ -1584,7 +1703,13 @@ export function App() {
                         settings={settings}
                         visible={terminalVisible}
                         active={terminalVisible && workspace.id === activeWorkspace.id}
-                        onActivate={() => setActiveWorkspaceId(workspace.id)}
+                        onActivate={() => {
+                          const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
+                          if (group) {
+                            terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
+                          }
+                          setActiveWorkspaceId(workspace.id);
+                        }}
                         onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
                         onState={(state, reason) => {
                           updateWorkspace(workspace.id, {
@@ -1834,6 +1959,24 @@ export function App() {
             setRenameTarget(null);
           }}
           onClose={() => setRenameTarget(null)}
+        />
+      )}
+
+      {renameGroupTarget && (
+        <PromptDialog
+          title="Rename terminal group"
+          label="Group name"
+          description="This name appears in the Workspace tab strip."
+          defaultValue={renameGroupTarget.name}
+          placeholder="Terminal group"
+          submitLabel="Rename"
+          onSubmit={(value) => {
+            setTerminalGroups((current) =>
+              renameTerminalGroup(current, renameGroupTarget.id, value),
+            );
+            setRenameGroupTarget(null);
+          }}
+          onClose={() => setRenameGroupTarget(null)}
         />
       )}
 

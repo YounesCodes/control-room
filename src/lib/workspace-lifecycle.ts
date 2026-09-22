@@ -1,8 +1,9 @@
+import { getTerminalLayoutIds } from "./terminal-layout";
 import {
-  getTerminalLayoutIds,
-  removeTerminalFromLayout,
-  type TerminalLayout,
-} from "./terminal-layout";
+  pruneTerminalGroups,
+  terminalGroupForWorkspace,
+  type TerminalGroup,
+} from "./terminal-groups";
 import { isRemoteWorkspace, workspaceTargetKey, workspaceTargetName } from "./workspace-target";
 import type { SavedConnection, Workspace } from "../types";
 
@@ -10,14 +11,14 @@ interface RemovedConnectionWorkspaces {
   remaining: Workspace[];
   removed: Workspace[];
   nextActiveId: string | null;
-  nextLayout: TerminalLayout | null;
+  nextGroups: TerminalGroup[];
 }
 
 export function removeConnectionWorkspaces(
   workspaces: Workspace[],
   connectionId: string,
   activeWorkspaceId: string | null,
-  terminalLayout: TerminalLayout | null,
+  terminalGroups: TerminalGroup[],
 ): RemovedConnectionWorkspaces {
   // Deleting a Saved Connection touches its own Workspaces only. Local
   // Workspaces have no connection to lose and stay open.
@@ -27,16 +28,20 @@ export function removeConnectionWorkspaces(
   const remaining = workspaces.filter((workspace) => !belongsToConnection(workspace));
   const activeIndex = workspaces.findIndex((workspace) => workspace.id === activeWorkspaceId);
   const activeWasRemoved = removed.some((workspace) => workspace.id === activeWorkspaceId);
-  const nextLayout = removed.reduce<TerminalLayout | null>(
-    (layout, workspace) => (layout ? removeTerminalFromLayout(layout, workspace.id) : null),
-    terminalLayout,
+  const activeGroup = terminalGroupForWorkspace(terminalGroups, activeWorkspaceId);
+  const nextGroups = pruneTerminalGroups(
+    terminalGroups,
+    new Set(remaining.map((workspace) => workspace.id)),
   );
 
   if (!activeWasRemoved) {
-    return { remaining, removed, nextActiveId: activeWorkspaceId, nextLayout };
+    return { remaining, removed, nextActiveId: activeWorkspaceId, nextGroups };
   }
 
-  const nextLayoutId = nextLayout ? getTerminalLayoutIds(nextLayout)[0] : null;
+  const nextGroup = activeGroup
+    ? (nextGroups.find((group) => group.id === activeGroup.id) ?? null)
+    : null;
+  const nextLayoutId = nextGroup ? getTerminalLayoutIds(nextGroup.layout)[0] : null;
   const nextActive =
     remaining.find((workspace) => workspace.id === nextLayoutId) ??
     remaining[Math.min(Math.max(activeIndex, 0), remaining.length - 1)] ??
@@ -46,7 +51,7 @@ export function removeConnectionWorkspaces(
     remaining,
     removed,
     nextActiveId: nextActive?.id ?? null,
-    nextLayout,
+    nextGroups,
   };
 }
 

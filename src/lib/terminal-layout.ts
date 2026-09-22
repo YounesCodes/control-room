@@ -83,6 +83,19 @@ export function removeTerminalFromLayout(
   return { ...layout, first, second };
 }
 
+export function pruneTerminalLayout(
+  layout: TerminalLayout | null | undefined,
+  workspaceIds: Set<string>,
+): TerminalLayout | null {
+  if (!layout) return null;
+  if (layout.kind === "leaf") return workspaceIds.has(layout.workspaceId) ? layout : null;
+  const first = pruneTerminalLayout(layout.first, workspaceIds);
+  const second = pruneTerminalLayout(layout.second, workspaceIds);
+  if (!first) return second;
+  if (!second) return first;
+  return { ...layout, first, second };
+}
+
 export function selectTerminalTab(layout: TerminalLayout, workspaceId: string): TerminalLayout {
   return terminalLayoutContains(layout, workspaceId) ? layout : createTerminalLayout(workspaceId);
 }

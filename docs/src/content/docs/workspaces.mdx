@@ -11,7 +11,7 @@ A Workspace is one open view of one target. A remote Workspace belongs to a Save
 
 A remote Workspace groups one SSH Terminal Session with the inspection views supported by the Remote Host. The navigation includes Overview, Terminal, Systemd, Ports, Docker, Boot, Logs, Baselines, History, and Scratchpad.
 
-You can open several Workspaces for the same Saved Connection. Their sessions, view choices, terminal layouts, and reconnect lifecycle stay separate.
+You can open several Workspaces for the same Saved Connection. Their sessions, view choices, and reconnect lifecycle stay separate.
 
 ## Local Workspaces
 
@@ -20,7 +20,7 @@ terminal settings as a remote Workspace, and none of the host views.
 
 ## Restore after restart
 
-Control Room saves Workspace identity, active view, Enhanced History pause state, and the terminal split layout locally. On restart:
+Control Room saves Workspace identity, active view, Enhanced History pause state, and focus-mode terminal groups locally. On restart:
 
 - remote Workspaces return disconnected
 - local Workspaces return with their tabs present but stopped
@@ -46,4 +46,4 @@ Select a restored Workspace and reconnect or start its terminal when you are rea
 
 ## Labels and focus
 
-When several Workspaces share a target, Control Room adds a number to their display labels. Focus mode hides the connection rail and title bar so terminal panes have more room.
+When several Workspaces share a target, Control Room adds a number to their display labels. Focus mode hides the connection rail and title bar and shows standalone terminal tabs alongside named split groups. A group can mix Workspaces from several remote hosts and local shells. Leaving focus mode returns to the active Workspace and its inspection views.

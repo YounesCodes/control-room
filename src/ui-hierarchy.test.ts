@@ -230,8 +230,8 @@ describe("application hierarchy", () => {
   it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
     // Saved Connections carry the host OS mark directly: the sidebar, the split
     // menu, and the New terminal menu all list connections. Workspace tabs and
-    // split entries go through one mark helper instead, because a local shell
-    // has no host OS to report. Split panes leave identity to the tab strip.
+    // split entries use the same host mark, while a local shell has no host OS
+    // to report. Split panes leave identity to the tab strip.
     expect(appSource.match(/<HostOsIcon/g)).toHaveLength(4);
     expect(appSource.match(/workspaceMark\(workspace\)/g)).toHaveLength(2);
     expect(appSource).not.toContain("StatusDot");
@@ -428,16 +428,20 @@ describe("application hierarchy", () => {
     );
   });
 
-  it("keeps Workspace identity in the focus-mode tab strip and outlines the active pane", () => {
+  it("keeps groups inside focus mode and outlines the active group and pane", () => {
     expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
     expect(appSource).toContain('aria-label="Split terminal"');
+    expect(appSource).toContain("<Plus size={15} /> New terminal");
+    expect(appSource).not.toContain("openFocusGroup");
     expect(appSource).toContain("Split vertically");
     expect(appSource).toContain("Split horizontally");
     expect(appSource).toContain("New from Saved Connections");
-    expect(appSource).toContain("Remove from split");
-    expect(appSource).toContain("Split group,");
+    expect(appSource).not.toContain("Remove from terminal group");
+    expect(appSource).toContain("Delete group; terminals stay open");
+    expect(appSource).toContain("nextTerminalGroupName");
     expect(appSource).toContain("session-tab-group-label");
     expect(stylesSource).toContain(".session-tab-group");
+    expect(stylesSource).toContain(".session-tab-group.active");
     expect(appSource).not.toContain("terminal-pane-header");
     expect(stylesSource).not.toContain(".terminal-pane-header");
     expect(stylesSource).toMatch(

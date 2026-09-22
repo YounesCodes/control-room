@@ -532,7 +532,7 @@ describe("Local Terminal", () => {
     expect(screen.getByRole("button", { name: /Close Git Bash 2 Workspace/ })).toBeTruthy();
   });
 
-  it("splits a local shell beside an SSH terminal", async () => {
+  it("keeps normal Workspaces separate and switches persistent groups in focus mode", async () => {
     const user = userEvent.setup();
     const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
     api.listConnections.mockResolvedValue([host]);
@@ -540,7 +540,18 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "Git Bash");
     await openNewTerminal(user, "Saved Connections: prod-web");
-    await user.click(await screen.findByLabelText("Focus terminal"));
+
+    expect(screen.queryByRole("group", { name: "prod-web group" })).toBeNull();
+    expect(screen.queryByLabelText("Split terminal")).toBeNull();
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
+
+    await user.click(screen.getByLabelText("Focus terminal"));
+    expect(screen.queryByRole("group", { name: "prod-web group" })).toBeNull();
+    expect(screen.getByRole("button", { name: "New terminal" })).toBeTruthy();
+    expect(screen.getByLabelText("Rename Git Bash Workspace")).toBeTruthy();
+    expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
+
     await user.click(await screen.findByLabelText("Split terminal"));
     await user.click(
       await screen.findByRole("button", { name: "New local terminal: PowerShell 7" }),
@@ -552,20 +563,73 @@ describe("Local Terminal", () => {
       "remote",
       "local",
     ]);
-    const splitGroup = screen.getByRole("group", { name: "Split group, 2 terminals" });
-    expect(within(splitGroup).getByText("Split 2")).toBeTruthy();
+    let splitGroup = screen.getByRole("group", { name: "prod-web group" });
+    expect(within(splitGroup).getByText("prod-web group")).toBeTruthy();
     expect(within(splitGroup).getByText("prod-web")).toBeTruthy();
     expect(within(splitGroup).getByText("PowerShell 7")).toBeTruthy();
     expect(within(splitGroup).queryByText("Git Bash")).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
     expect(document.querySelectorAll(".terminal-workspace-pane.active")).toHaveLength(1);
     expect(document.querySelector(".terminal-pane-header")).toBeNull();
-    expect(screen.getByLabelText("Remove prod-web from split")).toBeTruthy();
-    expect(screen.getByLabelText("Remove PowerShell 7 from split")).toBeTruthy();
+    expect(screen.queryByTitle("Remove from terminal group")).toBeNull();
 
-    await user.click(screen.getByLabelText("Remove prod-web from split"));
-    expect(screen.queryByRole("group", { name: /Split group/ })).toBeNull();
+    await user.click(screen.getByLabelText("Exit terminal focus"));
+    expect(screen.queryByRole("group", { name: "prod-web group" })).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
+    expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
+    expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
+
+    await user.click(screen.getByLabelText("Focus terminal"));
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+
+    await user.click(screen.getByLabelText("Rename prod-web group"));
+    const groupName = screen.getByRole("textbox", { name: /^Group name/ });
+    await user.clear(groupName);
+    await user.type(groupName, "Proxmox");
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    splitGroup = screen.getByRole("group", { name: "Proxmox" });
+    expect(within(splitGroup).getByText("Proxmox")).toBeTruthy();
+    await waitFor(() =>
+      expect(api.saveWorkspaceState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          terminalGroups: [expect.objectContaining({ name: "Proxmox" })],
+        }),
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Git Bash$/ }));
+    await user.click(await screen.findByLabelText("Split terminal"));
+    await user.click(await screen.findByRole("button", { name: "New local terminal: Git Bash" }));
+    expect(screen.getByRole("group", { name: "Proxmox" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Open Proxmox, 2 terminals" }));
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+    expect(screen.getByRole("group", { name: "Proxmox" }).classList).toContain("active");
+
+    await user.click(screen.getByLabelText("Delete Proxmox; terminals stay open"));
+    expect(screen.queryByRole("group", { name: "Proxmox" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Git Bash group" }).classList).not.toContain("active");
+    expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
+    expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
+    expect(await screen.findAllByTestId(/^terminal-/)).toHaveLength(4);
+
+    await user.click(screen.getByLabelText("Exit terminal focus"));
+    expect(screen.queryByRole("group", { name: "Git Bash group" })).toBeNull();
+    expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
+
+    await user.click(screen.getByLabelText("Focus terminal"));
+    expect(screen.queryByRole("group", { name: "Proxmox" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
+    expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
+    expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Open Git Bash group, 2 terminals" }));
+    expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
   });
 
   it("restores a local tab without starting its shell", async () => {
