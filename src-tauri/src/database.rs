@@ -1167,6 +1167,16 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     if !LOG_TAIL_OPTIONS.contains(&settings.default_log_tail) {
         return Err("Unsupported default log tail count".into());
     }
+    // The list is a set of known profile ids, so it can never grow past the
+    // ids this release knows, plus room for an accidental duplicate or two.
+    if settings.hidden_local_shells.len() > 16 {
+        return Err("Too many hidden local terminals".into());
+    }
+    for shell_id in &settings.hidden_local_shells {
+        if LocalShellKind::from_profile_id(shell_id).is_none() {
+            return Err(format!("Unknown local terminal profile: {shell_id}"));
+        }
+    }
     let font_family = settings.terminal_font_family.trim();
     if font_family.is_empty()
         || font_family.chars().count() > 500
@@ -2576,6 +2586,45 @@ mod tests {
         assert!(
             !loaded.automatic_update_checks,
             "an unrelated preference must not be reset by removing another field"
+        );
+        assert!(
+            loaded.hidden_local_shells.is_empty(),
+            "a payload written before the local terminal toggles existed offers every profile"
+        );
+    }
+
+    #[test]
+    fn hidden_local_terminals_round_trip() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let settings = AppSettings {
+            hidden_local_shells: vec!["git-bash".into(), "powershell-7-administrator".into()],
+            ..AppSettings::default()
+        };
+
+        database.save_settings(&settings).unwrap();
+
+        assert_eq!(
+            database.get_settings().unwrap().hidden_local_shells,
+            settings.hidden_local_shells
+        );
+    }
+
+    #[test]
+    fn a_local_terminal_id_the_frontend_made_up_is_refused_when_saving_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        // The same shape of refusal as any other profile id: a path, a program
+        // name, or an id from a future release is an error rather than a
+        // silently stored value the launchers would then have to interpret.
+        let settings = AppSettings {
+            hidden_local_shells: vec!["C:\\Windows\\System32\\cmd.exe".into()],
+            ..AppSettings::default()
+        };
+
+        assert_eq!(
+            database.save_settings(&settings).unwrap_err(),
+            "Unknown local terminal profile: C:\\Windows\\System32\\cmd.exe"
         );
     }
 

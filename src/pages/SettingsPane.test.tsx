@@ -14,7 +14,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { SettingsPane } from "./SettingsPane";
-import type { AppSettings, EnvironmentInfo } from "../types";
+import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 
 const settings: AppSettings = {
   terminalFontFamily: "Cascadia Mono, Consolas, monospace",
@@ -31,6 +31,7 @@ const settings: AppSettings = {
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
+  hiddenLocalShells: [],
 };
 
 const environment: EnvironmentInfo = {
@@ -40,11 +41,31 @@ const environment: EnvironmentInfo = {
   platformSupported: true,
 };
 
+const powershell: LocalShellProfile = {
+  id: "powershell-7",
+  label: "PowerShell 7",
+  kind: "powershell-7",
+  elevated: false,
+};
+const gitBash: LocalShellProfile = {
+  id: "git-bash",
+  label: "Git Bash",
+  kind: "git-bash",
+  elevated: false,
+};
+const administratorPowerShell: LocalShellProfile = {
+  id: "powershell-7-administrator",
+  label: "PowerShell 7",
+  kind: "powershell-7",
+  elevated: true,
+};
+
 function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {}) {
   const props = {
     settings,
     defaults: settings,
     logTailOptions: [50, 100, 200, 500, 1000],
+    localShells: [] as LocalShellProfile[],
     environment,
     appVersion: "0.6.1",
     onCheckForUpdates: vi.fn(async () => ({ outcome: "current" }) as const),
@@ -190,5 +211,61 @@ describe("Settings actions", () => {
     expect(props.onSaved).not.toHaveBeenCalled();
     // Still dirty, so the reader can correct the problem and try again.
     expect(saveButton().disabled).toBe(false);
+  });
+
+  it("offers each installed shell in the two groups the launcher uses", () => {
+    renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+
+    expect(screen.getByText("Local terminals")).toBeTruthy();
+    expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
+    expect(screen.getByLabelText("Offer Git Bash")).toBeTruthy();
+    // The administrator row is a separate entry with its own label, because the
+    // launcher offers it as one.
+    expect(screen.getByText("Run as administrator")).toBeTruthy();
+    expect(screen.getByLabelText("Offer PowerShell 7, run as administrator")).toBeTruthy();
+  });
+
+  it("says so plainly when this machine has no local shells", () => {
+    renderPane({ localShells: [] });
+
+    expect(screen.getByText("No local shells are installed on this machine.")).toBeTruthy();
+    expect(screen.queryByLabelText("Offer Git Bash")).toBeNull();
+  });
+
+  it("hides a shell from the launchers once the setting is saved", async () => {
+    const user = userEvent.setup();
+    const props = renderPane({ localShells: [powershell, gitBash] });
+
+    await user.click(screen.getByLabelText("Offer Git Bash"));
+    expect(saveButton().disabled).toBe(false);
+
+    await user.click(saveButton());
+
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenLocalShells: ["git-bash"] }),
+    );
+    expect(props.onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenLocalShells: ["git-bash"] }),
+    );
+  });
+
+  it("shows a saved choice as off and gives a one-step way back", async () => {
+    const user = userEvent.setup();
+    renderPane({
+      settings: { ...settings, hiddenLocalShells: ["git-bash"] },
+      localShells: [powershell, gitBash],
+    });
+
+    const toggle = screen.getByLabelText("Offer Git Bash") as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
+
+    // Turning every hidden shell back on in one click, rather than hunting for
+    // the rows that are no longer obvious once several are off.
+    await user.click(screen.getByRole("button", { name: /Show all/ }));
+    expect((screen.getByLabelText("Offer Git Bash") as HTMLInputElement).checked).toBe(true);
+    // Still a draft: every other Settings change is confirmed the same way.
+    expect(saveButton().disabled).toBe(false);
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
   });
 });

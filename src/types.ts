@@ -411,6 +411,11 @@ export interface AppSettings {
    *  itself and never touches a Remote Host. Off still leaves the manual check
    *  in Settings working. */
   automaticUpdateChecks: boolean;
+  /** Local Shell Profile ids turned off in Settings, so the Local terminal,
+   *  New terminal, and Split launchers stop offering them. Presentation only:
+   *  the shell stays installed and a Workspace already using it keeps running
+   *  and restoring. A profile missing from this list is offered. */
+  hiddenLocalShells: string[];
 }
 
 /** An update Control Room could install, as reported by the signed updater

@@ -14,7 +14,10 @@ to the code, its tests, and the user manual under `docs/`, not here.
 - Local Terminal covers four shell profiles: PowerShell 7, Windows PowerShell,
   Command Prompt, and Git Bash. It also offers administrator variants of both
   PowerShell profiles and Command Prompt when Sudo for Windows is enabled in
-  inline mode. Control Room is the terminal emulator, so never
+  inline mode. Settings can hide any profile from the launchers; hiding is
+  presentation only; the shell stays installed, a Workspace already running it
+  keeps restoring, and Rust still validates the id behind every launch.
+  Control Room is the terminal emulator, so never
   launch, embed, or parse Windows Terminal, and never open an external terminal
   window. Keep the profile model extensible enough for WSL or custom profiles
   without adding either now.

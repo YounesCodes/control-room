@@ -128,6 +128,7 @@ const settings: AppSettings = {
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
+  hiddenLocalShells: [],
 };
 
 const shell: LocalShellProfile = {

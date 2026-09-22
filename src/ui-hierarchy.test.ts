@@ -164,6 +164,19 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("keeps one offerable list of local terminals behind Settings", () => {
+    // Settings is where a shell is turned off, and it needs the full catalog to
+    // turn it back on, so the filtering happens once for every launcher rather
+    // than in each menu. The catalog itself stays unfiltered because restoring
+    // a Workspace checks against it: hiding a shell must never cost the user a
+    // Workspace that was already running it.
+    expect(settingsSource).toContain("<legend>Local terminal</legend>");
+    expect(settingsSource).toContain("localShells: LocalShellProfile[]");
+    expect(appSource).toContain("offeredLocalShells(");
+    expect(appSource).not.toContain("localShells.filter((shell) => !shell.elevated)");
+    expect(appSource).toContain("restoreWorkspaceState(");
+  });
+
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
     // Unsaved Settings changes are guarded with an in-app confirm dialog rather

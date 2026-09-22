@@ -224,8 +224,10 @@ the remote-content palette, not part of the monochrome chrome.
 
 Every interactive element runs the same states: default, hover (`--fill-hover`),
 active or selected (`--fill-active` / `--fill-selected`), focus-visible (a 2 px
-accent ring), and disabled (0.4 opacity, `not-allowed`). A 2 px accent bar marks
-selection and "you are here" on rail rows, nav items, and list rows. The active
+accent ring), and disabled (0.4 opacity, `not-allowed`). A 2 px accent bar signals
+selection and "you are here" on rail rows and nav items, while the sidebar
+connection card gets a 1.5 px accent outline on all four sides, rounded to the
+card's 8 px corners. The active
 tab uses an underline instead. Same idea either way.
 
 **Session presence.** Connection rows and Workspace tabs carry a small presence
@@ -306,7 +308,10 @@ Esc and backdrop close and focus trap and restore), `PromptDialog` and
 `ConfirmDialog`, `CommandPalette`, `PanelState` (`LoadingState`, `EmptyState`,
 `ErrorState`), `HostOsIcon`, `StatusDot`, `WindowControls`, `TerminalPane`,
 `TerminalTargetMenu` (the shared list behind "New terminal" and Split),
-`ResourceMeter`, `UpdateIndicator`, and `ReleaseNotes` with `WhatsNewDialog`.
+`ResourceMeter`, `UpdateIndicator`, `ReleaseNotes` with `WhatsNewDialog`, and
+`ErrorBoundary` (the outermost shell in `main.tsx`: a pane that throws while
+rendering becomes a centred error screen with the message and a Reload button,
+never an empty black window).
 
 Shared layout patterns: the split page (a dense list beside a detail panel) used
 by Systemd, Ports, Docker, and Baselines; the definition grid and capability list

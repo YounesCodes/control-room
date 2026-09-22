@@ -16,6 +16,12 @@ Configure:
 
 Reset returns the ANSI palette to the app defaults. Terminal settings apply to both local and SSH terminals. Right-click behavior is built in and is not listed here; see [SSH terminal](/control-room/terminal/#right-click-behavior).
 
+## Local terminal
+
+Pick which local shells the **Local terminal** button, **New terminal**, and the split menu offer. Every installed profile is on by default; turn off the ones you never use, such as Command Prompt, and they disappear from all of those menus at once.
+
+Turning a shell off is presentation only. It stays installed, a Workspace already running it keeps going and restores after a restart, and **Show all** brings every hidden shell back in one step. Changing the list takes effect when you save.
+
 ## Logs and History
 
 Choose the default log tail from 50, 100, 200, 500, or 1000 lines. The global Enhanced History switch controls whether remote connections capture reported Bash commands. Existing entries remain until you delete or clear them.

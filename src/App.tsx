@@ -64,6 +64,7 @@ import {
   terminalGroupForWorkspace,
   type TerminalGroup,
 } from "./lib/terminal-groups";
+import { offeredLocalShells } from "./lib/offered-local-shells";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
 import {
   removeConnectionWorkspaces,
@@ -322,9 +323,25 @@ export function App() {
   // "New terminal" asks which target to open, so it needs a target to offer
   // rather than a compatible Workspace to copy. Having nothing saved and no
   // shell installed is the only case with nothing to choose from.
-  const canOpenNewTerminal = connections.length > 0 || localShells.length > 0;
-  const standardLocalShells = localShells.filter((shell) => !shell.elevated);
-  const administratorLocalShells = localShells.filter((shell) => shell.elevated);
+  //
+  // Every launcher offers the same set: each installed profile except the ones
+  // turned off in Settings. The catalog itself stays complete, because it is
+  // also what a restored Workspace is checked against — hiding a shell must
+  // never cost someone the Workspace that was already running it.
+  const offeredShells = offeredLocalShells(
+    localShells,
+    settingsContract?.current.hiddenLocalShells ?? [],
+  );
+  const canOpenNewTerminal = connections.length > 0 || offeredShells.length > 0;
+  const standardLocalShells = offeredShells.filter((shell) => !shell.elevated);
+  const administratorLocalShells = offeredShells.filter((shell) => shell.elevated);
+  // The "Run as administrator" group leaves the menu entirely once every entry
+  // in it has been turned off in Settings: an empty group, or the setup note
+  // that says administrator terminals need enabling, would both be describing
+  // a state the user chose rather than one they are stuck on. The note still
+  // shows when this machine genuinely cannot offer the group.
+  const administratorGroupOffered =
+    administratorLocalShells.length > 0 || !localShells.some((shell) => shell.elevated);
   const activeTerminalGroup = terminalFocusMode
     ? terminalGroupForWorkspace(terminalGroups, activeWorkspaceId)
     : null;
@@ -1404,7 +1421,7 @@ export function App() {
           </div>
         )}
         <div className="sidebar-footer">
-          {!!localShells.length && (
+          {!!offeredShells.length && (
             <div className="local-shell-launcher" data-local-shell-menu>
               <button
                 className="sidebar-secondary"
@@ -1432,32 +1449,34 @@ export function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="local-shell-menu-group local-shell-administrator-group">
-                    <strong>Run as administrator</strong>
-                    {administratorLocalShells.length ? (
-                      administratorLocalShells.map((shell) => (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          key={shell.id}
-                          onClick={() => openLocalShell(shell)}
-                          aria-label={`${shell.label}, run as administrator`}
-                        >
-                          <Shield
-                            size={14}
-                            strokeWidth={1.8}
-                            className="administrator-terminal-icon"
-                          />
-                          <span>{shell.label}</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="local-shell-administrator-note">
-                        <ShieldAlert size={14} strokeWidth={1.8} />
-                        <span>{administratorTerminalNote(administratorTerminalStatus)}</span>
-                      </p>
-                    )}
-                  </div>
+                  {administratorGroupOffered && (
+                    <div className="local-shell-menu-group local-shell-administrator-group">
+                      <strong>Run as administrator</strong>
+                      {administratorLocalShells.length ? (
+                        administratorLocalShells.map((shell) => (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            key={shell.id}
+                            onClick={() => openLocalShell(shell)}
+                            aria-label={`${shell.label}, run as administrator`}
+                          >
+                            <Shield
+                              size={14}
+                              strokeWidth={1.8}
+                              className="administrator-terminal-icon"
+                            />
+                            <span>{shell.label}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="local-shell-administrator-note">
+                          <ShieldAlert size={14} strokeWidth={1.8} />
+                          <span>{administratorTerminalNote(administratorTerminalStatus)}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1569,7 +1588,7 @@ export function App() {
                       disabled={
                         !connections.length &&
                         !existingSplitCandidates.length &&
-                        !localShells.length
+                        !offeredShells.length
                       }
                       aria-label="Split terminal"
                       aria-haspopup="dialog"
@@ -1881,6 +1900,7 @@ export function App() {
             settings={settings}
             defaults={settingsContract.defaults}
             logTailOptions={settingsContract.logTailOptions}
+            localShells={localShells}
             environment={environment}
             appVersion={updater.currentVersion}
             onCheckForUpdates={updater.checkNow}
@@ -1900,7 +1920,7 @@ export function App() {
               {connections.length
                 ? "Choose a saved connection from the sidebar to open it."
                 : "Use Add connection in the sidebar to save an SSH destination."}
-              {!!localShells.length && " Local terminal opens a shell on this machine."}
+              {!!offeredShells.length && " Local terminal opens a shell on this machine."}
             </p>
             <div className="empty-shortcuts">
               <span className="empty-shortcut">

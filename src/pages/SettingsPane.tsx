@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { settingsHaveChanges } from "../lib/settings-draft";
-import type { AppSettings, EnvironmentInfo } from "../types";
+import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
 import { contrastRatio } from "../lib/color-contrast";
 
@@ -20,6 +20,7 @@ export function SettingsPane({
   settings,
   defaults,
   logTailOptions,
+  localShells,
   environment,
   appVersion,
   onCheckForUpdates,
@@ -30,6 +31,9 @@ export function SettingsPane({
   settings: AppSettings;
   defaults: AppSettings;
   logTailOptions: number[];
+  /** Every local shell this machine has, the hidden ones included: Settings is
+   *  where they are turned back on, so it cannot be handed a filtered list. */
+  localShells: LocalShellProfile[];
   environment: EnvironmentInfo;
   /** The running version, read from Tauri package metadata rather than any
    *  constant in this file. */
@@ -41,7 +45,13 @@ export function SettingsPane({
   onClose: () => boolean;
   onDirtyChange: (dirty: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(settings);
+  /* The list is read from whatever settings the backend sent. An older payload
+     simply has no such key, and Settings has to open on it rather than take the
+     whole window down: absent means nothing is hidden, same as in Rust. */
+  const [draft, setDraft] = useState<AppSettings>(() => ({
+    ...settings,
+    hiddenLocalShells: settings.hiddenLocalShells ?? [],
+  }));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -64,6 +74,37 @@ export function SettingsPane({
   }
 
   const dirty = settingsHaveChanges(settings, draft);
+
+  const standardProfiles = localShells.filter((shell) => !shell.elevated);
+  const administratorProfiles = localShells.filter((shell) => shell.elevated);
+  const hiddenIds = draft.hiddenLocalShells;
+  const hiddenCount = localShells.filter((shell) => hiddenIds.includes(shell.id)).length;
+
+  /* One row per profile, in the same two groups the launchers use, so the
+     setting and the menu it controls read as the same list. */
+  function setOffered(shell: LocalShellProfile, offered: boolean) {
+    const remaining = hiddenIds.filter((id) => id !== shell.id);
+    setDraft({
+      ...draft,
+      hiddenLocalShells: offered ? remaining : [...remaining, shell.id],
+    });
+  }
+
+  function toggleRow(shell: LocalShellProfile) {
+    return (
+      <label className="checkbox-label" key={shell.id}>
+        <input
+          type="checkbox"
+          checked={!hiddenIds.includes(shell.id)}
+          onChange={(event) => setOffered(shell, event.target.checked)}
+          aria-label={
+            shell.elevated ? `Offer ${shell.label}, run as administrator` : `Offer ${shell.label}`
+          }
+        />
+        {shell.label}
+      </label>
+    );
+  }
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -256,6 +297,43 @@ export function SettingsPane({
                 </label>
               ))}
             </div>
+          </fieldset>
+          <fieldset>
+            <legend>Local terminal</legend>
+            <small>
+              Choose which shells the Local terminal button, New terminal, and Split menus offer.
+              Turning one off hides it from those menus only: the shell stays installed, a Workspace
+              already running it keeps going, and turning it back on brings it back.
+            </small>
+            {localShells.length === 0 ? (
+              <small>No local shells are installed on this machine.</small>
+            ) : (
+              <>
+                <div className="local-shell-toggle-group">
+                  <div className="local-shell-toggle-heading">
+                    <strong>Local terminals</strong>
+                    {hiddenCount > 0 && (
+                      <button
+                        className="secondary-button compact-button"
+                        type="button"
+                        onClick={() => setDraft({ ...draft, hiddenLocalShells: [] })}
+                      >
+                        <RotateCcw size={13} /> Show all
+                      </button>
+                    )}
+                  </div>
+                  {standardProfiles.map(toggleRow)}
+                </div>
+                {administratorProfiles.length > 0 && (
+                  <div className="local-shell-toggle-group">
+                    <div className="local-shell-toggle-heading">
+                      <strong>Run as administrator</strong>
+                    </div>
+                    {administratorProfiles.map(toggleRow)}
+                  </div>
+                )}
+              </>
+            )}
           </fieldset>
           <fieldset>
             <legend>Logs and History</legend>
