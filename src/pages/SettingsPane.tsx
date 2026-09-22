@@ -144,14 +144,14 @@ export function SettingsPane({
             className="icon-button settings-back"
             type="button"
             onClick={() => onClose()}
-            aria-label="Back to terminal"
-            title="Back to terminal"
+            aria-label="Close Settings"
+            title="Close Settings"
           >
             <ArrowLeft size={17} />
           </button>
           <div className="settings-heading-text">
             <h2>Settings</h2>
-            <p>Terminal, log, and local History preferences.</p>
+            <p>Terminal, logs, local shells, SSH access, and Control Room updates.</p>
           </div>
           <div className="settings-heading-actions">
             {message ? (

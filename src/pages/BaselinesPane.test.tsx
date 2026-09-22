@@ -431,6 +431,10 @@ describe("baselines pane", () => {
     renderPane();
     await screen.findAllByText("after upgrade");
     await userEvent.click(screen.getByRole("button", { name: "Delete baseline" }));
+    expect(api.deleteHostBaseline).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Delete baseline" }),
+    );
     await waitFor(() => expect(api.deleteHostBaseline).toHaveBeenCalledWith("later"));
   });
 

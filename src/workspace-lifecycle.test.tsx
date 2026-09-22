@@ -221,7 +221,7 @@ describe("App Workspace behavior", () => {
     await user.click(await screen.findByLabelText("Open Settings"));
     await user.clear(screen.getByLabelText("Font family"));
     await user.type(screen.getByLabelText("Font family"), "Cascadia Mono");
-    await user.click(screen.getByRole("button", { name: "Back to terminal" }));
+    await user.click(screen.getByRole("button", { name: "Close Settings" }));
 
     // The in-app confirm dialog appears and Settings stays open.
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
@@ -232,7 +232,7 @@ describe("App Workspace behavior", () => {
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
 
     // Discarding leaves Settings.
-    await user.click(screen.getByRole("button", { name: "Back to terminal" }));
+    await user.click(screen.getByRole("button", { name: "Close Settings" }));
     await user.click(screen.getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Settings" })).toBeNull());
   });

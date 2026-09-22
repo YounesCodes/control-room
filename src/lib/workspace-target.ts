@@ -35,6 +35,9 @@ export function workspaceTargetName(workspace: Workspace): string {
 /// A local shell runs and stops; a remote session connects and disconnects.
 /// The lifecycle is identical, so only the words differ.
 export function terminalStateLabel(workspace: Workspace): string {
+  if (workspace.restored && !workspace.connectRequested) {
+    return isRemoteWorkspace(workspace) ? "not connected" : "not started";
+  }
   if (isRemoteWorkspace(workspace)) return workspace.state;
   switch (workspace.state) {
     case "connecting":
@@ -63,6 +66,7 @@ export function createRemoteWorkspace(connection: SavedConnection): RemoteWorksp
     historyPaused: false,
     reconnectToken: 0,
     connectRequested: true,
+    restored: false,
     servicesCache: emptyCachedList(),
     portsCache: emptyCachedList(),
     containersCache: emptyCachedList(),
@@ -90,5 +94,6 @@ export function createLocalWorkspace(shell: LocalShellProfile): LocalWorkspace {
     view: "terminal",
     reconnectToken: 0,
     connectRequested: true,
+    restored: false,
   };
 }

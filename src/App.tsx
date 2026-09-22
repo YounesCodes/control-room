@@ -76,6 +76,7 @@ import {
   createRemoteWorkspace,
   isLocalWorkspace,
   isRemoteWorkspace,
+  terminalStateLabel,
   workspaceTargetName,
 } from "./lib/workspace-target";
 import { DockerPane } from "./pages/DockerPane";
@@ -169,6 +170,9 @@ export function App() {
   const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
   const [hostCapabilities, setHostCapabilities] = useState<Record<string, HostCapabilities>>({});
   const [hostMenuConnectionId, setHostMenuConnectionId] = useState<string | null>(null);
+  const [hostMenuPosition, setHostMenuPosition] = useState<{ top: number; left: number } | null>(
+    null,
+  );
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
   const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
@@ -191,6 +195,8 @@ export function App() {
     right: number;
   } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
+  const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   const [renameGroupTarget, setRenameGroupTarget] = useState<TerminalGroup | null>(null);
   // One update lifecycle for the whole application: one timer, one in-flight
@@ -377,6 +383,16 @@ export function App() {
   });
 
   useEffect(() => {
+    if (!activeWorkspaceId || activeWorkspace?.view !== "terminal" || settingsOpen) return;
+    setTerminalActivity((current) => {
+      if (!current[activeWorkspaceId]) return current;
+      const next = { ...current };
+      delete next[activeWorkspaceId];
+      return next;
+    });
+  }, [activeWorkspaceId, activeWorkspace?.view, settingsOpen]);
+
+  useEffect(() => {
     const group = terminalGroupForWorkspace(terminalGroups, activeWorkspaceId);
     if (group && activeWorkspaceId) {
       terminalGroupActiveWorkspaceRef.current.set(group.id, activeWorkspaceId);
@@ -423,8 +439,21 @@ export function App() {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, {
           connectRequested: true,
+          restored: false,
           reconnectToken: activeWorkspace.reconnectToken + 1,
         });
+      }
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "f" &&
+        activeWorkspace?.view === "terminal"
+      ) {
+        event.preventDefault();
+        setTerminalFindRequests((current) => ({
+          ...current,
+          [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
+        }));
       }
     }
     window.addEventListener("keydown", keydown);
@@ -461,10 +490,14 @@ export function App() {
         return;
       }
       setHostMenuConnectionId(null);
+      setHostMenuPosition(null);
     }
 
     function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") setHostMenuConnectionId(null);
+      if (event.key === "Escape") {
+        setHostMenuConnectionId(null);
+        setHostMenuPosition(null);
+      }
     }
 
     document.addEventListener("pointerdown", dismissMenu);
@@ -871,6 +904,7 @@ export function App() {
       })),
     },
   ];
+  const canSplitTerminal = splitTargetGroups.some((group) => group.options.length > 0);
 
   /// The targets "New terminal" offers: everything saved, plus every shell this
   /// machine actually has. Each one opens its own Workspace, so choosing the
@@ -1182,7 +1216,12 @@ export function App() {
         data-host-menu={connection.id}
         key={connection.id}
       >
-        <button className="host-main" type="button" onClick={() => openConnection(connection)}>
+        <button
+          className="host-main"
+          type="button"
+          onClick={() => openConnection(connection)}
+          aria-describedby={`connection-session-${connection.id}`}
+        >
           <span className="os-badge">
             <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
             {connectionSessionStates[connection.id] && (
@@ -1211,12 +1250,32 @@ export function App() {
             </span>
           )}
         </button>
+        <span className="sr-only" id={`connection-session-${connection.id}`}>
+          {connectionSessionStates[connection.id]
+            ? `Terminal ${connectionSessionStates[connection.id]}`
+            : "No open terminal"}
+        </span>
         <button
           className="host-menu"
           type="button"
-          onClick={() =>
-            setHostMenuConnectionId((current) => (current === connection.id ? null : connection.id))
-          }
+          onClick={(event) => {
+            if (hostMenuConnectionId === connection.id) {
+              setHostMenuConnectionId(null);
+              setHostMenuPosition(null);
+              return;
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            const width = 190;
+            const height = 76;
+            setHostMenuPosition({
+              top:
+                rect.bottom + height + 8 > window.innerHeight
+                  ? rect.top - height - 4
+                  : rect.bottom + 4,
+              left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+            });
+            setHostMenuConnectionId(connection.id);
+          }}
           aria-label={`Open actions for ${connection.displayName}`}
           aria-haspopup="menu"
           aria-expanded={hostMenuConnectionId === connection.id}
@@ -1224,12 +1283,13 @@ export function App() {
           <MoreHorizontal size={16} />
         </button>
         {hostMenuConnectionId === connection.id && (
-          <div className="host-context-menu" role="menu">
+          <div className="host-context-menu" role="menu" style={hostMenuPosition ?? undefined}>
             <button
               type="button"
               role="menuitem"
               onClick={() => {
                 setHostMenuConnectionId(null);
+                setHostMenuPosition(null);
                 setDialogConnection(connection);
               }}
             >
@@ -1241,6 +1301,7 @@ export function App() {
               role="menuitem"
               onClick={() => {
                 setHostMenuConnectionId(null);
+                setHostMenuPosition(null);
                 void deleteConnection(connection);
               }}
             >
@@ -1286,14 +1347,29 @@ export function App() {
           className="session-tab-main"
           type="button"
           aria-current={workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined}
+          aria-describedby={`workspace-session-${workspace.id}`}
           onClick={() => selectWorkspaceTab(workspace)}
         >
           <span className="os-badge">
             {workspaceMark(workspace)}
             <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
           </span>
-          <span>{duplicateLabel(workspace)}</span>
+          <span className="session-tab-label">{duplicateLabel(workspace)}</span>
+          {terminalActivity[workspace.id] && (
+            <span
+              className={`terminal-activity terminal-activity-${terminalActivity[workspace.id]}`}
+              aria-label={
+                terminalActivity[workspace.id] === "bell" ? "Terminal bell" : "New terminal output"
+              }
+              title={
+                terminalActivity[workspace.id] === "bell" ? "Terminal bell" : "New terminal output"
+              }
+            />
+          )}
         </button>
+        <span className="sr-only" id={`workspace-session-${workspace.id}`}>
+          Terminal {terminalStateLabel(workspace)}
+        </span>
         {!grouped ? (
           <button
             className="session-tab-rename"
@@ -1736,6 +1812,7 @@ export function App() {
                           updateWorkspace(workspace.id, {
                             state,
                             reason,
+                            restored: false,
                             connectRequested:
                               state === "disconnected" || state === "error"
                                 ? false
@@ -1750,9 +1827,29 @@ export function App() {
                         onReconnect={() =>
                           updateWorkspace(workspace.id, {
                             connectRequested: true,
+                            restored: false,
                             reconnectToken: workspace.reconnectToken + 1,
                           })
                         }
+                        onDisconnect={() =>
+                          updateWorkspace(workspace.id, {
+                            connectRequested: false,
+                            sessionId: null,
+                            state: "disconnected",
+                            reason: null,
+                            restored: false,
+                          })
+                        }
+                        onActivity={(kind) =>
+                          setTerminalActivity((current) => ({
+                            ...current,
+                            [workspace.id]:
+                              kind === "bell" || current[workspace.id] !== "bell"
+                                ? kind
+                                : current[workspace.id],
+                          }))
+                        }
+                        findRequest={terminalFindRequests[workspace.id] ?? 0}
                       />
                     </div>
                   );
@@ -1924,6 +2021,11 @@ export function App() {
                 : "Use Add connection in the sidebar to save an SSH destination."}
               {!!offeredShells.length && " Local terminal opens a shell on this machine."}
             </p>
+            {!connections.length && (
+              <p className="empty-workspace-note">
+                The connection editor can test read-only inspection access before you save.
+              </p>
+            )}
             <div className="empty-shortcuts">
               <span className="empty-shortcut">
                 <kbd>Ctrl</kbd>
@@ -2024,12 +2126,14 @@ export function App() {
       {paletteOpen && (
         <CommandPalette
           connections={connections}
+          localShells={offeredShells}
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           activeView={activeWorkspace?.view ?? null}
           canOpenNewTerminal={canOpenNewTerminal && workspaces.length > 0}
           activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
+          canSplitTerminal={canSplitTerminal}
           // Inspection views exist on a Remote Host only, so a local Workspace
           // offers none to go to.
           views={activeRemoteWorkspace ? navigation : []}
@@ -2037,23 +2141,39 @@ export function App() {
           labelForWorkspace={duplicateLabel}
           onClose={() => setPaletteOpen(false)}
           onOpenConnection={(connection) => openConnection(connection)}
+          onOpenLocalShell={openLocalShell}
           onSelectWorkspace={(workspace) => selectWorkspaceTab(workspace)}
           onSetView={(view) => {
             if (!activeWorkspace) return;
             closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
           }}
-          onNewTerminal={() => setNewTerminalMenuOpen(true)}
+          onNewTerminal={openNewTerminalMenu}
           onReconnect={() =>
             activeWorkspace &&
             updateWorkspace(activeWorkspace.id, {
               connectRequested: true,
+              restored: false,
               reconnectToken: activeWorkspace.reconnectToken + 1,
             })
           }
           onCloseWorkspace={() => activeWorkspace && void closeWorkspace(activeWorkspace.id)}
           onFocusTerminal={enterTerminalFocus}
+          onFindTerminal={() => {
+            if (!activeWorkspace) return;
+            setTerminalFindRequests((current) => ({
+              ...current,
+              [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
+            }));
+          }}
+          onSplitTerminal={() => {
+            enterTerminalFocus();
+            setSplitMenuOpen(true);
+          }}
+          onRenameWorkspace={() => activeWorkspace && renameWorkspace(activeWorkspace)}
+          onManageConnections={() => setConnectionGroupsOpen(true)}
           onAddConnection={() => setDialogConnection("new")}
           onOpenSettings={() => setSettingsOpen(true)}
+          onCheckForUpdates={() => void updater.checkNow()}
         />
       )}
     </div>

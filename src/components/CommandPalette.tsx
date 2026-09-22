@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Plus, Search, Settings, SquareTerminal } from "lucide-react";
+import { Columns2, FolderCog, Pencil, Plus, Search, Settings, SquareTerminal } from "lucide-react";
 import { connectionTarget } from "../lib/format";
 import { HostOsIcon } from "./HostOsIcon";
-import type { HostCapabilities, SavedConnection, Workspace, WorkspaceView } from "../types";
+import type {
+  HostCapabilities,
+  LocalShellProfile,
+  SavedConnection,
+  Workspace,
+  WorkspaceView,
+} from "../types";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number }>;
 
@@ -20,48 +26,64 @@ interface CommandItem {
 
 interface CommandPaletteProps {
   connections: SavedConnection[];
+  localShells: LocalShellProfile[];
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   activeView: WorkspaceView | null;
   canOpenNewTerminal: boolean;
   activeWorkspaceIsLocal: boolean;
   canFocusTerminal: boolean;
+  canSplitTerminal: boolean;
   views: { id: WorkspaceView; label: string; icon: IconType }[];
   hostCapabilities: Record<string, HostCapabilities>;
   labelForWorkspace: (workspace: Workspace) => string;
   onClose: () => void;
   onOpenConnection: (connection: SavedConnection) => void;
+  onOpenLocalShell: (shell: LocalShellProfile) => void;
   onSelectWorkspace: (workspace: Workspace) => void;
   onSetView: (view: WorkspaceView) => void;
   onNewTerminal: () => void;
   onReconnect: () => void;
   onCloseWorkspace: () => void;
   onFocusTerminal: () => void;
+  onFindTerminal: () => void;
+  onSplitTerminal: () => void;
+  onRenameWorkspace: () => void;
+  onManageConnections: () => void;
   onAddConnection: () => void;
   onOpenSettings: () => void;
+  onCheckForUpdates: () => void;
 }
 
 export function CommandPalette({
   connections,
+  localShells,
   workspaces,
   activeWorkspaceId,
   activeView,
   canOpenNewTerminal,
   activeWorkspaceIsLocal,
   canFocusTerminal,
+  canSplitTerminal,
   views,
   hostCapabilities,
   labelForWorkspace,
   onClose,
   onOpenConnection,
+  onOpenLocalShell,
   onSelectWorkspace,
   onSetView,
   onNewTerminal,
   onReconnect,
   onCloseWorkspace,
   onFocusTerminal,
+  onFindTerminal,
+  onSplitTerminal,
+  onRenameWorkspace,
+  onManageConnections,
   onAddConnection,
   onOpenSettings,
+  onCheckForUpdates,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -127,6 +149,17 @@ export function CommandPalette({
       });
     }
 
+    for (const shell of localShells) {
+      result.push({
+        id: `shell-${shell.id}`,
+        group: "New local terminal",
+        label: shell.label,
+        sublabel: shell.elevated ? "Run as administrator" : "Local shell",
+        icon: SquareTerminal,
+        run: run(() => onOpenLocalShell(shell)),
+      });
+    }
+
     result.push({
       id: "act-add",
       group: "Actions",
@@ -145,6 +178,13 @@ export function CommandPalette({
     }
     if (activeWorkspaceId) {
       result.push({
+        id: "act-rename",
+        group: "Actions",
+        label: "Rename workspace",
+        icon: Pencil,
+        run: run(onRenameWorkspace),
+      });
+      result.push({
         id: "act-reconnect",
         group: "Actions",
         label: activeWorkspaceIsLocal ? "Restart terminal" : "Reconnect terminal",
@@ -153,11 +193,28 @@ export function CommandPalette({
       });
       if (canFocusTerminal) {
         result.push({
+          id: "act-find-terminal",
+          group: "Actions",
+          label: "Find in terminal",
+          icon: Search,
+          shortcut: "Ctrl+Shift+F",
+          run: run(onFindTerminal),
+        });
+        result.push({
           id: "act-focus",
           group: "Actions",
           label: "Focus terminal",
           run: run(onFocusTerminal),
         });
+        if (canSplitTerminal) {
+          result.push({
+            id: "act-split-terminal",
+            group: "Actions",
+            label: "Split terminal",
+            icon: Columns2,
+            run: run(onSplitTerminal),
+          });
+        }
       }
       result.push({
         id: "act-close",
@@ -168,35 +225,56 @@ export function CommandPalette({
       });
     }
     result.push({
+      id: "act-manage-connections",
+      group: "Actions",
+      label: "Manage groups and tags",
+      icon: FolderCog,
+      run: run(onManageConnections),
+    });
+    result.push({
       id: "act-settings",
       group: "Actions",
       label: "Open settings",
       icon: Settings,
       run: run(onOpenSettings),
     });
+    result.push({
+      id: "act-check-updates",
+      group: "Actions",
+      label: "Check for Control Room updates",
+      run: run(onCheckForUpdates),
+    });
 
     return result;
   }, [
     connections,
+    localShells,
     workspaces,
     activeWorkspaceId,
     activeView,
     canOpenNewTerminal,
     activeWorkspaceIsLocal,
     canFocusTerminal,
+    canSplitTerminal,
     views,
     hostCapabilities,
     labelForWorkspace,
     onClose,
     onOpenConnection,
+    onOpenLocalShell,
     onSelectWorkspace,
     onSetView,
     onNewTerminal,
     onReconnect,
     onCloseWorkspace,
     onFocusTerminal,
+    onFindTerminal,
+    onSplitTerminal,
+    onRenameWorkspace,
+    onManageConnections,
     onAddConnection,
     onOpenSettings,
+    onCheckForUpdates,
   ]);
 
   const filtered = useMemo(() => {

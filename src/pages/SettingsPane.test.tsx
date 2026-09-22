@@ -94,7 +94,7 @@ describe("Settings actions", () => {
     // Both live in the header, above the scrolling region, so neither depends
     // on how far down the form the reader has gone.
     const header = screen.getByRole("banner");
-    expect(header.contains(screen.getByRole("button", { name: "Back to terminal" }))).toBe(true);
+    expect(header.contains(screen.getByRole("button", { name: "Close Settings" }))).toBe(true);
     expect(header.contains(saveButton())).toBe(true);
   });
 

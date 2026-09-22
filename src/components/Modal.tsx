@@ -21,7 +21,10 @@ export function Modal({ title, children, onClose }: ModalProps) {
         ...(dialog?.querySelectorAll<HTMLElement>("button, input, select, textarea, [tabindex]") ??
           []),
       ].filter((element) => !element.hasAttribute("disabled") && element.tabIndex >= 0);
-    if (!dialog?.querySelector("[autofocus]")) focusable()[0]?.focus();
+    if (!dialog?.querySelector("[autofocus]")) {
+      const preferred = focusable().find((element) => !element.hasAttribute("data-modal-close"));
+      (preferred ?? dialog)?.focus();
+    }
 
     function keydown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -58,11 +61,18 @@ export function Modal({ title, children, onClose }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="modal-header">
           <h2 id={titleId}>{title}</h2>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            data-modal-close
+          >
             <X size={17} />
           </button>
         </header>

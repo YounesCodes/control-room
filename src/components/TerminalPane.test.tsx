@@ -12,6 +12,9 @@ const api = vi.hoisted(() => ({
   closeSession: vi.fn(),
   addHistory: vi.fn(),
 }));
+const channels = vi.hoisted(
+  () => [] as Array<{ onmessage: ((message: ArrayBuffer) => void) | null }>,
+);
 
 /// Records what the pane asked of xterm, so the test can see which handlers a
 /// session installs without rendering a real terminal.
@@ -36,6 +39,7 @@ const xterm = vi.hoisted(() => ({
     this.pastes = [];
     this.selection = "";
     this.mouseTrackingMode = "none";
+    channels.length = 0;
   },
 }));
 
@@ -47,6 +51,9 @@ vi.mock("../lib/api", () => ({
 vi.mock("@tauri-apps/api/core", () => ({
   Channel: class {
     onmessage: ((message: ArrayBuffer) => void) | null = null;
+    constructor() {
+      channels.push(this);
+    }
   },
 }));
 
@@ -57,6 +64,22 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
     fit() {}
+  },
+}));
+
+vi.mock("@xterm/addon-search", () => ({
+  SearchAddon: class {
+    onDidChangeResults() {
+      return { dispose: () => undefined };
+    }
+    findNext() {
+      return false;
+    }
+    findPrevious() {
+      return false;
+    }
+    clearDecorations() {}
+    dispose() {}
   },
 }));
 
@@ -78,6 +101,12 @@ vi.mock("@xterm/xterm", () => ({
       return { dispose: () => undefined };
     }
     onBinary() {
+      return { dispose: () => undefined };
+    }
+    onSelectionChange() {
+      return { dispose: () => undefined };
+    }
+    onBell() {
       return { dispose: () => undefined };
     }
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
@@ -241,10 +270,22 @@ describe("TerminalPane sessions", () => {
   });
 
   it("does not start a restored Workspace of either kind", async () => {
-    const local = { ...createLocalWorkspace(shell), connectRequested: false } as const;
+    const local = {
+      ...createLocalWorkspace(shell),
+      connectRequested: false,
+      state: "disconnected",
+      restored: true,
+    } as const;
     renderPane(local);
+    expect(screen.getByText("not started")).toBeTruthy();
     cleanup();
-    renderPane({ ...createRemoteWorkspace(connection), connectRequested: false });
+    renderPane({
+      ...createRemoteWorkspace(connection),
+      connectRequested: false,
+      state: "disconnected",
+      restored: true,
+    });
+    expect(screen.getByText("not connected")).toBeTruthy();
 
     await Promise.resolve();
     expect(api.startLocalSession).not.toHaveBeenCalled();
@@ -553,19 +594,38 @@ describe("TerminalPane sessions", () => {
     expect(screen.queryByText("Reconnect before sending terminal input.")).toBeNull();
   });
 
-  it("gives a running terminal nothing to press", async () => {
+  it("keeps common terminal actions visible while a session runs", async () => {
     renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    // Clearing is what the shell's own `clear` is for, and closing the
-    // Workspace is what stops a session. Neither needed a button here.
-    expect(screen.queryByRole("button", { name: /Clear/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Clear terminal" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Find in terminal" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Disconnect/ })).toBeNull();
-    // Recovery is the one control that earns its place, and only once the
-    // session has actually ended.
     expect(screen.queryByRole("button", { name: /Restart/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reconnect/ })).toBeNull();
+  });
+
+  it("reports output that arrives in a background terminal", async () => {
+    const onActivity = vi.fn();
+    render(
+      <TerminalPane
+        workspace={createLocalWorkspace(shell)}
+        settings={settings}
+        visible={false}
+        active={false}
+        onActivate={() => undefined}
+        onSession={() => undefined}
+        onState={() => undefined}
+        onReconnect={() => undefined}
+        onActivity={onActivity}
+      />,
+    );
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+
+    channels[0]?.onmessage?.(new TextEncoder().encode("background output").buffer);
+
+    expect(onActivity).toHaveBeenCalledWith("output");
   });
 
   it("still closes its session when the pane goes away", async () => {

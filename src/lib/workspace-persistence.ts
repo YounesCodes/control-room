@@ -33,6 +33,7 @@ export function restoreWorkspaceState(
       label: saved.label,
       state: "disconnected",
       connectRequested: false,
+      restored: true,
     } as const;
     if (saved.localShellId) {
       // A shell that is no longer installed is dropped, the way a Workspace for

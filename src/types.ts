@@ -527,6 +527,7 @@ interface WorkspaceBase {
   view: WorkspaceView;
   reconnectToken: number;
   connectRequested: boolean;
+  restored?: boolean;
 }
 
 /// A Workspace on a Remote Host. Inspection caches, Enhanced History, and the

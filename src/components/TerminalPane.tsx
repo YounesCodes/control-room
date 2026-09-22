@@ -2,8 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { RefreshCw } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Clipboard,
+  Copy,
+  Eraser,
+  Power,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import {
@@ -25,6 +36,9 @@ interface TerminalPaneProps {
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
   onReconnect: () => void;
+  onDisconnect?: () => void;
+  onActivity?: (kind: "output" | "bell") => void;
+  findRequest?: number;
 }
 
 interface PendingHistory {
@@ -48,11 +62,16 @@ export function TerminalPane({
   onSession,
   onState,
   onReconnect,
+  onDisconnect = () => undefined,
+  onActivity = () => undefined,
+  findRequest = 0,
 }: TerminalPaneProps) {
   const remote = isRemoteWorkspace(workspace) ? workspace : null;
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string | null>(null);
   const sessionGenerationRef = useRef(0);
   const pendingInputRef = useRef(new BoundedByteQueue());
@@ -62,21 +81,29 @@ export function TerminalPane({
   const historyPausedRef = useRef(remote?.historyPaused ?? false);
   const globalHistoryEnabledRef = useRef(settings.globalHistoryEnabled);
   const visibleRef = useRef(visible);
+  const activeRef = useRef(active);
   const connectionIdRef = useRef(remote?.connectionId ?? null);
   const workspaceReasonRef = useRef(workspace.reason);
   const onSessionRef = useRef(onSession);
   const onStateRef = useRef(onState);
+  const onActivityRef = useRef(onActivity);
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
+  const [hasSelection, setHasSelection] = useState(false);
 
   historyPausedRef.current = remote?.historyPaused ?? false;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
   visibleRef.current = visible;
+  activeRef.current = active;
   connectionIdRef.current = remote?.connectionId ?? null;
   workspaceReasonRef.current = workspace.reason;
   onSessionRef.current = onSession;
   onStateRef.current = onState;
+  onActivityRef.current = onActivity;
 
   handleSessionStateRef.current = (event) => {
     onStateRef.current(event.state, event.reason);
@@ -111,6 +138,7 @@ export function TerminalPane({
     const container = containerRef.current;
     if (!container) return;
     let resizeTimer: number | undefined;
+    let bellTimer: number | undefined;
     const terminal = new Terminal({
       convertEol: false,
       cursorBlink: true,
@@ -126,11 +154,27 @@ export function TerminalPane({
       theme: buildTerminalTheme(settings),
     });
     const fit = new FitAddon();
+    const search = new SearchAddon();
     terminal.loadAddon(fit);
+    terminal.loadAddon(search);
     terminal.open(container);
     fit.fit();
     terminalRef.current = terminal;
     fitRef.current = fit;
+    searchRef.current = search;
+
+    const selectionDisposable = terminal.onSelectionChange(() =>
+      setHasSelection(terminal.hasSelection()),
+    );
+    const bellDisposable = terminal.onBell(() => {
+      if (!activeRef.current) onActivityRef.current("bell");
+      container.classList.add("visual-bell");
+      window.clearTimeout(bellTimer);
+      bellTimer = window.setTimeout(() => container.classList.remove("visual-bell"), 140);
+    });
+    const searchDisposable = search.onDidChangeResults(({ resultIndex, resultCount }) =>
+      setSearchResult({ index: resultIndex, count: resultCount }),
+    );
 
     const send = (bytes: Uint8Array) => sendInputRef.current(bytes);
     const pasteClipboard = () => {
@@ -307,12 +351,18 @@ export function TerminalPane({
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
       container.removeEventListener("contextmenu", handleContextMenu);
       window.clearTimeout(resizeTimer);
+      window.clearTimeout(bellTimer);
       dataDisposable.dispose();
       binaryDisposable.dispose();
+      selectionDisposable.dispose();
+      bellDisposable.dispose();
+      searchDisposable.dispose();
       oscDisposable?.dispose();
+      search.dispose();
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
     };
   }, []);
 
@@ -368,6 +418,7 @@ export function TerminalPane({
     output.onmessage = (message) => {
       if (disposed || generation !== sessionGenerationRef.current) return;
       const bytes = new Uint8Array(message);
+      if (!activeRef.current) onActivityRef.current("output");
       terminal.write(bytes, () => acknowledge(bytes.byteLength));
     };
 
@@ -447,6 +498,69 @@ export function TerminalPane({
     if (active) terminal.focus();
   }, [settings, visible, active]);
 
+  useEffect(() => {
+    if (findRequest <= 0) return;
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, [findRequest]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const search = searchRef.current;
+    if (!searchTerm) {
+      search?.clearDecorations();
+      setSearchResult({ index: -1, count: 0 });
+      return;
+    }
+    find(true, true);
+  }, [searchOpen, searchTerm]);
+
+  function find(next: boolean, incremental = false) {
+    const search = searchRef.current;
+    if (!search || !searchTerm) {
+      search?.clearDecorations();
+      setSearchResult({ index: -1, count: 0 });
+      return;
+    }
+    const options = {
+      incremental,
+      decorations: {
+        matchBackground: "#343434",
+        matchOverviewRuler: "#92928e",
+        activeMatchBackground: "#f2f2ee",
+        activeMatchColorOverviewRuler: "#f2f2ee",
+      },
+    };
+    if (next) search.findNext(searchTerm, options);
+    else search.findPrevious(searchTerm, options);
+  }
+
+  function closeSearch() {
+    searchRef.current?.clearDecorations();
+    setSearchOpen(false);
+    setSearchResult({ index: -1, count: 0 });
+    terminalRef.current?.focus();
+  }
+
+  function copySelection() {
+    const terminal = terminalRef.current;
+    if (!terminal?.hasSelection()) return;
+    void navigator.clipboard
+      .writeText(terminal.getSelection())
+      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+  }
+
+  function pasteClipboard() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    void navigator.clipboard
+      .readText()
+      .then((text) => {
+        if (text) terminal.paste(text);
+      })
+      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+  }
+
   // A local shell is started and stopped; a remote one is connected and
   // disconnected. Same lifecycle, different words for what it means.
   const local = workspace.kind === "local";
@@ -458,10 +572,56 @@ export function TerminalPane({
       onPointerDown={onActivate}
     >
       <header className="terminal-toolbar">
-        <span className="toolbar-state">
+        <span className="toolbar-state" aria-live="polite" aria-atomic="true">
           <StatusDot state={workspace.state} /> {terminalStateLabel(workspace)}
         </span>
         <div className="toolbar-actions">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => {
+              setSearchOpen(true);
+              window.setTimeout(() => searchInputRef.current?.focus(), 0);
+            }}
+            aria-label="Find in terminal"
+            title="Find in terminal"
+          >
+            <Search size={14} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={copySelection}
+            disabled={!hasSelection}
+            aria-label="Copy terminal selection"
+            title="Copy selection"
+          >
+            <Copy size={14} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={pasteClipboard}
+            disabled={ended}
+            aria-label="Paste into terminal"
+            title="Paste"
+          >
+            <Clipboard size={14} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => terminalRef.current?.clear()}
+            aria-label="Clear terminal"
+            title="Clear terminal"
+          >
+            <Eraser size={14} />
+          </button>
+          {!ended && (
+            <button className="toolbar-button" type="button" onClick={onDisconnect}>
+              <Power size={14} /> {local ? "Stop" : "Disconnect"}
+            </button>
+          )}
           {ended && (
             <button className="toolbar-button" type="button" onClick={onReconnect}>
               <RefreshCw size={14} /> {local ? "Restart" : "Reconnect"}
@@ -469,6 +629,44 @@ export function TerminalPane({
           )}
         </div>
       </header>
+      {searchOpen && (
+        <form
+          className="terminal-search"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            find(true);
+          }}
+        >
+          <Search size={14} aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") closeSearch();
+            }}
+            aria-label="Find in terminal output"
+            placeholder="Find in terminal"
+          />
+          <span className="terminal-search-count" aria-live="polite">
+            {searchResult.count
+              ? `${searchResult.index + 1} of ${searchResult.count}`
+              : searchTerm
+                ? "No matches"
+                : ""}
+          </span>
+          <button type="button" onClick={() => find(false)} aria-label="Previous match">
+            <ChevronUp size={14} />
+          </button>
+          <button type="button" onClick={() => find(true)} aria-label="Next match">
+            <ChevronDown size={14} />
+          </button>
+          <button type="button" onClick={closeSearch} aria-label="Close terminal search">
+            <X size={14} />
+          </button>
+        </form>
+      )}
       {(localError || workspace.reason) && (
         <div className="terminal-notice" role="status">
           {localError ?? workspace.reason}

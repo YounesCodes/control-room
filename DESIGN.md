@@ -129,8 +129,9 @@ Two families, one for chrome and one for anything technical.
   commands.
 
 The type scale is small: 20 px section headings, ~17 px stat values, 12.5 px
-body, 11.5 px controls, and 10 px uppercase labels with tracking. Numeric columns
-use `tabular-nums`.
+body, 11.5 px controls, 11 px supporting text, and 10 px uppercase labels with
+tracking. Informative text never drops below 10 px. Numeric columns use
+`tabular-nums`.
 
 ### Spacing, radius, elevation, motion
 
@@ -167,7 +168,7 @@ hues above are the only exceptions.
 | `--topbar-bg` / `--terminal-bg`         | `#000`                            |
 | `--text`                                | `#f2f2ee`                         |
 | `--text-muted`                          | `#adadaa`                         |
-| `--text-faint`                          | `#7a7a77`                         |
+| `--text-faint`                          | `#92928e`                         |
 | `--text-strong`                         | `#fff`                            |
 | `--accent` / `--accent-hover`           | `#f2f2ee` / `#fff`                |
 | `--on-accent`                           | `#000`                            |
@@ -318,6 +319,17 @@ by Systemd, Ports, Docker, and Baselines; the definition grid and capability lis
 on the Overview host dashboard; the dense row with a leading status indicator;
 and the compact chip for exit codes, counts, and section states.
 
+Button hierarchy is semantic and reusable. `primary-button` is the single main
+commit action in a surface, `secondary-button` is a quieter alternative,
+`danger-button` is reserved for confirmed destructive work, and `icon-button`
+is a compact labelled control. `compact-button` changes density only; it does
+not create another importance level.
+
+`EmptyState` owns empty asynchronous panes and split-page lists. Inline absence
+inside a populated detail view (for example, one boot-evidence section), the
+terminal or log viewport, the application shell before a Workspace opens, and
+small titlebar popovers stay purpose-built because they are not empty panels.
+
 A split page has one visible context. If filtering removes the selected row, the
 detail side names that mismatch and offers to clear the filter. A truly empty
 list produces the same empty state on both sides. Active tabs, scope switches,
@@ -392,6 +404,7 @@ the app sees them. Those actions live on buttons and in the palette instead.
 | `Ctrl+Shift+P` | Open the command palette                    |
 | `Ctrl+Shift+T` | Switch the active Workspace to its Terminal |
 | `Ctrl+Shift+R` | Reconnect or restart the active session     |
+| `Ctrl+Shift+F` | Find text in the active terminal buffer     |
 | `Ctrl+Shift+W` | Close the active Workspace                  |
 
 The terminal lets these bubble up to the app and keeps copy and paste on

@@ -141,13 +141,14 @@ describe("application hierarchy", () => {
       /\.host-tag-summary\s*\{[^}]*grid-column: 1 \/ -1;[^}]*flex-wrap: wrap;/s,
     );
     expect(stylesSource).toMatch(
-      /\.host-tag-summary \.connection-tag-badge\s*\{[^}]*min-height: 21px;[^}]*font-size: 10\.5px;/s,
+      /\.host-tag-summary \.connection-tag-badge\s*\{[^}]*min-height: 21px;[^}]*font-size: 11px;/s,
     );
   });
 
-  it("centres the connection menu in rows of every responsive height", () => {
+  it("opens the connection menu as an anchored popover without resizing its row", () => {
     expect(stylesSource).toMatch(/\.host-menu\s*\{[^}]*top: 50%;/s);
-    expect(stylesSource).toMatch(/\.host-row\.menu-open \.host-menu\s*\{[^}]*top: 29px;/s);
+    expect(stylesSource).toMatch(/\.host-context-menu\s*\{[^}]*position: fixed;/s);
+    expect(stylesSource).not.toMatch(/\.host-row\.menu-open\s*\{[^}]*min-height:/s);
   });
 
   it("keeps baseline capture manual and never schedules it", () => {
@@ -183,7 +184,7 @@ describe("application hierarchy", () => {
     // than a native window.confirm.
     expect(appSource).not.toContain("window.confirm");
     expect(appSource).toContain('message: "Discard unsaved Settings changes?"');
-    expect(settingsSource).toContain('aria-label="Back to terminal"');
+    expect(settingsSource).toContain('aria-label="Close Settings"');
   });
 
   it("keeps local History search separate from the remote integration check", () => {
@@ -281,17 +282,11 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("xterm owns keyboard paste");
   });
 
-  it("keeps a running terminal free of Clear and Stop controls", () => {
-    // Clearing is what the shell's own `clear` is for, and closing the
-    // Workspace is the lifecycle action that stops a session.
-    expect(terminalSource).not.toContain("Eraser");
-    expect(terminalSource).not.toContain("CircleStop");
-    expect(terminalSource).not.toContain("clearTerminalDisplay");
-    expect(terminalSource).not.toContain("endSession");
-    // Removing the button must not remove the shutdown it used: unmount and
-    // Workspace close still reap the process.
+  it("keeps common terminal lifecycle actions visible", () => {
+    expect(terminalSource).toContain("Eraser");
+    expect(terminalSource).toContain("onDisconnect");
+    expect(terminalSource).toContain("Find in terminal");
     expect(terminalSource).toContain("api.closeSession");
-    // Recovery stays, because it appears only when there is something to do.
     expect(terminalSource).toContain("onReconnect");
   });
 

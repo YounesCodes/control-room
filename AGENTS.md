@@ -220,6 +220,11 @@ Run `npm ci` and `npm run check` before handoff. Build the installer with
 `npm run tauri build`. Live SSH tests are ignored by default and need a host and
 account you control.
 
+For a release that changes visible behavior, refresh the six screenshots under
+`docs/src/assets/screenshots/` from the release build. Check their labels,
+limits, empty sections, and available controls against the shipped UI before
+publishing the documentation.
+
 Neither command needs the updater signing key: updater artifacts are produced
 only by the release workflow, through `src-tauri/tauri.release.conf.json`. The
 release does need `TAURI_SIGNING_PRIVATE_KEY` and the public key committed in
