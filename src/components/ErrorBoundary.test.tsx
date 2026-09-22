@@ -3,6 +3,11 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./WindowControls", () => ({
+  WindowControls: () => <div data-testid="window-controls" />,
+}));
+
 import { ErrorBoundary } from "./ErrorBoundary";
 
 function Bomb(): never {
@@ -41,6 +46,8 @@ describe("ErrorBoundary", () => {
     // A crash says nothing about stored data, and must not claim it was lost.
     expect(alert.textContent).toContain("were not changed");
     expect(screen.getByRole("button", { name: /Reload/ })).toBeTruthy();
+    expect(screen.getByTestId("window-controls")).toBeTruthy();
+    expect(document.querySelector("[data-tauri-drag-region]")).toBeTruthy();
   });
 
   it("offers a reload that restarts the window", async () => {

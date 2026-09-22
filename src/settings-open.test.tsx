@@ -132,7 +132,16 @@ describe("Opening Settings", () => {
 
     expect(await screen.findByText("Local terminal", { selector: "legend" })).toBeTruthy();
     // Absent means offered, so the shell reads as on rather than crashing.
-    expect(screen.getByLabelText("Offer Git Bash")).toBeTruthy();
+    const toggle = screen.getByLabelText("Offer Git Bash");
+    expect(toggle).toBeTruthy();
+
+    await user.click(toggle);
+    const save = screen.getByRole("button", { name: "Save settings" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    await user.click(save);
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenLocalShells: ["git-bash"] }),
+    );
   });
 
   it("renders with the payload and catalog this machine actually produces", async () => {

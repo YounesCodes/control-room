@@ -199,7 +199,11 @@ describe("App Workspace behavior", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+    // App loads TerminalPane lazily. Parallel full-suite runs can delay that
+    // import beyond Testing Library's one-second default without delaying App.
+    expect(
+      await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 }),
+    ).toBeTruthy();
     expect(screen.getByTestId("terminal-workspace-1")).toBeTruthy();
     await user.click(screen.getByLabelText("Open actions for Host A"));
     await user.click(screen.getByRole("menuitem", { name: /Delete connection/i }));

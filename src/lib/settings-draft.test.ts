@@ -27,14 +27,28 @@ describe("Settings drafts", () => {
   });
 
   it("compares a list of hidden local terminals by content, not by identity", () => {
-    // Toggling rebuilds the array, so a shell hidden and shown again must land
-    // back on a clean draft rather than leaving "Unsaved changes" on screen.
-    const hidden: AppSettings = { ...settings, hiddenLocalShells: ["git-bash"] };
+    const hidden: AppSettings = {
+      ...settings,
+      hiddenLocalShells: ["git-bash", "powershell-7"],
+    };
     expect(settingsHaveChanges(settings, hidden)).toBe(true);
-    expect(settingsHaveChanges(hidden, { ...hidden, hiddenLocalShells: ["git-bash"] })).toBe(false);
+    expect(
+      settingsHaveChanges(hidden, {
+        ...hidden,
+        hiddenLocalShells: ["powershell-7", "git-bash"],
+      }),
+    ).toBe(false);
     expect(settingsHaveChanges(hidden, { ...hidden, hiddenLocalShells: ["command-prompt"] })).toBe(
       true,
     );
     expect(settingsHaveChanges(hidden, { ...hidden, hiddenLocalShells: [] })).toBe(true);
+  });
+
+  it("detects a hidden shell added to a legacy payload", () => {
+    const legacy = { ...settings } as AppSettings;
+    delete (legacy as Partial<AppSettings>).hiddenLocalShells;
+
+    expect(settingsHaveChanges(legacy, { ...legacy, hiddenLocalShells: [] })).toBe(false);
+    expect(settingsHaveChanges(legacy, { ...legacy, hiddenLocalShells: ["git-bash"] })).toBe(true);
   });
 });

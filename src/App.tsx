@@ -1435,20 +1435,22 @@ export function App() {
               </button>
               {localShellMenuOpen && (
                 <div className="local-shell-menu" role="menu" aria-label="Local terminal">
-                  <div className="local-shell-menu-group">
-                    <strong>Local terminals</strong>
-                    {standardLocalShells.map((shell) => (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        key={shell.id}
-                        onClick={() => openLocalShell(shell)}
-                      >
-                        <SquareTerminal size={14} strokeWidth={1.8} />
-                        <span>{shell.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {standardLocalShells.length > 0 && (
+                    <div className="local-shell-menu-group">
+                      <strong>Local terminals</strong>
+                      {standardLocalShells.map((shell) => (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          key={shell.id}
+                          onClick={() => openLocalShell(shell)}
+                        >
+                          <SquareTerminal size={14} strokeWidth={1.8} />
+                          <span>{shell.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {administratorGroupOffered && (
                     <div className="local-shell-menu-group local-shell-administrator-group">
                       <strong>Run as administrator</strong>

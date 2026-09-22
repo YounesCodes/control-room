@@ -270,6 +270,28 @@ describe("Local Terminal", () => {
     ).toBeTruthy();
   });
 
+  it("drops the empty standard group when only an administrator shell is offered", async () => {
+    const user = userEvent.setup();
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, hiddenLocalShells: ["powershell-7"] },
+      defaults: settings,
+      logTailOptions: [50, 100, 200, 500, 1000],
+    });
+    api.listLocalShells.mockResolvedValue({
+      profiles: [powershell, administratorPowerShell],
+      administratorStatus: "available",
+    });
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+
+    expect(screen.queryByText("Local terminals", { selector: "strong" })).toBeNull();
+    expect(screen.getByText("Run as administrator")).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: "PowerShell 7, run as administrator" }),
+    ).toBeTruthy();
+  });
+
   it("refreshes administrator availability when the shell menu reopens", async () => {
     const user = userEvent.setup();
     render(<App />);
