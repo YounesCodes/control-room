@@ -2353,7 +2353,7 @@ code,
   flex: 1;
   border: 0;
   background: transparent;
-  padding: 4px 2px;
+  padding: 4px 8px;
 }
 
 .terminal-search-count {
@@ -2393,6 +2393,15 @@ code,
 .terminal-container > .xterm {
   height: 100%;
   padding: 10px 12px;
+}
+
+.terminal-container .xterm-find-result-decoration {
+  box-shadow: inset 0 -1px 0 #92928e;
+}
+
+.terminal-container .xterm-find-active-result-decoration {
+  outline-width: 2px !important;
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* ==========================================================================

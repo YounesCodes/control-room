@@ -219,6 +219,11 @@ the remote-content palette, not part of the monochrome chrome.
 | Magenta             | `#c793ff` |
 | Cyan                | `#65d4d1` |
 
+Search matches keep their terminal colors and use a quiet neutral frame with a
+tick in the overview ruler. The active match gets a brighter frame and a thicker
+accent underline. Search selection stays transparent so the active result does
+not cover ANSI foreground or background colors.
+
 ---
 
 ## Interaction and state

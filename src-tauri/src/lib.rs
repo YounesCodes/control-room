@@ -25,6 +25,11 @@ pub fn run() {
         .manage(RemoteOperationLimiter::default())
         .manage(BaselineCaptureRegistry::default())
         .setup(|app| {
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_title("Control Room (Dev)")?;
+            }
+
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
             app.manage(database);

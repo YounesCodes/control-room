@@ -69,6 +69,7 @@ export function TerminalPane({
   const remote = isRemoteWorkspace(workspace) ? workspace : null;
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const terminalThemeRef = useRef<ReturnType<typeof buildTerminalTheme> | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -139,7 +140,12 @@ export function TerminalPane({
     if (!container) return;
     let resizeTimer: number | undefined;
     let bellTimer: number | undefined;
+    const theme = buildTerminalTheme(settings);
+    terminalThemeRef.current = theme;
     const terminal = new Terminal({
+      // SearchAddon uses xterm's decoration API to highlight every match and
+      // report the active result count. xterm guards that API behind this flag.
+      allowProposedApi: true,
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
@@ -150,8 +156,11 @@ export function TerminalPane({
       drawBoldTextInBrightColors: false,
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,
+      // Search match markers render in this narrow rail, separate from the
+      // terminal text so they never compete with ANSI colors.
+      overviewRuler: { width: 8, showTopBorder: false, showBottomBorder: false },
       scrollback: settings.terminalScrollback,
-      theme: buildTerminalTheme(settings),
+      theme,
     });
     const fit = new FitAddon();
     const search = new SearchAddon();
@@ -361,10 +370,23 @@ export function TerminalPane({
       search.dispose();
       terminal.dispose();
       terminalRef.current = null;
+      terminalThemeRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    const theme = terminalThemeRef.current;
+    if (!terminal || !theme) return;
+
+    // SearchAddon selects the active match internally. Make that selection
+    // transparent while searching so it does not recolor ANSI output; the
+    // match's outline and overview-ruler marker carry the search state instead.
+    terminal.options.theme =
+      searchOpen && searchTerm ? { ...theme, selectionBackground: "transparent" } : theme;
+  }, [searchOpen, searchTerm]);
 
   // What this terminal is attached to: a Saved Connection or a local shell.
   const targetId = workspace.kind === "local" ? workspace.shell.id : workspace.connectionId;
@@ -525,9 +547,12 @@ export function TerminalPane({
     const options = {
       incremental,
       decorations: {
-        matchBackground: "#343434",
+        // Keep the terminal's foreground and background colors untouched.
+        // The subtle frame marks every result; the brighter frame marks the
+        // active result, and both also appear in the overview ruler.
+        matchBorder: "#92928e",
         matchOverviewRuler: "#92928e",
-        activeMatchBackground: "#f2f2ee",
+        activeMatchBorder: "#f2f2ee",
         activeMatchColorOverviewRuler: "#f2f2ee",
       },
     };

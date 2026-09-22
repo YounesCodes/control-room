@@ -9,6 +9,13 @@ const CONVENTIONAL_PREFIX =
 const BULLET = /^\s*[-*+•]\s+(.+)$/;
 const HEADING = /^\s*#{1,6}\s+/;
 const FULL_CHANGELOG = /^(?:\*\*|__)?full changelog(?:\*\*|__)?\s*:/i;
+const MAINTENANCE = /^(?:chore\(deps(?:-dev)?\):|bump\s|dependabot\b)/i;
+const MERGE_COMMIT = /^merge pull request #\d+/i;
+const PR_CONTRIBUTION =
+  /\s+by\s+@\S+\s+in\s+https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)\s*$/i;
+const IGNORED_WORDS = new Set([
+  "a", "an", "and", "for", "in", "of", "the", "to", "with", "terminal", "terminals",
+]);
 
 function formatSubject(subject) {
   const text = subject.replace(CONVENTIONAL_PREFIX, "").trim();
@@ -17,12 +24,59 @@ function formatSubject(subject) {
 
 export function buildDirectChangeNotes(commits) {
   const changes = commits
-    .filter((commit) => commit.pullRequests.length === 0 && !RELEASE_COMMIT.test(commit.subject))
+    .filter((commit) =>
+      commit.pullRequests.length === 0 &&
+      !RELEASE_COMMIT.test(commit.subject) &&
+      !MERGE_COMMIT.test(commit.subject) &&
+      !MAINTENANCE.test(commit.subject),
+    )
     .map((commit) => formatSubject(commit.subject))
     .filter(Boolean);
-  return changes.length
-    ? `## Direct changes\n${changes.map((change) => `* ${change}`).join("\n")}`
-    : "";
+  return changes.map((change) => `* ${change}`).join("\n");
+}
+
+function changeWords(change) {
+  return change
+    .toLowerCase()
+    .replace(/\(#\d+\)/g, "")
+    .split(/[^a-z0-9]+/)
+    .map((word) => word.replace(/(?:ed|s)$/, ""))
+    .filter((word) => word && !IGNORED_WORDS.has(word));
+}
+
+function sameChange(left, right) {
+  const a = changeWords(left);
+  const b = changeWords(right);
+  if (a.join(" ") === b.join(" ")) return true;
+  // Only collapse near-identical actions. Sharing a noun (such as "terminal")
+  // does not make a UI polish commit the same change as the feature PR.
+  return a[0] === b[0] && a.filter((word) => b.includes(word)).length >= 2;
+}
+
+function generatedChanges(notes) {
+  const changes = [];
+  let contributors = false;
+  let maintenance = false;
+  for (const raw of notes.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (HEADING.test(line)) {
+      contributors = /contributors?/i.test(line);
+      continue;
+    }
+    const bullet = BULLET.exec(line);
+    if (!bullet || contributors) continue;
+    const match = PR_CONTRIBUTION.exec(bullet[1]);
+    const title = match ? bullet[1].slice(0, match.index) : bullet[1];
+    if (MAINTENANCE.test(title)) {
+      maintenance = true;
+      continue;
+    }
+    const change = formatSubject(title);
+    if (change && !changes.some((existing) => sameChange(existing, change))) {
+      changes.push(match ? `${change} (#${match[1]})` : change);
+    }
+  }
+  return { changes, maintenance };
 }
 
 export function hasDescribedChanges(notes) {
@@ -43,8 +97,19 @@ export function hasDescribedChanges(notes) {
 }
 
 export function combineReleaseNotes(generatedNotes, commits) {
-  const directNotes = buildDirectChangeNotes(commits);
-  return [directNotes, generatedNotes.trim()].filter(Boolean).join("\n\n");
+  const { changes: pullChanges, maintenance } = generatedChanges(generatedNotes);
+  const changes = [...pullChanges];
+  for (const direct of buildDirectChangeNotes(commits).split("\n").filter(Boolean)) {
+    const change = direct.slice(2);
+    if (!changes.some((existing) => sameChange(existing, change))) changes.push(change);
+  }
+  if (
+    !changes.length &&
+    (maintenance || commits.some((commit) => MAINTENANCE.test(commit.subject)))
+  ) {
+    changes.push("Dependency maintenance");
+  }
+  return changes.map((change) => `* ${change}`).join("\n");
 }
 
 function run(command, args) {

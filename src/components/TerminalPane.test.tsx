@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -23,6 +23,9 @@ const xterm = vi.hoisted(() => ({
   clears: 0,
   writes: [] as string[],
   pastes: [] as string[],
+  searchNext: vi.fn(),
+  searchPrevious: vi.fn(),
+  terminalOptions: null as Record<string, unknown> | null,
   // Drives the right-click policy: what is selected, and whether the program in
   // the pty asked for the mouse.
   selection: "",
@@ -37,6 +40,9 @@ const xterm = vi.hoisted(() => ({
     this.clears = 0;
     this.writes = [];
     this.pastes = [];
+    this.searchNext.mockReset();
+    this.searchPrevious.mockReset();
+    this.terminalOptions = null;
     this.selection = "";
     this.mouseTrackingMode = "none";
     channels.length = 0;
@@ -72,10 +78,12 @@ vi.mock("@xterm/addon-search", () => ({
     onDidChangeResults() {
       return { dispose: () => undefined };
     }
-    findNext() {
+    findNext(term: string, options: unknown) {
+      xterm.searchNext(term, options);
       return false;
     }
-    findPrevious() {
+    findPrevious(term: string, options: unknown) {
+      xterm.searchPrevious(term, options);
       return false;
     }
     clearDecorations() {}
@@ -88,6 +96,10 @@ vi.mock("@xterm/xterm", () => ({
     cols = 100;
     rows = 30;
     options: Record<string, unknown> = {};
+    constructor(options: Record<string, unknown>) {
+      xterm.terminalOptions = options;
+      this.options = options;
+    }
     parser = {
       registerOscHandler: () => {
         xterm.oscHandlers += 1;
@@ -604,6 +616,47 @@ describe("TerminalPane sessions", () => {
     expect(screen.queryByRole("button", { name: /Disconnect/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Restart/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reconnect/ })).toBeNull();
+  });
+
+  it("keeps search results legible without covering terminal colors", async () => {
+    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Find in terminal" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Find in terminal output" }), {
+      target: { value: "needle" },
+    });
+
+    await vi.waitFor(() => expect(xterm.searchNext).toHaveBeenCalled());
+    expect(xterm.terminalOptions).toMatchObject({ allowProposedApi: true });
+    expect(xterm.terminalOptions).toMatchObject({
+      overviewRuler: { width: 8, showTopBorder: false, showBottomBorder: false },
+    });
+    expect(xterm.searchNext).toHaveBeenLastCalledWith(
+      "needle",
+      expect.objectContaining({
+        incremental: true,
+        decorations: expect.objectContaining({
+          matchBorder: "#92928e",
+          activeMatchBorder: "#f2f2ee",
+          matchOverviewRuler: "#92928e",
+          activeMatchColorOverviewRuler: "#f2f2ee",
+        }),
+      }),
+    );
+    const searchOptions = xterm.searchNext.mock.calls.at(-1)?.[1] as {
+      decorations: Record<string, unknown>;
+    };
+    expect(searchOptions.decorations).not.toHaveProperty("matchBackground");
+    expect(searchOptions.decorations).not.toHaveProperty("activeMatchBackground");
+    expect((xterm.terminalOptions?.theme as Record<string, unknown>)?.selectionBackground).toBe(
+      "transparent",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close terminal search" }));
+    expect((xterm.terminalOptions?.theme as Record<string, unknown>)?.selectionBackground).toBe(
+      "#393939",
+    );
   });
 
   it("reports output that arrives in a background terminal", async () => {
