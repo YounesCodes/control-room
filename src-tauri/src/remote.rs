@@ -34,6 +34,10 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+#[path = "remote_distro_matrix_tests.rs"]
+mod distro_matrix_tests;
+
 const OUTPUT_LIMIT: u64 = 5 * 1024 * 1024;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
@@ -312,7 +316,26 @@ impl RemoteCommandExecutor {
 /// on purpose: the account identity and default shell it reports have to be
 /// the connecting account's, not root's.
 fn capability_command() -> &'static str {
-    r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"; printf 'default_shell=%s\n' "$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"; if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then printf 'passwordless_sudo=true\n'; else printf 'passwordless_sudo=false\n'; fi; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; if sudo -n docker info >/dev/null 2>&1; then printf 'docker_accessible_with_sudo=true\n'; printf 'running_container_count=%s\n' "$(sudo -n docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(sudo -n docker ps -aq | wc -l)"; fi; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#
+    r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_like=%s\n' "$ID_LIKE"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; uptime_value=$(uptime -p 2>/dev/null || true); if test -z "$uptime_value" && test -r /proc/uptime; then uptime_value=$(awk '{seconds=int($1); days=int(seconds/86400); hours=int((seconds%86400)/3600); minutes=int((seconds%3600)/60); if(days>0) printf "up %d days, ",days; else printf "up "; if(hours>0) printf "%d hours, ",hours; printf "%d minutes",minutes}' /proc/uptime); fi; printf 'uptime=%s\n' "$uptime_value"; account_name=$(id -un 2>/dev/null); default_shell=$(getent passwd "$account_name" 2>/dev/null | cut -d: -f7); if test -z "$default_shell" && test -r /etc/passwd; then default_shell=$(awk -F: -v account="$account_name" '$1==account {print $7; exit}' /etc/passwd); fi; printf 'default_shell=%s\n' "$default_shell"; if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then printf 'passwordless_sudo=true\n'; else printf 'passwordless_sudo=false\n'; fi; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; if sudo -n docker info >/dev/null 2>&1; then printf 'docker_accessible_with_sudo=true\n'; printf 'running_container_count=%s\n' "$(sudo -n docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(sudo -n docker ps -aq | wc -l)"; fi; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#
+}
+
+fn distribution_family(os_id: Option<&str>, os_like: Option<&str>) -> Option<String> {
+    let candidates = os_id
+        .into_iter()
+        .chain(os_like.into_iter().flat_map(str::split_whitespace));
+    for candidate in candidates {
+        let family = match candidate.trim().to_ascii_lowercase().as_str() {
+            "debian" | "ubuntu" => "debian",
+            "rhel" | "rocky" | "almalinux" | "ol" | "centos" | "fedora" => "rhel",
+            "amzn" => "amazon",
+            "suse" | "opensuse" | "opensuse-leap" | "sles" | "sled" => "suse",
+            "arch" | "manjaro" => "arch",
+            "alpine" => "alpine",
+            _ => continue,
+        };
+        return Some(family.into());
+    }
+    None
 }
 
 /// One round trip that reads `/proc` and nothing else. CPU busy share only
@@ -389,6 +412,10 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
         os_id: values.get("os_id").cloned(),
         os_name: values.get("os_name").cloned(),
         os_version: values.get("os_version").cloned(),
+        os_family: distribution_family(
+            values.get("os_id").map(String::as_str),
+            values.get("os_like").map(String::as_str),
+        ),
         kernel: values.get("kernel").cloned(),
         architecture: values.get("architecture").cloned(),
         uptime: values.get("uptime").cloned(),
@@ -1325,6 +1352,9 @@ fn bounded_text(value: &str, maximum_chars: usize) -> String {
 }
 
 const FIREWALL_UNAVAILABLE_MARKER: &str = "__CR_FW_UNAVAILABLE__";
+const FIREWALL_BACKEND_MARKER: &str = "__CR_FW_BACKEND__";
+const FIREWALL_STATE_MARKER: &str = "__CR_FW_STATE__";
+const FIREWALL_ZONE_MARKER: &str = "__CR_FW_ZONE__";
 
 pub fn list_firewall(
     connection: &SavedConnection,
@@ -1337,22 +1367,34 @@ pub fn list_firewall(
 }
 
 fn firewall_status_command() -> &'static str {
-    // `ufw status` requires root; when run without privilege it exits non-zero
-    // with a "you need to be root" message, which classify_failure maps to a
-    // permission error so the UI can offer the existing sudo retry.
-    r#"env LC_ALL=C sh -c 'if ! command -v ufw >/dev/null 2>&1; then printf "__CR_FW_UNAVAILABLE__\n"; exit 0; fi; ufw status verbose'"#
+    // Both front-ends only perform query operations. UFW requires root on the
+    // common distributions. firewalld may allow unprivileged D-Bus reads, but
+    // the same sudo retry covers hosts whose policy denies them.
+    r#"env LC_ALL=C sh -c 'if command -v ufw >/dev/null 2>&1; then printf "__CR_FW_BACKEND__\tufw\n"; ufw status verbose; exit $?; fi; if command -v firewall-cmd >/dev/null 2>&1; then printf "__CR_FW_BACKEND__\tfirewalld\n"; if firewall-cmd --state >/dev/null 2>&1; then printf "__CR_FW_STATE__\tactive\n"; firewall-cmd --get-active-zones 2>/dev/null | while IFS= read -r line; do case "$line" in [![:space:]]*) zone=${line%% *}; test -n "$zone" || continue; printf "__CR_FW_ZONE__\t%s\t" "$zone"; firewall-cmd --zone="$zone" --list-ports 2>/dev/null || true;; esac; done; else status=$?; if test "$status" -eq 252; then printf "__CR_FW_STATE__\tinactive\n"; else firewall-cmd --state; exit "$status"; fi; fi; exit 0; fi; printf "__CR_FW_UNAVAILABLE__\n"'"#
 }
 
 fn parse_firewall_status(text: &str) -> FirewallStatus {
     let collected_at = Utc::now().to_rfc3339();
     if text.contains(FIREWALL_UNAVAILABLE_MARKER) {
         return FirewallStatus {
+            backend: None,
             available: false,
             active: None,
             default_incoming: None,
             rules: Vec::new(),
             collected_at,
         };
+    }
+
+    let backend = text.lines().find_map(|line| {
+        line.strip_prefix(FIREWALL_BACKEND_MARKER)
+            .map(str::trim)
+            .filter(|value| matches!(*value, "ufw" | "firewalld"))
+            .map(str::to_string)
+    });
+
+    if backend.as_deref() == Some("firewalld") {
+        return parse_firewalld_status(text, collected_at);
     }
 
     let mut active = None;
@@ -1393,9 +1435,66 @@ fn parse_firewall_status(text: &str) -> FirewallStatus {
     }
 
     FirewallStatus {
+        backend: Some("ufw".into()),
         available: true,
         active,
         default_incoming,
+        rules,
+        collected_at,
+    }
+}
+
+fn parse_firewalld_status(text: &str, collected_at: String) -> FirewallStatus {
+    let active = text.lines().find_map(|line| {
+        line.strip_prefix(FIREWALL_STATE_MARKER)
+            .map(str::trim)
+            .and_then(|state| match state {
+                "active" => Some(true),
+                "inactive" => Some(false),
+                _ => None,
+            })
+    });
+    let mut rules = Vec::new();
+    for line in text.lines() {
+        let Some(details) = line.strip_prefix(FIREWALL_ZONE_MARKER) else {
+            continue;
+        };
+        let mut fields = details.trim_start_matches('\t').splitn(2, '\t');
+        let zone = fields.next().unwrap_or("").trim();
+        let ports = fields.next().unwrap_or("");
+        if zone.is_empty() {
+            continue;
+        }
+        for value in ports.split_whitespace() {
+            if rules.len() >= MAX_FIREWALL_RULES {
+                break;
+            }
+            let (port, protocol) = parse_firewall_target(value);
+            let (Some(port), Some(protocol)) = (port, protocol) else {
+                continue;
+            };
+            for ipv6 in [false, true] {
+                if rules.len() >= MAX_FIREWALL_RULES {
+                    break;
+                }
+                rules.push(FirewallRule {
+                    to: bounded_text(value, 120),
+                    action: "ALLOW".into(),
+                    from: bounded_text(&format!("zone {zone}"), 120),
+                    port: Some(port),
+                    protocol: Some(protocol.clone()),
+                    ipv6,
+                });
+            }
+        }
+    }
+    FirewallStatus {
+        backend: Some("firewalld".into()),
+        available: true,
+        active,
+        // firewalld policies depend on zones, interfaces, and sources. A
+        // single global incoming default would be false precision.
+        default_incoming: None,
         rules,
         collected_at,
     }
@@ -2233,6 +2332,39 @@ swapfree=1048576\n";
     }
 
     #[test]
+    fn normalizes_the_supported_distribution_families() {
+        for (id, like, expected) in [
+            ("ubuntu", None, "debian"),
+            ("rocky", Some("rhel centos fedora"), "rhel"),
+            ("almalinux", Some("rhel centos fedora"), "rhel"),
+            ("rhel", Some("fedora"), "rhel"),
+            ("ol", Some("fedora"), "rhel"),
+            ("centos", Some("rhel fedora"), "rhel"),
+            ("fedora", None, "rhel"),
+            ("amzn", Some("fedora"), "amazon"),
+            ("opensuse-leap", Some("suse opensuse"), "suse"),
+            ("sles", Some("suse"), "suse"),
+            ("arch", None, "arch"),
+            ("alpine", None, "alpine"),
+        ] {
+            assert_eq!(
+                distribution_family(Some(id), like).as_deref(),
+                Some(expected),
+                "wrong family for {id}"
+            );
+        }
+        assert_eq!(distribution_family(Some("gentoo"), None), None);
+    }
+
+    #[test]
+    fn capability_probe_has_busybox_fallbacks() {
+        let command = capability_command();
+        assert!(command.contains("/proc/uptime"));
+        assert!(command.contains("test -r /etc/passwd"));
+        assert!(command.contains("printf 'os_like=%s"));
+    }
+
+    #[test]
     fn refuses_a_zero_width_window_instead_of_dividing_by_it() {
         let text = "cpu_total_1=500\ncpu_idle_1=400\ncpu_total_2=500\ncpu_idle_2=400\n";
         assert_eq!(parse_host_resources(text).cpu_percent, None);
@@ -2330,7 +2462,7 @@ tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
     fn live_connection() -> SavedConnection {
         SavedConnection {
             id: "live-fixture".into(),
-            display_name: "Debian laptop".into(),
+            display_name: "Linux fixture".into(),
             destination: std::env::var("CONTROL_ROOM_TEST_HOST")
                 .expect("CONTROL_ROOM_TEST_HOST is required"),
             username: std::env::var("CONTROL_ROOM_TEST_USER").ok(),
@@ -2749,9 +2881,10 @@ __CONTROL_ROOM_PROCESS_UNITS__
     #[test]
     fn parses_ufw_status_rules_defaults_and_families() {
         let status = parse_firewall_status(
-            "Status: active\nLogging: on (low)\nDefault: deny (incoming), allow (outgoing), disabled (routed)\nNew profiles: skip\n\nTo                         Action      From\n--                         ------      ----\n22/tcp                     ALLOW IN    Anywhere\n443                        ALLOW IN    Anywhere\n5432/tcp                   ALLOW IN    192.168.0.0/16\n22/tcp (v6)                ALLOW IN    Anywhere (v6)\n",
+            "__CR_FW_BACKEND__\tufw\nStatus: active\nLogging: on (low)\nDefault: deny (incoming), allow (outgoing), disabled (routed)\nNew profiles: skip\n\nTo                         Action      From\n--                         ------      ----\n22/tcp                     ALLOW IN    Anywhere\n443                        ALLOW IN    Anywhere\n5432/tcp                   ALLOW IN    192.168.0.0/16\n22/tcp (v6)                ALLOW IN    Anywhere (v6)\n",
         );
         assert!(status.available);
+        assert_eq!(status.backend.as_deref(), Some("ufw"));
         assert_eq!(status.active, Some(true));
         assert_eq!(status.default_incoming.as_deref(), Some("deny"));
         assert_eq!(status.rules.len(), 4);
@@ -2766,9 +2899,27 @@ __CONTROL_ROOM_PROCESS_UNITS__
     }
 
     #[test]
-    fn firewall_reports_unavailable_when_ufw_is_missing() {
+    fn parses_firewalld_active_zone_numeric_ports_without_global_policy_claims() {
+        let status = parse_firewall_status(
+            "__CR_FW_BACKEND__\tfirewalld\n__CR_FW_STATE__\tactive\n__CR_FW_ZONE__\tpublic\t22/tcp 5353/udp\n",
+        );
+        assert!(status.available);
+        assert_eq!(status.backend.as_deref(), Some("firewalld"));
+        assert_eq!(status.active, Some(true));
+        assert_eq!(status.default_incoming, None);
+        assert_eq!(status.rules.len(), 4);
+        assert_eq!(status.rules[0].from, "zone public");
+        assert_eq!(status.rules[0].port, Some(22));
+        assert_eq!(status.rules[0].protocol.as_deref(), Some("tcp"));
+        assert!(!status.rules[0].ipv6);
+        assert!(status.rules[1].ipv6);
+    }
+
+    #[test]
+    fn firewall_reports_unavailable_when_supported_frontends_are_missing() {
         let status = parse_firewall_status("__CR_FW_UNAVAILABLE__\n");
         assert!(!status.available);
+        assert_eq!(status.backend, None);
         assert_eq!(status.active, None);
         assert!(status.rules.is_empty());
     }
@@ -2783,7 +2934,7 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert!(script.contains("command -v sudo >/dev/null 2>&1 && sudo -n true"));
         // Identity has to come from the connecting account. Elevating the whole
         // script would report root as the default shell on every host.
-        assert!(script.contains(r#"$(id -un)"#));
+        assert!(script.contains("account_name=$(id -un"));
         assert!(!script.contains("sudo -n id"));
         assert!(!script.contains("sudo -n getent"));
     }
@@ -2870,9 +3021,11 @@ __CONTROL_ROOM_PROCESS_UNITS__
     }
 
     #[test]
-    fn firewall_command_is_read_only_and_probes_ufw() {
+    fn firewall_command_is_read_only_and_probes_supported_frontends() {
         let command = firewall_status_command();
         assert!(command.contains("ufw status"));
+        assert!(command.contains("firewall-cmd --state"));
+        assert!(command.contains("firewall-cmd --zone=\"$zone\" --list-ports"));
         for mutation in [
             " ufw enable",
             " ufw disable",
@@ -2880,6 +3033,9 @@ __CONTROL_ROOM_PROCESS_UNITS__
             " ufw deny",
             " ufw delete",
         ] {
+            assert!(!command.contains(mutation));
+        }
+        for mutation in ["--add-", "--remove-", "--reload", "--runtime-to-permanent"] {
             assert!(!command.contains(mutation));
         }
     }
@@ -3640,16 +3796,32 @@ __CONTROL_ROOM_PROCESS_UNITS__
     }
 
     #[test]
-    #[ignore = "requires the explicitly configured Debian SSH fixture"]
+    #[ignore = "requires an explicitly configured Linux SSH fixture"]
     fn live_fixture_supports_structured_features() {
         let connection = live_connection();
         let capabilities = discover_capabilities(&connection).unwrap();
-        assert_eq!(capabilities.os_id.as_deref(), Some("debian"));
-        assert!(capabilities.systemd_available);
-        assert!(capabilities.journald_available);
-        assert!(capabilities.docker_available);
-        let services = list_services(&connection).unwrap();
-        assert!(!services.is_empty());
-        let _containers = list_containers(&connection, Elevation::None).unwrap();
+        if let Ok(expected) = std::env::var("CONTROL_ROOM_TEST_OS_ID") {
+            assert_eq!(capabilities.os_id.as_deref(), Some(expected.as_str()));
+        }
+        assert!(
+            capabilities.os_family.is_some(),
+            "unrecognized distro family"
+        );
+        let resources = collect_host_resources(&connection).unwrap();
+        assert!(resources.memory_total_kib.is_some());
+        let _filesystems = list_filesystems(&connection).unwrap();
+        let _firewall = list_firewall(&connection, Elevation::None).unwrap();
+        if capabilities.systemd_available {
+            let services = list_services(&connection).unwrap();
+            assert!(!services.is_empty());
+            let _boot = collect_boot_diagnostics(&connection, None, Elevation::None).unwrap();
+        }
+        if std::env::var("CONTROL_ROOM_TEST_EXPECT_PORTS").as_deref() == Ok("true") {
+            let _ports = list_ports(&connection, Elevation::None).unwrap();
+            let _connections = list_connections(&connection, Elevation::None).unwrap();
+        }
+        if capabilities.docker_accessible {
+            let _containers = list_containers(&connection, Elevation::None).unwrap();
+        }
     }
 }

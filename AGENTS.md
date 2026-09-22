@@ -18,9 +18,15 @@ to the code, its tests, and the user manual under `docs/`, not here.
   launch, embed, or parse Windows Terminal, and never open an external terminal
   window. Keep the profile model extensible enough for WSL or custom profiles
   without adding either now.
-- Structured inspection targets Debian and Ubuntu family hosts with systemd,
-  journald, Bash, and optional Docker. Other Linux systems are terminal-only,
-  best effort.
+- Structured inspection targets Debian and Ubuntu, the RHEL-compatible family
+  (Rocky Linux, AlmaLinux, Oracle Linux, and CentOS Stream), Amazon Linux 2023,
+  Fedora Server, openSUSE Leap, Arch Linux, and Alpine Linux. SLES and RHEL use
+  the same commands as their openSUSE and RHEL-compatible relatives, but do not
+  become validated targets until they pass the live SSH suite on the real
+  distributions. systemd and journald panes require those subsystems, `ss`
+  requires iproute2, Enhanced History requires Bash, and Docker remains
+  optional. Alpine is supported for the portable panes and reports its OpenRC
+  boundary instead of imitating systemd support.
 - Do not add file transfer, remote file editing, service or container
   management, cloud accounts, collaboration, AI features, mobile support, host
   discovery, background monitoring, package updates, or private-key storage.
@@ -215,7 +221,13 @@ to the code, its tests, and the user manual under `docs/`, not here.
 
 Run `npm ci` and `npm run check` before handoff. Build the installer with
 `npm run tauri build`. Live SSH tests are ignored by default and need a host and
-account you control.
+account you control. Set `CONTROL_ROOM_TEST_HOST`, optionally
+`CONTROL_ROOM_TEST_USER` and `CONTROL_ROOM_TEST_PORT`, and
+`CONTROL_ROOM_TEST_OS_ID` when the distribution ID should be asserted. Set
+`CONTROL_ROOM_TEST_EXPECT_PORTS=true` only when iproute2 is installed. The
+ignored Docker distribution test takes `CONTROL_ROOM_DOCKER_IMAGES` as
+comma-separated `image=family` pairs; it checks portable capability discovery
+in containers, not systemd, journald, SSH, boot, or firewall behavior.
 
 Neither command needs the updater signing key: updater artifacts are produced
 only by the release workflow, through `src-tauri/tauri.release.conf.json`. The
