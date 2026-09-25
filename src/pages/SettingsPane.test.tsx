@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -143,7 +143,97 @@ describe("Settings actions", () => {
   it("warns about a terminal colour that is hard to read", () => {
     renderPane({ settings: { ...settings, terminalBlue: "#111111" } });
 
-    expect(screen.getByText(/Blue and directories.*Aim for 4.5:1 contrast/)).toBeTruthy();
+    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
+  });
+
+  it("does not move the active color picker when contrast drops", () => {
+    renderPane();
+    const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
+    const controls = picker.closest(".terminal-color-grid") as HTMLElement;
+
+    fireEvent.change(picker, { target: { value: "#111111" } });
+
+    const warning = screen.getByText(/ANSI 4.*Choose a brighter color/);
+    expect(picker.isConnected).toBe(true);
+    expect(
+      controls.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("waits until the native picker closes before showing a contrast warning", () => {
+    renderPane();
+    const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
+
+    fireEvent.input(picker, { target: { value: "#111111" } });
+    expect(screen.queryByText(/ANSI 4.*Choose a brighter color/)).toBeNull();
+    expect(saveButton().disabled).toBe(true);
+
+    fireEvent.change(picker, { target: { value: "#111111" } });
+    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it("uses swatches without hex fields or contrast numbers", () => {
+    renderPane();
+    expect(document.querySelectorAll('input[type="color"]')).toHaveLength(7);
+    for (const label of [
+      "Default text and cursor",
+      "ANSI 1",
+      "ANSI 2",
+      "ANSI 3",
+      "ANSI 4",
+      "ANSI 5",
+      "ANSI 6",
+    ]) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    const prompt = screen.getByText("user@host:~$") as HTMLElement;
+    expect(prompt.style.color).toBe("rgb(82, 207, 145)");
+    expect((prompt.closest(".ansi-preview") as HTMLElement).style.color).toBe("rgb(242, 242, 238)");
+    expect(screen.getByText("sample")).toBeTruthy();
+    expect(screen.queryByText("agent@ubuntu")).toBeNull();
+    expect(screen.queryByText(/Choose a swatch\. The preview/)).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /hex color/i })).toBeNull();
+    expect(screen.queryByText(/\d\.\d:1/)).toBeNull();
+  });
+
+  it("keeps an ANSI slot's neutral label when its chosen hue changes", () => {
+    renderPane({ settings: { ...settings, terminalGreen: "#ff00ff" } });
+
+    const picker = screen.getByLabelText("ANSI 2") as HTMLInputElement;
+    expect(picker.value).toBe("#ff00ff");
+    expect(screen.queryByLabelText("Green")).toBeNull();
+  });
+
+  it("shows common uses as descriptions of the ANSI slots", () => {
+    renderPane();
+
+    for (const [slot, use] of [
+      ["ANSI 1", "Errors"],
+      ["ANSI 2", "Prompts"],
+      ["ANSI 3", "Warnings"],
+      ["ANSI 4", "Directories"],
+      ["ANSI 5", "Highlights"],
+      ["ANSI 6", "Symlinks"],
+    ]) {
+      const picker = screen.getByLabelText(slot);
+      const description = document.getElementById(picker.getAttribute("aria-describedby") ?? "");
+      expect(description?.textContent).toBe(use);
+    }
+  });
+
+  it("restores the palette after a picked color is committed", async () => {
+    const user = userEvent.setup();
+    renderPane();
+    const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
+    fireEvent.change(picker, { target: { value: "#111111" } });
+    expect(saveButton().disabled).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Reset colors" }));
+
+    expect(picker.value).toBe(settings.terminalBlue);
+    expect(screen.queryByText(/ANSI 4.*Choose a brighter color/)).toBeNull();
+    expect(saveButton().disabled).toBe(true);
   });
 
   it("checks manually even with automatic checks turned off", async () => {

@@ -53,7 +53,9 @@ describe("release note generation", () => {
         { sha: "one", subject: "fix: group split tabs and update rustls", pullRequests: [] },
         { sha: "two", subject: "fix: simplify focused terminal split headers", pullRequests: [] },
       ]),
-    ).toBe("* Group terminal splits in focus mode (#81)\n* Simplify focused terminal split headers");
+    ).toBe(
+      "* Group terminal splits in focus mode (#81)\n* Simplify focused terminal split headers",
+    );
   });
 
   it("hides dependency noise, but describes a maintenance-only release", () => {

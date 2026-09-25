@@ -15,11 +15,11 @@ Control Room gives you one place to keep and work with your Linux machines from 
 ## Install
 
 Download the latest installer:
-[GitHub Releases](https://github.com/YounesCodes/control-room/releases/latest) 
+[GitHub Releases](https://github.com/YounesCodes/control-room/releases/latest)
 
-Runs on Windows 11 x64 and installs for your user without administrator access. 
+Runs on Windows 11 x64 and installs for your user without administrator access.
 
-*Note that Windows may warn that the publisher is unsigned.*
+_Note that Windows may warn that the publisher is unsigned._
 
 ## Documentation
 
