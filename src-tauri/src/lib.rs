@@ -31,7 +31,7 @@ pub fn run() {
         .manage(RemoteOperationLimiter::default())
         .manage(BaselineCaptureRegistry::default())
         .setup(|app| {
-            #[cfg(debug_assertions)]
+            #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
             if let Some(window) = app.get_webview_window("main") {
                 window.set_title("Control Room (Dev)")?;
             }

@@ -22,7 +22,7 @@ The first Windows baseline (September 2026) is 70.15% frontend statements, 64.37
 
 ## Chromium components
 
-Run `npx playwright install chromium` once, then `npm run test:browser`. Vitest Browser Mode uses Playwright Chromium; these tests use real keyboard, focus, layout, and axe checks without Tauri or network access. The main `npm test` command still runs the existing jsdom suites. Browser screenshots on failure go to `.vitest/`.
+Run `npx playwright install chromium` once, then `npm run test:browser`. Vitest Browser Mode uses Playwright Chromium; these tests use real keyboard, focus, layout, and axe checks without Tauri or network access. Layout checks cover long-dialog scrolling and wide Settings alignment rather than source or CSS syntax. The main `npm test` command still runs the existing jsdom suites. Browser screenshots on failure go to `.vitest/`.
 
 ## Windows desktop E2E
 
@@ -33,7 +33,7 @@ npm run test:desktop:build
 npm run test:desktop
 ```
 
-The [Tauri 2 WebDriver guidance](https://v2.tauri.app/develop/tests/webdriver/) recommends WebdriverIO with its Tauri service. This suite uses an external `tauri-driver` on Windows. WebdriverIO's helper plugin and its permission load only in the debug E2E build; production builds select only the default capability and omit the plugin. The service installs `tauri-driver` and a matching Edge WebDriver if needed. The `desktop-e2e` Cargo feature requires the runner's temporary `CONTROL_ROOM_E2E_DATA_DIR`; the WDIO configuration creates and removes that directory. The tests use real IPC and SQLite, and the Saved Connection points at `example.invalid` without connecting. Run the optional `Desktop E2E` GitHub workflow on an interactive Windows runner for CI.
+The [Tauri 2 WebDriver guidance](https://v2.tauri.app/develop/tests/webdriver/) recommends WebdriverIO with its Tauri service. This suite uses an external `tauri-driver` on Windows. WebdriverIO's helper plugin and its permission load only in the debug E2E build; production builds select only the default capability and omit the plugin. The service installs `tauri-driver` and a matching Edge WebDriver if needed. The `desktop-e2e` Cargo feature requires the runner's temporary `CONTROL_ROOM_E2E_DATA_DIR`; the WDIO configuration creates and removes that directory. The tests use real IPC and SQLite, assert output from a Command Prompt ConPTY session, and read native maximize state and dimensions. The Saved Connection points at `example.invalid` without connecting. Run the optional `Desktop E2E` GitHub workflow on an interactive Windows runner for CI.
 
 ## Debian SSH fixture
 

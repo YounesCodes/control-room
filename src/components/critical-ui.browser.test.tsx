@@ -44,7 +44,7 @@ afterEach(() => {
   container = null;
 });
 
-function ModalFixture() {
+function ModalFixture({ long = false }: { long?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -57,6 +57,8 @@ function ModalFixture() {
             <label>
               Name <input />
             </label>
+            {long &&
+              Array.from({ length: 40 }, (_, index) => <p key={index}>Detail {index + 1}</p>)}
             <footer className="modal-actions">
               <button className="primary-button" type="button">
                 Save
@@ -79,25 +81,33 @@ function PaletteFixture({ onSettings }: { onSettings: () => void }) {
       {open && (
         <CommandPalette
           connections={[]}
+          localShells={[]}
           workspaces={[]}
           activeWorkspaceId={null}
           activeView={null}
           canOpenNewTerminal={false}
           activeWorkspaceIsLocal={false}
           canFocusTerminal={false}
+          canSplitTerminal={false}
           views={[]}
           hostCapabilities={{}}
           labelForWorkspace={() => ""}
           onClose={() => setOpen(false)}
           onOpenConnection={() => undefined}
+          onOpenLocalShell={() => undefined}
           onSelectWorkspace={() => undefined}
           onSetView={() => undefined}
           onNewTerminal={() => undefined}
           onReconnect={() => undefined}
           onCloseWorkspace={() => undefined}
           onFocusTerminal={() => undefined}
+          onFindTerminal={() => undefined}
+          onSplitTerminal={() => undefined}
+          onRenameWorkspace={() => undefined}
+          onManageConnections={() => undefined}
           onAddConnection={() => undefined}
           onOpenSettings={onSettings}
+          onCheckForUpdates={() => undefined}
         />
       )}
     </>
@@ -119,6 +129,7 @@ const settings: AppSettings = {
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
+  hiddenLocalShells: [],
 };
 
 const environment: EnvironmentInfo = {
@@ -128,12 +139,31 @@ const environment: EnvironmentInfo = {
   platformSupported: true,
 };
 
+function SettingsFixture() {
+  return (
+    <SettingsPane
+      settings={settings}
+      defaults={settings}
+      logTailOptions={[50, 100, 200, 500, 1000]}
+      localShells={[]}
+      environment={environment}
+      appVersion="0.7.6"
+      onCheckForUpdates={async () => ({ outcome: "current" })}
+      onSaved={() => undefined}
+      onClose={() => true}
+      onDirtyChange={() => undefined}
+    />
+  );
+}
+
 describe("critical UI in Chromium", () => {
   it("traps dialog focus, closes on Escape, and restores the trigger", async () => {
     mount(<ModalFixture />);
     const trigger = page.getByRole("button", { name: "Open dialog" });
     await trigger.click();
     await expect.element(page.getByRole("dialog", { name: "Example dialog" })).toBeVisible();
+    await expect.element(page.getByRole("textbox", { name: "Name" })).toHaveFocus();
+    await userEvent.tab({ shift: true });
     await expect.element(page.getByRole("button", { name: "Close" })).toHaveFocus();
     await userEvent.tab({ shift: true });
     await expect.element(page.getByRole("button", { name: "Save" })).toHaveFocus();
@@ -141,6 +171,22 @@ describe("critical UI in Chromium", () => {
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
     await expect.element(trigger).toHaveFocus();
+  });
+
+  it("keeps a long dialog's heading and actions visible while its body scrolls", async () => {
+    await page.viewport(960, 640);
+    mount(<ModalFixture long />);
+    await page.getByRole("button", { name: "Open dialog" }).click();
+    const dialog = page.getByRole("dialog").element();
+    expect(dialog.scrollHeight).toBeGreaterThan(dialog.clientHeight);
+    dialog.scrollTop = dialog.scrollHeight;
+    expect(dialog.scrollTop).toBeGreaterThan(0);
+    const bounds = dialog.getBoundingClientRect();
+    const header = dialog.querySelector(".modal-header")!.getBoundingClientRect();
+    const actions = dialog.querySelector(".modal-actions")!.getBoundingClientRect();
+    expect(header.top).toBeGreaterThanOrEqual(bounds.top);
+    expect(actions.bottom).toBeLessThanOrEqual(bounds.bottom);
+    await expect.element(page.getByRole("button", { name: "Save" })).toBeVisible();
   });
 
   it("navigates the command palette with a real keyboard", async () => {
@@ -186,21 +232,9 @@ describe("critical UI in Chromium", () => {
 
   it("keeps Settings actions visible at the minimum supported height", async () => {
     await page.viewport(960, 640);
-    mount(
-      <SettingsPane
-        settings={settings}
-        defaults={settings}
-        logTailOptions={[50, 100, 200, 500, 1000]}
-        environment={environment}
-        appVersion="0.7.6"
-        onCheckForUpdates={async () => ({ outcome: "current" })}
-        onSaved={() => undefined}
-        onClose={() => true}
-        onDirtyChange={() => undefined}
-      />,
-    );
-    await expect.element(page.getByRole("button", { name: "Back to terminal" })).toBeVisible();
-    const back = page.getByRole("button", { name: "Back to terminal" }).element();
+    mount(<SettingsFixture />);
+    await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
+    const back = page.getByRole("button", { name: "Close Settings" }).element();
     const save = page.getByRole("button", { name: "Save settings" }).element();
     expect(back.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
     expect(save.getBoundingClientRect().bottom).toBeLessThanOrEqual(640);
@@ -209,5 +243,17 @@ describe("critical UI in Chromium", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
+  });
+
+  it("keeps Settings content bounded and centered in a wide window", async () => {
+    await page.viewport(1600, 900);
+    mount(<SettingsFixture />);
+    await expect.element(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    const form = container!.querySelector(".settings-form")!.getBoundingClientRect();
+    const heading = container!.querySelector(".settings-heading-inner")!.getBoundingClientRect();
+    expect(form.width).toBeLessThan(1100);
+    expect(Math.abs(form.left - (1600 - form.right))).toBeLessThan(24);
+    expect(Math.abs(heading.left - form.left)).toBeLessThan(24);
+    expect(Math.abs(heading.right - form.right)).toBeLessThan(24);
   });
 });
