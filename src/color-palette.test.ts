@@ -77,10 +77,35 @@ describe("monochrome application palette", () => {
       contrastRatio(paletteValue("text-faint"), paletteValue("sidebar-bg")),
     ).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio("#000", paletteValue("accent"))).toBeGreaterThanOrEqual(7);
+    for (const textToken of ["text", "text-muted", "text-faint"]) {
+      for (const surfaceToken of [
+        "app-bg",
+        "sidebar-bg",
+        "surface-chrome",
+        "surface-raised",
+        "surface-overlay",
+        "fill-hover",
+        "fill-active",
+        "fill-selected",
+      ]) {
+        expect(
+          contrastRatio(paletteValue(textToken), paletteValue(surfaceToken)),
+          `${textToken} on ${surfaceToken}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
     for (const semanticColor of ["success", "warning", "failure"]) {
       expect(
         contrastRatio(paletteValue(semanticColor), paletteValue("app-bg")),
       ).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it("keeps informative interface text at least 10 pixels", () => {
+    const sizes = [...stylesSource.matchAll(/font-size:\s*([\d.]+)px/g)].map((match) =>
+      Number(match[1]),
+    );
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10);
   });
 });

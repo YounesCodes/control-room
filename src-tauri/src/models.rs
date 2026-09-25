@@ -573,6 +573,13 @@ pub struct AppSettings {
     /// to do with packages on a Remote Host, which Control Room never touches.
     /// Turning it off leaves the manual check in Settings working.
     pub automatic_update_checks: bool,
+    /// Local Shell Profile ids the user turned off in Settings, so the Local
+    /// terminal, New terminal, and Split launchers stop offering them. This is
+    /// presentation only: it never uninstalls a shell, never stops a running
+    /// session, and never removes a Workspace. A profile that is absent from
+    /// this list is offered, so a profile added by a later release starts out
+    /// visible instead of hidden behind a setting nobody wrote.
+    pub hidden_local_shells: Vec<String>,
 }
 
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
@@ -602,6 +609,7 @@ impl Default for AppSettings {
             global_history_enabled: true,
             global_sudo_enabled: false,
             automatic_update_checks: true,
+            hidden_local_shells: Vec::new(),
         }
     }
 }

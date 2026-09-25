@@ -95,6 +95,7 @@ const settings: AppSettings = {
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
+  hiddenLocalShells: [],
 };
 
 const powershell: LocalShellProfile = {
@@ -212,6 +213,41 @@ describe("Local Terminal", () => {
     ).toBeTruthy();
   });
 
+  it("leaves a shell the user turned off out of every launcher", async () => {
+    const user = userEvent.setup();
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, hiddenLocalShells: ["powershell-7"] },
+      defaults: settings,
+      logTailOptions: [50, 100, 200, 500, 1000],
+    });
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    expect(screen.queryByRole("menuitem", { name: "PowerShell 7" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Git Bash" })).toBeTruthy();
+
+    // The chooser reads the same list, so it is short the same entry rather
+    // than being the one surface the setting forgot.
+    await user.click(screen.getByRole("menuitem", { name: "Git Bash" }));
+    await user.click(await screen.findByRole("button", { name: /New terminal/ }));
+    expect(screen.queryByRole("button", { name: "Local terminals: PowerShell 7" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
+  });
+
+  it("drops the launcher once every local terminal is turned off", async () => {
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, hiddenLocalShells: ["powershell-7", "git-bash"] },
+      defaults: settings,
+      logTailOptions: [50, 100, 200, 500, 1000],
+    });
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: /No connections yet/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Local terminal/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /New terminal/ })).toBeNull();
+    expect(screen.queryByText("Local terminal opens a shell on this machine.")).toBeNull();
+  });
+
   it("separates administrator terminals and labels the elevated action", async () => {
     const user = userEvent.setup();
     api.listLocalShells.mockResolvedValue({
@@ -231,6 +267,28 @@ describe("Local Terminal", () => {
     await user.click(elevated);
     expect(
       await screen.findByRole("button", { name: /Close PowerShell 7 \(Administrator\)/ }),
+    ).toBeTruthy();
+  });
+
+  it("drops the empty standard group when only an administrator shell is offered", async () => {
+    const user = userEvent.setup();
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, hiddenLocalShells: ["powershell-7"] },
+      defaults: settings,
+      logTailOptions: [50, 100, 200, 500, 1000],
+    });
+    api.listLocalShells.mockResolvedValue({
+      profiles: [powershell, administratorPowerShell],
+      administratorStatus: "available",
+    });
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+
+    expect(screen.queryByText("Local terminals", { selector: "strong" })).toBeNull();
+    expect(screen.getByText("Run as administrator")).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: "PowerShell 7, run as administrator" }),
     ).toBeTruthy();
   });
 

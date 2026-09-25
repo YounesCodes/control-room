@@ -12,9 +12,15 @@ Configure:
 - terminal font family
 - font size from 9 to 32
 - scrollback from 100 to 100,000 lines
-- ANSI foreground, red, green, yellow, blue, magenta, and cyan colors
+- default text and cursor color, plus ANSI color slots 1–6
 
-Reset returns the ANSI palette to the app defaults. Terminal settings apply to both local and SSH terminals. Right-click behavior is built in and is not listed here; see [SSH terminal](/control-room/terminal/#right-click-behavior).
+Pick a swatch to change a color. **Default text and cursor** sets the terminal's foreground and cursor color. In the preview, the sample command and output use that foreground, while the generic prompt uses ANSI 2. ANSI slots 1–6 are the standard red, green, yellow, blue, magenta, and cyan slots; their numbers stay fixed when you change their shades. The hints beside the slots show common uses, such as errors and directories. Actual use depends on the shell or program. The preview and any readability warning update after you close the picker. Colors that are hard to read against the black terminal background get a warning, but you can still save them. **Reset colors** returns the palette to the app defaults. Save to apply the palette to local and SSH terminals. Right-click behavior is built in and is not listed here; see [SSH terminal](/control-room/terminal/#right-click-behavior).
+
+## Local terminal
+
+Pick which local shells the **Local terminal** button, **New terminal**, and the split menu offer. Every installed profile is on by default; turn off the ones you never use, such as Command Prompt, and they disappear from all of those menus at once.
+
+Turning a shell off is presentation only. It stays installed, a Workspace already running it keeps going and restores after a restart, and **Show all** brings every hidden shell back in one step. Changing the list takes effect when you save.
 
 ## Logs and History
 

@@ -87,8 +87,8 @@ jobs:
           releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: false
           prerelease: false
-          # The preparation step combines GitHub's generated PR notes with
-          # direct commits, which GitHub leaves out of generated notes.
+          # The preparation step turns PR notes and direct commits into one
+          # deduplicated list, without generated headings or changelog text.
           generateReleaseNotes: false
           # Only NSIS is built, so this is the bundle the updater feed must name.
           updaterJsonPreferNsis: true

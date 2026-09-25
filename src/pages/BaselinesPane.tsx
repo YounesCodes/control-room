@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { Camera, Pencil, Pin, PinOff, RefreshCw, Trash2, X } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BaselineComparisonView } from "../components/baselines/BaselineComparisonView";
 import { BaselineSectionList } from "../components/baselines/BaselineSectionList";
 import { api, errorMessage } from "../lib/api";
@@ -51,6 +52,7 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
   const [liveProgress, setLiveProgress] = useState<BaselineProgress[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<HostBaselineSummary | null>(null);
   const detailRequestRef = useRef(0);
 
   const selected = baselines.find((baseline) => baseline.id === selectedId) ?? null;
@@ -224,10 +226,10 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
     }
   }
 
-  async function remove() {
-    if (!selected) return;
+  async function remove(target: HostBaselineSummary) {
     try {
-      await api.deleteHostBaseline(selected.id);
+      await api.deleteHostBaseline(target.id);
+      setDeleteTarget(null);
       await loadList();
     } catch (caught) {
       setActionError(errorMessage(caught));
@@ -412,7 +414,7 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
                   className="icon-button"
                   type="button"
                   aria-label="Delete baseline"
-                  onClick={() => void remove()}
+                  onClick={() => setDeleteTarget(selected)}
                 >
                   <Trash2 size={15} />
                 </button>
@@ -483,6 +485,21 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
           </>
         )}
       </aside>
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete baseline?"
+          message={
+            <>
+              Delete “{baselineTitle(deleteTarget)}”? This stored snapshot cannot be recovered; you
+              would need to capture the host again.
+            </>
+          }
+          confirmLabel="Delete baseline"
+          danger
+          onConfirm={() => void remove(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </section>
   );
 }

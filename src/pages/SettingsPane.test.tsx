@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +14,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { SettingsPane } from "./SettingsPane";
-import type { AppSettings, EnvironmentInfo } from "../types";
+import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 
 const settings: AppSettings = {
   terminalFontFamily: "Cascadia Mono, Consolas, monospace",
@@ -31,6 +31,7 @@ const settings: AppSettings = {
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
+  hiddenLocalShells: [],
 };
 
 const environment: EnvironmentInfo = {
@@ -40,11 +41,31 @@ const environment: EnvironmentInfo = {
   platformSupported: true,
 };
 
+const powershell: LocalShellProfile = {
+  id: "powershell-7",
+  label: "PowerShell 7",
+  kind: "powershell-7",
+  elevated: false,
+};
+const gitBash: LocalShellProfile = {
+  id: "git-bash",
+  label: "Git Bash",
+  kind: "git-bash",
+  elevated: false,
+};
+const administratorPowerShell: LocalShellProfile = {
+  id: "powershell-7-administrator",
+  label: "PowerShell 7",
+  kind: "powershell-7",
+  elevated: true,
+};
+
 function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {}) {
   const props = {
     settings,
     defaults: settings,
     logTailOptions: [50, 100, 200, 500, 1000],
+    localShells: [] as LocalShellProfile[],
     environment,
     appVersion: "0.6.1",
     onCheckForUpdates: vi.fn(async () => ({ outcome: "current" }) as const),
@@ -73,7 +94,7 @@ describe("Settings actions", () => {
     // Both live in the header, above the scrolling region, so neither depends
     // on how far down the form the reader has gone.
     const header = screen.getByRole("banner");
-    expect(header.contains(screen.getByRole("button", { name: "Back to terminal" }))).toBe(true);
+    expect(header.contains(screen.getByRole("button", { name: "Close Settings" }))).toBe(true);
     expect(header.contains(saveButton())).toBe(true);
   });
 
@@ -122,7 +143,97 @@ describe("Settings actions", () => {
   it("warns about a terminal colour that is hard to read", () => {
     renderPane({ settings: { ...settings, terminalBlue: "#111111" } });
 
-    expect(screen.getByText(/Blue and directories.*Aim for 4.5:1 contrast/)).toBeTruthy();
+    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
+  });
+
+  it("does not move the active color picker when contrast drops", () => {
+    renderPane();
+    const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
+    const controls = picker.closest(".terminal-color-grid") as HTMLElement;
+
+    fireEvent.change(picker, { target: { value: "#111111" } });
+
+    const warning = screen.getByText(/ANSI 4.*Choose a brighter color/);
+    expect(picker.isConnected).toBe(true);
+    expect(
+      controls.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("waits until the native picker closes before showing a contrast warning", () => {
+    renderPane();
+    const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
+
+    fireEvent.input(picker, { target: { value: "#111111" } });
+    expect(screen.queryByText(/ANSI 4.*Choose a brighter color/)).toBeNull();
+    expect(saveButton().disabled).toBe(true);
+
+    fireEvent.change(picker, { target: { value: "#111111" } });
+    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it("uses swatches without hex fields or contrast numbers", () => {
+    renderPane();
+    expect(document.querySelectorAll('input[type="color"]')).toHaveLength(7);
+    for (const label of [
+      "Default text and cursor",
+      "ANSI 1",
+      "ANSI 2",
+      "ANSI 3",
+      "ANSI 4",
+      "ANSI 5",
+      "ANSI 6",
+    ]) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    const prompt = screen.getByText("user@host:~$") as HTMLElement;
+    expect(prompt.style.color).toBe("rgb(82, 207, 145)");
+    expect((prompt.closest(".ansi-preview") as HTMLElement).style.color).toBe("rgb(242, 242, 238)");
+    expect(screen.getByText("sample")).toBeTruthy();
+    expect(screen.queryByText("agent@ubuntu")).toBeNull();
+    expect(screen.queryByText(/Choose a swatch\. The preview/)).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /hex color/i })).toBeNull();
+    expect(screen.queryByText(/\d\.\d:1/)).toBeNull();
+  });
+
+  it("keeps an ANSI slot's neutral label when its chosen hue changes", () => {
+    renderPane({ settings: { ...settings, terminalGreen: "#ff00ff" } });
+
+    const picker = screen.getByLabelText("ANSI 2") as HTMLInputElement;
+    expect(picker.value).toBe("#ff00ff");
+    expect(screen.queryByLabelText("Green")).toBeNull();
+  });
+
+  it("shows common uses as descriptions of the ANSI slots", () => {
+    renderPane();
+
+    for (const [slot, use] of [
+      ["ANSI 1", "Errors"],
+      ["ANSI 2", "Prompts"],
+      ["ANSI 3", "Warnings"],
+      ["ANSI 4", "Directories"],
+      ["ANSI 5", "Highlights"],
+      ["ANSI 6", "Symlinks"],
+    ]) {
+      const picker = screen.getByLabelText(slot);
+      const description = document.getElementById(picker.getAttribute("aria-describedby") ?? "");
+      expect(description?.textContent).toBe(use);
+    }
+  });
+
+  it("restores the palette after a picked color is committed", async () => {
+    const user = userEvent.setup();
+    renderPane();
+    const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
+    fireEvent.change(picker, { target: { value: "#111111" } });
+    expect(saveButton().disabled).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Reset colors" }));
+
+    expect(picker.value).toBe(settings.terminalBlue);
+    expect(screen.queryByText(/ANSI 4.*Choose a brighter color/)).toBeNull();
+    expect(saveButton().disabled).toBe(true);
   });
 
   it("checks manually even with automatic checks turned off", async () => {
@@ -190,5 +301,61 @@ describe("Settings actions", () => {
     expect(props.onSaved).not.toHaveBeenCalled();
     // Still dirty, so the reader can correct the problem and try again.
     expect(saveButton().disabled).toBe(false);
+  });
+
+  it("offers each installed shell in the two groups the launcher uses", () => {
+    renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+
+    expect(screen.getByText("Local terminals")).toBeTruthy();
+    expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
+    expect(screen.getByLabelText("Offer Git Bash")).toBeTruthy();
+    // The administrator row is a separate entry with its own label, because the
+    // launcher offers it as one.
+    expect(screen.getByText("Run as administrator")).toBeTruthy();
+    expect(screen.getByLabelText("Offer PowerShell 7, run as administrator")).toBeTruthy();
+  });
+
+  it("says so plainly when this machine has no local shells", () => {
+    renderPane({ localShells: [] });
+
+    expect(screen.getByText("No local shells are installed on this machine.")).toBeTruthy();
+    expect(screen.queryByLabelText("Offer Git Bash")).toBeNull();
+  });
+
+  it("hides a shell from the launchers once the setting is saved", async () => {
+    const user = userEvent.setup();
+    const props = renderPane({ localShells: [powershell, gitBash] });
+
+    await user.click(screen.getByLabelText("Offer Git Bash"));
+    expect(saveButton().disabled).toBe(false);
+
+    await user.click(saveButton());
+
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenLocalShells: ["git-bash"] }),
+    );
+    expect(props.onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenLocalShells: ["git-bash"] }),
+    );
+  });
+
+  it("shows a saved choice as off and gives a one-step way back", async () => {
+    const user = userEvent.setup();
+    renderPane({
+      settings: { ...settings, hiddenLocalShells: ["git-bash"] },
+      localShells: [powershell, gitBash],
+    });
+
+    const toggle = screen.getByLabelText("Offer Git Bash") as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
+
+    // Turning every hidden shell back on in one click, rather than hunting for
+    // the rows that are no longer obvious once several are off.
+    await user.click(screen.getByRole("button", { name: /Show all/ }));
+    expect((screen.getByLabelText("Offer Git Bash") as HTMLInputElement).checked).toBe(true);
+    // Still a draft: every other Settings change is confirmed the same way.
+    expect(saveButton().disabled).toBe(false);
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
   });
 });

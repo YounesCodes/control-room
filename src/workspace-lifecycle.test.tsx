@@ -82,6 +82,7 @@ const settings: AppSettings = {
   globalHistoryEnabled: true,
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
+  hiddenLocalShells: [],
 };
 
 function connection(id: string, displayName: string): SavedConnection {
@@ -198,7 +199,11 @@ describe("App Workspace behavior", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+    // App loads TerminalPane lazily. Parallel full-suite runs can delay that
+    // import beyond Testing Library's one-second default without delaying App.
+    expect(
+      await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 }),
+    ).toBeTruthy();
     expect(screen.getByTestId("terminal-workspace-1")).toBeTruthy();
     await user.click(screen.getByLabelText("Open actions for Host A"));
     await user.click(screen.getByRole("menuitem", { name: /Delete connection/i }));
@@ -216,7 +221,7 @@ describe("App Workspace behavior", () => {
     await user.click(await screen.findByLabelText("Open Settings"));
     await user.clear(screen.getByLabelText("Font family"));
     await user.type(screen.getByLabelText("Font family"), "Cascadia Mono");
-    await user.click(screen.getByRole("button", { name: "Back to terminal" }));
+    await user.click(screen.getByRole("button", { name: "Close Settings" }));
 
     // The in-app confirm dialog appears and Settings stays open.
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
@@ -227,7 +232,7 @@ describe("App Workspace behavior", () => {
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
 
     // Discarding leaves Settings.
-    await user.click(screen.getByRole("button", { name: "Back to terminal" }));
+    await user.click(screen.getByRole("button", { name: "Close Settings" }));
     await user.click(screen.getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Settings" })).toBeNull());
   });

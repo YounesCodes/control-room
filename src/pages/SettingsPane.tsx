@@ -1,25 +1,72 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { settingsHaveChanges } from "../lib/settings-draft";
-import type { AppSettings, EnvironmentInfo } from "../types";
+import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
 import { contrastRatio } from "../lib/color-contrast";
+import { TERMINAL_BACKGROUND } from "../lib/terminal-theme";
 
-const terminalColorFields = [
-  ["terminalForeground", "Text and cursor"],
-  ["terminalGreen", "Green and prompts"],
-  ["terminalBlue", "Blue and directories"],
-  ["terminalCyan", "Cyan"],
-  ["terminalYellow", "Yellow"],
-  ["terminalMagenta", "Magenta"],
-  ["terminalRed", "Red and errors"],
+const terminalAnsiColors = [
+  ["terminalRed", "ANSI 1", "Errors"],
+  ["terminalGreen", "ANSI 2", "Prompts"],
+  ["terminalYellow", "ANSI 3", "Warnings"],
+  ["terminalBlue", "ANSI 4", "Directories"],
+  ["terminalMagenta", "ANSI 5", "Highlights"],
+  ["terminalCyan", "ANSI 6", "Symlinks"],
 ] as const;
+const terminalColorFields = [
+  ["terminalForeground", "Default text and cursor", ""],
+  ...terminalAnsiColors,
+] as const;
+type TerminalColorField = (typeof terminalColorFields)[number][0];
+
+function TerminalColorPicker({
+  label,
+  descriptionId,
+  value,
+  onCommit,
+}: {
+  label: string;
+  descriptionId?: string;
+  value: string;
+  onCommit: (color: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // React's onChange receives the picker's live input events in WebView2. A
+  // Settings render during that native popup dismisses it, so commit only on
+  // the native change event sent when the picker closes.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const commit = () => onCommit(input.value);
+    input.addEventListener("change", commit);
+    return () => input.removeEventListener("change", commit);
+  }, [onCommit]);
+
+  // defaultValue leaves the picker alone while it is open. Reset colors still
+  // needs to sync a new saved value into that same stable input element.
+  useEffect(() => {
+    if (inputRef.current && inputRef.current.value !== value) inputRef.current.value = value;
+  }, [value]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="color"
+      defaultValue={value}
+      aria-label={label}
+      aria-describedby={descriptionId}
+    />
+  );
+}
 
 export function SettingsPane({
   settings,
   defaults,
   logTailOptions,
+  localShells,
   environment,
   appVersion,
   onCheckForUpdates,
@@ -30,6 +77,9 @@ export function SettingsPane({
   settings: AppSettings;
   defaults: AppSettings;
   logTailOptions: number[];
+  /** Every local shell this machine has, the hidden ones included: Settings is
+   *  where they are turned back on, so it cannot be handed a filtered list. */
+  localShells: LocalShellProfile[];
   environment: EnvironmentInfo;
   /** The running version, read from Tauri package metadata rather than any
    *  constant in this file. */
@@ -41,15 +91,21 @@ export function SettingsPane({
   onClose: () => boolean;
   onDirtyChange: (dirty: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(settings);
+  /* The list is read from whatever settings the backend sent. An older payload
+     simply has no such key, and Settings has to open on it rather than take the
+     whole window down: absent means nothing is hidden, same as in Rust. */
+  const [draft, setDraft] = useState<AppSettings>(() => ({
+    ...settings,
+    hiddenLocalShells: settings.hiddenLocalShells ?? [],
+  }));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
   const lowContrastColors = terminalColorFields
-    .map(([field, label]) => ({ label, ratio: contrastRatio(draft[field], "#050505") }))
-    .filter(({ ratio }) => ratio < 4.5);
+    .filter(([field]) => contrastRatio(draft[field], TERMINAL_BACKGROUND) < 4.5)
+    .map(([, label]) => label);
 
   /* Manual checks stay available with the automatic preference off: turning the
      schedule off is not the same as refusing to look. */
@@ -64,6 +120,41 @@ export function SettingsPane({
   }
 
   const dirty = settingsHaveChanges(settings, draft);
+
+  const standardProfiles = localShells.filter((shell) => !shell.elevated);
+  const administratorProfiles = localShells.filter((shell) => shell.elevated);
+  const hiddenIds = draft.hiddenLocalShells;
+  const hiddenCount = localShells.filter((shell) => hiddenIds.includes(shell.id)).length;
+
+  function setColor(field: TerminalColorField, color: string) {
+    setDraft((current) => ({ ...current, [field]: color.toLowerCase() }));
+  }
+
+  /* One row per profile, in the same two groups the launchers use, so the
+     setting and the menu it controls read as the same list. */
+  function setOffered(shell: LocalShellProfile, offered: boolean) {
+    const remaining = hiddenIds.filter((id) => id !== shell.id);
+    setDraft({
+      ...draft,
+      hiddenLocalShells: offered ? remaining : [...remaining, shell.id],
+    });
+  }
+
+  function toggleRow(shell: LocalShellProfile) {
+    return (
+      <label className="checkbox-label" key={shell.id}>
+        <input
+          type="checkbox"
+          checked={!hiddenIds.includes(shell.id)}
+          onChange={(event) => setOffered(shell, event.target.checked)}
+          aria-label={
+            shell.elevated ? `Offer ${shell.label}, run as administrator` : `Offer ${shell.label}`
+          }
+        />
+        {shell.label}
+      </label>
+    );
+  }
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -103,14 +194,14 @@ export function SettingsPane({
             className="icon-button settings-back"
             type="button"
             onClick={() => onClose()}
-            aria-label="Back to terminal"
-            title="Back to terminal"
+            aria-label="Close Settings"
+            title="Close Settings"
           >
             <ArrowLeft size={17} />
           </button>
           <div className="settings-heading-text">
             <h2>Settings</h2>
-            <p>Terminal, log, and local History preferences.</p>
+            <p>Terminal, logs, local shells, SSH access, and Control Room updates.</p>
           </div>
           <div className="settings-heading-actions">
             {message ? (
@@ -180,15 +271,13 @@ export function SettingsPane({
             </small>
             <div className="terminal-color-heading">
               <div>
-                <strong>ANSI colors</strong>
-                <small>
-                  Remote prompts and tools choose the category. These settings choose its color.
-                </small>
+                <strong>Terminal colors</strong>
+                <small>Programs choose how to use each ANSI slot.</small>
               </div>
               <button
                 className="secondary-button compact-button"
                 type="button"
-                onClick={() =>
+                onClick={() => {
                   setDraft({
                     ...draft,
                     terminalForeground: defaults.terminalForeground,
@@ -198,8 +287,8 @@ export function SettingsPane({
                     terminalBlue: defaults.terminalBlue,
                     terminalMagenta: defaults.terminalMagenta,
                     terminalCyan: defaults.terminalCyan,
-                  })
-                }
+                  });
+                }}
               >
                 <RotateCcw size={13} /> Reset colors
               </button>
@@ -210,52 +299,78 @@ export function SettingsPane({
               aria-hidden="true"
             >
               <div>
-                <span style={{ color: draft.terminalGreen, fontWeight: 700 }}>agent@ubuntu</span>:
-                <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>~</span>$ ls -la /
+                <span style={{ color: draft.terminalGreen }}>user@host:~$</span> echo sample
               </div>
-              <div>
-                <span style={{ color: draft.terminalCyan, fontWeight: 700 }}>bin</span> -&gt;{" "}
-                <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>usr/bin</span>
-                {"   "}
-                <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>boot</span>
-                {"   "}
-                <span style={{ color: draft.terminalBlue, fontWeight: 700 }}>etc</span>
-                {"   "}fstab
-              </div>
-              <div>
-                <span style={{ color: draft.terminalYellow, fontWeight: 700 }}>warning:</span> low
-                disk space {"  ·  "}
-                <span style={{ color: draft.terminalMagenta, fontWeight: 700 }}>note:</span> using
-                defaults
-              </div>
-              <div>
-                <span style={{ color: draft.terminalRed, fontWeight: 700 }}>error:</span> permission
-                denied
+              <div>sample</div>
+              <div className="ansi-preview-slots">
+                {terminalAnsiColors.map(([field, label]) => (
+                  <span key={field} style={{ color: draft[field] }}>
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
-            {lowContrastColors.length > 0 && (
-              <p className="inline-warning" role="status">
-                Hard to read on the terminal background:{" "}
-                {lowContrastColors
-                  .map(({ label, ratio }) => `${label} (${ratio.toFixed(1)}:1)`)
-                  .join(", ")}
-                . Aim for 4.5:1 contrast or reset the colors.
-              </p>
-            )}
             <div className="terminal-color-grid">
-              {terminalColorFields.map(([field, label]) => (
+              {terminalColorFields.map(([field, label, example]) => (
                 <label className="terminal-color-control" key={field}>
-                  <input
-                    type="color"
+                  <TerminalColorPicker
+                    label={label}
+                    descriptionId={example ? `${field}-example` : undefined}
                     value={draft[field]}
-                    onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
-                    aria-label={label}
+                    onCommit={(color) => setColor(field, color)}
                   />
                   <span>{label}</span>
-                  <code>{draft[field]}</code>
+                  {example && (
+                    <small className="terminal-color-example" id={`${field}-example`}>
+                      {example}
+                    </small>
+                  )}
                 </label>
               ))}
             </div>
+            {lowContrastColors.length > 0 && (
+              <p className="inline-warning terminal-color-warning" role="status">
+                Hard to read on the terminal background: {lowContrastColors.join(", ")}. Choose a
+                brighter color or reset the colors.
+              </p>
+            )}
+          </fieldset>
+          <fieldset>
+            <legend>Local terminal</legend>
+            <small>
+              Choose which shells the Local terminal button, New terminal, and Split menus offer.
+              Turning one off hides it from those menus only: the shell stays installed, a Workspace
+              already running it keeps going, and turning it back on brings it back.
+            </small>
+            {localShells.length === 0 ? (
+              <small>No local shells are installed on this machine.</small>
+            ) : (
+              <>
+                <div className="local-shell-toggle-group">
+                  <div className="local-shell-toggle-heading">
+                    <strong>Local terminals</strong>
+                    {hiddenCount > 0 && (
+                      <button
+                        className="secondary-button compact-button"
+                        type="button"
+                        onClick={() => setDraft({ ...draft, hiddenLocalShells: [] })}
+                      >
+                        <RotateCcw size={13} /> Show all
+                      </button>
+                    )}
+                  </div>
+                  {standardProfiles.map(toggleRow)}
+                </div>
+                {administratorProfiles.length > 0 && (
+                  <div className="local-shell-toggle-group">
+                    <div className="local-shell-toggle-heading">
+                      <strong>Run as administrator</strong>
+                    </div>
+                    {administratorProfiles.map(toggleRow)}
+                  </div>
+                )}
+              </>
+            )}
           </fieldset>
           <fieldset>
             <legend>Logs and History</legend>

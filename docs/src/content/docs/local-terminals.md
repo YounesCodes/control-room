@@ -16,6 +16,8 @@ Control Room can host local Windows shells in terminal-only Local Workspaces. Se
 
 Only profiles that are installed are offered. PowerShell 7 and Git for Windows use deterministic checks of standard install locations plus the allowed PATH lookup. Git Bash never uses `System32\bash.exe`, which is the WSL launcher.
 
+Installed does not mean offered: [Settings](/control-room/reference/settings/#local-terminal) lets you turn a profile off so the **Local terminal**, **New terminal**, and split menus stop listing it. The shell stays installed, and a Workspace already running it keeps working.
+
 ## Administrator terminals
 
 The shell picker has a separate **Run as administrator** group for PowerShell 7, Windows PowerShell, and Command Prompt. Choosing one opens the Windows UAC prompt, then runs the elevated shell inside Control Room.

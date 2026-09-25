@@ -25,6 +25,8 @@ Containers without validated Compose project and service labels appear under Ung
 
 Only installed profiles appear. Check that PowerShell 7, Windows PowerShell, Command Prompt, or Git for Windows is installed. Control Room resolves the known shell profiles itself and rejects unknown ids. It does not use `System32\bash.exe` as Git Bash.
 
+A profile can also be turned off: open Settings, then **Local terminal**, and use **Show all** or tick the shell you want back.
+
 ## A restored Workspace is disconnected
 
 This is normal. Control Room restores tabs and layout, but never reconnects SSH or starts a local process automatically. Select the Workspace and reconnect or start it.
@@ -32,6 +34,12 @@ This is normal. Control Room restores tabs and layout, but never reconnects SSH 
 ## Boot or port data is partial
 
 Structured reads have bounds and independent sections. A missing timestamp, permission error, unsupported command, or truncation stays visible as such. Use the terminal for a broader investigation, and do not read an empty section as proof that the host has no matching data.
+
+## The window says something went wrong
+
+Control Room catches a pane that fails to draw and shows an error screen with the message and a **Reload** button instead of leaving the window empty. Reload restarts the session: Saved Connections, settings, Scratchpad notes, and Host Baselines were not changed, and terminal output is never stored to begin with.
+
+The message on that screen names what failed. Open the app with devtools (F12 in a debug build) if you need the stack trace behind it.
 
 ## The app cannot find OpenSSH
 
