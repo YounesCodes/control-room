@@ -1,0 +1,81 @@
+name: Live SSH fixture
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner with network access to the Debian fixture
+        required: true
+        default: windows-latest
+        type: choice
+        options:
+          - windows-latest
+          - self-hosted
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 35
+    env:
+      CONTROL_ROOM_TEST_HOST: ${{ secrets.CONTROL_ROOM_TEST_HOST }}
+      CONTROL_ROOM_TEST_USER: ${{ secrets.CONTROL_ROOM_TEST_USER }}
+      CONTROL_ROOM_TEST_PORT: ${{ secrets.CONTROL_ROOM_TEST_PORT }}
+      CONTROL_ROOM_TEST_KEY_B64: ${{ secrets.CONTROL_ROOM_TEST_KEY_B64 }}
+      CONTROL_ROOM_TEST_KNOWN_HOSTS: ${{ secrets.CONTROL_ROOM_TEST_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - name: Configure temporary SSH identity and pinned host key
+        shell: pwsh
+        run: |
+          if (-not $env:CONTROL_ROOM_TEST_HOST -or -not $env:CONTROL_ROOM_TEST_USER -or
+              -not $env:CONTROL_ROOM_TEST_KEY_B64 -or -not $env:CONTROL_ROOM_TEST_KNOWN_HOSTS) {
+            throw "Live fixture secrets are incomplete. See docs/testing.md."
+          }
+          $sshDir = Join-Path $env:USERPROFILE ".ssh"
+          New-Item -ItemType Directory -Force -Path $sshDir | Out-Null
+          $backupDir = Join-Path $env:RUNNER_TEMP "control-room-ssh-backup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+          foreach ($name in @("config", "known_hosts", "control-room-fixture-key")) {
+            $existing = Join-Path $sshDir $name
+            if (Test-Path -LiteralPath $existing) {
+              Copy-Item -LiteralPath $existing -Destination (Join-Path $backupDir $name)
+            }
+          }
+          $keyPath = Join-Path $sshDir "control-room-fixture-key"
+          $knownHostsPath = Join-Path $sshDir "known_hosts"
+          [IO.File]::WriteAllBytes($keyPath, [Convert]::FromBase64String($env:CONTROL_ROOM_TEST_KEY_B64))
+          [IO.File]::WriteAllText($knownHostsPath, $env:CONTROL_ROOM_TEST_KNOWN_HOSTS)
+          $keyForSsh = $keyPath.Replace('\', '/')
+          $hostsForSsh = $knownHostsPath.Replace('\', '/')
+          [IO.File]::WriteAllText((Join-Path $sshDir "config"), "Host *`n  IdentityFile $keyForSsh`n  UserKnownHostsFile $hostsForSsh`n  StrictHostKeyChecking yes`n  IdentitiesOnly yes`n")
+          icacls $keyPath /inheritance:r /grant:r "${env:USERNAME}:R" | Out-Null
+      - run: npm ci
+      - run: npm run test:live-ssh
+      - name: Restore SSH files
+        if: always()
+        shell: pwsh
+        run: |
+          $sshDir = Join-Path $env:USERPROFILE ".ssh"
+          $backupDir = Join-Path $env:RUNNER_TEMP "control-room-ssh-backup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (-not (Test-Path -LiteralPath $backupDir)) { return }
+          foreach ($name in @("config", "known_hosts", "control-room-fixture-key")) {
+            $path = Join-Path $sshDir $name
+            $backup = Join-Path $backupDir $name
+            if (Test-Path -LiteralPath $backup) {
+              Copy-Item -LiteralPath $backup -Destination $path -Force
+            } elseif (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Force
+            }
+          }

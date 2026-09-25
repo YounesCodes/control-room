@@ -1589,6 +1589,7 @@ mod tests {
         let ssh_path = crate::ssh::detect_ssh_path().unwrap();
         let host = std::env::var("CONTROL_ROOM_TEST_HOST").unwrap();
         let user = std::env::var("CONTROL_ROOM_TEST_USER").unwrap();
+        let port = std::env::var("CONTROL_ROOM_TEST_PORT").unwrap_or_else(|_| "22".into());
         let target = format!("{user}@{host}");
         let pair = native_pty_system().openpty(PtySize::default()).unwrap();
         let mut command = CommandBuilder::new(ssh_path);
@@ -1598,6 +1599,8 @@ mod tests {
             "BatchMode=yes",
             "-o",
             "ConnectTimeout=10",
+            "-p",
+            &port,
             &target,
             "printf CONTROL_ROOM_SSH_OK; exit",
         ]);

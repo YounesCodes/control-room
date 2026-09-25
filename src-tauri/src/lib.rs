@@ -9,6 +9,9 @@ mod session;
 mod ssh;
 mod updater;
 
+#[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
+compile_error!("desktop-e2e is only for debug test builds");
+
 use baselines::BaselineCaptureRegistry;
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
@@ -16,9 +19,12 @@ use session::SessionManager;
 use tauri::Manager;
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+    #[cfg(feature = "desktop-e2e")]
+    let builder = builder.plugin(tauri_plugin_wdio::init());
+    builder
         .manage(SessionManager::default())
         .manage(updater::UpdaterState::default())
         .manage(StreamManager::default())
@@ -30,6 +36,13 @@ pub fn run() {
                 window.set_title("Control Room (Dev)")?;
             }
 
+            #[cfg(feature = "desktop-e2e")]
+            let database_path = std::path::PathBuf::from(
+                std::env::var_os("CONTROL_ROOM_E2E_DATA_DIR")
+                    .ok_or("CONTROL_ROOM_E2E_DATA_DIR is required for desktop-e2e")?,
+            )
+            .join("control-room.db");
+            #[cfg(not(feature = "desktop-e2e"))]
             let database_path = app.path().app_data_dir()?.join("control-room.db");
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
             app.manage(database);

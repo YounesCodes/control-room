@@ -292,8 +292,8 @@ export function CommandPalette({
   }, [query]);
 
   useEffect(() => {
-    inputRef.current?.focus();
     const previousFocus = document.activeElement as HTMLElement | null;
+    inputRef.current?.focus();
     return () => previousFocus?.focus?.();
   }, []);
 
