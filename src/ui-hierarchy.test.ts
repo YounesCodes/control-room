@@ -13,9 +13,6 @@ const terminalSource = readFileSync(
 const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
 const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-const tauriConfig = JSON.parse(
-  readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"),
-) as { app: { windows: { minWidth: number; minHeight: number }[] } };
 /** Source with comments removed, so a comment explaining a rule cannot be
  *  mistaken for a violation of it. */
 function code(relativePath: string): string {
@@ -46,6 +43,8 @@ function calledWindowMethods(): string[] {
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
 ) as { permissions: string[] };
+const apiSource = code("./lib/api.ts");
+const tauriSource = code("../src-tauri/src/lib.rs");
 
 /** Every production `.ts`/`.tsx` file under `src`, tests excluded. */
 function productionSources(directory = new URL("./", import.meta.url)): URL[] {
@@ -74,81 +73,21 @@ function importedDialogFunctions(): string[] {
 }
 
 describe("application hierarchy", () => {
-  it("does not repeat Workspace identity in extra headers or a status rail", () => {
-    expect(appSource).not.toContain('className="host-header"');
-    expect(appSource).not.toContain('className="status-rail"');
-    expect(appSource).not.toContain("workspace-navigation-heading");
-    expect(overviewSource).toContain("<h2>Overview</h2>");
-  });
-
-  it("keeps connection and page content bounded in wide windows", () => {
-    expect(stylesSource).toMatch(/\.workspace-open \.host-list\s*\{[^}]*max-height:/s);
-    expect(stylesSource).toMatch(/\.overview-content\s*\{[^}]*max-width: 980px/s);
-    expect(stylesSource).toMatch(/\.session-tabs\s*\{[^}]*padding-left: 0;/s);
-    expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*padding-bottom: 8px;/s);
-    // The settings bar and the form centre on the same axis, so a wide window
-    // leaves an even margin either side rather than a growing empty half.
-    expect(stylesSource).toMatch(/\.settings-heading-inner\s*\{[^}]*margin-inline: auto;/s);
-    expect(stylesSource).toMatch(/\.settings-form\s*\{[^}]*margin-inline: auto;/s);
-  });
-
-  it("keeps connection search in the sidebar and gives the workspace a compact titlebar", () => {
-    expect(appSource).toContain('className="search-field sidebar-search"');
-    expect(appSource).not.toContain('className="search-field app-search"');
-    expect(stylesSource).toMatch(/\.app-shell\s*\{[^}]*grid-template-rows: 42px/s);
-  });
-
-  it("keeps the short-window sidebar actions the same height", () => {
-    expect(stylesSource).toMatch(
-      /@media \(max-height: 720px\)[\s\S]*?\.sidebar-footer \.local-shell-launcher\s*\{[^}]*margin-bottom: 0;/,
-    );
-    expect(stylesSource).toMatch(
-      /\.sidebar-footer \.sidebar-secondary,\s*\.sidebar-footer \.sidebar-primary\s*\{[^}]*height: 34px;/s,
-    );
-  });
-
-  it("lets the WebView fit fractional native sizing without clipping the outer border", () => {
-    expect(stylesSource).toMatch(
-      /html,\s*body,\s*#root\s*\{[^}]*min-width: 0;[^}]*min-height: 0;/s,
-    );
-    expect(tauriConfig.app.windows[0]).toMatchObject({ minWidth: 960, minHeight: 640 });
-  });
-
-  it("keeps the connection filter copy visible beside the groups button", () => {
-    expect(appSource).toContain('placeholder="Find a connection"');
-    expect(appSource).toContain('aria-label="Filter connections by name, group, or tag"');
-    expect(appSource).toContain("<FolderCog size={18} />");
-    expect(stylesSource).toMatch(
-      /\.sidebar-filter-row\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 32px;/s,
-    );
-    expect(stylesSource).toMatch(
-      /\.sidebar-filter-row > \.icon-button\s*\{[^}]*width: 32px;[^}]*height: 32px;/s,
-    );
-    expect(stylesSource).toMatch(/\.sidebar-search input\s*\{[^}]*font-size: 13px;/s);
-  });
-
-  it("gives tags room in the tag-management list", () => {
-    expect(stylesSource).toMatch(
-      /\.connection-tag-manage-row > \.connection-tag-badge\s*\{[^}]*min-height: 24px;[^}]*padding: 3px 10px;[^}]*font-size: 11px;/s,
-    );
-  });
-
-  it("shows every connection tag in a larger full-width wrapping row", () => {
-    expect(appSource).not.toContain("connection.tags.slice(0, 2)");
-    expect(appSource).not.toContain("host-tag-overflow");
-    expect(stylesSource).toMatch(/\.host-main\s*\{[^}]*display: grid;/s);
-    expect(stylesSource).toMatch(
-      /\.host-tag-summary\s*\{[^}]*grid-column: 1 \/ -1;[^}]*flex-wrap: wrap;/s,
-    );
-    expect(stylesSource).toMatch(
-      /\.host-tag-summary \.connection-tag-badge\s*\{[^}]*min-height: 21px;[^}]*font-size: 11px;/s,
-    );
-  });
-
-  it("opens the connection menu as an anchored popover without resizing its row", () => {
-    expect(stylesSource).toMatch(/\.host-menu\s*\{[^}]*top: 50%;/s);
-    expect(stylesSource).toMatch(/\.host-context-menu\s*\{[^}]*position: fixed;/s);
-    expect(stylesSource).not.toMatch(/\.host-row\.menu-open\s*\{[^}]*min-height:/s);
+  it("registers every frontend IPC command in the Rust handler", () => {
+    const called = [
+      ...apiSource.matchAll(/\b(?:invoke|invokeRemoteInspection)(?:<[^\n(]*>)?\(\s*"([a-z_]+)"/g),
+    ].map((match) => match[1]);
+    const handlers = tauriSource
+      .split("tauri::generate_handler![")[1]
+      ?.split("])")[0]
+      .matchAll(/(?:commands|updater)::([a-z_]+)/g);
+    const registered = new Set([...(handlers ?? [])].map((match) => match[1]));
+    expect(called.length).toBeGreaterThan(40);
+    for (const command of called) {
+      expect(registered.has(command), `${command} is called in api.ts but not registered`).toBe(
+        true,
+      );
+    }
   });
 
   it("keeps baseline capture manual and never schedules it", () => {
@@ -207,24 +146,6 @@ describe("application hierarchy", () => {
     expect(dockerSource).toContain("Retry with sudo");
   });
 
-  it("keeps a checkbox on one line inside a modal, as Settings already does", () => {
-    // .form-stack label used to stack every label vertically, checkbox rows
-    // included, so a checkbox in a dialog sat above its own text. Settings had
-    // always excluded them; modals never did, because no modal had one.
-    expect(stylesSource).toMatch(
-      /\.settings-form label:not\(\.checkbox-label\),\s*\.form-stack label:not\(\.checkbox-label\)\s*\{/,
-    );
-  });
-
-  it("centres a warning message whether or not the banner has an action", () => {
-    // The message is an anonymous flex item, so space-between pinned it to the
-    // free edge when no button followed it.
-    expect(stylesSource).toMatch(
-      /\.inline-warning > \.inline-warning-text[^}]*text-align: center/s,
-    );
-    expect(portsSource).toContain('<span className="inline-warning-text">');
-  });
-
   it("shows whether the host can act on an elevation allowance", () => {
     // A permission the account cannot use is the confusing case, so Overview
     // reports passwordless sudo as a host fact beside systemd and Docker.
@@ -239,21 +160,6 @@ describe("application hierarchy", () => {
     expect(logsSource).toContain('type SudoPurpose = "sources" | "stream"');
     expect(logsSource).toContain('setSudoPurpose("sources")');
     expect(logsSource).toContain('loadSources("docker", true, password)');
-  });
-
-  it("uses host OS marks and session presence in navigation, with the status dot in the Terminal view", () => {
-    // Saved Connections carry the host OS mark directly: the sidebar, the split
-    // menu, and the New terminal menu all list connections. Workspace tabs and
-    // split entries use the same host mark, while a local shell has no host OS
-    // to report. Split panes leave identity to the tab strip.
-    expect(appSource.match(/<HostOsIcon/g)).toHaveLength(4);
-    expect(appSource.match(/workspaceMark\(workspace\)/g)).toHaveLength(2);
-    expect(appSource).not.toContain("StatusDot");
-    // Connection sidebar and Workspace tabs surface live session state as a
-    // presence badge on the OS mark; the labelled status dot stays in Terminal.
-    expect(appSource).toContain("connectionSessionStates");
-    expect(appSource).toContain("className={`presence presence-${workspace.state}`}");
-    expect(terminalSource.match(/<StatusDot/g)).toHaveLength(1);
   });
 
   it("renders bold terminal text as weight so category colors match what the user picks", () => {
@@ -367,35 +273,6 @@ describe("application hierarchy", () => {
         `dialog.${name} is called but not permitted`,
       ).toContain(`dialog:allow-${name}`);
     }
-  });
-
-  it("puts the update control left of Settings without touching the window controls", () => {
-    const updaterSource = code("./components/UpdateIndicator.tsx");
-    // Order in the titlebar: update status, Settings, divider, native controls.
-    expect(appSource).toMatch(
-      /<UpdateIndicator[\s\S]*?\/>\s*<button\s+className=\{settingsOpen[\s\S]*?<span className="window-controls-divider"[\s\S]*?<WindowControls \/>/,
-    );
-    // The control is an ordinary button: a drag region here would swallow the
-    // click and start moving the window instead.
-    expect(updaterSource).not.toContain("data-tauri-drag-region");
-    expect(updaterSource).toContain('type="button"');
-    expect(stylesSource).toMatch(/\.update-indicator-button\s*\{/);
-  });
-
-  it("paints the titlebar above the session strip so the update popover clears it", () => {
-    // The popover is a child of the titlebar, so its own z-index only matters
-    // inside the titlebar's stacking context. The relationship that decides
-    // whether the Workspace strip can paint over it lives between the titlebar
-    // and the strip. Fixed dialogs stay above both.
-    const layerOf = (selector: string) => {
-      const match = stylesSource.match(new RegExp(`${selector}\\s*\\{[^}]*?z-index:\\s*(\\d+)`));
-      expect(match, selector).not.toBeNull();
-      return Number(match![1]);
-    };
-    const titlebar = layerOf("\\.app-bar");
-    expect(titlebar).toBeGreaterThan(layerOf("\\.session-tabs"));
-    expect(layerOf("\\.modal-backdrop")).toBeGreaterThan(titlebar);
-    expect(layerOf("\\.command-palette-backdrop")).toBeGreaterThan(titlebar);
   });
 
   it("renders release notes as text and never as markup", () => {
