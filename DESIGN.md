@@ -68,6 +68,10 @@ text readable against the app surfaces and never use tag color to imply
 connection state. Terminal ANSI colors are user-editable in Settings and belong
 to the terminal output palette, not the app chrome.
 
+Keep the terminal color picker open while a user adjusts it. Update the preview
+and any readability warning when the picker closes, and let the user save a
+deliberate low-contrast choice.
+
 Use borders and restrained fills to separate controls and surfaces. Make the
 selected state easy to locate without shifting nearby content. Avoid heavy
 shadows; reserve stronger elevation for overlays such as menus and dialogs.

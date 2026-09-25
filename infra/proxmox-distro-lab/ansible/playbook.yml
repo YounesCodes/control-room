@@ -1,0 +1,446 @@
+---
+- name: Prepare a disposable Control Room inspection target
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    control_room_install_docker: false
+    ansible_become_method: "{{ 'doas' if control_room_distro == 'alpine' else 'sudo' }}"
+    ansible_python_interpreter: >-
+      {{ '/usr/bin/python3.11' if control_room_distro in ['opensuse-leap', 'sles'] else 'auto_silent' }}
+    expected_os_ids:
+      rocky: rocky
+      ubuntu: ubuntu
+      debian: debian
+      alma: almalinux
+      rhel: rhel
+      fedora: fedora
+      centos-stream: centos
+      oracle: ol
+      amazon-linux: amzn
+      opensuse-leap: opensuse-leap
+      sles: sles
+      arch: arch
+      alpine: alpine
+    core_packages:
+      rocky: [bash, curl, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      ubuntu: [bash, curl, openssh-server, sudo, iproute2, procps, python3, util-linux, ufw]
+      debian: [bash, curl, openssh-server, sudo, iproute2, procps, python3, util-linux, ufw]
+      alma: [bash, curl, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      rhel: [bash, curl, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      fedora: [bash, curl, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      centos-stream:
+        [bash, curl, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      oracle: [bash, curl, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      amazon-linux: [bash, openssh-server, sudo, iproute, procps-ng, python3, util-linux, firewalld]
+      opensuse-leap: [bash, curl, openssh, sudo, iproute2, procps, python311, util-linux, firewalld]
+      sles: [bash, curl, openssh, sudo, iproute2, procps, python311, util-linux, firewalld]
+      arch: [bash, curl, openssh, sudo, iproute2, procps-ng, python, util-linux, firewalld]
+      alpine: [bash, curl, openssh, sudo, iproute2, procps, python3, util-linux]
+    python_commands:
+      arch: /usr/bin/python
+      opensuse-leap: /usr/bin/python3.11
+      sles: /usr/bin/python3.11
+    firewalld_distros:
+      - rocky
+      - alma
+      - rhel
+      - fedora
+      - centos-stream
+      - oracle
+      - amazon-linux
+      - opensuse-leap
+      - sles
+      - arch
+    docker_repository_urls:
+      rocky: https://download.docker.com/linux/centos/docker-ce.repo
+      alma: https://download.docker.com/linux/centos/docker-ce.repo
+      rhel: https://download.docker.com/linux/rhel/docker-ce.repo
+      fedora: https://download.docker.com/linux/fedora/docker-ce.repo
+      centos-stream: https://download.docker.com/linux/centos/docker-ce.repo
+      oracle: https://download.docker.com/linux/centos/docker-ce.repo
+    native_docker_packages:
+      ubuntu: [docker.io]
+      debian: [docker.io]
+      amazon-linux: [docker]
+      opensuse-leap: [docker]
+      sles: [docker]
+      arch: [docker]
+      alpine: [docker]
+
+  pre_tasks:
+    - name: Validate the requested distribution
+      ansible.builtin.assert:
+        that:
+          - control_room_distro in expected_os_ids
+        fail_msg: "Unknown control_room_distro value."
+
+    - name: Wait for the SSH port
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+        port: 22
+        delay: 5
+        sleep: 5
+        timeout: 300
+      become: false
+      delegate_to: localhost
+      vars:
+        ansible_python_interpreter: auto_silent
+
+    - name: Wait for authenticated SSH access
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - BatchMode=yes
+          - -o
+          - StrictHostKeyChecking=no
+          - -o
+          - UserKnownHostsFile=/dev/null
+          - -o
+          - ConnectTimeout=5
+          - -i
+          - "{{ ansible_private_key_file }}"
+          - "{{ ansible_user }}@{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+          - "true"
+      become: false
+      delegate_to: localhost
+      register: authenticated_ssh
+      retries: 60
+      delay: 5
+      until: authenticated_ssh.rc == 0
+      changed_when: false
+
+    - name: Wait for cloud-init to finish when installed
+      ansible.builtin.raw: |
+        if command -v cloud-init >/dev/null 2>&1; then
+          cloud-init status --wait >/dev/null 2>&1
+          status=$?
+          output=$(cloud-init status --long 2>&1)
+          printf '%s\n' "$output"
+          if [ "$status" -eq 2 ] \
+            && printf '%s\n' "$output" | grep -qx 'status: done' \
+            && printf '%s\n' "$output" | grep -qx 'extended_status: degraded done' \
+            && printf '%s\n' "$output" | grep -qx 'errors: \[\]'; then
+            exit 0
+          fi
+          exit "$status"
+        fi
+      changed_when: false
+
+    - name: Install Python before fact gathering
+      ansible.builtin.raw: |
+        case "{{ control_room_distro }}" in
+          opensuse-leap|sles)
+            command -v python3.11 >/dev/null 2>&1 || zypper --non-interactive install python311
+            exit $?
+            ;;
+        esac
+        if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+          exit 0
+        fi
+        case "{{ control_room_distro }}" in
+          alpine) apk add --no-cache python3 ;;
+          arch) pacman -Sy --noconfirm python ;;
+          ubuntu|debian) apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3 ;;
+          *) dnf -y install python3 ;;
+        esac
+      changed_when: false
+
+    - name: Gather guest facts
+      ansible.builtin.setup:
+
+    - name: Restore resolver configuration on Alpine cloud images
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        mode: "0644"
+        content: |
+          nameserver {{ control_room_dns_server }}
+      when: control_room_distro == "alpine"
+
+    - name: Refresh package metadata
+      ansible.builtin.shell: |
+        case "{{ control_room_distro }}" in
+          alpine) apk update ;;
+          arch) pacman -Sy --noconfirm ;;
+          opensuse-leap|sles) zypper --non-interactive refresh ;;
+          ubuntu|debian) apt-get update ;;
+          *) dnf clean all && dnf -y makecache ;;
+        esac
+      args:
+        executable: /bin/sh
+      changed_when: false
+
+  tasks:
+    - name: Read the operating system identifier
+      ansible.builtin.shell: . /etc/os-release && printf '%s' "$ID"
+      args:
+        executable: /bin/sh
+      register: os_release_id
+      changed_when: false
+
+    - name: Confirm the template matches the selected distribution
+      ansible.builtin.assert:
+        that:
+          - os_release_id.stdout == expected_os_ids[control_room_distro]
+        fail_msg: >-
+          The selected {{ control_room_distro }} template reports ID={{ os_release_id.stdout }}.
+          Fix template_vm_ids before testing Control Room.
+
+    - name: Install the portable inspection dependencies
+      ansible.builtin.package:
+        name: "{{ core_packages[control_room_distro] }}"
+        state: present
+
+    - name: Install the long-running systemd fixture
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/control-room-fixture.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Control Room fixture HTTP service
+          After=network.target
+
+          [Service]
+          ExecStart={{ python_commands.get(control_room_distro, '/usr/bin/python3') }} -m http.server 18081 --bind 127.0.0.1
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      when: control_room_distro != "alpine"
+      notify: Reload systemd
+
+    - name: Install the socket-activated systemd fixture
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/control-room-fixture.socket
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Control Room fixture socket
+
+          [Socket]
+          ListenStream=18080
+          Accept=yes
+
+          [Install]
+          WantedBy=sockets.target
+      when: control_room_distro != "alpine"
+      notify: Reload systemd
+
+    - name: Install the socket service template
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/control-room-fixture@.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Control Room fixture socket connection
+
+          [Service]
+          ExecStart=-/bin/cat
+          StandardInput=socket
+      when: control_room_distro != "alpine"
+      notify: Reload systemd
+
+    - name: Install the failed-unit fixture
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/control-room-fixture-failed.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Control Room intentional failed unit
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/false
+      when: control_room_distro != "alpine"
+      notify: Reload systemd
+
+    - name: Apply pending systemd unit changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: Start the active systemd fixtures
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - control-room-fixture.service
+        - control-room-fixture.socket
+      when: control_room_distro != "alpine"
+
+    - name: Put the intentional unit into failed state
+      ansible.builtin.command: systemctl start control-room-fixture-failed.service
+      register: failed_unit_start
+      changed_when: failed_unit_start.rc != 0
+      failed_when: false
+      when: control_room_distro != "alpine"
+
+    - name: Write a deterministic journal record
+      ansible.builtin.command:
+        argv:
+          - systemd-cat
+          - --identifier=control-room-fixture
+          - echo
+          - Control Room distribution lab fixture
+      changed_when: true
+      when: control_room_distro != "alpine"
+
+    - name: Install the Alpine OpenRC fixture
+      ansible.builtin.copy:
+        dest: /etc/init.d/control-room-fixture
+        mode: "0755"
+        content: |
+          #!/sbin/openrc-run
+          name="Control Room fixture HTTP service"
+          command="/usr/bin/python3"
+          command_args="-m http.server 18081 --bind 127.0.0.1"
+          command_background="yes"
+          pidfile="/run/control-room-fixture.pid"
+      when: control_room_distro == "alpine"
+
+    - name: Enable the Alpine OpenRC fixture
+      ansible.builtin.command: rc-update add control-room-fixture default
+      register: alpine_enable
+      changed_when: "'added' in alpine_enable.stdout"
+      when: control_room_distro == "alpine"
+
+    - name: Start the Alpine OpenRC fixture
+      ansible.builtin.command: rc-service control-room-fixture restart
+      changed_when: true
+      when: control_room_distro == "alpine"
+
+    - name: Start firewalld
+      ansible.builtin.service:
+        name: firewalld
+        enabled: true
+        state: started
+      when: control_room_distro in firewalld_distros
+
+    - name: Add the firewalld fixture rule
+      ansible.builtin.command: firewall-cmd --permanent --add-port=18080/tcp
+      register: firewalld_rule
+      changed_when: "'success' in firewalld_rule.stdout"
+      when: control_room_distro in firewalld_distros
+
+    - name: Reload firewalld
+      ansible.builtin.command: firewall-cmd --reload
+      changed_when: true
+      when: control_room_distro in firewalld_distros
+
+    - name: Allow SSH through UFW
+      ansible.builtin.command: ufw allow 22/tcp
+      register: ufw_ssh
+      changed_when: "'Rule added' in ufw_ssh.stdout"
+      when: control_room_distro in ["ubuntu", "debian"]
+
+    - name: Add the UFW fixture rule
+      ansible.builtin.command: ufw allow 18080/tcp
+      register: ufw_fixture
+      changed_when: "'Rule added' in ufw_fixture.stdout"
+      when: control_room_distro in ["ubuntu", "debian"]
+
+    - name: Enable UFW
+      ansible.builtin.command: ufw --force enable
+      register: ufw_enable
+      changed_when: "'active' in ufw_enable.stdout"
+      when: control_room_distro in ["ubuntu", "debian"]
+
+    - name: Add the Docker RPM repository
+      ansible.builtin.get_url:
+        url: "{{ docker_repository_urls[control_room_distro] }}"
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: "0644"
+      when:
+        - control_room_install_docker | bool
+        - control_room_distro in docker_repository_urls
+
+    - name: Install Docker CE from its RPM repository
+      ansible.builtin.package:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      when:
+        - control_room_install_docker | bool
+        - control_room_distro in docker_repository_urls
+
+    - name: Install Docker from the distribution repository
+      ansible.builtin.package:
+        name: "{{ native_docker_packages[control_room_distro] }}"
+        state: present
+      when:
+        - control_room_install_docker | bool
+        - control_room_distro in native_docker_packages
+
+    - name: Require a known Docker installation path
+      ansible.builtin.assert:
+        that:
+          - control_room_distro in docker_repository_urls or control_room_distro in native_docker_packages
+        fail_msg: "This distribution does not have an automated Docker fixture yet."
+      when: control_room_install_docker | bool
+
+    - name: Start Docker with systemd
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+      when:
+        - control_room_install_docker | bool
+        - control_room_distro != "alpine"
+
+    - name: Start Docker with OpenRC
+      ansible.builtin.command: rc-service docker start
+      changed_when: true
+      when:
+        - control_room_install_docker | bool
+        - control_room_distro == "alpine"
+
+    - name: Add the test account to the Docker group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+      when: control_room_install_docker | bool
+
+    - name: Check for the Docker fixture container
+      ansible.builtin.command: docker inspect control-room-fixture
+      register: docker_fixture
+      changed_when: false
+      failed_when: false
+      when: control_room_install_docker | bool
+
+    - name: Start the Docker fixture container
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --detach
+          - --name
+          - control-room-fixture
+          - --publish
+          - 18082:80
+          - --label
+          - com.docker.compose.project=control-room-lab
+          - --label
+          - com.docker.compose.service=web
+          - nginx:alpine
+      when:
+        - control_room_install_docker | bool
+        - docker_fixture.rc != 0
+
+    - name: Verify the portable inspection commands
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - bash --version
+        - ss --version
+        - df -P /
+      changed_when: false
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

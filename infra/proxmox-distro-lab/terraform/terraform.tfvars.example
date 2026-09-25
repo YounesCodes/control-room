@@ -1,0 +1,32 @@
+proxmox_endpoint = "https://192.168.100.200:8006/"
+proxmox_insecure = true
+node_name        = "pve"
+vm_id                  = 9800
+vm_datastore_id        = "local-lvm"
+cloud_init_datastore_id = "local-lvm"
+bridge                 = "vmbr0"
+
+ipv4_cidr  = "192.168.100.240/24"
+gateway_ipv4 = "192.168.100.1"
+dns_servers = ["192.168.100.1"]
+
+ssh_username        = "controlroom"
+ssh_public_key_file = "~/.ssh/id_ed25519.pub"
+
+# Add a VM ID after creating each cloud-init template. Only the selected
+# distribution must exist in this map.
+template_vm_ids = {
+  rocky          = 9001
+  ubuntu         = 9002
+  debian         = 9003
+  alma           = 9004
+  rhel           = 9005
+  fedora         = 9006
+  centos-stream  = 9007
+  oracle         = 9008
+  amazon-linux   = 9009
+  opensuse-leap  = 9010
+  sles           = 9011
+  arch           = 9012
+  alpine         = 9013
+}

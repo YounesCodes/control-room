@@ -17,16 +17,6 @@ backend owns native processes, persistence, and remote operations.
 Read `DESIGN.md` before making substantial UI changes. Find nearby tests and
 existing implementation before changing a feature contract.
 
-## Product scope
-
-- Target Windows 11 x64, the installed Windows OpenSSH client, and ConPTY.
-- Structured host inspection targets Debian- and Ubuntu-family systems with
-  systemd, journald, Bash, and optional Docker. Other Linux hosts are terminal
-  only, on a best-effort basis.
-- Local Workspaces host supported Windows shells and provide a terminal only.
-  Do not inspect the local machine or launch, embed, parse, or open an external
-  terminal application.
-
 ## Security and architecture boundaries
 
 - Rust owns process creation, SQLite, SSH and remote-command construction, and
@@ -76,11 +66,8 @@ existing implementation before changing a feature contract.
 - Saved Connection groups and tags are local organization metadata. A
   connection belongs to at most one group; deleting a group returns its
   connections to Ungrouped. Tags grant no access and trigger no operation.
-- Hiding an installed Local Shell Profile in Settings only removes it from
-  launchers. It does not stop its shell or discard an existing Workspace.
 - Enhanced History is opt-in, Bash-only, and based on events reported by the
-  installed shell integration. It is remote-only; never infer commands from
-  keystrokes or import host shell history.
+  installed shell integration.
 - Capture Host Baselines only on user request. Preserve distinct states for
   collected, partial, unsupported, unavailable, and skipped sections. A live
   comparison is a read, not a saved capture. Store normalized facts and version

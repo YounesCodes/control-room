@@ -12,6 +12,8 @@ type TerminalColorSettings = Pick<
   | "terminalCyan"
 >;
 
+export const TERMINAL_BACKGROUND = "#000000";
+
 function brighten(hex: string) {
   const channels = hex
     .slice(1)
@@ -23,7 +25,7 @@ function brighten(hex: string) {
 
 export function buildTerminalTheme(colors: TerminalColorSettings): ITheme {
   return {
-    background: "#000000",
+    background: TERMINAL_BACKGROUND,
     foreground: colors.terminalForeground,
     cursor: colors.terminalForeground,
     selectionBackground: "#393939",

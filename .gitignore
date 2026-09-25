@@ -21,3 +21,9 @@
 /.tauri/
 /vite.config.js
 /vite.config.d.ts
+
+# Local Proxmox distribution lab data and downloaded providers.
+/infra/proxmox-distro-lab/.lab.env
+/infra/proxmox-distro-lab/terraform/.terraform/
+/infra/proxmox-distro-lab/terraform/*.tfvars
+/infra/proxmox-distro-lab/terraform/*.tfstate*

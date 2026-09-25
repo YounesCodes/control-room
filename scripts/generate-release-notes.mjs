@@ -14,7 +14,17 @@ const MERGE_COMMIT = /^merge pull request #\d+/i;
 const PR_CONTRIBUTION =
   /\s+by\s+@\S+\s+in\s+https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)\s*$/i;
 const IGNORED_WORDS = new Set([
-  "a", "an", "and", "for", "in", "of", "the", "to", "with", "terminal", "terminals",
+  "a",
+  "an",
+  "and",
+  "for",
+  "in",
+  "of",
+  "the",
+  "to",
+  "with",
+  "terminal",
+  "terminals",
 ]);
 
 function formatSubject(subject) {
@@ -24,11 +34,12 @@ function formatSubject(subject) {
 
 export function buildDirectChangeNotes(commits) {
   const changes = commits
-    .filter((commit) =>
-      commit.pullRequests.length === 0 &&
-      !RELEASE_COMMIT.test(commit.subject) &&
-      !MERGE_COMMIT.test(commit.subject) &&
-      !MAINTENANCE.test(commit.subject),
+    .filter(
+      (commit) =>
+        commit.pullRequests.length === 0 &&
+        !RELEASE_COMMIT.test(commit.subject) &&
+        !MERGE_COMMIT.test(commit.subject) &&
+        !MAINTENANCE.test(commit.subject),
     )
     .map((commit) => formatSubject(commit.subject))
     .filter(Boolean);

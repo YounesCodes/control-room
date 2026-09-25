@@ -4172,26 +4172,38 @@ dd {
   overflow-x: auto;
 }
 
+.ansi-preview-slots {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  column-gap: 24px;
+  font-weight: 700;
+}
+
 .terminal-color-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 24px;
+  column-gap: 16px;
+  border-top: 1px solid var(--border-subtle);
 }
 
-/* Higher specificity than `.settings-form label:not(.checkbox-label)` so the
-   swatch/label/hex render as a compact row rather than a vertical stack. */
-.settings-form .terminal-color-grid .terminal-color-control {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
-  min-height: 38px;
+.settings-form .terminal-color-grid label.terminal-color-control {
+  display: flex;
+  min-height: 44px;
+  flex-direction: row;
   align-items: center;
   gap: 11px;
   border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
 }
 
-.settings-form .terminal-color-grid .terminal-color-control input[type="color"] {
-  width: 26px;
-  height: 22px;
+.settings-form .terminal-color-grid label.terminal-color-control:first-child {
+  grid-column: 1 / -1;
+}
+
+.settings-form .terminal-color-grid label.terminal-color-control input[type="color"] {
+  width: 32px;
+  height: 27px;
+  flex: none;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -4199,7 +4211,7 @@ dd {
   cursor: pointer;
 }
 
-.settings-form .terminal-color-grid .terminal-color-control span {
+.settings-form .terminal-color-grid label.terminal-color-control span {
   color: var(--text);
   font-size: 11.5px;
   font-weight: 500;
@@ -4207,11 +4219,15 @@ dd {
   text-transform: none;
 }
 
-.terminal-color-control code {
-  justify-self: end;
+.settings-form .terminal-color-grid .terminal-color-example {
+  margin-left: auto;
   color: var(--text-faint);
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.terminal-color-warning {
+  margin-top: 0;
 }
 
 .settings-save:disabled {
