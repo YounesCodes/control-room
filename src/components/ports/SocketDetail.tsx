@@ -24,6 +24,12 @@ export function SocketDetail({
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
   const disposition = firewallForSocket(firewall, socket);
+  const firewallLabel =
+    firewall?.backend === "firewalld"
+      ? "firewalld"
+      : firewall?.backend === "ufw"
+        ? "UFW"
+        : "Firewall";
   return (
     <>
       <header>
@@ -58,7 +64,7 @@ export function SocketDetail({
       <h3 className="detail-section-heading">Firewall</h3>
       <dl className="detail-list">
         <div>
-          <dt>{firewall?.backend === "firewalld" ? "firewalld" : "UFW"}</dt>
+          <dt>{firewallLabel}</dt>
           <dd>{disposition.label}</dd>
         </div>
       </dl>

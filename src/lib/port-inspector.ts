@@ -269,7 +269,12 @@ export function firewallForSocket(
   if (firewall.active === false) return { state: "inactive", label: "Firewall inactive" };
   if (firewall.active !== true) return { state: "unknown", label: "Firewall status unknown" };
 
-  const backend = firewall.backend === "firewalld" ? "firewalld" : "UFW";
+  const backend =
+    firewall.backend === "firewalld"
+      ? "firewalld"
+      : firewall.backend === "ufw"
+        ? "UFW"
+        : "Firewall";
 
   const match = firewall.rules.find(
     (rule) =>

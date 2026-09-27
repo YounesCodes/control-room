@@ -1370,7 +1370,40 @@ fn firewall_status_command() -> &'static str {
     // Both front-ends only perform query operations. UFW requires root on the
     // common distributions. firewalld may allow unprivileged D-Bus reads, but
     // the same sudo retry covers hosts whose policy denies them.
-    r#"env LC_ALL=C sh -c 'if command -v ufw >/dev/null 2>&1; then printf "__CR_FW_BACKEND__\tufw\n"; ufw status verbose; exit $?; fi; if command -v firewall-cmd >/dev/null 2>&1; then printf "__CR_FW_BACKEND__\tfirewalld\n"; if firewall-cmd --state >/dev/null 2>&1; then printf "__CR_FW_STATE__\tactive\n"; firewall-cmd --get-active-zones 2>/dev/null | while IFS= read -r line; do case "$line" in [![:space:]]*) zone=${line%% *}; test -n "$zone" || continue; printf "__CR_FW_ZONE__\t%s\t" "$zone"; firewall-cmd --zone="$zone" --list-ports 2>/dev/null || true;; esac; done; else status=$?; if test "$status" -eq 252; then printf "__CR_FW_STATE__\tinactive\n"; else firewall-cmd --state; exit "$status"; fi; fi; exit 0; fi; printf "__CR_FW_UNAVAILABLE__\n"'"#
+    r#"env LC_ALL=C sh -c '
+if command -v ufw >/dev/null 2>&1; then
+  printf "__CR_FW_BACKEND__\tufw\n"
+  ufw status verbose
+  exit $?
+fi
+if command -v firewall-cmd >/dev/null 2>&1; then
+  printf "__CR_FW_BACKEND__\tfirewalld\n"
+  if firewall-cmd --state >/dev/null 2>&1; then
+    printf "__CR_FW_STATE__\tactive\n"
+    zones=$(firewall-cmd --get-active-zones) || exit $?
+    printf "%s\n" "$zones" | while IFS= read -r line; do
+      case "$line" in
+        [![:space:]]*)
+          zone=${line%% *}
+          test -n "$zone" || continue
+          ports=$(firewall-cmd --zone="$zone" --list-ports) || exit $?
+          printf "__CR_FW_ZONE__\t%s\t%s\n" "$zone" "$ports"
+          ;;
+      esac
+    done || exit $?
+  else
+    status=$?
+    if test "$status" -eq 252; then
+      printf "__CR_FW_STATE__\tinactive\n"
+    else
+      firewall-cmd --state
+      exit "$status"
+    fi
+  fi
+  exit 0
+fi
+printf "__CR_FW_UNAVAILABLE__\n"
+'"#
 }
 
 fn parse_firewall_status(text: &str) -> FirewallStatus {
@@ -2913,6 +2946,44 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert_eq!(status.rules[0].protocol.as_deref(), Some("tcp"));
         assert!(!status.rules[0].ipv6);
         assert!(status.rules[1].ipv6);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn firewalld_read_failures_do_not_become_empty_rule_sets() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::Command as Shell;
+
+        let script = firewall_status_command()
+            .strip_prefix("env LC_ALL=C sh -c '")
+            .and_then(|value| value.strip_suffix("'"))
+            .expect("firewall command shell");
+        let directory = tempfile::tempdir().unwrap();
+        let mock = directory.path().join("firewall-cmd");
+        std::fs::write(
+            &mock,
+            r#"#!/bin/sh
+case "$1" in
+  --state) exit 0;;
+  --get-active-zones) test "$CR_FW_FAIL" = zones && exit 13; printf 'public\n  interfaces: eth0\n';;
+  --zone=public) test "$CR_FW_FAIL" = ports && exit 14; printf '22/tcp\n';;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&mock, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        for (failure, expected_status) in [("zones", 13), ("ports", 14)] {
+            let output = Shell::new("/bin/sh")
+                .arg("-c")
+                .arg(script)
+                .env("PATH", directory.path())
+                .env("CR_FW_FAIL", failure)
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(expected_status));
+            assert!(!String::from_utf8_lossy(&output.stdout).contains(FIREWALL_ZONE_MARKER));
+        }
     }
 
     #[test]

@@ -35,4 +35,3 @@ The portable views require ordinary POSIX shell tools. Systemd, Boot, and journa
 ## Firewall inspection
 
 Ports reads UFW or firewalld when either front-end is installed. UFW rules include its incoming default policy. The firewalld read reports active zones and explicit numeric port rules. Service-name rules, rich rules, direct rules, nftables-only configurations, and iptables-only configurations remain unavailable, so Control Room does not turn a missing numeric rule into a claim that a port is blocked.
-

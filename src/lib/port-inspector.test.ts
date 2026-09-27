@@ -141,6 +141,10 @@ describe("port inspector", () => {
     expect(firewallForSocket(firewall({ active: false }), socket()).state).toBe("inactive");
     expect(firewallForSocket(firewall({ available: false }), socket()).state).toBe("unavailable");
     expect(firewallForSocket(null, socket()).state).toBe("unavailable");
+    expect(
+      firewallForSocket(firewall({ backend: null, defaultIncoming: null, rules: [] }), socket())
+        .label,
+    ).toBe("Firewall: no matching numeric port rule");
     // An IPv6 socket is not matched by an IPv4 rule.
     expect(
       firewallForSocket(allowAnywhere, socket({ addressFamily: "ipv6", localAddress: "::" })).state,
