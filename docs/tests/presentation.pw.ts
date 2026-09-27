@@ -24,15 +24,18 @@ for (const theme of ["dark", "light"]) {
         await page.evaluate(() => document.fonts.ready);
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         await expect(page.locator("h1")).toBeVisible();
-        const metrics = await page.evaluate(() => {
+        const metrics = await page.evaluate(async () => {
           const article = document.querySelector(".sl-markdown-content")!;
           const toc = document.querySelector(".right-sidebar")!;
+          const interFaces = await document.fonts.load('400 16px "Inter Local"', "Control Room");
           return {
             page: document.documentElement.scrollWidth,
             viewport: document.documentElement.clientWidth,
             article: article.getBoundingClientRect().width,
             tocOverflow: toc.scrollWidth - toc.clientWidth,
             bodyFont: getComputedStyle(article).fontFamily,
+            interLoaded:
+              interFaces.length > 0 && interFaces.every((face) => face.status === "loaded"),
             imagesLoaded: [...article.querySelectorAll("img")].every(
               (img) => img.complete && img.naturalWidth > 0,
             ),
@@ -42,6 +45,7 @@ for (const theme of ["dark", "light"]) {
         expect(metrics.article).toBeLessThanOrEqual(768);
         if (width >= 1152) expect(metrics.tocOverflow).toBeLessThanOrEqual(1);
         expect(metrics.bodyFont).toContain("Inter Local");
+        expect(metrics.interLoaded).toBe(true);
         expect(metrics.imagesLoaded).toBe(true);
         await page.screenshot({
           path: testInfo.outputPath(`${route.replaceAll("/", "-") || "home"}.png`),

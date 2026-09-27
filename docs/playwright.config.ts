@@ -17,6 +17,6 @@ export default defineConfig({
       ASTRO_PREVIEW_BACKGROUND: "0",
     },
     url: "http://127.0.0.1:4322/control-room/",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
   },
 });
