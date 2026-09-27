@@ -19,9 +19,11 @@ if (!host || !user || !Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 const ssh = join(process.env.WINDIR || "C:\\Windows", "System32", "OpenSSH", "ssh.exe");
+const sshConfig = process.env.CONTROL_ROOM_TEST_SSH_CONFIG?.trim();
 const preflight = spawnSync(
   ssh,
   [
+    ...(sshConfig ? ["-F", sshConfig] : []),
     "-o",
     "BatchMode=yes",
     "-o",

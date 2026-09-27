@@ -98,10 +98,10 @@ describe("Control Room desktop", () => {
   });
 
   it("changes the native window state and size when maximized", async () => {
-    const isMaximized = () =>
-      browser.tauri.execute(({ core }) =>
+    const isMaximized = async () =>
+      (await browser.tauri.execute(({ core }) =>
         core.invoke("plugin:window|is_maximized", { label: "main" }),
-      ) as Promise<boolean>;
+      )) === true;
     const before = await browser.getWindowRect();
     expect(await isMaximized()).toBe(false);
     await $("aria/Maximize or restore window").click();

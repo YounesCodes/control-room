@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import type { Options } from "@wdio/types";
+import type { TauriCapabilities } from "@wdio/tauri-service";
 
 if (process.platform !== "win32") {
   throw new Error("Control Room desktop E2E tests require Windows.");
@@ -29,8 +29,12 @@ const driverIds = () => {
   );
 };
 const existingDrivers = driverIds();
+const tauriCapabilities: TauriCapabilities = {
+  browserName: "tauri",
+  "tauri:options": { application },
+};
 
-export const config: Options.Testrunner = {
+export const config: WebdriverIO.Config = {
   runner: "local",
   specs: ["./e2e/**/*.spec.ts"],
   maxInstances: 1,
@@ -45,7 +49,7 @@ export const config: Options.Testrunner = {
       },
     ],
   ],
-  capabilities: [{ browserName: "tauri", "tauri:options": { application } }],
+  capabilities: [tauriCapabilities],
   framework: "mocha",
   mochaOpts: { ui: "bdd", timeout: 60_000 },
   reporters: ["spec"],
