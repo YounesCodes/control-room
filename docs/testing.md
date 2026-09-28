@@ -1,6 +1,6 @@
 # Testing
 
-Control Room keeps most checks in fast Rust unit tests and Vitest jsdom component tests. A small Chromium suite checks browser focus and accessibility behavior. Separate desktop tests cross React, Tauri IPC, Rust, SQLite, and Windows APIs. Three ignored Rust tests use a real Debian SSH fixture.
+Control Room keeps most checks in fast Rust unit tests and Vitest jsdom component tests. A small Chromium suite checks browser focus and accessibility behavior. Separate desktop tests cross React, Tauri IPC, Rust, SQLite, and Windows APIs. Three ignored Rust tests use a real Debian SSH fixture; two more use the local Ubuntu VM.
 
 | Layer                       | Command                      | Runs in pull request CI      |
 | --------------------------- | ---------------------------- | ---------------------------- |

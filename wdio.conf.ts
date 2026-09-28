@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -11,24 +10,6 @@ if (process.platform !== "win32") {
 const dataDirectory = mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
 const application = resolve("src-tauri/target/debug/control-room.exe");
-const driverIds = () => {
-  const result = spawnSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-Command",
-      "Get-Process -Name tauri-driver,msedgedriver -ErrorAction SilentlyContinue | ForEach-Object Id",
-    ],
-    { encoding: "utf8" },
-  );
-  return new Set(
-    result.stdout
-      .split(/\s+/)
-      .map(Number)
-      .filter((id) => Number.isInteger(id) && id > 0),
-  );
-};
-const existingDrivers = driverIds();
 const tauriCapabilities: TauriCapabilities = {
   browserName: "tauri",
   "tauri:options": { application },
@@ -62,11 +43,6 @@ export const config: WebdriverIO.Config = {
   connectionRetryTimeout: 60_000,
   connectionRetryCount: 1,
   onComplete: () => {
-    for (const id of driverIds()) {
-      if (!existingDrivers.has(id)) {
-        spawnSync("taskkill.exe", ["/PID", String(id), "/T", "/F"], { stdio: "ignore" });
-      }
-    }
     if (
       resolve(dataDirectory).startsWith(resolve(tmpdir()) + sep) &&
       dataDirectory.split(sep).at(-1)?.startsWith("control-room-e2e-")
