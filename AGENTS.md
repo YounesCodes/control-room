@@ -97,6 +97,7 @@ failed refreshes and keep the original SSH failure beside Reconnect.
 - Keep `README.md`, `DESIGN.md`, `docs/`, and this file accurate when behavior or
   project boundaries change.
 - Do not commit or push unless the user asks.
+- When this checkout has `.env.local`, run `npm run test:local-gate` before any commit or push. It uses the ignored Ubuntu fixture and real Windows SSH, so keep it out of CI. The checkout-local Git hooks run the same gate. Do not bypass them or stage `.env.local`.
 
 ## Validation
 

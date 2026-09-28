@@ -1,0 +1,77 @@
+name: Live SSH fixture
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner with network access to the Debian fixture
+        required: true
+        default: windows-latest
+        type: choice
+        options:
+          - windows-latest
+          - self-hosted
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - run: npm ci
+      - name: Configure temporary SSH identity and pinned host key
+        shell: pwsh
+        env:
+          CONTROL_ROOM_TEST_HOST: ${{ secrets.CONTROL_ROOM_TEST_HOST }}
+          CONTROL_ROOM_TEST_USER: ${{ secrets.CONTROL_ROOM_TEST_USER }}
+          CONTROL_ROOM_TEST_KEY_B64: ${{ secrets.CONTROL_ROOM_TEST_KEY_B64 }}
+          CONTROL_ROOM_TEST_KNOWN_HOSTS: ${{ secrets.CONTROL_ROOM_TEST_KNOWN_HOSTS }}
+        run: |
+          if (-not $env:CONTROL_ROOM_TEST_HOST -or -not $env:CONTROL_ROOM_TEST_USER -or
+              -not $env:CONTROL_ROOM_TEST_KEY_B64 -or -not $env:CONTROL_ROOM_TEST_KNOWN_HOSTS) {
+            throw "Live fixture secrets are incomplete. See docs/testing.md."
+          }
+          $fixtureDir = Join-Path $env:RUNNER_TEMP "control-room-ssh-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
+          $keyPath = Join-Path $fixtureDir "fixture-key"
+          $knownHostsPath = Join-Path $fixtureDir "known_hosts"
+          $configPath = Join-Path $fixtureDir "config"
+          [IO.File]::WriteAllBytes($keyPath, [Convert]::FromBase64String($env:CONTROL_ROOM_TEST_KEY_B64))
+          [IO.File]::WriteAllText($knownHostsPath, $env:CONTROL_ROOM_TEST_KNOWN_HOSTS)
+          $keyForSsh = $keyPath.Replace('\', '/')
+          $hostsForSsh = $knownHostsPath.Replace('\', '/')
+          [IO.File]::WriteAllText($configPath, "Host *`n  IdentityFile `"$keyForSsh`"`n  UserKnownHostsFile `"$hostsForSsh`"`n  StrictHostKeyChecking yes`n  IdentitiesOnly yes`n  BatchMode yes`n")
+          $principal = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+          icacls $keyPath /inheritance:r /grant:r "${principal}:F" | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Could not restrict the fixture key permissions." }
+          "CONTROL_ROOM_TEST_SSH_CONFIG=$configPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - run: npm run test:live-ssh
+        env:
+          CONTROL_ROOM_TEST_HOST: ${{ secrets.CONTROL_ROOM_TEST_HOST }}
+          CONTROL_ROOM_TEST_USER: ${{ secrets.CONTROL_ROOM_TEST_USER }}
+          CONTROL_ROOM_TEST_PORT: ${{ secrets.CONTROL_ROOM_TEST_PORT }}
+      - name: Remove temporary SSH fixture files
+        if: always()
+        shell: pwsh
+        run: |
+          $fixtureDir = Join-Path $env:RUNNER_TEMP "control-room-ssh-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $tempRoot = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92)
+          $target = [IO.Path]::GetFullPath($fixtureDir)
+          if (-not $target.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Fixture directory is outside RUNNER_TEMP."
+          }
+          if (Test-Path -LiteralPath $target) {
+            Remove-Item -LiteralPath $target -Recurse -Force
+          }

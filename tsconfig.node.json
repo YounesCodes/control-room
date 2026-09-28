@@ -1,11 +1,20 @@
 {
   "compilerOptions": {
     "composite": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "@wdio/globals/types", "mocha", "@wdio/native-types"],
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["vite.config.ts", "eslint.config.js"]
+  "include": [
+    "vite.config.ts",
+    "vitest.browser.config.ts",
+    "wdio.conf.ts",
+    "e2e/**/*.ts",
+    "eslint.config.js"
+  ]
 }
