@@ -36,7 +36,11 @@ const tauriCapabilities: TauriCapabilities = {
 
 export const config: WebdriverIO.Config = {
   runner: "local",
-  specs: ["./e2e/**/*.spec.ts"],
+  specs:
+    process.env.CONTROL_ROOM_LIVE_DESKTOP === "1"
+      ? ["./e2e/live-ssh.spec.ts"]
+      : ["./e2e/**/*.spec.ts"],
+  exclude: process.env.CONTROL_ROOM_LIVE_DESKTOP === "1" ? [] : ["./e2e/live-ssh.spec.ts"],
   maxInstances: 1,
   services: [
     [

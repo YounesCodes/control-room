@@ -3652,4 +3652,124 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert!(!services.is_empty());
         let _containers = list_containers(&connection, Elevation::None).unwrap();
     }
+
+    #[test]
+    #[ignore = "requires the explicitly configured local Ubuntu VM"]
+    fn live_ubuntu_structured_reads_return_typed_evidence() {
+        let connection = live_connection();
+        let capabilities = discover_capabilities(&connection).unwrap();
+        assert_eq!(capabilities.connection_id, connection.id);
+        assert_eq!(capabilities.os_id.as_deref(), Some("ubuntu"));
+        assert!(capabilities.systemd_available);
+        assert!(capabilities.journald_available);
+
+        let identity = collect_host_identity(&connection).unwrap();
+        assert_eq!(identity.os_id.as_deref(), Some("ubuntu"));
+        assert_eq!(
+            identity.hostname.as_deref(),
+            capabilities.hostname.as_deref()
+        );
+        assert!(identity.machine_fingerprint.as_deref().is_some_and(
+            |value| value.len() == 16 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        ));
+
+        let resources = collect_host_resources(&connection).unwrap();
+        assert!(resources.memory_total_kib.is_some_and(|value| value > 0));
+        assert!(resources.core_count.is_some_and(|value| value > 0));
+        assert!(
+            resources
+                .cpu_percent
+                .is_some_and(|value| (0.0..=100.0).contains(&value))
+        );
+
+        let services = list_services(&connection).unwrap();
+        assert!(!services.is_empty());
+        assert!(services.iter().all(|unit| !unit.id.is_empty()));
+
+        let ports = list_ports(&connection, Elevation::None).unwrap();
+        assert!(!ports.is_empty());
+        assert!(ports.iter().all(|socket| socket.port > 0));
+
+        let filesystems = list_filesystems(&connection).unwrap();
+        assert!(
+            filesystems
+                .iter()
+                .any(|filesystem| filesystem.mount_point == "/")
+        );
+
+        let connections = list_connections(&connection, Elevation::None).unwrap();
+        assert!(connections.total_established > 0);
+
+        let boot = collect_boot_diagnostics(&connection, None, Elevation::None).unwrap();
+        assert!(boot.selected_boot_id.is_some());
+        assert!(
+            boot.boots
+                .data
+                .as_ref()
+                .is_some_and(|boots| boots.iter().any(|item| item.current))
+        );
+        assert!(boot.timing.data.is_some() || boot.timing.error.is_some());
+        assert!(boot.journal.data.is_some() || boot.journal.error.is_some());
+
+        match list_firewall(&connection, Elevation::None) {
+            Ok(firewall) => assert!(!firewall.available || firewall.active.is_some()),
+            Err(error) => assert!(error.to_ascii_lowercase().contains("permission"), "{error}"),
+        }
+
+        if capabilities.docker_accessible {
+            let containers = list_containers(&connection, Elevation::None).unwrap();
+            if let Some(container) = containers.first() {
+                let details =
+                    inspect_container(&connection, &container.id, Elevation::None).unwrap();
+                assert_eq!(details.id, container.id);
+            }
+        } else {
+            eprintln!(
+                "Docker inspection was not exercised because this account cannot access Docker without sudo"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires the explicitly configured local Ubuntu VM"]
+    fn live_ubuntu_baseline_capture_is_ephemeral_and_typed() {
+        use crate::baselines::{self, BaselineCaptureRegistry, SectionReporter};
+        use crate::models::BaselineSection;
+
+        struct NoopReporter;
+        impl SectionReporter for NoopReporter {
+            fn report(&self, _: &BaselineSection, _: u32, _: u32) {}
+        }
+
+        let connection = live_connection();
+        let captured = baselines::capture(
+            &connection,
+            "local-ubuntu-live-test",
+            None,
+            None,
+            &Elevation::None,
+            &BaselineCaptureRegistry::default(),
+            &NoopReporter,
+        )
+        .unwrap();
+        assert_eq!(captured.connection_id, connection.id);
+        assert_eq!(captured.identity.os_id.as_deref(), Some("ubuntu"));
+        assert_eq!(captured.sections.len(), baselines::SECTION_KINDS.len());
+        for (section, kind) in captured.sections.iter().zip(baselines::SECTION_KINDS) {
+            assert_eq!(section.kind, kind);
+            assert_ne!(section.status, baselines::STATUS_SKIPPED);
+            assert!(section.schema_version > 0);
+        }
+        assert_eq!(captured.sections[0].status, baselines::STATUS_COLLECTED);
+        assert_eq!(captured.sections[1].status, baselines::STATUS_COLLECTED);
+        assert!(matches!(
+            captured.sections[3].status.as_str(),
+            baselines::STATUS_COLLECTED | baselines::STATUS_PARTIAL
+        ));
+        assert!(!captured.sections[3].entries.is_empty());
+        if captured.sections[3].status == baselines::STATUS_PARTIAL {
+            assert!(captured.sections[3].message.is_some());
+        }
+        assert_eq!(captured.sections[4].status, baselines::STATUS_COLLECTED);
+    }
 }

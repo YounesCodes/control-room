@@ -40,3 +40,21 @@ The [Tauri 2 WebDriver guidance](https://v2.tauri.app/develop/tests/webdriver/) 
 The live tests stay `#[ignore]` in ordinary `cargo test`. They require Windows for ConPTY and an explicitly configured Debian host with systemd, journald, Bash, and Docker. Set `CONTROL_ROOM_TEST_HOST` and `CONTROL_ROOM_TEST_USER`; set `CONTROL_ROOM_TEST_PORT` if it is not 22. Configure a key and pinned host key through the Windows OpenSSH client before running `npm run test:live-ssh`. To use an isolated OpenSSH config, set `CONTROL_ROOM_TEST_SSH_CONFIG` to its path; the preflight and Rust fixture tests pass it to SSH with `-F`. The command checks noninteractive SSH first, then runs only the three named ignored tests. The history test creates and removes its own remote temporary home.
 
 The manual `Live SSH fixture` GitHub workflow reads host, user, optional port, a base64-encoded private key (`CONTROL_ROOM_TEST_KEY_B64`), and pinned OpenSSH `known_hosts` content (`CONTROL_ROOM_TEST_KNOWN_HOSTS`) from repository secrets. It fails before testing if required secrets are missing. The key, host key, and config live under the runner's temporary directory for that run; the workflow never replaces the runner's own SSH files. Pick `windows-latest` only if that runner can reach your fixture; select `self-hosted` for a private host. No fixture address, key, or host fingerprint belongs in the repository.
+
+## Local Ubuntu VM gate
+
+The development checkout can run a separate, local-only Ubuntu fixture. Put its address, user, and port in the ignored root `.env.local` file:
+
+```dotenv
+CONTROL_ROOM_TEST_HOST=your-vm-address-or-ssh-alias
+CONTROL_ROOM_TEST_USER=your-user
+CONTROL_ROOM_TEST_PORT=22
+```
+
+Use Windows OpenSSH with a key or agent and a pinned `known_hosts` entry. The local runner refuses password prompts and untrusted host keys. It reads only these three values from `.env.local`; never put a password or private key there. The file is ignored by Git across branch switches. The tracked test files contain no address, username, key, or fingerprint.
+
+Run `npm run test:local-lab` to check the real Rust structured reads, an in-memory Host Baseline, a reversible Enhanced History install in a temporary remote home, SSH through ConPTY, and a desktop UI connection. The UI test uses the E2E app's temporary local database, opens Overview and Systemd, then deletes its Saved Connection. It does not change the VM's services, containers, firewall, or saved user files. Docker details run only when the account can access Docker without sudo. Firewall reads stay unelevated; permission denial is checked as a valid result.
+
+Run `npm run test:local-gate` for the ordinary checks, Chromium tests, and the local VM suite together. `npm run install:local-lab-hooks` installs checkout-only pre-commit and pre-push hooks that run this gate. The installer refuses to replace existing hooks. These hooks remain under `.git/hooks` when branches change, and they never enter a commit. If the VM is down or SSH fails, the gate fails before a commit or push. Keep ordinary CI and the existing Debian fixture workflow separate; neither reads `.env.local`.
+
+This fixture proves behavior against this one Ubuntu VM at the time it runs. It cannot prove that every Linux distribution, permission state, network failure, or production desktop environment behaves the same way. Existing deterministic tests cover those branches; add a disposable fixture when a new host-specific behavior needs live proof.
