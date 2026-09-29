@@ -34,7 +34,7 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
-  it("restores tabs and splits as disconnected without session IDs", () => {
+  it("restores tabs and splits with fresh connection requests and no session IDs", () => {
     const state: PersistedWorkspaceState = {
       workspaces: [
         {
@@ -83,8 +83,8 @@ describe("Workspace restoration", () => {
         connectRequested,
       })),
     ).toEqual([
-      { state: "disconnected", sessionId: null, connectRequested: false },
-      { state: "disconnected", sessionId: null, connectRequested: false },
+      { state: "connecting", sessionId: null, connectRequested: true },
+      { state: "connecting", sessionId: null, connectRequested: true },
     ]);
   });
 
@@ -164,7 +164,7 @@ describe("Workspace restoration", () => {
     expect(restored.terminalGroups).toEqual([state.terminalGroups?.[0]]);
   });
 
-  it("restores a local terminal tab without starting its shell", () => {
+  it("requests a fresh local shell alongside a restored remote session", () => {
     const state: PersistedWorkspaceState = {
       workspaces: [
         {
@@ -196,8 +196,7 @@ describe("Workspace restoration", () => {
     const restored = restoreWorkspaceState([connection("connection-a")], state, [powershell]);
 
     expect(restored.workspaces.map((workspace) => workspace.kind)).toEqual(["local", "remote"]);
-    // Restoring a layout starts nothing: no SSH connection and no local
-    // process until the user asks.
+    // Both tabs start new sessions when their TerminalPanes mount.
     expect(
       restored.workspaces.map(({ state, sessionId, connectRequested }) => ({
         state,
@@ -205,8 +204,8 @@ describe("Workspace restoration", () => {
         connectRequested,
       })),
     ).toEqual([
-      { state: "disconnected", sessionId: null, connectRequested: false },
-      { state: "disconnected", sessionId: null, connectRequested: false },
+      { state: "connecting", sessionId: null, connectRequested: true },
+      { state: "connecting", sessionId: null, connectRequested: true },
     ]);
     expect(restored.workspaces[0].label).toBe("Build shell");
     expect(restored.terminalGroups[0].layout).toEqual(state.terminalLayout);
@@ -282,7 +281,7 @@ describe("Workspace restoration", () => {
     expect(remote.connectionId).toBe("connection-a");
     expect(remote.view).toBe("logs");
     expect(remote.historyPaused).toBe(true);
-    expect(remote.state).toBe("disconnected");
+    expect(remote.state).toBe("connecting");
     expect(restored.terminalGroups).toEqual([]);
   });
 

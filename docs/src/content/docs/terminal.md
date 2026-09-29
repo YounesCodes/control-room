@@ -36,7 +36,7 @@ Use the tab or pane controls to select a terminal, close it, or restart it. Clos
 
 ## Reconnect and restart
 
-When a remote session ends, the terminal toolbar offers **Reconnect**; when a local shell exits, it offers **Restart**. The `Ctrl+Shift+R` shortcut does the same for the active Workspace. Either action starts a fresh session for the current Workspace. Control Room does not retry on a timer or reconnect after restart without your action.
+When a remote session ends, the terminal toolbar offers **Reconnect**; when a local shell exits, it offers **Restart**. The `Ctrl+Shift+R` shortcut does the same for the active Workspace. Either action starts a fresh session for the current Workspace. On app startup, saved Workspaces start fresh sessions automatically. A failed attempt stays visible until you reconnect or restart it; Control Room does not retry on a timer.
 
 ## Right-click behavior
 

@@ -27,9 +27,9 @@ Only installed profiles appear. Check that PowerShell 7, Windows PowerShell, Com
 
 A profile can also be turned off: open Settings, then **Local terminal**, and use **Show all** or tick the shell you want back.
 
-## A restored Workspace is disconnected
+## A restored Workspace did not connect
 
-This is normal. Control Room restores tabs and layout, but never reconnects SSH or starts a local process automatically. Select the Workspace and reconnect or start it.
+Control Room starts fresh sessions for restored Workspaces. If SSH fails or a local shell cannot start, the terminal shows the failure. Check the message, then use **Reconnect** or **Restart** to try again.
 
 ## Boot or port data is partial
 

@@ -61,8 +61,9 @@ existing implementation before changing a feature contract.
   may use the same target.
 - Persist only Saved Connections and their local organization metadata,
   settings, host capabilities, Enhanced History, Scratchpad notes, Host
-  Baselines, and disconnected Workspace layout. Restore Workspaces disconnected;
-  do not reconnect remote sessions or start local shells automatically.
+  Baselines, and Workspace layout. Restore Workspaces with fresh SSH or local
+  terminal sessions on startup. Never restore session IDs or terminal output;
+  leave a failed startup attempt visible for manual Reconnect or Restart.
 - Saved Connection groups and tags are local organization metadata. A
   connection belongs to at most one group; deleting a group returns its
   connections to Ungrouped. Tags grant no access and trigger no operation.

@@ -690,7 +690,7 @@ describe("Local Terminal", () => {
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
   });
 
-  it("restores a local tab without starting its shell", async () => {
+  it("starts a restored local shell without pressing Restart", async () => {
     api.workspaceState.mockResolvedValue({
       workspaces: [
         {
@@ -711,8 +711,7 @@ describe("Local Terminal", () => {
 
     expect(terminal.dataset.kind).toBe("local");
     expect(terminal.dataset.target).toBe("powershell-7");
-    // Restored means present, not running.
-    expect(terminal.dataset.connectRequested).toBe("false");
+    expect(terminal.dataset.connectRequested).toBe("true");
   });
 
   it("stops one local shell without touching the others", async () => {

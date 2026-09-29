@@ -16,10 +16,9 @@ interface RestoredWorkspaceState {
 
 const LEGACY_TERMINAL_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 
-/// Rebuilds the saved tabs and split layout. Nothing is started here: every
-/// restored Workspace comes back disconnected with no session and no connect
-/// request, remote and local alike, so restarting the app never opens an SSH
-/// connection or a local process on its own.
+/// Rebuilds the saved tabs and split layout. Each valid restored Workspace
+/// requests a fresh session when its TerminalPane mounts. No old session ID or
+/// terminal output is restored.
 export function restoreWorkspaceState(
   connections: SavedConnection[],
   state: PersistedWorkspaceState,
@@ -28,11 +27,11 @@ export function restoreWorkspaceState(
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
   const shellsById = new Map(localShells.map((shell) => [shell.id, shell]));
   const workspaces = state.workspaces.flatMap<Workspace>((saved) => {
-    const dormant = {
+    const reconnecting = {
       id: saved.id,
       label: saved.label,
-      state: "disconnected",
-      connectRequested: false,
+      state: "connecting",
+      connectRequested: true,
       restored: true,
     } as const;
     if (saved.localShellId) {
@@ -41,14 +40,14 @@ export function restoreWorkspaceState(
       const shell = shellsById.get(saved.localShellId);
       if (!shell) return [];
       // A local Workspace is terminal-only, whatever view the payload names.
-      return [{ ...createLocalWorkspace(shell), ...dormant, view: "terminal" }];
+      return [{ ...createLocalWorkspace(shell), ...reconnecting, view: "terminal" }];
     }
     const connection = saved.connectionId ? connectionsById.get(saved.connectionId) : undefined;
     if (!connection) return [];
     return [
       {
         ...createRemoteWorkspace(connection),
-        ...dormant,
+        ...reconnecting,
         view: saved.view,
         historyPaused: saved.historyPaused,
       },

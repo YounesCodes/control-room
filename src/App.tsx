@@ -1316,8 +1316,7 @@ export function App() {
   /* Installing replaces this process, so the interruption is stated before it
      happens rather than after. Whether sessions are live is read from the
      Workspaces already in state; the updater adds no lifecycle tracker of its
-     own to answer this. Restored Workspaces come back disconnected as always,
-     and nothing is reconnected automatically after the restart. */
+     own to answer this. Saved Workspaces request fresh sessions after restart. */
   function requestUpdateInstall() {
     const version = updateInfo(updater.state)?.version ?? "the new version";
     const live = workspaces.some((workspace) => workspace.sessionId);
