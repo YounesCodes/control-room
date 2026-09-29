@@ -4,6 +4,9 @@ import { playwright } from "@vitest/browser-playwright";
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ["@tauri-apps/api/event", "@xterm/addon-fit", "@xterm/addon-search", "@xterm/xterm"],
+  },
   test: {
     include: ["src/**/*.browser.test.tsx"],
     testTimeout: 20_000,

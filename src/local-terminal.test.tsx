@@ -520,6 +520,11 @@ describe("Local Terminal", () => {
       const terminals = await screen.findAllByTestId(/^terminal-/);
       expect(terminals).toHaveLength(2);
       expect(openTabs()).toEqual(["Close prod-web Workspace", "Close prod-web 2 Workspace"]);
+      expect(
+        document
+          .querySelector(".session-tab-list")
+          ?.contains(screen.getByRole("button", { name: "New terminal" })),
+      ).toBe(false);
     });
 
     it("is available before any compatible Workspace exists", async () => {

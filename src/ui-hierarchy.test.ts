@@ -10,6 +10,10 @@ const terminalSource = readFileSync(
   new URL("./components/TerminalPane.tsx", import.meta.url),
   "utf8",
 );
+const tabScrollerSource = readFileSync(
+  new URL("./components/WorkspaceTabScroller.tsx", import.meta.url),
+  "utf8",
+);
 const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
 const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
@@ -188,12 +192,21 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("xterm owns keyboard paste");
   });
 
-  it("keeps common terminal lifecycle actions visible", () => {
-    expect(terminalSource).toContain("Eraser");
-    expect(terminalSource).toContain("onDisconnect");
-    expect(terminalSource).toContain("Find in terminal");
+  it("keeps terminal actions in the tab strip and the terminal surface clear", () => {
+    expect(appSource).toContain('aria-label="Find in terminal"');
+    expect(appSource).toContain('aria-label="Copy terminal selection"');
+    expect(appSource).toContain('aria-label="Paste into terminal"');
+    expect(appSource).not.toContain('aria-label="Clear terminal"');
+    expect(appSource).toContain('"Restart terminal"');
+    expect(appSource).toContain('"Reconnect terminal"');
+    expect(appSource).toContain("terminalHandlesRef.current.get(activeWorkspace.id)");
+    expect(terminalSource).not.toContain("terminal-toolbar");
+    expect(terminalSource).not.toContain("onDisconnect");
+    expect(terminalSource).not.toContain("terminalStateLabel");
+    expect(terminalSource).not.toContain("clear: () =>");
+    expect(stylesSource).toContain(".terminal-search {");
+    expect(stylesSource).toMatch(/\.terminal-search\s*\{[^}]*position: absolute;/);
     expect(terminalSource).toContain("api.closeSession");
-    expect(terminalSource).toContain("onReconnect");
   });
 
   it("keeps a local Workspace terminal-only and off every remote code path", () => {
@@ -238,7 +251,7 @@ describe("application hierarchy", () => {
 
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
-    expect(appSource.match(/data-tauri-drag-region/g)).toHaveLength(5);
+    expect((appSource + tabScrollerSource).match(/data-tauri-drag-region/g)).toHaveLength(5);
   });
 
   it("grants a native permission for every window control the frontend uses", () => {
@@ -301,16 +314,14 @@ describe("application hierarchy", () => {
     }
   });
 
-  it("keeps only terminal tabs and the active terminal visible in focus mode", () => {
+  it("keeps terminal actions visible in focus mode", () => {
     expect(appSource).toContain("terminalFocusMode");
     expect(appSource).toContain('aria-label="Exit terminal focus"');
     expect(appSource).toContain('aria-label="Focus terminal"');
     expect(stylesSource).toMatch(
       /\.terminal-focus-mode \.app-bar,[\s\S]*\.terminal-focus-mode \.sidebar\s*\{[^}]*display: none;/,
     );
-    expect(stylesSource).toMatch(
-      /\.terminal-focus-mode \.terminal-toolbar\s*\{[^}]*display: none;/,
-    );
+    expect(stylesSource).not.toContain(".terminal-toolbar");
   });
 
   it("keeps groups inside focus mode and outlines the active group and pane", () => {

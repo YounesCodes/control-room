@@ -9,6 +9,10 @@ The terminal is an interactive shell that runs through the Windows OpenSSH clien
 
 **New terminal** in the tab strip opens a target chooser listing every Saved Connection and every installed local shell. Choosing one creates an independent Workspace for that target, so choosing the target you are already using opens a second terminal for it instead of reusing the one on screen.
 
+When many Workspaces are open, the tabs scroll while **New terminal** stays visible. Use the left and right controls, or the mouse wheel over the tabs, to reach hidden tabs. Scrolling settles at a tab edge when the tab fits in the strip. Selecting a terminal from elsewhere in the app brings its tab into view.
+
+Tab names use the available width. Hover over a Workspace tab, or move keyboard focus into it, to reveal **Rename** and **Close**. The name shortens while those controls are visible; hovering over it shows the full name.
+
 ## Session behavior
 
 Each Terminal Session belongs to one Workspace. It has its own reader, writer, resize path, flow control, and lifecycle. A dropped remote session can be reconnected. A local shell that exits is stopped and can be started again.
@@ -30,13 +34,17 @@ Enter focus mode from a Terminal view to work without the connection rail and ho
 
 Use the split menu in focus mode to create a side-by-side or top-and-bottom pane. The menu lists ungrouped terminals that are already open, plus local shells and Saved Connections. Use **New terminal** to open another ungrouped tab. Deleting a group leaves each of its terminals open as an ordinary tab.
 
+The tab strip keeps Search, Copy, and Paste available in both normal and focus mode. In a split group, they act on the selected pane. Search opens a small panel over the terminal; it does not shrink the terminal. The status dot on each tab shows its session state. Closing a Workspace tab ends its terminal session; if it is still running, Control Room asks for confirmation.
+
+Search marks match locations in a narrow rail at the terminal's right edge. The rail stays invisible when there are no search matches.
+
 Exit focus mode to return to the active Workspace. Its Overview, Systemd, Ports, Docker, and other host views remain available there.
 
-Use the tab or pane controls to select a terminal, close it, or restart it. Closing an active Workspace asks for confirmation before it ends a running session.
+Use the tab or pane controls to select a terminal, close it, or restart it.
 
 ## Reconnect and restart
 
-When a remote session ends, the terminal toolbar offers **Reconnect**; when a local shell exits, it offers **Restart**. The `Ctrl+Shift+R` shortcut does the same for the active Workspace. Either action starts a fresh session for the current Workspace. On app startup, saved Workspaces start fresh sessions automatically. A failed attempt stays visible until you reconnect or restart it; Control Room does not retry on a timer.
+When a remote session ends, the tab strip offers **Reconnect**; when a local shell exits, it offers **Restart**. The `Ctrl+Shift+R` shortcut does the same for the active Workspace. Either action starts a fresh session for the current Workspace. On app startup, saved Workspaces start fresh sessions automatically. A failed attempt stays visible until you reconnect or restart it; Control Room does not retry on a timer.
 
 ## Right-click behavior
 

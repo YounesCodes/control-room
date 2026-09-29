@@ -49,6 +49,13 @@ scan. The active Workspace, group, and pane need a clear non-text state cue.
 Leaving focus mode returns to the active Workspace without changing its target
 or its session.
 
+When Workspace tabs overflow, keep New terminal outside the scrolling list.
+Show controls to move through the tabs and reveal the selected tab when it
+changes, including in focus mode. Where a tab fits in the strip, settle scrolling
+on a complete tab or group edge so its status and actions stay visible.
+Let tab names use the space reserved for Rename and Close until the tab is
+hovered or focused. Revealing those controls must not resize neighboring tabs.
+
 Content should stay usable at the supported minimum window size. Keep primary
 navigation reachable. In dialogs, keep the title and actions available while a
 long body scrolls. Menus should open as anchored overlays and must not resize or
@@ -125,16 +132,19 @@ trigger and within the window.
 ### Navigation and terminal work
 
 Use host marks and session presence to help users find a connection or
-Workspace. Keep the labelled connection state in the Terminal view; use compact
-presence cues in navigation. Local shells use local terms such as running,
-stopped, and restarted. Remote sessions use connected, disconnected, and
-reconnected.
+Workspace. Show session state on its tab with a compact presence cue and an
+accessible label. Keep the terminal pane free of duplicate status rows. Local
+shells use local terms such as running, stopped, and restarted. Remote sessions
+use connected, disconnected, and reconnected.
 
 The terminal is the main working surface, not a dashboard card. Keep common
-session actions close to it and use the same pane for local and remote sessions.
-Search results should remain distinguishable without washing out ANSI colors;
-make the active result more prominent than other matches and give users a
-location cue in the overview ruler.
+session actions in the tab strip for the active pane and use the same pane for
+local and remote sessions. Open terminal search as a compact overlay so it does
+not reduce terminal height. Search results should remain distinguishable
+without washing out ANSI colors; make the active result more prominent than
+other matches and give users a location cue in the overview ruler.
+Keep the search-marker rail borderless so an empty rail does not look like a
+scrollbar or a pane divider.
 
 When an inactive terminal receives output or rings its bell, show a subtle cue
 on its Workspace tab. Clear the cue when the user returns to that terminal.

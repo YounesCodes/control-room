@@ -1,20 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import {
-  ChevronDown,
-  ChevronUp,
-  Clipboard,
-  Copy,
-  Eraser,
-  Power,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import {
@@ -23,11 +13,16 @@ import {
   terminalRightClickAction,
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
-import { isRemoteWorkspace, terminalStateLabel } from "../lib/workspace-target";
+import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
-import { StatusDot } from "./StatusDot";
+
+export interface TerminalPaneHandle {
+  copySelection: () => void;
+  pasteClipboard: () => void;
+}
 
 interface TerminalPaneProps {
+  ref?: Ref<TerminalPaneHandle>;
   workspace: Workspace;
   settings: AppSettings;
   visible: boolean;
@@ -35,8 +30,7 @@ interface TerminalPaneProps {
   onActivate: () => void;
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
-  onReconnect: () => void;
-  onDisconnect?: () => void;
+  onSelectionChange?: (hasSelection: boolean) => void;
   onActivity?: (kind: "output" | "bell") => void;
   findRequest?: number;
 }
@@ -54,6 +48,7 @@ const MAX_EARLY_SESSION_EVENTS = 16;
 /// integration handler that feeds Enhanced History) is decided when the
 /// terminal is built, and a local shell never reaches it.
 export function TerminalPane({
+  ref,
   workspace,
   settings,
   visible,
@@ -61,8 +56,7 @@ export function TerminalPane({
   onActivate,
   onSession,
   onState,
-  onReconnect,
-  onDisconnect = () => undefined,
+  onSelectionChange,
   onActivity = () => undefined,
   findRequest = 0,
 }: TerminalPaneProps) {
@@ -87,6 +81,7 @@ export function TerminalPane({
   const workspaceReasonRef = useRef(workspace.reason);
   const onSessionRef = useRef(onSession);
   const onStateRef = useRef(onState);
+  const onSelectionChangeRef = useRef(onSelectionChange);
   const onActivityRef = useRef(onActivity);
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
@@ -94,7 +89,11 @@ export function TerminalPane({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
-  const [hasSelection, setHasSelection] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    copySelection,
+    pasteClipboard,
+  }));
 
   historyPausedRef.current = remote?.historyPaused ?? false;
   globalHistoryEnabledRef.current = settings.globalHistoryEnabled;
@@ -104,6 +103,7 @@ export function TerminalPane({
   workspaceReasonRef.current = workspace.reason;
   onSessionRef.current = onSession;
   onStateRef.current = onState;
+  onSelectionChangeRef.current = onSelectionChange;
   onActivityRef.current = onActivity;
 
   handleSessionStateRef.current = (event) => {
@@ -173,7 +173,7 @@ export function TerminalPane({
     searchRef.current = search;
 
     const selectionDisposable = terminal.onSelectionChange(() =>
-      setHasSelection(terminal.hasSelection()),
+      onSelectionChangeRef.current?.(terminal.hasSelection()),
     );
     const bellDisposable = terminal.onBell(() => {
       if (!activeRef.current) onActivityRef.current("bell");
@@ -416,6 +416,7 @@ export function TerminalPane({
     onStateRef.current("connecting", null);
     setLocalError(null);
     terminal.reset();
+    onSelectionChangeRef.current?.(false);
 
     const flushAcknowledgements = () => {
       window.clearTimeout(acknowledgementTimer);
@@ -586,118 +587,59 @@ export function TerminalPane({
       .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
   }
 
-  // A local shell is started and stopped; a remote one is connected and
-  // disconnected. Same lifecycle, different words for what it means.
-  const local = workspace.kind === "local";
-  const ended = workspace.state === "disconnected" || workspace.state === "error";
-
   return (
     <section
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
       onPointerDown={onActivate}
     >
-      <header className="terminal-toolbar">
-        <span className="toolbar-state" aria-live="polite" aria-atomic="true">
-          <StatusDot state={workspace.state} /> {terminalStateLabel(workspace)}
-        </span>
-        <div className="toolbar-actions">
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => {
-              setSearchOpen(true);
-              window.setTimeout(() => searchInputRef.current?.focus(), 0);
-            }}
-            aria-label="Find in terminal"
-            title="Find in terminal"
-          >
-            <Search size={14} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={copySelection}
-            disabled={!hasSelection}
-            aria-label="Copy terminal selection"
-            title="Copy selection"
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={pasteClipboard}
-            disabled={ended}
-            aria-label="Paste into terminal"
-            title="Paste"
-          >
-            <Clipboard size={14} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => terminalRef.current?.clear()}
-            aria-label="Clear terminal"
-            title="Clear terminal"
-          >
-            <Eraser size={14} />
-          </button>
-          {!ended && (
-            <button className="toolbar-button" type="button" onClick={onDisconnect}>
-              <Power size={14} /> {local ? "Stop" : "Disconnect"}
-            </button>
-          )}
-          {ended && (
-            <button className="toolbar-button" type="button" onClick={onReconnect}>
-              <RefreshCw size={14} /> {local ? "Restart" : "Reconnect"}
-            </button>
-          )}
-        </div>
-      </header>
-      {searchOpen && (
-        <form
-          className="terminal-search"
-          role="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            find(true);
-          }}
-        >
-          <Search size={14} aria-hidden="true" />
-          <input
-            ref={searchInputRef}
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") closeSearch();
-            }}
-            aria-label="Find in terminal output"
-            placeholder="Find in terminal"
-          />
-          <span className="terminal-search-count" aria-live="polite">
-            {searchResult.count
-              ? `${searchResult.index + 1} of ${searchResult.count}`
-              : searchTerm
-                ? "No matches"
-                : ""}
-          </span>
-          <button type="button" onClick={() => find(false)} aria-label="Previous match">
-            <ChevronUp size={14} />
-          </button>
-          <button type="button" onClick={() => find(true)} aria-label="Next match">
-            <ChevronDown size={14} />
-          </button>
-          <button type="button" onClick={closeSearch} aria-label="Close terminal search">
-            <X size={14} />
-          </button>
-        </form>
-      )}
       {(localError || workspace.reason) && (
         <div className="terminal-notice" role="status">
           {localError ?? workspace.reason}
         </div>
       )}
-      <div className="terminal-container" ref={containerRef} />
+      <div className="terminal-content">
+        <div className="terminal-container" ref={containerRef} />
+        {searchOpen && (
+          <form
+            className="terminal-search"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              find(true);
+            }}
+          >
+            <Search size={14} aria-hidden="true" />
+            <input
+              ref={searchInputRef}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") closeSearch();
+              }}
+              aria-label="Find in terminal output"
+              placeholder="Find in terminal"
+            />
+            <span className="terminal-search-count" aria-live="polite">
+              {searchResult.count
+                ? `${searchResult.index + 1} of ${searchResult.count}`
+                : searchTerm
+                  ? "No matches"
+                  : ""}
+            </span>
+            <span className="terminal-search-controls">
+              <button type="button" onClick={() => find(false)} aria-label="Previous match">
+                <ChevronUp size={14} />
+              </button>
+              <button type="button" onClick={() => find(true)} aria-label="Next match">
+                <ChevronDown size={14} />
+              </button>
+              <button type="button" onClick={closeSearch} aria-label="Close terminal search">
+                <X size={14} />
+              </button>
+            </span>
+          </form>
+        )}
+      </div>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef, type Ref } from "react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -20,7 +21,6 @@ const channels = vi.hoisted(
 /// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
-  clears: 0,
   writes: [] as string[],
   pastes: [] as string[],
   searchNext: vi.fn(),
@@ -32,12 +32,13 @@ const xterm = vi.hoisted(() => ({
   mouseTrackingMode: "none",
   // The handler xterm calls for typed input, so a test can type.
   onData: null as ((data: string) => void) | null,
+  selectionChange: null as (() => void) | null,
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
     this.onData = null;
+    this.selectionChange = null;
     this.customKeyHandler = null;
     this.oscHandlers = 0;
-    this.clears = 0;
     this.writes = [];
     this.pastes = [];
     this.searchNext.mockReset();
@@ -115,7 +116,8 @@ vi.mock("@xterm/xterm", () => ({
     onBinary() {
       return { dispose: () => undefined };
     }
-    onSelectionChange() {
+    onSelectionChange(handler: () => void) {
+      xterm.selectionChange = handler;
       return { dispose: () => undefined };
     }
     onBell() {
@@ -134,9 +136,6 @@ vi.mock("@xterm/xterm", () => ({
       return xterm.selection;
     }
     reset() {}
-    clear() {
-      xterm.clears += 1;
-    }
     write(data: unknown) {
       if (typeof data === "string") xterm.writes.push(data);
     }
@@ -150,7 +149,7 @@ vi.mock("@xterm/xterm", () => ({
   },
 }));
 
-import { TerminalPane } from "./TerminalPane";
+import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 import { createLocalWorkspace, createRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, LocalShellProfile, SavedConnection } from "../types";
 
@@ -198,6 +197,11 @@ const connection: SavedConnection = {
 function renderPane(
   workspace: ReturnType<typeof createLocalWorkspace> | ReturnType<typeof createRemoteWorkspace>,
   onState = vi.fn(),
+  options: {
+    ref?: Ref<TerminalPaneHandle>;
+    onSelectionChange?: (hasSelection: boolean) => void;
+    findRequest?: number;
+  } = {},
 ) {
   render(
     <TerminalPane
@@ -208,7 +212,7 @@ function renderPane(
       onActivate={() => undefined}
       onSession={() => undefined}
       onState={onState}
-      onReconnect={() => undefined}
+      {...options}
     />,
   );
   return onState;
@@ -289,7 +293,7 @@ describe("TerminalPane sessions", () => {
       restored: true,
     } as const;
     renderPane(local);
-    expect(screen.getByText("not started")).toBeTruthy();
+    expect(document.querySelector(".terminal-toolbar")).toBeNull();
     cleanup();
     renderPane({
       ...createRemoteWorkspace(connection),
@@ -297,33 +301,33 @@ describe("TerminalPane sessions", () => {
       state: "disconnected",
       restored: true,
     });
-    expect(screen.getByText("not connected")).toBeTruthy();
+    expect(document.querySelector(".terminal-toolbar")).toBeNull();
 
     await Promise.resolve();
     expect(api.startLocalSession).not.toHaveBeenCalled();
     expect(api.startSession).not.toHaveBeenCalled();
   });
 
-  it("says a local shell runs and stops, and a remote session connects", () => {
+  it("keeps session errors visible without a redundant status row", () => {
     const running = (state: ConnectionState) => ({ ...createLocalWorkspace(shell), state });
 
     renderPane({ ...running("connected"), sessionId: "local-session" });
-    expect(screen.getByText("running")).toBeTruthy();
+    expect(screen.queryByText("running")).toBeNull();
+    expect(document.querySelector(".terminal-toolbar")).toBeNull();
     cleanup();
 
-    // An exited shell keeps its Workspace, reports the exit, and offers Restart.
+    // An exited shell keeps its Workspace and reports the original cause.
     renderPane({
       ...running("disconnected"),
       connectRequested: false,
       reason: "PowerShell 7 exited.",
     });
-    expect(screen.getByText("stopped")).toBeTruthy();
+    expect(screen.queryByText("stopped")).toBeNull();
     expect(screen.getByText("PowerShell 7 exited.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Restart/ })).toBeTruthy();
     cleanup();
 
     renderPane({ ...createRemoteWorkspace(connection), state: "connected", sessionId: "ssh" });
-    expect(screen.getByText("connected")).toBeTruthy();
+    expect(screen.queryByText("connected")).toBeNull();
   });
 
   describe("right click", () => {
@@ -606,23 +610,44 @@ describe("TerminalPane sessions", () => {
     expect(screen.queryByText("Reconnect before sending terminal input.")).toBeNull();
   });
 
-  it("keeps common terminal actions visible while a session runs", async () => {
-    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
+  it("exposes copy and paste to the shared tab controls", async () => {
+    api.writeSession.mockResolvedValue(undefined);
+    clipboard.readText.mockResolvedValue("echo ready");
+    const ref = createRef<TerminalPaneHandle>();
+    const onSelectionChange = vi.fn();
+    renderPane(
+      { ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" },
+      vi.fn(),
+      { ref, onSelectionChange },
+    );
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    expect(screen.getByRole("button", { name: "Clear terminal" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Find in terminal" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Disconnect/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Restart/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Reconnect/ })).toBeNull();
+    expect(ref.current).not.toBeNull();
+    expect(onSelectionChange).toHaveBeenCalledWith(false);
+    xterm.selection = "selected text";
+    act(() => xterm.selectionChange?.());
+    expect(onSelectionChange).toHaveBeenLastCalledWith(true);
+    act(() => ref.current?.copySelection());
+    expect(clipboard.writeText).toHaveBeenCalledWith("selected text");
+
+    act(() => ref.current?.pasteClipboard());
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
+    expect(xterm.pastes).toEqual(["echo ready"]);
+    expect(document.querySelector(".terminal-toolbar")).toBeNull();
   });
 
   it("keeps search results legible without covering terminal colors", async () => {
-    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
+    renderPane(
+      { ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" },
+      vi.fn(),
+      { findRequest: 1 },
+    );
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: "Find in terminal" }));
+    expect(document.querySelector(".terminal-search")?.parentElement).toHaveProperty(
+      "className",
+      "terminal-content",
+    );
     fireEvent.change(screen.getByRole("textbox", { name: "Find in terminal output" }), {
       target: { value: "needle" },
     });
@@ -670,7 +695,6 @@ describe("TerminalPane sessions", () => {
         onActivate={() => undefined}
         onSession={() => undefined}
         onState={() => undefined}
-        onReconnect={() => undefined}
         onActivity={onActivity}
       />,
     );

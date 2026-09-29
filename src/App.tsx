@@ -4,7 +4,9 @@ import {
   Camera,
   ChevronDown,
   ChevronRight,
+  Clipboard,
   Columns2,
+  Copy,
   FileClock,
   FolderCog,
   Gauge,
@@ -17,6 +19,7 @@ import {
   Power,
   Plus,
   Rows2,
+  RefreshCw,
   Search,
   Server,
   Settings,
@@ -31,6 +34,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { UpdateIndicator } from "./components/UpdateIndicator";
 import { TerminalTargetMenu } from "./components/TerminalTargetMenu";
+import type { TerminalPaneHandle } from "./components/TerminalPane";
 import type { TerminalTargetGroup } from "./components/TerminalTargetMenu";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { useAppUpdater } from "./hooks/use-app-updater";
@@ -41,6 +45,7 @@ import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { WindowControls } from "./components/WindowControls";
+import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
 import { organizeConnections } from "./lib/connection-organization";
@@ -188,8 +193,7 @@ export function App() {
     width: Number.POSITIVE_INFINITY,
     height: Number.POSITIVE_INFINITY,
   });
-  // The menu is positioned rather than anchored, because the tab strip scrolls
-  // horizontally and an absolutely positioned child would be clipped to one row.
+  // Position the menu below its fixed button so it stays inside the window.
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<{
     top: number;
     right: number;
@@ -197,6 +201,8 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
   const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
+  const [terminalHasSelection, setTerminalHasSelection] = useState<Record<string, boolean>>({});
+  const terminalHandlesRef = useRef(new Map<string, TerminalPaneHandle>());
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   const [renameGroupTarget, setRenameGroupTarget] = useState<TerminalGroup | null>(null);
   // One update lifecycle for the whole application: one timer, one in-flight
@@ -317,6 +323,13 @@ export function App() {
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const tabArrangementKey = [
+    terminalFocusMode ? "focus" : "normal",
+    ...workspaces.map((workspace) => workspace.id),
+    ...terminalGroups.map((group) => `${group.id}:${getTerminalLayoutIds(group.layout).join(",")}`),
+  ].join("|");
+  const activeTerminalEnded =
+    activeWorkspace?.state === "disconnected" || activeWorkspace?.state === "error";
   // Inspection views, Enhanced History, and Saved Connection actions belong to
   // a remote Workspace. A local one is terminal-only.
   const activeRemoteWorkspace =
@@ -1345,6 +1358,7 @@ export function App() {
         <button
           className="session-tab-main"
           type="button"
+          title={duplicateLabel(workspace)}
           aria-current={workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined}
           aria-describedby={`workspace-session-${workspace.id}`}
           onClick={() => selectWorkspaceTab(workspace)}
@@ -1571,7 +1585,10 @@ export function App() {
       <main className="workspace-shell">
         {workspaces.length > 0 && (
           <nav className="session-tabs" aria-label="Open Workspaces">
-            <div className="session-tab-list" data-tauri-drag-region>
+            <WorkspaceTabScroller
+              activeTabId={settingsOpen ? null : activeWorkspaceId}
+              arrangementKey={tabArrangementKey}
+            >
               {terminalFocusMode
                 ? (() => {
                     const renderedGroups = new Set<string>();
@@ -1627,35 +1644,100 @@ export function App() {
                     });
                   })()
                 : workspaces.map((workspace) => renderWorkspaceTab(workspace))}
-              <span className="session-new-terminal-anchor" data-new-terminal-menu>
-                <button
-                  ref={newTerminalButtonRef}
-                  className="session-new-terminal"
-                  type="button"
-                  onClick={openNewTerminalMenu}
-                  disabled={!canOpenNewTerminal}
-                  aria-haspopup="dialog"
-                  aria-expanded={newTerminalMenuOpen}
-                  title="Open a terminal for a Saved Connection or a local shell"
-                >
-                  <Plus size={15} /> New terminal
-                </button>
-                {newTerminalMenuOpen && (
-                  <TerminalTargetMenu
-                    label="New terminal"
-                    className="new-terminal-menu"
-                    groups={newTerminalGroups}
-                    style={newTerminalMenuAt ?? undefined}
-                    onClose={() => {
-                      setNewTerminalMenuOpen(false);
-                      newTerminalButtonRef.current?.focus();
-                    }}
-                  />
-                )}
-              </span>
-            </div>
+            </WorkspaceTabScroller>
+            <span className="session-new-terminal-anchor" data-new-terminal-menu>
+              <button
+                ref={newTerminalButtonRef}
+                className="session-new-terminal"
+                type="button"
+                onClick={openNewTerminalMenu}
+                disabled={!canOpenNewTerminal}
+                aria-haspopup="dialog"
+                aria-expanded={newTerminalMenuOpen}
+                title="Open a terminal for a Saved Connection or a local shell"
+              >
+                <Plus size={15} /> New terminal
+              </button>
+              {newTerminalMenuOpen && (
+                <TerminalTargetMenu
+                  label="New terminal"
+                  className="new-terminal-menu"
+                  groups={newTerminalGroups}
+                  style={newTerminalMenuAt ?? undefined}
+                  onClose={() => {
+                    setNewTerminalMenuOpen(false);
+                    newTerminalButtonRef.current?.focus();
+                  }}
+                />
+              )}
+            </span>
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
               <div className="session-tab-actions" data-terminal-split-menu>
+                <div
+                  className="session-terminal-actions"
+                  role="group"
+                  aria-label="Terminal actions"
+                >
+                  <button
+                    className="session-strip-button"
+                    type="button"
+                    onClick={() =>
+                      setTerminalFindRequests((current) => ({
+                        ...current,
+                        [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
+                      }))
+                    }
+                    aria-label="Find in terminal"
+                    title="Find in terminal"
+                  >
+                    <Search size={15} />
+                  </button>
+                  <button
+                    className="session-strip-button"
+                    type="button"
+                    onClick={() =>
+                      terminalHandlesRef.current.get(activeWorkspace.id)?.copySelection()
+                    }
+                    disabled={!terminalHasSelection[activeWorkspace.id]}
+                    aria-label="Copy terminal selection"
+                    title="Copy selection"
+                  >
+                    <Copy size={15} />
+                  </button>
+                  <button
+                    className="session-strip-button"
+                    type="button"
+                    onClick={() =>
+                      terminalHandlesRef.current.get(activeWorkspace.id)?.pasteClipboard()
+                    }
+                    disabled={activeTerminalEnded}
+                    aria-label="Paste into terminal"
+                    title="Paste"
+                  >
+                    <Clipboard size={15} />
+                  </button>
+                </div>
+                {activeTerminalEnded && (
+                  <button
+                    className="session-strip-button"
+                    type="button"
+                    onClick={() =>
+                      updateWorkspace(activeWorkspace.id, {
+                        connectRequested: true,
+                        restored: false,
+                        reconnectToken: activeWorkspace.reconnectToken + 1,
+                      })
+                    }
+                    aria-label={
+                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
+                    }
+                    title={
+                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
+                    }
+                  >
+                    <RefreshCw size={15} />
+                  </button>
+                )}
                 {terminalFocusMode && (
                   <>
                     <button
@@ -1795,6 +1877,10 @@ export function App() {
                       }
                     >
                       <TerminalPane
+                        ref={(handle) => {
+                          if (handle) terminalHandlesRef.current.set(workspace.id, handle);
+                          else terminalHandlesRef.current.delete(workspace.id);
+                        }}
                         workspace={workspace}
                         settings={settings}
                         visible={terminalVisible}
@@ -1823,21 +1909,12 @@ export function App() {
                             detectConnectionCapabilities(workspace.connectionId);
                           }
                         }}
-                        onReconnect={() =>
-                          updateWorkspace(workspace.id, {
-                            connectRequested: true,
-                            restored: false,
-                            reconnectToken: workspace.reconnectToken + 1,
-                          })
-                        }
-                        onDisconnect={() =>
-                          updateWorkspace(workspace.id, {
-                            connectRequested: false,
-                            sessionId: null,
-                            state: "disconnected",
-                            reason: null,
-                            restored: false,
-                          })
+                        onSelectionChange={(hasSelection) =>
+                          setTerminalHasSelection((current) =>
+                            current[workspace.id] === hasSelection
+                              ? current
+                              : { ...current, [workspace.id]: hasSelection },
+                          )
                         }
                         onActivity={(kind) =>
                           setTerminalActivity((current) => ({

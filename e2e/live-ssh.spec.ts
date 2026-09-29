@@ -21,14 +21,13 @@ describe("local Ubuntu SSH fixture", () => {
     await $(".host-main*=Local lab fixture").click();
     try {
       await browser.waitUntil(
-        async () =>
-          (await $(".terminal-toolbar .toolbar-state").getText())
-            .toLowerCase()
-            .includes("connected"),
+        async () => await $(".session-tab-wrap.active .presence-connected").isExisting(),
         { timeout: 30_000, timeoutMsg: "The SSH terminal did not reach the connected state" },
       );
     } catch {
-      const state = await $(".terminal-toolbar .toolbar-state").getText();
+      const tab = await $(".session-tab-wrap.active .session-tab-main");
+      const describedBy = await tab.getAttribute("aria-describedby");
+      const state = describedBy ? await $(`#${describedBy}`).getText() : "unknown";
       const notice = (await $(".terminal-notice").isExisting())
         ? await $(".terminal-notice").getText()
         : "none";
@@ -68,6 +67,7 @@ describe("local Ubuntu SSH fixture", () => {
       },
     );
 
+    await $(".session-tab-wrap.active .session-tab-main").moveTo();
     await $("aria/Close Local lab fixture Workspace").click();
     await $("button=Disconnect & close").click();
     const fixtureMenu = $("aria/Open actions for Local lab fixture");

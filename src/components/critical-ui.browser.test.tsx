@@ -7,6 +7,7 @@ import { Modal } from "./Modal";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionDialog } from "./ConnectionDialog";
 import { WindowControls } from "./WindowControls";
+import { WorkspaceTabScroller } from "./WorkspaceTabScroller";
 import { SettingsPane } from "../pages/SettingsPane";
 import type { AppSettings, EnvironmentInfo } from "../types";
 import "../styles.css";
@@ -156,7 +157,176 @@ function SettingsFixture() {
   );
 }
 
+function TabOverflowFixture() {
+  const [active, setActive] = useState(0);
+  const [count, setCount] = useState(4);
+  const [narrow, setNarrow] = useState(false);
+  const tabs = Array.from({ length: count }, (_, index) => index);
+  return (
+    <div style={{ width: narrow ? 340 : 740 }}>
+      <nav className="session-tabs" aria-label="Open Workspaces">
+        <WorkspaceTabScroller activeTabId={`tab-${active}`} arrangementKey={`count-${count}`}>
+          {tabs.map((index) => (
+            <div className={`session-tab-wrap ${index === active ? "active" : ""}`} key={index}>
+              <button className="session-tab-main" type="button" onClick={() => setActive(index)}>
+                Terminal {index + 1}
+              </button>
+            </div>
+          ))}
+        </WorkspaceTabScroller>
+        <button className="session-new-terminal" type="button">
+          New terminal
+        </button>
+      </nav>
+      <button type="button" onClick={() => setNarrow((current) => !current)}>
+        Resize tabs
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setActive(count);
+          setCount(count + 1);
+        }}
+      >
+        Add terminal
+      </button>
+      <button type="button" onClick={() => setActive(count - 1)}>
+        Select last terminal
+      </button>
+      <button type="button" onClick={() => setActive(0)}>
+        Select first terminal
+      </button>
+    </div>
+  );
+}
+
+function TabNameFixture() {
+  return (
+    <div>
+      <nav className="session-tabs" aria-label="Open Workspaces">
+        <div className="session-tab-wrap active">
+          <button
+            className="session-tab-main"
+            type="button"
+            aria-label="Open production database workspace"
+            title="Production database workspace"
+          >
+            <span className="session-tab-label">Production database workspace</span>
+          </button>
+          <button className="session-tab-rename" type="button" aria-label="Rename workspace">
+            Edit
+          </button>
+          <button className="session-tab-close" type="button" aria-label="Close workspace">
+            Close
+          </button>
+        </div>
+        <div className="session-tab-wrap">
+          <button className="session-tab-main" type="button">
+            <span className="session-tab-label">Git Bash</span>
+          </button>
+          <button className="session-tab-rename" type="button" aria-label="Rename Git Bash">
+            Edit
+          </button>
+          <button className="session-tab-close" type="button" aria-label="Close Git Bash">
+            Close
+          </button>
+        </div>
+      </nav>
+      <button type="button">Outside</button>
+    </div>
+  );
+}
+
 describe("critical UI in Chromium", () => {
+  it("gives active tab names the action space until hover or keyboard focus", async () => {
+    mount(<TabNameFixture />);
+    const main = page.getByRole("button", { name: "Open production database workspace" });
+    await expect.element(main).toBeVisible();
+    const tab = document.querySelector<HTMLElement>(".session-tab-wrap")!;
+    const nextTab = document.querySelectorAll<HTMLElement>(".session-tab-wrap")[1];
+    const label = document.querySelector<HTMLElement>(".session-tab-label")!;
+    const rename = document.querySelector<HTMLButtonElement>(".session-tab-rename")!;
+    const initialTabWidth = tab.getBoundingClientRect().width;
+    const nextTabLeft = nextTab.getBoundingClientRect().left;
+    const initialLabelWidth = label.getBoundingClientRect().width;
+    expect(getComputedStyle(rename).opacity).toBe("0");
+
+    await main.hover();
+    await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
+    expect(label.getBoundingClientRect().width).toBeLessThan(initialLabelWidth - 40);
+    expect(tab.getBoundingClientRect().width).toBe(initialTabWidth);
+    expect(nextTab.getBoundingClientRect().left).toBe(nextTabLeft);
+
+    await page.getByRole("button", { name: "Outside" }).hover();
+    await vi.waitFor(() => expect(getComputedStyle(rename).opacity).toBe("0"));
+    rename.focus();
+    await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
+  });
+
+  it("keeps New terminal reachable and reveals tabs when the strip overflows", async () => {
+    mount(<TabOverflowFixture />);
+    await expect
+      .element(page.getByRole("button", { name: "Scroll terminals right" }))
+      .not.toBeInTheDocument();
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    const list = document.querySelector<HTMLElement>(".session-tab-list")!;
+    await expect
+      .element(page.getByRole("button", { name: "Scroll terminals right" }))
+      .toBeVisible();
+    await vi.waitFor(() => {
+      const selected = document.querySelector<HTMLElement>(".session-tab-wrap.active")!;
+      expect(selected.getBoundingClientRect().right).toBeLessThanOrEqual(
+        list.getBoundingClientRect().right + 1,
+      );
+    });
+
+    await page.getByRole("button", { name: "Select first terminal" }).click();
+    await page.getByRole("button", { name: "Resize tabs" }).click();
+    await expect
+      .element(page.getByRole("button", { name: "Scroll terminals right" }))
+      .toBeVisible();
+    expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+    await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Scroll terminals right" }).click();
+    await vi.waitFor(() => expect(list.scrollLeft).toBeGreaterThan(0));
+
+    await page.getByRole("button", { name: "Select last terminal" }).click();
+    await vi.waitFor(() => {
+      const selected = document.querySelector<HTMLElement>(".session-tab-wrap.active")!;
+      expect(selected.getBoundingClientRect().right).toBeLessThanOrEqual(
+        list.getBoundingClientRect().right + 1,
+      );
+    });
+    await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
+  });
+
+  it("keeps the first visible terminal tab whole after scrolling right", async () => {
+    await page.viewport(1024, 768);
+    mount(<TabOverflowFixture />);
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    await page.getByRole("button", { name: "Select first terminal" }).click();
+    const list = document.querySelector<HTMLElement>(".session-tab-list")!;
+    const right = page.getByRole("button", { name: "Scroll terminals right" });
+    await right.click();
+    await vi.waitFor(() => expect(list.scrollLeft).toBeGreaterThan(0));
+    await right.click();
+    await vi.waitFor(() => expect((right.element() as HTMLButtonElement).disabled).toBe(true));
+
+    const edge = list.getBoundingClientRect().left;
+    const firstVisible = Array.from(list.querySelectorAll<HTMLElement>(".session-tab-wrap")).find(
+      (tab) => tab.getBoundingClientRect().right > edge + 1,
+    )!;
+    expect(firstVisible.getBoundingClientRect().left).toBeGreaterThanOrEqual(edge - 1);
+
+    list.scrollLeft = 470;
+    await vi.waitFor(() => expect(list.scrollLeft).toBe(392));
+    const wheelVisible = Array.from(list.querySelectorAll<HTMLElement>(".session-tab-wrap")).find(
+      (tab) => tab.getBoundingClientRect().right > edge + 1,
+    )!;
+    expect(wheelVisible.getBoundingClientRect().left).toBeGreaterThanOrEqual(edge - 1);
+  });
+
   it("traps dialog focus, closes on Escape, and restores the trigger", async () => {
     mount(<ModalFixture />);
     const trigger = page.getByRole("button", { name: "Open dialog" });

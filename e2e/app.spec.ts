@@ -91,6 +91,7 @@ describe("Control Room desktop", () => {
       },
       { timeoutMsg: "Command Prompt did not print CONTROL_ROOM_E2E_OK through ConPTY" },
     );
+    await $(".session-tab-wrap.active .session-tab-main").moveTo();
     await $("aria/Close Command Prompt Workspace").click();
     await expect($("[role=dialog]")).toBeDisplayed();
     await $("button=Stop & close").click();
