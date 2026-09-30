@@ -1,40 +1,14 @@
 ---
 title: FAQ
-description: Short answers about scope, storage, permissions, and supported hosts.
+description: Quick answers about SSH, local shells, and saved data.
 ---
 
-### Does Control Room replace SSH?
+**Does it use my usual SSH setup?** Yes. The terminal uses Windows OpenSSH, including your SSH config and agent.
 
-No. It hosts the Windows OpenSSH client inside its own terminal and adds read-only views around the same Saved Connection.
+**Does it save passwords or keys?** No. It can save the path to an existing private key, but never copies the key or stores SSH or sudo passwords.
 
-### Does it change my Linux host?
+**Can I use a local shell?** Yes. Installed PowerShell, Command Prompt, and Git Bash shells can open in tabs and splits.
 
-Structured operations do not. They read bounded data only. Enabling or removing Enhanced History is an explicit exception because it changes the remote account's Bash startup configuration.
+**Does it change the Linux host?** The inspection views only read. Commands you type in the terminal have their normal effects. Optional Enhanced History changes the remote account's Bash startup files when you enable or remove it.
 
-### Does it store my private key?
-
-No. An identity-file field points to a key in its existing location. Control Room stores the path, not a copy of the key.
-
-### Does it store terminal output or logs?
-
-No. Terminal output, fetched logs, and Boot Diagnostic evidence stay in memory and are discarded with their session or view.
-
-### Does it monitor hosts in the background?
-
-No. Overview load sampling runs only while the Overview pane is mounted and visible. There is no agent, schedule, alert, or stored time series.
-
-### Does it update itself?
-
-Yes, on Windows. Control Room checks GitHub Releases and installs an update only after you confirm the restart. It never installs or updates packages on a Remote Host.
-
-### Can I use local terminals?
-
-Yes, if the profile is installed. Control Room supports PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash. Local Workspaces are terminal-only and do not record History.
-
-### Can I manage services or containers?
-
-No. You can inspect them and open their logs. Start, stop, restart, create, and remove controls are outside Control Room's scope.
-
-### Why is my port shown without an owner?
-
-The account may not be allowed to read process ownership. Control Room keeps the socket fact and the owner fact separate. Retry with sudo if that is appropriate.
+**Does it save terminal output or logs?** No. It keeps fetched output in memory while you view it. See [Security and storage](/control-room/reference/security/) for what is saved.

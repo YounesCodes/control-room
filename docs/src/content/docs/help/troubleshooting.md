@@ -1,46 +1,20 @@
 ---
 title: Troubleshooting
-description: Diagnose common connection, inspection, Docker, terminal, and local shell problems.
+description: Fix common SSH, inspection, Docker, and local shell problems.
 ---
 
-## The terminal connects, but structured access fails
+**The terminal connects, but host views fail.** Open **Edit connection** and run **Test structured access**. The views need SSH access without a password prompt. A terminal password login can still work. Set up an SSH key or agent if you want the views.
 
-Open the connection editor and select **Test structured access**. Structured operations use noninteractive SSH. Check that the host accepts public-key authentication or an ssh-agent identity without a password prompt.
+**A view needs permission.** Some Docker, port, firewall, and boot reads need more access. Allow passwordless sudo for that host or use the one-time retry offered by the view. The view marks missing information instead of showing it as zero.
 
-An interactive password login can work while structured access fails. That is expected when OpenSSH would need to ask for a password.
+**Docker is unavailable.** Check Docker in Overview. The daemon may be missing or your account may lack access. Containers with incomplete Compose labels appear under **Ungrouped**.
 
-## A view says permission is required
+**A local shell is missing.** Install the shell, then check **Settings → Local terminal**. Use **Show all** if you hid it earlier. Git Bash means Git for Windows, not the Windows WSL launcher.
 
-Some facts need more access, especially socket ownership, firewall rules, Docker, and parts of boot diagnostics. Enable the appropriate sudo allowance if you want passwordless elevation, then retry. If the account requires a password, use the one-shot retry offered by the pane.
+**A tab did not connect after restart.** The app starts fresh sessions for restored tabs. If a start fails, read the error, then use **Reconnect** for SSH or **Restart** for a local shell to try again.
 
-The view may still show partial facts. Missing owner data is not treated as proof that no process owns the socket.
+**A view shows partial results.** A command may be unavailable, access may be limited, or a result may have reached its size limit. The view labels that condition. Use the terminal if you need a broader check.
 
-## Docker is unavailable
+**The window shows an error.** Read the message and select **Reload**. This restarts the app session; saved connections, settings, notes, and baselines stay on disk.
 
-Check the Docker capability row in Overview. The daemon may be absent, inaccessible to the account, or accessible only with sudo. Retry the Docker read with the allowed path when appropriate.
-
-Containers without validated Compose project and service labels appear under Ungrouped. That does not mean the container is outside Compose. It means Control Room did not have enough validated label data to group it.
-
-## A local shell is not offered
-
-Only installed profiles appear. Check that PowerShell 7, Windows PowerShell, Command Prompt, or Git for Windows is installed. Control Room resolves the known shell profiles itself and rejects unknown ids. It does not use `System32\bash.exe` as Git Bash.
-
-A profile can also be turned off: open Settings, then **Local terminal**, and use **Show all** or tick the shell you want back.
-
-## A restored Workspace did not connect
-
-Control Room starts fresh sessions for restored Workspaces. If SSH fails or a local shell cannot start, the terminal shows the failure. Check the message, then use **Reconnect** or **Restart** to try again.
-
-## Boot or port data is partial
-
-Structured reads have bounds and independent sections. A missing timestamp, permission error, unsupported command, or truncation stays visible as such. Use the terminal for a broader investigation, and do not read an empty section as proof that the host has no matching data.
-
-## The window says something went wrong
-
-Control Room catches a pane that fails to draw and shows an error screen with the message and a **Reload** button instead of leaving the window empty. Reload restarts the session: Saved Connections, settings, Scratchpad notes, and Host Baselines were not changed, and terminal output is never stored to begin with.
-
-The message on that screen names what failed. Open the app with devtools (F12 in a debug build) if you need the stack trace behind it.
-
-## The app cannot find OpenSSH
-
-Control Room checks the Windows OpenSSH client in its standard location and then uses the available fallback. Install or enable the Windows OpenSSH Client, then restart Control Room so environment discovery runs again.
+**OpenSSH is missing.** Install or enable the Windows OpenSSH Client, then restart Control Room.

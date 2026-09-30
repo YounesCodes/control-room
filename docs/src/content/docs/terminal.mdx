@@ -1,0 +1,38 @@
+---
+title: Terminal
+description: Open SSH and local shells, split panes, and reconnect.
+---
+
+import terminalScreenshot from "../../assets/screenshots/terminal.png";
+
+The SSH terminal uses Windows OpenSSH. Type commands as you would in any other SSH client. Local shells use the same terminal controls.
+
+<figure class="docs-screenshot">
+  <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={terminalScreenshot.src}
+      alt="An SSH terminal with New terminal, search, copy, paste, and focus controls in the tab strip."
+    />
+  </a>
+  <figcaption>An SSH terminal and its controls. Example data shown.</figcaption>
+</figure>
+
+**New terminal** opens a new tab for any saved host or installed local shell. Choosing the current host again gives you a separate SSH session.
+
+When there are more tabs than fit, scroll them with the arrow controls or mouse wheel. **New terminal** stays visible. Hover over a tab or focus it with the keyboard to show **Rename** and **Close**.
+
+Search, Copy, and Paste are in the tab strip. In a split group, they act on the selected pane. Search opens over the terminal and marks matches along its right edge. Each tab's status dot shows whether its session is connected, stopped, or failed.
+
+## Splits and focus mode
+
+Focus mode gives the terminal more room. Use its split menu for side-by-side or top-and-bottom panes. A split group can mix SSH hosts and local shells. You can name groups and switch between them. Removing a group leaves its terminals open as regular tabs.
+
+Leave focus mode to return to the host's inspection views. Closing a tab with a running session asks for confirmation.
+
+## Reconnect and copy
+
+When an SSH session ends, use **Reconnect** in the tab strip. When a local shell exits, use **Restart**. `Ctrl+Shift+R` does the same for the active tab. After an app restart, saved tabs start fresh sessions. A failed start stays visible until you try again; the app does not retry on a timer.
+
+Right-click copies selected text or pastes when nothing is selected. Programs that use the mouse, such as Vim or tmux, receive the click themselves. `Ctrl+Shift+C` copies and `Ctrl+Shift+V` pastes.
+
+See [Tabs and workspaces](/control-room/workspaces/) for what returns after an app restart.

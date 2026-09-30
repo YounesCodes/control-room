@@ -1,0 +1,30 @@
+---
+title: Boot diagnostics
+description: Check boot timing, failed services, and journal warnings.
+---
+
+import bootScreenshot from "../../../assets/screenshots/boot.png";
+
+Boot Diagnostics reads information when you open it. You can choose the current boot or one of up to ten recent boots reported by journald.
+
+<figure class="docs-screenshot">
+  <a href={bootScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={bootScreenshot.src}
+      alt="Boot Diagnostics with boot timing, a failed backup service, slow units, and journal warnings."
+    />
+  </a>
+  <figcaption>Boot timing and the available evidence. Example data shown.</figcaption>
+</figure>
+
+For the current boot, it can show:
+
+- boot id and time range
+- total boot time, kernel time, and userspace time
+- up to 20 slow-unit observations from `systemd-analyze blame`
+- current failed system-scope units
+- up to 30 warning-through-alert journal entries
+
+Boot timing, slow units, and failed-unit status are available for the current boot only. Choosing an older boot shows its journal sample and marks those other parts unavailable. Use **View journal** beside a failed unit to open its logs, or **Refresh** to read again.
+
+The view labels missing or permission-limited information instead of treating it as an empty result. A slow unit is a clue, not proof of the cause. This information stays in memory and is not saved.

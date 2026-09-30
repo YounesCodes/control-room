@@ -1,0 +1,42 @@
+---
+title: Baselines
+description: Save a host snapshot and compare it with a later one.
+---
+
+import baselinesScreenshot from "../../../assets/screenshots/baselines.png";
+
+A baseline is a snapshot you choose to save for one SSH host. Capture one before a change, then compare it with another snapshot or a fresh read of the host.
+
+<figure class="docs-screenshot">
+  <a href={baselinesScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={baselinesScreenshot.src}
+      alt="Saved baselines beside a comparison showing a changed container image."
+    />
+  </a>
+  <figcaption>Choose a saved snapshot and compare it with another. Example data shown.</figcaption>
+</figure>
+
+Choose what to capture:
+
+- host identity and capabilities
+- systemd units
+- Docker containers
+- listening ports
+- filesystems
+
+The app reads one part at a time. If you stop, completed parts stay saved and the rest are marked skipped. Each part also has a collection time and status:
+
+| Status       | Meaning                                                   |
+| ------------ | --------------------------------------------------------- |
+| Collected    | The app read this part successfully.                      |
+| Partial      | Some information was missing or the read reached a limit. |
+| Not present  | The host does not provide this kind of information.       |
+| Not readable | The read failed or the account did not have permission.   |
+| Not captured | You did not select this part, or stopped before it ran.   |
+
+Comparison shows what was added, removed, or changed. It matches services by unit ID, containers by ID, listeners by address and protocol, and filesystems by mount point. A live comparison is read and discarded; it does not save a new baseline. The app shows when host identity or section versions do not match, and does not guess why something changed.
+
+Open a saved baseline to expand its parts. Use the history icon beside an entry to see its values across saved captures. Comparisons hide service sub-states and container states by default; turn off **Hide values that move on their own** to include them.
+
+You can rename, pin, or delete a baseline, and copy or export a comparison as Markdown or JSON. Control Room keeps up to 20 unpinned baselines per host; pinned ones stay until you remove them.

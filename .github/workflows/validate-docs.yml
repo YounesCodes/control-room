@@ -34,5 +34,14 @@ jobs:
         run: npm ci
       - name: Check documentation
         run: npm run check
-      - name: Build documentation
-        run: npm run build
+      - name: Install browser for documentation UI tests
+        run: npx playwright install --with-deps chromium
+      - name: Build and test documentation UI
+        run: npm run test:ui
+      - name: Upload documentation UI failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-ui-failure-${{ github.run_id }}
+          path: docs/node_modules/.cache/docs-ui-results
+          if-no-files-found: ignore

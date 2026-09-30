@@ -1,0 +1,20 @@
+---
+title: Scratchpad
+description: Write a note for a host or the whole app.
+---
+
+import scratchpadScreenshot from "../../../assets/screenshots/scratchpad.png";
+
+Scratchpad lets you keep one plain-text note per SSH host and one note shared across the app. Notes save automatically after you stop typing and remain when you close a tab. You can edit, undo, redo, or delete them.
+
+<figure class="docs-screenshot">
+  <a href={scratchpadScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={scratchpadScreenshot.src}
+      alt="Scratchpad with a connection note, a Global note selector, and saved status."
+    />
+  </a>
+  <figcaption>Switch between the host's note and the shared note. Example data shown.</figcaption>
+</figure>
+
+Control Room never fills notes from terminal output or logs. Notes are stored locally and are not encrypted secret storage.

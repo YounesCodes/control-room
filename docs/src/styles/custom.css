@@ -1,3 +1,7 @@
+@import "./reading-font.css";
+@import "./shell.css";
+@import "./content.css";
+
 @font-face {
   font-family: "Space Grotesk Local";
   src: url("../assets/fonts/space-grotesk-latin.woff2") format("woff2");
@@ -52,11 +56,11 @@
      job: 16px paragraphs read in long stretches, where its display proportions,
      short extenders and tight apertures flatten the word shapes a reader scans
      by. It keeps the wordmark, the headings and the small caps labels, which is
-     where it carries the brand; running prose goes to the reader's own UI face,
-     which is the same stack the app falls back to. */
+     where it carries the brand; Inter gives prose and navigation a consistent,
+     open reading face across operating systems, following the Herdr reference. */
   --sl-font:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+    "Inter Local", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   --sl-font-display: "Space Grotesk Local", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --sl-font-mono: "Cascadia Mono Local", "Cascadia Mono", Consolas, ui-monospace, monospace;
 
@@ -66,9 +70,9 @@
   --sl-color-gray-2: #b5b5b0;
   --sl-color-gray-3: #858581;
   --sl-color-gray-4: #4b4b49;
-  --sl-color-gray-5: #30302f;
-  --sl-color-gray-6: #1c1c1b;
-  --sl-color-black: #0a0a09;
+  --sl-color-gray-5: #2d2d2c;
+  --sl-color-gray-6: #20201f;
+  --sl-color-black: #111110;
 
   /* Monochrome accent: off-white, like the app's interaction color. It marks
      links and the current sidebar entry's rail, never a filled surface. */
@@ -77,20 +81,27 @@
   --sl-color-accent-high: #f2f2ee;
 
   /* Chrome surfaces sit close to the page color; hairlines do the separating. */
-  --sl-color-bg-nav: #0d0d0c;
-  --sl-color-bg-sidebar: #0d0d0c;
+  --sl-color-bg-nav: #181817;
+  --sl-color-bg-sidebar: #181817;
+  --sl-color-hairline: #2d2d2c;
+  --sl-color-hairline-light: #353534;
 
   --sl-color-text: #c9c9c4;
 
   /* Restrained heading scale for a manual rather than a landing page. */
-  --sl-text-h1: 2.125rem;
-  --sl-text-h2: 1.625rem;
-  --sl-text-h3: 1.25rem;
+  --sl-text-h1: clamp(2rem, 1.5rem + 1vw, 2.625rem);
+  --sl-text-h2: clamp(1.625rem, 1.25rem + 0.8vw, 2rem);
+  --sl-text-h3: 1.375rem;
   --sl-text-h4: 1.125rem;
 
-  /* 45rem lands around 70 characters a line at 16px. The previous 52rem ran to
-     roughly 95, well past the point where the eye loses the next line's start. */
-  --sl-content-width: 45rem;
+  /* A bounded reading column, not an app-sized canvas. The shell uses a
+     separate TOC width so right navigation cannot consume the prose measure. */
+  --sl-content-width: 48rem;
+  --sl-sidebar-width: 17.5rem;
+  --sl-nav-height: 4rem;
+  --sl-line-height: 1.65;
+  --sl-line-height-headings: 1.2;
+  --docs-toc-width: 15rem;
 }
 
 :root[data-theme="light"] {
@@ -99,10 +110,10 @@
   --sl-color-gray-2: #50504b;
   --sl-color-gray-3: #70706a;
   --sl-color-gray-4: #a5a59e;
-  --sl-color-gray-5: #d8d8d2;
-  --sl-color-gray-6: #eeeeea;
+  --sl-color-gray-5: #d9d9d3;
+  --sl-color-gray-6: #eeeee9;
   --sl-color-gray-7: #f4f4f0;
-  --sl-color-black: #fbfbf9;
+  --sl-color-black: #fafaf7;
 
   /* Light mode keeps the accent near-black so links and highlights stay
      neutral. Chrome surfaces are re-declared here because the dark values above
@@ -112,7 +123,9 @@
   --sl-color-accent-high: #1c1c1a;
 
   --sl-color-bg-nav: #f4f4f0;
-  --sl-color-bg-sidebar: #fbfbf9;
+  --sl-color-bg-sidebar: #f4f4f0;
+  --sl-color-hairline: #d9d9d3;
+  --sl-color-hairline-light: #d2d2cb;
 
   --sl-color-text: #3d3d39;
 }
@@ -125,7 +138,7 @@ h1#_top,
 .sl-link-card .title,
 .sl-steps > li > :first-child:is(h1, h2, h3, h4, h5, h6) {
   font-family: var(--sl-font-display);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.035em;
 }
 
 /* Starlight sizes the site title with --sl-text-h4, and the heading scale above
@@ -136,6 +149,7 @@ h1#_top,
 .site-title {
   gap: 0.5rem;
   font-size: 1.3125rem;
+  letter-spacing: -0.025em;
 }
 
 .site-title img {

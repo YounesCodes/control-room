@@ -1,0 +1,33 @@
+---
+title: Command history and notes
+description: Save optional Bash command history and write your own notes.
+---
+
+import historyScreenshot from "../../../assets/screenshots/history.png";
+
+**Enhanced History** is optional. It records commands from new interactive Bash sessions on an SSH host. It does not import the account's existing `.bash_history`.
+
+Open **History** for the host and select **Enable Enhanced History**. Control Room adds a marked block to the remote account's `~/.bashrc` and a script under `~/.local/share/control-room/`. Capture also needs **Enable Enhanced History globally** in Settings to be on.
+
+<figure class="docs-screenshot">
+  <a href={historyScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={historyScreenshot.src}
+      alt="Enhanced History with saved commands, working directories, exit results, and capture controls."
+    />
+  </a>
+  <figcaption>Saved commands from Bash sessions. Example data shown.</figcaption>
+</figure>
+
+Only sessions opened after the integration is enabled report entries. The integration reports:
+
+- the command line
+- working directory
+- start and finish times
+- exit code
+
+Entries are stored on your Windows machine. You can search, copy, or delete them, and paste a command into the terminal without running it. **Pause** stops capture for the current tab. **Remove from remote Bash** removes the marked block and script. If several connections use the same remote account, removal affects all of them.
+
+Command lines may contain secrets. The local database is not encrypted secret storage, so enable History only if saving those commands is appropriate. Local shells are not recorded.
+
+**Scratchpad** is for notes you write yourself. Each connection has a note, and there is one shared note for the app. See [Scratchpad](/control-room/tools/scratchpad/) for details.
