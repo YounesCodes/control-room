@@ -775,15 +775,14 @@ code,
   transition: background-color var(--motion-fast) var(--ease);
 }
 
-/* The selection mark runs around the whole connection card rather than down one
-   edge, so the card reads as the selected unit. The outline is drawn inside the
-   row, so it never moves the content it sits on. */
-.host-row::before {
+/* Selected hosts and sections share an inset outline that does not move content. */
+.host-row::before,
+.feature-nav button::before {
   content: "";
   position: absolute;
   inset: 0;
   border: 1.5px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: inherit;
   pointer-events: none;
   transition: border-color var(--motion-fast) var(--ease);
 }
@@ -796,7 +795,8 @@ code,
   background: var(--fill-active);
 }
 
-.host-row.active::before {
+.host-row.active::before,
+.feature-nav button.active::before {
   border-color: var(--accent);
 }
 
@@ -1014,17 +1014,6 @@ code,
 
 .feature-nav button.active svg {
   color: var(--accent);
-}
-
-.feature-nav button.active::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 0;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
 }
 
 .sidebar-footer {

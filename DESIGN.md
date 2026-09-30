@@ -80,8 +80,10 @@ and any readability warning when the picker closes, and let the user save a
 deliberate low-contrast choice.
 
 Use borders and restrained fills to separate controls and surfaces. Make the
-selected state easy to locate without shifting nearby content. Avoid heavy
-shadows; reserve stronger elevation for overlays such as menus and dialogs.
+selected state easy to locate without shifting nearby content. Selected Saved
+Connections and host section rows share an inset outline around the whole box.
+Avoid heavy shadows; reserve stronger elevation for overlays such as menus and
+dialogs.
 
 ### Type and density
 
