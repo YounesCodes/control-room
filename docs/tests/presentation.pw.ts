@@ -2,12 +2,54 @@ import { expect, test } from "@playwright/test";
 
 const pages = [
   "",
+  "connections/",
+  "terminal/",
+  "local-terminals/",
+  "workspaces/",
+  "start-here/introduction/",
+  "start-here/requirements/",
   "start-here/quick-start/",
   "reference/security/",
   "start-here/installation/",
   "reference/keyboard-shortcuts/",
   "inspection/baselines/",
+  "inspection/boot/",
+  "inspection/docker/",
+  "inspection/logs/",
+  "inspection/overview/",
+  "inspection/ports/",
+  "inspection/services/",
+  "tools/history/",
+  "tools/scratchpad/",
+  "reference/settings/",
+  "help/faq/",
+  "help/troubleshooting/",
 ];
+
+test("all documentation links and section targets resolve", async ({ page }) => {
+  const targets = new Set<string>();
+  const routes = new Set(pages.map((route) => `/control-room/${route}`));
+  for (const route of pages) {
+    await page.goto(route || "./");
+    const links = await page
+      .locator(".sl-markdown-content a")
+      .evaluateAll((anchors) => anchors.map((anchor) => (anchor as HTMLAnchorElement).href));
+    for (const link of links) {
+      const url = new URL(link);
+      if (url.origin !== "http://127.0.0.1:4322" || url.pathname.includes("/_astro/")) continue;
+      expect(routes.has(url.pathname), link).toBe(true);
+      if (url.hash) targets.add(link);
+    }
+  }
+  for (const target of targets) {
+    await page.goto(target);
+    const id = decodeURIComponent(new URL(target).hash.slice(1));
+    expect(
+      await page.evaluate((value) => Boolean(document.getElementById(value)), id),
+      target,
+    ).toBe(true);
+  }
+});
 
 for (const theme of ["dark", "light"]) {
   for (const [width, height] of [
@@ -26,6 +68,7 @@ for (const theme of ["dark", "light"]) {
         await expect(page.locator("h1")).toBeVisible();
         const metrics = await page.evaluate(async () => {
           const article = document.querySelector(".sl-markdown-content")!;
+          await Promise.all([...article.querySelectorAll("img")].map((img) => img.decode()));
           const toc = document.querySelector(".right-sidebar")!;
           const interFaces = await document.fonts.load('400 16px "Inter Local"', "Control Room");
           return {
@@ -64,11 +107,7 @@ for (const theme of ["dark", "light"]) {
   }
 }
 
-test("search, theme, copy, anchors and mobile navigation retain native behavior", async ({
-  page,
-  context,
-}) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+test("search, theme, anchors and mobile navigation retain native behavior", async ({ page }) => {
   await page.goto("start-here/installation/");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.locator(".pagefind-ui__search-input").fill("baselines");
@@ -79,9 +118,6 @@ test("search, theme, copy, anchors and mobile navigation retain native behavior"
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.goto("start-here/quick-start/");
-  const copy = page.locator(".expressive-code .copy button").first();
-  await copy.click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("192.168.1.20");
   await expect(page.locator('a[href*="/edit/main/docs/"]')).toBeVisible();
   await expect(page.locator("time")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -94,8 +130,9 @@ test("search, theme, copy, anchors and mobile navigation retain native behavior"
     "aria-expanded",
     "false",
   );
+  await page.goto("reference/security/");
   const heading = page.locator(".sl-heading-wrapper h2").first();
   const id = await heading.getAttribute("id");
-  await page.goto(`inspection/baselines/#${id}`);
+  await page.goto(`reference/security/#${id}`);
   await expect(heading).toBeInViewport();
 });

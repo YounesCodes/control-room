@@ -11,6 +11,7 @@
     "test:ui": "playwright test"
   },
   "dependencies": {
+    "@astrojs/markdown-satteri": "^0.3.8",
     "@astrojs/starlight": "^0.41.11",
     "astro": "^7.1.6"
   },

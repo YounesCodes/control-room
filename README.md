@@ -24,5 +24,3 @@ _Note that Windows may warn that the publisher is unsigned._
 ## Documentation
 
 **[Quick start](https://younescodes.github.io/control-room/start-here/quick-start/)**
-
-Developers can find the test commands and CI layers in [docs/testing.md](docs/testing.md).

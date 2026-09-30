@@ -1,0 +1,42 @@
+---
+title: Settings
+description: Change terminal appearance, local shells, logs, and updates.
+---
+
+import settingsScreenshot from "../../../assets/screenshots/settings.png";
+
+Open **Settings** from the top bar. Select **Save settings** to apply changes.
+
+<figure class="docs-screenshot">
+  <a href={settingsScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={settingsScreenshot.src}
+      alt="Settings showing terminal font, scrollback, color controls, and a live preview."
+    />
+  </a>
+  <figcaption>Terminal settings and their preview. Example data shown.</figcaption>
+</figure>
+
+## Terminal
+
+Choose a font, size (9–32), and scrollback limit (100–100,000 lines). You can change the text and ANSI colors for both SSH and local terminals; the cursor follows the text color. The preview shows your choices and warns if a color is hard to read. **Reset colors** restores the defaults. See [Terminal](/control-room/terminal/#reconnect-and-copy) for right-click behavior.
+
+## Local terminal
+
+Choose which installed shells appear in **Local terminal**, **New terminal**, and split menus. Hiding one does not uninstall it or close a running tab. **Show all** makes every installed shell available again.
+
+## Logs and History
+
+Choose the default log length: 50, 100, 200, 500, or 1000 lines. The global History switch allows command capture on connections where you have enabled Bash integration. Turning it off stops capture and keeps saved entries. See [Command history](/control-room/tools/history/) to enable it for a host.
+
+## Elevated reads
+
+Allow passwordless sudo reads for all hosts, or set the allowance on one connection. This setting does not ask for or save a sudo password. See [Security](/control-room/reference/security/#elevated-reads).
+
+## Control Room updates
+
+See the installed version, switch automatic update checks on or off, or use **Check for updates** at any time. Updates apply to Control Room on this Windows machine. [Install and update](/control-room/start-here/installation/#updates) explains the restart.
+
+## SSH environment
+
+Settings shows the detected Windows OpenSSH path, your SSH config path, and whether ssh-agent has an available identity. Your OpenSSH configuration still controls SSH behavior.

@@ -1,11 +1,14 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import { satteri } from "@astrojs/markdown-satteri";
 
 import { codeStyle } from "./src/code-style.mjs";
+import { wrapTables } from "./src/table-plugin.mjs";
 
 export default defineConfig({
   site: "https://younescodes.github.io",
   base: "/control-room",
+  markdown: { processor: satteri({ hastPlugins: [wrapTables] }) },
   integrations: [
     starlight({
       title: "Control Room",
@@ -30,6 +33,10 @@ export default defineConfig({
       ],
       expressiveCode: codeStyle,
       customCss: ["./src/styles/custom.css"],
+      components: {
+        TableOfContents: "./src/components/TableOfContents.astro",
+        MobileTableOfContents: "./src/components/MobileTableOfContents.astro",
+      },
       editLink: {
         baseUrl: "https://github.com/YounesCodes/control-room/edit/main/docs/",
       },
@@ -42,22 +49,13 @@ export default defineConfig({
       sidebar: [
         { label: "Home", link: "/" },
         {
-          label: "Getting started",
+          label: "Start",
           collapsed: false,
           items: [
-            { label: "Introduction", slug: "start-here/introduction" },
-            { label: "Installation", slug: "start-here/installation" },
             { label: "Quick start", slug: "start-here/quick-start" },
-            { label: "Requirements", slug: "start-here/requirements" },
-          ],
-        },
-        {
-          label: "Using Control Room",
-          collapsed: false,
-          items: [
+            { label: "Install and requirements", slug: "start-here/installation" },
             { label: "Connections", slug: "connections" },
-            { label: "Workspaces & splits", slug: "workspaces" },
-            { label: "SSH terminal", slug: "terminal" },
+            { label: "Terminals and tabs", slug: "terminal" },
             { label: "Local terminals", slug: "local-terminals" },
           ],
         },
@@ -75,22 +73,14 @@ export default defineConfig({
           ],
         },
         {
-          label: "Advanced",
+          label: "More",
           collapsed: false,
           items: [
-            { label: "Enhanced History", slug: "tools/history" },
-            { label: "Scratchpad", slug: "tools/scratchpad" },
-            { label: "Security", slug: "reference/security" },
+            { label: "History and notes", slug: "tools/history" },
             { label: "Settings", slug: "reference/settings" },
-          ],
-        },
-        {
-          label: "Help",
-          collapsed: false,
-          items: [
-            { label: "Troubleshooting", slug: "help/troubleshooting" },
-            { label: "FAQ", slug: "help/faq" },
+            { label: "Security and storage", slug: "reference/security" },
             { label: "Keyboard shortcuts", slug: "reference/keyboard-shortcuts" },
+            { label: "Troubleshooting", slug: "help/troubleshooting" },
           ],
         },
       ],

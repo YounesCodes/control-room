@@ -1,16 +1,11 @@
 ---
 title: Docker
-description: List Docker containers, group validated Compose labels, and inspect one container.
+description: Find containers and inspect their current state.
 ---
 
 import dockerScreenshot from "../../../assets/screenshots/docker.png";
 
-The Docker view shows what is running on a host, how containers group into Compose projects, and
-what a single container looks like inside. You never leave the Workspace or type the `docker`
-commands yourself.
-
-It reads a bounded `docker ps -a --no-trunc` list and keeps each container instance distinct, in
-a grouped or flat view.
+Docker lists the host's containers, including stopped ones. Switch between a flat list and groups based on Docker Compose labels. Select a container to see its details.
 
 <figure class="docs-screenshot">
   <a href={dockerScreenshot.src} target="_blank" rel="noreferrer">
@@ -19,21 +14,12 @@ a grouped or flat view.
       alt="The Control Room Docker view with grouped containers and a selected container detail panel."
     />
   </a>
-  <figcaption>
-    Grouped containers remain distinct, with the selected record showing typed details on the right.
-    Example data shown.
-  </figcaption>
+  <figcaption>Containers and details. Example data shown.</figcaption>
 </figure>
 
-## Groups and search
+Search by project, service, name, image, or container ID. A container appears under **Ungrouped** when its Compose labels are missing or invalid.
 
-Grouped view uses only validated Compose project and service labels. Containers with missing or invalid Compose identity stay under **Ungrouped**. The fallback is intentional, because a guessed project name is worse than an ungrouped container.
-
-Search matches projects, services, container names, images, and full IDs. A container's row shows its state, status, image, published ports, and validated Compose facts when available.
-
-## Inspect one container
-
-Select one container to load its detail record by the full stable Docker ID. The inspector can show:
+Details can include:
 
 - name, image reference, and content ID
 - running, paused, restarting, OOM-killed, and dead state
@@ -44,10 +30,4 @@ Select one container to load its detail record by the full stable Docker ID. The
 - mount destinations
 - validated Compose project, service, number, and one-off facts
 
-The inspector does not read environment values, command arguments, arbitrary labels, health logs, or host mount sources. It does not offer container lifecycle controls.
-
-## Access and logs
-
-If the Docker daemon is reachable only with sudo, Overview identifies that state and the Docker view can offer a read-only retry. Select a container's logs to open an independent Docker Log Stream. See [Logs](/control-room/inspection/logs/) for stream behavior.
-
-Related: [Elevated reads](/control-room/reference/security/#elevated-reads) explains when a read can use sudo.
+The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). If Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).

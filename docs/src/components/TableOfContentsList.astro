@@ -1,0 +1,54 @@
+---
+interface TocItem {
+  slug: string;
+  text: string;
+  children: TocItem[];
+}
+interface Props {
+  toc: TocItem[];
+  depth?: number;
+  isMobile?: boolean;
+}
+const { toc, depth = 0, isMobile = false } = Astro.props;
+---
+
+<ul class:list={{ isMobile }}>
+  {toc.map((heading) => (
+    <li>
+      <a href={"#" + heading.slug}>
+        <span>{heading.text}</span>
+        <svg class="current-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m3 8 3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </a>
+      {heading.children.length > 0 && (
+        <Astro.self toc={heading.children} depth={depth + 1} isMobile={isMobile} />
+      )}
+    </li>
+  ))}
+</ul>
+
+<style define:vars={{ depth }}>
+  ul { padding: 0; list-style: none; }
+  a {
+    display: block;
+    padding-block: 0.25rem;
+    padding-inline: calc(1rem * var(--depth) + 0.5rem) 0.5rem;
+    line-height: 1.25;
+  }
+  a[aria-current="true"] { color: var(--sl-color-text-accent); }
+  .current-check { display: none; flex-shrink: 0; }
+  .isMobile a {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--sl-color-gray-6);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+    outline-offset: var(--sl-outline-offset-inside);
+  }
+  .isMobile:first-child > li:first-child > a { border-top: 0; }
+  .isMobile a[aria-current="true"] { color: var(--sl-color-white); font-weight: 600; }
+  .isMobile a[aria-current="true"] .current-check { display: block; }
+</style>

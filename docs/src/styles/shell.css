@@ -1,4 +1,4 @@
-/* Starlight retains all navigation, search, theme and focus-management logic.
+/* Starlight provides the navigation, search, theme and focus-management layout.
    These overrides target its public component classes, never generated hashes. */
 @media (min-width: 50rem) {
   header.header > .header {
@@ -119,13 +119,13 @@ header .social-icons::after {
   }
 }
 
-starlight-toc h2 {
+docs-toc h2 {
   font-size: 0.875rem;
   font-weight: 650;
   margin-bottom: 0.75rem;
 }
 
-starlight-toc a {
+docs-toc a {
   font-size: 0.8125rem;
   line-height: 1.5;
   padding-block: 0.3rem;
@@ -134,13 +134,13 @@ starlight-toc a {
   color: var(--sl-color-gray-2);
 }
 
-starlight-toc a[aria-current="true"] {
+docs-toc a[aria-current="true"] {
   color: var(--sl-color-white);
   border-inline-start-color: var(--sl-color-accent);
   font-weight: 600;
 }
 
-starlight-toc a:hover {
+docs-toc a:hover {
   color: var(--sl-color-white);
   background: var(--sl-color-gray-6);
 }
