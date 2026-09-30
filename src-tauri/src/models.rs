@@ -64,6 +64,10 @@ pub struct HostCapabilities {
     pub os_id: Option<String>,
     pub os_name: Option<String>,
     pub os_version: Option<String>,
+    /// Normalized distribution family derived from ID and ID_LIKE in
+    /// /etc/os-release. The original values remain available above; this field
+    /// only lets the UI and live tests describe the compatibility contract.
+    pub os_family: Option<String>,
     pub kernel: Option<String>,
     pub architecture: Option<String>,
     pub uptime: Option<String>,
@@ -246,7 +250,10 @@ pub struct DockerPublishedPort {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FirewallStatus {
-    /// Whether a supported firewall front-end (ufw) is installed.
+    /// The supported firewall front-end that produced this snapshot.
+    /// `None` means neither UFW nor firewalld was available.
+    pub backend: Option<String>,
+    /// Whether a supported firewall front-end is installed.
     pub available: bool,
     /// `Some(true)` when the firewall reports itself active, `Some(false)` when
     /// inactive, `None` when availability could not be determined.

@@ -133,6 +133,10 @@ trigger and within the window.
 
 ### Navigation and terminal work
 
+Host OS marks use the Debian and Ubuntu logos, with a generic server glyph
+for other distributions. A generic mark does not mean the OS was undetected;
+its accessible label names the detected distribution when available.
+
 Use host marks and session presence to help users find a connection or
 Workspace. Show session state on its tab with a compact presence cue and an
 accessible label. Keep the terminal pane free of duplicate status rows. Local

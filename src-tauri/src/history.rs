@@ -200,7 +200,7 @@ mod tests {
     fn live_connection() -> SavedConnection {
         SavedConnection {
             id: "live-history-fixture".into(),
-            display_name: "Debian laptop".into(),
+            display_name: "Linux fixture".into(),
             destination: std::env::var("CONTROL_ROOM_TEST_HOST")
                 .expect("CONTROL_ROOM_TEST_HOST is required"),
             username: std::env::var("CONTROL_ROOM_TEST_USER").ok(),
@@ -461,7 +461,7 @@ rm -rf "$root"
     }
 
     #[test]
-    #[ignore = "requires the explicitly configured Debian SSH fixture"]
+    #[ignore = "requires an explicitly configured Linux SSH fixture with Bash"]
     fn live_history_install_is_reversible_in_an_isolated_home() {
         let connection = live_connection();
         let script = format!(

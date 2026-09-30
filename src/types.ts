@@ -45,6 +45,7 @@ export interface HostCapabilities {
   osId: string | null;
   osName: string | null;
   osVersion: string | null;
+  osFamily?: string | null;
   kernel: string | null;
   architecture: string | null;
   uptime: string | null;
@@ -124,6 +125,7 @@ export interface FirewallRule {
 }
 
 export interface FirewallStatus {
+  backend?: "ufw" | "firewalld" | null;
   available: boolean;
   active: boolean | null;
   defaultIncoming: string | null;
