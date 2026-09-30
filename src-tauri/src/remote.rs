@@ -1051,6 +1051,9 @@ fn classify_failure(code: i32, stderr: &[u8]) -> String {
         || lower.contains("access denied")
         || lower.contains("you need to be root")
         || lower.contains("operation not permitted")
+        || lower.contains("authorization failed")
+        || lower.contains("not_authorized")
+        || lower.contains("notauthorizedexception")
     {
         "Permission denied"
     } else if lower.contains("could not resolve hostname") {
@@ -3328,6 +3331,25 @@ esac
         assert!(
             classify_failure(127, b"sh: 1: docker: not found")
                 .starts_with("Feature is not installed")
+        );
+    }
+
+    #[test]
+    fn firewalld_authorization_errors_preserve_the_permission_retry() {
+        for message in [
+            "Authorization failed.
+    Make sure polkit agent is running or run the application as superuser.",
+            "Error: NOT_AUTHORIZED",
+            "org.fedoraproject.FirewallD1.NotAuthorizedException",
+        ] {
+            assert_eq!(
+                classify_failure(253, message.as_bytes()),
+                format!("Permission denied: {message}")
+            );
+        }
+        assert_eq!(
+            classify_failure(253, b"unrelated command failure"),
+            "Remote command failed: unrelated command failure"
         );
     }
 

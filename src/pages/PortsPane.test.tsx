@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CachedList, DockerContainer, ListeningSocket, SavedConnection } from "../types";
+import { api } from "../lib/api";
 import { PortsPane } from "./PortsPane";
 
 vi.mock("../lib/api", () => ({
@@ -157,6 +158,39 @@ describe("PortsPane", () => {
     await user.click(screen.getByRole("button", { name: /443/ }));
     // Owner label in the row plus the container row in the detail panel.
     expect(screen.getAllByText("gateway-1")).toHaveLength(2);
+  });
+
+  it("offers a one-shot sudo retry after firewalld denies authorization", async () => {
+    const user = userEvent.setup();
+    const inspectFirewall = vi.mocked(api.inspectFirewall);
+    inspectFirewall.mockClear();
+    inspectFirewall.mockRejectedValueOnce("Permission denied: Authorization failed.");
+    inspectFirewall.mockResolvedValueOnce({
+      backend: "firewalld",
+      available: true,
+      active: true,
+      defaultIncoming: null,
+      rules: [],
+      collectedAt: "",
+    });
+    renderPane();
+
+    const retry = await screen.findByRole("button", { name: "Retry with sudo" });
+    expect(screen.getByText(/Authorization failed/)).toBeTruthy();
+    expect(inspectFirewall).toHaveBeenCalledExactlyOnceWith(connection.id, null);
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await user.click(retry);
+    expect(screen.getByRole("dialog", { name: "Sudo required" })).toBeTruthy();
+    await user.type(screen.getByLabelText(/^Password/), "test-only-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(inspectFirewall).toHaveBeenLastCalledWith(connection.id, "test-only-password");
+      expect(screen.queryByText(/Authorization failed/)).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(inspectFirewall).toHaveBeenCalledTimes(2);
   });
 
   it("aggregates established connections in the Connections tab", async () => {
