@@ -87,7 +87,8 @@ dialogs.
 
 ### Type and density
 
-Use Space Grotesk for interface text and Cascadia Mono, with system monospace
+Use Inter Variable for interface text, Space Grotesk for headings and
+display sizes, and Cascadia Mono, with system monospace
 fallbacks, for terminal and technical values. Align numeric columns and use
 tabular figures where values are compared. Keep supporting text readable at the
 app's compact density; do not shrink informational labels to make a layout fit.
