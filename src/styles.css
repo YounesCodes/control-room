@@ -1,8 +1,11 @@
 /* ==========================================================================
-   Control Room — bundled UI typeface
-   Space Grotesk (variable, 300–700). Bundled as woff2 so the desktop build
-   never depends on the network or a fallback flash. Terminal, log, and code
-   text keep their monospace stack.
+   Control Room — typefaces
+   Inter Variable (opsz, 100–900) for interface text: tall x-height and
+   optical sizing for 10–13px dense chrome. Space Grotesk (variable,
+   300–700) for headings and display sizes only, preserving product
+   character where it is large enough to stay legible. Both are bundled
+   (npm / woff2) so the desktop build never depends on the network or a
+   fallback flash. Terminal, log, and code text keep their monospace stack.
    ========================================================================== */
 
 @font-face {
@@ -40,7 +43,13 @@
   color-scheme: dark;
   color: #f2f2ee;
   background: #000;
-  font-family: "Space Grotesk", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  --font-ui: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  --font-display:
+    "Space Grotesk", "Inter Variable", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  font-family: var(--font-ui);
+  font-feature-settings:
+    "liga" 1,
+    "calt" 1;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -96,6 +105,16 @@
   --motion-fast: 110ms;
   --motion-med: 160ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Headings and display sizes keep the product voice. Body chrome stays in
+   the UI workhorse for small-size legibility. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 * {
@@ -3878,7 +3897,7 @@ dd {
   font-size: 12.5px;
   line-height: 1.55;
   text-align: center;
-  font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  font-family: var(--font-ui);
 }
 
 /* ==========================================================================
