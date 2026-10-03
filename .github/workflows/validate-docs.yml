@@ -40,7 +40,7 @@ jobs:
         run: npm run test:ui
       - name: Upload documentation UI failure screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-ui-failure-${{ github.run_id }}
           path: docs/node_modules/.cache/docs-ui-results
