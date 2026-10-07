@@ -1,3 +1,4 @@
+import { ResizableSplit } from "../ResizablePanels";
 import { useEffect, useMemo, useState } from "react";
 import { FileClock, Server } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../PanelState";
@@ -57,7 +58,7 @@ export function PortsConnections({
   const selected = filtered.find((group) => group.key === selectedKey) ?? null;
 
   return (
-    <div className="split-page ports-view">
+    <ResizableSplit name="Ports connections" className="split-page ports-view">
       <div className="list-panel">
         {connections && (
           <p className="unit-scope-note connections-summary">
@@ -164,6 +165,6 @@ export function PortsConnections({
           <EmptyState title="Select a listener" />
         )}
       </aside>
-    </div>
+    </ResizableSplit>
   );
 }

@@ -1,3 +1,4 @@
+import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { Camera, Pencil, Pin, PinOff, RefreshCw, Trash2, X } from "lucide-react";
@@ -254,7 +255,7 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
   }
 
   return (
-    <section className="feature-page split-page">
+    <ResizableSplit name="Baselines" className="feature-page split-page">
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
@@ -500,6 +501,6 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
           onClose={() => setDeleteTarget(null)}
         />
       )}
-    </section>
+    </ResizableSplit>
   );
 }

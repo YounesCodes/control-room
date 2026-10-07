@@ -1041,6 +1041,22 @@ fn validate_scratchpad_input(input: &ScratchpadNoteInput) -> Result<(), String> 
 }
 
 fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), String> {
+    if state.panel_sizes.len() > 32
+        || state.panel_sizes.iter().any(|(key, size)| {
+            let bounds = if key == "connections" {
+                Some((200, 480))
+            } else if key.starts_with("content:") && key.len() <= 64 {
+                Some((360, 1600))
+            } else if key.starts_with("split:") && key.len() <= 64 {
+                Some((240, 900))
+            } else {
+                None
+            };
+            bounds.is_none_or(|(min, max)| *size < min || *size > max)
+        })
+    {
+        return Err("Workspace state contains invalid panel sizes".into());
+    }
     if state.workspaces.len() > 100 {
         return Err("Workspace state cannot contain more than 100 Workspaces".into());
     }
@@ -2799,6 +2815,56 @@ mod tests {
     }
 
     #[test]
+    fn panel_sizes_survive_database_reopen_and_reset() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let state = PersistedWorkspaceState {
+            panel_sizes: [
+                ("connections".into(), 320),
+                ("content:overview".into(), 720),
+                ("split:Docker".into(), 420),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        {
+            let database = Database::open(&path).unwrap();
+            database.save_workspace_state(&state).unwrap();
+        }
+        let database = Database::open(&path).unwrap();
+        assert_eq!(database.get_workspace_state().unwrap(), state);
+        database
+            .save_workspace_state(&PersistedWorkspaceState::default())
+            .unwrap();
+        assert!(
+            database
+                .get_workspace_state()
+                .unwrap()
+                .panel_sizes
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn panel_sizes_reject_unknown_keys_and_out_of_bounds_values() {
+        for (key, value) in [
+            ("connections", 199),
+            ("connections", 481),
+            ("content:overview", 359),
+            ("content:ports", 1601),
+            ("split:Docker", 239),
+            ("split:Docker", 901),
+            ("unknown", 320),
+        ] {
+            let state = PersistedWorkspaceState {
+                panel_sizes: [(key.into(), value)].into(),
+                ..Default::default()
+            };
+            assert!(validate_workspace_state(&state).is_err(), "{key}: {value}");
+        }
+    }
+
+    #[test]
     fn disconnected_workspace_state_round_trips_without_session_data() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -2815,6 +2881,7 @@ mod tests {
             }],
             active_workspace_id: Some(workspace_id.clone()),
             terminal_groups: Vec::new(),
+            panel_sizes: Default::default(),
             terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
         };
 
@@ -2839,6 +2906,7 @@ mod tests {
             }],
             active_workspace_id: Some(workspace_id.clone()),
             terminal_groups: Vec::new(),
+            panel_sizes: Default::default(),
             terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
         };
 
@@ -2861,6 +2929,7 @@ mod tests {
             }],
             active_workspace_id: Some(workspace_id.clone()),
             terminal_groups: Vec::new(),
+            panel_sizes: Default::default(),
             terminal_layout: None,
         };
 
@@ -3326,6 +3395,7 @@ mod tests {
                 }],
                 active_workspace_id: Some(workspace_id.clone()),
                 terminal_groups: Vec::new(),
+                panel_sizes: Default::default(),
                 terminal_layout: Some(layout),
             }
         };
@@ -3381,6 +3451,7 @@ mod tests {
                     name: "Build".into(),
                     layout,
                 }],
+                panel_sizes: Default::default(),
                 terminal_layout: None,
             };
 
@@ -3414,6 +3485,7 @@ mod tests {
                 }],
                 active_workspace_id: Some(workspace_id.clone()),
                 terminal_groups: Vec::new(),
+                panel_sizes: Default::default(),
                 terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
             })
             .unwrap();
@@ -3636,6 +3708,7 @@ mod tests {
                 }],
                 active_workspace_id: Some(workspace_id),
                 terminal_groups: Vec::new(),
+                panel_sizes: Default::default(),
                 terminal_layout: None,
             };
             assert!(

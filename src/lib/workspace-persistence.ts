@@ -80,6 +80,7 @@ export function persistWorkspaceState(
   workspaces: Workspace[],
   activeWorkspaceId: string | null,
   terminalGroups: TerminalGroup[],
+  panelSizes: import("./panel-layout").PanelSizes = {},
 ): PersistedWorkspaceState {
   const workspaceIds = new Set(workspaces.map((workspace) => workspace.id));
   return {
@@ -94,5 +95,6 @@ export function persistWorkspaceState(
     activeWorkspaceId: workspaceIds.has(activeWorkspaceId ?? "") ? activeWorkspaceId : null,
     terminalGroups: pruneTerminalGroups(terminalGroups, workspaceIds),
     terminalLayout: null,
+    panelSizes,
   };
 }

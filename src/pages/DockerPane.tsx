@@ -1,3 +1,4 @@
+import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { RefreshCw, Search } from "lucide-react";
@@ -203,7 +204,7 @@ export function DockerPane({
   }
 
   return (
-    <section className="feature-page split-page">
+    <ResizableSplit name="Docker" className="feature-page split-page">
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
@@ -308,6 +309,6 @@ export function DockerPane({
           }
         />
       )}
-    </section>
+    </ResizableSplit>
   );
 }

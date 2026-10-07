@@ -1,3 +1,4 @@
+import { ResizableSplit } from "../ResizablePanels";
 import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "../PanelState";
 import { SocketDetail } from "./SocketDetail";
@@ -55,7 +56,7 @@ export function PortsTable({
   const selectedContainer = selected ? resolveSocketContainer(selected, containers) : null;
 
   return (
-    <div className="split-page ports-view">
+    <ResizableSplit name="Ports table" className="split-page ports-view">
       <div className="list-panel">
         <div className="port-list-controls">
           <select
@@ -118,6 +119,6 @@ export function PortsTable({
           <EmptyState title="Select a listening port" />
         )}
       </aside>
-    </div>
+    </ResizableSplit>
   );
 }

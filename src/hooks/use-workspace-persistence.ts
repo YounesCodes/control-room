@@ -9,17 +9,19 @@ export function useWorkspacePersistence({
   workspaces,
   activeWorkspaceId,
   terminalGroups,
+  panelSizes,
   onError,
 }: {
   ready: boolean;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   terminalGroups: TerminalGroup[];
+  panelSizes: import("../lib/panel-layout").PanelSizes;
   onError: (message: string) => void;
 }) {
   const state = useMemo(
-    () => persistWorkspaceState(workspaces, activeWorkspaceId, terminalGroups),
-    [activeWorkspaceId, terminalGroups, workspaces],
+    () => persistWorkspaceState(workspaces, activeWorkspaceId, terminalGroups, panelSizes),
+    [activeWorkspaceId, terminalGroups, workspaces, panelSizes],
   );
   const serializedState = JSON.stringify(state);
 

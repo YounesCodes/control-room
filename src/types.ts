@@ -577,6 +577,7 @@ interface PersistedWorkspace {
 }
 
 export interface PersistedWorkspaceState {
+  panelSizes?: import("./lib/panel-layout").PanelSizes;
   workspaces: PersistedWorkspace[];
   activeWorkspaceId: string | null;
   terminalGroups?: import("./lib/terminal-groups").TerminalGroup[];

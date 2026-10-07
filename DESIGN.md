@@ -58,6 +58,13 @@ on a complete tab or group edge so its status and actions stay visible.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.
 
+Connection and inspection panes have draggable, keyboard-operable dividers.
+Keep saved widths within limits that leave the neighboring pane usable. Reflow
+content at the pane's width, and stack list/detail views when two columns no
+longer fit. A smaller window may temporarily constrain a saved width; widening
+it should restore that preference. Provide individual divider resets and a
+visible Reset layout action for all panel sizes.
+
 Content should stay usable at the supported minimum window size. Keep primary
 navigation reachable. In dialogs, keep the title and actions available while a
 long body scrolls. Menus should open as anchored overlays and must not resize or

@@ -766,6 +766,7 @@ pub struct EnvironmentInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PersistedWorkspaceState {
+    pub panel_sizes: std::collections::BTreeMap<String, u32>,
     pub workspaces: Vec<PersistedWorkspace>,
     pub active_workspace_id: Option<String>,
     pub terminal_groups: Vec<PersistedTerminalGroup>,
