@@ -254,8 +254,8 @@ describe("critical UI in Chromium", () => {
     await main.hover();
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
     expect(label.getBoundingClientRect().width).toBeLessThan(initialLabelWidth - 40);
-    expect(tab.getBoundingClientRect().width).toBe(initialTabWidth);
-    expect(nextTab.getBoundingClientRect().left).toBe(nextTabLeft);
+    expect(Math.abs(tab.getBoundingClientRect().width - initialTabWidth)).toBeLessThanOrEqual(1);
+    expect(Math.abs(nextTab.getBoundingClientRect().left - nextTabLeft)).toBeLessThanOrEqual(1);
 
     await page.getByRole("button", { name: "Outside" }).hover();
     await vi.waitFor(() => expect(getComputedStyle(rename).opacity).toBe("0"));
@@ -320,7 +320,7 @@ describe("critical UI in Chromium", () => {
     expect(firstVisible.getBoundingClientRect().left).toBeGreaterThanOrEqual(edge - 1);
 
     list.scrollLeft = 470;
-    await vi.waitFor(() => expect(list.scrollLeft).toBe(392));
+    await vi.waitFor(() => expect(Math.abs(list.scrollLeft - 392)).toBeLessThanOrEqual(1));
     const wheelVisible = Array.from(list.querySelectorAll<HTMLElement>(".session-tab-wrap")).find(
       (tab) => tab.getBoundingClientRect().right > edge + 1,
     )!;

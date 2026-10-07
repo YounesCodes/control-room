@@ -107,7 +107,7 @@ describe("Saved Connections through real SQLite", () => {
           tagIds: [],
         },
       }),
-    ).rejects.toBeDefined();
+    ).rejects.toThrow(/destination|unsafe|invalid/i);
     expect(await ipc("list_connections")).toEqual([]);
   });
 });

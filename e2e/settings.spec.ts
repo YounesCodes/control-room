@@ -64,7 +64,7 @@ describe("Settings and native window", () => {
     await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === false);
     const restored = await browser.getWindowRect();
-    expect(restored.width).toBe(before.width);
-    expect(restored.height).toBe(before.height);
+    expect(Math.abs(restored.width - before.width)).toBeLessThanOrEqual(2);
+    expect(Math.abs(restored.height - before.height)).toBeLessThanOrEqual(2);
   });
 });

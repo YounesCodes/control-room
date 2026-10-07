@@ -1,6 +1,7 @@
 import { $, browser, expect } from "@wdio/globals";
 import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
 import type { AppSettings, SavedConnection } from "../src/types";
 
 export interface RuntimeStatus {
@@ -84,27 +85,6 @@ export async function cleanRuntime() {
   );
 }
 
-export function sanitize(text: string) {
-  for (const value of [
-    process.env.CONTROL_ROOM_TEST_HOST,
-    process.env.CONTROL_ROOM_TEST_USER,
-    process.env.USERPROFILE,
-    process.env.CONTROL_ROOM_E2E_DATA_DIR,
-  ]) {
-    if (value) text = text.split(value).join("[redacted]");
-  }
-  return text.replace(
-    /((?:password|token|secret|private.?key)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}\]]+)/gi,
-    (_, prefix: string, value: string) =>
-      prefix +
-      (value.startsWith('"')
-        ? '"[redacted]"'
-        : value.startsWith("'")
-          ? "'[redacted]'"
-          : "[redacted]"),
-  );
-}
-
 export async function captureFailure(title: string) {
   const folder = resolve(
     "test-results/desktop",
@@ -114,11 +94,16 @@ export async function captureFailure(title: string) {
   // Live screenshots stay local and may contain host facts. Only the deterministic workflow uploads artifacts.
   await browser.saveScreenshot(join(folder, "failure.png"));
   const dom = await browser.execute(
-    () => document.body.innerText + "\n\n" + document.body.outerHTML,
+    () =>
+      document.body.innerText.slice(0, 128_000) +
+      "\n\n" +
+      document.body.outerHTML.slice(0, 256_000),
   );
   writeFileSync(
     join(folder, "state.txt"),
-    sanitize(`${title}\n${dom}\n${JSON.stringify(await runtime())}`),
+    sanitize(
+      `${title}\n${dom}\n${JSON.stringify(await runtime().catch(() => ({ unavailable: true })))}`,
+    ),
   );
 }
 

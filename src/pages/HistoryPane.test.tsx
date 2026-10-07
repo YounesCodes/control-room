@@ -219,4 +219,70 @@ describe("HistoryPane", () => {
     expect(screen.getByRole("button", { name: "Enable Enhanced History" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Disable on this connection" })).toBeNull();
   });
+  it.each(["install", "uninstall", "toggle", "delete", "clear"])(
+    "ignores late %s completion after switching hosts",
+    async (operation) => {
+      const options = props();
+      api.historyIntegrationStatus.mockResolvedValue(operation !== "install");
+      const method = {
+        install: api.installHistoryIntegration,
+        uninstall: api.uninstallHistoryIntegration,
+        toggle: api.setConnectionHistoryEnabled,
+        delete: api.deleteHistory,
+        clear: api.clearHistory,
+      }[operation]!;
+      let finish!: (value: unknown) => void;
+      method.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const view = render(<HistoryPane {...options} />);
+      await screen.findByText("docker ps");
+      const labels = {
+        install: "Enable Enhanced History",
+        uninstall: "Remove from remote Bash",
+        toggle: "Disable on this connection",
+        delete: "Delete history entry",
+        clear: "Clear saved history",
+      };
+      await userEvent.click(
+        screen.getByRole("button", { name: labels[operation as keyof typeof labels] }),
+      );
+      if (operation === "uninstall")
+        await userEvent.click(screen.getByRole("button", { name: "Remove integration" }));
+      if (operation === "clear")
+        await userEvent.click(screen.getByRole("button", { name: "Clear history" }));
+      api.history.mockResolvedValue([
+        { id: "entry-a", command: "HOST_B_COMMAND", startedAt: "2026-08-27T10:00:00Z" },
+      ]);
+      view.rerender(
+        <HistoryPane {...options} connection={{ ...connection, id: "connection-b" }} />,
+      );
+      await screen.findByText("HOST_B_COMMAND");
+      await act(async () => finish(connection));
+      expect(screen.getByText("HOST_B_COMMAND")).toBeTruthy();
+      expect(options.onConnectionChanged).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ignores a late mutation error and releases the new host's controls", async () => {
+    api.historyIntegrationStatus.mockResolvedValue(false);
+    let fail!: (reason: Error) => void;
+    api.installHistoryIntegration.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
+    const options = props();
+    const view = render(<HistoryPane {...options} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Enable Enhanced History" }));
+    view.rerender(<HistoryPane {...options} connection={{ ...connection, id: "connection-b" }} />);
+    const button = await screen.findByRole("button", { name: "Enable Enhanced History" });
+    expect(button.hasAttribute("disabled")).toBe(false);
+    await act(async () => fail(new Error("OLD_HOST_ERROR")));
+    expect(screen.queryByText("OLD_HOST_ERROR")).toBeNull();
+  });
 });

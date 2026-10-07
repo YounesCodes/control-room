@@ -13,7 +13,10 @@ import type { PersistedWorkspaceState } from "../src/types";
 
 async function renameActive(name: string) {
   await $(".session-tab-wrap.active .session-tab-main").moveTo();
-  await $(".session-tab-wrap.active .session-tab-rename").click();
+  const rename = $(".session-tab-wrap.active .session-tab-rename");
+  await rename.moveTo();
+  await rename.waitForClickable();
+  await rename.click();
   await $("[role=dialog] input").setValue(name);
   await $("button=Rename").click();
 }

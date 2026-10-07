@@ -49,6 +49,16 @@ export function HistoryPane({
   const loadRequestRef = useRef(0);
   const integrationRequestRef = useRef(0);
 
+  const mutationGeneration = useRef(0);
+  useEffect(() => {
+    setWorking(false);
+    setError(null);
+    setConfirmState(null);
+    return () => {
+      mutationGeneration.current += 1;
+    };
+  }, [connection.id]);
+
   async function loadIntegration() {
     const request = ++integrationRequestRef.current;
     setIntegrationError(null);
@@ -98,16 +108,18 @@ export function HistoryPane({
   }
 
   async function installIntegration() {
+    const generation = mutationGeneration.current;
     setWorking(true);
     setError(null);
     try {
       const updated = await api.installHistoryIntegration(connection.id);
+      if (generation !== mutationGeneration.current) return;
       setIntegrationInstalled(true);
       onConnectionChanged(updated);
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
-      setWorking(false);
+      if (generation === mutationGeneration.current) setWorking(false);
     }
   }
 
@@ -122,20 +134,23 @@ export function HistoryPane({
   }
 
   async function performRemoveIntegration() {
+    const generation = mutationGeneration.current;
     setWorking(true);
     setError(null);
     try {
       const updated = await api.uninstallHistoryIntegration(connection.id);
+      if (generation !== mutationGeneration.current) return;
       setIntegrationInstalled(false);
       onConnectionChanged(updated);
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
-      setWorking(false);
+      if (generation === mutationGeneration.current) setWorking(false);
     }
   }
 
   async function toggleCapture() {
+    const generation = mutationGeneration.current;
     setWorking(true);
     setError(null);
     try {
@@ -143,21 +158,23 @@ export function HistoryPane({
         connection.id,
         !connection.historyEnabled,
       );
-      onConnectionChanged(updated);
+      if (generation === mutationGeneration.current) onConnectionChanged(updated);
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
-      setWorking(false);
+      if (generation === mutationGeneration.current) setWorking(false);
     }
   }
 
   async function remove(entry: HistoryEntry) {
+    const generation = mutationGeneration.current;
     setError(null);
     try {
       await api.deleteHistory(entry.id);
+      if (generation !== mutationGeneration.current) return;
       setEntries((current) => current.filter((item) => item.id !== entry.id));
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (generation === mutationGeneration.current) setError(errorMessage(caught));
     }
   }
 
@@ -171,12 +188,13 @@ export function HistoryPane({
   }
 
   async function performClear() {
+    const generation = mutationGeneration.current;
     setError(null);
     try {
       await api.clearHistory(connection.id);
-      setEntries([]);
+      if (generation === mutationGeneration.current) setEntries([]);
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (generation === mutationGeneration.current) setError(errorMessage(caught));
     }
   }
 

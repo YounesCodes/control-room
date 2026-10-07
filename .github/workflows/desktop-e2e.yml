@@ -25,11 +25,12 @@ jobs:
       - run: npm run test:desktop:build
       - run: npm run test:desktop
       - name: Sanitize failure diagnostics
+        id: sanitize
         if: failure()
         run: node scripts/sanitize-e2e-results.mjs
       - uses: actions/upload-artifact@v7
-        if: failure()
+        if: failure() && steps.sanitize.outcome == 'success'
         with:
           name: desktop-failure-diagnostics
-          path: test-results/desktop/
+          path: test-results/desktop-sanitized/
           if-no-files-found: ignore

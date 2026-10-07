@@ -10,17 +10,23 @@ interface DriverProcess {
 }
 
 function drivers(): DriverProcess[] {
-  const output = execFileSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "$rows = @(Get-CimInstance Win32_Process -Filter \"Name='tauri-driver.exe' OR Name='msedgedriver.exe' OR Name='cmd.exe'\" | ForEach-Object { @{ id = $_.ProcessId; parent = $_.ParentProcessId; name = $_.Name; created = $_.CreationDate.ToUniversalTime().ToString('o') } }); ConvertTo-Json -Compress -InputObject $rows",
-    ],
-    { encoding: "utf8", windowsHide: true },
-  );
-  return JSON.parse(output);
+  try {
+    const output = execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$rows = @(Get-CimInstance Win32_Process -Filter \"Name='tauri-driver.exe' OR Name='msedgedriver.exe' OR Name='cmd.exe'\" | ForEach-Object { @{ id = $_.ProcessId; parent = $_.ParentProcessId; name = $_.Name; created = $_.CreationDate.ToUniversalTime().ToString('o') } }); ConvertTo-Json -Compress -InputObject $rows",
+      ],
+      { encoding: "utf8", windowsHide: true },
+    );
+    const parsed = output.trim() ? JSON.parse(output) : [];
+    return Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+  } catch {
+    console.error("Could not inspect desktop driver processes; preserving unverified processes.");
+    return [];
+  }
 }
 
 export function recordDrivers(directory: string, runnerPid: number) {

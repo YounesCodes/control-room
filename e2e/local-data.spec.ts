@@ -1,5 +1,5 @@
 import "./isolation";
-import { $, $$, expect } from "@wdio/globals";
+import { $, $$, browser, expect } from "@wdio/globals";
 import {
   addConnection,
   connectionMenu,
@@ -10,7 +10,7 @@ import {
   runtime,
   terminalCommand,
 } from "./helpers";
-import type { HistoryEntry, ScratchpadNote } from "../src/types";
+import type { HistoryEntry, ScratchpadNote, PersistedWorkspaceState } from "../src/types";
 
 async function note(text: string) {
   await $("textarea[aria-label='Connection note']").setValue(text);
@@ -106,7 +106,7 @@ describe("Local data in remote Workspaces", () => {
   });
 
   it("deletes every Workspace of a connection and keeps an unrelated local terminal running", async () => {
-    await addConnection("Deleted host");
+    const deleted = await addConnection("Deleted host");
     await $(".host-main*=Deleted host").click();
     await $("button=New terminal").click();
     await $(".new-terminal-menu").$("button*=Deleted host").click();
@@ -123,5 +123,19 @@ describe("Local data in remote Workspaces", () => {
     await expect($(".session-tab-main=Deleted host")).not.toExist();
     await terminalCommand("echo UNRELATED_SURVIVED", "UNRELATED_SURVIVED");
     expect((await runtime()).sessionIds).toContain(localSession);
+    await browser.waitUntil(
+      async () =>
+        !(await ipc<PersistedWorkspaceState>("get_workspace_state")).workspaces.some(
+          (workspace) => workspace.connectionId === deleted.id,
+        ),
+    );
+    await restartApp();
+    await expect($(".host-main*=Deleted host")).not.toExist();
+    await expect($(".session-tab-main*=Deleted host")).not.toExist();
+    expect(
+      (await ipc<PersistedWorkspaceState>("get_workspace_state")).workspaces.some(
+        (workspace) => workspace.connectionId === deleted.id,
+      ),
+    ).toBe(false);
   });
 });
