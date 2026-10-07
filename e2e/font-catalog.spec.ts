@@ -8,7 +8,9 @@ const liveFonts = process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : descr
 
 liveFonts("public font catalog in WebView2", () => {
   it("renders a downloaded preview without installing or changing the current font", async () => {
-    const folder = join(process.env.LOCALAPPDATA!, "Microsoft", "Windows", "Fonts");
+    const localData = process.env.LOCALAPPDATA;
+    if (!localData) throw new Error("LOCALAPPDATA is required to inspect user-installed fonts.");
+    const folder = join(localData, "Microsoft", "Windows", "Fonts");
     const paths = [400, 700].map((weight) =>
       join(folder, `ControlRoom-jetbrains-mono-${weight}.ttf`),
     );

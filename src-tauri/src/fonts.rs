@@ -1,5 +1,11 @@
 //! Catalog previews stay in memory. Only install_catalog_font writes user fonts.
-use std::{collections::HashMap, io::Read, path::Path, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    io::Read,
+    path::Path,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use parking_lot::Mutex;
 use reqwest::blocking::Client;
@@ -11,6 +17,7 @@ use tauri::{
 
 const CATALOG: &str = "https://api.fontsource.org/v1/fonts?category=monospace&type=google&weights=400&styles=normal&subsets=latin";
 const MAX_DOWNLOAD: usize = 8 * 1024 * 1024;
+const MAX_PREVIEW_CACHE: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Default)]
 pub struct FontState {
@@ -55,7 +62,11 @@ fn client() -> Result<Client, String> {
         .connect_timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
         // Google returns complete TrueType fonts for this non-browser client.
-        .user_agent("ControlRoom/0.8 font installer")
+        .user_agent(concat!(
+            "ControlRoom/",
+            env!("CARGO_PKG_VERSION"),
+            " font installer"
+        ))
         .build()
         .map_err(|e| format!("Could not start font download: {e}"))
 }
@@ -81,6 +92,8 @@ fn usable(font: &CatalogFont) -> bool {
         && font.source_type == "google"
         && font.weights.contains(&400)
         && font.styles.iter().any(|s| s == "normal")
+        && font.subsets.len() <= 32
+        && font.subsets.iter().all(|s| s.len() <= 32 && valid_id(s))
         && font.subsets.iter().any(|s| s == "latin")
 }
 
@@ -95,6 +108,9 @@ fn download(
         .send()
         .and_then(|r| r.error_for_status())
         .map_err(|e| format!("Font service unavailable. Check your connection and retry. {e}"))?;
+    if response.status().is_redirection() {
+        return Err("Font service redirected the download. Retry later.".into());
+    }
     let total = response.content_length();
     if total.is_some_and(|n| n > limit as u64) {
         return Err("Font service returned a file that is too large.".into());
@@ -155,8 +171,10 @@ fn catalog_font(state: &FontState, id: &str) -> Result<CatalogFont, String> {
 // Ignore arbitrary URLs in catalog data. Only Google's fixed HTTPS font host
 // can supply installable bytes; redirects, credentials, and query strings fail.
 fn ttf_urls(css: &str) -> Result<Vec<String>, String> {
-    let expression =
-        regex::Regex::new(r"url\((https://fonts\.gstatic\.com/s/[A-Za-z0-9_./-]+\.ttf)\)").unwrap();
+    static EXPRESSION: OnceLock<regex::Regex> = OnceLock::new();
+    let expression = EXPRESSION.get_or_init(|| {
+        regex::Regex::new(r"url\((https://fonts\.gstatic\.com/s/[A-Za-z0-9_./-]+\.ttf)\)").unwrap()
+    });
     let urls: Vec<_> = expression
         .captures_iter(css)
         .map(|c| c[1].to_string())
@@ -169,10 +187,15 @@ fn ttf_urls(css: &str) -> Result<Vec<String>, String> {
     Ok(urls)
 }
 
-fn validate_font(bytes: &[u8], family: &str) -> Result<(), String> {
+fn validate_font(bytes: &[u8], family: &str, weight: u16) -> Result<(), String> {
     let face = ttf_parser::Face::parse(bytes, 0).map_err(|_| {
         "Downloaded file is not a valid TrueType font. Retry the download.".to_string()
     })?;
+    if face.weight().to_number() != weight {
+        return Err(
+            "Downloaded font does not match the requested weight. Retry the download.".into(),
+        );
+    }
     let matches = face.names().into_iter().any(|n| {
         matches!(
             n.name_id,
@@ -206,7 +229,7 @@ fn font_bytes(
         return Err("The font service returned an unsupported split font. Retry later.".into());
     }
     let bytes = download(client, &urls[0], MAX_DOWNLOAD, report)?;
-    validate_font(&bytes, &font.family)?;
+    validate_font(&bytes, &font.family, weight)?;
     Ok(bytes)
 }
 
@@ -253,6 +276,19 @@ pub async fn preview_catalog_font(
     font_worker(move || preview_font(&state, id)).await
 }
 
+fn cache_preview(cache: &mut HashMap<String, Vec<u8>>, id: String, bytes: Vec<u8>) {
+    cache.remove(&id);
+    while cache.len() >= 16
+        || cache.values().map(Vec::len).sum::<usize>() + bytes.len() > MAX_PREVIEW_CACHE
+    {
+        let Some(key) = cache.keys().next().cloned() else {
+            break;
+        };
+        cache.remove(&key);
+    }
+    cache.insert(id, bytes);
+}
+
 fn preview_font(state: &FontState, id: String) -> Result<Response, String> {
     let font = catalog_font(state, &id)?;
     if let Some(bytes) = state.previews.lock().get(&id).cloned() {
@@ -260,10 +296,7 @@ fn preview_font(state: &FontState, id: String) -> Result<Response, String> {
     }
     let bytes = font_bytes(&client()?, &font, 400, |_, _| {})?;
     let mut cache = state.previews.lock();
-    if cache.len() >= 16 {
-        cache.clear();
-    }
-    cache.insert(id, bytes.clone());
+    cache_preview(&mut cache, id, bytes.clone());
     Ok(Response::new(bytes))
 }
 
@@ -280,6 +313,36 @@ trait FontRegistration {
     fn unregister(&self, path: &Path, key: &str);
 }
 
+// Publish a fully synced staging file without replacing an existing font.
+fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
+    use std::io::Write;
+    let staging = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&staging)
+            .map_err(|e| format!("Cannot write to your Windows font folder. Check folder permissions and retry. {e}"))?;
+        file.write_all(bytes)
+            .and_then(|_| file.sync_all())
+            .map_err(|e| format!("Cannot write the font file. Check disk space and retry. {e}"))?;
+        drop(file);
+        match std::fs::hard_link(&staging, path) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                if std::fs::read(path).map_err(|e| format!("Cannot read existing font: {e}"))?
+                    != bytes
+                {
+                    return Err("A different version of this font already exists in your Windows font folder. Remove it through Windows Settings before retrying.".into());
+                }
+                Ok(false)
+            }
+            Err(e) => Err(format!(
+                "Cannot publish the font file in your Windows font folder. Check folder permissions and retry. {e}"
+            )),
+        }
+    })();
+    let _ = std::fs::remove_file(&staging);
+    result
+}
+
 fn install_files(
     directory: &Path,
     font: &CatalogFont,
@@ -293,39 +356,9 @@ fn install_files(
     let mut installed: Vec<InstalledFile> = Vec::new();
     let result = (|| {
         for (index, (weight, bytes)) in files.iter().enumerate() {
-            validate_font(bytes, &font.family)?;
+            validate_font(bytes, &font.family, *weight)?;
             let path = directory.join(format!("ControlRoom-{}-{weight}.ttf", font.id));
-            let created = match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-            {
-                Ok(mut file) => {
-                    use std::io::Write;
-                    if let Err(e) = file.write_all(bytes).and_then(|_| file.sync_all()) {
-                        drop(file);
-                        let _ = std::fs::remove_file(&path);
-                        return Err(format!(
-                            "Cannot write the font file. Check disk space and folder permissions, then retry. {e}"
-                        ));
-                    }
-                    true
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if std::fs::read(&path)
-                        .map_err(|e| format!("Cannot read existing font: {e}"))?
-                        != *bytes
-                    {
-                        return Err("A different version of this font already exists in your Windows font folder. Remove it through Windows Settings before retrying.".into());
-                    }
-                    false
-                }
-                Err(e) => {
-                    return Err(format!(
-                        "Cannot write to your Windows font folder. Check folder permissions and retry. {e}"
-                    ));
-                }
-            };
+            let created = write_font_file(&path, bytes)?;
             installed.push(InstalledFile {
                 path,
                 created,
@@ -493,10 +526,6 @@ fn install_font(
     id: String,
     progress: Channel<FontProgress>,
 ) -> Result<String, String> {
-    let _guard = state
-        .installation
-        .try_lock()
-        .ok_or("A font installation is already running. Wait until it finishes.")?;
     let font = catalog_font(state, &id)?;
     let client = client()?;
     let weights = if font.weights.contains(&700) {
@@ -519,6 +548,10 @@ fn install_font(
         })?;
         files.push((weight, bytes));
     }
+    let _guard = state
+        .installation
+        .try_lock()
+        .ok_or("A font installation is already running. Wait until it finishes.")?;
     let directory = app
         .path()
         .local_data_dir()
@@ -546,10 +579,7 @@ fn install_font(
         )?;
         windows::notify();
         let mut cache = state.previews.lock();
-        if cache.len() >= 16 {
-            cache.clear();
-        }
-        cache.insert(id, files[0].1.clone());
+        cache_preview(&mut cache, id, files[0].1.clone());
     }
     #[cfg(not(windows))]
     {
@@ -613,7 +643,17 @@ mod tests {
             install_files(
                 directory.path(),
                 &font,
-                &[(400, bytes.clone()), (700, bytes)],
+                &[
+                    (400, bytes.clone()),
+                    (
+                        700,
+                        std::fs::read(
+                            std::path::PathBuf::from(std::env::var_os("WINDIR").unwrap())
+                                .join("Fonts/consolab.ttf")
+                        )
+                        .unwrap()
+                    )
+                ],
                 &registration,
                 |_, _| {}
             )
@@ -672,13 +712,23 @@ mod tests {
             fn unregister(&self, _: &Path, _: &str) {}
         }
         let (font, bytes) = windows_font_fixture();
-        assert!(validate_font(&bytes, "Different family").is_err());
+        assert!(validate_font(&bytes, "Different family", 400).is_err());
         let directory = tempfile::tempdir().unwrap();
         let mut events = Vec::new();
         install_files(
             directory.path(),
             &font,
-            &[(400, bytes.clone()), (700, bytes)],
+            &[
+                (400, bytes.clone()),
+                (
+                    700,
+                    std::fs::read(
+                        std::path::PathBuf::from(std::env::var_os("WINDIR").unwrap())
+                            .join("Fonts/consolab.ttf"),
+                    )
+                    .unwrap(),
+                ),
+            ],
             &Accept,
             |done, total| events.push((done, total)),
         )
@@ -726,6 +776,76 @@ mod tests {
         f = font();
         f.weights.clear();
         assert!(!usable(&f));
+    }
+    #[test]
+    fn preview_cache_is_bounded_by_bytes_and_entry_count() {
+        let mut cache = HashMap::new();
+        for index in 0..20 {
+            cache_preview(&mut cache, index.to_string(), vec![0; 16]);
+        }
+        assert_eq!(cache.len(), 16);
+        for index in 0..3 {
+            cache_preview(&mut cache, format!("large-{index}"), vec![0; MAX_DOWNLOAD]);
+        }
+        assert!(cache.values().map(Vec::len).sum::<usize>() <= MAX_PREVIEW_CACHE);
+        assert!(cache.contains_key("large-2"));
+    }
+    #[test]
+    fn redirects_report_an_explicit_failure_without_following() {
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0; 1024];
+            let read = stream.read(&mut buffer).unwrap();
+            assert!(read > 0);
+            stream.write_all(b"HTTP/1.1 302 Found\r\nLocation: https://example.invalid/font.ttf\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+        });
+        let error = download(
+            &client().unwrap(),
+            &format!("http://{address}"),
+            1024,
+            |_, _| {},
+        )
+        .unwrap_err();
+        server.join().unwrap();
+        assert!(error.contains("redirected"), "{error}");
+    }
+    #[test]
+    fn catalog_rejects_oversized_or_unsafe_subsets() {
+        for subsets in [
+            vec!["latin".into(), "../bad".into()],
+            vec!["latin".into(); 33],
+            vec!["latin".into(), "x".repeat(33)],
+        ] {
+            let mut font = font();
+            font.subsets = subsets;
+            assert!(!usable(&font));
+        }
+    }
+    #[test]
+    fn staging_never_exposes_a_partial_final_font() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("font.ttf");
+        let orphan = path.with_extension("interrupted.tmp");
+        std::fs::write(&orphan, b"partial").unwrap();
+        assert!(write_font_file(&path, b"complete font").unwrap());
+        assert_eq!(std::fs::read(&path).unwrap(), b"complete font");
+        assert!(!write_font_file(&path, b"complete font").unwrap());
+        assert!(write_font_file(&path, b"different font").is_err());
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+    #[cfg(windows)]
+    #[test]
+    fn regular_font_cannot_be_installed_as_bold() {
+        let (font, bytes) = windows_font_fixture();
+        assert!(validate_font(&bytes, &font.family, 400).is_ok());
+        assert!(
+            validate_font(&bytes, &font.family, 700)
+                .unwrap_err()
+                .contains("weight")
+        );
     }
     #[test]
     fn font_download_urls_are_restricted_to_google_truetype() {

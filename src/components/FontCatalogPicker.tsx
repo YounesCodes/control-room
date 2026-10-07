@@ -30,6 +30,7 @@ export function FontCatalogPicker({
   const pending = useRef(new Set<string>());
   const alive = useRef(true);
   const running = useRef(false);
+  const installed = useRef<{ id: string; family: string } | null>(null);
   const results = open
     ? (catalog?.fonts ?? [])
         .filter((font) => font.family.toLowerCase().includes(query.trim().toLowerCase()))
@@ -108,23 +109,38 @@ export function FontCatalogPicker({
     setFailure(null);
     setReady(null);
     setProgress({ stage: "downloadingRegular", completed: 0, total: null });
+    let installedFace: FontFace | null = null;
     try {
       const channel = new Channel<FontProgress>();
       channel.onmessage = (value) => {
         if (alive.current) setProgress(value);
       };
-      const family = await api.installCatalogFont(active.id, channel);
+      let family = installed.current?.id === active.id ? installed.current.family : null;
+      if (!family) {
+        family = await api.installCatalogFont(active.id, channel);
+        installed.current = { id: active.id, family };
+      }
+      if (!alive.current) return;
       // Reuse bytes cached by the successful Windows installer so the new
       // family renders immediately while the system font cache refreshes.
       const bytes = await api.previewCatalogFont(active.id);
-      const installedFace = await new FontFace(family, bytes).load();
+      installedFace = await new FontFace(family, bytes).load();
+      if (!alive.current) return;
+      const key = "installed:" + active.id;
+      const previous = loaded.current.get(key);
+      if (previous) document.fonts.delete(previous);
       document.fonts.add(installedFace);
+      loaded.current.set(key, installedFace);
       await onUse(family);
       if (alive.current) {
         setReady(`${family} is ready and applied to your terminals.`);
         setOpen(false);
       }
     } catch (error) {
+      if (installedFace) {
+        document.fonts.delete(installedFace);
+        loaded.current.delete("installed:" + active.id);
+      }
       if (alive.current) setFailure(errorMessage(error));
     } finally {
       running.current = false;
@@ -178,6 +194,7 @@ export function FontCatalogPicker({
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
               event.preventDefault();
               setOpen(true);
+              if (!results.length) return;
               const index = results.findIndex((font) => font.id === active?.id);
               const next =
                 (index + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length;
@@ -254,7 +271,11 @@ export function FontCatalogPicker({
             disabled={busy || disabled}
             onClick={() => void install()}
           >
-            {failure ? "Retry install and use" : "Install and use"}
+            {failure
+              ? installed.current?.id === active.id
+                ? "Retry apply font"
+                : "Retry install and use"
+              : "Install and use"}
           </button>
           <button
             type="button"
@@ -294,7 +315,10 @@ export function FontCatalogPicker({
       )}
       {failure && (
         <p role="alert" className="inline-warning">
-          {failure} Your current font is unchanged. Retry install and use.
+          {failure}{" "}
+          {installed.current?.id === active?.id
+            ? "The font is installed for your Windows account but has not been applied or saved. Retry apply font."
+            : "Your current font is unchanged. Retry install and use."}
         </p>
       )}
       {ready && <p role="status">{ready}</p>}

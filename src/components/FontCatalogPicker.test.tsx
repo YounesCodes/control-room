@@ -135,7 +135,17 @@ describe("catalog font lifecycle", () => {
       expect.stringContaining("Settings could not be saved"),
     );
     expect(screen.queryByText(/is ready and applied/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Retry install and use" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry apply font" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("installed for your Windows account");
+    expect(screen.getByRole("alert").textContent).not.toContain("current font is unchanged");
+    const face = add.mock.calls.find(([face]) => face.family === "JetBrains Mono")![0];
+    expect(remove).toHaveBeenCalledWith(face);
+    await userEvent.click(screen.getByRole("button", { name: "Retry apply font" }));
+    await screen.findByText(/is ready and applied/);
+    expect(api.installCatalogFont).toHaveBeenCalledTimes(1);
+    const applied = add.mock.calls.at(-1)![0];
+    cleanup();
+    expect(remove).toHaveBeenCalledWith(applied);
   });
 
   it("recovers from catalog and preview outages without applying a font", async () => {
@@ -151,6 +161,24 @@ describe("catalog font lifecycle", () => {
     await waitFor(() =>
       expect(props.onPreview).toHaveBeenCalledWith('"ControlRoomPreview-fira-mono", monospace'),
     );
+    expect(props.onUse).not.toHaveBeenCalled();
+  });
+
+  it("does not apply or add a font when installation finishes after unmount", async () => {
+    let finish!: (family: string) => void;
+    api.installCatalogFont.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const props = mount();
+    await screen.findByRole("option", { name: /Fira Mono/ });
+    await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
+    cleanup();
+    add.mockClear();
+    await act(async () => finish("JetBrains Mono"));
+    expect(add).not.toHaveBeenCalled();
     expect(props.onUse).not.toHaveBeenCalled();
   });
 

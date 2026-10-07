@@ -99,6 +99,8 @@ export function SettingsPane({
     ...settings,
     hiddenLocalShells: settings.hiddenLocalShells ?? [],
   }));
+  const savedSettings = useRef(settings);
+  savedSettings.current = settings;
   const [saving, setSaving] = useState(false);
   const [fontBusy, setFontBusy] = useState(false);
   const [previewFont, setPreviewFont] = useState<string | null>(null);
@@ -249,7 +251,7 @@ export function SettingsPane({
               onPreview={setPreviewFont}
               onUse={async (family) => {
                 const updated = {
-                  ...settings,
+                  ...savedSettings.current,
                   terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
                 };
                 await api.saveSettings(updated);

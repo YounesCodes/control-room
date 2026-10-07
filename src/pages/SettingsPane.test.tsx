@@ -79,8 +79,8 @@ function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {})
     onDirtyChange: vi.fn(),
     ...overrides,
   };
-  render(<SettingsPane {...props} />);
-  return props;
+  const view = render(<SettingsPane {...props} />);
+  return { ...props, ...view };
 }
 
 const saveButton = () => screen.getByRole("button", { name: /Save settings/ }) as HTMLButtonElement;
@@ -133,6 +133,38 @@ describe("Settings actions", () => {
         terminalFontSize: 16,
         terminalFontFamily: '"JetBrains Mono", Cascadia Mono, Consolas, monospace',
       }),
+    );
+  });
+
+  it("uses the latest saved preferences if they change during font installation", async () => {
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { add: vi.fn(), delete: vi.fn() },
+    });
+    vi.stubGlobal(
+      "FontFace",
+      class {
+        async load() {
+          return this;
+        }
+      },
+    );
+    let finish!: (family: string) => void;
+    api.installCatalogFont.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const props = renderPane();
+    await userEvent.click(screen.getByRole("combobox", { name: "Search free fonts" }));
+    await screen.findByRole("option", { name: /JetBrains Mono/ });
+    await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
+    props.rerender(<SettingsPane {...props} settings={{ ...settings, terminalFontSize: 19 }} />);
+    finish("JetBrains Mono");
+    await screen.findByText(/is ready and applied/);
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalFontSize: 19 }),
     );
   });
 
