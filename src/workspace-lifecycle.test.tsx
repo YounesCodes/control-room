@@ -83,6 +83,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 function connection(id: string, displayName: string): SavedConnection {

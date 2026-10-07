@@ -59,7 +59,7 @@ export async function restartApp(preserve = true) {
     },
     { timeout: 20_000, timeoutMsg: "The previous native application did not exit" },
   );
-  await expect($("aria/Saved connections")).toBeDisplayed();
+  await expect($("aria/Saved connections")).toExist();
   // First launch offers connection creation automatically. Tests set up their own data.
   if (await $("[role=dialog]").isExisting()) await $("[role=dialog]").$("button=Cancel").click();
   const current = await runtime();

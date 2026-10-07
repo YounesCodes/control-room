@@ -57,6 +57,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: false,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 let root: Root | null = null;

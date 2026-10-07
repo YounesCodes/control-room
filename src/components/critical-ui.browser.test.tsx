@@ -131,6 +131,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 const environment: EnvironmentInfo = {
@@ -399,6 +401,55 @@ describe("critical UI in Chromium", () => {
       await expect.element(page.getByRole("button", { name })).toHaveAccessibleName(name);
     }
   });
+
+  it.each([960, 1600])(
+    "hides Connections and gives the focused terminal full width at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mount(
+        <div className="app-shell terminal-focus-mode" style={{ height: 640 }}>
+          <header className="app-bar">Control Room</header>
+          <aside className="sidebar">
+            <button type="button">Add connection</button>
+          </aside>
+          <main className="workspace-shell">
+            <button type="button">New terminal</button>
+          </main>
+        </div>,
+      );
+      await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
+      const shell = container!.querySelector(".app-shell")!.getBoundingClientRect();
+      const terminal = container!.querySelector(".workspace-shell")!.getBoundingClientRect();
+      expect(getComputedStyle(container!.querySelector(".sidebar")!).display).toBe("none");
+      expect(terminal.left).toBe(shell.left + 1);
+      expect(terminal.right).toBe(shell.right - 1);
+    },
+  );
+
+  it.each([960, 1600])(
+    "keeps the Settings startup toggle and description close at %s pixels",
+    async (width) => {
+      await page.viewport(width, 900);
+      mount(<SettingsFixture />);
+      const mode = page.getByRole("checkbox", { name: "Local Terminal Mode", exact: true });
+      await expect.element(mode).toBeInTheDocument();
+      const row = mode.element().closest("label")!;
+      const description = page
+        .getByText("Start the default local terminal in Focus Mode on launch.")
+        .element();
+      row.scrollIntoView({ block: "center" });
+      const rowBounds = row.getBoundingClientRect();
+      const descriptionBounds = description.getBoundingClientRect();
+      const selector = page.getByRole("combobox", { name: "Default local terminal" }).element();
+      expect(rowBounds.height).toBeGreaterThanOrEqual(24);
+      expect(rowBounds.height).toBeLessThanOrEqual(30);
+      expect(descriptionBounds.top - rowBounds.bottom).toBeGreaterThanOrEqual(0);
+      expect(descriptionBounds.top - rowBounds.bottom).toBeLessThanOrEqual(8);
+      expect(
+        selector.closest("label")!.getBoundingClientRect().top - descriptionBounds.bottom,
+      ).toBeGreaterThanOrEqual(12);
+    },
+  );
 
   it("keeps Settings actions visible at the minimum supported height", async () => {
     await page.viewport(960, 640);

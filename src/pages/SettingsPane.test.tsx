@@ -32,6 +32,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 const environment: EnvironmentInfo = {
@@ -86,6 +88,35 @@ describe("Settings actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.saveSettings.mockResolvedValue(undefined);
+  });
+
+  it("saves Local Terminal Mode and the selected enabled default", async () => {
+    const user = userEvent.setup();
+    renderPane({ localShells: [powershell, gitBash] });
+    await user.click(screen.getByRole("checkbox", { name: "Local Terminal Mode" }));
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Default local terminal" }),
+      "git-bash",
+    );
+    await user.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ localTerminalMode: true, defaultLocalShellId: "git-bash" }),
+    );
+  });
+
+  it("excludes administrator shells from the startup selector while keeping their manual toggles", () => {
+    renderPane({ localShells: [powershell, administratorPowerShell] });
+    expect(screen.queryByRole("option", { name: /Administrator/ })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /PowerShell 7.*administrator/ })).toBeTruthy();
+  });
+
+  it("does not offer a disabled shell as a new default", () => {
+    renderPane({
+      settings: { ...settings, hiddenLocalShells: ["git-bash"] },
+      localShells: [powershell, gitBash],
+    });
+    expect(screen.queryByRole("option", { name: "Git Bash" })).toBeNull();
+    expect(screen.getByRole("option", { name: "PowerShell 7" })).toBeTruthy();
   });
 
   it("keeps Back and Save reachable without scrolling to the end of the form", () => {
@@ -339,7 +370,7 @@ describe("Settings actions", () => {
     );
   });
 
-  it("shows a saved choice as off and gives a one-step way back", async () => {
+  it("restores a hidden shell through its individual toggle", async () => {
     const user = userEvent.setup();
     renderPane({
       settings: { ...settings, hiddenLocalShells: ["git-bash"] },
@@ -350,12 +381,15 @@ describe("Settings actions", () => {
     expect(toggle.checked).toBe(false);
     expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
 
-    // Turning every hidden shell back on in one click, rather than hunting for
-    // the rows that are no longer obvious once several are off.
-    await user.click(screen.getByRole("button", { name: /Show all/ }));
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+    await user.click(toggle);
     expect((screen.getByLabelText("Offer Git Bash") as HTMLInputElement).checked).toBe(true);
     // Still a draft: every other Settings change is confirmed the same way.
     expect(saveButton().disabled).toBe(false);
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
+    await user.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenLocalShells: [] }),
+    );
   });
 });

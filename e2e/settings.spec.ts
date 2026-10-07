@@ -1,6 +1,6 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { openLocal, restartApp, savedSettings, terminalCommand } from "./helpers";
+import { ipc, openLocal, restartApp, runtime, savedSettings, terminalCommand } from "./helpers";
 
 const font = () => $("//label[span[normalize-space()='Font family']]/input");
 
@@ -43,7 +43,7 @@ describe("Settings and native window", () => {
     await browser.keys("Escape");
     await restartApp();
     await $("aria/Open Settings").click();
-    await $("button=Show all").click();
+    await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
     await openLocal();
@@ -66,5 +66,47 @@ describe("Settings and native window", () => {
     const restored = await browser.getWindowRect();
     expect(Math.abs(restored.width - before.width)).toBeLessThanOrEqual(2);
     expect(Math.abs(restored.height - before.height)).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("Local Terminal Mode desktop", () => {
+  it("starts the selected shell in normal Focus Mode, restores Connections on exit and reuses workspaces", async () => {
+    const settings = await savedSettings();
+    const catalog = await ipc<{ profiles: { id: string }[] }>("list_local_shells");
+    await ipc("save_settings", {
+      settings: {
+        ...settings,
+        localTerminalMode: true,
+        defaultLocalShellId: "command-prompt",
+        hiddenLocalShells: catalog.profiles
+          .filter((shell) => shell.id !== "command-prompt")
+          .map((shell) => shell.id),
+      },
+    });
+    await restartApp();
+    await expect($(".app-shell")).toHaveAttribute("class", "app-shell terminal-focus-mode");
+    await expect($(".sidebar")).not.toBeDisplayed();
+    await expect($("aria/New terminal")).toBeDisplayed();
+    await terminalCommand("echo CONTROL_ROOM_LOCAL_MODE_OK", "CONTROL_ROOM_LOCAL_MODE_OK");
+    expect((await runtime()).sessionIds).toHaveLength(1);
+    await $("aria/Exit terminal focus").click();
+    await expect($("aria/Saved connections")).toBeDisplayed();
+    await $("button=Local terminal").click();
+    await expect($(".local-shell-menu")).not.toExist();
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
+    await $("button=Add connection").click();
+    await expect($("[role=dialog]")).toBeDisplayed();
+    await browser.keys("Escape");
+    await browser.waitUntil(
+      async () =>
+        (await ipc<{ workspaces: unknown[] }>("get_workspace_state")).workspaces.length === 2,
+    );
+    await restartApp();
+    await expect($(".app-shell")).toHaveAttribute("class", "app-shell terminal-focus-mode");
+    await expect($(".sidebar")).not.toBeDisplayed();
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
+    expect(await browser.execute(() => document.querySelectorAll(".session-tab-wrap").length)).toBe(
+      2,
+    );
   });
 });

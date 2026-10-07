@@ -29,6 +29,8 @@ export const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: false,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 export function connection(id = "host-a"): SavedConnection {
   return {

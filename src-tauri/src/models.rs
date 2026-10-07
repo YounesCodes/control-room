@@ -587,6 +587,9 @@ pub struct AppSettings {
     /// this list is offered, so a profile added by a later release starts out
     /// visible instead of hidden behind a setting nobody wrote.
     pub hidden_local_shells: Vec<String>,
+    /// Starts the default enabled local shell in normal Focus Mode.
+    pub local_terminal_mode: bool,
+    pub default_local_shell_id: Option<String>,
 }
 
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
@@ -617,6 +620,8 @@ impl Default for AppSettings {
             global_sudo_enabled: false,
             automatic_update_checks: true,
             hidden_local_shells: Vec::new(),
+            local_terminal_mode: false,
+            default_local_shell_id: None,
         }
     }
 }
