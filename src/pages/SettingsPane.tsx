@@ -377,8 +377,6 @@ export function SettingsPane({
                   ))}
               </select>
             </label>
-            <small>Startup uses an enabled standard terminal.</small>
-            <small>Choose which shells appear in terminal menus.</small>
             {localShells.length === 0 ? (
               <small>No local shells are installed on this machine.</small>
             ) : (
