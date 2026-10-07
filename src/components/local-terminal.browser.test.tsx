@@ -77,7 +77,7 @@ afterEach(() => {
 });
 describe("Local Terminal Mode in the real App", () => {
   it.each([960, 1280])(
-    "starts focused and keeps Connections usable at %s pixels",
+    "starts in full-width focus and restores Connections on exit at %s pixels",
     async (width) => {
       await page.viewport(width, 640);
       container = document.createElement("div");
@@ -86,14 +86,15 @@ describe("Local Terminal Mode in the real App", () => {
       root = createRoot(container);
       root.render(<App />);
       await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
-      await expect
-        .element(page.getByRole("button", { name: "Add connection", exact: true }))
-        .toBeVisible();
-      expect(container.querySelector(".terminal-focus-mode.local-terminal-mode")).toBeTruthy();
-      const sidebar = container.querySelector(".sidebar")!.getBoundingClientRect();
+      expect(container.querySelector(".app-shell")!.className).toBe(
+        "app-shell terminal-focus-mode",
+      );
+      expect(getComputedStyle(container.querySelector(".sidebar")!).display).toBe("none");
+      const shell = container.querySelector(".app-shell")!.getBoundingClientRect();
       const terminal = container.querySelector(".workspace-shell")!.getBoundingClientRect();
-      expect(Math.abs(terminal.left - sidebar.right)).toBeLessThanOrEqual(1);
-      expect(terminal.width).toBeGreaterThan(700);
+      expect(terminal.left).toBe(shell.left + 1);
+      expect(terminal.right).toBe(shell.right - 1);
+      await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
       await expect
         .element(page.getByRole("region", { name: "Local terminal surface" }))
         .toBeVisible();
@@ -101,6 +102,14 @@ describe("Local Terminal Mode in the real App", () => {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
       });
       expect(result.violations.map(({ id }) => id)).toEqual([]);
+      await page.getByRole("button", { name: "Exit terminal focus" }).click();
+      await expect
+        .element(page.getByRole("button", { name: "Add connection", exact: true }))
+        .toBeVisible();
+      expect(container.querySelector(".app-shell")!.className).toBe("app-shell");
+      await expect
+        .element(page.getByRole("region", { name: "Local terminal surface" }))
+        .toBeVisible();
     },
   );
 });

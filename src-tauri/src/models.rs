@@ -587,7 +587,7 @@ pub struct AppSettings {
     /// this list is offered, so a profile added by a later release starts out
     /// visible instead of hidden behind a setting nobody wrote.
     pub hidden_local_shells: Vec<String>,
-    /// Starts the default enabled local shell in Focus Mode with Connections visible.
+    /// Starts the default enabled local shell in normal Focus Mode.
     pub local_terminal_mode: bool,
     pub default_local_shell_id: Option<String>,
 }

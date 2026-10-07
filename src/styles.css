@@ -1223,20 +1223,6 @@ code,
   display: none;
 }
 
-.terminal-focus-mode.local-terminal-mode {
-  grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
-}
-
-.terminal-focus-mode.local-terminal-mode .sidebar {
-  display: flex;
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.terminal-focus-mode.local-terminal-mode .workspace-shell {
-  grid-column: 2;
-}
-
 .terminal-focus-mode .workspace-shell {
   grid-column: 1 / -1;
   grid-row: 1 / -1;

@@ -219,7 +219,7 @@ describe("Local Terminal", () => {
         api.workspaceState.mockRejectedValue(new Error("workspace failed"));
       const { container } = render(<App />);
       expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("powershell-7");
-      expect(container.querySelector(".terminal-focus-mode.local-terminal-mode")).toBeTruthy();
+      expect(container.querySelector(".terminal-focus-mode")).toBeTruthy();
       expect(screen.getByLabelText("Saved connections")).toBeTruthy();
       if (scenario.endsWith("fail")) {
         await new Promise((resolve) => setTimeout(resolve, 350));
@@ -228,7 +228,7 @@ describe("Local Terminal", () => {
     },
   );
 
-  it("starts the selected default in focus with Connections and remote launch available", async () => {
+  it("starts the selected default in normal focus and restores Connections on exit", async () => {
     const user = userEvent.setup();
     api.settingsContract.mockResolvedValue({
       current: { ...settings, localTerminalMode: true, defaultLocalShellId: "git-bash" },
@@ -245,9 +245,9 @@ describe("Local Terminal", () => {
     expect(container.querySelector(".app-shell")?.classList.contains("terminal-focus-mode")).toBe(
       true,
     );
-    expect(container.querySelector(".app-shell")?.classList.contains("local-terminal-mode")).toBe(
-      true,
-    );
+    expect(container.querySelector(".app-shell")?.className).toBe("app-shell terminal-focus-mode");
+    await user.click(screen.getByRole("button", { name: "Exit terminal focus" }));
+    expect(container.querySelector(".app-shell")?.className).toBe("app-shell");
     expect(screen.getByLabelText("Saved connections")).toBeTruthy();
     await openConnection(user, "prod-web");
     expect(

@@ -1449,9 +1449,7 @@ export function App() {
   const settings = settingsContract.current;
 
   return (
-    <div
-      className={`app-shell${terminalFocusMode ? " terminal-focus-mode" : ""}${settings.localTerminalMode ? " local-terminal-mode" : ""}`}
-    >
+    <div className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}>
       <header className="app-bar" data-tauri-drag-region>
         <div className="app-bar-actions">
           <UpdateIndicator

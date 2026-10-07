@@ -190,6 +190,13 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
+    #[cfg(feature = "desktop-e2e")]
+    pub fn e2e_ids(&self) -> Vec<String> {
+        let mut ids: Vec<_> = self.sessions.lock().keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
     pub fn start(
         &self,
         app: AppHandle,

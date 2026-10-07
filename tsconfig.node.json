@@ -15,6 +15,9 @@
     "vitest.browser.config.ts",
     "wdio.conf.ts",
     "e2e/**/*.ts",
+    "src/types.ts",
+    "src/lib/terminal-groups.ts",
+    "src/lib/terminal-layout.ts",
     "eslint.config.js"
   ]
 }

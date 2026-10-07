@@ -351,8 +351,8 @@ export function SettingsPane({
               Local Terminal Mode
             </label>
             <small>
-              When Control Room opens, start the default local terminal in Focus Mode. Connections
-              stays available for remote hosts and more workspaces.
+              When Control Room opens, start the default local terminal in Focus Mode with the
+              Connections sidebar hidden.
             </small>
             <label>
               <span>Default local terminal</span>

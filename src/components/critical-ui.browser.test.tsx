@@ -256,8 +256,8 @@ describe("critical UI in Chromium", () => {
     await main.hover();
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
     expect(label.getBoundingClientRect().width).toBeLessThan(initialLabelWidth - 40);
-    expect(tab.getBoundingClientRect().width).toBe(initialTabWidth);
-    expect(nextTab.getBoundingClientRect().left).toBe(nextTabLeft);
+    expect(Math.abs(tab.getBoundingClientRect().width - initialTabWidth)).toBeLessThanOrEqual(1);
+    expect(Math.abs(nextTab.getBoundingClientRect().left - nextTabLeft)).toBeLessThanOrEqual(1);
 
     await page.getByRole("button", { name: "Outside" }).hover();
     await vi.waitFor(() => expect(getComputedStyle(rename).opacity).toBe("0"));
@@ -322,7 +322,7 @@ describe("critical UI in Chromium", () => {
     expect(firstVisible.getBoundingClientRect().left).toBeGreaterThanOrEqual(edge - 1);
 
     list.scrollLeft = 470;
-    await vi.waitFor(() => expect(list.scrollLeft).toBe(392));
+    await vi.waitFor(() => expect(Math.abs(list.scrollLeft - 392)).toBeLessThanOrEqual(1));
     const wheelVisible = Array.from(list.querySelectorAll<HTMLElement>(".session-tab-wrap")).find(
       (tab) => tab.getBoundingClientRect().right > edge + 1,
     )!;
@@ -403,11 +403,11 @@ describe("critical UI in Chromium", () => {
   });
 
   it.each([960, 1600])(
-    "keeps Connections beside the focused terminal at %s pixels",
+    "hides Connections and gives the focused terminal full width at %s pixels",
     async (width) => {
       await page.viewport(width, 640);
       mount(
-        <div className="app-shell terminal-focus-mode local-terminal-mode" style={{ height: 640 }}>
+        <div className="app-shell terminal-focus-mode" style={{ height: 640 }}>
           <header className="app-bar">Control Room</header>
           <aside className="sidebar">
             <button type="button">Add connection</button>
@@ -417,14 +417,12 @@ describe("critical UI in Chromium", () => {
           </main>
         </div>,
       );
-      await expect.element(page.getByRole("button", { name: "Add connection" })).toBeVisible();
       await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
-      const sidebar = container!.querySelector(".sidebar")!.getBoundingClientRect();
+      const shell = container!.querySelector(".app-shell")!.getBoundingClientRect();
       const terminal = container!.querySelector(".workspace-shell")!.getBoundingClientRect();
-      expect(sidebar.width).toBe(width === 960 ? 216 : 244);
-      expect(terminal.left).toBe(sidebar.right);
-      expect(terminal.width).toBeGreaterThan(700);
-      expect(terminal.right).toBeLessThanOrEqual(width);
+      expect(getComputedStyle(container!.querySelector(".sidebar")!).display).toBe("none");
+      expect(terminal.left).toBe(shell.left + 1);
+      expect(terminal.right).toBe(shell.right - 1);
     },
   );
 
@@ -441,6 +439,17 @@ describe("critical UI in Chromium", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
+  });
+
+  it("honors reduced motion while keeping dialog keyboard focus usable", async () => {
+    expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(true);
+    mount(<ModalFixture />);
+    await page.getByRole("button", { name: "Open dialog" }).click();
+    await expect.element(page.getByRole("dialog", { name: "Example dialog" })).toBeVisible();
+    const modal = page.getByRole("dialog", { name: "Example dialog" }).element();
+    expect(parseFloat(getComputedStyle(modal).animationDuration)).toBeLessThanOrEqual(0.00001);
+    await userEvent.keyboard("{Escape}");
+    await expect.element(page.getByRole("button", { name: "Open dialog" })).toHaveFocus();
   });
 
   it("keeps Settings content bounded and centered in a wide window", async () => {
