@@ -1,4 +1,4 @@
-import { ResizableSplit } from "../ResizablePanels";
+import { observeLayoutFallback, ResizableSplit } from "../ResizablePanels";
 import {
   useCallback,
   useEffect,
@@ -146,11 +146,15 @@ export function PortsOverview({
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
+    if (!viewport) return;
+    const resize = () => {
       measure();
       fit();
-    });
+    };
+    if (typeof ResizeObserver === "undefined") {
+      return observeLayoutFallback(viewport, resize);
+    }
+    const observer = new ResizeObserver(resize);
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [measure, fit, sockets.length]);

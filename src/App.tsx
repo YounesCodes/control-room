@@ -5,7 +5,7 @@ import {
   restorePanelSizes,
   type PanelSizes,
 } from "./lib/panel-layout";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   RotateCcw,
   Boxes,
@@ -198,18 +198,22 @@ export function App() {
     Math.min(PANEL_LIMITS.connections.max, (shellSize.width || 840) - 360),
   );
   const railWidth = clampPanelSize(
-    panelSizes.connections ?? 244,
+    panelSizes.connections ?? (shellSize.width > 0 && shellSize.width <= 1120 ? 216 : 244),
     PANEL_LIMITS.connections.min,
     railMax,
   );
-  function setPanelSize(key: string, size: number | null) {
+  const setPanelSize = useCallback((key: string, size: number | null) => {
     setPanelSizes((current) => {
       const next = { ...current };
       if (size === null) delete next[key];
       else next[key] = size;
       return next;
     });
-  }
+  }, []);
+  const panelLayout = useMemo(
+    () => ({ sizes: panelSizes, setSize: setPanelSize }),
+    [panelSizes, setPanelSize],
+  );
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
   const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
@@ -2026,10 +2030,7 @@ export function App() {
               {/* Inspection views need a Remote Host and its Saved
                   Connection. A local Workspace renders its terminal only. */}
               {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
-                <ConnectionSection
-                  section={activeRemoteWorkspace.view}
-                  layout={{ sizes: panelSizes, setSize: setPanelSize }}
-                >
+                <ConnectionSection section={activeRemoteWorkspace.view} layout={panelLayout}>
                   {activeRemoteWorkspace.view === "overview" && (
                     <OverviewPane
                       key={activeRemoteWorkspace.id}

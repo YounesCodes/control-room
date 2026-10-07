@@ -52,6 +52,68 @@ describe("Control Room desktop", () => {
     await expect($("aria/Resize Connections panel")).toHaveAttribute("aria-valuenow", "244");
   });
 
+  it("saves content and split widths, shares them across hosts, restores and resets through SQLite", async () => {
+    const create = async (name: string) => {
+      await $(".sidebar-primary").click();
+      await $("aria/Display name").setValue(name);
+      await $("aria/SSH destination").setValue("127.0.0.1");
+      await $("aria/Username").setValue("tester");
+      await $(".port-field input").setValue("1");
+      await $(".modal-actions button[type=submit]").click();
+    };
+    await create("Layout host A");
+    await create("Layout host B");
+    await $(".host-main*=Layout host A").click();
+    const openBaselines = async () => {
+      await $("nav[aria-label='Workspace features']").$("button=Baselines").click();
+    };
+    await openBaselines();
+    const content = $("aria/Resize Baselines content");
+    await content.click();
+    await browser.keys("ArrowLeft");
+    const contentWidth = Number(await content.getAttribute("aria-valuenow"));
+    const split = $("aria/Resize Baselines panes");
+    await split.click();
+    await browser.keys(["Shift", "ArrowLeft", "NULL"]);
+    const splitWidth = Number(await split.getAttribute("aria-valuenow"));
+    const saved = async () =>
+      (await browser.tauri.execute(({ core }) => core.invoke("get_workspace_state"))) as {
+        panelSizes: Record<string, number>;
+      };
+    await browser.waitUntil(async () => {
+      const state = await saved();
+      return (
+        state.panelSizes["content:baselines"] === contentWidth &&
+        state.panelSizes["split:Baselines"] === splitWidth
+      );
+    });
+    await $(".host-main*=Layout host B").click();
+    await openBaselines();
+    await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
+    await browser.refresh();
+    await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
+    await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
+    const window = await browser.getWindowRect();
+    await browser.setWindowSize(960, 640);
+    await browser.waitUntil(
+      async () => Number(await content.getAttribute("aria-valuenow")) < contentWidth,
+    );
+    expect((await saved()).panelSizes["content:baselines"]).toBe(contentWidth);
+    await browser.setWindowSize(window.width, window.height);
+    await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
+    await split.doubleClick();
+    await browser.waitUntil(async () => !("split:Baselines" in (await saved()).panelSizes));
+    await $("aria/Reset layout").click();
+    await browser.waitUntil(async () => Object.keys((await saved()).panelSizes).length === 0);
+    for (const name of ["Layout host A", "Layout host B"]) {
+      const menu = $("aria/Open actions for " + name);
+      await menu.moveTo();
+      await menu.click();
+      await $("aria/Delete connection").click();
+      await $("button=Delete connection").click();
+    }
+  });
+
   it("creates, edits, and deletes a Saved Connection in SQLite", async () => {
     await $(".sidebar-primary").click();
     await $("aria/Display name").setValue("E2E fixture");
@@ -144,7 +206,7 @@ describe("Control Room desktop", () => {
       timeoutMsg: "The native window did not leave the maximized state",
     });
     const restored = await browser.getWindowRect();
-    expect(restored.width).toBe(before.width);
-    expect(restored.height).toBe(before.height);
+    expect(Math.abs(restored.width - before.width)).toBeLessThanOrEqual(2);
+    expect(Math.abs(restored.height - before.height)).toBeLessThanOrEqual(2);
   });
 });

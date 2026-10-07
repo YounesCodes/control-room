@@ -141,6 +141,7 @@ let mountNode: HTMLDivElement | null = null;
 afterEach(() => {
   root?.unmount();
   mountNode?.remove();
+  vi.unstubAllGlobals();
   root = null;
   mountNode = null;
 });
@@ -265,6 +266,8 @@ describe("resizable connection panels in Chromium", () => {
     }
     await userEvent.keyboard("{ArrowRight}");
     await expect.element(divider).toHaveAttribute("aria-valuenow", "210");
+    await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", "260");
     await userEvent.keyboard("{Enter}");
     await expect.element(divider).toHaveAttribute("aria-valuenow", "244");
     const result = await axe.run(mountNode!, {
@@ -309,6 +312,13 @@ describe("resizable connection panels in Chromium", () => {
     const split = page.getByRole("separator", { name: "Resize Docker panes" });
     await expect.element(split).toBeVisible();
     const initial = Number(split.element().getAttribute("aria-valuenow"));
+    const handle = split.element().getBoundingClientRect();
+    const listEdge = document.querySelector(".list-panel")!.getBoundingClientRect().right;
+    expect(Math.abs((handle.left + handle.right) / 2 - listEdge)).toBeLessThanOrEqual(1);
+    expect(handle.width).toBeGreaterThanOrEqual(24);
+    expect(document.elementFromPoint((handle.left + handle.right) / 2, handle.top + 60)).toBe(
+      split.element(),
+    );
     await userEvent.dragAndDrop(split, page.getByRole("main"), {
       targetPosition: { x: 300, y: 150 },
     });
@@ -336,6 +346,45 @@ describe("resizable connection panels in Chromium", () => {
     await page.getByRole("button", { name: "Open overview" }).click();
     await page.getByRole("button", { name: "Open docker" }).click();
     await expect.element(split).toHaveAttribute("aria-valuenow", chosen!);
+  });
+
+  it("moves focus to the pane group when a focused split stacks", async () => {
+    await page.viewport(1280, 900);
+    mount();
+    await page.getByRole("button", { name: "Open docker" }).click();
+    const split = page.getByRole("separator", { name: "Resize Docker panes" });
+    await split.click();
+    await expect.element(split).toHaveFocus();
+    const section = document.querySelector<HTMLElement>(".connection-section-content")!;
+    section.style.width = "400px";
+    await expect.element(split).not.toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(document.querySelector(".resizable-split")),
+    );
+  });
+
+  it("refits the Ports graph on window resize without ResizeObserver", async () => {
+    vi.stubGlobal("ResizeObserver", undefined);
+    await page.viewport(1280, 900);
+    mount();
+    await page.getByRole("button", { name: "Open ports" }).click();
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLElement>(".arch-content")?.style.transform).toContain(
+        "scale",
+      ),
+    );
+    const before = document.querySelector<HTMLElement>(".arch-content")!.style.transform;
+    await page.viewport(960, 640);
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLElement>(".arch-content")!.style.transform).not.toBe(
+        before,
+      ),
+    );
+    await vi.waitFor(() => {
+      const canvas = document.querySelector(".arch-viewport")!.getBoundingClientRect();
+      const graph = document.querySelector(".arch-content")!.getBoundingClientRect();
+      expect(graph.right).toBeLessThanOrEqual(canvas.right + 1);
+    });
   });
 
   it("fits the Ports graph after pane resizing and keeps filters usable at the minimum window", async () => {

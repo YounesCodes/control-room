@@ -869,7 +869,36 @@ impl Database {
                     .map(|object| !object.contains_key("terminalGroups"))
             })
             .unwrap_or(false);
-        if let Ok(mut state) = serde_json::from_str::<PersistedWorkspaceState>(&payload) {
+        let restored = serde_json::from_str::<serde_json::Value>(&payload)
+            .ok()
+            .and_then(|mut value| {
+                if let Some(object) = value.as_object_mut() {
+                    let mut sizes = serde_json::Map::new();
+                    if let Some(entries) = object
+                        .get("panelSizes")
+                        .and_then(serde_json::Value::as_object)
+                    {
+                        for (key, value) in entries {
+                            let bounds = panel_size_bounds(key);
+                            if sizes.len() < 32
+                                && let Some((min, max)) = bounds
+                                && let Some(size) = value.as_f64()
+                                && size.is_finite()
+                            {
+                                sizes.insert(
+                                    key.clone(),
+                                    serde_json::json!(
+                                        size.round().clamp(min as f64, max as f64) as u32
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                    object.insert("panelSizes".into(), serde_json::Value::Object(sizes));
+                }
+                serde_json::from_value::<PersistedWorkspaceState>(value).ok()
+            });
+        if let Some(mut state) = restored {
             if is_legacy_terminal_layout
                 && state.terminal_groups.is_empty()
                 && let Some(layout) = state.terminal_layout.clone()
@@ -1040,18 +1069,25 @@ fn validate_scratchpad_input(input: &ScratchpadNoteInput) -> Result<(), String> 
     Ok(())
 }
 
+fn panel_size_bounds(key: &str) -> Option<(u32, u32)> {
+    if key.len() > 64 {
+        return None;
+    }
+    if key == "connections" {
+        Some((200, 480))
+    } else if key.starts_with("content:") {
+        Some((360, 1600))
+    } else if key.starts_with("split:") {
+        Some((240, 900))
+    } else {
+        None
+    }
+}
+
 fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), String> {
     if state.panel_sizes.len() > 32
         || state.panel_sizes.iter().any(|(key, size)| {
-            let bounds = if key == "connections" {
-                Some((200, 480))
-            } else if key.starts_with("content:") && key.len() <= 64 {
-                Some((360, 1600))
-            } else if key.starts_with("split:") && key.len() <= 64 {
-                Some((240, 900))
-            } else {
-                None
-            };
+            let bounds = panel_size_bounds(key);
             bounds.is_none_or(|(min, max)| *size < min || *size > max)
         })
     {
@@ -2842,6 +2878,60 @@ mod tests {
                 .unwrap()
                 .panel_sizes
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn corrupt_panel_sizes_preserve_tabs_and_terminal_groups() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let id = Uuid::new_v4().to_string();
+        let state = PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: id.clone(),
+                label: None,
+                connection_id: None,
+                local_shell_id: Some("git-bash".into()),
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(id.clone()),
+            terminal_groups: vec![PersistedTerminalGroup {
+                id: Uuid::new_v4().to_string(),
+                name: "Kept group".into(),
+                layout: PersistedTerminalLayout::Leaf { workspace_id: id },
+            }],
+            ..Default::default()
+        };
+        for sizes in [
+            serde_json::json!({"connections": 999, "unknown": 320, "content:ports": "bad", "split:Docker": -1, "content:overview": 799.6}),
+            serde_json::json!("bad map"),
+        ] {
+            let mut payload = serde_json::to_value(&state).unwrap();
+            payload["panelSizes"] = sizes;
+            database
+                .set_app_metadata("workspace_state", &payload.to_string())
+                .unwrap();
+            let loaded = database.get_workspace_state().unwrap();
+            assert_eq!(loaded.workspaces, state.workspaces);
+            assert_eq!(loaded.active_workspace_id, state.active_workspace_id);
+            assert_eq!(loaded.terminal_groups, state.terminal_groups);
+            assert!(!loaded.panel_sizes.contains_key("unknown"));
+            if !loaded.panel_sizes.is_empty() {
+                assert_eq!(loaded.panel_sizes["connections"], 480);
+                assert_eq!(loaded.panel_sizes["split:Docker"], 240);
+                assert_eq!(loaded.panel_sizes["content:overview"], 800);
+            }
+        }
+        drop(database);
+        assert_eq!(
+            Database::open(&path)
+                .unwrap()
+                .get_workspace_state()
+                .unwrap()
+                .workspaces,
+            state.workspaces
         );
     }
 
