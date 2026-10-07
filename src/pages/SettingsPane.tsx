@@ -350,10 +350,7 @@ export function SettingsPane({
               />
               Local Terminal Mode
             </label>
-            <small>
-              When Control Room opens, start the default local terminal in Focus Mode with the
-              Connections sidebar hidden.
-            </small>
+            <small>Start the default local terminal in Focus Mode on launch.</small>
             <label>
               <span>Default local terminal</span>
               <select
