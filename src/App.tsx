@@ -276,43 +276,46 @@ export function App() {
           const detectedShells = localShellCatalog.profiles;
           setLocalShells(detectedShells);
           setAdministratorTerminalStatus(localShellCatalog.administratorStatus);
+          const restored = restoreWorkspaceState(
+            connectionsResult.status === "fulfilled" ? connectionsResult.value : [],
+            workspaceStateResult.status === "fulfilled"
+              ? workspaceStateResult.value
+              : { workspaces: [], activeWorkspaceId: null, terminalLayout: null },
+            detectedShells,
+          );
+          if (
+            settingsResult.status === "fulfilled" &&
+            settingsResult.value.current.localTerminalMode
+          ) {
+            const startupSettings = settingsResult.value.current;
+            const shell = defaultLocalShell(
+              offeredLocalShells(detectedShells, startupSettings.hiddenLocalShells ?? []),
+              startupSettings.defaultLocalShellId ?? null,
+            );
+            if (shell) {
+              const existing = restored.workspaces.find(
+                (workspace) => isLocalWorkspace(workspace) && workspace.shell.id === shell.id,
+              );
+              const workspace = existing ?? createLocalWorkspace(shell);
+              if (!existing) restored.workspaces.push(workspace);
+              workspace.view = "terminal";
+              restored.activeWorkspaceId = workspace.id;
+              setTerminalFocusMode(true);
+            }
+          }
+          setWorkspaces(restored.workspaces);
+          setActiveWorkspaceId(restored.activeWorkspaceId);
+          setTerminalGroups(restored.terminalGroups);
+          setWorkspacePersistenceReady(
+            connectionsResult.status === "fulfilled" && workspaceStateResult.status === "fulfilled",
+          );
+          if (workspaceStateResult.status === "rejected") {
+            setActionError(
+              `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
+            );
+          }
           if (connectionsResult.status === "fulfilled") {
             setConnections(connectionsResult.value);
-            if (workspaceStateResult.status === "fulfilled") {
-              const restored = restoreWorkspaceState(
-                connectionsResult.value,
-                workspaceStateResult.value,
-                detectedShells,
-              );
-              if (
-                settingsResult.status === "fulfilled" &&
-                settingsResult.value.current.localTerminalMode
-              ) {
-                const startupSettings = settingsResult.value.current;
-                const shell = defaultLocalShell(
-                  offeredLocalShells(detectedShells, startupSettings.hiddenLocalShells ?? []),
-                  startupSettings.defaultLocalShellId ?? null,
-                );
-                if (shell) {
-                  const existing = restored.workspaces.find(
-                    (workspace) => isLocalWorkspace(workspace) && workspace.shell.id === shell.id,
-                  );
-                  const workspace = existing ?? createLocalWorkspace(shell);
-                  if (!existing) restored.workspaces.push(workspace);
-                  workspace.view = "terminal";
-                  restored.activeWorkspaceId = workspace.id;
-                  setTerminalFocusMode(true);
-                }
-              }
-              setWorkspaces(restored.workspaces);
-              setActiveWorkspaceId(restored.activeWorkspaceId);
-              setTerminalGroups(restored.terminalGroups);
-              setWorkspacePersistenceReady(true);
-            } else {
-              setActionError(
-                `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
-              );
-            }
             for (const connection of connectionsResult.value) {
               void api
                 .cachedCapabilities(connection.id)
@@ -873,7 +876,13 @@ export function App() {
           settingsContract?.current.hiddenLocalShells ?? [],
         );
         if (enabled.length === 1) openLocalShell(enabled[0]);
-        else setLocalShellMenuOpen(enabled.length > 1);
+        else {
+          setLocalShellMenuOpen(enabled.length > 1);
+          if (!enabled.length)
+            setActionError(
+              "No enabled local terminals are available. Check installed shells and Settings.",
+            );
+        }
       })
       .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
   }

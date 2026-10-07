@@ -773,10 +773,17 @@ impl Database {
         let Some(payload) = payload else {
             return Ok(AppSettings::default());
         };
-        if let Ok(settings) = serde_json::from_str::<AppSettings>(&payload)
-            && validate_settings(&settings).is_ok()
-        {
-            return Ok(settings);
+        if let Ok(mut settings) = serde_json::from_str::<AppSettings>(&payload) {
+            if settings
+                .default_local_shell_id
+                .as_deref()
+                .is_some_and(|id| LocalShellKind::from_profile_id(id).is_none())
+            {
+                settings.default_local_shell_id = None;
+            }
+            if validate_settings(&settings).is_ok() {
+                return Ok(settings);
+            }
         }
         self.connection
             .lock()
@@ -2620,6 +2627,28 @@ mod tests {
             database.save_settings(&settings).unwrap_err(),
             "Unknown default local terminal profile: cmd.exe"
         );
+    }
+
+    #[test]
+    fn unknown_startup_default_preserves_other_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        for id in ["", "future-shell"] {
+            let settings = AppSettings {
+                default_local_shell_id: Some(id.into()),
+                terminal_font_size: 19,
+                global_sudo_enabled: true,
+                ..AppSettings::default()
+            };
+            database
+                .set_app_metadata("settings", &serde_json::to_string(&settings).unwrap())
+                .unwrap();
+            let loaded = database.get_settings().unwrap();
+            assert_eq!(loaded.default_local_shell_id, None);
+            assert_eq!(loaded.terminal_font_size, 19);
+            assert!(loaded.global_sudo_enabled);
+            database.save_settings(&loaded).unwrap();
+        }
     }
 
     #[test]

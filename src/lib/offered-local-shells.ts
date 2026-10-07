@@ -23,7 +23,8 @@ export function defaultLocalShell(
   profiles: LocalShellProfile[],
   defaultId: string | null,
 ): LocalShellProfile | null {
-  return profiles.find((profile) => profile.id === defaultId) ?? profiles[0] ?? null;
+  const standard = profiles.filter((profile) => !profile.elevated);
+  return standard.find((profile) => profile.id === defaultId) ?? standard[0] ?? null;
 }
 
 export function needsAdministratorSetup(

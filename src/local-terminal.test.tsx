@@ -197,6 +197,37 @@ describe("Local Terminal", () => {
     api.dismissUpdateNotice.mockResolvedValue(undefined);
   });
 
+  it.each(["normal", "connections-fail", "workspace-fail", "elevated-default"])(
+    "starts a standard shell with a null/default fallback when %s",
+    async (scenario) => {
+      api.settingsContract.mockResolvedValue({
+        current: {
+          ...settings,
+          localTerminalMode: true,
+          defaultLocalShellId: scenario === "elevated-default" ? administratorPowerShell.id : null,
+        },
+        defaults: settings,
+        logTailOptions: [200],
+      });
+      api.listLocalShells.mockResolvedValue({
+        profiles: [administratorPowerShell, powershell, gitBash],
+        administratorStatus: "available",
+      });
+      if (scenario === "connections-fail")
+        api.listConnections.mockRejectedValue(new Error("connections failed"));
+      if (scenario === "workspace-fail")
+        api.workspaceState.mockRejectedValue(new Error("workspace failed"));
+      const { container } = render(<App />);
+      expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("powershell-7");
+      expect(container.querySelector(".terminal-focus-mode.local-terminal-mode")).toBeTruthy();
+      expect(screen.getByLabelText("Saved connections")).toBeTruthy();
+      if (scenario.endsWith("fail")) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        expect(api.saveWorkspaceState).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it("starts the selected default in focus with Connections and remote launch available", async () => {
     const user = userEvent.setup();
     api.settingsContract.mockResolvedValue({
@@ -291,6 +322,17 @@ describe("Local Terminal", () => {
     expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
     expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
     expect(screen.queryByText(/One-time setup/)).toBeNull();
+  });
+
+  it("explains when the last available shell disappears before launch", async () => {
+    render(<App />);
+    const launcher = await screen.findByRole("button", { name: /Local terminal/ });
+    api.listLocalShells.mockResolvedValue({
+      profiles: [],
+      administratorStatus: "unsupportedWindows",
+    });
+    await userEvent.click(launcher);
+    expect(await screen.findByText(/No enabled local terminals are available/)).toBeTruthy();
   });
 
   it("suppresses setup when all supporting shells are disabled", async () => {

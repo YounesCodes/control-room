@@ -104,6 +104,12 @@ describe("Settings actions", () => {
     );
   });
 
+  it("excludes administrator shells from the startup selector while keeping their manual toggles", () => {
+    renderPane({ localShells: [powershell, administratorPowerShell] });
+    expect(screen.queryByRole("option", { name: /Administrator/ })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /PowerShell 7.*administrator/ })).toBeTruthy();
+  });
+
   it("does not offer a disabled shell as a new default", () => {
     renderPane({
       settings: { ...settings, hiddenLocalShells: ["git-bash"] },

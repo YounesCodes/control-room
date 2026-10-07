@@ -16,7 +16,7 @@ export function settingsHaveChanges(saved: AppSettings, draft: AppSettings): boo
   ]);
   return [...keys].some((key) => {
     if (key === "localTerminalMode") return (saved[key] ?? false) !== (draft[key] ?? false);
-    if (key === "defaultLocalShellId") return (saved[key] ?? null) !== (draft[key] ?? null);
+    if (key === "defaultLocalShellId") return (saved[key] || null) !== (draft[key] || null);
     if (key === "hiddenLocalShells") return !sameStringSet(saved[key], draft[key]);
     return saved[key] !== draft[key];
   });

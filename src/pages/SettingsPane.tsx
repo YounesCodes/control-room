@@ -99,7 +99,7 @@ export function SettingsPane({
     ...settings,
     hiddenLocalShells: settings.hiddenLocalShells ?? [],
     localTerminalMode: settings.localTerminalMode ?? false,
-    defaultLocalShellId: settings.defaultLocalShellId ?? null,
+    defaultLocalShellId: settings.defaultLocalShellId || null,
   }));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -364,24 +364,26 @@ export function SettingsPane({
               >
                 <option value="">First enabled terminal</option>
                 {draft.defaultLocalShellId &&
-                  !offeredLocalShells(localShells, hiddenIds).some(
-                    (shell) => shell.id === draft.defaultLocalShellId,
-                  ) && (
+                  !offeredLocalShells(localShells, hiddenIds)
+                    .filter((shell) => !shell.elevated)
+                    .some((shell) => shell.id === draft.defaultLocalShellId) && (
                     <option value={draft.defaultLocalShellId} disabled>
                       Saved terminal unavailable or disabled
                     </option>
                   )}
-                {offeredLocalShells(localShells, hiddenIds).map((shell) => (
-                  <option key={shell.id} value={shell.id}>
-                    {shell.label}
-                    {shell.elevated ? " (Administrator)" : ""}
-                  </option>
-                ))}
+                {offeredLocalShells(localShells, hiddenIds)
+                  .filter((shell) => !shell.elevated)
+                  .map((shell) => (
+                    <option key={shell.id} value={shell.id}>
+                      {shell.label}
+                    </option>
+                  ))}
               </select>
             </label>
             <small>
-              If the default is disabled or unavailable, startup uses the first enabled terminal.
-              With none enabled, Local Terminal Mode opens no terminal.
+              Startup uses a standard terminal without administrator elevation. If the default is
+              disabled or unavailable, startup uses the first enabled standard terminal. With none
+              enabled, Local Terminal Mode opens no terminal.
             </small>
             <small>
               Choose which shells the Local terminal button, New terminal, and Split menus offer.

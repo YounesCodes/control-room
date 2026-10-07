@@ -23,6 +23,12 @@ const settings: AppSettings = {
 };
 
 describe("Settings drafts", () => {
+  it("treats an empty startup default like a null or missing preference", () => {
+    expect(settingsHaveChanges({ ...settings, defaultLocalShellId: "" }, settings)).toBe(false);
+    expect(settingsHaveChanges(settings, { ...settings, defaultLocalShellId: "git-bash" })).toBe(
+      true,
+    );
+  });
   it("detects unsaved changes without treating an equal copy as dirty", () => {
     expect(settingsHaveChanges(settings, { ...settings })).toBe(false);
     expect(settingsHaveChanges(settings, { ...settings, terminalFontSize: 16 })).toBe(true);

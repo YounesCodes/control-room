@@ -1,0 +1,106 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { page } from "vitest/browser";
+import { createRoot, type Root } from "react-dom/client";
+import axe from "axe-core";
+import { App } from "../App";
+import "../styles.css";
+vi.mock("./WindowControls", () => ({ WindowControls: () => null }));
+vi.mock("./TerminalPane", () => ({
+  TerminalPane: () => (
+    <div role="region" aria-label="Local terminal surface" style={{ height: "100%" }} />
+  ),
+}));
+vi.mock("../lib/api", () => {
+  const settings = {
+    terminalFontFamily: "Consolas",
+    terminalFontSize: 14,
+    terminalScrollback: 10000,
+    terminalForeground: "#f2f2ee",
+    terminalRed: "#ff6f7d",
+    terminalGreen: "#52cf91",
+    terminalYellow: "#e8c56c",
+    terminalBlue: "#55aef2",
+    terminalMagenta: "#c793ff",
+    terminalCyan: "#65d4d1",
+    defaultLogTail: 200,
+    globalHistoryEnabled: true,
+    globalSudoEnabled: false,
+    automaticUpdateChecks: false,
+    hiddenLocalShells: [],
+    localTerminalMode: true,
+    defaultLocalShellId: null,
+  };
+  return {
+    errorMessage: String,
+    api: {
+      listConnections: async () => [],
+      settingsContract: async () => ({
+        current: settings,
+        defaults: settings,
+        logTailOptions: [200],
+      }),
+      environment: async () => ({
+        sshPath: null,
+        sshConfigPath: "",
+        sshAgentAvailable: false,
+        platformSupported: true,
+      }),
+      workspaceState: async () => ({
+        workspaces: [],
+        activeWorkspaceId: null,
+        terminalLayout: null,
+      }),
+      listConnectionGroups: async () => [],
+      listConnectionTags: async () => [],
+      listLocalShells: async () => ({
+        profiles: [
+          {
+            id: "command-prompt",
+            label: "Command Prompt",
+            kind: "command-prompt",
+            elevated: false,
+          },
+        ],
+        administratorStatus: "disabled",
+      }),
+      saveWorkspaceState: async () => {},
+      currentAppVersion: async () => "0.8.2",
+      pendingUpdateNotice: async () => null,
+    },
+  };
+});
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+afterEach(() => {
+  root?.unmount();
+  container?.remove();
+});
+describe("Local Terminal Mode in the real App", () => {
+  it.each([960, 1280])(
+    "starts focused and keeps Connections usable at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      container = document.createElement("div");
+      container.style.height = "100vh";
+      document.body.append(container);
+      root = createRoot(container);
+      root.render(<App />);
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      await expect
+        .element(page.getByRole("button", { name: "Add connection", exact: true }))
+        .toBeVisible();
+      expect(container.querySelector(".terminal-focus-mode.local-terminal-mode")).toBeTruthy();
+      const sidebar = container.querySelector(".sidebar")!.getBoundingClientRect();
+      const terminal = container.querySelector(".workspace-shell")!.getBoundingClientRect();
+      expect(Math.abs(terminal.left - sidebar.right)).toBeLessThanOrEqual(1);
+      expect(terminal.width).toBeGreaterThan(700);
+      await expect
+        .element(page.getByRole("region", { name: "Local terminal surface" }))
+        .toBeVisible();
+      const result = await axe.run(container, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(result.violations.map(({ id }) => id)).toEqual([]);
+    },
+  );
+});

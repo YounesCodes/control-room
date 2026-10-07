@@ -7,7 +7,7 @@ Select **Local terminal** in the sidebar. With one enabled shell, it starts dire
 
 Control Room offers installed PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash from Git for Windows. You can hide a shell from the menus in [Settings](/control-room/reference/settings/#local-terminal); a shell already running stays open.
 
-Enable **Local Terminal Mode** in [Settings](/control-room/reference/settings/#local-terminal) to start your default local terminal in Focus Mode when Control Room opens. Connections stays available for remote hosts and more workspaces.
+Enable **Local Terminal Mode** in [Settings](/control-room/reference/settings/#local-terminal) to start your default local terminal in Focus Mode when Control Room opens. Startup uses an enabled standard shell without administrator elevation. Connections stays available for remote hosts and more workspaces.
 
 ## Administrator shells
 

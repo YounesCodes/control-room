@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { needsAdministratorSetup, offeredLocalShells } from "./offered-local-shells";
+import {
+  defaultLocalShell,
+  needsAdministratorSetup,
+  offeredLocalShells,
+} from "./offered-local-shells";
 import type { LocalShellProfile } from "../types";
 
 function profile(id: string, elevated = false): LocalShellProfile {
@@ -14,6 +18,12 @@ function profile(id: string, elevated = false): LocalShellProfile {
 const installed = [profile("powershell-7"), profile("git-bash"), profile("command-prompt")];
 
 describe("Offered local shells", () => {
+  it("never automatically selects an administrator shell", () => {
+    const admin = profile("powershell-7-administrator", true);
+    expect(defaultLocalShell([admin, ...installed], admin.id)).toEqual(installed[0]);
+    expect(defaultLocalShell([admin], null)).toBeNull();
+    expect(defaultLocalShell(installed, null)).toEqual(installed[0]);
+  });
   it("offers every installed shell when nothing is hidden", () => {
     expect(offeredLocalShells(installed, [])).toEqual(installed);
   });
