@@ -131,6 +131,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 const environment: EnvironmentInfo = {
@@ -399,6 +401,32 @@ describe("critical UI in Chromium", () => {
       await expect.element(page.getByRole("button", { name })).toHaveAccessibleName(name);
     }
   });
+
+  it.each([960, 1600])(
+    "keeps Connections beside the focused terminal at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mount(
+        <div className="app-shell terminal-focus-mode local-terminal-mode" style={{ height: 640 }}>
+          <header className="app-bar">Control Room</header>
+          <aside className="sidebar">
+            <button type="button">Add connection</button>
+          </aside>
+          <main className="workspace-shell">
+            <button type="button">New terminal</button>
+          </main>
+        </div>,
+      );
+      await expect.element(page.getByRole("button", { name: "Add connection" })).toBeVisible();
+      await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
+      const sidebar = container!.querySelector(".sidebar")!.getBoundingClientRect();
+      const terminal = container!.querySelector(".workspace-shell")!.getBoundingClientRect();
+      expect(sidebar.width).toBe(width === 960 ? 216 : 244);
+      expect(terminal.left).toBe(sidebar.right);
+      expect(terminal.width).toBeGreaterThan(700);
+      expect(terminal.right).toBeLessThanOrEqual(width);
+    },
+  );
 
   it("keeps Settings actions visible at the minimum supported height", async () => {
     await page.viewport(960, 640);

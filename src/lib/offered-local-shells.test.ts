@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { offeredLocalShells } from "./offered-local-shells";
+import { needsAdministratorSetup, offeredLocalShells } from "./offered-local-shells";
 import type { LocalShellProfile } from "../types";
 
 function profile(id: string, elevated = false): LocalShellProfile {
@@ -41,5 +41,19 @@ describe("Offered local shells", () => {
 
   it("ignores a hidden id that names nothing installed", () => {
     expect(offeredLocalShells(installed, ["wt.exe"])).toEqual(installed);
+  });
+});
+
+describe("Administrator setup", () => {
+  it("requires an enabled shell and administrator variant that support setup", () => {
+    const bash = { ...profile("git-bash"), kind: "git-bash" } as LocalShellProfile;
+    const shells = [profile("powershell-7"), bash];
+    expect(needsAdministratorSetup([bash], [], "disabled")).toBe(false);
+    expect(needsAdministratorSetup(shells, ["powershell-7"], "disabled")).toBe(false);
+    expect(needsAdministratorSetup(shells, ["powershell-7-administrator"], "disabled")).toBe(false);
+    expect(needsAdministratorSetup(shells, [], "disabled")).toBe(true);
+    expect(needsAdministratorSetup(shells, [], "unsupportedMode")).toBe(true);
+    expect(needsAdministratorSetup(shells, [], "available")).toBe(false);
+    expect(needsAdministratorSetup(shells, [], "unsupportedWindows")).toBe(false);
   });
 });

@@ -121,3 +121,77 @@ describe("Control Room desktop", () => {
     expect(restored.height).toBe(before.height);
   });
 });
+
+describe("Local Terminal Mode desktop", () => {
+  it("starts the saved default in Focus Mode and launches a single enabled shell directly", async () => {
+    const original = (await browser.tauri.execute(({ core }) =>
+      core.invoke("get_settings_contract"),
+    )) as { current: Record<string, unknown> };
+    const catalog = (await browser.tauri.execute(({ core }) =>
+      core.invoke("list_local_shells"),
+    )) as { profiles: { id: string }[] };
+    await browser.tauri.execute(
+      ({ core }, hidden: string[], current: Record<string, unknown>) =>
+        core.invoke("save_settings", {
+          settings: {
+            ...current,
+            localTerminalMode: true,
+            defaultLocalShellId: "command-prompt",
+            hiddenLocalShells: hidden,
+          },
+        }),
+      catalog.profiles.filter((shell) => shell.id !== "command-prompt").map((shell) => shell.id),
+      original.current,
+    );
+    try {
+      await browser.refresh();
+      await expect($(".app-shell.local-terminal-mode.terminal-focus-mode")).toBeDisplayed();
+      await expect($("aria/Saved connections")).toBeDisplayed();
+      await expect($("button=Add connection")).toBeDisplayed();
+      await expect($("aria/New terminal")).toBeDisplayed();
+      await expect($(".terminal-container .xterm-screen")).toBeDisplayed();
+      const screen = $(".terminal-container .xterm-screen");
+      await screen.click();
+      await browser.keys("echo CONTROL_ROOM_LOCAL_MODE_OK");
+      await browser.keys("Enter");
+      await browser.waitUntil(
+        async () => {
+          const lines = await browser.execute(() =>
+            Array.from(document.querySelectorAll(".terminal-container .xterm-rows > div"), (row) =>
+              row.textContent?.trim(),
+            ),
+          );
+          return lines.includes("CONTROL_ROOM_LOCAL_MODE_OK");
+        },
+        { timeoutMsg: "The default local terminal did not start through ConPTY" },
+      );
+      await $("button=Local terminal").click();
+      await expect($(".local-shell-menu")).not.toExist();
+      await browser.waitUntil(
+        async () =>
+          (await browser.execute(() => document.querySelectorAll(".session-tab-wrap").length)) ===
+          2,
+      );
+      await $("button=Add connection").click();
+      await expect($("[role=dialog]")).toBeDisplayed();
+      await browser.keys("Escape");
+      await browser.waitUntil(async () => {
+        const state = (await browser.tauri.execute(({ core }) =>
+          core.invoke("get_workspace_state"),
+        )) as { workspaces: unknown[] };
+        return state.workspaces.length === 2;
+      });
+      await browser.refresh();
+      await expect($(".app-shell.local-terminal-mode.terminal-focus-mode")).toBeDisplayed();
+      expect(
+        await browser.execute(() => document.querySelectorAll(".session-tab-wrap").length),
+      ).toBe(2);
+    } finally {
+      await browser.tauri.execute(
+        ({ core }, current: Record<string, unknown>) =>
+          core.invoke("save_settings", { settings: current }),
+        original.current,
+      );
+    }
+  });
+});

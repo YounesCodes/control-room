@@ -32,6 +32,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 const environment: EnvironmentInfo = {
@@ -86,6 +88,29 @@ describe("Settings actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.saveSettings.mockResolvedValue(undefined);
+  });
+
+  it("saves Local Terminal Mode and the selected enabled default", async () => {
+    const user = userEvent.setup();
+    renderPane({ localShells: [powershell, gitBash] });
+    await user.click(screen.getByRole("checkbox", { name: "Local Terminal Mode" }));
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Default local terminal" }),
+      "git-bash",
+    );
+    await user.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ localTerminalMode: true, defaultLocalShellId: "git-bash" }),
+    );
+  });
+
+  it("does not offer a disabled shell as a new default", () => {
+    renderPane({
+      settings: { ...settings, hiddenLocalShells: ["git-bash"] },
+      localShells: [powershell, gitBash],
+    });
+    expect(screen.queryByRole("option", { name: "Git Bash" })).toBeNull();
+    expect(screen.getByRole("option", { name: "PowerShell 7" })).toBeTruthy();
   });
 
   it("keeps Back and Save reachable without scrolling to the end of the form", () => {

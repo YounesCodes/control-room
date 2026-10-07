@@ -1177,6 +1177,13 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
             return Err(format!("Unknown local terminal profile: {shell_id}"));
         }
     }
+    if let Some(shell_id) = &settings.default_local_shell_id
+        && LocalShellKind::from_profile_id(shell_id).is_none()
+    {
+        return Err(format!(
+            "Unknown default local terminal profile: {shell_id}"
+        ));
+    }
     let font_family = settings.terminal_font_family.trim();
     if font_family.is_empty()
         || font_family.chars().count() > 500
@@ -2587,9 +2594,31 @@ mod tests {
             !loaded.automatic_update_checks,
             "an unrelated preference must not be reset by removing another field"
         );
+        assert!(!loaded.local_terminal_mode);
+        assert_eq!(loaded.default_local_shell_id, None);
         assert!(
             loaded.hidden_local_shells.is_empty(),
             "a payload written before the local terminal toggles existed offers every profile"
+        );
+    }
+
+    #[test]
+    fn local_terminal_mode_settings_round_trip_and_validate_default() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let mut settings = AppSettings {
+            local_terminal_mode: true,
+            default_local_shell_id: Some("git-bash".into()),
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        let loaded = database.get_settings().unwrap();
+        assert!(loaded.local_terminal_mode);
+        assert_eq!(loaded.default_local_shell_id, Some("git-bash".into()));
+        settings.default_local_shell_id = Some("cmd.exe".into());
+        assert_eq!(
+            database.save_settings(&settings).unwrap_err(),
+            "Unknown default local terminal profile: cmd.exe"
         );
     }
 

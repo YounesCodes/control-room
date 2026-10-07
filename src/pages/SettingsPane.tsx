@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
@@ -97,6 +98,8 @@ export function SettingsPane({
   const [draft, setDraft] = useState<AppSettings>(() => ({
     ...settings,
     hiddenLocalShells: settings.hiddenLocalShells ?? [],
+    localTerminalMode: settings.localTerminalMode ?? false,
+    defaultLocalShellId: settings.defaultLocalShellId ?? null,
   }));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -337,6 +340,49 @@ export function SettingsPane({
           </fieldset>
           <fieldset>
             <legend>Local terminal</legend>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={draft.localTerminalMode}
+                onChange={(event) =>
+                  setDraft({ ...draft, localTerminalMode: event.target.checked })
+                }
+              />
+              Local Terminal Mode
+            </label>
+            <small>
+              When Control Room opens, start the default local terminal in Focus Mode. Connections
+              stays available for remote hosts and more workspaces.
+            </small>
+            <label>
+              <span>Default local terminal</span>
+              <select
+                value={draft.defaultLocalShellId ?? ""}
+                onChange={(event) =>
+                  setDraft({ ...draft, defaultLocalShellId: event.target.value || null })
+                }
+              >
+                <option value="">First enabled terminal</option>
+                {draft.defaultLocalShellId &&
+                  !offeredLocalShells(localShells, hiddenIds).some(
+                    (shell) => shell.id === draft.defaultLocalShellId,
+                  ) && (
+                    <option value={draft.defaultLocalShellId} disabled>
+                      Saved terminal unavailable or disabled
+                    </option>
+                  )}
+                {offeredLocalShells(localShells, hiddenIds).map((shell) => (
+                  <option key={shell.id} value={shell.id}>
+                    {shell.label}
+                    {shell.elevated ? " (Administrator)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <small>
+              If the default is disabled or unavailable, startup uses the first enabled terminal.
+              With none enabled, Local Terminal Mode opens no terminal.
+            </small>
             <small>
               Choose which shells the Local terminal button, New terminal, and Split menus offer.
               Turning one off hides it from those menus only: the shell stays installed, a Workspace
