@@ -4335,10 +4335,21 @@ dd {
   gap: 7px;
 }
 
-.settings-form fieldset > small {
+.settings-form fieldset > small,
+.local-terminal-mode-option > small {
   color: var(--text-faint);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.local-terminal-mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.local-terminal-mode-option .checkbox-label {
+  min-height: 28px;
 }
 
 /* Settings mirrors the launcher it controls: the same two groups, in the same

@@ -426,6 +426,31 @@ describe("critical UI in Chromium", () => {
     },
   );
 
+  it.each([960, 1600])(
+    "keeps the Settings startup toggle and description close at %s pixels",
+    async (width) => {
+      await page.viewport(width, 900);
+      mount(<SettingsFixture />);
+      const mode = page.getByRole("checkbox", { name: "Local Terminal Mode", exact: true });
+      await expect.element(mode).toBeInTheDocument();
+      const row = mode.element().closest("label")!;
+      const description = page
+        .getByText("Start the default local terminal in Focus Mode on launch.")
+        .element();
+      row.scrollIntoView({ block: "center" });
+      const rowBounds = row.getBoundingClientRect();
+      const descriptionBounds = description.getBoundingClientRect();
+      const selector = page.getByRole("combobox", { name: "Default local terminal" }).element();
+      expect(rowBounds.height).toBeGreaterThanOrEqual(24);
+      expect(rowBounds.height).toBeLessThanOrEqual(30);
+      expect(descriptionBounds.top - rowBounds.bottom).toBeGreaterThanOrEqual(0);
+      expect(descriptionBounds.top - rowBounds.bottom).toBeLessThanOrEqual(8);
+      expect(
+        selector.closest("label")!.getBoundingClientRect().top - descriptionBounds.bottom,
+      ).toBeGreaterThanOrEqual(12);
+    },
+  );
+
   it("keeps Settings actions visible at the minimum supported height", async () => {
     await page.viewport(960, 640);
     mount(<SettingsFixture />);

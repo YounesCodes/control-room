@@ -339,17 +339,19 @@ export function SettingsPane({
           </fieldset>
           <fieldset>
             <legend>Local terminal</legend>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={draft.localTerminalMode}
-                onChange={(event) =>
-                  setDraft({ ...draft, localTerminalMode: event.target.checked })
-                }
-              />
-              Local Terminal Mode
-            </label>
-            <small>Start the default local terminal in Focus Mode on launch.</small>
+            <div className="local-terminal-mode-option">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={draft.localTerminalMode}
+                  onChange={(event) =>
+                    setDraft({ ...draft, localTerminalMode: event.target.checked })
+                  }
+                />
+                Local Terminal Mode
+              </label>
+              <small>Start the default local terminal in Focus Mode on launch.</small>
+            </div>
             <label>
               <span>Default local terminal</span>
               <select
