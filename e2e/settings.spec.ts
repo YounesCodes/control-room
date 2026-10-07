@@ -43,7 +43,7 @@ describe("Settings and native window", () => {
     await browser.keys("Escape");
     await restartApp();
     await $("aria/Open Settings").click();
-    await $("button=Show all").click();
+    await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
     await openLocal();

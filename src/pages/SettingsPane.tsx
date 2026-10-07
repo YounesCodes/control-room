@@ -127,7 +127,6 @@ export function SettingsPane({
   const standardProfiles = localShells.filter((shell) => !shell.elevated);
   const administratorProfiles = localShells.filter((shell) => shell.elevated);
   const hiddenIds = draft.hiddenLocalShells;
-  const hiddenCount = localShells.filter((shell) => hiddenIds.includes(shell.id)).length;
 
   function setColor(field: TerminalColorField, color: string) {
     setDraft((current) => ({ ...current, [field]: color.toLowerCase() }));
@@ -384,15 +383,6 @@ export function SettingsPane({
                 <div className="local-shell-toggle-group">
                   <div className="local-shell-toggle-heading">
                     <strong>Local terminals</strong>
-                    {hiddenCount > 0 && (
-                      <button
-                        className="secondary-button compact-button"
-                        type="button"
-                        onClick={() => setDraft({ ...draft, hiddenLocalShells: [] })}
-                      >
-                        <RotateCcw size={13} /> Show all
-                      </button>
-                    )}
                   </div>
                   {standardProfiles.map(toggleRow)}
                 </div>
