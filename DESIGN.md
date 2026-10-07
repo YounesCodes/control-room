@@ -164,6 +164,12 @@ Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut
 list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 
+Font catalog suggestions show each name in its font and update the Settings
+preview as the user searches or moves through suggestions. Preview faces stay
+in the webview and do not install fonts. Keep installation explicit, report
+its progress and errors, and preserve the current terminal font until the
+per-user Windows installation and settings save both succeed.
+
 ### Host data and updates
 
 Present the fact the host returned, not a stronger conclusion. A missing value

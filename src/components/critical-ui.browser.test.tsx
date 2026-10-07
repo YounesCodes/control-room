@@ -148,7 +148,7 @@ function SettingsFixture() {
       logTailOptions={[50, 100, 200, 500, 1000]}
       localShells={[]}
       environment={environment}
-      appVersion="0.7.6"
+      appVersion="0.8.2"
       onCheckForUpdates={async () => ({ outcome: "current" })}
       onSaved={() => undefined}
       onClose={() => true}
@@ -425,5 +425,8 @@ describe("critical UI in Chromium", () => {
     expect(Math.abs(form.left - (1600 - form.right))).toBeLessThan(24);
     expect(Math.abs(heading.left - form.left)).toBeLessThan(24);
     expect(Math.abs(heading.right - form.right)).toBeLessThan(24);
+    if (import.meta.env.VITE_CAPTURE_DOCS === "1") {
+      await page.screenshot({ path: "../../docs/src/assets/screenshots/settings.png" });
+    }
   });
 });

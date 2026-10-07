@@ -6,12 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   saveSettings: vi.fn(),
+  listCatalogFonts: vi.fn(),
+  previewCatalogFont: vi.fn(),
+  installCatalogFont: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
   api,
   errorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
+
+vi.mock("@tauri-apps/api/core", () => ({ Channel: class {} }));
 
 import { SettingsPane } from "./SettingsPane";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
@@ -82,10 +87,53 @@ const saveButton = () => screen.getByRole("button", { name: /Save settings/ }) a
 
 describe("Settings actions", () => {
   afterEach(cleanup);
+  afterEach(() => vi.unstubAllGlobals());
 
   beforeEach(() => {
     vi.clearAllMocks();
     api.saveSettings.mockResolvedValue(undefined);
+    api.listCatalogFonts.mockResolvedValue({
+      fonts: [{ id: "jetbrains-mono", family: "JetBrains Mono", license: "OFL-1.1" }],
+      stale: false,
+    });
+    api.previewCatalogFont.mockResolvedValue(new ArrayBuffer(8));
+    api.installCatalogFont.mockResolvedValue("JetBrains Mono");
+  });
+
+  it("applies an installed font immediately while preserving other unsaved changes", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { add: vi.fn(), delete: vi.fn() },
+    });
+    vi.stubGlobal(
+      "FontFace",
+      class {
+        async load() {
+          return this;
+        }
+      },
+    );
+    const props = renderPane();
+    fireEvent.change(screen.getByLabelText("Font size"), { target: { value: "16" } });
+    await user.click(screen.getByRole("combobox", { name: "Search free fonts" }));
+    await screen.findByRole("option", { name: /JetBrains Mono/ });
+    await user.click(screen.getByRole("button", { name: "Install and use" }));
+    await screen.findByText(/JetBrains Mono is ready and applied/);
+    expect(api.installCatalogFont).toHaveBeenCalledWith("jetbrains-mono", expect.anything());
+    expect(api.saveSettings).toHaveBeenCalledWith({
+      ...settings,
+      terminalFontFamily: '"JetBrains Mono", Cascadia Mono, Consolas, monospace',
+    });
+    expect(props.onSaved).toHaveBeenCalledWith(expect.objectContaining({ terminalFontSize: 14 }));
+    expect((screen.getByLabelText("Font size") as HTMLInputElement).value).toBe("16");
+    await user.click(saveButton());
+    expect(api.saveSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        terminalFontSize: 16,
+        terminalFontFamily: '"JetBrains Mono", Cascadia Mono, Consolas, monospace',
+      }),
+    );
   });
 
   it("keeps Back and Save reachable without scrolling to the end of the form", () => {

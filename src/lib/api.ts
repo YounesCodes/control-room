@@ -1,6 +1,8 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
+  FontCatalog,
+  FontProgress,
   AppUpdateInfo,
   BootDiagnostics,
   ConnectionGroup,
@@ -237,6 +239,10 @@ export const api = {
   installUpdate: () => invoke<void>("install_update"),
   pendingUpdateNotice: () => invoke<PendingUpdateNotice | null>("pending_update_notice"),
   dismissUpdateNotice: () => invoke<void>("dismiss_update_notice"),
+  listCatalogFonts: () => invoke<FontCatalog>("list_catalog_fonts"),
+  previewCatalogFont: (id: string) => invoke<ArrayBuffer>("preview_catalog_font", { id }),
+  installCatalogFont: (id: string, progress: Channel<FontProgress>) =>
+    invoke<string>("install_catalog_font", { id, progress }),
   settingsContract: () => invoke<SettingsContract>("get_settings_contract"),
   saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
   workspaceState: () => invoke<PersistedWorkspaceState>("get_workspace_state"),

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { api, errorMessage } from "../lib/api";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
@@ -99,6 +100,8 @@ export function SettingsPane({
     hiddenLocalShells: settings.hiddenLocalShells ?? [],
   }));
   const [saving, setSaving] = useState(false);
+  const [fontBusy, setFontBusy] = useState(false);
+  const [previewFont, setPreviewFont] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -193,6 +196,7 @@ export function SettingsPane({
           <button
             className="icon-button settings-back"
             type="button"
+            disabled={fontBusy || saving}
             onClick={() => onClose()}
             aria-label="Close Settings"
             title="Close Settings"
@@ -220,7 +224,7 @@ export function SettingsPane({
               className="primary-button settings-save"
               type="submit"
               form="settings-form"
-              disabled={saving || !dirty}
+              disabled={saving || fontBusy || !dirty}
             >
               <Save size={15} /> {saving ? "Saving…" : "Save settings"}
             </button>
@@ -234,10 +238,28 @@ export function SettingsPane({
             <label>
               <span>Font family</span>
               <input
+                disabled={fontBusy || saving}
                 value={draft.terminalFontFamily}
                 onChange={(event) => setDraft({ ...draft, terminalFontFamily: event.target.value })}
               />
             </label>
+            <FontCatalogPicker
+              disabled={saving}
+              onBusyChange={setFontBusy}
+              onPreview={setPreviewFont}
+              onUse={async (family) => {
+                const updated = {
+                  ...settings,
+                  terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
+                };
+                await api.saveSettings(updated);
+                onSaved(updated);
+                setDraft((current) => ({
+                  ...current,
+                  terminalFontFamily: updated.terminalFontFamily,
+                }));
+              }}
+            />
             <div className="form-row">
               <label>
                 <span>Font size</span>
@@ -295,7 +317,11 @@ export function SettingsPane({
             </div>
             <div
               className="ansi-preview"
-              style={{ color: draft.terminalForeground }}
+              style={{
+                color: draft.terminalForeground,
+                fontFamily: previewFont ?? draft.terminalFontFamily,
+                fontSize: draft.terminalFontSize,
+              }}
               aria-hidden="true"
             >
               <div>

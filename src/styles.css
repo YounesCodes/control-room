@@ -5474,3 +5474,61 @@ kbd {
   flex: none;
   color: var(--text-faint);
 }
+
+.font-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.font-catalog > small {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.font-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 3px;
+  max-height: 230px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.font-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.font-suggestions li[aria-selected="true"] {
+  background: var(--surface-raised);
+  outline: 1px solid var(--border-strong);
+  outline-offset: -1px;
+}
+
+.font-suggestions small {
+  color: var(--text-muted);
+}
+
+.font-catalog-actions,
+.font-install-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.font-catalog-actions > span {
+  flex: 1 1 180px;
+}
+
+.font-install-progress progress {
+  width: 140px;
+  accent-color: var(--text-muted);
+}

@@ -5,7 +5,7 @@ description: Change terminal appearance, local shells, logs, and updates.
 
 import settingsScreenshot from "../../../assets/screenshots/settings.png";
 
-Open **Settings** from the top bar. Select **Save settings** to apply changes.
+Open **Settings** from the top bar. Select **Save settings** to apply changes. Catalog fonts have their own **Install and use** action.
 
 <figure class="docs-screenshot">
   <a href={settingsScreenshot.src} target="_blank" rel="noreferrer">
@@ -20,6 +20,24 @@ Open **Settings** from the top bar. Select **Save settings** to apply changes.
 ## Terminal
 
 Choose a font, size (9–32), and scrollback limit (100–100,000 lines). You can change the text and ANSI colors for both SSH and local terminals; the cursor follows the text color. The preview shows your choices and warns if a color is hard to read. **Reset colors** restores the defaults. See [Terminal](/control-room/terminal/#reconnect-and-copy) for right-click behavior.
+
+Use **Search free fonts** to find open-source monospace fonts from Fontsource.
+Each suggestion shows its name in that font. Typing or using the arrow keys
+updates the preview without installing anything. **Keep current font** or Escape
+ends the preview.
+
+Select **Install and use** to download and install the regular font and bold
+weight when available for your Windows account. The app shows download and
+installation progress, then applies and saves the font for all terminals. Other
+unsaved settings still need **Save settings**. Installation needs no administrator
+access and the font remains installed when Control Room closes.
+
+If a download, installation, or save fails, the current terminal font stays in
+use. Read the error and choose **Retry install and use**. **Retry preview** and
+**Retry catalog** retry their own requests. When the catalog is unavailable,
+you can keep using installed fonts through **Font family**, including a list of
+fallbacks such as `"JetBrains Mono", Consolas, monospace`. Cached catalog names
+remain available during the current app session.
 
 ## Local terminal
 
