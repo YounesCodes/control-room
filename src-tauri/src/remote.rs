@@ -2094,6 +2094,13 @@ pub struct StreamManager {
 }
 
 impl StreamManager {
+    #[cfg(feature = "desktop-e2e")]
+    pub fn e2e_ids(&self) -> Vec<String> {
+        let mut ids: Vec<_> = self.streams.lock().keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
     pub fn start_journal(
         &self,
         app: AppHandle,

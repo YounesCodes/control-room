@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -199,6 +199,61 @@ afterEach(() => {
 });
 
 describe("baselines pane", () => {
+  it("shows capture progress and cancels the active capture without requesting another", async () => {
+    api.listHostBaselines.mockResolvedValue([]);
+    let finish!: (value: HostBaselineSummary) => void;
+    api.captureHostBaseline.mockImplementationOnce((request, channel) => {
+      channel.onmessage({
+        captureId: request.captureId,
+        kind: "host",
+        status: "collected",
+        message: null,
+        completed: 1,
+        total: 5,
+      });
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    api.cancelHostBaseline.mockResolvedValue(undefined);
+    renderPane(null);
+    await screen.findByText("No baselines yet");
+    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
+    expect(screen.getByRole("button", { name: "Stop after this section" })).toBeTruthy();
+    expect(document.querySelector(".baseline-progress")?.textContent).toContain("Host facts");
+    await userEvent.click(screen.getByRole("button", { name: "Stop after this section" }));
+    expect(api.cancelHostBaseline).toHaveBeenCalledExactlyOnceWith(
+      api.captureHostBaseline.mock.calls[0][0].captureId,
+    );
+    await act(async () => finish(summary("partial", "2026-10-07T10:00:00Z", "Stopped capture")));
+    expect(api.captureHostBaseline).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Stop after this section" })).toBeNull();
+  });
+
+  it("ignores a previous selection's late detail failure", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("earlier", "2026-09-01T10:00:00Z", null),
+      summary("later", "2026-09-02T10:00:00Z", null),
+    ]);
+    let reject!: (error: Error) => void;
+    api.getHostBaseline
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, fail) => {
+            reject = fail;
+          }),
+      )
+      .mockResolvedValue(detail);
+    const onSelect = vi.fn();
+    const view = render(
+      <BaselinesPane connection={connection} selectedId="earlier" onSelect={onSelect} />,
+    );
+    await waitFor(() => expect(api.getHostBaseline).toHaveBeenCalledWith("earlier"));
+    view.rerender(<BaselinesPane connection={connection} selectedId="later" onSelect={onSelect} />);
+    await screen.findAllByText("Host facts");
+    await act(async () => reject(new Error("old request failed")));
+    expect(screen.queryByText("old request failed")).toBeNull();
+  });
   it("lists saved captures and says capture is manual", async () => {
     api.listHostBaselines.mockResolvedValue([
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),

@@ -47,6 +47,18 @@ export function HistoryPane({
     onConfirm: () => void;
   } | null>(null);
   const loadRequestRef = useRef(0);
+  const integrationRequestRef = useRef(0);
+
+  async function loadIntegration() {
+    const request = ++integrationRequestRef.current;
+    setIntegrationError(null);
+    try {
+      const installed = await api.historyIntegrationStatus(connection.id);
+      if (request === integrationRequestRef.current) setIntegrationInstalled(installed);
+    } catch (caught) {
+      if (request === integrationRequestRef.current) setIntegrationError(errorMessage(caught));
+    }
+  }
 
   async function loadHistory() {
     const request = ++loadRequestRef.current;
@@ -73,29 +85,16 @@ export function HistoryPane({
   }, [connection.id, search]);
 
   useEffect(() => {
-    let current = true;
     setIntegrationInstalled(null);
-    setIntegrationError(null);
-    void api
-      .historyIntegrationStatus(connection.id)
-      .then((installed) => {
-        if (current) setIntegrationInstalled(installed);
-      })
-      .catch((caught) => {
-        if (current) setIntegrationError(errorMessage(caught));
-      });
+    void loadIntegration();
     return () => {
-      current = false;
+      integrationRequestRef.current += 1;
     };
   }, [connection.id]);
 
   function refresh() {
     void loadHistory();
-    setIntegrationError(null);
-    void api
-      .historyIntegrationStatus(connection.id)
-      .then(setIntegrationInstalled)
-      .catch((caught) => setIntegrationError(errorMessage(caught)));
+    void loadIntegration();
   }
 
   async function installIntegration() {

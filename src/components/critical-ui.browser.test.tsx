@@ -415,6 +415,17 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("honors reduced motion while keeping dialog keyboard focus usable", async () => {
+    expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(true);
+    mount(<ModalFixture />);
+    await page.getByRole("button", { name: "Open dialog" }).click();
+    await expect.element(page.getByRole("dialog", { name: "Example dialog" })).toBeVisible();
+    const modal = page.getByRole("dialog", { name: "Example dialog" }).element();
+    expect(parseFloat(getComputedStyle(modal).animationDuration)).toBeLessThanOrEqual(0.00001);
+    await userEvent.keyboard("{Escape}");
+    await expect.element(page.getByRole("button", { name: "Open dialog" })).toHaveFocus();
+  });
+
   it("keeps Settings content bounded and centered in a wide window", async () => {
     await page.viewport(1600, 900);
     mount(<SettingsFixture />);

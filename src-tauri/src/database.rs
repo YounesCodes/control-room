@@ -3050,6 +3050,91 @@ mod tests {
         }
     }
 
+    #[test]
+    fn deleting_one_owner_preserves_other_and_global_data_after_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let removed = database.create_connection(input("Removed")).unwrap();
+        let survivor = database.create_connection(input("Survivor")).unwrap();
+        for saved in [&removed, &survivor] {
+            database
+                .add_history(HistoryInput {
+                    connection_id: saved.id.clone(),
+                    session_id: "session".into(),
+                    command: format!("echo {}", saved.display_name),
+                    cwd: None,
+                    started_at: "2026-10-07T10:00:00Z".into(),
+                    finished_at: None,
+                    exit_code: None,
+                    shell: "bash".into(),
+                })
+                .unwrap();
+            database
+                .save_scratchpad_note(ScratchpadNoteInput {
+                    scope: "connection".into(),
+                    owner_id: saved.id.clone(),
+                    connection_id: Some(saved.id.clone()),
+                    text: saved.display_name.clone(),
+                })
+                .unwrap();
+            database
+                .save_host_baseline(&baseline_for(&saved.id, &saved.id, "2026-10-07T10:00:00Z"))
+                .unwrap();
+        }
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "global".into(),
+                owner_id: "global".into(),
+                connection_id: None,
+                text: "Shared reminder".into(),
+            })
+            .unwrap();
+        drop(database);
+        let database = Database::open(&path).unwrap();
+        database.delete_connection(&removed.id).unwrap();
+        drop(database);
+        let database = Database::open(&path).unwrap();
+        assert!(database.get_connection(&removed.id).is_err());
+        assert!(
+            database
+                .list_history(&removed.id, None, 500)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            database
+                .list_host_baselines(&removed.id)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            database.get_connection(&survivor.id).unwrap().display_name,
+            "Survivor"
+        );
+        assert_eq!(
+            database.list_history(&survivor.id, None, 500).unwrap()[0].command,
+            "echo Survivor"
+        );
+        assert_eq!(database.list_host_baselines(&survivor.id).unwrap().len(), 1);
+        assert_eq!(
+            database
+                .get_scratchpad_note("connection", &survivor.id, Some(&survivor.id))
+                .unwrap()
+                .unwrap()
+                .text,
+            "Survivor"
+        );
+        assert_eq!(
+            database
+                .get_scratchpad_note("global", "global", None)
+                .unwrap()
+                .unwrap()
+                .text,
+            "Shared reminder"
+        );
+    }
+
     /// Restore reads whatever is on disk, including what an interrupted write
     /// or an older bug left there. A payload it cannot trust is dropped and the
     /// app starts with no Workspaces, rather than failing to start at all.
