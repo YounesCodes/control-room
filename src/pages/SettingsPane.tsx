@@ -377,16 +377,8 @@ export function SettingsPane({
                   ))}
               </select>
             </label>
-            <small>
-              Startup uses a standard terminal without administrator elevation. If the default is
-              disabled or unavailable, startup uses the first enabled standard terminal. With none
-              enabled, Local Terminal Mode opens no terminal.
-            </small>
-            <small>
-              Choose which shells the Local terminal button, New terminal, and Split menus offer.
-              Turning one off hides it from those menus only: the shell stays installed, a Workspace
-              already running it keeps going, and turning it back on brings it back.
-            </small>
+            <small>Startup uses an enabled standard terminal.</small>
+            <small>Choose which shells appear in terminal menus.</small>
             {localShells.length === 0 ? (
               <small>No local shells are installed on this machine.</small>
             ) : (
