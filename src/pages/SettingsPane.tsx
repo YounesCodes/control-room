@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { api, errorMessage } from "../lib/api";
 import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
@@ -101,7 +102,11 @@ export function SettingsPane({
     localTerminalMode: settings.localTerminalMode ?? false,
     defaultLocalShellId: settings.defaultLocalShellId || null,
   }));
+  const savedSettings = useRef(settings);
+  savedSettings.current = settings;
   const [saving, setSaving] = useState(false);
+  const [fontBusy, setFontBusy] = useState(false);
+  const [previewFont, setPreviewFont] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -195,6 +200,7 @@ export function SettingsPane({
           <button
             className="icon-button settings-back"
             type="button"
+            disabled={fontBusy || saving}
             onClick={() => onClose()}
             aria-label="Close Settings"
             title="Close Settings"
@@ -203,7 +209,7 @@ export function SettingsPane({
           </button>
           <div className="settings-heading-text">
             <h2>Settings</h2>
-            <p>Terminal, logs, local shells, SSH access, and Control Room updates.</p>
+            <p>Terminal, logs, local shells, SSH access, and updates.</p>
           </div>
           <div className="settings-heading-actions">
             {message ? (
@@ -222,7 +228,7 @@ export function SettingsPane({
               className="primary-button settings-save"
               type="submit"
               form="settings-form"
-              disabled={saving || !dirty}
+              disabled={saving || fontBusy || !dirty}
             >
               <Save size={15} /> {saving ? "Saving…" : "Save settings"}
             </button>
@@ -232,110 +238,137 @@ export function SettingsPane({
       <div className="settings-body">
         <form id="settings-form" className="settings-form" onSubmit={submit}>
           <fieldset>
-            <legend>Terminal</legend>
+            <legend>Terminal appearance</legend>
+            <small>
+              Font and colors for every local and SSH terminal. Preview your choices together before
+              saving.
+            </small>
+            <div className="terminal-appearance-layout">
+              <div className="terminal-appearance-controls">
+                <FontCatalogPicker
+                  value={draft.terminalFontFamily}
+                  onChange={(terminalFontFamily) =>
+                    setDraft((current) => ({ ...current, terminalFontFamily }))
+                  }
+                  disabled={saving}
+                  onBusyChange={setFontBusy}
+                  onPreview={setPreviewFont}
+                  onUse={async (family) => {
+                    const updated = {
+                      ...savedSettings.current,
+                      terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
+                    };
+                    await api.saveSettings(updated);
+                    onSaved(updated);
+                    setDraft((current) => ({
+                      ...current,
+                      terminalFontFamily: updated.terminalFontFamily,
+                    }));
+                  }}
+                />
+                <label>
+                  <span>Font size</span>
+                  <input
+                    type="number"
+                    min="9"
+                    max="32"
+                    value={draft.terminalFontSize}
+                    onChange={(event) =>
+                      setDraft({ ...draft, terminalFontSize: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <div className="terminal-color-heading">
+                  <div>
+                    <strong>Terminal colors</strong>
+                    <small>Programs choose how to use each ANSI slot.</small>
+                  </div>
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() => {
+                      setDraft({
+                        ...draft,
+                        terminalForeground: defaults.terminalForeground,
+                        terminalRed: defaults.terminalRed,
+                        terminalGreen: defaults.terminalGreen,
+                        terminalYellow: defaults.terminalYellow,
+                        terminalBlue: defaults.terminalBlue,
+                        terminalMagenta: defaults.terminalMagenta,
+                        terminalCyan: defaults.terminalCyan,
+                      });
+                    }}
+                  >
+                    <RotateCcw size={13} /> Reset colors
+                  </button>
+                </div>
+                <div className="terminal-color-grid">
+                  {terminalColorFields.map(([field, label, example]) => (
+                    <label className="terminal-color-control" key={field}>
+                      <TerminalColorPicker
+                        label={label}
+                        descriptionId={example ? `${field}-example` : undefined}
+                        value={draft[field]}
+                        onCommit={(color) => setColor(field, color)}
+                      />
+                      <span>{label}</span>
+                      {example && (
+                        <small className="terminal-color-example" id={`${field}-example`}>
+                          {example}
+                        </small>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                {lowContrastColors.length > 0 && (
+                  <p className="inline-warning terminal-color-warning" role="status">
+                    Hard to read on the terminal background: {lowContrastColors.join(", ")}. Choose
+                    a brighter color or reset the colors.
+                  </p>
+                )}
+              </div>
+              <div className="terminal-appearance-preview">
+                <strong>Live preview</strong>
+                <small>Font, size, and colors</small>
+                <div
+                  className="ansi-preview"
+                  style={{
+                    color: draft.terminalForeground,
+                    fontFamily: previewFont ?? draft.terminalFontFamily,
+                    fontSize: draft.terminalFontSize,
+                  }}
+                  aria-hidden="true"
+                >
+                  <div>
+                    <span style={{ color: draft.terminalGreen }}>user@host:~$</span> echo sample
+                  </div>
+                  <div>sample</div>
+                  <div className="ansi-preview-slots">
+                    {terminalAnsiColors.map(([field, label]) => (
+                      <span key={field} style={{ color: draft[field] }}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Terminal behavior</legend>
+            <small>Output history retained for local and SSH terminals.</small>
             <label>
-              <span>Font family</span>
+              <span>Scrollback lines</span>
               <input
-                value={draft.terminalFontFamily}
-                onChange={(event) => setDraft({ ...draft, terminalFontFamily: event.target.value })}
+                type="number"
+                min="100"
+                max="100000"
+                value={draft.terminalScrollback}
+                onChange={(event) =>
+                  setDraft({ ...draft, terminalScrollback: Number(event.target.value) })
+                }
               />
             </label>
-            <div className="form-row">
-              <label>
-                <span>Font size</span>
-                <input
-                  type="number"
-                  min="9"
-                  max="32"
-                  value={draft.terminalFontSize}
-                  onChange={(event) =>
-                    setDraft({ ...draft, terminalFontSize: Number(event.target.value) })
-                  }
-                />
-              </label>
-              <label>
-                <span>Scrollback lines</span>
-                <input
-                  type="number"
-                  min="100"
-                  max="100000"
-                  value={draft.terminalScrollback}
-                  onChange={(event) =>
-                    setDraft({ ...draft, terminalScrollback: Number(event.target.value) })
-                  }
-                />
-              </label>
-            </div>
-            <small>
-              A right click copies the selected text, or pastes the clipboard when nothing is
-              selected. While a program is reading the mouse, such as Vim or top, the click goes to
-              that program instead. Ctrl+Shift+C and Ctrl+Shift+V work everywhere.
-            </small>
-            <div className="terminal-color-heading">
-              <div>
-                <strong>Terminal colors</strong>
-                <small>Programs choose how to use each ANSI slot.</small>
-              </div>
-              <button
-                className="secondary-button compact-button"
-                type="button"
-                onClick={() => {
-                  setDraft({
-                    ...draft,
-                    terminalForeground: defaults.terminalForeground,
-                    terminalRed: defaults.terminalRed,
-                    terminalGreen: defaults.terminalGreen,
-                    terminalYellow: defaults.terminalYellow,
-                    terminalBlue: defaults.terminalBlue,
-                    terminalMagenta: defaults.terminalMagenta,
-                    terminalCyan: defaults.terminalCyan,
-                  });
-                }}
-              >
-                <RotateCcw size={13} /> Reset colors
-              </button>
-            </div>
-            <div
-              className="ansi-preview"
-              style={{ color: draft.terminalForeground }}
-              aria-hidden="true"
-            >
-              <div>
-                <span style={{ color: draft.terminalGreen }}>user@host:~$</span> echo sample
-              </div>
-              <div>sample</div>
-              <div className="ansi-preview-slots">
-                {terminalAnsiColors.map(([field, label]) => (
-                  <span key={field} style={{ color: draft[field] }}>
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="terminal-color-grid">
-              {terminalColorFields.map(([field, label, example]) => (
-                <label className="terminal-color-control" key={field}>
-                  <TerminalColorPicker
-                    label={label}
-                    descriptionId={example ? `${field}-example` : undefined}
-                    value={draft[field]}
-                    onCommit={(color) => setColor(field, color)}
-                  />
-                  <span>{label}</span>
-                  {example && (
-                    <small className="terminal-color-example" id={`${field}-example`}>
-                      {example}
-                    </small>
-                  )}
-                </label>
-              ))}
-            </div>
-            {lowContrastColors.length > 0 && (
-              <p className="inline-warning terminal-color-warning" role="status">
-                Hard to read on the terminal background: {lowContrastColors.join(", ")}. Choose a
-                brighter color or reset the colors.
-              </p>
-            )}
           </fieldset>
           <fieldset>
             <legend>Local terminal</legend>
@@ -401,6 +434,7 @@ export function SettingsPane({
           </fieldset>
           <fieldset>
             <legend>Logs and History</legend>
+            <small>Log viewer defaults and command history across SSH connections.</small>
             <label>
               <span>Default log tail</span>
               <select
@@ -465,12 +499,6 @@ export function SettingsPane({
               />{" "}
               Automatically check for updates
             </label>
-            <small>
-              Checks GitHub Releases shortly after Control Room starts, then periodically while it
-              stays open and when you return to it after being away. Update packages are
-              cryptographically signed and verified before anything is installed. This updates
-              Control Room on this Windows machine only, and never a Remote Host.
-            </small>
             <div className="settings-update-actions">
               <button
                 className="secondary-button"
@@ -504,6 +532,9 @@ export function SettingsPane({
           </fieldset>
           <fieldset>
             <legend>SSH environment</legend>
+            <small>
+              Detected Windows SSH tools and configuration. These details are read-only.
+            </small>
             <dl className="detail-list">
               <div>
                 <dt>ssh.exe</dt>

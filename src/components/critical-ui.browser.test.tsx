@@ -144,18 +144,20 @@ const environment: EnvironmentInfo = {
 
 function SettingsFixture() {
   return (
-    <SettingsPane
-      settings={settings}
-      defaults={settings}
-      logTailOptions={[50, 100, 200, 500, 1000]}
-      localShells={[]}
-      environment={environment}
-      appVersion="0.7.6"
-      onCheckForUpdates={async () => ({ outcome: "current" })}
-      onSaved={() => undefined}
-      onClose={() => true}
-      onDirtyChange={() => undefined}
-    />
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
+      <SettingsPane
+        settings={settings}
+        defaults={settings}
+        logTailOptions={[50, 100, 200, 500, 1000]}
+        localShells={[]}
+        environment={environment}
+        appVersion="0.8.2"
+        onCheckForUpdates={async () => ({ outcome: "current" })}
+        onSaved={() => undefined}
+        onClose={() => true}
+        onDirtyChange={() => undefined}
+      />
+    </div>
   );
 }
 
@@ -454,6 +456,7 @@ describe("critical UI in Chromium", () => {
   it("keeps Settings actions visible at the minimum supported height", async () => {
     await page.viewport(960, 640);
     mount(<SettingsFixture />);
+    container!.style.width = "708px";
     await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
     const back = page.getByRole("button", { name: "Close Settings" }).element();
     const save = page.getByRole("button", { name: "Save settings" }).element();
@@ -464,6 +467,52 @@ describe("critical UI in Chromium", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
+  });
+
+  it("keeps appearance controls with their preview while Settings scrolls", async () => {
+    await page.viewport(960, 640);
+    mount(<SettingsFixture />);
+    container!.style.width = "708px";
+    await expect.element(page.getByRole("group", { name: "Terminal appearance" })).toBeVisible();
+    const appearance = page.getByRole("group", { name: "Terminal appearance" }).element();
+    const preview = appearance.querySelector<HTMLElement>(".terminal-appearance-preview")!;
+    const font = page.getByRole("combobox", { name: "Font family" }).element();
+    const size = page.getByRole("spinbutton", { name: "Font size" });
+    const colorInput = appearance.querySelector<HTMLInputElement>(
+      'input[aria-label="Default text and cursor"]',
+    )!;
+    expect(appearance.contains(font)).toBe(true);
+    expect(colorInput).not.toBeNull();
+    expect(preview.getBoundingClientRect().left).toBeGreaterThan(
+      font.getBoundingClientRect().right,
+    );
+    expect(
+      Number.parseFloat(getComputedStyle(appearance.querySelector("legend")!).fontSize),
+    ).toBeGreaterThanOrEqual(18);
+    await size.fill("20");
+    await vi.waitFor(() =>
+      expect(preview.querySelector<HTMLElement>(".ansi-preview")!.style.fontSize).toBe("20px"),
+    );
+    colorInput.value = "#00ff00";
+    colorInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(preview.querySelector<HTMLElement>(".ansi-preview")!.style.color).toBe(
+        "rgb(0, 255, 0)",
+      ),
+    );
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    body.scrollTop = 160;
+    await vi.waitFor(() =>
+      expect(preview.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        body.getBoundingClientRect().top,
+      ),
+    );
+    expect(container!.scrollWidth).toBeLessThanOrEqual(708);
+    await page.screenshot({ path: "../../test-results/settings-minimum.png" });
+    expect(container!.querySelector(".settings-navigation")).toBeNull();
+    body.scrollTop = body.scrollHeight;
+    await expect.element(page.getByRole("button", { name: "Save settings" })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
   });
 
   it("honors reduced motion while keeping dialog keyboard focus usable", async () => {
@@ -487,5 +536,8 @@ describe("critical UI in Chromium", () => {
     expect(Math.abs(form.left - (1600 - form.right))).toBeLessThan(24);
     expect(Math.abs(heading.left - form.left)).toBeLessThan(24);
     expect(Math.abs(heading.right - form.right)).toBeLessThan(24);
+    if (import.meta.env.VITE_CAPTURE_DOCS === "1") {
+      await page.screenshot({ path: "../../docs/src/assets/screenshots/settings.png" });
+    }
   });
 });

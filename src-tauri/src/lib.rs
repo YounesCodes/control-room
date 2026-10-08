@@ -1,6 +1,7 @@
 mod baselines;
 mod commands;
 mod database;
+mod fonts;
 mod history;
 mod local_shell;
 mod models;
@@ -29,6 +30,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_wdio::init());
     builder
         .manage(SessionManager::default())
+        .manage(fonts::FontState::default())
         .manage(updater::UpdaterState::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
@@ -65,6 +67,9 @@ pub fn run() {
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
             commands::get_environment_info,
+            fonts::list_catalog_fonts,
+            fonts::preview_catalog_font,
+            fonts::install_catalog_font,
             commands::list_connections,
             commands::create_connection,
             commands::update_connection,

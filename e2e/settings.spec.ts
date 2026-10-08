@@ -2,15 +2,22 @@ import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { ipc, openLocal, restartApp, runtime, savedSettings, terminalCommand } from "./helpers";
 
-const font = () => $("//label[span[normalize-space()='Font family']]/input");
+const font = () => $('[role="combobox"][aria-controls="font-suggestions"]');
+
+async function enterFont(value: string) {
+  await font().click();
+  await browser.keys(value);
+  await expect(font()).toHaveValue(value);
+  await browser.keys("Enter");
+}
 
 describe("Settings and native window", () => {
   it("saves terminal settings and restores them after a native app restart", async () => {
     expect((await savedSettings()).automaticUpdateChecks).toBe(false);
     await $("aria/Open Settings").click();
-    await font().setValue("Courier New");
+    await enterFont("Courier New");
     await $("button=Save settings").click();
-    await expect($("[role=status]")).toHaveText("Settings saved.");
+    await expect($(".settings-heading [role=status]")).toHaveText("Settings saved.");
     await restartApp();
     await $("aria/Open Settings").click();
     await expect(font()).toHaveValue("Courier New");
@@ -22,7 +29,7 @@ describe("Settings and native window", () => {
   it("keeps dirty settings on cancellation and discards them only on confirmation", async () => {
     const original = (await savedSettings()).terminalFontFamily;
     await $("aria/Open Settings").click();
-    await font().setValue("Discard this draft");
+    await enterFont("Discard this draft");
     await $("aria/Close Settings").click();
     await expect($("h2=Discard changes?")).toBeDisplayed();
     await $("button=Cancel").click();

@@ -626,3 +626,20 @@ export interface StreamStateEvent {
   state: "running" | "stopped" | "error";
   reason: string | null;
 }
+
+export interface CatalogFont {
+  id: string;
+  family: string;
+  license: string;
+}
+
+export interface FontCatalog {
+  fonts: CatalogFont[];
+  stale: boolean;
+}
+
+export interface FontProgress {
+  stage: "downloadingRegular" | "downloadingBold" | "installing" | "ready";
+  completed: number;
+  total: number | null;
+}

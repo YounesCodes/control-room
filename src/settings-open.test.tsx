@@ -111,7 +111,7 @@ describe("Opening Settings", () => {
     await user.click(await screen.findByRole("button", { name: "Open Settings" }));
 
     expect(await screen.findByText("Local terminal", { selector: "legend" })).toBeTruthy();
-    expect(screen.getByText("Terminal", { selector: "legend" })).toBeTruthy();
+    expect(screen.getByText("Terminal appearance", { selector: "legend" })).toBeTruthy();
     expect(screen.getByLabelText("Offer Git Bash")).toBeTruthy();
   });
 

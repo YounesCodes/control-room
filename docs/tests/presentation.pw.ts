@@ -26,10 +26,10 @@ const pages = [
   "help/troubleshooting/",
 ];
 
-test("all documentation links and section targets resolve", async ({ page }) => {
-  const targets = new Set<string>();
-  const routes = new Set(pages.map((route) => `/control-room/${route}`));
-  for (const route of pages) {
+for (const route of pages) {
+  test(`${route || "home"}: documentation links and section targets resolve`, async ({ page }) => {
+    const targets = new Set<string>();
+    const routes = new Set(pages.map((route) => `/control-room/${route}`));
     await page.goto(route || "./");
     const links = await page
       .locator(".sl-markdown-content a")
@@ -40,16 +40,16 @@ test("all documentation links and section targets resolve", async ({ page }) => 
       expect(routes.has(url.pathname), link).toBe(true);
       if (url.hash) targets.add(link);
     }
-  }
-  for (const target of targets) {
-    await page.goto(target);
-    const id = decodeURIComponent(new URL(target).hash.slice(1));
-    expect(
-      await page.evaluate((value) => Boolean(document.getElementById(value)), id),
-      target,
-    ).toBe(true);
-  }
-});
+    for (const target of targets) {
+      await page.goto(target);
+      const id = decodeURIComponent(new URL(target).hash.slice(1));
+      expect(
+        await page.evaluate((value) => Boolean(document.getElementById(value)), id),
+        target,
+      ).toBe(true);
+    }
+  });
+}
 
 for (const theme of ["dark", "light"]) {
   for (const [width, height] of [

@@ -4112,7 +4112,7 @@ dd {
 .settings-heading-text h2 {
   margin: 0;
   color: var(--text);
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.01em;
 }
@@ -4177,14 +4177,15 @@ dd {
   gap: 14px;
   border: 0;
   border-top: 1px solid var(--border);
-  margin: 0 0 24px;
+  margin: 0 0 32px;
   padding: 18px 0 0;
+  min-width: 0;
 }
 
 .settings-form legend {
   padding-right: 13px;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -4289,7 +4290,7 @@ dd {
 
 .settings-form .terminal-color-grid label.terminal-color-control span {
   color: var(--text);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -4337,8 +4338,8 @@ dd {
 
 .settings-form fieldset > small,
 .local-terminal-mode-option > small {
-  color: var(--text-faint);
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -5486,4 +5487,132 @@ kbd {
 .docker-arrow {
   flex: none;
   color: var(--text-faint);
+}
+
+.font-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.font-catalog > small {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.font-family-control,
+.font-family-input {
+  position: relative;
+}
+
+.font-family-input input {
+  width: 100%;
+  padding-right: 34px;
+}
+
+.font-family-input svg {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.font-suggestions {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface-overlay);
+  list-style: none;
+  margin: 0;
+  padding: 3px;
+  max-height: 230px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.font-suggestions li:hover {
+  background: var(--surface-raised);
+}
+
+.font-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.font-suggestions li[aria-selected="true"] {
+  background: var(--surface-raised);
+  outline: 1px solid var(--border-strong);
+  outline-offset: -1px;
+}
+
+.font-suggestions small {
+  color: var(--text-muted);
+}
+
+.font-catalog-actions,
+.font-install-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.font-catalog-actions > span {
+  flex: 1 1 180px;
+}
+
+.font-install-progress progress {
+  width: 140px;
+  accent-color: var(--text-muted);
+}
+
+.settings-form label > span {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.terminal-appearance-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+.terminal-appearance-controls {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.terminal-appearance-preview {
+  position: sticky;
+  top: 0;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.terminal-appearance-preview > strong,
+.terminal-color-heading strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.terminal-appearance-preview > small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.terminal-appearance-controls .terminal-color-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.terminal-appearance-preview .ansi-preview {
+  min-height: 190px;
 }
