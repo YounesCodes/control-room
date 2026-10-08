@@ -1,5 +1,6 @@
 export const PANEL_LIMITS = {
   connections: { min: 200, max: 480 },
+  sidebarHosts: { min: 96, max: 800 },
   content: { min: 360, max: 1600 },
   split: { min: 240, max: 900 },
 };
@@ -17,11 +18,13 @@ export function restorePanelSizes(value: unknown): PanelSizes {
     const limits =
       key === "connections"
         ? PANEL_LIMITS.connections
-        : key.startsWith("content:")
-          ? PANEL_LIMITS.content
-          : key.startsWith("split:")
-            ? PANEL_LIMITS.split
-            : null;
+        : key === "sidebar:hosts"
+          ? PANEL_LIMITS.sidebarHosts
+          : key.startsWith("content:")
+            ? PANEL_LIMITS.content
+            : key.startsWith("split:")
+              ? PANEL_LIMITS.split
+              : null;
     if (
       limits &&
       key.length <= 64 &&

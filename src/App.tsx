@@ -1,4 +1,9 @@
-import { ConnectionSection, ResizeDivider, usePanelWidth } from "./components/ResizablePanels";
+import {
+  ConnectionSection,
+  ResizeDivider,
+  SidebarSections,
+  usePanelWidth,
+} from "./components/ResizablePanels";
 import {
   clampPanelSize,
   PANEL_LIMITS,
@@ -1511,9 +1516,6 @@ export function App() {
         </div>
       </header>
 
-      {/* Only a Remote Host puts a view switcher under the list, so only it
-          needs the list capped to leave room. A local Workspace has no
-          switcher, so the list keeps the whole sidebar. */}
       <aside className={activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span data-tauri-drag-region>Connections</span>
@@ -1548,54 +1550,59 @@ export function App() {
             <FolderCog size={18} />
           </button>
         </div>
-        <nav className="host-list" aria-label="Saved connections">
-          {connectionSections.map((section) => {
-            const collapsed = section.collapsed && !hostSearch.trim();
-            return (
-              <section className="connection-group-section" key={section.id ?? "ungrouped"}>
-                <button
-                  className="connection-group-heading"
-                  type="button"
-                  onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
-                  aria-expanded={!collapsed}
-                >
-                  {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                  <span>{section.name}</span>
-                  <small>{section.connections.length}</small>
-                </button>
-                {!collapsed && section.connections.map(renderConnectionRow)}
-              </section>
-            );
-          })}
-          {!connectionSections.some((section) => section.connections.length) && (
-            <p className="sidebar-empty">
-              {connections.length ? "No matches" : "No connections yet"}
-            </p>
-          )}
-        </nav>
-        {/* The view switcher belongs to a Remote Host. A local Workspace is
-            terminal-only, so it shows no inspection views at all. */}
-        {activeRemoteWorkspace && (
-          <div className="workspace-navigation">
-            <nav className="feature-nav" aria-label="Workspace features">
-              {navigation.map(({ id, label, icon: Icon }) => (
-                <button
-                  className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
-                  type="button"
-                  key={id}
-                  aria-current={
-                    activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
-                  }
-                  onClick={() =>
-                    closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
-                  }
-                >
-                  <Icon size={17} strokeWidth={1.8} /> {label}
-                </button>
-              ))}
+        <SidebarSections
+          layout={panelLayout}
+          hosts={
+            <nav className="host-list" aria-label="Saved connections">
+              {connectionSections.map((section) => {
+                const collapsed = section.collapsed && !hostSearch.trim();
+                return (
+                  <section className="connection-group-section" key={section.id ?? "ungrouped"}>
+                    <button
+                      className="connection-group-heading"
+                      type="button"
+                      onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
+                      aria-expanded={!collapsed}
+                    >
+                      {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                      <span>{section.name}</span>
+                      <small>{section.connections.length}</small>
+                    </button>
+                    {!collapsed && section.connections.map(renderConnectionRow)}
+                  </section>
+                );
+              })}
+              {!connectionSections.some((section) => section.connections.length) && (
+                <p className="sidebar-empty">
+                  {connections.length ? "No matches" : "No connections yet"}
+                </p>
+              )}
             </nav>
-          </div>
-        )}
+          }
+          capabilities={
+            activeRemoteWorkspace && (
+              <div className="workspace-navigation">
+                <nav className="feature-nav" aria-label="Workspace features">
+                  {navigation.map(({ id, label, icon: Icon }) => (
+                    <button
+                      className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
+                      type="button"
+                      key={id}
+                      aria-current={
+                        activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
+                      }
+                      onClick={() =>
+                        closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
+                      }
+                    >
+                      <Icon size={17} strokeWidth={1.8} /> {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )
+          }
+        />
         <div className="sidebar-footer">
           {!!offeredShells.length && (
             <div className="local-shell-launcher" data-local-shell-menu>

@@ -39,12 +39,13 @@ export function observeLayoutFallback(element: HTMLElement, measure: () => void)
   };
 }
 
-export function usePanelWidth() {
+function usePanelDimension(dimension: "width" | "height") {
   const [element, ref] = useState<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState(0);
   useLayoutEffect(() => {
     if (!element) return;
-    const measure = () => setWidth(element.clientWidth);
+    const measure = () =>
+      setSize(dimension === "width" ? element.clientWidth : element.clientHeight);
     measure();
     if (typeof ResizeObserver === "undefined") {
       return observeLayoutFallback(element, measure);
@@ -52,12 +53,65 @@ export function usePanelWidth() {
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [element]);
-  return { ref, width };
+  }, [element, dimension]);
+  return { ref, size };
+}
+
+export function usePanelWidth() {
+  const { ref, size } = usePanelDimension("width");
+  return { ref, width: size };
+}
+
+export function SidebarSections({
+  hosts,
+  capabilities,
+  layout,
+}: {
+  hosts: ReactNode;
+  capabilities: ReactNode;
+  layout: ContextType<typeof PanelLayoutContext>;
+}) {
+  const { sizes, setSize } = layout;
+  const { ref, size: height } = usePanelDimension("height");
+  const key = "sidebar:hosts";
+  const max = Math.max(
+    0,
+    Math.min(PANEL_LIMITS.sidebarHosts.max, height - 6 - PANEL_LIMITS.sidebarHosts.min),
+  );
+  const min = Math.min(PANEL_LIMITS.sidebarHosts.min, max);
+  const size = clampPanelSize(sizes[key] ?? height * 0.45, min, max);
+  return (
+    <div
+      ref={ref}
+      className={`sidebar-sections${capabilities ? " with-capabilities" : ""}`}
+      style={
+        capabilities && height ? { gridTemplateRows: `${size}px 6px minmax(0, 1fr)` } : undefined
+      }
+    >
+      {hosts}
+      {capabilities && (
+        <>
+          <ResizeDivider
+            label="Resize Hosts and Capabilities"
+            orientation="horizontal"
+            value={size}
+            min={min}
+            max={max}
+            className="sidebar-sections-divider"
+            style={{ top: size + 3 }}
+            onChange={(next) => setSize(key, next)}
+            onReset={() => setSize(key, null)}
+          />
+          {capabilities}
+        </>
+      )}
+    </div>
+  );
 }
 
 export function ResizeDivider({
   label,
+  orientation = "vertical",
   value,
   min,
   max,
@@ -67,6 +121,7 @@ export function ResizeDivider({
   style,
 }: {
   label: string;
+  orientation?: "vertical" | "horizontal";
   value: number;
   min: number;
   max: number;
@@ -75,7 +130,10 @@ export function ResizeDivider({
   className?: string;
   style?: CSSProperties;
 }) {
-  const drag = useRef<{ id: number; x: number; size: number } | null>(null);
+  const drag = useRef<{ id: number; start: number; size: number } | null>(null);
+  const horizontal = orientation === "horizontal";
+  const coordinate = (event: { clientX: number; clientY: number }) =>
+    horizontal ? event.clientY : event.clientX;
   const [dragging, setDragging] = useState(false);
   const element = useRef<HTMLDivElement>(null);
   const latest = useRef({ min, max, onChange });
@@ -120,12 +178,12 @@ export function ResizeDivider({
       role="separator"
       tabIndex={0}
       aria-label={label}
-      aria-orientation="vertical"
+      aria-orientation={orientation}
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={value}
       aria-valuetext={`${value} pixels`}
-      title={`${label}. Drag or use Left and Right arrows. Double-click or press Enter to reset.`}
+      title={`${label}. Drag or use ${horizontal ? "Up and Down" : "Left and Right"} arrows. Double-click or press Enter to reset.`}
       className={`resize-divider ${className}${dragging ? " dragging" : ""}`}
       onDoubleClick={onReset}
       onKeyDown={(event) => {
@@ -141,9 +199,9 @@ export function ResizeDivider({
         }
         const step = event.shiftKey ? 50 : 10;
         const next =
-          event.key === "ArrowLeft"
+          event.key === (horizontal ? "ArrowUp" : "ArrowLeft")
             ? value - step
-            : event.key === "ArrowRight"
+            : event.key === (horizontal ? "ArrowDown" : "ArrowRight")
               ? value + step
               : event.key === "Home"
                 ? min
@@ -160,12 +218,12 @@ export function ResizeDivider({
         event.preventDefault();
         event.currentTarget.focus();
         event.currentTarget.setPointerCapture(event.pointerId);
-        drag.current = { id: event.pointerId, x: event.clientX, size: value };
+        drag.current = { id: event.pointerId, start: coordinate(event), size: value };
         setDragging(true);
       }}
       onPointerMove={(event) => {
         if (drag.current?.id !== event.pointerId) return;
-        pending.current = drag.current.size + event.clientX - drag.current.x;
+        pending.current = drag.current.size + coordinate(event) - drag.current.start;
         if (frame.current === null) frame.current = requestAnimationFrame(flush);
       }}
       onPointerUp={(event) => {

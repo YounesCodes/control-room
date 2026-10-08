@@ -4,7 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { useState } from "react";
 import axe from "axe-core";
 import { Plus } from "lucide-react";
-import { ConnectionSection, PanelLayoutContext, ResizeDivider } from "./ResizablePanels";
+import {
+  ConnectionSection,
+  PanelLayoutContext,
+  ResizeDivider,
+  SidebarSections,
+} from "./ResizablePanels";
 import { OverviewPane } from "../pages/OverviewPane";
 import { DockerPane } from "../pages/DockerPane";
 import { PortsPane } from "../pages/PortsPane";
@@ -149,6 +154,7 @@ afterEach(() => {
 function Fixture() {
   const [sizes, setSizes] = useState<PanelSizes>({});
   const [section, setSection] = useState("overview");
+  const [remote, setRemote] = useState(true);
   const setSize = (key: string, size: number | null) =>
     setSizes((current) => {
       const next = { ...current };
@@ -163,13 +169,44 @@ function Fixture() {
         className="app-shell"
         style={{ height: "100vh", gridTemplateColumns: `${rail}px minmax(0, 1fr)` }}
       >
-        <aside className="sidebar">
+        <aside className="sidebar workspace-open">
           <button onClick={() => setSizes({})}>Reset layout</button>
-          {["overview", "docker", "ports"].map((name) => (
-            <button key={name} onClick={() => setSection(name)}>
-              Open {name}
-            </button>
-          ))}
+          <button onClick={() => setRemote(!remote)}>Toggle remote workspace</button>
+          <SidebarSections
+            layout={{ sizes, setSize }}
+            hosts={
+              <nav className="host-list" aria-label="Saved connections">
+                {Array.from({ length: 20 }, (_, index) => (
+                  <div className="host-row" key={index}>
+                    <button className="host-main">Sample host {index + 1}</button>
+                  </div>
+                ))}
+              </nav>
+            }
+            capabilities={
+              remote && (
+                <div className="workspace-navigation">
+                  <nav className="feature-nav" aria-label="Workspace features">
+                    {[
+                      "overview",
+                      "docker",
+                      "ports",
+                      "systemd",
+                      "boot",
+                      "logs",
+                      "baselines",
+                      "history",
+                      "scratchpad",
+                    ].map((name) => (
+                      <button key={name} onClick={() => setSection(name)}>
+                        Open {name}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              )
+            }
+          />
           <div className="sidebar-footer">
             <button className="sidebar-secondary">Local terminal</button>
             <button className="sidebar-primary">
@@ -253,7 +290,11 @@ describe("resizable connection panels in Chromium", () => {
     await vi.waitFor(() =>
       expect(Number(divider.element().getAttribute("aria-valuenow"))).toBeGreaterThan(300),
     );
-    expect(document.querySelector(".sidebar")!.getBoundingClientRect().width).toBeGreaterThan(300);
+    await vi.waitFor(() =>
+      expect(document.querySelector(".sidebar")!.getBoundingClientRect().width).toBeGreaterThan(
+        300,
+      ),
+    );
     await divider.click();
     await userEvent.keyboard("{End}");
     await expect.element(divider).toHaveAttribute("aria-valuenow", "480");
@@ -274,6 +315,105 @@ describe("resizable connection panels in Chromium", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id }) => id)).toEqual([]);
+  });
+
+  it("uses a thin centered hover line inside the larger drag target", async () => {
+    await page.viewport(960, 640);
+    mount();
+    const divider = page.getByRole("separator", { name: "Resize Connections panel" });
+    await userEvent.hover(divider);
+    const highlight = getComputedStyle(divider.element(), "::after");
+    expect(highlight.width).toBe("2px");
+    await vi.waitFor(() => expect(highlight.backgroundColor).toBe("rgb(173, 173, 170)"));
+    const handle = divider.element().getBoundingClientRect();
+    const edge = document.querySelector(".sidebar")!.getBoundingClientRect().right;
+    expect(Math.abs((handle.left + handle.right) / 2 - edge)).toBeLessThanOrEqual(1);
+    expect(handle.width).toBe(24);
+    await divider.click();
+    expect(getComputedStyle(divider.element()).outlineStyle).toBe("none");
+    expect(getComputedStyle(divider.element(), "::after").width).toBe("2px");
+  });
+
+  it("resizes Hosts and Capabilities vertically and scrolls each bounded section", async () => {
+    await page.viewport(960, 640);
+    mount();
+    const divider = page.getByRole("separator", { name: "Resize Hosts and Capabilities" });
+    await expect.element(divider).toHaveAttribute("aria-orientation", "horizontal");
+    const original = Number(divider.element().getAttribute("aria-valuenow"));
+    await userEvent.dragAndDrop(
+      divider,
+      page.getByRole("navigation", { name: "Saved connections" }),
+      {
+        targetPosition: { x: 80, y: 25 },
+      },
+    );
+    await vi.waitFor(() =>
+      expect(Number(divider.element().getAttribute("aria-valuenow"))).toBeLessThan(original),
+    );
+    await divider.click();
+    await userEvent.keyboard("{Home}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", "96");
+    const hosts = document.querySelector<HTMLElement>(".host-list")!;
+    const features = document.querySelector<HTMLElement>(".workspace-navigation")!;
+    expect(hosts.scrollHeight).toBeGreaterThan(hosts.clientHeight);
+    expect(getComputedStyle(hosts).overflowY).toBe("auto");
+    hosts.scrollTop = hosts.scrollHeight;
+    await expect
+      .element(page.getByRole("button", { name: "Sample host 20", exact: true }))
+      .toBeVisible();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", "106");
+    await userEvent.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", "156");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", "146");
+    await userEvent.keyboard("{End}");
+    await vi.waitFor(() => {
+      expect(features.clientHeight).toBe(96);
+      expect(features.scrollHeight).toBeGreaterThan(features.clientHeight);
+      expect(getComputedStyle(features).overflowY).toBe("auto");
+      const hostBounds = hosts.getBoundingClientRect();
+      const featureBounds = features.getBoundingClientRect();
+      expect(featureBounds.top).toBeGreaterThanOrEqual(hostBounds.bottom + 5);
+      expect(featureBounds.bottom).toBeLessThanOrEqual(
+        document.querySelector(".sidebar-footer")!.getBoundingClientRect().top + 1,
+      );
+    });
+    features.scrollTop = features.scrollHeight;
+    await page.getByRole("button", { name: "Open scratchpad" }).click();
+    await divider.click();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", String(original));
+    await userEvent.keyboard("{Home}");
+    await userEvent.dblClick(divider);
+    await expect.element(divider).toHaveAttribute("aria-valuenow", String(original));
+    await userEvent.keyboard("{Home}");
+    await page.getByRole("button", { name: "Reset layout", exact: true }).click();
+    await expect.element(divider).toHaveAttribute("aria-valuenow", String(original));
+    await divider.click();
+    await userEvent.keyboard("{End}");
+    const chosen = divider.element().getAttribute("aria-valuenow");
+    await page.viewport(960, 540);
+    await vi.waitFor(() =>
+      expect(Number(divider.element().getAttribute("aria-valuenow"))).toBeLessThan(Number(chosen)),
+    );
+    await page.viewport(960, 640);
+    await expect.element(divider).toHaveAttribute("aria-valuenow", chosen!);
+    await page.getByRole("button", { name: "Toggle remote workspace" }).click();
+    await expect.element(divider).not.toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLElement>(".host-list")!.clientHeight).toBe(
+        document.querySelector<HTMLElement>(".sidebar-sections")!.clientHeight,
+      ),
+    );
+    const allHostsHeight = document.querySelector<HTMLElement>(".host-list")!.clientHeight;
+    await page.getByRole("button", { name: "Toggle remote workspace" }).click();
+    await expect.element(divider).toHaveAttribute("aria-valuenow", chosen!);
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLElement>(".host-list")!.clientHeight).toBeLessThan(
+        allHostsHeight,
+      ),
+    );
   });
 
   it("resizes Overview content and reflows long host facts without horizontal overflow", async () => {
@@ -311,6 +451,11 @@ describe("resizable connection panels in Chromium", () => {
     await page.getByRole("button", { name: "Open docker" }).click();
     const split = page.getByRole("separator", { name: "Resize Docker panes" });
     await expect.element(split).toBeVisible();
+    await vi.waitFor(() => {
+      const handle = split.element().getBoundingClientRect();
+      const edge = document.querySelector(".list-panel")!.getBoundingClientRect().right;
+      expect(Math.abs((handle.left + handle.right) / 2 - edge)).toBeLessThanOrEqual(1);
+    });
     const initial = Number(split.element().getAttribute("aria-valuenow"));
     const handle = split.element().getBoundingClientRect();
     const listEdge = document.querySelector(".list-panel")!.getBoundingClientRect().right;

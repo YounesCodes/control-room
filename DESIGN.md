@@ -63,7 +63,9 @@ Keep saved widths within limits that leave the neighboring pane usable. Reflow
 content at the pane's width, and stack list/detail views when two columns no
 longer fit. A smaller window may temporarily constrain a saved width; widening
 it should restore that preference. Provide individual divider resets and a
-visible Reset layout action for all panel sizes.
+visible Reset layout action for all panel sizes. Use a thin hover line within
+a larger drag target. The host list and capability navigation share a horizontal
+divider and scroll independently as their available heights shrink.
 
 Content should stay usable at the supported minimum window size. Keep primary
 navigation reachable. In dialogs, keep the title and actions available while a

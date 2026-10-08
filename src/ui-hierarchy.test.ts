@@ -214,7 +214,9 @@ describe("application hierarchy", () => {
     // Workspace gets no view switcher, because there is no host to inspect.
     expect(appSource).toContain("api.listLocalShells()");
     expect(appSource).toContain("Local terminal");
-    expect(appSource).toContain("{activeRemoteWorkspace && (");
+    expect(appSource).toMatch(
+      /capabilities=\{\s*activeRemoteWorkspace && \(\s*<div className="workspace-navigation"/,
+    );
     expect(appSource).toContain(
       "{activeRemoteWorkspace && activeConnection && activeSavedConnection && (",
     );

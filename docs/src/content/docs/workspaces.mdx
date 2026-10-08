@@ -14,13 +14,18 @@ view such as **Overview**, **Docker**, or **Ports** to change its content width.
 List/detail views also have a divider between their panes. Narrow views stack
 the panes and let their contents scroll.
 
+Drag the divider between the host list and the host navigation to give either
+section more height. Both sections show scrollbars when their contents do not fit.
+Each keeps at least 96 pixels of height when the window has enough space.
+The host list can grow to 800 pixels, subject to the available sidebar height.
+
 Connections can be 200–480 pixels wide, host content 360–1600 pixels, and the
 first pane in a split view 240–900 pixels. The available window space may lower
 the maximum. Control Room remembers these sizes across restarts, separately for
 each host view and split layout. The choices apply across connections.
 
-Double-click a divider to restore its default width. You can also focus it with
-**Tab**, resize with **Left/Right** arrows, use **Shift** for larger steps, or
+Double-click a divider to restore its default size. You can also focus it with
+**Tab**, resize with **Left/Right** arrows or **Up/Down** for the horizontal divider, use **Shift** for larger steps, or
 press **Home/End** for the limits and **Enter** to reset. **Reset layout** beside
 the Connections heading restores all panel sizes. It keeps your open tabs and
 terminal groups.

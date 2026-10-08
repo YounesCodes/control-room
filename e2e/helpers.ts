@@ -44,7 +44,10 @@ export async function restartApp(preserve = true) {
   await browser.reloadSession({
     ...browser.requestedCapabilities,
     "tauri:options": {
-      application: resolve("src-tauri/target/debug/control-room.exe"),
+      application: resolve(
+        process.env.CARGO_TARGET_DIR ?? "src-tauri/target",
+        "debug/control-room.exe",
+      ),
       args: [`--e2e-data-dir=${directory}`],
     },
   } as unknown as WebdriverIO.Capabilities);

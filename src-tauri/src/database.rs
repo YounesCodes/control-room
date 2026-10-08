@@ -1075,6 +1075,8 @@ fn panel_size_bounds(key: &str) -> Option<(u32, u32)> {
     }
     if key == "connections" {
         Some((200, 480))
+    } else if key == "sidebar:hosts" {
+        Some((96, 800))
     } else if key.starts_with("content:") {
         Some((360, 1600))
     } else if key.starts_with("split:") {
@@ -2857,6 +2859,7 @@ mod tests {
         let state = PersistedWorkspaceState {
             panel_sizes: [
                 ("connections".into(), 320),
+                ("sidebar:hosts".into(), 250),
                 ("content:overview".into(), 720),
                 ("split:Docker".into(), 420),
             ]
@@ -2938,6 +2941,8 @@ mod tests {
     #[test]
     fn panel_sizes_reject_unknown_keys_and_out_of_bounds_values() {
         for (key, value) in [
+            ("sidebar:hosts", 95),
+            ("sidebar:hosts", 801),
             ("connections", 199),
             ("connections", 481),
             ("content:overview", 359),
