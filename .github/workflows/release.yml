@@ -104,9 +104,13 @@ jobs:
         run: |
           $installer = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not produced" }
-          $checksumPath = "$($installer.FullName).sha256"
+          $assets = (gh release view $env:GITHUB_REF_NAME --json assets | ConvertFrom-Json).assets
+          if ($LASTEXITCODE -ne 0) { throw "Could not read published release assets" }
+          $publishedInstaller = @($assets | Where-Object { $_.name -match '-setup\.exe$' })
+          if ($publishedInstaller.Count -ne 1) { throw "Expected exactly one published NSIS installer" }
+          $checksumPath = Join-Path $installer.DirectoryName ($publishedInstaller[0].name + ".sha256")
           $checksum = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$checksum  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
+          "$checksum  $($publishedInstaller[0].name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
           gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
 
       # tauri-action composes latest.json from its own inputs, so notes GitHub
