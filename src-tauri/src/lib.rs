@@ -58,9 +58,24 @@ pub fn run() {
             }
             app.manage(database);
             #[cfg(feature = "desktop-e2e")]
-            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
-                .data_directory(data_directory.join("webview"))
-                .build()?;
+            {
+                // Elevated WebView2 ignores environment overrides. Pass the driver's
+                // port and profile through the API in this debug-only test build.
+                let driver_profile = std::env::var_os("WEBVIEW2_USER_DATA_FOLDER");
+                let mut window =
+                    tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+                        .data_directory(e2e::webview_data_directory(
+                            driver_profile.as_deref(),
+                            data_directory.join("webview"),
+                        ));
+                if let Some(arguments) = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+                    .ok()
+                    .and_then(|arguments| e2e::automation_browser_args(&arguments))
+                {
+                    window = window.additional_browser_args(&arguments);
+                }
+                window.build()?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
