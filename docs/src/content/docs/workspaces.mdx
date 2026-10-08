@@ -8,3 +8,24 @@ A workspace is a tab for one SSH host or local shell. Each host tab has its own 
 Control Room saves your tabs, selected views, and terminal groups. After an app restart, each host tab opens a fresh SSH session and each local tab starts a fresh shell. If a start fails, the error stays visible with **Reconnect** or **Restart** available. Old terminal output is not restored.
 
 In focus mode, you can put terminals from different hosts and local shells in one split group. Leave focus mode to return to the selected host's views. See [Terminal](/control-room/terminal/) for split controls.
+
+Drag the right edge of **Connections** to resize it. Drag the right edge of a host
+view such as **Overview**, **Docker**, or **Ports** to change its content width.
+List/detail views also have a divider between their panes. Narrow views stack
+the panes and let their contents scroll.
+
+Drag the divider between the host list and the host navigation to give either
+section more height. Both sections show scrollbars when their contents do not fit.
+Each keeps at least 96 pixels of height when the window has enough space.
+The host list can grow to 800 pixels, subject to the available sidebar height.
+
+Connections can be 200–480 pixels wide, host content 360–1600 pixels, and the
+first pane in a split view 240–900 pixels. The available window space may lower
+the maximum. Control Room remembers these sizes across restarts, separately for
+each host view and split layout. The choices apply across connections.
+
+Double-click a divider to restore its default size. You can also focus it with
+**Tab**, resize with **Left/Right** arrows or **Up/Down** for the horizontal divider, use **Shift** for larger steps, or
+press **Home/End** for the limits and **Enter** to reset. **Reset layout** beside
+the Connections heading restores all panel sizes. It keeps your open tabs and
+terminal groups.

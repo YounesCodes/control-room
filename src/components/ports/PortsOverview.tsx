@@ -1,3 +1,4 @@
+import { observeLayoutFallback, ResizableSplit } from "../ResizablePanels";
 import {
   useCallback,
   useEffect,
@@ -122,7 +123,7 @@ export function PortsOverview({
     if (!contentWidth || !contentHeight) return;
     const padding = 48;
     const scale = Math.max(
-      0.55,
+      0.1,
       Math.min(
         1,
         (viewport.clientWidth - padding) / contentWidth,
@@ -144,10 +145,19 @@ export function PortsOverview({
   }, [fit, sockets.length, groups.length]);
 
   useEffect(() => {
-    const onResize = () => measure();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [measure]);
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const resize = () => {
+      measure();
+      fit();
+    };
+    if (typeof ResizeObserver === "undefined") {
+      return observeLayoutFallback(viewport, resize);
+    }
+    const observer = new ResizeObserver(resize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [measure, fit, sockets.length]);
 
   useEffect(() => {
     const onChange = () => {
@@ -176,7 +186,11 @@ export function PortsOverview({
   const osLabel = [capabilities?.osName, capabilities?.osVersion].filter(Boolean).join(" ");
 
   return (
-    <div className={`ports-view arch-view${fullscreen ? " fullscreen" : ""}`}>
+    <ResizableSplit
+      name="Ports overview"
+      defaultFraction={0.65}
+      className={`ports-view arch-view${fullscreen ? " fullscreen" : ""}`}
+    >
       <div className="arch-canvas" ref={canvasRef}>
         <div className="graph-toolbar">
           <button
@@ -308,6 +322,6 @@ export function PortsOverview({
           <EmptyState title="Select a port or service" />
         )}
       </aside>
-    </div>
+    </ResizableSplit>
   );
 }

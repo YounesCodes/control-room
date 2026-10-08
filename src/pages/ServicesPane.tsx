@@ -1,3 +1,4 @@
+import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileClock, RefreshCw, Search } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
@@ -97,7 +98,7 @@ export function ServicesPane({
   }
 
   return (
-    <section className="feature-page split-page">
+    <ResizableSplit name="Services" className="feature-page split-page">
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
@@ -233,6 +234,6 @@ export function ServicesPane({
           <EmptyState title="Select a unit" />
         )}
       </aside>
-    </section>
+    </ResizableSplit>
   );
 }

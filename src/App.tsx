@@ -1,5 +1,18 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ConnectionSection,
+  ResizeDivider,
+  SidebarSections,
+  usePanelWidth,
+} from "./components/ResizablePanels";
+import {
+  clampPanelSize,
+  PANEL_LIMITS,
+  restorePanelSizes,
+  type PanelSizes,
+} from "./lib/panel-layout";
+import { useCallback, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  RotateCcw,
   Boxes,
   Camera,
   ChevronDown,
@@ -183,6 +196,29 @@ export function App() {
     null,
   );
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
+  const [panelSizes, setPanelSizes] = useState<PanelSizes>({});
+  const shellSize = usePanelWidth();
+  const railMax = Math.max(
+    PANEL_LIMITS.connections.min,
+    Math.min(PANEL_LIMITS.connections.max, (shellSize.width || 840) - 360),
+  );
+  const railWidth = clampPanelSize(
+    panelSizes.connections ?? (shellSize.width > 0 && shellSize.width <= 1120 ? 216 : 244),
+    PANEL_LIMITS.connections.min,
+    railMax,
+  );
+  const setPanelSize = useCallback((key: string, size: number | null) => {
+    setPanelSizes((current) => {
+      const next = { ...current };
+      if (size === null) delete next[key];
+      else next[key] = size;
+      return next;
+    });
+  }, []);
+  const panelLayout = useMemo(
+    () => ({ sizes: panelSizes, setSize: setPanelSize }),
+    [panelSizes, setPanelSize],
+  );
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
   const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
@@ -303,6 +339,8 @@ export function App() {
               setTerminalFocusMode(true);
             }
           }
+          if (workspaceStateResult.status === "fulfilled")
+            setPanelSizes(restorePanelSizes(workspaceStateResult.value.panelSizes));
           setWorkspaces(restored.workspaces);
           setActiveWorkspaceId(restored.activeWorkspaceId);
           setTerminalGroups(restored.terminalGroups);
@@ -419,6 +457,7 @@ export function App() {
     workspaces,
     activeWorkspaceId,
     terminalGroups,
+    panelSizes,
     onError: setActionError,
   });
 
@@ -1449,7 +1488,13 @@ export function App() {
   const settings = settingsContract.current;
 
   return (
-    <div className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}>
+    <div
+      ref={shellSize.ref}
+      className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}
+      style={
+        !terminalFocusMode ? { gridTemplateColumns: `${railWidth}px minmax(0, 1fr)` } : undefined
+      }
+    >
       <header className="app-bar" data-tauri-drag-region>
         <div className="app-bar-actions">
           <UpdateIndicator
@@ -1471,13 +1516,19 @@ export function App() {
         </div>
       </header>
 
-      {/* Only a Remote Host puts a view switcher under the list, so only it
-          needs the list capped to leave room. A local Workspace has no
-          switcher, so the list keeps the whole sidebar. */}
       <aside className={activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
+          <button
+            type="button"
+            className="icon-button layout-reset"
+            aria-label="Reset layout"
+            title="Reset all panel sizes"
+            onClick={() => setPanelSizes({})}
+          >
+            <RotateCcw size={14} />
+          </button>
         </div>
         <div className="sidebar-filter-row">
           <label className="search-field sidebar-search">
@@ -1499,54 +1550,59 @@ export function App() {
             <FolderCog size={18} />
           </button>
         </div>
-        <nav className="host-list" aria-label="Saved connections">
-          {connectionSections.map((section) => {
-            const collapsed = section.collapsed && !hostSearch.trim();
-            return (
-              <section className="connection-group-section" key={section.id ?? "ungrouped"}>
-                <button
-                  className="connection-group-heading"
-                  type="button"
-                  onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
-                  aria-expanded={!collapsed}
-                >
-                  {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                  <span>{section.name}</span>
-                  <small>{section.connections.length}</small>
-                </button>
-                {!collapsed && section.connections.map(renderConnectionRow)}
-              </section>
-            );
-          })}
-          {!connectionSections.some((section) => section.connections.length) && (
-            <p className="sidebar-empty">
-              {connections.length ? "No matches" : "No connections yet"}
-            </p>
-          )}
-        </nav>
-        {/* The view switcher belongs to a Remote Host. A local Workspace is
-            terminal-only, so it shows no inspection views at all. */}
-        {activeRemoteWorkspace && (
-          <div className="workspace-navigation">
-            <nav className="feature-nav" aria-label="Workspace features">
-              {navigation.map(({ id, label, icon: Icon }) => (
-                <button
-                  className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
-                  type="button"
-                  key={id}
-                  aria-current={
-                    activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
-                  }
-                  onClick={() =>
-                    closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
-                  }
-                >
-                  <Icon size={17} strokeWidth={1.8} /> {label}
-                </button>
-              ))}
+        <SidebarSections
+          layout={panelLayout}
+          hosts={
+            <nav className="host-list" aria-label="Saved connections">
+              {connectionSections.map((section) => {
+                const collapsed = section.collapsed && !hostSearch.trim();
+                return (
+                  <section className="connection-group-section" key={section.id ?? "ungrouped"}>
+                    <button
+                      className="connection-group-heading"
+                      type="button"
+                      onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
+                      aria-expanded={!collapsed}
+                    >
+                      {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                      <span>{section.name}</span>
+                      <small>{section.connections.length}</small>
+                    </button>
+                    {!collapsed && section.connections.map(renderConnectionRow)}
+                  </section>
+                );
+              })}
+              {!connectionSections.some((section) => section.connections.length) && (
+                <p className="sidebar-empty">
+                  {connections.length ? "No matches" : "No connections yet"}
+                </p>
+              )}
             </nav>
-          </div>
-        )}
+          }
+          capabilities={
+            activeRemoteWorkspace && (
+              <div className="workspace-navigation">
+                <nav className="feature-nav" aria-label="Workspace features">
+                  {navigation.map(({ id, label, icon: Icon }) => (
+                    <button
+                      className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
+                      type="button"
+                      key={id}
+                      aria-current={
+                        activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
+                      }
+                      onClick={() =>
+                        closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
+                      }
+                    >
+                      <Icon size={17} strokeWidth={1.8} /> {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )
+          }
+        />
         <div className="sidebar-footer">
           {!!offeredShells.length && (
             <div className="local-shell-launcher" data-local-shell-menu>
@@ -1618,6 +1674,15 @@ export function App() {
             <Plus size={16} /> Add connection
           </button>
         </div>
+        <ResizeDivider
+          label="Resize Connections panel"
+          value={railWidth}
+          min={PANEL_LIMITS.connections.min}
+          max={railMax}
+          className="connections-divider"
+          onChange={(next) => setPanelSize("connections", next)}
+          onReset={() => setPanelSize("connections", null)}
+        />
       </aside>
 
       <main className="workspace-shell">
@@ -1972,7 +2037,7 @@ export function App() {
               {/* Inspection views need a Remote Host and its Saved
                   Connection. A local Workspace renders its terminal only. */}
               {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
-                <>
+                <ConnectionSection section={activeRemoteWorkspace.view} layout={panelLayout}>
                   {activeRemoteWorkspace.view === "overview" && (
                     <OverviewPane
                       key={activeRemoteWorkspace.id}
@@ -2102,7 +2167,7 @@ export function App() {
                   {activeRemoteWorkspace.view === "scratchpad" && (
                     <ScratchpadPane key={activeRemoteWorkspace.id} connection={activeConnection} />
                   )}
-                </>
+                </ConnectionSection>
               )}
             </div>
           </section>

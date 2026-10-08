@@ -13,7 +13,10 @@ const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
 process.env.CONTROL_ROOM_E2E_RUNNER_PID ||= String(process.pid);
-const application = resolve("src-tauri/target/debug/control-room.exe");
+const application = resolve(
+  process.env.CARGO_TARGET_DIR ?? "src-tauri/target",
+  "debug/control-room.exe",
+);
 const tauriCapabilities: TauriCapabilities = {
   browserName: "tauri",
   "tauri:options": { application },
