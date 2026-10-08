@@ -175,6 +175,10 @@ Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut
 list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 
+Settings fills the window below a draggable titlebar with native window controls.
+Hide Connections and Workspace tabs while Settings is open, and restore the
+existing workspace and focus mode when it closes. Use the available page width
+for its form and keep Back and Save visible while its body scrolls.
 Settings uses readable section titles and short scope descriptions. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.

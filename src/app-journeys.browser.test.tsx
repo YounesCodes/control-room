@@ -257,6 +257,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await page.getByRole("button", { name: "Open Settings" }).click();
     await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     await page.getByRole("button", { name: /Control Room 9.9.9/ }).click();
     await expect
       .element(page.getByText(/<img src=x onerror=alert\(1\)> Fixture release/))
@@ -367,6 +368,66 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const data = native.invoke.mock.calls.find(([command]) => command === "write_session")![1].data;
     expect(new TextDecoder().decode(new Uint8Array(data))).toBe("printf safe");
     await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+  });
+
+  it.each([960, 1600])(
+    "gives Settings the full window at %s pixels and restores its workspace",
+    async (width) => {
+      await page.viewport(width, 640);
+      await mount();
+      await navigate("Terminal");
+      const workspace = page.getByRole("navigation", { name: "Open Workspaces" }).element();
+      const sessionCount = native.invoke.mock.calls.filter(
+        ([command]) => command === "start_session",
+      ).length;
+      await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+      await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
+      const shell = element.querySelector(".app-shell")!.getBoundingClientRect();
+      const titlebar = element.querySelector(".app-bar")!.getBoundingClientRect();
+      const settings = element.querySelector(".settings-page")!.getBoundingClientRect();
+      const form = element.querySelector(".settings-form")!.getBoundingClientRect();
+      expect(settings.left).toBe(shell.left + 1);
+      expect(settings.right).toBe(shell.right - 1);
+      expect(settings.top).toBe(titlebar.bottom);
+      expect(settings.bottom).toBe(shell.bottom - 1);
+      expect(form.width).toBeGreaterThan(width - 100);
+      expect(getComputedStyle(element.querySelector(".sidebar")!).display).toBe("none");
+      expect(getComputedStyle(workspace).display).toBe("none");
+      for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
+        await expect.element(page.getByRole("button", { name })).toBeVisible();
+      }
+      if (width === 1600) {
+        await page.screenshot({ path: "../test-results/settings-full-window.png" });
+      }
+      const body = element.querySelector<HTMLElement>(".settings-body")!;
+      body.scrollTop = body.scrollHeight;
+      await expect.element(page.getByRole("button", { name: "Save settings" })).toBeVisible();
+      await page.getByRole("button", { name: "Close Settings" }).click();
+      await expect
+        .element(page.getByRole("navigation", { name: "Saved connections" }))
+        .toBeVisible();
+      await expect.element(page.getByRole("navigation", { name: "Open Workspaces" })).toBeVisible();
+      expect(page.getByRole("navigation", { name: "Open Workspaces" }).element()).toBe(workspace);
+      expect(
+        native.invoke.mock.calls.filter(([command]) => command === "start_session"),
+      ).toHaveLength(sessionCount);
+    },
+  );
+
+  it("keeps window controls available in Settings opened from terminal focus", async () => {
+    await mount();
+    await navigate("Terminal");
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
+    await page.getByRole("combobox", { name: "Search commands" }).fill("settings");
+    await userEvent.keyboard("{Enter}");
+    await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Close window" })).toBeVisible();
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    expect(element.querySelector(".app-shell")!.classList.contains("terminal-focus-mode")).toBe(
+      true,
+    );
   });
 
   it("keeps Settings edits after a save failure and retries at minimum window size", async () => {

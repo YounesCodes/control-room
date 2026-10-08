@@ -1490,27 +1490,39 @@ export function App() {
   return (
     <div
       ref={shellSize.ref}
-      className={terminalFocusMode ? "app-shell terminal-focus-mode" : "app-shell"}
+      className={
+        settingsOpen
+          ? "app-shell settings-mode"
+          : terminalFocusMode
+            ? "app-shell terminal-focus-mode"
+            : "app-shell"
+      }
       style={
-        !terminalFocusMode ? { gridTemplateColumns: `${railWidth}px minmax(0, 1fr)` } : undefined
+        !terminalFocusMode && !settingsOpen
+          ? { gridTemplateColumns: `${railWidth}px minmax(0, 1fr)` }
+          : undefined
       }
     >
       <header className="app-bar" data-tauri-drag-region>
         <div className="app-bar-actions">
-          <UpdateIndicator
-            state={updater.state}
-            onDownload={() => void updater.download()}
-            onRestart={requestUpdateInstall}
-          />
-          <button
-            className={settingsOpen ? "app-bar-button active" : "app-bar-button"}
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Open Settings"
-            title="Settings"
-          >
-            <Settings size={18} />
-          </button>
+          {!settingsOpen && (
+            <>
+              <UpdateIndicator
+                state={updater.state}
+                onDownload={() => void updater.download()}
+                onRestart={requestUpdateInstall}
+              />
+              <button
+                className="app-bar-button"
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Open Settings"
+                title="Settings"
+              >
+                <Settings size={18} />
+              </button>
+            </>
+          )}
           <span className="window-controls-divider" aria-hidden="true" />
           <WindowControls />
         </div>

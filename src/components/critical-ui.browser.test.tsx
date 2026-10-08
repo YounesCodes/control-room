@@ -526,13 +526,13 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("button", { name: "Open dialog" })).toHaveFocus();
   });
 
-  it("keeps Settings content bounded and centered in a wide window", async () => {
+  it("lets Settings content use a wide window and aligns its heading with the form", async () => {
     await page.viewport(1600, 900);
     mount(<SettingsFixture />);
     await expect.element(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     const form = container!.querySelector(".settings-form")!.getBoundingClientRect();
     const heading = container!.querySelector(".settings-heading-inner")!.getBoundingClientRect();
-    expect(form.width).toBeLessThan(1100);
+    expect(form.width).toBeGreaterThan(1500);
     expect(Math.abs(form.left - (1600 - form.right))).toBeLessThan(24);
     expect(Math.abs(heading.left - form.left)).toBeLessThan(24);
     expect(Math.abs(heading.right - form.right)).toBeLessThan(24);

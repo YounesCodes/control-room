@@ -183,7 +183,9 @@ describe("catalog font lifecycle", () => {
     await act(async () => finish("JetBrains Mono"));
     expect(props.onUse).toHaveBeenCalledWith("JetBrains Mono");
     expect(
-      await screen.findByText("JetBrains Mono is ready and applied to your terminals."),
+      await screen.findByText(
+        "JetBrains Mono is installed and selected for your terminals. If the new font is not visible yet, restart Control Room.",
+      ),
     ).toBeTruthy();
   });
 
@@ -196,14 +198,14 @@ describe("catalog font lifecycle", () => {
       "textContent",
       expect.stringContaining("Settings could not be saved"),
     );
-    expect(screen.queryByText(/is ready and applied/)).toBeNull();
+    expect(screen.queryByText(/is installed and selected/)).toBeNull();
     expect(screen.getByRole("button", { name: "Retry apply font" })).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("installed for your Windows account");
     expect(screen.getByRole("alert").textContent).not.toContain("current font is unchanged");
     const face = add.mock.calls.find(([face]) => face.family === "JetBrains Mono")![0];
     expect(remove).toHaveBeenCalledWith(face);
     await userEvent.click(screen.getByRole("button", { name: "Retry apply font" }));
-    await screen.findByText(/is ready and applied/);
+    await screen.findByText(/is installed and selected/);
     expect(api.installCatalogFont).toHaveBeenCalledTimes(1);
     const applied = add.mock.calls.at(-1)![0];
     cleanup();

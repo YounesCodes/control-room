@@ -169,7 +169,9 @@ export function FontCatalogPicker({
       loaded.current.set(key, installedFace);
       await onUse(family);
       if (alive.current) {
-        setReady(`${family} is ready and applied to your terminals.`);
+        setReady(
+          `${family} is installed and selected for your terminals. If the new font is not visible yet, restart Control Room.`,
+        );
         setOpen(false);
         setQuery(null);
         setPicked(null);

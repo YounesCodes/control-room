@@ -1222,6 +1222,24 @@ code,
   grid-row: 1 / -1;
 }
 
+.app-shell.settings-mode {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-mode .app-bar {
+  grid-column: 1 / -1;
+}
+
+.settings-mode .sidebar,
+.settings-mode .session-tabs {
+  display: none;
+}
+
+.settings-mode .workspace-shell {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
 .workspace-view {
   display: flex;
   min-width: 0;
@@ -4063,7 +4081,7 @@ dd {
    of the fields it applies to, so the bar keeps Back, the page identity, and
    Save on screen the whole way down. */
 .settings-page {
-  --settings-measure: 790px;
+  --settings-measure: none;
   --settings-gutter: 30px;
   /* The classic scrollbar Chromium gives the body, sized by the
      `::-webkit-scrollbar` rule near the top of this file. The bar reserves the
@@ -4086,9 +4104,7 @@ dd {
   padding: 13px calc(var(--settings-gutter) + var(--settings-scrollbar)) 13px var(--settings-gutter);
 }
 
-/* Capped to the form's own measure so Save lands on the same right edge as the
-   fields, and centred with it so a wide window leaves an even margin on both
-   sides instead of a growing hole to the right of the content. */
+/* Align the heading and Save with the form across the full Settings page. */
 .settings-heading-inner {
   display: flex;
   width: 100%;

@@ -146,7 +146,7 @@ describe("Settings actions", () => {
     await user.click(screen.getByRole("combobox", { name: "Font family" }));
     await user.click(await screen.findByRole("option", { name: /JetBrains Mono/ }));
     await user.click(screen.getByRole("button", { name: "Install and use" }));
-    await screen.findByText(/JetBrains Mono is ready and applied/);
+    await screen.findByText(/JetBrains Mono is installed and selected/);
     expect(api.installCatalogFont).toHaveBeenCalledWith("jetbrains-mono", expect.anything());
     expect(api.saveSettings).toHaveBeenCalledWith({
       ...settings,
@@ -189,7 +189,7 @@ describe("Settings actions", () => {
     await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
     props.rerender(<SettingsPane {...props} settings={{ ...settings, terminalFontSize: 19 }} />);
     finish("JetBrains Mono");
-    await screen.findByText(/is ready and applied/);
+    await screen.findByText(/is installed and selected/);
     expect(api.saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ terminalFontSize: 19 }),
     );
