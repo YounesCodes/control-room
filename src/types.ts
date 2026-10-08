@@ -418,6 +418,8 @@ export interface AppSettings {
    *  the shell stays installed and a Workspace already using it keeps running
    *  and restoring. A profile missing from this list is offered. */
   hiddenLocalShells: string[];
+  localTerminalMode: boolean;
+  defaultLocalShellId: string | null;
 }
 
 /** An update Control Room could install, as reported by the signed updater

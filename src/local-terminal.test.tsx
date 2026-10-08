@@ -96,6 +96,8 @@ const settings: AppSettings = {
   globalSudoEnabled: false,
   automaticUpdateChecks: true,
   hiddenLocalShells: [],
+  localTerminalMode: false,
+  defaultLocalShellId: null,
 };
 
 const powershell: LocalShellProfile = {
@@ -195,6 +197,165 @@ describe("Local Terminal", () => {
     api.dismissUpdateNotice.mockResolvedValue(undefined);
   });
 
+  it.each(["normal", "connections-fail", "workspace-fail", "elevated-default"])(
+    "starts a standard shell with a null/default fallback when %s",
+    async (scenario) => {
+      api.settingsContract.mockResolvedValue({
+        current: {
+          ...settings,
+          localTerminalMode: true,
+          defaultLocalShellId: scenario === "elevated-default" ? administratorPowerShell.id : null,
+        },
+        defaults: settings,
+        logTailOptions: [200],
+      });
+      api.listLocalShells.mockResolvedValue({
+        profiles: [administratorPowerShell, powershell, gitBash],
+        administratorStatus: "available",
+      });
+      if (scenario === "connections-fail")
+        api.listConnections.mockRejectedValue(new Error("connections failed"));
+      if (scenario === "workspace-fail")
+        api.workspaceState.mockRejectedValue(new Error("workspace failed"));
+      const { container } = render(<App />);
+      expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("powershell-7");
+      expect(container.querySelector(".terminal-focus-mode")).toBeTruthy();
+      expect(screen.getByLabelText("Saved connections")).toBeTruthy();
+      if (scenario.endsWith("fail")) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        expect(api.saveWorkspaceState).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("starts the selected default in normal focus and restores Connections on exit", async () => {
+    const user = userEvent.setup();
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, localTerminalMode: true, defaultLocalShellId: "git-bash" },
+      defaults: settings,
+      logTailOptions: [200],
+    });
+    api.listConnections.mockResolvedValue([
+      connection("11111111-1111-4111-8111-111111111111", "prod-web"),
+    ]);
+    const { container } = render(<App />);
+    expect((await screen.findByTestId(/^terminal-/, {}, { timeout: 5000 })).dataset.target).toBe(
+      "git-bash",
+    );
+    expect(container.querySelector(".app-shell")?.classList.contains("terminal-focus-mode")).toBe(
+      true,
+    );
+    expect(container.querySelector(".app-shell")?.className).toBe("app-shell terminal-focus-mode");
+    await user.click(screen.getByRole("button", { name: "Exit terminal focus" }));
+    expect(container.querySelector(".app-shell")?.className).toBe("app-shell");
+    expect(screen.getByLabelText("Saved connections")).toBeTruthy();
+    await openConnection(user, "prod-web");
+    expect(
+      (await screen.findAllByTestId(/^terminal-/)).some((node) => node.dataset.kind === "remote"),
+    ).toBe(true);
+    expect(screen.getByRole("button", { name: /New terminal/ })).toBeTruthy();
+  });
+
+  it("reuses a restored default terminal without adding another tab", async () => {
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, localTerminalMode: true, defaultLocalShellId: "git-bash" },
+      defaults: settings,
+      logTailOptions: [200],
+    });
+    api.workspaceState.mockResolvedValue({
+      ...emptyState,
+      activeWorkspaceId: "saved-local",
+      workspaces: [
+        {
+          id: "saved-local",
+          connectionId: null,
+          localShellId: "git-bash",
+          label: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+    });
+    render(<App />);
+    expect((await screen.findByTestId("terminal-saved-local")).dataset.connectRequested).toBe(
+      "true",
+    );
+    expect(screen.getAllByTestId(/^terminal-/)).toHaveLength(1);
+  });
+
+  it.each(["disabled", "uninstalled"])("falls back when the default is %s", async (reason) => {
+    api.settingsContract.mockResolvedValue({
+      current: {
+        ...settings,
+        localTerminalMode: true,
+        defaultLocalShellId: reason === "disabled" ? "powershell-7" : "command-prompt",
+        hiddenLocalShells: ["powershell-7"],
+      },
+      defaults: settings,
+      logTailOptions: [200],
+    });
+    render(<App />);
+    expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
+  });
+
+  it("starts no terminal when Local Terminal Mode has no enabled shell", async () => {
+    api.settingsContract.mockResolvedValue({
+      current: {
+        ...settings,
+        localTerminalMode: true,
+        hiddenLocalShells: ["powershell-7", "git-bash"],
+      },
+      defaults: settings,
+      logTailOptions: [200],
+    });
+    render(<App />);
+    await screen.findByLabelText("Saved connections");
+    expect(screen.queryByTestId(/^terminal-/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Add connection" })).toBeTruthy();
+  });
+
+  it("launches Git Bash directly without an administrator warning", async () => {
+    const user = userEvent.setup();
+    api.listLocalShells.mockResolvedValue({ profiles: [gitBash], administratorStatus: "disabled" });
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
+    expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
+    expect(screen.queryByText(/One-time setup/)).toBeNull();
+  });
+
+  it("explains when the last available shell disappears before launch", async () => {
+    render(<App />);
+    const launcher = await screen.findByRole("button", { name: /Local terminal/ });
+    api.listLocalShells.mockResolvedValue({
+      profiles: [],
+      administratorStatus: "unsupportedWindows",
+    });
+    await userEvent.click(launcher);
+    expect(await screen.findByText(/No enabled local terminals are available/)).toBeTruthy();
+  });
+
+  it("suppresses setup when all supporting shells are disabled", async () => {
+    const user = userEvent.setup();
+    api.listLocalShells.mockResolvedValue({
+      profiles: [
+        powershell,
+        gitBash,
+        { id: "command-prompt", label: "Command Prompt", kind: "command-prompt", elevated: false },
+      ],
+      administratorStatus: "disabled",
+    });
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, hiddenLocalShells: ["powershell-7", "command-prompt-administrator"] },
+      defaults: settings,
+      logTailOptions: [200],
+    });
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    expect(await screen.findByRole("menuitem", { name: "Git Bash" })).toBeTruthy();
+    expect(screen.queryByText(/One-time setup/)).toBeNull();
+  });
+
   it("offers only the shells the machine actually has", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -224,11 +385,11 @@ describe("Local Terminal", () => {
 
     await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
     expect(screen.queryByRole("menuitem", { name: "PowerShell 7" })).toBeNull();
-    expect(screen.getByRole("menuitem", { name: "Git Bash" })).toBeTruthy();
+    expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
+    expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
 
     // The chooser reads the same list, so it is short the same entry rather
     // than being the one surface the setting forgot.
-    await user.click(screen.getByRole("menuitem", { name: "Git Bash" }));
     await user.click(await screen.findByRole("button", { name: /New terminal/ }));
     expect(screen.queryByRole("button", { name: "Local terminals: PowerShell 7" })).toBeNull();
     expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
@@ -286,10 +447,10 @@ describe("Local Terminal", () => {
     await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
 
     expect(screen.queryByText("Local terminals", { selector: "strong" })).toBeNull();
-    expect(screen.getByText("Run as administrator")).toBeTruthy();
-    expect(
-      screen.getByRole("menuitem", { name: "PowerShell 7, run as administrator" }),
-    ).toBeTruthy();
+    expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
+    expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe(
+      "powershell-7-administrator",
+    );
   });
 
   it("refreshes administrator availability when the shell menu reopens", async () => {

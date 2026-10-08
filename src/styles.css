@@ -320,7 +320,8 @@ code,
 
 .app-shell {
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  --connection-rail-width: 244px;
+  grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
   grid-template-rows: 42px minmax(0, 1fr);
   height: 100%;
   border: 1px solid #2a2a2a;
@@ -4335,10 +4336,21 @@ dd {
   gap: 7px;
 }
 
-.settings-form fieldset > small {
+.settings-form fieldset > small,
+.local-terminal-mode-option > small {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.local-terminal-mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.local-terminal-mode-option .checkbox-label {
+  min-height: 28px;
 }
 
 /* Settings mirrors the launcher it controls: the same two groups, in the same
@@ -5086,7 +5098,8 @@ kbd {
 
 @media (max-width: 1120px) {
   .app-shell {
-    grid-template-columns: 216px minmax(0, 1fr);
+    --connection-rail-width: 216px;
+    grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
   }
 
   .split-page {

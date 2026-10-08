@@ -10,6 +10,9 @@ mod session;
 mod ssh;
 mod updater;
 
+#[cfg(feature = "desktop-e2e")]
+mod e2e;
+
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("desktop-e2e is only for debug test builds");
 
@@ -39,18 +42,30 @@ pub fn run() {
             }
 
             #[cfg(feature = "desktop-e2e")]
-            let database_path = std::path::PathBuf::from(
-                std::env::var_os("CONTROL_ROOM_E2E_DATA_DIR")
-                    .ok_or("CONTROL_ROOM_E2E_DATA_DIR is required for desktop-e2e")?,
-            )
-            .join("control-room.db");
+            let data_directory = e2e::data_directory()?;
+            #[cfg(feature = "desktop-e2e")]
+            let database_path = data_directory.join("control-room.db");
             #[cfg(not(feature = "desktop-e2e"))]
             let database_path = app.path().app_data_dir()?.join("control-room.db");
+            #[cfg(feature = "desktop-e2e")]
+            let fresh = !database_path.exists();
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
+            #[cfg(feature = "desktop-e2e")]
+            if fresh {
+                let mut settings = database.get_settings()?;
+                settings.automatic_update_checks = false;
+                database.save_settings(&settings)?;
+            }
             app.manage(database);
+            #[cfg(feature = "desktop-e2e")]
+            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+                .data_directory(data_directory.join("webview"))
+                .build()?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "desktop-e2e")]
+            e2e::e2e_runtime_status,
             commands::get_environment_info,
             fonts::list_catalog_fonts,
             fonts::preview_catalog_font,

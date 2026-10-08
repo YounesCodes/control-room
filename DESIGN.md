@@ -46,6 +46,8 @@ header or a separate status rail.
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
 scan. The active Workspace, group, and pane need a clear non-text state cue.
+Local Terminal Mode starts the default enabled standard local shell in normal focus
+mode, with the Connections rail hidden.
 Leaving focus mode returns to the active Workspace without changing its target
 or its session.
 

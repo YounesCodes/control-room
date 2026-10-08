@@ -773,10 +773,17 @@ impl Database {
         let Some(payload) = payload else {
             return Ok(AppSettings::default());
         };
-        if let Ok(settings) = serde_json::from_str::<AppSettings>(&payload)
-            && validate_settings(&settings).is_ok()
-        {
-            return Ok(settings);
+        if let Ok(mut settings) = serde_json::from_str::<AppSettings>(&payload) {
+            if settings
+                .default_local_shell_id
+                .as_deref()
+                .is_some_and(|id| LocalShellKind::from_profile_id(id).is_none())
+            {
+                settings.default_local_shell_id = None;
+            }
+            if validate_settings(&settings).is_ok() {
+                return Ok(settings);
+            }
         }
         self.connection
             .lock()
@@ -1176,6 +1183,13 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         if LocalShellKind::from_profile_id(shell_id).is_none() {
             return Err(format!("Unknown local terminal profile: {shell_id}"));
         }
+    }
+    if let Some(shell_id) = &settings.default_local_shell_id
+        && LocalShellKind::from_profile_id(shell_id).is_none()
+    {
+        return Err(format!(
+            "Unknown default local terminal profile: {shell_id}"
+        ));
     }
     let font_family = settings.terminal_font_family.trim();
     if font_family.is_empty()
@@ -2587,10 +2601,54 @@ mod tests {
             !loaded.automatic_update_checks,
             "an unrelated preference must not be reset by removing another field"
         );
+        assert!(!loaded.local_terminal_mode);
+        assert_eq!(loaded.default_local_shell_id, None);
         assert!(
             loaded.hidden_local_shells.is_empty(),
             "a payload written before the local terminal toggles existed offers every profile"
         );
+    }
+
+    #[test]
+    fn local_terminal_mode_settings_round_trip_and_validate_default() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let mut settings = AppSettings {
+            local_terminal_mode: true,
+            default_local_shell_id: Some("git-bash".into()),
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        let loaded = database.get_settings().unwrap();
+        assert!(loaded.local_terminal_mode);
+        assert_eq!(loaded.default_local_shell_id, Some("git-bash".into()));
+        settings.default_local_shell_id = Some("cmd.exe".into());
+        assert_eq!(
+            database.save_settings(&settings).unwrap_err(),
+            "Unknown default local terminal profile: cmd.exe"
+        );
+    }
+
+    #[test]
+    fn unknown_startup_default_preserves_other_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        for id in ["", "future-shell"] {
+            let settings = AppSettings {
+                default_local_shell_id: Some(id.into()),
+                terminal_font_size: 19,
+                global_sudo_enabled: true,
+                ..AppSettings::default()
+            };
+            database
+                .set_app_metadata("settings", &serde_json::to_string(&settings).unwrap())
+                .unwrap();
+            let loaded = database.get_settings().unwrap();
+            assert_eq!(loaded.default_local_shell_id, None);
+            assert_eq!(loaded.terminal_font_size, 19);
+            assert!(loaded.global_sudo_enabled);
+            database.save_settings(&loaded).unwrap();
+        }
     }
 
     #[test]
@@ -3048,6 +3106,91 @@ mod tests {
                 .unwrap();
             assert_eq!(rows, 0, "{table} kept rows for a deleted connection");
         }
+    }
+
+    #[test]
+    fn deleting_one_owner_preserves_other_and_global_data_after_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let removed = database.create_connection(input("Removed")).unwrap();
+        let survivor = database.create_connection(input("Survivor")).unwrap();
+        for saved in [&removed, &survivor] {
+            database
+                .add_history(HistoryInput {
+                    connection_id: saved.id.clone(),
+                    session_id: "session".into(),
+                    command: format!("echo {}", saved.display_name),
+                    cwd: None,
+                    started_at: "2026-10-07T10:00:00Z".into(),
+                    finished_at: None,
+                    exit_code: None,
+                    shell: "bash".into(),
+                })
+                .unwrap();
+            database
+                .save_scratchpad_note(ScratchpadNoteInput {
+                    scope: "connection".into(),
+                    owner_id: saved.id.clone(),
+                    connection_id: Some(saved.id.clone()),
+                    text: saved.display_name.clone(),
+                })
+                .unwrap();
+            database
+                .save_host_baseline(&baseline_for(&saved.id, &saved.id, "2026-10-07T10:00:00Z"))
+                .unwrap();
+        }
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "global".into(),
+                owner_id: "global".into(),
+                connection_id: None,
+                text: "Shared reminder".into(),
+            })
+            .unwrap();
+        drop(database);
+        let database = Database::open(&path).unwrap();
+        database.delete_connection(&removed.id).unwrap();
+        drop(database);
+        let database = Database::open(&path).unwrap();
+        assert!(database.get_connection(&removed.id).is_err());
+        assert!(
+            database
+                .list_history(&removed.id, None, 500)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            database
+                .list_host_baselines(&removed.id)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            database.get_connection(&survivor.id).unwrap().display_name,
+            "Survivor"
+        );
+        assert_eq!(
+            database.list_history(&survivor.id, None, 500).unwrap()[0].command,
+            "echo Survivor"
+        );
+        assert_eq!(database.list_host_baselines(&survivor.id).unwrap().len(), 1);
+        assert_eq!(
+            database
+                .get_scratchpad_note("connection", &survivor.id, Some(&survivor.id))
+                .unwrap()
+                .unwrap()
+                .text,
+            "Survivor"
+        );
+        assert_eq!(
+            database
+                .get_scratchpad_note("global", "global", None)
+                .unwrap()
+                .unwrap()
+                .text,
+            "Shared reminder"
+        );
     }
 
     /// Restore reads whatever is on disk, including what an interrupted write

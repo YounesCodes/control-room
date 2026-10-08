@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { api, errorMessage } from "../lib/api";
+import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
@@ -98,6 +99,8 @@ export function SettingsPane({
   const [draft, setDraft] = useState<AppSettings>(() => ({
     ...settings,
     hiddenLocalShells: settings.hiddenLocalShells ?? [],
+    localTerminalMode: settings.localTerminalMode ?? false,
+    defaultLocalShellId: settings.defaultLocalShellId || null,
   }));
   const savedSettings = useRef(settings);
   savedSettings.current = settings;
@@ -129,7 +132,6 @@ export function SettingsPane({
   const standardProfiles = localShells.filter((shell) => !shell.elevated);
   const administratorProfiles = localShells.filter((shell) => shell.elevated);
   const hiddenIds = draft.hiddenLocalShells;
-  const hiddenCount = localShells.filter((shell) => hiddenIds.includes(shell.id)).length;
 
   function setColor(field: TerminalColorField, color: string) {
     setDraft((current) => ({ ...current, [field]: color.toLowerCase() }));
@@ -370,6 +372,45 @@ export function SettingsPane({
           </fieldset>
           <fieldset>
             <legend>Local terminal</legend>
+            <div className="local-terminal-mode-option">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={draft.localTerminalMode}
+                  onChange={(event) =>
+                    setDraft({ ...draft, localTerminalMode: event.target.checked })
+                  }
+                />
+                Local Terminal Mode
+              </label>
+              <small>Start the default local terminal in Focus Mode on launch.</small>
+            </div>
+            <label>
+              <span>Default local terminal</span>
+              <select
+                value={draft.defaultLocalShellId ?? ""}
+                onChange={(event) =>
+                  setDraft({ ...draft, defaultLocalShellId: event.target.value || null })
+                }
+              >
+                <option value="">First enabled terminal</option>
+                {draft.defaultLocalShellId &&
+                  !offeredLocalShells(localShells, hiddenIds)
+                    .filter((shell) => !shell.elevated)
+                    .some((shell) => shell.id === draft.defaultLocalShellId) && (
+                    <option value={draft.defaultLocalShellId} disabled>
+                      Saved terminal unavailable or disabled
+                    </option>
+                  )}
+                {offeredLocalShells(localShells, hiddenIds)
+                  .filter((shell) => !shell.elevated)
+                  .map((shell) => (
+                    <option key={shell.id} value={shell.id}>
+                      {shell.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
             {localShells.length === 0 ? (
               <small>No local shells are installed on this machine.</small>
             ) : (
@@ -377,15 +418,6 @@ export function SettingsPane({
                 <div className="local-shell-toggle-group">
                   <div className="local-shell-toggle-heading">
                     <strong>Local terminals</strong>
-                    {hiddenCount > 0 && (
-                      <button
-                        className="secondary-button compact-button"
-                        type="button"
-                        onClick={() => setDraft({ ...draft, hiddenLocalShells: [] })}
-                      >
-                        <RotateCcw size={13} /> Show all
-                      </button>
-                    )}
                   </div>
                   {standardProfiles.map(toggleRow)}
                 </div>

@@ -69,7 +69,11 @@ import {
   terminalGroupForWorkspace,
   type TerminalGroup,
 } from "./lib/terminal-groups";
-import { offeredLocalShells } from "./lib/offered-local-shells";
+import {
+  defaultLocalShell,
+  needsAdministratorSetup,
+  offeredLocalShells,
+} from "./lib/offered-local-shells";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
 import {
   removeConnectionWorkspaces,
@@ -272,23 +276,46 @@ export function App() {
           const detectedShells = localShellCatalog.profiles;
           setLocalShells(detectedShells);
           setAdministratorTerminalStatus(localShellCatalog.administratorStatus);
+          const restored = restoreWorkspaceState(
+            connectionsResult.status === "fulfilled" ? connectionsResult.value : [],
+            workspaceStateResult.status === "fulfilled"
+              ? workspaceStateResult.value
+              : { workspaces: [], activeWorkspaceId: null, terminalLayout: null },
+            detectedShells,
+          );
+          if (
+            settingsResult.status === "fulfilled" &&
+            settingsResult.value.current.localTerminalMode
+          ) {
+            const startupSettings = settingsResult.value.current;
+            const shell = defaultLocalShell(
+              offeredLocalShells(detectedShells, startupSettings.hiddenLocalShells ?? []),
+              startupSettings.defaultLocalShellId ?? null,
+            );
+            if (shell) {
+              const existing = restored.workspaces.find(
+                (workspace) => isLocalWorkspace(workspace) && workspace.shell.id === shell.id,
+              );
+              const workspace = existing ?? createLocalWorkspace(shell);
+              if (!existing) restored.workspaces.push(workspace);
+              workspace.view = "terminal";
+              restored.activeWorkspaceId = workspace.id;
+              setTerminalFocusMode(true);
+            }
+          }
+          setWorkspaces(restored.workspaces);
+          setActiveWorkspaceId(restored.activeWorkspaceId);
+          setTerminalGroups(restored.terminalGroups);
+          setWorkspacePersistenceReady(
+            connectionsResult.status === "fulfilled" && workspaceStateResult.status === "fulfilled",
+          );
+          if (workspaceStateResult.status === "rejected") {
+            setActionError(
+              `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
+            );
+          }
           if (connectionsResult.status === "fulfilled") {
             setConnections(connectionsResult.value);
-            if (workspaceStateResult.status === "fulfilled") {
-              const restored = restoreWorkspaceState(
-                connectionsResult.value,
-                workspaceStateResult.value,
-                detectedShells,
-              );
-              setWorkspaces(restored.workspaces);
-              setActiveWorkspaceId(restored.activeWorkspaceId);
-              setTerminalGroups(restored.terminalGroups);
-              setWorkspacePersistenceReady(true);
-            } else {
-              setActionError(
-                `Could not restore Workspaces: ${errorMessage(workspaceStateResult.reason)}`,
-              );
-            }
             for (const connection of connectionsResult.value) {
               void api
                 .cachedCapabilities(connection.id)
@@ -354,13 +381,13 @@ export function App() {
   const canOpenNewTerminal = connections.length > 0 || offeredShells.length > 0;
   const standardLocalShells = offeredShells.filter((shell) => !shell.elevated);
   const administratorLocalShells = offeredShells.filter((shell) => shell.elevated);
-  // The "Run as administrator" group leaves the menu entirely once every entry
-  // in it has been turned off in Settings: an empty group, or the setup note
-  // that says administrator terminals need enabling, would both be describing
-  // a state the user chose rather than one they are stuck on. The note still
-  // shows when this machine genuinely cannot offer the group.
   const administratorGroupOffered =
-    administratorLocalShells.length > 0 || !localShells.some((shell) => shell.elevated);
+    administratorLocalShells.length > 0 ||
+    needsAdministratorSetup(
+      localShells,
+      settingsContract?.current.hiddenLocalShells ?? [],
+      administratorTerminalStatus,
+    );
   const activeTerminalGroup = terminalFocusMode
     ? terminalGroupForWorkspace(terminalGroups, activeWorkspaceId)
     : null;
@@ -839,12 +866,23 @@ export function App() {
       setLocalShellMenuOpen(false);
       return;
     }
-    setLocalShellMenuOpen(true);
     void api
       .listLocalShells()
       .then((catalog) => {
         setLocalShells(catalog.profiles);
         setAdministratorTerminalStatus(catalog.administratorStatus);
+        const enabled = offeredLocalShells(
+          catalog.profiles,
+          settingsContract?.current.hiddenLocalShells ?? [],
+        );
+        if (enabled.length === 1) openLocalShell(enabled[0]);
+        else {
+          setLocalShellMenuOpen(enabled.length > 1);
+          if (!enabled.length)
+            setActionError(
+              "No enabled local terminals are available. Check installed shells and Settings.",
+            );
+        }
       })
       .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
   }
@@ -1516,8 +1554,8 @@ export function App() {
                 className="sidebar-secondary"
                 type="button"
                 onClick={toggleLocalShellMenu}
-                aria-haspopup="menu"
-                aria-expanded={localShellMenuOpen}
+                aria-haspopup={offeredShells.length > 1 ? "menu" : undefined}
+                aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
                 title="Open a shell on this Windows machine"
               >
                 <SquareTerminal size={16} /> Local terminal

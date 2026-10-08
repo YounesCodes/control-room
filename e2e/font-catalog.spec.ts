@@ -1,3 +1,4 @@
+import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";

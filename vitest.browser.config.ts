@@ -12,7 +12,7 @@ export default defineConfig({
     testTimeout: 20_000,
     browser: {
       enabled: true,
-      provider: playwright(),
+      provider: playwright({ contextOptions: { reducedMotion: "reduce" } }),
       instances: [{ browser: "chromium" }],
       headless: true,
     },

@@ -22,7 +22,8 @@ Find nearby tests and existing implementation before changing a feature contract
 - Keep `DESIGN.md` and `docs/` accurate when behavior or project boundaries change.
 - Avoid adding or upgrading dependencies unless required by the task.
 - Do not modify `AGENTS.md` files unless explicitly asked to.
-- Do not commit or push unless explicitly asked to.
+- Always work in a dedicated branch and worktree unless explicitly asked not to.
+- After completing and validating the task, commit and push all task-related changes to that branch, then open a PR against main.
 
 ## Validation
 
