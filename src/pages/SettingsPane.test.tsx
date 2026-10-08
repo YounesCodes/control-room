@@ -100,6 +100,31 @@ describe("Settings actions", () => {
     api.installCatalogFont.mockResolvedValue("JetBrains Mono");
   });
 
+  it("uses one font field and does not save an unfinished catalog query", async () => {
+    renderPane();
+    const font = screen.getByRole("combobox", { name: "Font family" });
+    expect(screen.queryByLabelText("Search free fonts")).toBeNull();
+    fireEvent.change(font, { target: { value: "jet" } });
+    expect(saveButton().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Font size"), { target: { value: "16" } });
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith({ ...settings, terminalFontSize: 16 });
+    expect(api.installCatalogFont).not.toHaveBeenCalled();
+  });
+
+  it("saves a manually entered fallback list through the same font field", async () => {
+    renderPane();
+    const font = screen.getByRole("combobox", { name: "Font family" });
+    fireEvent.change(font, { target: { value: '"Cascadia Code", Consolas, monospace' } });
+    fireEvent.keyDown(font, { key: "Enter" });
+    expect(saveButton().disabled).toBe(false);
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith({
+      ...settings,
+      terminalFontFamily: '"Cascadia Code", Consolas, monospace',
+    });
+  });
+
   it("applies an installed font immediately while preserving other unsaved changes", async () => {
     const user = userEvent.setup();
     Object.defineProperty(document, "fonts", {
@@ -116,8 +141,8 @@ describe("Settings actions", () => {
     );
     const props = renderPane();
     fireEvent.change(screen.getByLabelText("Font size"), { target: { value: "16" } });
-    await user.click(screen.getByRole("combobox", { name: "Search free fonts" }));
-    await screen.findByRole("option", { name: /JetBrains Mono/ });
+    await user.click(screen.getByRole("combobox", { name: "Font family" }));
+    await user.click(await screen.findByRole("option", { name: /JetBrains Mono/ }));
     await user.click(screen.getByRole("button", { name: "Install and use" }));
     await screen.findByText(/JetBrains Mono is ready and applied/);
     expect(api.installCatalogFont).toHaveBeenCalledWith("jetbrains-mono", expect.anything());
@@ -157,8 +182,8 @@ describe("Settings actions", () => {
         }),
     );
     const props = renderPane();
-    await userEvent.click(screen.getByRole("combobox", { name: "Search free fonts" }));
-    await screen.findByRole("option", { name: /JetBrains Mono/ });
+    await userEvent.click(screen.getByRole("combobox", { name: "Font family" }));
+    await userEvent.click(await screen.findByRole("option", { name: /JetBrains Mono/ }));
     await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
     props.rerender(<SettingsPane {...props} settings={{ ...settings, terminalFontSize: 19 }} />);
     finish("JetBrains Mono");

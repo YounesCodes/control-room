@@ -221,6 +221,7 @@ describe("App Workspace behavior", () => {
     await user.click(await screen.findByLabelText("Open Settings"));
     await user.clear(screen.getByLabelText("Font family"));
     await user.type(screen.getByLabelText("Font family"), "Cascadia Mono");
+    await user.keyboard("{Enter}");
     await user.click(screen.getByRole("button", { name: "Close Settings" }));
 
     // The in-app confirm dialog appears and Settings stays open.

@@ -29,9 +29,18 @@ function mount() {
   const onUse = vi.fn(async () => {});
   const onPreview = vi.fn();
   const onBusyChange = vi.fn();
-  render(<FontCatalogPicker onUse={onUse} onPreview={onPreview} onBusyChange={onBusyChange} />);
+  const onChange = vi.fn();
+  render(
+    <FontCatalogPicker
+      value="Consolas, monospace"
+      onChange={onChange}
+      onUse={onUse}
+      onPreview={onPreview}
+      onBusyChange={onBusyChange}
+    />,
+  );
   fireEvent.focus(screen.getByRole("combobox"));
-  return { onUse, onPreview, onBusyChange };
+  return { onUse, onPreview, onBusyChange, onChange };
 }
 
 beforeEach(() => {
@@ -60,6 +69,44 @@ afterEach(() => {
 });
 
 describe("catalog font lifecycle", () => {
+  it("accepts an installed font and fallback list while the catalog is offline", async () => {
+    api.listCatalogFonts.mockRejectedValueOnce("Offline");
+    const props = mount();
+    await screen.findByText(/Offline.*current font is unchanged/);
+    const field = screen.getByRole("combobox", { name: "Font family" });
+    expect(field).toHaveProperty("value", "Consolas, monospace");
+    fireEvent.change(field, { target: { value: '"Cascadia Code", Consolas, monospace' } });
+    expect(props.onChange).not.toHaveBeenCalled();
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(props.onChange).toHaveBeenCalledWith('"Cascadia Code", Consolas, monospace');
+    expect(api.installCatalogFont).not.toHaveBeenCalled();
+    expect(props.onUse).not.toHaveBeenCalled();
+  });
+
+  it("dismisses search on focus leaving the picker without committing partial text", async () => {
+    const props = mount();
+    const field = screen.getByRole("combobox");
+    fireEvent.change(field, { target: { value: "jet" } });
+    await screen.findByRole("option", { name: /JetBrains Mono/ });
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    fireEvent.blur(field, { relatedTarget: outside });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(field).toHaveProperty("value", "Consolas, monospace");
+    expect(props.onChange).not.toHaveBeenCalled();
+    outside.remove();
+  });
+
+  it("keeps an entered font through the explicit manual action", async () => {
+    const props = mount();
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "Cascadia Code, monospace" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Use typed font" }));
+    expect(props.onChange).toHaveBeenCalledWith("Cascadia Code, monospace");
+    expect(api.installCatalogFont).not.toHaveBeenCalled();
+  });
+
   it("searches, previews the name and sample, and releases preview faces without installing", async () => {
     const props = mount();
     await screen.findByRole("option", { name: /Fira Mono/ });
@@ -75,29 +122,44 @@ describe("catalog font lifecycle", () => {
     );
     expect(api.installCatalogFont).not.toHaveBeenCalled();
     expect(props.onUse).not.toHaveBeenCalled();
+    expect(props.onChange).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("option", { name: /JetBrains Mono/ }));
     await userEvent.click(screen.getByRole("button", { name: "Keep current font" }));
     expect(props.onPreview).toHaveBeenLastCalledWith(null);
     cleanup();
     expect(remove).toHaveBeenCalled();
   });
 
-  it("supports arrow navigation and Escape, while Enter never installs a preview", async () => {
-    mount();
+  it("accepts keyboard suggestions without installing, and Escape restores the current value", async () => {
+    const props = mount();
     await screen.findByRole("option", { name: /Fira Mono/ });
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: /Fira Mono/ }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
     expect(
       screen.getByRole("option", { name: /JetBrains Mono/ }).getAttribute("aria-selected"),
     ).toBe("true");
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    expect(screen.getByRole("combobox")).toHaveProperty("value", "JetBrains Mono");
+    expect(screen.queryByRole("listbox")).toBeNull();
     expect(api.installCatalogFont).not.toHaveBeenCalled();
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
     expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("combobox")).toHaveProperty("value", "Consolas, monospace");
+    expect(props.onChange).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: /Fira Mono/ }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
   });
 
   it("keeps the current font on failure and retries with download and install progress", async () => {
     const props = mount();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "jet" } });
-    await screen.findByRole("option", { name: /JetBrains Mono/ });
+    await userEvent.click(await screen.findByRole("option", { name: /JetBrains Mono/ }));
     api.installCatalogFont.mockRejectedValueOnce("Windows denied access to your font folder.");
     await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
     expect(await screen.findByRole("alert")).toHaveProperty(
@@ -127,7 +189,7 @@ describe("catalog font lifecycle", () => {
 
   it("reports a save failure and permits retry without claiming readiness", async () => {
     const props = mount();
-    await screen.findByRole("option", { name: /Fira Mono/ });
+    await userEvent.click(await screen.findByRole("option", { name: /Fira Mono/ }));
     props.onUse.mockRejectedValueOnce(new Error("Settings could not be saved"));
     await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
     expect(await screen.findByRole("alert")).toHaveProperty(
@@ -155,6 +217,7 @@ describe("catalog font lifecycle", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry catalog" }));
     api.previewCatalogFont.mockRejectedValue("Preview download failed");
     await screen.findByRole("option", { name: /Fira Mono/ });
+    await userEvent.click(screen.getByRole("option", { name: /Fira Mono/ }));
     await screen.findByText(/Preview download failed.*preview uses your current font/);
     api.previewCatalogFont.mockResolvedValue(new ArrayBuffer(8));
     await userEvent.click(screen.getByRole("button", { name: "Retry preview" }));
@@ -173,7 +236,7 @@ describe("catalog font lifecycle", () => {
         }),
     );
     const props = mount();
-    await screen.findByRole("option", { name: /Fira Mono/ });
+    await userEvent.click(await screen.findByRole("option", { name: /Fira Mono/ }));
     await userEvent.click(screen.getByRole("button", { name: "Install and use" }));
     cleanup();
     add.mockClear();

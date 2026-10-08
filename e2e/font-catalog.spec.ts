@@ -20,11 +20,11 @@ liveFonts("public font catalog in WebView2", () => {
       );
     const before = snapshot();
     await $("aria/Open Settings").click();
-    const current = $("//label[span[normalize-space()='Font family']]/input");
+    const current = $("[role=combobox][aria-controls=font-suggestions]");
     const original = await current.getValue();
-    await $("//label[span[normalize-space()='Search free fonts']]/input").setValue(
-      "JetBrains Mono",
-    );
+    await current.click();
+    await browser.keys("JetBrains Mono");
+    await expect(current).toHaveValue("JetBrains Mono");
     try {
       await $("#font-option-jetbrains-mono").waitForDisplayed({ timeout: 30_000 });
     } catch (error) {
@@ -52,8 +52,7 @@ liveFonts("public font catalog in WebView2", () => {
       { timeout: 30_000, timeoutMsg: "The native font preview did not load in WebView2" },
     );
     await expect($("#font-option-jetbrains-mono span")).toHaveText("JetBrains Mono");
-    await expect(current).toHaveValue(original);
-    await $("button=Keep current font").click();
+    await browser.keys("Escape");
     await expect(current).toHaveValue(original);
     await expect($("#font-suggestions")).not.toBeDisplayed();
     expect(snapshot()).toEqual(before);

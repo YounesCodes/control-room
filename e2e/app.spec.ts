@@ -11,16 +11,23 @@ describe("Control Room desktop", () => {
 
   it("saves a setting through Rust and restores it after a webview reload", async () => {
     await $("aria/Open Settings").click();
-    const family = $("//label[span[normalize-space()='Font family']]/input");
+    const fontSelector = '[role="combobox"][aria-controls="font-suggestions"]';
+    const family = $(fontSelector);
     const original = await family.getValue();
     const changed = original === "Consolas" ? "Courier New" : "Consolas";
-    await family.setValue(changed);
+    await family.click();
+    await browser.keys(changed);
+    await expect(family).toHaveValue(changed);
+    await browser.keys("Enter");
     await $("button=Save settings").click();
-    await expect($("[role=status]")).toHaveText("Settings saved.");
+    await expect($(".settings-heading [role=status]")).toHaveText("Settings saved.");
     await browser.refresh();
     await $("aria/Open Settings").click();
-    await expect($("//label[span[normalize-space()='Font family']]/input")).toHaveValue(changed);
-    await $("//label[span[normalize-space()='Font family']]/input").setValue(original);
+    await expect($(fontSelector)).toHaveValue(changed);
+    await $(fontSelector).click();
+    await browser.keys(original);
+    await expect($(fontSelector)).toHaveValue(original);
+    await browser.keys("Enter");
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
   });

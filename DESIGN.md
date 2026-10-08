@@ -164,6 +164,16 @@ Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut
 list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 
+Settings uses readable section titles and short scope descriptions. Group
+terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
+behavior separate from appearance and local shell availability.
+
+Select the current font value on focus or when reopening the field so typing
+starts a new search without deleting the saved family. Preserve cursor editing
+once a search is in progress. Use one editable Font family combobox for catalog search and manual fallback
+lists. Anchor suggestions to the field without moving the controls below it.
+Keep typed search text separate from saved settings. Enter accepts a keyboard
+selection or keeps a typed manual value; Escape restores the current value.
 Font catalog suggestions show each name in its font and update the Settings
 preview as the user searches or moves through suggestions. Preview faces stay
 in the webview and do not install fonts. Keep installation explicit, report

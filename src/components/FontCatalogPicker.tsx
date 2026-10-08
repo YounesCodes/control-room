@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
+import { ChevronDown } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import type { CatalogFont, FontCatalog, FontProgress } from "../types";
 
 export function FontCatalogPicker({
+  value,
+  onChange,
   disabled = false,
   onPreview,
   onBusyChange,
   onUse,
 }: {
+  value: string;
+  onChange: (value: string) => void;
   disabled?: boolean;
   onPreview: (family: string | null) => void;
   onBusyChange: (busy: boolean) => void;
@@ -17,7 +22,8 @@ export function FontCatalogPicker({
   const [catalog, setCatalog] = useState<FontCatalog | null>(null);
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState<string | null>(null);
+  const [picked, setPicked] = useState<CatalogFont | null>(null);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [faces, setFaces] = useState<Record<string, string>>({});
@@ -31,13 +37,39 @@ export function FontCatalogPicker({
   const alive = useRef(true);
   const running = useRef(false);
   const installed = useRef<{ id: string; family: string } | null>(null);
-  const results = open
-    ? (catalog?.fonts ?? [])
-        .filter((font) => font.family.toLowerCase().includes(query.trim().toLowerCase()))
-        .slice(0, 8)
-    : [];
-  const active = results.find((font) => font.id === selected) ?? results[0];
+  const input = useRef<HTMLInputElement>(null);
+  const catalogRequest = useRef(false);
+  const matching = (catalog?.fonts ?? [])
+    .filter((font) => font.family.toLowerCase().includes((query ?? "").trim().toLowerCase()))
+    .slice(0, 8);
+  const results = open ? matching : [];
+  const active = picked ?? results.find((font) => font.id === selected) ?? results[0];
   const resultIds = results.map((font) => font.id).join(",");
+
+  function cancelPreview() {
+    setOpen(false);
+    setQuery(null);
+    setPicked(null);
+    setSelected(null);
+    setFailure(null);
+  }
+
+  function choose(font: CatalogFont) {
+    void loadPreview(font);
+    setPicked(font);
+    setQuery(font.family);
+    setOpen(false);
+    setSelected(null);
+    setFailure(null);
+    setReady(null);
+  }
+
+  function keepTypedValue() {
+    if (query === null || !query.trim()) return;
+    onChange(query.trim());
+    cancelPreview();
+    setReady(null);
+  }
 
   useEffect(() => {
     alive.current = true;
@@ -50,6 +82,8 @@ export function FontCatalogPicker({
   }, []);
 
   async function loadCatalog() {
+    if (catalogRequest.current) return;
+    catalogRequest.current = true;
     setLoading(true);
     setCatalogError(null);
     try {
@@ -58,6 +92,7 @@ export function FontCatalogPicker({
     } catch (error) {
       if (alive.current) setCatalogError(errorMessage(error));
     } finally {
+      catalogRequest.current = false;
       if (alive.current) setLoading(false);
     }
   }
@@ -94,15 +129,16 @@ export function FontCatalogPicker({
 
   const activeFace = active ? faces[active.id] : null;
   useEffect(() => {
-    if (open && active)
-      document.getElementById(`font-option-${active.id}`)?.scrollIntoView?.({ block: "nearest" });
-  }, [open, active]);
+    if (open && selected)
+      document.getElementById(`font-option-${selected}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, selected]);
   useEffect(() => {
     onPreview(activeFace ? `"${activeFace}", monospace` : null);
   }, [activeFace, onPreview]);
 
   async function install() {
     if (!active || running.current) return;
+    choose(active);
     running.current = true;
     setBusy(true);
     onBusyChange(true);
@@ -135,6 +171,8 @@ export function FontCatalogPicker({
       if (alive.current) {
         setReady(`${family} is ready and applied to your terminals.`);
         setOpen(false);
+        setQuery(null);
+        setPicked(null);
       }
     } catch (error) {
       if (installedFace) {
@@ -162,51 +200,125 @@ export function FontCatalogPicker({
           : "Downloading font";
 
   return (
-    <div className="font-catalog">
-      <label>
-        <span>Search free fonts</span>
-        <input
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={open && results.length > 0}
-          aria-controls="font-suggestions"
-          aria-activedescendant={open && active ? `font-option-${active.id}` : undefined}
-          aria-describedby="font-catalog-help"
-          disabled={disabled || busy}
-          value={query}
-          placeholder="Search monospace fonts"
-          onFocus={() => {
-            setOpen(true);
-            if (!catalog && !loading) void loadCatalog();
-          }}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setSelected(null);
-            setFailure(null);
-            setReady(null);
-            setOpen(true);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setOpen(false);
-            }
-            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-              event.preventDefault();
-              setOpen(true);
-              if (!results.length) return;
-              const index = results.findIndex((font) => font.id === active?.id);
-              const next =
-                (index + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length;
-              setSelected(results[next]?.id ?? null);
-            }
-            if (event.key === "Enter") event.preventDefault();
-          }}
-        />
-      </label>
+    <div
+      className="font-catalog"
+      onBlur={(event) => {
+        if (!busy && !event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+          setSelected(null);
+          if (!picked) setQuery(null);
+        }
+      }}
+    >
+      <div className="font-family-control">
+        <label>
+          <span>Font family</span>
+          <div className="font-family-input">
+            <input
+              ref={input}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={open && results.length > 0}
+              aria-controls="font-suggestions"
+              aria-activedescendant={open && selected ? `font-option-${selected}` : undefined}
+              aria-describedby="font-catalog-help"
+              disabled={disabled || busy}
+              value={query ?? value}
+              placeholder="Search fonts or enter a font family"
+              autoComplete="off"
+              spellCheck={false}
+              onFocus={(event) => {
+                event.currentTarget.select();
+                setOpen(true);
+                if (!catalog && !loading) void loadCatalog();
+              }}
+              onClick={(event) => {
+                if (query === null || picked !== null) event.currentTarget.select();
+                setOpen(true);
+              }}
+              onBlur={() => {
+                setOpen(false);
+                setSelected(null);
+              }}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPicked(null);
+                setSelected(null);
+                setFailure(null);
+                setReady(null);
+                setOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  cancelPreview();
+                }
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setOpen(true);
+                  setPicked(null);
+                  if (!matching.length) return;
+                  const index = matching.findIndex((font) => font.id === selected);
+                  const next =
+                    index < 0
+                      ? event.key === "ArrowDown"
+                        ? 0
+                        : matching.length - 1
+                      : (index + (event.key === "ArrowDown" ? 1 : -1) + matching.length) %
+                        matching.length;
+                  setSelected(matching[next]?.id ?? null);
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const highlighted = results.find((font) => font.id === selected);
+                  if (highlighted) choose(highlighted);
+                  else if (!picked) keepTypedValue();
+                }
+              }}
+            />
+            <ChevronDown size={15} aria-hidden="true" />
+          </div>
+        </label>
+        <ul
+          id="font-suggestions"
+          role="listbox"
+          aria-label="Font suggestions"
+          className="font-suggestions"
+          hidden={!open || !results.length}
+        >
+          {results.map((font) => (
+            <li
+              key={font.id}
+              id={`font-option-${font.id}`}
+              role="option"
+              aria-selected={font.id === selected}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                if (!busy) choose(font);
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: faces[font.id] ? `"${faces[font.id]}", monospace` : undefined,
+                }}
+              >
+                {font.family}
+              </span>
+              <small>
+                {faces[font.id]
+                  ? font.license
+                  : previewErrors[font.id]
+                    ? "Preview unavailable"
+                    : "Loading preview…"}
+              </small>
+            </li>
+          ))}
+        </ul>
+      </div>
       <small id="font-catalog-help">
-        Fontsource open-source monospace fonts. Previews are temporary. Install and use downloads
-        the font for your Windows account and applies it immediately.
+        Search free fonts or enter installed font names and fallbacks. Previews do not install
+        fonts.
       </small>
       {loading && <p role="status">Loading font catalog…</p>}
       {catalog?.stale && <p role="status">Catalog unavailable. Showing fonts from this session.</p>}
@@ -216,7 +328,10 @@ export function FontCatalogPicker({
           <button
             type="button"
             className="secondary-button compact-button"
-            onClick={() => void loadCatalog()}
+            onClick={() => {
+              void loadCatalog();
+              input.current?.focus();
+            }}
             disabled={loading || busy}
           >
             Retry catalog
@@ -224,47 +339,24 @@ export function FontCatalogPicker({
         </div>
       )}
       {open && catalog && !loading && results.length === 0 && (
-        <p role="status">No matching fonts.</p>
+        <p role="status">No matching catalog fonts. You can still use an installed font.</p>
       )}
-      <ul
-        id="font-suggestions"
-        role="listbox"
-        aria-label="Font suggestions"
-        className="font-suggestions"
-        hidden={!open || !results.length}
-      >
-        {results.map((font) => (
-          <li
-            key={font.id}
-            id={`font-option-${font.id}`}
-            role="option"
-            aria-selected={font.id === active?.id}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              if (!busy) {
-                setSelected(font.id);
-                setFailure(null);
-              }
-            }}
-          >
-            <span
-              style={{ fontFamily: faces[font.id] ? `"${faces[font.id]}", monospace` : undefined }}
-            >
-              {font.family}
-            </span>
-            <small>
-              {faces[font.id]
-                ? font.license
-                : previewErrors[font.id]
-                  ? "Preview unavailable"
-                  : "Loading preview…"}
-            </small>
-          </li>
-        ))}
-      </ul>
-      {open && active && (
+      {query !== null && !picked && query.trim() && (
         <div className="font-catalog-actions">
-          <span>Previewing {active.family}</span>
+          <button
+            type="button"
+            className="secondary-button compact-button"
+            disabled={busy || disabled}
+            onClick={keepTypedValue}
+          >
+            Use typed font
+          </button>
+          <small>Enter keeps the typed value. Save settings applies it.</small>
+        </div>
+      )}
+      {picked && (
+        <div className="font-catalog-actions">
+          <span>Previewing {picked.family}</span>
           <button
             type="button"
             className="primary-button compact-button"
@@ -272,7 +364,7 @@ export function FontCatalogPicker({
             onClick={() => void install()}
           >
             {failure
-              ? installed.current?.id === active.id
+              ? installed.current?.id === picked.id
                 ? "Retry apply font"
                 : "Retry install and use"
               : "Install and use"}
@@ -281,20 +373,20 @@ export function FontCatalogPicker({
             type="button"
             className="secondary-button compact-button"
             disabled={busy}
-            onClick={() => setOpen(false)}
+            onClick={cancelPreview}
           >
             Keep current font
           </button>
         </div>
       )}
-      {open && active && previewErrors[active.id] && (
+      {picked && previewErrors[picked.id] && (
         <div className="inline-warning">
-          <p role="status">{previewErrors[active.id]} The preview uses your current font.</p>
+          <p role="status">{previewErrors[picked.id]} The preview uses your current font.</p>
           <button
             type="button"
             className="secondary-button compact-button"
             disabled={busy}
-            onClick={() => void loadPreview(active)}
+            onClick={() => void loadPreview(picked)}
           >
             Retry preview
           </button>

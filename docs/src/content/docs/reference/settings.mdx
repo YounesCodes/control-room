@@ -11,20 +11,25 @@ Open **Settings** from the top bar. Select **Save settings** to apply changes. C
   <a href={settingsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={settingsScreenshot.src}
-      alt="Settings showing terminal font, scrollback, color controls, and a live preview."
+      alt="Settings showing Terminal appearance with font and color controls beside one live preview."
     />
   </a>
-  <figcaption>Terminal settings and their preview. Example data shown.</figcaption>
+  <figcaption>Font and colors share one live preview. Example data shown.</figcaption>
 </figure>
 
 ## Terminal
 
 Choose a font, size (9–32), and scrollback limit (100–100,000 lines). You can change the text and ANSI colors for both SSH and local terminals; the cursor follows the text color. The preview shows your choices and warns if a color is hard to read. **Reset colors** restores the defaults. See [Terminal](/control-room/terminal/#reconnect-and-copy) for right-click behavior.
 
-Use **Search free fonts** to find open-source monospace fonts from Fontsource.
+Use **Font family** to search open-source monospace fonts from Fontsource. Clicking the current value selects it, so you can start typing immediately.
 Each suggestion shows its name in that font. Typing or using the arrow keys
 updates the preview without installing anything. **Keep current font** or Escape
-ends the preview.
+ends the preview and restores the current value. Choose a suggestion by clicking
+it, or use the arrow keys and Enter. Choosing a suggestion does not install it.
+
+To use an installed font or a fallback list, type it in **Font family** and choose
+**Use typed font**, or press Enter without selecting a suggestion. Then use
+**Save settings** to apply it. Search text is never saved automatically.
 
 Select **Install and use** to download and install the regular font and bold
 weight when available for your Windows account. The app shows download and
