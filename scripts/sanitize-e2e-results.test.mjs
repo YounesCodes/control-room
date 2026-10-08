@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +33,22 @@ describe("desktop diagnostic redaction", () => {
       expect(() => sanitizeDirectory(source, output)).toThrow();
       expect(existsSync(join(output, "large.txt"))).toBe(false);
     } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it("identifies rejected diagnostics without exposing credentials or user paths", () => {
+    const directory = mkdtempSync(join(tmpdir(), "control-room-redaction-"));
+    const source = join(directory, "raw");
+    const output = join(directory, "safe");
+    mkdirSync(source);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      writeFileSync(join(source, "driver.log"), Buffer.from([0, 255]));
+      expect(() => sanitizeDirectory(source, output)).toThrow();
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("driver.log: Binary diagnostic"));
+      expect(error.mock.calls.flat().join(" ")).not.toContain(directory);
+    } finally {
+      error.mockRestore();
       rmSync(directory, { recursive: true, force: true });
     }
   });

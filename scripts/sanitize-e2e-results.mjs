@@ -58,9 +58,11 @@ export function sanitizeDirectory(directory, output) {
           sanitize(new TextDecoder("utf-8", { fatal: true }).decode(bytes)),
         );
       }
-    } catch {
+    } catch (error) {
       failed = true;
-      console.error("Could not sanitize a diagnostic file; artifact upload is blocked.");
+      console.error(
+        `Could not sanitize ${sanitize(entry.name)}: ${sanitize(error.message)}; artifact upload is blocked.`,
+      );
     }
   }
   if (failed) throw new Error("Failure diagnostics could not all be sanitized");

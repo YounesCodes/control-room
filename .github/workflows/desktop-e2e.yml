@@ -2,6 +2,11 @@ name: Desktop E2E
 
 on:
   workflow_dispatch:
+    inputs:
+      spec:
+        description: "Optional desktop spec path; leave empty for the full suite"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -23,7 +28,29 @@ jobs:
           cache-bin: false
       - run: npm ci
       - run: npm run test:desktop:build
-      - run: npm run test:desktop
+      - name: Check desktop driver environment
+        shell: pwsh
+        run: |
+          $runtimeKeys = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          )
+          foreach ($key in $runtimeKeys) {
+            $runtime = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+            if ($runtime.pv) { Write-Host "WebView2 runtime: $($runtime.pv)" }
+          }
+          Get-Command msedgedriver.exe -All -ErrorAction SilentlyContinue | ForEach-Object {
+            & $_.Source --version
+          }
+      - name: Run desktop tests
+        shell: pwsh
+        env:
+          DESKTOP_SPEC: ${{ inputs.spec }}
+        run: |
+          $arguments = @('run', 'test:desktop', '--', '--logLevel', 'info')
+          if ($env:DESKTOP_SPEC) { $arguments += @('--spec', $env:DESKTOP_SPEC) }
+          npm @arguments
       - name: Sanitize failure diagnostics
         id: sanitize
         if: failure()
