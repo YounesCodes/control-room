@@ -62,17 +62,38 @@ describe("Settings and native window", () => {
       browser.tauri.execute(({ core }) =>
         core.invoke("plugin:window|is_maximized", { label: "main" }),
       );
-    const before = await browser.getWindowRect();
+    const dimensions = () =>
+      ipc<{ width: number; height: number }>("plugin:window|inner_size", { label: "main" });
+    const monitor = await ipc<{ workArea: { size: { width: number; height: number } } } | null>(
+      "plugin:window|current_monitor",
+    );
+    expect(monitor).not.toBeNull();
+    const before = await dimensions();
     await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === true);
-    const expanded = await browser.getWindowRect();
-    expect(expanded.width).toBeGreaterThan(before.width);
-    expect(expanded.height).toBeGreaterThan(before.height);
+    // Maximizing fills the work area, even if the initial window exceeds a small CI display.
+    await browser.waitUntil(
+      async () => {
+        const expanded = await dimensions();
+        return (
+          Math.abs(expanded.width - monitor!.workArea.size.width) <= 2 &&
+          Math.abs(expanded.height - monitor!.workArea.size.height) <= 2
+        );
+      },
+      { timeoutMsg: "Maximized native window did not fill the monitor work area" },
+    );
     await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === false);
-    const restored = await browser.getWindowRect();
-    expect(Math.abs(restored.width - before.width)).toBeLessThanOrEqual(2);
-    expect(Math.abs(restored.height - before.height)).toBeLessThanOrEqual(2);
+    await browser.waitUntil(
+      async () => {
+        const restored = await dimensions();
+        return (
+          Math.abs(restored.width - before.width) <= 2 &&
+          Math.abs(restored.height - before.height) <= 2
+        );
+      },
+      { timeoutMsg: "Restored native window did not recover its original dimensions" },
+    );
   });
 });
 

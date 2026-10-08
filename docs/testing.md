@@ -33,11 +33,13 @@ npm run test:desktop:build
 npm run test:desktop
 ```
 
-This suite uses an external `tauri-driver` on Windows. WebdriverIO's helper plugin, permissions, and read-only `e2e_runtime_status` command load only with the debug `desktop-e2e` feature. The release build refuses that feature. The service installs a matching driver if needed; once provisioned, the deterministic tests need no external network. Offline connections use loopback port 1 and updater checks are disabled in each new test database.
+The manual `Desktop E2E` workflow accepts an optional `spec` path for a single suite. Leave it empty to run all desktop tests. It reports the runner's elevation and installed WebView2/driver versions before testing.
+
+This suite uses an external `tauri-driver` on Windows. WebdriverIO's helper plugin, permissions, and read-only `e2e_runtime_status` command load only with the debug `desktop-e2e` feature. The release build refuses that feature. The service installs a matching driver if needed; once provisioned, the deterministic tests need no external network. Offline connections use loopback port 1 and updater checks are disabled in each new test database. The debug test app passes the driver's debugging port and profile directly to WebView2, so session creation also works on elevated Windows runners.
 
 Each test starts a fresh app process, SQLite database, and WebView2 profile. Persistence tests explicitly restart with the same database. Mocha setup failures fail the test, and teardown closes owned sessions and streams even after assertion failures. Diagnostics expose the app PID and active session/stream IDs; cleanup waits for those resources and app processes to exit before removing temporary files. Tests run serially with no automatic test retries.
 
-Run one feature suite with `npm run test:desktop -- --spec e2e/connections.spec.ts` (or `settings`, `terminals`, or `local-data`). Run each independently and the complete suite twice when changing isolation or process lifecycle. Failures save a screenshot, test name, DOM state, and runtime diagnostics under ignored `test-results/desktop/`, alongside driver/application logs. The manual `Desktop E2E` workflow uploads only sanitized text diagnostics. Screenshots stay local. A failed sanitizer blocks the upload. Live-host screenshots stay local and are never included in that workflow.
+Run one feature suite with `npm run test:desktop -- --spec e2e/connections.spec.ts` (or `settings`, `terminals`, or `local-data`). Run each independently and the complete suite twice when changing isolation or process lifecycle. Failures save a screenshot, test name, DOM state, and runtime diagnostics under ignored `test-results/desktop/`, alongside driver/application logs. The manual `Desktop E2E` workflow uploads only sanitized text diagnostics. Screenshots stay local. If the shared launcher log contains NUL padding, its contents are omitted; sanitized per-spec logs remain available. Other sanitization failures block the upload. Live-host screenshots stay local and are never included in that workflow.
 
 ## Debian SSH fixture
 

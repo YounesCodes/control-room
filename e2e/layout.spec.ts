@@ -6,6 +6,7 @@ import type { PersistedWorkspaceState } from "../src/types";
 describe("Resizable panels in the native app", () => {
   it("drags and saves the Connections width through SQLite and resets it", async () => {
     const divider = $("aria/Resize Connections panel");
+    const defaultWidth = await divider.getAttribute("aria-valuenow");
     await divider.dragAndDrop({ x: 100, y: 0 });
     const chosen = Number(await divider.getAttribute("aria-valuenow"));
     expect(chosen).toBeGreaterThan(300);
@@ -28,7 +29,7 @@ describe("Resizable panels in the native app", () => {
       return Object.keys(state.panelSizes).length === 0;
     });
     await restartApp();
-    await expect($("aria/Resize Connections panel")).toHaveAttribute("aria-valuenow", "244");
+    await expect($("aria/Resize Connections panel")).toHaveAttribute("aria-valuenow", defaultWidth);
   });
 
   it("saves content and split widths, shares them across hosts, restores and resets through SQLite", async () => {

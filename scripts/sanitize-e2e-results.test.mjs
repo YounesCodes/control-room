@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +33,40 @@ describe("desktop diagnostic redaction", () => {
       expect(() => sanitizeDirectory(source, output)).toThrow();
       expect(existsSync(join(output, "large.txt"))).toBe(false);
     } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it("omits a corrupt shared launcher log and preserves sanitized per-spec diagnostics", () => {
+    const directory = mkdtempSync(join(tmpdir(), "control-room-redaction-"));
+    const source = join(directory, "raw");
+    const output = join(directory, "safe");
+    mkdirSync(source);
+    try {
+      writeFileSync(join(source, "wdio.log"), Buffer.from("password=private\0padding"));
+      writeFileSync(join(source, "connections.spec-0-0.log"), "password=private; session failed");
+      sanitizeDirectory(source, output);
+      expect(readFileSync(join(output, "wdio.log"), "utf8")).toContain("omitted");
+      expect(readFileSync(join(output, "wdio.log"), "utf8")).not.toContain("private");
+      expect(readFileSync(join(output, "connections.spec-0-0.log"), "utf8")).toBe(
+        "password=[redacted]; session failed",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it("identifies rejected diagnostics without exposing credentials or user paths", () => {
+    const directory = mkdtempSync(join(tmpdir(), "control-room-redaction-"));
+    const source = join(directory, "raw");
+    const output = join(directory, "safe");
+    mkdirSync(source);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      writeFileSync(join(source, "driver.log"), Buffer.from([0, 255]));
+      expect(() => sanitizeDirectory(source, output)).toThrow();
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("driver.log: Binary diagnostic"));
+      expect(error.mock.calls.flat().join(" ")).not.toContain(directory);
+    } finally {
+      error.mockRestore();
       rmSync(directory, { recursive: true, force: true });
     }
   });
