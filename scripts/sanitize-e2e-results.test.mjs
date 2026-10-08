@@ -36,6 +36,24 @@ describe("desktop diagnostic redaction", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+  it("omits a corrupt shared launcher log and preserves sanitized per-spec diagnostics", () => {
+    const directory = mkdtempSync(join(tmpdir(), "control-room-redaction-"));
+    const source = join(directory, "raw");
+    const output = join(directory, "safe");
+    mkdirSync(source);
+    try {
+      writeFileSync(join(source, "wdio.log"), Buffer.from("password=private\0padding"));
+      writeFileSync(join(source, "connections.spec-0-0.log"), "password=private; session failed");
+      sanitizeDirectory(source, output);
+      expect(readFileSync(join(output, "wdio.log"), "utf8")).toContain("omitted");
+      expect(readFileSync(join(output, "wdio.log"), "utf8")).not.toContain("private");
+      expect(readFileSync(join(output, "connections.spec-0-0.log"), "utf8")).toBe(
+        "password=[redacted]; session failed",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("identifies rejected diagnostics without exposing credentials or user paths", () => {
     const directory = mkdtempSync(join(tmpdir(), "control-room-redaction-"));
     const source = join(directory, "raw");
