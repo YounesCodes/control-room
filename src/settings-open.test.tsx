@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -119,12 +119,43 @@ describe("Opening Settings", () => {
     const docs = (await screen.findByRole("button", {
       name: "Open documentation",
     })) as HTMLButtonElement;
-    await user.click(docs);
+    act(() => {
+      docs.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      docs.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(api.openDocumentation).toHaveBeenCalledTimes(1);
     expect(docs.disabled).toBe(true);
+    expect(docs.getAttribute("aria-busy")).toBe("true");
+    expect(docs.title).toBe("Opening documentation…");
     await user.click(docs);
     expect(api.openDocumentation).toHaveBeenCalledTimes(1);
     finish();
     await waitFor(() => expect(docs.disabled).toBe(false));
+    expect(docs.getAttribute("aria-busy")).toBe("false");
+    await user.click(docs);
+    expect(api.openDocumentation).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps workspace errors when documentation succeeds, fails, is dismissed and retried", async () => {
+    api.workspaceState.mockRejectedValueOnce("Workspace database unavailable");
+    const user = userEvent.setup();
+    render(<App />);
+    const workspaceError = "Could not restore Workspaces: Workspace database unavailable";
+    await screen.findByText(workspaceError);
+    const docs = screen.getByRole("button", { name: "Open documentation" });
+    await user.click(docs);
+    expect(screen.getByText(workspaceError)).toBeTruthy();
+    api.openDocumentation.mockRejectedValueOnce("Default browser unavailable");
+    await user.click(docs);
+    await screen.findByText("Could not open documentation: Default browser unavailable");
+    expect(screen.getByText(workspaceError)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Dismiss documentation error" }));
+    expect(screen.getByText(workspaceError)).toBeTruthy();
+    expect(
+      screen.queryByText("Could not open documentation: Default browser unavailable"),
+    ).toBeNull();
+    await user.click(docs);
+    expect(screen.getByText(workspaceError)).toBeTruthy();
   });
 
   it("opens documentation and keeps unsaved Settings changes when browser launch fails", async () => {

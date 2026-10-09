@@ -263,6 +263,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await page.getByRole("button", { name: "Open Settings" }).click();
       }
       await expect.element(docs).toBeVisible();
+      expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(1);
       (docs.element() as HTMLButtonElement).focus();
       await userEvent.keyboard("{Enter}");
       await expect
@@ -275,12 +276,22 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const bounds = docs.element().getBoundingClientRect();
       expect(bounds.left).toBeGreaterThanOrEqual(0);
       expect(bounds.right).toBeLessThanOrEqual(960);
+      for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
+        const control = page.getByRole("button", { name, exact: true });
+        await expect.element(control).toBeVisible();
+        const controlBounds = control.element().getBoundingClientRect();
+        expect(controlBounds.left).toBeGreaterThanOrEqual(bounds.right);
+        expect(controlBounds.right).toBeLessThanOrEqual(960);
+        expect(controlBounds.top).toBeGreaterThanOrEqual(0);
+        expect(controlBounds.bottom).toBeLessThanOrEqual(640);
+      }
+      const toolbar = mode === "focus" ? ".session-tab-actions" : ".app-bar";
+      const result = await axe.run(element.querySelector(toolbar)!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(result.violations.map(({ id }) => id)).toEqual([]);
     }
     await page.screenshot({ path: "../test-results/documentation-settings.png" });
-    const result = await axe.run(element.querySelector(".app-bar")!, {
-      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
-    });
-    expect(result.violations.map(({ id }) => id)).toEqual([]);
   });
 
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {

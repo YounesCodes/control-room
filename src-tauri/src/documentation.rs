@@ -33,8 +33,15 @@ fn browser_launch_result(code: isize) -> Result<(), String> {
     if code > 32 {
         Ok(())
     } else {
+        let recovery = match code {
+            5 => {
+                "Windows denied access. Check your browser permissions or contact your administrator."
+            }
+            27 | 31 => "Set a default web browser in Windows Settings and try again.",
+            _ => "Check your default browser and try again.",
+        };
         Err(format!(
-            "Windows could not launch your default browser (error {code}). Check your default browser and try again."
+            "Windows could not launch your default browser (error {code}). {recovery}"
         ))
     }
 }
@@ -51,6 +58,16 @@ mod tests {
             assert!(error.contains(&format!("error {code}")));
             assert!(error.contains("default browser"));
         }
+        assert!(
+            browser_launch_result(5)
+                .unwrap_err()
+                .contains("denied access")
+        );
+        assert!(
+            browser_launch_result(31)
+                .unwrap_err()
+                .contains("Set a default web browser")
+        );
         assert!(browser_launch_result(33).is_ok());
         assert!(browser_launch_result(1024).is_ok());
     }

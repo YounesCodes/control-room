@@ -189,6 +189,8 @@ export function App() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [openingDocumentation, setOpeningDocumentation] = useState(false);
+  const openingDocumentationRef = useRef(false);
+  const [documentationError, setDocumentationError] = useState<string | null>(null);
   const [hostSearch, setHostSearch] = useState("");
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
@@ -1486,13 +1488,16 @@ export function App() {
   }
 
   async function openDocumentation() {
+    if (openingDocumentationRef.current) return;
+    openingDocumentationRef.current = true;
     setOpeningDocumentation(true);
-    setActionError(null);
+    setDocumentationError(null);
     try {
       await api.openDocumentation();
     } catch (error) {
-      setActionError(`Could not open documentation: ${errorMessage(error)}`);
+      setDocumentationError(`Could not open documentation: ${errorMessage(error)}`);
     } finally {
+      openingDocumentationRef.current = false;
       setOpeningDocumentation(false);
     }
   }
@@ -1505,7 +1510,10 @@ export function App() {
         onClick={() => void openDocumentation()}
         disabled={openingDocumentation}
         aria-label="Open documentation"
-        title="Documentation (opens in your browser)"
+        aria-busy={openingDocumentation}
+        title={
+          openingDocumentation ? "Opening documentation…" : "Documentation (opens in your browser)"
+        }
       >
         <CircleHelp size={18} />
       </button>
@@ -1541,7 +1549,7 @@ export function App() {
               onRestart={requestUpdateInstall}
             />
           )}
-          {renderDocumentationButton("app-bar-button")}
+          {(!terminalFocusMode || settingsOpen) && renderDocumentationButton("app-bar-button")}
           {!settingsOpen && (
             <button
               className="app-bar-button"
@@ -1971,6 +1979,19 @@ export function App() {
               </div>
             )}
           </nav>
+        )}
+
+        {documentationError && (
+          <div className="inline-error app-action-error" role="alert">
+            <span>{documentationError}</span>
+            <button
+              type="button"
+              onClick={() => setDocumentationError(null)}
+              aria-label="Dismiss documentation error"
+            >
+              <X size={14} />
+            </button>
+          </div>
         )}
 
         {actionError && (

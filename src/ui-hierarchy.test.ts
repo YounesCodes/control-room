@@ -77,6 +77,18 @@ function importedDialogFunctions(): string[] {
 }
 
 describe("application hierarchy", () => {
+  it("opens the same documentation URL that the docs site publishes", () => {
+    const config = code("../docs/astro.config.mjs");
+    const site = config.match(/site:\s*"([^"]+)"/)?.[1];
+    const base = config.match(/base:\s*"([^"]+)"/)?.[1];
+    expect(site).toBeDefined();
+    expect(base).toBeDefined();
+    const url = code("../src-tauri/src/documentation.rs").match(
+      /DOCUMENTATION_URL:\s*&str\s*=\s*"([^"]+)"/,
+    )?.[1];
+    expect(url).toBe(new URL(`${base}/`, site).href);
+  });
+
   it("registers every frontend IPC command in the Rust handler", () => {
     const called = [
       ...apiSource.matchAll(/\b(?:invoke|invokeRemoteInspection)(?:<[^\n(]*>)?\(\s*"([a-z_]+)"/g),
