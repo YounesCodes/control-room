@@ -18,24 +18,51 @@ export const PanelLayoutContext = createContext<{
 
 // A parent can resize after its own React measurement. Watch ancestor layout
 // changes as well as the window when this WebView has no ResizeObserver.
+// Ancestor style/class mutations miss resizes caused by cascading React state
+// (window shrinks -> outer panel remeasures -> inner width style updates ->
+// split fraction updates -> canvas shrinks). Poll the element's own box every
+// frame so the final size always triggers one more measurement.
 export function observeLayoutFallback(element: HTMLElement, measure: () => void) {
   let frame: number | null = null;
+  let watchFrame: number | null = null;
+  let disposed = false;
+  const snapshot = () => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  };
+  let last = snapshot();
   const schedule = () => {
+    if (disposed) return;
     if (frame !== null) cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       frame = null;
+      if (disposed) return;
+      last = snapshot();
       measure();
     });
+  };
+  const watch = () => {
+    if (disposed) return;
+    const current = snapshot();
+    if (current.width !== last.width || current.height !== last.height) {
+      schedule();
+    }
+    watchFrame = requestAnimationFrame(watch);
   };
   const observer = new MutationObserver(schedule);
   for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
     observer.observe(ancestor, { attributes: true, attributeFilter: ["style", "class"] });
   }
   window.addEventListener("resize", schedule);
+  watchFrame = requestAnimationFrame(watch);
   return () => {
+    disposed = true;
     observer.disconnect();
     window.removeEventListener("resize", schedule);
     if (frame !== null) cancelAnimationFrame(frame);
+    if (watchFrame !== null) cancelAnimationFrame(watchFrame);
+    frame = null;
+    watchFrame = null;
   };
 }
 
