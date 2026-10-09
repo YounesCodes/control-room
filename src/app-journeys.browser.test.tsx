@@ -248,7 +248,7 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
-  it("opens documentation by keyboard in normal, focus and Settings modes at minimum width", async () => {
+  it("opens documentation in normal and Settings modes and hides it in terminal focus at minimum width", async () => {
     await page.viewport(960, 640);
     await mount();
     const docs = page.getByRole("button", { name: "Open documentation", exact: true });
@@ -262,25 +262,33 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
         await page.getByRole("button", { name: "Open Settings" }).click();
       }
-      await expect.element(docs).toBeVisible();
-      expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(1);
-      (docs.element() as HTMLButtonElement).focus();
-      await userEvent.keyboard("{Enter}");
-      await expect
-        .poll(
-          () =>
-            native.invoke.mock.calls.filter(([command]) => command === "open_documentation").length,
-        )
-        .toBe(["normal", "focus", "settings"].indexOf(mode) + 1);
-      await expect.element(docs).toBeEnabled();
-      const bounds = docs.element().getBoundingClientRect();
-      expect(bounds.left).toBeGreaterThanOrEqual(0);
-      expect(bounds.right).toBeLessThanOrEqual(960);
+      let documentationRight = 0;
+      if (mode === "focus") {
+        await expect.element(docs).not.toBeInTheDocument();
+        expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(0);
+      } else {
+        await expect.element(docs).toBeVisible();
+        expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(1);
+        (docs.element() as HTMLButtonElement).focus();
+        await userEvent.keyboard("{Enter}");
+        await expect
+          .poll(
+            () =>
+              native.invoke.mock.calls.filter(([command]) => command === "open_documentation")
+                .length,
+          )
+          .toBe(mode === "normal" ? 1 : 2);
+        await expect.element(docs).toBeEnabled();
+        const bounds = docs.element().getBoundingClientRect();
+        expect(bounds.left).toBeGreaterThanOrEqual(0);
+        expect(bounds.right).toBeLessThanOrEqual(960);
+        documentationRight = bounds.right;
+      }
       for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
         const control = page.getByRole("button", { name, exact: true });
         await expect.element(control).toBeVisible();
         const controlBounds = control.element().getBoundingClientRect();
-        expect(controlBounds.left).toBeGreaterThanOrEqual(bounds.right);
+        expect(controlBounds.left).toBeGreaterThanOrEqual(documentationRight);
         expect(controlBounds.right).toBeLessThanOrEqual(960);
         expect(controlBounds.top).toBeGreaterThanOrEqual(0);
         expect(controlBounds.bottom).toBeLessThanOrEqual(640);

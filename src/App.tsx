@@ -1961,7 +1961,6 @@ export function App() {
                     >
                       <Minimize2 size={15} />
                     </button>
-                    {renderDocumentationButton("session-strip-button")}
                     <span className="window-controls-divider" aria-hidden="true" />
                     <WindowControls />
                   </>
