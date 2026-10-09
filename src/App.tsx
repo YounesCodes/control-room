@@ -45,6 +45,8 @@ import {
 } from "lucide-react";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { HostMetrics } from "./components/HostMetrics";
+import { DEFAULT_HEADER_METRICS } from "./lib/header-metrics";
 import { UpdateIndicator } from "./components/UpdateIndicator";
 import { TerminalTargetMenu } from "./components/TerminalTargetMenu";
 import type { TerminalPaneHandle } from "./components/TerminalPane";
@@ -1504,6 +1506,27 @@ export function App() {
       }
     >
       <header className="app-bar" data-tauri-drag-region>
+        {!settingsOpen &&
+          settingsContract?.current.hostMetricsEnabled &&
+          activeWorkspace &&
+          (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
+            <HostMetrics
+              key={
+                isLocalWorkspace(activeWorkspace)
+                  ? "local"
+                  : `${activeWorkspace.connectionId}:${activeWorkspace.connectionSnapshot.updatedAt}`
+              }
+              target={isLocalWorkspace(activeWorkspace) ? "local" : activeWorkspace.connectionId}
+              name={
+                isLocalWorkspace(activeWorkspace)
+                  ? "Local machine"
+                  : activeWorkspace.connectionSnapshot.displayName
+              }
+              metrics={settingsContract.current.hostMetrics ?? DEFAULT_HEADER_METRICS}
+              seconds={settingsContract.current.hostMetricsIntervalSeconds ?? 5}
+              onSettings={() => setSettingsOpen(true)}
+            />
+          )}
         <div className="app-bar-actions">
           {!settingsOpen && (
             <>

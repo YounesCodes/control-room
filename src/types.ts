@@ -395,7 +395,24 @@ export interface HistoryInput {
   shell: string;
 }
 
+export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "uptime";
+
+export interface HeaderMetrics {
+  sampledAt: string;
+  cpuPercent: number | null;
+  memoryTotalKib: number | null;
+  memoryAvailableKib: number | null;
+  gpuPercent: number | null;
+  diskTotalKib: number | null;
+  diskFreeKib: number | null;
+  diskLabel: string | null;
+  uptimeSeconds: number | null;
+}
+
 export interface AppSettings {
+  hostMetricsEnabled?: boolean;
+  hostMetrics?: HeaderMetric[];
+  hostMetricsIntervalSeconds?: number;
   terminalFontFamily: string;
   terminalFontSize: number;
   terminalScrollback: number;
@@ -553,7 +570,7 @@ export interface RemoteWorkspace extends WorkspaceBase {
 }
 
 /// A Workspace on a local Windows shell. It is terminal-only: there is no
-/// Saved Connection, no host inspection, and no History.
+/// Saved Connection, no remote inspection pages, and no History. Optional header metrics read Windows usage.
 export interface LocalWorkspace extends WorkspaceBase {
   kind: "local";
   shell: LocalShellProfile;

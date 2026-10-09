@@ -60,3 +60,23 @@ describe("Settings drafts", () => {
     expect(settingsHaveChanges(legacy, { ...legacy, hiddenLocalShells: ["git-bash"] })).toBe(true);
   });
 });
+
+describe("header metric preferences", () => {
+  it("treats missing preferences as defaults and compares metric selections by value", () => {
+    expect(
+      settingsHaveChanges(settings, {
+        ...settings,
+        hostMetricsEnabled: false,
+        hostMetrics: ["cpu", "ram", "gpu", "disk", "uptime"],
+        hostMetricsIntervalSeconds: 5,
+      }),
+    ).toBe(false);
+    expect(settingsHaveChanges(settings, { ...settings, hostMetrics: ["cpu"] })).toBe(true);
+    expect(
+      settingsHaveChanges(
+        { ...settings, hostMetrics: ["cpu", "ram"] },
+        { ...settings, hostMetrics: ["ram", "cpu"] },
+      ),
+    ).toBe(false);
+  });
+});

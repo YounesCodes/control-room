@@ -98,6 +98,18 @@ async function respond(command: string, args: any = {}) {
     case "get_cached_capabilities":
     case "refresh_capabilities":
       return fixtures.capabilities(args.connectionId);
+    case "sample_header_metrics":
+      return {
+        sampledAt: new Date().toISOString(),
+        cpuPercent: args.connectionId === null ? 42 : 12,
+        memoryTotalKib: 4096,
+        memoryAvailableKib: 2048,
+        gpuPercent: null,
+        diskTotalKib: 8192,
+        diskFreeKib: 2048,
+        diskLabel: args.connectionId === null ? "C:" : "/",
+        uptimeSeconds: 90000,
+      };
     case "sample_host_resources":
       return fixtures.resources();
     case "start_session":
@@ -247,6 +259,67 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("keeps metrics off by default, saves customization, and follows remote and local workspaces", async () => {
+    await mount();
+    expect(native.invoke.mock.calls.some(([name]) => name === "sample_header_metrics")).toBe(false);
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
+    await page.getByRole("checkbox", { name: "GPU", exact: true }).click();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
+    await expect
+      .element(page.getByRole("button", { name: "Host metrics for Fixture Alpha" }))
+      .toBeVisible();
+    await expect.element(page.getByText("12%", { exact: true }).first()).toBeVisible();
+    expect(element.querySelector(".host-metrics-values")!.textContent).not.toContain("GPU");
+    await page.getByRole("button", { name: "Local terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Command Prompt", exact: true }).click();
+    await expect
+      .element(page.getByRole("button", { name: "Host metrics for Local machine" }))
+      .toBeVisible();
+    await expect.element(page.getByText("42%", { exact: true })).toBeVisible();
+    const call = native.invoke.mock.calls
+      .filter(([name]) => name === "sample_header_metrics")
+      .at(-1)!;
+    expect(call[1]).toEqual({ connectionId: null, metrics: ["cpu", "ram", "disk", "uptime"] });
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    expect(element.querySelector(".host-metrics")).toBeNull();
+    await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
+    expect(element.querySelector(".host-metrics")).toBeNull();
+  });
+  for (const width of [840, 1440]) {
+    it(`keeps header actions reachable and metrics accessible at ${width}px`, async () => {
+      currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+      await page.viewport(width, 700);
+      await mount();
+      await page.getByRole("button", { name: "Host metrics for Fixture Alpha" }).click();
+      await expect.element(page.getByText("This host did not report a reading")).toBeVisible();
+      const close = page.getByRole("button", { name: "Close host metrics" });
+      await expect.element(close).toHaveFocus();
+      await userEvent.keyboard("{Escape}");
+      await expect
+        .element(page.getByRole("button", { name: "Host metrics for Fixture Alpha" }))
+        .toHaveFocus();
+      const metrics = element.querySelector(".host-metrics")!.getBoundingClientRect();
+      const settings = element.querySelector(".app-bar-button")!.getBoundingClientRect();
+      expect(metrics.right).toBeLessThanOrEqual(settings.left);
+      expect(settings.right).toBeLessThanOrEqual(width);
+      expect(element.scrollWidth).toBeLessThanOrEqual(width);
+      const result = await axe.run(element.querySelector(".app-bar")!);
+      expect(result.violations).toEqual([]);
+      await page.screenshot({
+        element: element.querySelector(".app-bar")!,
+        path: `../test-results/host-metrics-${width}.png`,
+      });
+      if (width === 1440) {
+        await page.getByRole("button", { name: "Open Settings" }).click();
+        await page.screenshot({ path: "../test-results/host-metrics-settings.png" });
+      }
+    });
+  }
+
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {
     overrides.set("check_for_update", () => ({
       currentVersion: "0.8.2",

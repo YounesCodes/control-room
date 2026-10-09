@@ -27,7 +27,9 @@ export function formatKib(kib: number | null): string | null {
 // Used is total minus available, not total minus free. MemAvailable already
 // discounts page cache and reclaimable slab, so this does not report a healthy
 // host that is caching aggressively as being out of memory.
-export function memoryUsage(resources: HostResources | null): ResourceUsage | null {
+export function memoryUsage(
+  resources: Pick<HostResources, "memoryTotalKib" | "memoryAvailableKib"> | null,
+): ResourceUsage | null {
   if (!resources) return null;
   return usageFrom(resources.memoryTotalKib, resources.memoryAvailableKib);
 }

@@ -6,7 +6,7 @@ import type { HostResources } from "../types";
 /**
  * Samples host load while the Overview pane is open.
  *
- * This is the one place in Control Room that repeats a read on a timer, and it
+ * Overview repeats a read on a timer, and it
  * is deliberately scoped so it stays an on-demand read rather than monitoring:
  *
  * - it runs only while the pane is mounted and `live` is on, and the interval

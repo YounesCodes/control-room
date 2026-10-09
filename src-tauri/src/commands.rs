@@ -4,15 +4,16 @@ use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 use crate::{
     baselines::{self, BaselineCaptureRegistry, SectionReporter},
     database::{Database, normalize_optional, validate_connection_input},
-    history, local_shell,
+    header_metrics, history, local_shell,
     models::{
         AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
         BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
         DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
-        HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary, HostCapabilities,
-        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted, LocalShellCatalog,
-        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
-        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
+        HeaderMetric, HeaderMetrics, HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary,
+        HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted,
+        LocalShellCatalog, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
+        ScratchpadNote, ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted,
+        SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -281,6 +282,30 @@ pub fn refresh_capabilities(
     let capabilities = remote::discover_capabilities(&connection)?;
     database.save_capabilities(&capabilities)?;
     Ok(capabilities)
+}
+
+#[tauri::command(async)]
+pub fn sample_header_metrics(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    state: State<'_, header_metrics::HeaderMetricsState>,
+    connection_id: Option<String>,
+    metrics: Vec<HeaderMetric>,
+) -> Result<HeaderMetrics, String> {
+    if metrics.len() > 5 {
+        return Err("Too many header metrics".into());
+    }
+    let _guard = state
+        .0
+        .try_lock()
+        .ok_or("Previous header reading is still finishing")?;
+    match connection_id {
+        Some(id) => {
+            let _permit = limiter.acquire(&id)?;
+            header_metrics::collect_remote(&database.get_connection(&id)?, &metrics)
+        }
+        None => header_metrics::collect_local(&metrics),
+    }
 }
 
 /// Samples current load. Deliberately not saved anywhere: unlike capabilities,

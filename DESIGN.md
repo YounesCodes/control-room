@@ -39,9 +39,11 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Local Workspaces are terminal-only, so do not show remote
-inspection navigation for them. Keep connection and Workspace identity visible
+inspection navigation for them. Optional header metrics may read system usage
+for a local tab without adding inspection pages. Keep connection and Workspace identity visible
 where it helps navigation, but do not repeat the same identity in a second
-header or a separate status rail.
+header or a separate status rail. An enabled metrics strip may name the active
+target beside its readings.
 
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
@@ -196,6 +198,13 @@ its progress and errors, and preserve the current terminal font until the
 per-user Windows installation and settings save both succeed.
 
 ### Host data and updates
+
+Header metrics are opt-in and follow the active Workspace in normal and Focus Mode.
+Use compact labeled values with neutral styling, readable numbers, and a visible
+reading state. Keep Settings and native window controls reachable at narrow widths;
+scroll the metric row when needed. Host details must open with a keyboard or click
+and include capacity, the last reading time, and refresh errors. Pause header reads
+in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
 
 Present the fact the host returned, not a stronger conclusion. A missing value
 must look missing, not like zero. Keep unavailable, unsupported, skipped, and

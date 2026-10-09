@@ -2,6 +2,7 @@ mod baselines;
 mod commands;
 mod database;
 mod fonts;
+mod header_metrics;
 mod history;
 mod local_shell;
 mod models;
@@ -29,6 +30,7 @@ pub fn run() {
     #[cfg(feature = "desktop-e2e")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
     builder
+        .manage(header_metrics::HeaderMetricsState::default())
         .manage(SessionManager::default())
         .manage(fonts::FontState::default())
         .manage(updater::UpdaterState::default())
@@ -111,6 +113,7 @@ pub fn run() {
             commands::get_cached_capabilities,
             commands::refresh_capabilities,
             commands::sample_host_resources,
+            commands::sample_header_metrics,
             commands::list_services,
             commands::list_containers,
             commands::list_ports,

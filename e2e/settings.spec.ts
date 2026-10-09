@@ -12,6 +12,41 @@ async function enterFont(value: string) {
 }
 
 describe("Settings and native window", () => {
+  it("persists header metric choices and reads the local machine", async () => {
+    await $("aria/Open Settings").click();
+    await $(
+      "//label[input[@type='checkbox']][contains(.,'Show host metrics in header')]/input",
+    ).click();
+    await $("//label[input[@type='checkbox']][normalize-space(.)='GPU']/input").click();
+    await $("button=Save settings").click();
+    await $("aria/Close Settings").click();
+    await openLocal();
+    await expect($("aria/Host metrics for Local machine")).toBeDisplayed();
+    await browser.waitUntil(async () => (await $(".host-metrics-status").getText()) === "Live");
+    const native = await ipc<{
+      cpuPercent: number;
+      memoryTotalKib: number;
+      diskTotalKib: number;
+      uptimeSeconds: number;
+    }>("sample_header_metrics", { connectionId: null, metrics: ["cpu", "ram", "disk", "uptime"] });
+    expect(native.cpuPercent).toBeGreaterThanOrEqual(0);
+    expect(native.cpuPercent).toBeLessThanOrEqual(100);
+    expect(native.memoryTotalKib).toBeGreaterThan(0);
+    expect(native.diskTotalKib).toBeGreaterThan(0);
+    expect(native.uptimeSeconds).toBeGreaterThanOrEqual(0);
+    await restartApp();
+    await expect($("aria/Host metrics for Local machine")).toBeDisplayed();
+    expect((await savedSettings()).hostMetricsEnabled).toBe(true);
+    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "disk", "uptime"]);
+    await $("aria/Open Settings").click();
+    await $(
+      "//label[input[@type='checkbox']][contains(.,'Show host metrics in header')]/input",
+    ).click();
+    await $("button=Save settings").click();
+    await $("aria/Close Settings").click();
+    await expect($(".host-metrics")).not.toExist();
+  });
+
   it("saves terminal settings and restores them after a native app restart", async () => {
     expect((await savedSettings()).automaticUpdateChecks).toBe(false);
     await $("aria/Open Settings").click();
