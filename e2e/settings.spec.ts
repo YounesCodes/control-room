@@ -12,6 +12,20 @@ async function enterFont(value: string) {
 }
 
 describe("Settings and native window", () => {
+  it("handles an empty metric request without loading a host and rejects duplicate selections", async () => {
+    const sample = await ipc<{
+      sampledAt: string;
+      cpuPercent: number | null;
+      diskLabel: string | null;
+    }>("sample_header_metrics", { connectionId: "missing-host", metrics: [] });
+    expect(Number.isFinite(Date.parse(sample.sampledAt))).toBe(true);
+    expect(sample.cpuPercent).toBeNull();
+    expect(sample.diskLabel).toBeNull();
+    await expect(
+      ipc("sample_header_metrics", { connectionId: "missing-host", metrics: ["cpu", "cpu"] }),
+    ).rejects.toThrow(/unique/);
+  });
+
   it("persists header metric choices and reads the local machine", async () => {
     await $("aria/Open Settings").click();
     await $(

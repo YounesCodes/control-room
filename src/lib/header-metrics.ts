@@ -21,7 +21,7 @@ export function formatUptime(seconds: number | null | undefined): string {
   const days = Math.floor(hours / 24);
   if (days) return `${days}d ${hours % 24}h`;
   if (hours) return `${hours}h ${minutes % 60}m`;
-  return `${minutes}m`;
+  return minutes ? `${minutes}m` : `${Math.floor(seconds)}s`;
 }
 export function headerMetricValue(metric: HeaderMetric, sample: HeaderMetrics | null): string {
   switch (metric) {
@@ -32,7 +32,7 @@ export function headerMetricValue(metric: HeaderMetric, sample: HeaderMetrics | 
     case "ram":
       return formatPercent(memoryUsage(sample)?.percent);
     case "disk": {
-      if (!sample || !sample.diskTotalKib || sample.diskFreeKib === null) return "Unavailable";
+      if (!sample || !sample.diskTotalKib || sample.diskFreeKib == null) return "Unavailable";
       return formatPercent(
         ((sample.diskTotalKib - sample.diskFreeKib) / sample.diskTotalKib) * 100,
       );
@@ -53,4 +53,9 @@ export function headerMetricDetail(metric: HeaderMetric, sample: HeaderMetrics |
   }
   if (metric === "gpu") return "Busiest reported GPU engine or device";
   return metric === "cpu" ? "All processors combined" : "Time since this host started";
+}
+
+export function formatReadingTime(sampledAt: string): string {
+  const time = Date.parse(sampledAt);
+  return Number.isFinite(time) ? new Date(time).toLocaleTimeString() : "Unavailable";
 }

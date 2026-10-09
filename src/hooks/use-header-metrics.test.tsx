@@ -79,6 +79,26 @@ describe("header sampling lifecycle", () => {
     expect(mock.sampleHeaderMetrics).toHaveBeenLastCalledWith("host-b", ["cpu"]);
     expect(result.current.sample?.cpuPercent).toBe(15);
   });
+  it("treats a malformed sample time as stale and recovers with a valid time", async () => {
+    mock.sampleHeaderMetrics.mockResolvedValueOnce({ ...sample, sampledAt: "broken" });
+    const { result } = renderHook(() => useHeaderMetrics("local", ["cpu"], 5));
+    await tick();
+    expect(result.current.stale).toBe(true);
+    await tick(5000);
+    expect(result.current.stale).toBe(false);
+  });
+  it.each([0, -1, NaN, Infinity, 0.001, 31])(
+    "bounds invalid polling interval %s",
+    async (seconds) => {
+      renderHook(() => useHeaderMetrics("local", ["cpu"], seconds));
+      await tick();
+      expect(mock.sampleHeaderMetrics).toHaveBeenCalledTimes(1);
+      await tick(1999);
+      expect(mock.sampleHeaderMetrics).toHaveBeenCalledTimes(1);
+      await tick(3001);
+      expect(mock.sampleHeaderMetrics).toHaveBeenCalledTimes(2);
+    },
+  );
   it("marks a reading stale before a slow refresh finishes", async () => {
     const { result } = renderHook(() => useHeaderMetrics("host-a", ["cpu"], 5));
     await tick();

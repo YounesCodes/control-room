@@ -289,6 +289,77 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     expect(element.querySelector(".host-metrics")).toBeNull();
   });
+  it("starts local readings while the previous SSH target is still pending and ignores its late reply", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    let finish!: (value: unknown) => void;
+    const reading = {
+      sampledAt: new Date().toISOString(),
+      cpuPercent: 42,
+      memoryTotalKib: 4096,
+      memoryAvailableKib: 2048,
+      gpuPercent: null,
+      diskTotalKib: 8192,
+      diskFreeKib: 2048,
+      diskLabel: "C:",
+      uptimeSeconds: 59,
+    };
+    overrides.set("sample_header_metrics", ({ connectionId }) =>
+      connectionId === null
+        ? reading
+        : new Promise((resolve) => {
+            finish = resolve;
+          }),
+    );
+    await mount();
+    await expect.poll(() => typeof finish).toBe("function");
+    await page.getByRole("button", { name: "Local terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Command Prompt", exact: true }).click();
+    await expect.element(page.getByText("42%", { exact: true })).toBeVisible();
+    finish({ ...reading, cpuPercent: 99 });
+    await expect.element(page.getByText("42%", { exact: true })).toBeVisible();
+    expect(element.querySelector(".host-metrics-values")!.textContent).not.toContain("99%");
+  });
+  it("marks a malformed timestamp stale, hides Invalid Date, and recovers on manual refresh", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    let sampledAt = "broken";
+    overrides.set("sample_header_metrics", () => ({
+      sampledAt,
+      cpuPercent: 12,
+      memoryTotalKib: 4096,
+      memoryAvailableKib: 2048,
+      gpuPercent: null,
+      diskTotalKib: 8192,
+      diskFreeKib: 2048,
+      diskLabel: "/",
+      uptimeSeconds: 59,
+    }));
+    await mount();
+    await expect.element(page.getByText("Stale", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Host metrics for Fixture Alpha" }).click();
+    await expect.element(page.getByText(/Last reading time Unavailable/)).toBeVisible();
+    expect(element.querySelector(".host-metrics-panel")!.textContent).not.toContain("Invalid Date");
+    sampledAt = new Date().toISOString();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
+  });
+  it("adds a keyboard tab stop only while the metric row overflows", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    await mount();
+    const row = element.querySelector<HTMLDivElement>(".host-metrics-values")!;
+    await expect.poll(() => row.scrollWidth > row.clientWidth).toBe(false);
+    expect(row.getAttribute("tabindex")).toBeNull();
+    const strip = element.querySelector<HTMLElement>(".host-metrics")!;
+    strip.style.maxWidth = "340px";
+    await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
+    await page.getByRole("button", { name: "Host metrics for Fixture Alpha" }).click();
+    await userEvent.keyboard("{Escape}{Tab}{ArrowRight}");
+    await expect
+      .element(page.getByRole("group", { name: "Current host readings. Scroll for more metrics." }))
+      .toHaveFocus();
+    await expect.poll(() => row.scrollLeft).toBeGreaterThan(0);
+    strip.style.maxWidth = "";
+    await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
+  });
   for (const width of [840, 1440]) {
     it(`keeps header actions reachable and metrics accessible at ${width}px`, async () => {
       currentSettings = { ...currentSettings, hostMetricsEnabled: true };

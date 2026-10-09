@@ -1,7 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Gauge, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
-import { HEADER_METRIC_LABELS, headerMetricDetail, headerMetricValue } from "../lib/header-metrics";
+import {
+  HEADER_METRIC_LABELS,
+  formatReadingTime,
+  headerMetricDetail,
+  headerMetricValue,
+} from "../lib/header-metrics";
 import type { HeaderMetric } from "../types";
 
 export function HostMetrics({
@@ -23,6 +28,8 @@ export function HostMetrics({
   const trigger = useRef<HTMLButtonElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  const values = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
   const status = !reading.visible
     ? "Paused"
     : reading.error
@@ -34,6 +41,19 @@ export function HostMetrics({
         : reading.sample
           ? "Live"
           : "Reading";
+  useEffect(() => {
+    const element = values.current;
+    if (!element) return;
+    const measure = () => setOverflow(element.scrollWidth > element.clientWidth);
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [metrics, reading.sample, reading.error, status]);
   useEffect(() => {
     if (!open) return;
     close.current?.focus();
@@ -70,9 +90,12 @@ export function HostMetrics({
       </button>
       <div
         className="host-metrics-values"
-        tabIndex={0}
+        ref={values}
+        tabIndex={overflow ? 0 : undefined}
         role="group"
-        aria-label="Current host readings. Scroll for more metrics."
+        aria-label={
+          overflow ? "Current host readings. Scroll for more metrics." : "Current host readings"
+        }
       >
         {metrics.map((metric) => (
           <span className="host-metric" key={metric}>
@@ -110,7 +133,7 @@ export function HostMetrics({
           <p>
             {status}
             {reading.sample
-              ? ` · Last reading ${new Date(reading.sample.sampledAt).toLocaleTimeString()}`
+              ? ` · Last reading time ${formatReadingTime(reading.sample.sampledAt)}`
               : " · Waiting for a reading"}
           </p>
           <dl>

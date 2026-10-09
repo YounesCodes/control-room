@@ -284,28 +284,42 @@ pub fn refresh_capabilities(
     Ok(capabilities)
 }
 
-#[tauri::command(async)]
-pub fn sample_header_metrics(
-    database: State<'_, Database>,
-    limiter: State<'_, RemoteOperationLimiter>,
-    state: State<'_, header_metrics::HeaderMetricsState>,
+#[tauri::command]
+pub async fn sample_header_metrics(
+    app: AppHandle,
     connection_id: Option<String>,
     metrics: Vec<HeaderMetric>,
 ) -> Result<HeaderMetrics, String> {
-    if metrics.len() > 5 {
-        return Err("Too many header metrics".into());
+    if metrics.len() > 5
+        || metrics
+            .iter()
+            .enumerate()
+            .any(|(index, metric)| metrics[..index].contains(metric))
+    {
+        return Err("Header metrics must be unique, with at most five selections".into());
     }
-    let _guard = state
-        .0
-        .try_lock()
-        .ok_or("Previous header reading is still finishing")?;
-    match connection_id {
-        Some(id) => {
-            let _permit = limiter.acquire(&id)?;
-            header_metrics::collect_remote(&database.get_connection(&id)?, &metrics)
+    if metrics.is_empty() {
+        return Ok(header_metrics::empty_sample());
+    }
+    // SSH, limiter waits and native counter snapshots are blocking operations.
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<header_metrics::HeaderMetricsState>();
+        let _reading = state.begin(connection_id.as_deref())?;
+        match connection_id {
+            Some(id) => {
+                let limiter = app.state::<RemoteOperationLimiter>();
+                let _permit = limiter.acquire(&id)?;
+                header_metrics::collect_remote(
+                    &app.state::<Database>().get_connection(&id)?,
+                    &metrics,
+                )
+            }
+            None => header_metrics::collect_local(&metrics),
         }
-        None => header_metrics::collect_local(&metrics),
-    }
+    })
+    .await
+    .map_err(|error| format!("Host metrics worker failed: {error}"))?
 }
 
 /// Samples current load. Deliberately not saved anywhere: unlike capabilities,
@@ -893,6 +907,7 @@ mod tests {
             "list_local_shells",
             "start_local_session",
             "refresh_capabilities",
+            "sample_header_metrics",
             "list_services",
             "list_containers",
             "list_ports",
@@ -907,7 +922,8 @@ mod tests {
         ] {
             let declaration = format!("#[tauri::command(async)]\npub fn {command}");
             assert!(
-                source.contains(&declaration),
+                source.contains(&declaration)
+                    || source.contains(&format!("#[tauri::command]\npub async fn {command}")),
                 "{command} must stay asynchronous"
             );
         }

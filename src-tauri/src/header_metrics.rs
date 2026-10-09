@@ -7,13 +7,44 @@ use chrono::Utc;
 use parking_lot::Mutex;
 
 #[derive(Default)]
-pub struct HeaderMetricsState(pub Mutex<()>);
+pub struct HeaderMetricsState(Mutex<std::collections::HashSet<Option<String>>>);
+
+pub struct HeaderReadingPermit<'a> {
+    state: &'a HeaderMetricsState,
+    target: Option<String>,
+}
+impl HeaderMetricsState {
+    pub fn begin(&self, target: Option<&str>) -> Result<HeaderReadingPermit<'_>, String> {
+        let target = target.map(str::to_owned);
+        if !self.0.lock().insert(target.clone()) {
+            return Err("Previous reading for this host is still finishing".into());
+        }
+        Ok(HeaderReadingPermit {
+            state: self,
+            target,
+        })
+    }
+}
+impl Drop for HeaderReadingPermit<'_> {
+    fn drop(&mut self) {
+        self.state.0.lock().remove(&self.target);
+    }
+}
+
+pub fn empty_sample() -> HeaderMetrics {
+    HeaderMetrics {
+        sampled_at: Utc::now().to_rfc3339(),
+        ..HeaderMetrics::default()
+    }
+}
 
 fn remote_command(metrics: &[HeaderMetric]) -> String {
     let mut command = String::from("LC_ALL=C; export LC_ALL; ");
-    if metrics.contains(&HeaderMetric::Cpu) || metrics.contains(&HeaderMetric::Ram) {
+    if metrics.contains(&HeaderMetric::Cpu) {
         command.push_str(remote::resource_command());
         command.push_str("; ");
+    } else if metrics.contains(&HeaderMetric::Ram) {
+        command.push_str(r#"if test -r /proc/meminfo; then awk '/^MemTotal:|^MemAvailable:/{key=tolower(substr($1,1,length($1)-1)); printf "%s=%s\n", key, $2}' /proc/meminfo; fi; "#);
     }
     if metrics.contains(&HeaderMetric::Disk) {
         command.push_str(r#"df -Pk / 2>/dev/null | awk 'NR==2 {printf "disk_total=%s\ndisk_free=%s\n",$2,$4}'; "#);
@@ -37,10 +68,7 @@ pub fn collect_remote(
     metrics: &[HeaderMetric],
 ) -> Result<HeaderMetrics, String> {
     if metrics.is_empty() {
-        return Ok(HeaderMetrics {
-            sampled_at: Utc::now().to_rfc3339(),
-            ..HeaderMetrics::default()
-        });
+        return Ok(empty_sample());
     }
     let text =
         RemoteCommandExecutor::execute(connection, "header_metrics", &remote_command(metrics))?
@@ -58,10 +86,7 @@ fn percent(value: &str) -> Option<f64> {
 
 fn parse_remote(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
     let resources = remote::parse_host_resources(text);
-    let mut result = HeaderMetrics {
-        sampled_at: Utc::now().to_rfc3339(),
-        ..HeaderMetrics::default()
-    };
+    let mut result = empty_sample();
     if metrics.contains(&HeaderMetric::Cpu) {
         result.cpu_percent = resources.cpu_percent;
     }
@@ -73,6 +98,7 @@ fn parse_remote(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
         let Some((key, value)) = line.split_once('=') else {
             continue;
         };
+        let (key, value) = (key.trim(), value.trim());
         match key {
             "gpu" | "gpu_amd" if metrics.contains(&HeaderMetric::Gpu) => {
                 if let Some(value) = percent(value) {
@@ -95,10 +121,40 @@ fn parse_remote(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
             _ => (),
         }
     }
-    if result.disk_total_kib.is_some() {
-        result.disk_label = Some("/".into());
-    }
+    let capacity = (result.disk_total_kib, result.disk_free_kib);
+    set_disk_capacity(&mut result, capacity.0, capacity.1, "/");
     result
+}
+
+fn set_disk_capacity(
+    sample: &mut HeaderMetrics,
+    total: Option<u64>,
+    free: Option<u64>,
+    label: &str,
+) {
+    if let Some((total, free)) = total
+        .zip(free)
+        .filter(|(total, free)| *total > 0 && free <= total)
+    {
+        sample.disk_total_kib = Some(total);
+        sample.disk_free_kib = Some(free);
+        sample.disk_label = Some(label.into());
+    } else {
+        sample.disk_total_kib = None;
+        sample.disk_free_kib = None;
+        sample.disk_label = None;
+    }
+}
+
+#[cfg(any(windows, test))]
+fn system_drive(value: Option<&str>) -> String {
+    let drive = value.unwrap_or("").trim().trim_end_matches(['\\', '/']);
+    let bytes = drive.as_bytes();
+    if bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        drive.to_ascii_uppercase()
+    } else {
+        "C:".into()
+    }
 }
 
 // Windows reports system-wide CPU counters. Kernel includes idle time.
@@ -157,7 +213,7 @@ pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> 
         }
     }
     if metrics.contains(&HeaderMetric::Disk) {
-        let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        let drive = system_drive(std::env::var("SystemDrive").ok().as_deref());
         let path: Vec<u16> = format!("{drive}\\").encode_utf16().chain(Some(0)).collect();
         let mut total = 0;
         let mut free = 0;
@@ -167,9 +223,7 @@ pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> 
             GetDiskFreeSpaceExW(path.as_ptr(), std::ptr::null_mut(), &mut total, &mut free)
         } != 0
         {
-            sample.disk_total_kib = Some(total / 1024);
-            sample.disk_free_kib = Some(free / 1024);
-            sample.disk_label = Some(drive);
+            set_disk_capacity(&mut sample, Some(total / 1024), Some(free / 1024), &drive);
         }
     }
     if metrics.contains(&HeaderMetric::Uptime) {
@@ -308,6 +362,38 @@ pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String>
 mod tests {
     use super::*;
     #[test]
+    fn pending_host_read_does_not_block_other_targets_and_releases_on_drop() {
+        let state = HeaderMetricsState::default();
+        let pending = state.begin(Some("slow-ssh")).unwrap();
+        assert!(state.begin(Some("slow-ssh")).is_err());
+        let local = state.begin(None).unwrap();
+        let fast = state.begin(Some("fast-ssh")).unwrap();
+        let named_local = state.begin(Some("local")).unwrap();
+        assert!(state.begin(None).is_err());
+        drop(pending);
+        assert!(state.begin(Some("slow-ssh")).is_ok());
+        drop((local, fast, named_local));
+        assert!(state.0.lock().is_empty());
+    }
+
+    #[test]
+    fn system_drive_normalizes_root_and_rejects_malformed_values() {
+        for value in [
+            None,
+            Some(""),
+            Some("C"),
+            Some("\\"),
+            Some("C:folder"),
+            Some("12:"),
+        ] {
+            assert_eq!(system_drive(value), "C:");
+        }
+        for value in ["d:", "d:\\", " d:/ "] {
+            assert_eq!(system_drive(Some(value)), "D:");
+        }
+    }
+
+    #[test]
     fn selected_reads_only_and_driver_tool_is_bounded() {
         let command = remote_command(&[HeaderMetric::Uptime]);
         assert!(!command.contains("nvidia-smi"));
@@ -317,6 +403,10 @@ mod tests {
         assert!(command.contains("timeout -k 1 2 nvidia-smi"));
         assert!(command.contains("gpu_busy_percent"));
         assert!(!command.contains("sudo"));
+        let command = remote_command(&[HeaderMetric::Ram]);
+        assert!(command.contains("/proc/meminfo"));
+        assert!(!command.contains("/proc/stat"));
+        assert!(!command.contains("sleep"));
     }
     #[test]
     fn gpu_uses_busiest_valid_device_and_missing_is_not_zero() {
@@ -337,6 +427,37 @@ mod tests {
             None
         );
     }
+    #[test]
+    fn remote_disk_rejects_incomplete_or_impossible_capacity() {
+        for text in [
+            "disk_total=0\ndisk_free=0",
+            "disk_total=100\ndisk_free=101",
+            "disk_total=100",
+            "disk_free=50",
+            "disk_total=-1\ndisk_free=0",
+        ] {
+            let sample = parse_remote(text, &[HeaderMetric::Disk]);
+            assert_eq!(sample.disk_total_kib, None, "{text}");
+            assert_eq!(sample.disk_free_kib, None, "{text}");
+            assert_eq!(sample.disk_label, None, "{text}");
+        }
+        let sample = parse_remote("disk_total=100\ndisk_free=0", &[HeaderMetric::Disk]);
+        assert_eq!(sample.disk_free_kib, Some(0));
+        assert_eq!(sample.disk_label.as_deref(), Some("/"));
+    }
+
+    #[test]
+    fn remote_fields_accept_whitespace_consistently() {
+        let sample = parse_remote(
+            " disk_total = 100 \n disk_free = 40 \n uptime = 59 \n gpu = 12 ",
+            &[HeaderMetric::Disk, HeaderMetric::Uptime, HeaderMetric::Gpu],
+        );
+        assert_eq!(sample.disk_total_kib, Some(100));
+        assert_eq!(sample.disk_free_kib, Some(40));
+        assert_eq!(sample.uptime_seconds, Some(59));
+        assert_eq!(sample.gpu_percent, Some(12.0));
+    }
+
     #[test]
     fn gpu_sums_processes_on_one_engine_without_adding_independent_engines() {
         let readings = [

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatPercent,
   formatUptime,
+  formatReadingTime,
   headerMetricDetail,
   headerMetricValue,
 } from "./header-metrics";
@@ -30,8 +31,14 @@ describe("header metric values", () => {
     expect(headerMetricDetail("disk", sample)).toBe("/: 1.0 MiB of 2.0 MiB");
     expect(headerMetricValue("disk", { ...sample, diskTotalKib: 0 })).toBe("Unavailable");
   });
+  it("does not expose an invalid timestamp as a valid reading time", () => {
+    expect(formatReadingTime("broken")).toBe("Unavailable");
+    expect(formatReadingTime("2026-10-09T12:00:00Z")).not.toBe("Unavailable");
+  });
   it("compacts uptime without inventing a missing value", () => {
     expect(formatUptime(90000)).toBe("1d 1h");
+    expect(formatUptime(0)).toBe("0s");
+    expect(formatUptime(59)).toBe("59s");
     expect(formatUptime(60)).toBe("1m");
     expect(formatUptime(null)).toBe("Unavailable");
   });

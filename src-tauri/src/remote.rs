@@ -3972,6 +3972,7 @@ esac
         );
         assert!(header.memory_total_kib.is_some_and(|value| value > 0));
         assert!(header.disk_total_kib.is_some_and(|value| value > 0));
+        assert!(header.disk_free_kib.unwrap() <= header.disk_total_kib.unwrap());
         assert_eq!(header.disk_label.as_deref(), Some("/"));
         assert!(header.uptime_seconds.is_some());
         assert!(
@@ -3979,6 +3980,13 @@ esac
                 .gpu_percent
                 .is_none_or(|value| (0.0..=100.0).contains(&value))
         );
+
+        let ram_only =
+            crate::header_metrics::collect_remote(&connection, &[crate::models::HeaderMetric::Ram])
+                .unwrap();
+        assert!(ram_only.memory_total_kib.is_some_and(|value| value > 0));
+        assert!(ram_only.memory_available_kib.is_some());
+        assert_eq!(ram_only.cpu_percent, None);
 
         let services = list_services(&connection).unwrap();
         assert!(!services.is_empty());
