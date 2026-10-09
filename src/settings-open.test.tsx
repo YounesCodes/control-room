@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
+  openDocumentation: vi.fn(),
   listConnections: vi.fn(),
   settingsContract: vi.fn(),
   environment: vi.fn(),
@@ -69,6 +70,7 @@ describe("Opening Settings", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    api.openDocumentation.mockResolvedValue(undefined);
     api.listConnections.mockResolvedValue([]);
     api.settingsContract.mockResolvedValue({
       current: settings,
@@ -102,6 +104,48 @@ describe("Opening Settings", () => {
     api.checkForUpdate.mockResolvedValue(null);
     api.pendingUpdateNotice.mockResolvedValue(null);
     api.dismissUpdateNotice.mockResolvedValue(undefined);
+  });
+
+  it("prevents repeated browser launches while a request is pending", async () => {
+    let finish!: () => void;
+    api.openDocumentation.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+    const docs = (await screen.findByRole("button", {
+      name: "Open documentation",
+    })) as HTMLButtonElement;
+    await user.click(docs);
+    expect(docs.disabled).toBe(true);
+    await user.click(docs);
+    expect(api.openDocumentation).toHaveBeenCalledTimes(1);
+    finish();
+    await waitFor(() => expect(docs.disabled).toBe(false));
+  });
+
+  it("opens documentation and keeps unsaved Settings changes when browser launch fails", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const docs = await screen.findByRole("button", { name: "Open documentation" });
+    await user.click(docs);
+    expect(api.openDocumentation).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Open Settings" }));
+    await user.click(await screen.findByLabelText("Offer Git Bash"));
+    api.openDocumentation.mockRejectedValueOnce("Default browser unavailable");
+    await user.click(screen.getByRole("button", { name: "Open documentation" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Default browser unavailable");
+    expect((screen.getByLabelText("Offer Git Bash") as HTMLInputElement).checked).toBe(false);
+    expect(
+      (screen.getByRole("button", { name: "Save settings" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Open documentation" }));
+    expect(api.openDocumentation).toHaveBeenCalledTimes(3);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(api.saveSettings).not.toHaveBeenCalled();
   });
 
   it("shows the pane with its local terminal toggles", async () => {

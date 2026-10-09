@@ -84,7 +84,7 @@ describe("application hierarchy", () => {
     const handlers = tauriSource
       .split("tauri::generate_handler![")[1]
       ?.split("])")[0]
-      .matchAll(/(?:commands|updater|fonts)::([a-z_]+)/g);
+      .matchAll(/(?:commands|updater|fonts|documentation)::([a-z_]+)/g);
     const registered = new Set([...(handlers ?? [])].map((match) => match[1]));
     expect(called.length).toBeGreaterThan(40);
     for (const command of called) {

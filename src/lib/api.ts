@@ -75,6 +75,7 @@ function invokeRemoteInspection<T>(command: string, args: Record<string, unknown
 }
 
 export const api = {
+  openDocumentation: () => invoke<void>("open_documentation"),
   environment: () => invoke<EnvironmentInfo>("get_environment_info"),
   listConnections: () => invoke<SavedConnection[]>("list_connections"),
   createConnection: (input: SavedConnectionInput) =>
