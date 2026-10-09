@@ -384,6 +384,13 @@ code,
   font-size: 12px;
   color: var(--text-muted);
 }
+.host-metrics-identity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
 .host-metrics-target {
   display: flex;
   align-items: center;
@@ -405,12 +412,13 @@ code,
   background: var(--fill-hover);
 }
 .host-metrics-values {
+  border-left: 1px solid var(--border-subtle);
   display: flex;
   gap: 16px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
-  padding: 6px 0;
+  padding: 6px 0 6px 12px;
 }
 .host-metric {
   display: flex;
@@ -425,11 +433,30 @@ code,
   min-width: 3ch;
 }
 .host-metrics-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
   flex-shrink: 0;
 }
-.host-metrics-status[data-stale="true"] {
-  color: var(--text-strong);
+.host-metrics-status[data-state="live"] {
+  color: var(--success);
+}
+.host-metrics-status[data-state="live"] svg {
+  width: 6px;
+  height: 6px;
+  fill: currentColor;
+}
+.host-metrics-status[data-state="stale"] {
+  color: var(--warning);
+}
+.host-metrics-status[data-state="unavailable"] {
+  color: var(--failure);
 }
 .host-metrics-panel {
   position: absolute;
@@ -975,7 +1002,7 @@ code,
   display: grid;
   min-width: 0;
   flex: 1;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) 8px;
   align-items: center;
   gap: 5px 10px;
   border-radius: var(--radius-sm);
@@ -1314,8 +1341,7 @@ code,
   color: var(--warning);
 }
 
-/* The terminal mark stands in for the host OS mark on a local tab, so it keeps
-   the same box the presence badge is positioned against. */
+/* Local shell and host OS marks share a separate identity slot. */
 .local-shell-mark {
   flex: none;
   color: var(--text-muted);
@@ -1654,24 +1680,27 @@ code,
   color: var(--text-strong);
 }
 
-/* Session presence badge overlaid on the host OS mark. The ring color tracks
-   the current row/tab background so the badge reads as cut out of the icon. */
-.os-badge {
-  position: relative;
+/* Identity marks and trailing session indicators occupy separate slots. */
+.target-mark {
   display: inline-grid;
   flex: none;
   place-items: center;
 }
 
+.host-session-status {
+  display: inline-flex;
+  width: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
 .presence {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
+  display: inline-block;
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--text-faint);
-  box-shadow: 0 0 0 2px var(--badge-ring, var(--sidebar-bg));
 }
 
 .presence-connected {
@@ -1689,31 +1718,6 @@ code,
 
 .presence-disconnected {
   background: #6a6a6a;
-}
-
-.host-row {
-  --badge-ring: var(--sidebar-bg);
-}
-
-.host-row:hover,
-.host-row.menu-open {
-  --badge-ring: var(--fill-hover);
-}
-
-.host-row.active {
-  --badge-ring: var(--fill-active);
-}
-
-.session-tab-wrap {
-  --badge-ring: var(--surface-chrome);
-}
-
-.session-tab-wrap:hover {
-  --badge-ring: var(--fill-hover);
-}
-
-.session-tab-wrap.active {
-  --badge-ring: var(--surface-raised);
 }
 
 .session-tab-close,
@@ -2937,6 +2941,10 @@ dd {
   overflow: hidden;
 }
 
+.overview-counts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .overview-stat {
   display: flex;
   min-width: 0;
@@ -2969,77 +2977,6 @@ dd {
 .overview-stat-hint {
   color: var(--text-faint);
   font-size: 11px;
-}
-
-/* ==========================================================================
-   Live load meters
-   ========================================================================== */
-
-/* .overview-stats carries only a bottom margin, so without one here the meter
-   tiles and the facts strip below them meet border to border. */
-.overview-live {
-  margin-top: 0;
-  margin-bottom: 24px;
-}
-
-.overview-live-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.overview-live-note {
-  margin: 2px 0 0;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.resource-meters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.resource-meter {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  padding: 14px 16px 12px;
-}
-
-.resource-meter-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-/* The chart carries magnitude through length, so it stays neutral. A status
-   hue here would imply a verdict the app has no basis to give. */
-.resource-sparkline {
-  display: block;
-  width: 100%;
-  height: 40px;
-}
-
-.resource-sparkline-area {
-  fill: var(--fill-active);
-  stroke: none;
-}
-
-.resource-sparkline-line {
-  fill: none;
-  stroke: var(--text-muted);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .overview-section {
@@ -5947,9 +5884,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 .detail-panel h2,
 .detail-panel header p,
 .page-heading p,
-.overview-live-note,
-.capability-value,
-.resource-meter-detail {
+.capability-value {
   overflow-wrap: anywhere;
 }
 
@@ -5959,13 +5894,11 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .page-heading > div,
-.resource-meter-head > *,
 .docker-list-controls .search-field {
   min-width: 0;
 }
 
-.page-heading > button,
-.overview-live-heading > button {
+.page-heading > button {
   flex-shrink: 0;
 }
 
@@ -6034,10 +5967,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .overview-stat + .overview-stat {
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
-  }
-
-  .resource-meters {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .capability-row {

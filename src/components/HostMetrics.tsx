@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Gauge, X } from "lucide-react";
+import { Circle, CircleAlert, CircleDashed, Clock3, Gauge, Pause, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
 import {
   HEADER_METRIC_LABELS,
@@ -41,6 +41,20 @@ export function HostMetrics({
         : reading.sample
           ? "Live"
           : "Reading";
+  const StatusIcon = {
+    Live: Circle,
+    Reading: CircleDashed,
+    Stale: Clock3,
+    Paused: Pause,
+    Unavailable: CircleAlert,
+  }[status];
+  const statusDescription = {
+    Live: "Automatic refresh is active. The latest host reading is current.",
+    Reading: "Waiting for the first host reading.",
+    Stale: "The last host reading is out of date. Open host details to refresh or check errors.",
+    Paused: "Automatic refresh is paused while the window is hidden.",
+    Unavailable: "Host metrics could not be read. Open host details to check errors and retry.",
+  }[status];
   useEffect(() => {
     const element = values.current;
     if (!element) return;
@@ -76,18 +90,30 @@ export function HostMetrics({
   }, [open]);
   return (
     <div className="host-metrics" ref={container}>
-      <button
-        type="button"
-        className="host-metrics-target"
-        ref={trigger}
-        onClick={() => setOpen((value) => !value)}
-        aria-label={`Host metrics for ${name}`}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-      >
-        <Gauge size={14} aria-hidden="true" />
-        <span>{name}</span>
-      </button>
+      <div className="host-metrics-identity">
+        <button
+          type="button"
+          className="host-metrics-target"
+          ref={trigger}
+          onClick={() => setOpen((value) => !value)}
+          aria-label={`Host metrics for ${name}`}
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+        >
+          <Gauge size={14} aria-hidden="true" />
+          <span>{name}</span>
+        </button>
+        <span
+          className="host-metrics-status"
+          data-state={status.toLowerCase()}
+          role="status"
+          aria-label={statusDescription}
+          title={statusDescription}
+        >
+          <StatusIcon size={12} aria-hidden="true" />
+          {status}
+        </span>
+      </div>
       <div
         className="host-metrics-values"
         ref={values}
@@ -110,9 +136,6 @@ export function HostMetrics({
           </span>
         ))}
       </div>
-      <span className="host-metrics-status" data-stale={status !== "Live"}>
-        {status}
-      </span>
       {open && (
         <section className="host-metrics-panel" id={panelId} aria-label={`Readings for ${name}`}>
           <header>

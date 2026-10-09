@@ -152,8 +152,9 @@ for other distributions. A generic mark does not mean the OS was undetected;
 its accessible label names the detected distribution when available.
 
 Use host marks and session presence to help users find a connection or
-Workspace. Show session state on its tab with a compact presence cue and an
-accessible label. Keep the terminal pane free of duplicate status rows. Local
+Workspace. Place the session indicator after the host or tab label in its own
+slot, with an accessible label. Keep it separate from OS and shell marks so it
+does not obscure their identity. Keep the terminal pane free of duplicate status rows. Local
 shells use local terms such as running, stopped, and restarted. Remote sessions
 use connected, disconnected, and reconnected.
 
@@ -176,6 +177,10 @@ stream.
 Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut
 list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
+
+Keep Documentation in the titlebar beside Settings. It opens the public docs in
+the default browser and remains available in Settings. Hide it during terminal
+Focus Mode to keep the terminal controls compact.
 
 Settings fills the window below a draggable titlebar with native window controls.
 Hide Connections and Workspace tabs while Settings is open, and restore the
@@ -201,7 +206,10 @@ per-user Windows installation and settings save both succeed.
 
 Header metrics are opt-in and follow the active Workspace in normal and Focus Mode.
 Use compact labeled values with neutral styling, readable numbers, and a visible
-reading state. Keep Settings and native window controls reachable at narrow widths;
+reading state. Group an outlined status badge with the host name, separated from
+the numeric readings, so freshness cannot be mistaken for part of uptime. Use green
+for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
+Settings and native window controls reachable at narrow widths;
 scroll the metric row when needed. Host details must open with a keyboard or click
 and include capacity, the last reading time, and refresh errors. Pause header reads
 in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
@@ -211,9 +219,9 @@ must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Keep live Overview meters neutral; their magnitude alone is not a health
-judgment. Show when the latest reading arrived and distinguish an initial read
-from a failed refresh. A live baseline comparison should be visibly identified
+Keep resource readings in the optional host header. Overview presents host identity,
+service and container counts, and runtime capabilities without duplicate readings
+or resource polling. A live baseline comparison should be visibly identified
 as live and unsaved.
 
 Control Room's own updater is quiet while the app is current. When an update is

@@ -211,6 +211,7 @@ async function respond(command: string, args: any = {}) {
         fixtures.baseline("live", "Live state"),
         true,
       );
+    case "open_documentation":
     case "export_text_file":
       return;
     default:
@@ -360,6 +361,27 @@ describe("complete app journeys with typed IPC fixtures", () => {
     strip.style.maxWidth = "";
     await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
   });
+  it("keeps session status separate from identity marks in host rows and workspace tabs", async () => {
+    await mount();
+    const host = element.querySelector<HTMLElement>(".host-row.active")!;
+    const tab = element.querySelector<HTMLElement>(".session-tab-wrap.active")!;
+    await expect.poll(() => !!host.querySelector(".presence-connected")).toBe(true);
+    for (const item of [host, tab]) {
+      const mark = item.querySelector<HTMLElement>(".target-mark")!;
+      const presence = item.querySelector<HTMLElement>(".presence-connected")!;
+      expect(mark.contains(presence)).toBe(false);
+      expect(presence.getBoundingClientRect().left).toBeGreaterThan(
+        mark.getBoundingClientRect().right,
+      );
+    }
+    expect(host.querySelector(".host-session-status")?.getAttribute("title")).toBe(
+      "Terminal connected",
+    );
+    await page.screenshot({ element: host, path: "../test-results/host-status-placement.png" });
+    await page.screenshot({ element: tab, path: "../test-results/tab-status-placement.png" });
+    const result = await axe.run(element.querySelector(".sidebar") ?? element);
+    expect(result.violations).toEqual([]);
+  });
   for (const width of [840, 1440]) {
     it(`keeps header actions reachable and metrics accessible at ${width}px`, async () => {
       currentSettings = { ...currentSettings, hostMetricsEnabled: true };
@@ -373,9 +395,21 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect
         .element(page.getByRole("button", { name: "Host metrics for Fixture Alpha" }))
         .toHaveFocus();
+      const badge = element.querySelector(".host-metrics-status")!;
+      expect(badge.parentElement).toHaveClass("host-metrics-identity");
+      expect(badge.getAttribute("aria-label")).toContain("latest host reading is current");
+      expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(
+        element.querySelector(".host-metrics-values")!.getBoundingClientRect().left,
+      );
       const metrics = element.querySelector(".host-metrics")!.getBoundingClientRect();
-      const settings = element.querySelector(".app-bar-button")!.getBoundingClientRect();
-      expect(metrics.right).toBeLessThanOrEqual(settings.left);
+      const settings = element
+        .querySelector('[aria-label="Open Settings"]')!
+        .getBoundingClientRect();
+      const docs = element
+        .querySelector('[aria-label="Open documentation"]')!
+        .getBoundingClientRect();
+      expect(metrics.right).toBeLessThanOrEqual(docs.left);
+      expect(docs.right).toBeLessThanOrEqual(settings.left);
       expect(settings.right).toBeLessThanOrEqual(width);
       expect(element.scrollWidth).toBeLessThanOrEqual(width);
       const result = await axe.run(element.querySelector(".app-bar")!);
@@ -390,6 +424,59 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }
     });
   }
+  it("opens documentation in normal and Settings modes and hides it in terminal focus at minimum width", async () => {
+    await page.viewport(960, 640);
+    await mount();
+    const docs = page.getByRole("button", { name: "Open documentation", exact: true });
+    await expect.element(docs).toHaveAttribute("title", "Documentation (opens in your browser)");
+    const settingsButton = page.getByRole("button", { name: "Open Settings" }).element();
+    expect(docs.element().nextElementSibling).toBe(settingsButton);
+    for (const mode of ["normal", "focus", "settings"]) {
+      if (mode === "focus")
+        await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      if (mode === "settings") {
+        await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+        await page.getByRole("button", { name: "Open Settings" }).click();
+      }
+      let documentationRight = 0;
+      if (mode === "focus") {
+        await expect.element(docs).not.toBeInTheDocument();
+        expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(0);
+      } else {
+        await expect.element(docs).toBeVisible();
+        expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(1);
+        (docs.element() as HTMLButtonElement).focus();
+        await userEvent.keyboard("{Enter}");
+        await expect
+          .poll(
+            () =>
+              native.invoke.mock.calls.filter(([command]) => command === "open_documentation")
+                .length,
+          )
+          .toBe(mode === "normal" ? 1 : 2);
+        await expect.element(docs).toBeEnabled();
+        const bounds = docs.element().getBoundingClientRect();
+        expect(bounds.left).toBeGreaterThanOrEqual(0);
+        expect(bounds.right).toBeLessThanOrEqual(960);
+        documentationRight = bounds.right;
+      }
+      for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
+        const control = page.getByRole("button", { name, exact: true });
+        await expect.element(control).toBeVisible();
+        const controlBounds = control.element().getBoundingClientRect();
+        expect(controlBounds.left).toBeGreaterThanOrEqual(documentationRight);
+        expect(controlBounds.right).toBeLessThanOrEqual(960);
+        expect(controlBounds.top).toBeGreaterThanOrEqual(0);
+        expect(controlBounds.bottom).toBeLessThanOrEqual(640);
+      }
+      const toolbar = mode === "focus" ? ".session-tab-actions" : ".app-bar";
+      const result = await axe.run(element.querySelector(toolbar)!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(result.violations.map(({ id }) => id)).toEqual([]);
+    }
+    await page.screenshot({ path: "../test-results/documentation-settings.png" });
+  });
 
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {
     overrides.set("check_for_update", () => ({
@@ -650,6 +737,33 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Boot");
     await expect.element(page.getByText(/permission denied/)).toBeVisible();
   });
+  it("keeps Overview focused on host facts without resource polling", async () => {
+    await mount();
+    await navigate("Overview");
+    await expect
+      .element(page.getByRole("heading", { name: "Overview", exact: true }))
+      .toBeVisible();
+    const overview = document.querySelector(".overview-page")!;
+    expect(overview.textContent).toContain("Runtime and capabilities");
+    for (const label of ["Live load", "Uptime", "Memory"])
+      expect(overview.textContent).not.toContain(label);
+    expect(
+      native.invoke.mock.calls.filter(([command]) => command === "sample_host_resources"),
+    ).toHaveLength(0);
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await vi.waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === "refresh_capabilities")).toBe(
+        true,
+      ),
+    );
+    expect(
+      native.invoke.mock.calls.filter(([command]) => command === "sample_host_resources"),
+    ).toHaveLength(0);
+    expect((await axe.run(overview)).violations).toEqual([]);
+    await page.screenshot({ element: overview, path: "../test-results/overview-without-load.png" });
+    await page.screenshot({ path: "../test-results/overview-full.png" });
+  });
+
   it("navigates every remote page through the real app and keeps the terminal Workspace", async () => {
     await mount();
     for (const [view, heading] of [

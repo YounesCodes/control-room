@@ -432,9 +432,7 @@ describe("resizable connection panels in Chromium", () => {
     await divider.click();
     await userEvent.keyboard("{Home}");
     await expect.element(divider).toHaveAttribute("aria-valuenow", "360");
-    assertNoHorizontalOverflow(
-      ".overview-page, .definition-grid, .resource-meter, .capability-row",
-    );
+    assertNoHorizontalOverflow(".overview-page, .definition-grid, .capability-row");
     const rows = document.querySelectorAll(".definition-grid > div");
     expect(rows[1].getBoundingClientRect().top).toBeGreaterThan(
       rows[0].getBoundingClientRect().bottom - 1,
