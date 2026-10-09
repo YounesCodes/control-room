@@ -24,6 +24,7 @@ import {
   FolderCog,
   Gauge,
   History,
+  CircleHelp,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -187,6 +188,9 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [openingDocumentation, setOpeningDocumentation] = useState(false);
+  const openingDocumentationRef = useRef(false);
+  const [documentationError, setDocumentationError] = useState<string | null>(null);
   const [hostSearch, setHostSearch] = useState("");
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [connectionGroupsOpen, setConnectionGroupsOpen] = useState(false);
@@ -1483,6 +1487,39 @@ export function App() {
     );
   }
 
+  async function openDocumentation() {
+    if (openingDocumentationRef.current) return;
+    openingDocumentationRef.current = true;
+    setOpeningDocumentation(true);
+    setDocumentationError(null);
+    try {
+      await api.openDocumentation();
+    } catch (error) {
+      setDocumentationError(`Could not open documentation: ${errorMessage(error)}`);
+    } finally {
+      openingDocumentationRef.current = false;
+      setOpeningDocumentation(false);
+    }
+  }
+
+  function renderDocumentationButton(className: string) {
+    return (
+      <button
+        className={className}
+        type="button"
+        onClick={() => void openDocumentation()}
+        disabled={openingDocumentation}
+        aria-label="Open documentation"
+        aria-busy={openingDocumentation}
+        title={
+          openingDocumentation ? "Opening documentation…" : "Documentation (opens in your browser)"
+        }
+      >
+        <CircleHelp size={18} />
+      </button>
+    );
+  }
+
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
   const settings = settingsContract.current;
@@ -1506,22 +1543,23 @@ export function App() {
       <header className="app-bar" data-tauri-drag-region>
         <div className="app-bar-actions">
           {!settingsOpen && (
-            <>
-              <UpdateIndicator
-                state={updater.state}
-                onDownload={() => void updater.download()}
-                onRestart={requestUpdateInstall}
-              />
-              <button
-                className="app-bar-button"
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Open Settings"
-                title="Settings"
-              >
-                <Settings size={18} />
-              </button>
-            </>
+            <UpdateIndicator
+              state={updater.state}
+              onDownload={() => void updater.download()}
+              onRestart={requestUpdateInstall}
+            />
+          )}
+          {(!terminalFocusMode || settingsOpen) && renderDocumentationButton("app-bar-button")}
+          {!settingsOpen && (
+            <button
+              className="app-bar-button"
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open Settings"
+              title="Settings"
+            >
+              <Settings size={18} />
+            </button>
           )}
           <span className="window-controls-divider" aria-hidden="true" />
           <WindowControls />
@@ -1940,6 +1978,19 @@ export function App() {
               </div>
             )}
           </nav>
+        )}
+
+        {documentationError && (
+          <div className="inline-error app-action-error" role="alert">
+            <span>{documentationError}</span>
+            <button
+              type="button"
+              onClick={() => setDocumentationError(null)}
+              aria-label="Dismiss documentation error"
+            >
+              <X size={14} />
+            </button>
+          </div>
         )}
 
         {actionError && (

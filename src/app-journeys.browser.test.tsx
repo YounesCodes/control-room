@@ -199,6 +199,7 @@ async function respond(command: string, args: any = {}) {
         fixtures.baseline("live", "Live state"),
         true,
       );
+    case "open_documentation":
     case "export_text_file":
       return;
     default:
@@ -247,6 +248,60 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("opens documentation in normal and Settings modes and hides it in terminal focus at minimum width", async () => {
+    await page.viewport(960, 640);
+    await mount();
+    const docs = page.getByRole("button", { name: "Open documentation", exact: true });
+    await expect.element(docs).toHaveAttribute("title", "Documentation (opens in your browser)");
+    const settingsButton = page.getByRole("button", { name: "Open Settings" }).element();
+    expect(docs.element().nextElementSibling).toBe(settingsButton);
+    for (const mode of ["normal", "focus", "settings"]) {
+      if (mode === "focus")
+        await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      if (mode === "settings") {
+        await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+        await page.getByRole("button", { name: "Open Settings" }).click();
+      }
+      let documentationRight = 0;
+      if (mode === "focus") {
+        await expect.element(docs).not.toBeInTheDocument();
+        expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(0);
+      } else {
+        await expect.element(docs).toBeVisible();
+        expect(element.querySelectorAll('[aria-label="Open documentation"]')).toHaveLength(1);
+        (docs.element() as HTMLButtonElement).focus();
+        await userEvent.keyboard("{Enter}");
+        await expect
+          .poll(
+            () =>
+              native.invoke.mock.calls.filter(([command]) => command === "open_documentation")
+                .length,
+          )
+          .toBe(mode === "normal" ? 1 : 2);
+        await expect.element(docs).toBeEnabled();
+        const bounds = docs.element().getBoundingClientRect();
+        expect(bounds.left).toBeGreaterThanOrEqual(0);
+        expect(bounds.right).toBeLessThanOrEqual(960);
+        documentationRight = bounds.right;
+      }
+      for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
+        const control = page.getByRole("button", { name, exact: true });
+        await expect.element(control).toBeVisible();
+        const controlBounds = control.element().getBoundingClientRect();
+        expect(controlBounds.left).toBeGreaterThanOrEqual(documentationRight);
+        expect(controlBounds.right).toBeLessThanOrEqual(960);
+        expect(controlBounds.top).toBeGreaterThanOrEqual(0);
+        expect(controlBounds.bottom).toBeLessThanOrEqual(640);
+      }
+      const toolbar = mode === "focus" ? ".session-tab-actions" : ".app-bar";
+      const result = await axe.run(element.querySelector(toolbar)!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(result.violations.map(({ id }) => id)).toEqual([]);
+    }
+    await page.screenshot({ path: "../test-results/documentation-settings.png" });
+  });
+
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {
     overrides.set("check_for_update", () => ({
       currentVersion: "0.8.2",

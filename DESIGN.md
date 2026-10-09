@@ -175,6 +175,10 @@ Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut
 list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 
+Keep Documentation in the titlebar beside Settings. It opens the public docs in
+the default browser and remains available in Settings. Hide it during terminal
+Focus Mode to keep the terminal controls compact.
+
 Settings fills the window below a draggable titlebar with native window controls.
 Hide Connections and Workspace tabs while Settings is open, and restore the
 existing workspace and focus mode when it closes. Use the available page width

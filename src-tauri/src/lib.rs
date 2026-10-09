@@ -1,6 +1,7 @@
 mod baselines;
 mod commands;
 mod database;
+mod documentation;
 mod fonts;
 mod history;
 mod local_shell;
@@ -82,6 +83,7 @@ pub fn run() {
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
             commands::get_environment_info,
+            documentation::open_documentation,
             fonts::list_catalog_fonts,
             fonts::preview_catalog_font,
             fonts::install_catalog_font,
