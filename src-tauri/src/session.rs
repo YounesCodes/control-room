@@ -1660,4 +1660,128 @@ mod tests {
         assert!(status.success());
         assert!(String::from_utf8_lossy(&output).contains("CONTROL_ROOM_SSH_OK"));
     }
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "requires Git Bash and CONTROL_ROOM_TEST_OPENCODE_EXE"]
+    fn git_bash_survives_opencode_ctrl_c_exit() {
+        assert_git_bash_survives_opencode_exit(true);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "requires Git Bash and CONTROL_ROOM_TEST_OPENCODE_EXE"]
+    fn git_bash_survives_opencode_slash_exit() {
+        assert_git_bash_survives_opencode_exit(false);
+    }
+
+    #[cfg(windows)]
+    fn assert_git_bash_survives_opencode_exit(ctrl_c: bool) {
+        let executable = std::env::var("CONTROL_ROOM_TEST_OPENCODE_EXE")
+            .expect("Set CONTROL_ROOM_TEST_OPENCODE_EXE to the installed OpenCode executable");
+        assert!(std::path::Path::new(&executable).is_file());
+        let executable = executable.replace('\\', "/").replace('\'', "'\\''");
+        let shell = crate::local_shell::resolve_installed("git-bash").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let mut command = crate::local_shell::command_for(&shell);
+        command.cwd(directory.path());
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 30,
+                cols: 120,
+                ..PtySize::default()
+            })
+            .unwrap();
+        let mut child = pair.slave.spawn_command(command).unwrap();
+        drop(pair.slave);
+        let mut killer = child.clone_killer();
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let mut writer = pair.master.take_writer().unwrap();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buffer = [0; 4096];
+            loop {
+                let result = reader
+                    .read(&mut buffer)
+                    .map(|count| buffer[..count].to_vec());
+                let done = result.as_ref().map_or(true, Vec::is_empty);
+                if sender.send(result).is_err() || done {
+                    break;
+                }
+            }
+        });
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let collect = |writer: &mut dyn Write, duration: Duration| {
+                let deadline = Instant::now() + duration;
+                let mut bytes = Vec::new();
+                let mut answered_queries = 0;
+                while Instant::now() < deadline {
+                    if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(50)) {
+                        let chunk = chunk.expect("PTY output read failed");
+                        assert!(!chunk.is_empty(), "PTY output closed");
+                        bytes.extend(chunk);
+                        let queries = bytes.windows(4).filter(|part| *part == b"\x1b[6n").count();
+                        while answered_queries < queries {
+                            writer.write_all(b"\x1b[1;1R").unwrap();
+                            answered_queries += 1;
+                        }
+                    }
+                }
+                bytes
+            };
+            collect(&mut *writer, Duration::from_secs(2));
+            writer
+                .write_all(b"PS1='CONTROL_ROOM_PROMPT> '; PROMPT_COMMAND=; printf 'BEFORE_%s\\n' OPENCODE\r")
+                .unwrap();
+            let before = collect(&mut *writer, Duration::from_secs(5));
+            assert!(
+                String::from_utf8_lossy(&before).contains("BEFORE_OPENCODE"),
+                "Git Bash did not answer the initial input"
+            );
+            let launch = format!("'{executable}'\r");
+            writer.write_all(launch.as_bytes()).unwrap();
+            let opened = collect(&mut *writer, Duration::from_secs(8));
+            assert!(
+                opened.windows(6).any(|part| part == b"\x1b[?25l"),
+                "OpenCode did not render its interface"
+            );
+            assert!(
+                !String::from_utf8_lossy(&opened).contains("CONTROL_ROOM_PROMPT> "),
+                "OpenCode exited before the quit command"
+            );
+            if ctrl_c {
+                writer.write_all(b"\x03").unwrap();
+                collect(&mut *writer, Duration::from_millis(500));
+                writer.write_all(b"\x03").unwrap();
+            } else {
+                writer.write_all(b"/exit").unwrap();
+                // Let OpenCode update its slash-command selection before Enter.
+                collect(&mut *writer, Duration::from_millis(500));
+                writer.write_all(b"\r").unwrap();
+            }
+            let exited = collect(&mut *writer, Duration::from_secs(5));
+            assert!(
+                String::from_utf8_lossy(&exited).contains("CONTROL_ROOM_PROMPT> "),
+                "OpenCode did not return to the Bash prompt"
+            );
+            assert!(
+                child.try_wait().unwrap().is_none(),
+                "Git Bash exited with OpenCode"
+            );
+            writer
+                .write_all(b"printf 'AFTER_%s\\n' OPENCODE\r")
+                .expect("input pipe broke after OpenCode exit");
+            let after = collect(&mut *writer, Duration::from_secs(2));
+            assert!(
+                String::from_utf8_lossy(&after).contains("AFTER_OPENCODE"),
+                "Git Bash did not accept input after OpenCode exit"
+            );
+        }));
+        let _ = killer.kill();
+        let _ = child.wait();
+        drop(pair.master);
+        if let Err(error) = result {
+            std::panic::resume_unwind(error);
+        }
+    }
 }

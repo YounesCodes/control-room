@@ -119,6 +119,19 @@ fn terminal_type(kind: LocalShellKind) -> Option<&'static str> {
     }
 }
 
+fn configure_terminal_environment(command: &mut CommandBuilder, kind: LocalShellKind) {
+    if let Some(terminal) = terminal_type(kind) {
+        command.env("TERM", terminal);
+    }
+    // OpenTUI's alternate-screen cleanup can close the enclosing ConPTY pipes
+    // when OpenCode exits, leaving Bash alive with no usable terminal. Its
+    // main-screen mode returns to the same shell without breaking those pipes.
+    // Keep this local to Git Bash and honor an explicit inherited preference.
+    if kind == LocalShellKind::GitBash && command.get_env("OTUI_USE_ALTERNATE_SCREEN").is_none() {
+        command.env("OTUI_USE_ALTERNATE_SCREEN", "0");
+    }
+}
+
 /// Every place a shell may legitimately live, most specific first. Nothing here
 /// depends on a listing or a registry read, so the same input always produces
 /// the same candidates.
@@ -289,8 +302,8 @@ pub fn resolve_installed(shell_id: &str) -> Result<ResolvedLocalShell, String> {
 }
 
 /// Builds the pty command for a resolved shell. The local shell inherits the
-/// user's normal Windows environment; only `TERM` is added, and only for a shell
-/// that reads it.
+/// user's normal Windows environment, with Git Bash's terminal type and OpenTUI
+/// compatibility default added by `configure_terminal_environment`.
 pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
     let mut command = if let Some(sudo) = &shell.administrator_launcher {
         let mut command = CommandBuilder::new(sudo);
@@ -300,9 +313,7 @@ pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
         CommandBuilder::new(&shell.program)
     };
     command.args(shell.arguments);
-    if let Some(terminal) = terminal_type(shell.kind) {
-        command.env("TERM", terminal);
-    }
+    configure_terminal_environment(&mut command, shell.kind);
     if let Some(directory) = &shell.working_directory {
         command.cwd(directory);
     }
@@ -646,10 +657,11 @@ mod tests {
             Some(PathBuf::from(r"C:\Users\dev"))
         );
         assert!(overrides(&prompt).is_empty());
-        assert_eq!(
-            overrides(&bash),
-            vec![("TERM".to_string(), "xterm-256color".to_string())]
-        );
+        let mut expected = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        if env::var_os("OTUI_USE_ALTERNATE_SCREEN").is_none() {
+            expected.insert(0, ("OTUI_USE_ALTERNATE_SCREEN".into(), "0".into()));
+        }
+        assert_eq!(overrides(&bash), expected);
         // No Windows Terminal variable is invented for a shell Control Room
         // hosts itself.
         assert!(
@@ -684,6 +696,42 @@ mod tests {
             resolve_installed("../../evil.exe").unwrap_err(),
             "Unknown local shell"
         );
+    }
+
+    #[test]
+    fn git_bash_defaults_opentui_to_the_main_screen() {
+        let mut command = CommandBuilder::new("bash.exe");
+        command.env_clear();
+        configure_terminal_environment(&mut command, LocalShellKind::GitBash);
+        assert_eq!(
+            command.get_env("OTUI_USE_ALTERNATE_SCREEN"),
+            Some(std::ffi::OsStr::new("0"))
+        );
+    }
+
+    #[test]
+    fn an_explicit_opentui_screen_preference_is_preserved() {
+        let mut command = CommandBuilder::new("bash.exe");
+        command.env("OTUI_USE_ALTERNATE_SCREEN", "1");
+        configure_terminal_environment(&mut command, LocalShellKind::GitBash);
+        assert_eq!(
+            command.get_env("OTUI_USE_ALTERNATE_SCREEN"),
+            Some(std::ffi::OsStr::new("1"))
+        );
+    }
+
+    #[test]
+    fn other_shells_do_not_receive_the_git_bash_opentui_workaround() {
+        for kind in [
+            LocalShellKind::PowerShell7,
+            LocalShellKind::WindowsPowerShell,
+            LocalShellKind::CommandPrompt,
+        ] {
+            let mut command = CommandBuilder::new("shell.exe");
+            command.env_clear();
+            configure_terminal_environment(&mut command, kind);
+            assert!(command.get_env("OTUI_USE_ALTERNATE_SCREEN").is_none());
+        }
     }
 
     #[test]
