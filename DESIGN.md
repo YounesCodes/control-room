@@ -152,11 +152,12 @@ for other distributions. A generic mark does not mean the OS was undetected;
 its accessible label names the detected distribution when available.
 
 Use host marks and session presence to help users find a connection or
-Workspace. Place the session indicator after the host or tab label in its own
-slot, with an accessible label. Keep it separate from OS and shell marks so it
-does not obscure their identity. Keep the terminal pane free of duplicate status rows. Local
-shells use local terms such as running, stopped, and restarted. Remote sessions
-use connected, disconnected, and reconnected.
+Workspace. Put session indicators after labels, separate from OS and shell marks.
+When the sidebar is visible, connected tabs do not repeat its normal connection
+dots. Tabs retain connecting, disconnected, and error indicators; in Focus Mode,
+they also show normal connection state because the sidebar is hidden. Keep session
+state accessible in every mode. Local shells use running, stopped, and restarted;
+remote sessions use connected, disconnected, and reconnected.
 
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for
@@ -204,10 +205,12 @@ per-user Windows installation and settings save both succeed.
 
 ### Host data and updates
 
-Header metrics are opt-in and follow the active Workspace in normal and Focus Mode.
+Header metrics are opt-in and follow the active Workspace in normal mode.
+Focus Mode hides the header and stops its resource reads.
 Use compact labeled values with neutral styling, readable numbers, and a visible
-reading state. Group an outlined status badge with the host name, separated from
-the numeric readings, so freshness cannot be mistaken for part of uptime. Use green
+reading state. Use one compact status button to open reading details, separated from
+the numeric readings. Keep the active host name in its tooltip, accessible label,
+and details rather than repeating it in the header. Use green
 for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
 Settings and native window controls reachable at narrow widths;
 scroll the metric row when needed. Host details must open with a keyboard or click
@@ -221,7 +224,8 @@ reachability claims.
 
 Keep resource readings in the optional host header. Overview presents host identity,
 service and container counts, and runtime capabilities without duplicate readings
-or resource polling. A live baseline comparison should be visibly identified
+or resource polling. Its heading shows inspection time; host identity and OS
+belong in the System facts rather than a repeated heading mark. A live baseline comparison should be visibly identified
 as live and unsaved.
 
 Control Room's own updater is quiet while the app is current. When an update is

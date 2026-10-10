@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Circle, CircleAlert, CircleDashed, Clock3, Gauge, Pause, X } from "lucide-react";
+import { Circle, CircleAlert, CircleDashed, Clock3, ChevronDown, Pause, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
 import {
   HEADER_METRIC_LABELS,
@@ -90,30 +90,27 @@ export function HostMetrics({
   }, [open]);
   return (
     <div className="host-metrics" ref={container}>
-      <div className="host-metrics-identity">
-        <button
-          type="button"
-          className="host-metrics-target"
-          ref={trigger}
-          onClick={() => setOpen((value) => !value)}
-          aria-label={`Host metrics for ${name}`}
-          aria-expanded={open}
-          aria-controls={open ? panelId : undefined}
-        >
-          <Gauge size={14} aria-hidden="true" />
-          <span>{name}</span>
-        </button>
+      <button
+        type="button"
+        className="host-metrics-trigger"
+        ref={trigger}
+        onClick={() => setOpen((value) => !value)}
+        aria-label={`${status}: Host metrics for ${name}`}
+        title={`Readings for ${name}. ${statusDescription}`}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+      >
         <span
           className="host-metrics-status"
           data-state={status.toLowerCase()}
           role="status"
           aria-label={statusDescription}
-          title={statusDescription}
         >
           <StatusIcon size={12} aria-hidden="true" />
           {status}
         </span>
-      </div>
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
       <div
         className="host-metrics-values"
         ref={values}

@@ -32,6 +32,8 @@ export function observeLayoutFallback(element: HTMLElement, measure: () => void)
     observer.observe(ancestor, { attributes: true, attributeFilter: ["style", "class"] });
   }
   window.addEventListener("resize", schedule);
+  // Catch layout changes that happened before the observer attached.
+  schedule();
   return () => {
     observer.disconnect();
     window.removeEventListener("resize", schedule);

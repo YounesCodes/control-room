@@ -80,6 +80,10 @@ describe("OverviewPane", () => {
   it("shows host facts and capabilities without duplicate resource readings", async () => {
     renderPane();
     expect(await screen.findByText("Debian GNU/Linux 12")).toBeTruthy();
+    const heading = screen.getByRole("heading", { name: "Overview" }).closest("header")!;
+    expect(heading.textContent).not.toContain("debian");
+    expect(heading.querySelector(".host-os-icon")).toBeNull();
+    expect(screen.getAllByText("debian", { exact: true })).toHaveLength(1);
     for (const label of [
       "Architecture",
       "Default shell",

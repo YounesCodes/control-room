@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { relativeTime } from "../lib/format";
-import { HostOsIcon } from "../components/HostOsIcon";
 import type { HostCapabilities, SavedConnection } from "../types";
 import { ErrorState, LoadingState } from "../components/PanelState";
 
@@ -138,17 +137,9 @@ export function OverviewPane({
     <section className="feature-page overview-page">
       <div className="overview-content">
         <header className="page-heading overview-heading">
-          <div className="overview-identity">
-            <span className="overview-host-mark">
-              <HostOsIcon osId={capabilities.osId} />
-            </span>
-            <div>
-              <h2>Overview</h2>
-              <p>
-                {capabilities.hostname ?? connection.displayName} · Last inspected{" "}
-                {relativeTime(capabilities.detectedAt)}
-              </p>
-            </div>
+          <div>
+            <h2>Overview</h2>
+            <p>Last inspected {relativeTime(capabilities.detectedAt)}</p>
           </div>
           <button className="secondary-button" type="button" onClick={refresh} disabled={loading}>
             <RefreshCw size={15} className={loading ? "spinning" : ""} /> Refresh

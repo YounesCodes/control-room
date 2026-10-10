@@ -31,7 +31,7 @@ async function connect() {
   await ipc("set_connection_history_enabled", { connectionId: saved.id, enabled: false });
   await $(".host-main*=Live fixture").click();
   await browser.waitUntil(
-    async () => $(".session-tab-wrap.active .presence-connected").isExisting(),
+    async () => $('.session-tab-wrap.active[data-session-state="connected"]').isExisting(),
     { timeout: 30_000 },
   );
   const caps = await ipc<HostCapabilities>("refresh_capabilities", { connectionId: saved.id });

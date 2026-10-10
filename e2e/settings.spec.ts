@@ -35,7 +35,9 @@ describe("Settings and native window", () => {
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
     await openLocal();
-    await expect($("aria/Host metrics for Local machine")).toBeDisplayed();
+    await expect(
+      $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
+    ).toBeDisplayed();
     await browser.waitUntil(async () => (await $(".host-metrics-status").getText()) === "Live");
     const native = await ipc<{
       cpuPercent: number;
@@ -49,7 +51,9 @@ describe("Settings and native window", () => {
     expect(native.diskTotalKib).toBeGreaterThan(0);
     expect(native.uptimeSeconds).toBeGreaterThanOrEqual(0);
     await restartApp();
-    await expect($("aria/Host metrics for Local machine")).toBeDisplayed();
+    await expect(
+      $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
+    ).toBeDisplayed();
     expect((await savedSettings()).hostMetricsEnabled).toBe(true);
     expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "disk", "uptime"]);
     await $("aria/Open Settings").click();

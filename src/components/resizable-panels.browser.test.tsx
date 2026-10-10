@@ -6,6 +6,7 @@ import axe from "axe-core";
 import { Plus } from "lucide-react";
 import {
   ConnectionSection,
+  observeLayoutFallback,
   PanelLayoutContext,
   ResizeDivider,
   SidebarSections,
@@ -504,6 +505,24 @@ describe("resizable connection panels in Chromium", () => {
     await vi.waitFor(() =>
       expect(document.activeElement).toBe(document.querySelector(".resizable-split")),
     );
+  });
+
+  it("reads current layout when the fallback observer attaches after a size change", async () => {
+    const element = document.createElement("div");
+    mountNode = element;
+    element.style.width = "120px";
+    document.body.append(element);
+    root = createRoot(element);
+    let measuredWidth = element.style.width;
+    element.style.width = "200px";
+    const stop = observeLayoutFallback(element, () => {
+      measuredWidth = element.style.width;
+    });
+    try {
+      await expect.poll(() => measuredWidth).toBe("200px");
+    } finally {
+      stop();
+    }
   });
 
   it("refits the Ports graph on window resize without ResizeObserver", async () => {

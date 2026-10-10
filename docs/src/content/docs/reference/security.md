@@ -7,7 +7,7 @@ Control Room uses your Windows OpenSSH client. Commands you type in the terminal
 
 ## Host inspection
 
-The host views read systemd, journald, Docker, ports, filesystems, and boot information. They do not edit files or manage services and containers. Optional header resource reads pause while Settings is open or the window is hidden. Overview does not poll resource readings. An open terminal keeps its SSH session until you close it.
+The host views read systemd, journald, Docker, ports, filesystems, and boot information. They do not edit files or manage services and containers. Optional header resource reads pause while Settings is open, Focus Mode is active, or the window is hidden. Overview does not poll resource readings. An open terminal keeps its SSH session until you close it.
 
 ## Elevated reads
 

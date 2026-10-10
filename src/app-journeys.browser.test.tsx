@@ -269,14 +269,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Save settings" }).click();
     await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     await expect
-      .element(page.getByRole("button", { name: "Host metrics for Fixture Alpha" }))
+      .element(page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }))
       .toBeVisible();
     await expect.element(page.getByText("12%", { exact: true }).first()).toBeVisible();
     expect(element.querySelector(".host-metrics-values")!.textContent).not.toContain("GPU");
     await page.getByRole("button", { name: "Local terminal", exact: true }).click();
     await page.getByRole("button", { name: "Command Prompt", exact: true }).click();
     await expect
-      .element(page.getByRole("button", { name: "Host metrics for Local machine" }))
+      .element(page.getByRole("button", { name: /: Host metrics for Local machine$/ }))
       .toBeVisible();
     await expect.element(page.getByText("42%", { exact: true })).toBeVisible();
     const call = native.invoke.mock.calls
@@ -336,7 +336,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }));
     await mount();
     await expect.element(page.getByText("Stale", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Host metrics for Fixture Alpha" }).click();
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
     await expect.element(page.getByText(/Last reading time Unavailable/)).toBeVisible();
     expect(element.querySelector(".host-metrics-panel")!.textContent).not.toContain("Invalid Date");
     sampledAt = new Date().toISOString();
@@ -352,7 +352,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const strip = element.querySelector<HTMLElement>(".host-metrics")!;
     strip.style.maxWidth = "340px";
     await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
-    await page.getByRole("button", { name: "Host metrics for Fixture Alpha" }).click();
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
     await userEvent.keyboard("{Escape}{Tab}{ArrowRight}");
     await expect
       .element(page.getByRole("group", { name: "Current host readings. Scroll for more metrics." }))
@@ -361,42 +361,69 @@ describe("complete app journeys with typed IPC fixtures", () => {
     strip.style.maxWidth = "";
     await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
   });
-  it("keeps session status separate from identity marks in host rows and workspace tabs", async () => {
+  it("keeps normal connection state in the sidebar and restores tab indicators in Focus Mode", async () => {
     await mount();
     const host = element.querySelector<HTMLElement>(".host-row.active")!;
     const tab = element.querySelector<HTMLElement>(".session-tab-wrap.active")!;
-    await expect.poll(() => !!host.querySelector(".presence-connected")).toBe(true);
-    for (const item of [host, tab]) {
-      const mark = item.querySelector<HTMLElement>(".target-mark")!;
-      const presence = item.querySelector<HTMLElement>(".presence-connected")!;
-      expect(mark.contains(presence)).toBe(false);
-      expect(presence.getBoundingClientRect().left).toBeGreaterThan(
-        mark.getBoundingClientRect().right,
-      );
-    }
-    expect(host.querySelector(".host-session-status")?.getAttribute("title")).toBe(
-      "Terminal connected",
+    await expect.poll(() => tab.dataset.sessionState).toBe("connected");
+    const mark = host.querySelector<HTMLElement>(".target-mark")!;
+    const presence = host.querySelector<HTMLElement>(".presence-connected")!;
+    expect(mark.contains(presence)).toBe(false);
+    expect(presence.getBoundingClientRect().left).toBeGreaterThan(
+      mark.getBoundingClientRect().right,
     );
+    expect(tab.querySelector(".presence")).toBeNull();
+    expect(tab.querySelector(".sr-only")?.textContent).toBe("Terminal connected");
     await page.screenshot({ element: host, path: "../test-results/host-status-placement.png" });
     await page.screenshot({ element: tab, path: "../test-results/tab-status-placement.png" });
-    const result = await axe.run(element.querySelector(".sidebar") ?? element);
-    expect(result.violations).toEqual([]);
+    expect((await axe.run(element.querySelector(".sidebar")!)).violations).toEqual([]);
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await expect.poll(() => !!tab.querySelector(".presence-connected")).toBe(true);
+    const focusMark = tab.querySelector<HTMLElement>(".target-mark")!;
+    const focusPresence = tab.querySelector<HTMLElement>(".presence-connected")!;
+    expect(focusMark.contains(focusPresence)).toBe(false);
+    expect(focusPresence.getBoundingClientRect().left).toBeGreaterThan(
+      focusMark.getBoundingClientRect().right,
+    );
+    await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+    await expect.poll(() => tab.querySelector(".presence")).toBeNull();
   });
+
+  for (const state of ["connecting", "disconnected", "error"]) {
+    it(`keeps a tab indicator for a ${state} session`, async () => {
+      await mount();
+      const tab = element.querySelector<HTMLElement>(".session-tab-wrap.active")!;
+      await expect.poll(() => tab.dataset.sessionState).toBe("connected");
+      emit("session-state-changed", { sessionId: "session-1", state, reason: null });
+      await expect.poll(() => !!tab.querySelector(`.presence-${state}`)).toBe(true);
+      expect(tab.dataset.sessionState).toBe(state);
+      expect(tab.querySelector(".target-mark")!.contains(tab.querySelector(".presence"))).toBe(
+        false,
+      );
+    });
+  }
+
   for (const width of [840, 1440]) {
     it(`keeps header actions reachable and metrics accessible at ${width}px`, async () => {
-      currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+      currentSettings = {
+        ...currentSettings,
+        hostMetricsEnabled: true,
+        hostMetricsIntervalSeconds: 2,
+      };
       await page.viewport(width, 700);
       await mount();
-      await page.getByRole("button", { name: "Host metrics for Fixture Alpha" }).click();
+      await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
       await expect.element(page.getByText("This host did not report a reading")).toBeVisible();
       const close = page.getByRole("button", { name: "Close host metrics" });
       await expect.element(close).toHaveFocus();
       await userEvent.keyboard("{Escape}");
       await expect
-        .element(page.getByRole("button", { name: "Host metrics for Fixture Alpha" }))
+        .element(page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }))
         .toHaveFocus();
       const badge = element.querySelector(".host-metrics-status")!;
-      expect(badge.parentElement).toHaveClass("host-metrics-identity");
+      expect(badge.parentElement).toHaveClass("host-metrics-trigger");
+      expect(element.querySelector(".host-metrics")!.textContent).not.toContain("Fixture Alpha");
+      expect(badge.parentElement?.getAttribute("title")).toContain("Fixture Alpha");
       expect(badge.getAttribute("aria-label")).toContain("latest host reading is current");
       expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(
         element.querySelector(".host-metrics-values")!.getBoundingClientRect().left,
@@ -418,6 +445,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
         element: element.querySelector(".app-bar")!,
         path: `../test-results/host-metrics-${width}.png`,
       });
+      await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      expect(element.querySelector(".host-metrics")).toBeNull();
+      const samplesInFocus = native.invoke.mock.calls.filter(
+        ([command]) => command === "sample_header_metrics",
+      ).length;
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+      expect(
+        native.invoke.mock.calls.filter(([command]) => command === "sample_header_metrics"),
+      ).toHaveLength(samplesInFocus);
+      await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+      await expect
+        .element(page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }))
+        .toBeVisible();
+      expect(element.querySelector(".host-metrics")!.textContent).not.toContain("Fixture Alpha");
       if (width === 1440) {
         await page.getByRole("button", { name: "Open Settings" }).click();
         await page.screenshot({ path: "../test-results/host-metrics-settings.png" });
@@ -738,6 +779,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByText(/permission denied/)).toBeVisible();
   });
   it("keeps Overview focused on host facts without resource polling", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
     await mount();
     await navigate("Overview");
     await expect
@@ -760,6 +802,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       native.invoke.mock.calls.filter(([command]) => command === "sample_host_resources"),
     ).toHaveLength(0);
     expect((await axe.run(overview)).violations).toEqual([]);
+    await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
     await page.screenshot({ element: overview, path: "../test-results/overview-without-load.png" });
     await page.screenshot({ path: "../test-results/overview-full.png" });
   });

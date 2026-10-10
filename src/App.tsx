@@ -1445,6 +1445,7 @@ export function App() {
         ]
           .filter(Boolean)
           .join(" ")}
+        data-session-state={workspace.state}
         key={workspace.id}
       >
         <button
@@ -1457,11 +1458,13 @@ export function App() {
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
           <span className="session-tab-label">{duplicateLabel(workspace)}</span>
-          <span
-            className={`presence presence-${workspace.state}`}
-            aria-hidden="true"
-            title={`Terminal ${terminalStateLabel(workspace)}`}
-          />
+          {(workspace.state !== "connected" || terminalFocusMode) && (
+            <span
+              className={`presence presence-${workspace.state}`}
+              aria-hidden="true"
+              title={`Terminal ${terminalStateLabel(workspace)}`}
+            />
+          )}
           {terminalActivity[workspace.id] && (
             <span
               className={`terminal-activity terminal-activity-${terminalActivity[workspace.id]}`}
@@ -1555,6 +1558,7 @@ export function App() {
     >
       <header className="app-bar" data-tauri-drag-region>
         {!settingsOpen &&
+          !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
           (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
