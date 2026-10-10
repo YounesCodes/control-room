@@ -1219,6 +1219,18 @@ fn validate_persisted_layout(
 }
 
 fn validate_settings(settings: &AppSettings) -> Result<(), String> {
+    if ![2, 5, 10, 30].contains(&settings.host_metrics_interval_seconds) {
+        return Err("Unsupported host metrics refresh interval".into());
+    }
+    if settings.host_metrics.len() > 5
+        || settings
+            .host_metrics
+            .iter()
+            .enumerate()
+            .any(|(index, metric)| settings.host_metrics[..index].contains(metric))
+    {
+        return Err("Host metrics must be unique".into());
+    }
     if !(9..=32).contains(&settings.terminal_font_size) {
         return Err("Terminal font size must be between 9 and 32".into());
     }
@@ -1907,6 +1919,31 @@ mod tests {
     }
 
     #[test]
+    fn header_preferences_persist_and_invalid_intervals_are_rejected() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let mut settings = AppSettings {
+            host_metrics_enabled: true,
+            host_metrics: vec![
+                crate::models::HeaderMetric::Cpu,
+                crate::models::HeaderMetric::Uptime,
+            ],
+            host_metrics_interval_seconds: 10,
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        let loaded = database.get_settings().unwrap();
+        assert!(loaded.host_metrics_enabled);
+        assert_eq!(loaded.host_metrics, settings.host_metrics);
+        assert_eq!(loaded.host_metrics_interval_seconds, 10);
+        settings.host_metrics_interval_seconds = 1;
+        assert!(database.save_settings(&settings).is_err());
+        settings.host_metrics_interval_seconds = 5;
+        settings.host_metrics.push(crate::models::HeaderMetric::Cpu);
+        assert!(database.save_settings(&settings).is_err());
+    }
+
+    #[test]
     fn settings_written_before_the_updater_existed_still_load() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("control-room.db");
@@ -1921,6 +1958,9 @@ mod tests {
         let loaded = database.get_settings().unwrap();
         assert_eq!(loaded.terminal_font_size, 15, "existing settings survive");
         assert_eq!(loaded.default_log_tail, 500);
+        assert!(!loaded.host_metrics_enabled);
+        assert_eq!(loaded.host_metrics_interval_seconds, 5);
+        assert_eq!(loaded.host_metrics.len(), 5);
         assert!(loaded.global_sudo_enabled);
         assert!(
             loaded.automatic_update_checks,

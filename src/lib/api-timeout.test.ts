@@ -61,6 +61,23 @@ describe("structured discovery timeout", () => {
     vi.useRealTimers();
   });
 
+  it.each([null, "connection-id"])(
+    "names a stalled header reading correctly for target %s",
+    async (connectionId) => {
+      const result = api
+        .sampleHeaderMetrics(connectionId, ["cpu"])
+        .catch((error: Error) => error.message);
+      await vi.advanceTimersByTimeAsync(REMOTE_INSPECTION_TIMEOUT_MS);
+      expect(await result).toBe(
+        `Host metrics did not respond after ${REMOTE_INSPECTION_TIMEOUT_MS / 1000} seconds`,
+      );
+      expect(invoke).toHaveBeenCalledWith("sample_header_metrics", {
+        connectionId,
+        metrics: ["cpu"],
+      });
+    },
+  );
+
   it.each([
     ["capabilities", () => api.refreshCapabilities("connection-id")],
     ["services", () => api.listServices("connection-id")],

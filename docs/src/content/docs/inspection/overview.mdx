@@ -1,22 +1,22 @@
 ---
 title: Overview
-description: Check host details and current CPU and memory use.
+description: Check host identity and runtime capabilities.
 ---
 
 import overviewScreenshot from "../../../assets/screenshots/overview.png";
 
-Overview shows the host name, operating system, kernel, uptime, shell, and whether systemd, journald, and Docker are available. It can also show service and container counts.
+Overview shows the host name, operating system, kernel, architecture, shell, and whether systemd, journald, and Docker are available. It can also show service and container counts.
 
 <figure class="docs-screenshot">
   <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={overviewScreenshot.src}
-      alt="Control Room Overview showing host capability rows and live CPU and memory readings."
+      alt="Control Room Overview showing host details, service and container counts, and capability rows."
     />
   </a>
-  <figcaption>Host details and current load. Example data shown.</figcaption>
+  <figcaption>Host details and runtime capabilities. Example data shown.</figcaption>
 </figure>
 
 Use **Refresh** to read host details again. Control Room keeps the last result locally and marks it stale after 24 hours.
 
-While Overview is visible, it reads CPU and memory from `/proc` every four seconds. **Pause** stops those reads; **Resume** starts them again. Sampling also stops when you leave or hide the view. The short graph is kept in memory only. If a reading is missing, the view says so instead of showing zero.
+Resource readings appear in the optional header instead of Overview. Enable **Show host metrics in header** in Settings, then choose CPU, RAM, GPU, disk usage, or uptime and a refresh interval. The header follows the active local or SSH workspace. Overview does not poll resource readings.

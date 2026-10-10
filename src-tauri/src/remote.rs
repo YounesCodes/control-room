@@ -221,7 +221,7 @@ pub struct CommandOutput {
 }
 
 impl CommandOutput {
-    fn success_text(self) -> Result<String, String> {
+    pub(crate) fn success_text(self) -> Result<String, String> {
         if self.exit_code != 0 {
             return Err(classify_failure(self.exit_code, &self.stderr));
         }
@@ -343,7 +343,7 @@ fn distribution_family(os_id: Option<&str>, os_like: Option<&str>) -> Option<Str
 /// a short gap between them rather than by holding a previous sample here and
 /// hoping the next request arrives on schedule. Everything is a plain read: no
 /// process list, no command lines, no per-process accounting.
-fn resource_command() -> &'static str {
+pub(crate) fn resource_command() -> &'static str {
     r#"LC_ALL=C; if test -r /proc/stat; then awk '/^cpu /{t=0; for(n=2;n<=NF;n++) t+=$n; printf "cpu_total_1=%d\ncpu_idle_1=%d\n", t, $5+$6}' /proc/stat; sleep 0.25; awk '/^cpu /{t=0; for(n=2;n<=NF;n++) t+=$n; printf "cpu_total_2=%d\ncpu_idle_2=%d\n", t, $5+$6}' /proc/stat; fi; printf 'cores=%s\n' "$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null)"; if test -r /proc/loadavg; then printf 'load=%s\n' "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"; fi; if test -r /proc/meminfo; then awk '/^MemTotal:|^MemAvailable:|^SwapTotal:|^SwapFree:/{key=tolower(substr($1,1,length($1)-1)); printf "%s=%s\n", key, $2}' /proc/meminfo; fi"#
 }
 
@@ -376,7 +376,7 @@ pub fn collect_host_resources(connection: &SavedConnection) -> Result<HostResour
     Ok(parse_host_resources(&text))
 }
 
-fn parse_host_resources(text: &str) -> HostResources {
+pub(crate) fn parse_host_resources(text: &str) -> HostResources {
     let values = parse_key_values(text);
     let loads: Vec<f64> = values
         .get("load")
@@ -3953,6 +3953,40 @@ esac
                 .cpu_percent
                 .is_some_and(|value| (0.0..=100.0).contains(&value))
         );
+
+        let header = crate::header_metrics::collect_remote(
+            &connection,
+            &[
+                crate::models::HeaderMetric::Cpu,
+                crate::models::HeaderMetric::Ram,
+                crate::models::HeaderMetric::Gpu,
+                crate::models::HeaderMetric::Disk,
+                crate::models::HeaderMetric::Uptime,
+            ],
+        )
+        .unwrap();
+        assert!(
+            header
+                .cpu_percent
+                .is_some_and(|value| (0.0..=100.0).contains(&value))
+        );
+        assert!(header.memory_total_kib.is_some_and(|value| value > 0));
+        assert!(header.disk_total_kib.is_some_and(|value| value > 0));
+        assert!(header.disk_free_kib.unwrap() <= header.disk_total_kib.unwrap());
+        assert_eq!(header.disk_label.as_deref(), Some("/"));
+        assert!(header.uptime_seconds.is_some());
+        assert!(
+            header
+                .gpu_percent
+                .is_none_or(|value| (0.0..=100.0).contains(&value))
+        );
+
+        let ram_only =
+            crate::header_metrics::collect_remote(&connection, &[crate::models::HeaderMetric::Ram])
+                .unwrap();
+        assert!(ram_only.memory_total_kib.is_some_and(|value| value > 0));
+        assert!(ram_only.memory_available_kib.is_some());
+        assert_eq!(ram_only.cpu_percent, None);
 
         let services = list_services(&connection).unwrap();
         assert!(!services.is_empty());

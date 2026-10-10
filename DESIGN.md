@@ -39,9 +39,11 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Local Workspaces are terminal-only, so do not show remote
-inspection navigation for them. Keep connection and Workspace identity visible
+inspection navigation for them. Optional header metrics may read system usage
+for a local tab without adding inspection pages. Keep connection and Workspace identity visible
 where it helps navigation, but do not repeat the same identity in a second
-header or a separate status rail.
+header or a separate status rail. An enabled metrics strip may name the active
+target beside its readings.
 
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
@@ -150,10 +152,12 @@ for other distributions. A generic mark does not mean the OS was undetected;
 its accessible label names the detected distribution when available.
 
 Use host marks and session presence to help users find a connection or
-Workspace. Show session state on its tab with a compact presence cue and an
-accessible label. Keep the terminal pane free of duplicate status rows. Local
-shells use local terms such as running, stopped, and restarted. Remote sessions
-use connected, disconnected, and reconnected.
+Workspace. Put session indicators after labels, separate from OS and shell marks.
+When the sidebar is visible, connected tabs do not repeat its normal connection
+dots. Tabs retain connecting, disconnected, and error indicators; in Focus Mode,
+they also show normal connection state because the sidebar is hidden. Keep session
+state accessible in every mode. Local shells use running, stopped, and restarted;
+remote sessions use connected, disconnected, and reconnected.
 
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for
@@ -201,14 +205,27 @@ per-user Windows installation and settings save both succeed.
 
 ### Host data and updates
 
+Header metrics are opt-in and follow the active Workspace in normal mode.
+Focus Mode hides the header and stops its resource reads.
+Use compact labeled values with neutral styling, readable numbers, and a visible
+reading state. Use one compact status button to open reading details, separated from
+the numeric readings. Keep the active host name in its tooltip, accessible label,
+and details rather than repeating it in the header. Use green
+for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
+Settings and native window controls reachable at narrow widths;
+scroll the metric row when needed. Host details must open with a keyboard or click
+and include capacity, the last reading time, and refresh errors. Pause header reads
+in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
+
 Present the fact the host returned, not a stronger conclusion. A missing value
 must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Keep live Overview meters neutral; their magnitude alone is not a health
-judgment. Show when the latest reading arrived and distinguish an initial read
-from a failed refresh. A live baseline comparison should be visibly identified
+Keep resource readings in the optional host header. Overview presents host identity,
+service and container counts, and runtime capabilities without duplicate readings
+or resource polling. Its heading shows inspection time; host identity and OS
+belong in the System facts rather than a repeated heading mark. A live baseline comparison should be visibly identified
 as live and unsaved.
 
 Control Room's own updater is quiet while the app is current. When an update is

@@ -102,6 +102,25 @@ describe("Settings actions", () => {
     api.installCatalogFont.mockResolvedValue("JetBrains Mono");
   });
 
+  it("enables and customizes host metrics while keeping the default draft clean", async () => {
+    renderPane();
+    expect(saveButton().disabled).toBe(true);
+    const enabled = screen.getByRole("checkbox", { name: "Show host metrics in header" });
+    expect((enabled as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(enabled);
+    await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
+    fireEvent.change(screen.getByLabelText("Host metrics refresh interval"), {
+      target: { value: "10" },
+    });
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith({
+      ...settings,
+      hostMetricsEnabled: true,
+      hostMetrics: ["cpu", "ram", "disk", "uptime"],
+      hostMetricsIntervalSeconds: 10,
+    });
+  });
+
   it("uses one font field and does not save an unfinished catalog query", async () => {
     renderPane();
     const font = screen.getByRole("combobox", { name: "Font family" });

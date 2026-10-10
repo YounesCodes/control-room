@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { api, errorMessage } from "../lib/api";
+import { DEFAULT_HEADER_METRICS, HEADER_METRIC_LABELS } from "../lib/header-metrics";
 import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
@@ -209,7 +210,7 @@ export function SettingsPane({
           </button>
           <div className="settings-heading-text">
             <h2>Settings</h2>
-            <p>Terminal, logs, local shells, SSH access, and updates.</p>
+            <p>Host metrics, terminals, logs, SSH access, and updates.</p>
           </div>
           <div className="settings-heading-actions">
             {message ? (
@@ -237,6 +238,68 @@ export function SettingsPane({
       </header>
       <div className="settings-body">
         <form id="settings-form" className="settings-form" onSubmit={submit}>
+          <fieldset className="host-metrics-settings">
+            <legend>Host metrics</legend>
+            <small>Live readings in the top bar for the active local machine or SSH host.</small>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={draft.hostMetricsEnabled ?? false}
+                onChange={(event) =>
+                  setDraft({ ...draft, hostMetricsEnabled: event.target.checked })
+                }
+              />
+              Show host metrics in header
+            </label>
+            <fieldset className="host-metrics-options" disabled={!draft.hostMetricsEnabled}>
+              <legend>Displayed metrics</legend>
+              <div className="host-metrics-choices">
+                {DEFAULT_HEADER_METRICS.map((metric) => (
+                  <label className="checkbox-label" key={metric}>
+                    <input
+                      type="checkbox"
+                      checked={(draft.hostMetrics ?? DEFAULT_HEADER_METRICS).includes(metric)}
+                      onChange={(event) => {
+                        const selected = new Set(draft.hostMetrics ?? DEFAULT_HEADER_METRICS);
+                        if (event.target.checked) selected.add(metric);
+                        else selected.delete(metric);
+                        setDraft({
+                          ...draft,
+                          hostMetrics: DEFAULT_HEADER_METRICS.filter((value) =>
+                            selected.has(value),
+                          ),
+                        });
+                      }}
+                    />
+                    {HEADER_METRIC_LABELS[metric]}
+                  </label>
+                ))}
+              </div>
+              <label>
+                <span>Host metrics refresh interval</span>
+                <select
+                  value={draft.hostMetricsIntervalSeconds ?? 5}
+                  onChange={(event) =>
+                    setDraft({ ...draft, hostMetricsIntervalSeconds: Number(event.target.value) })
+                  }
+                >
+                  {[2, 5, 10, 30].map((seconds) => (
+                    <option value={seconds} key={seconds}>
+                      Every {seconds} seconds
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </fieldset>
+            <small>
+              Disk reads the Windows system drive or the SSH host's root filesystem. GPU
+              availability depends on its driver. Monitoring pauses while Settings is open or the
+              window is hidden.
+            </small>
+            {draft.hostMetricsEnabled && draft.hostMetrics?.length === 0 && (
+              <small>Select a metric to display the header.</small>
+            )}
+          </fieldset>
           <fieldset>
             <legend>Terminal appearance</legend>
             <small>

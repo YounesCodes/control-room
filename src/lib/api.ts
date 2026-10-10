@@ -18,6 +18,8 @@ import type {
   HostBaseline,
   HostBaselineSummary,
   HostResources,
+  HeaderMetric,
+  HeaderMetrics,
   ListeningSocket,
   LocalShellCatalog,
   PersistedWorkspaceState,
@@ -55,12 +57,13 @@ export const REMOTE_INSPECTION_TIMEOUT_MS = 30_000;
 const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
 const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
 
-function invokeRemoteInspection<T>(command: string, args: Record<string, unknown>): Promise<T> {
+function invokeRemoteInspection<T>(
+  command: string,
+  args: Record<string, unknown>,
+  timeoutMessage = REMOTE_INSPECTION_TIMEOUT_MESSAGE,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(REMOTE_INSPECTION_TIMEOUT_MESSAGE)),
-      REMOTE_INSPECTION_TIMEOUT_MS,
-    );
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), REMOTE_INSPECTION_TIMEOUT_MS);
     void invoke<T>(command, args).then(
       (value) => {
         clearTimeout(timer);
@@ -131,6 +134,12 @@ export const api = {
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>
     invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
+  sampleHeaderMetrics: (connectionId: string | null, metrics: HeaderMetric[]) =>
+    invokeRemoteInspection<HeaderMetrics>(
+      "sample_header_metrics",
+      { connectionId, metrics },
+      `Host metrics did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`,
+    ),
   sampleHostResources: (connectionId: string) =>
     invokeRemoteInspection<HostResources>("sample_host_resources", { connectionId }),
   listServices: (connectionId: string) =>

@@ -14,7 +14,6 @@ import type {
   DockerContainer,
   HostBaselineSummary,
   HostCapabilities,
-  HostResources,
   ListeningSocket,
   SystemdUnit,
 } from "../src/types";
@@ -32,7 +31,7 @@ async function connect() {
   await ipc("set_connection_history_enabled", { connectionId: saved.id, enabled: false });
   await $(".host-main*=Live fixture").click();
   await browser.waitUntil(
-    async () => $(".session-tab-wrap.active .presence-connected").isExisting(),
+    async () => $('.session-tab-wrap.active[data-session-state="connected"]').isExisting(),
     { timeout: 30_000 },
   );
   const caps = await ipc<HostCapabilities>("refresh_capabilities", { connectionId: saved.id });
@@ -68,16 +67,15 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await terminalCommand("printf 'RECONNECTED_OK\\n'", "RECONNECTED_OK");
     expect((await runtime()).sessionIds[0]).not.toBe(old);
   });
-  it("reads Overview identity and resources and pauses then resumes sampling", async () => {
-    const { saved } = await connect();
+  it("reads Overview identity and capabilities without duplicate resource readings", async () => {
+    await connect();
     await feature("Overview");
     await expect($(".overview-page")).toHaveText(expect.stringContaining("Ubuntu"));
-    const resources = await ipc<HostResources>("sample_host_resources", { connectionId: saved.id });
-    expect(resources.memoryTotalKib).toBeGreaterThan(0);
-    await $("button=Pause").click();
-    await expect($("button=Resume")).toBeDisplayed();
-    await $("button=Resume").click();
-    await expect($("button=Pause")).toBeDisplayed();
+    await expect($(".overview-page")).toHaveText(expect.stringMatching(/running services/i));
+    await expect($(".overview-page")).not.toHaveText(expect.stringMatching(/live load/i));
+    await expect($(".overview-page")).not.toHaveText(expect.stringMatching(/uptime/i));
+    await expect($(".overview-page")).not.toHaveText(expect.stringMatching(/memory/i));
+    await expect($("button=Pause")).not.toExist();
     await $("button=Refresh").click();
     await expect($("h2=Overview")).toBeDisplayed();
   });

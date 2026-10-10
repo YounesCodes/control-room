@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: Change terminal appearance, local shells, logs, and updates.
+description: Choose host metrics, terminal appearance, local shells, logs, and updates.
 ---
 
 import settingsScreenshot from "../../../assets/screenshots/settings.png";
@@ -11,10 +11,12 @@ Open **Settings** from the top bar. Select **Save settings** to apply changes. C
   <a href={settingsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={settingsScreenshot.src}
-      alt="Settings showing Terminal appearance with font and color controls beside one live preview."
+      alt="Settings showing optional Host metrics controls above Terminal appearance and its live preview."
     />
   </a>
-  <figcaption>Font and colors share one live preview. Example data shown.</figcaption>
+  <figcaption>
+    Choose header readings and terminal appearance in Settings. Example data shown.
+  </figcaption>
 </figure>
 
 ## Terminal
@@ -45,6 +47,14 @@ use. If Windows installed the font but saving or applying it failed, the app say
 you can keep using installed fonts through **Font family**, including a list of
 fallbacks such as `"JetBrains Mono", Consolas, monospace`. Cached catalog names
 remain available during the current app session.
+
+## Host metrics
+
+Enable **Show host metrics in header** to see CPU, RAM, GPU, disk usage, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and a **Host metrics refresh interval** of 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip.
+
+Click the reading status, such as **Live**, beside the metrics for capacity, the last reading time, **Refresh**, and **Customize in Settings**. Disk usage covers the Windows system drive for local tabs and `/` for SSH hosts. GPU shows the busiest reported engine or device. Windows needs GPU performance counters; Linux uses NVIDIA's `nvidia-smi` with `timeout`, or AMD's `gpu_busy_percent` when available. Other drivers may show **Unavailable**.
+
+Monitoring pauses while Settings is open, Focus Mode is active, or the window is hidden. A failed refresh keeps the last values and marks them **Stale**. Readings use no sudo and are not saved as history.
 
 ## Local terminal
 

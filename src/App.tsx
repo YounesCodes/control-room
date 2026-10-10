@@ -46,6 +46,8 @@ import {
 } from "lucide-react";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { HostMetrics } from "./components/HostMetrics";
+import { DEFAULT_HEADER_METRICS } from "./lib/header-metrics";
 import { UpdateIndicator } from "./components/UpdateIndicator";
 import { TerminalTargetMenu } from "./components/TerminalTargetMenu";
 import type { TerminalPaneHandle } from "./components/TerminalPane";
@@ -1316,18 +1318,27 @@ export function App() {
           onClick={() => openConnection(connection)}
           aria-describedby={`connection-session-${connection.id}`}
         >
-          <span className="os-badge">
+          <span className="target-mark">
             <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+          </span>
+          <span className="host-row-details">
+            <strong>{connection.displayName}</strong>
+            <small>{connectionTarget(connection)}</small>
+          </span>
+          <span
+            className="host-session-status"
+            title={
+              connectionSessionStates[connection.id]
+                ? `Terminal ${connectionSessionStates[connection.id]}`
+                : "No open terminal"
+            }
+          >
             {connectionSessionStates[connection.id] && (
               <span
                 className={`presence presence-${connectionSessionStates[connection.id]}`}
                 aria-hidden="true"
               />
             )}
-          </span>
-          <span className="host-row-details">
-            <strong>{connection.displayName}</strong>
-            <small>{connectionTarget(connection)}</small>
           </span>
           {!!connection.tags.length && (
             <span className="host-tag-summary">
@@ -1434,6 +1445,7 @@ export function App() {
         ]
           .filter(Boolean)
           .join(" ")}
+        data-session-state={workspace.state}
         key={workspace.id}
       >
         <button
@@ -1444,11 +1456,15 @@ export function App() {
           aria-describedby={`workspace-session-${workspace.id}`}
           onClick={() => selectWorkspaceTab(workspace)}
         >
-          <span className="os-badge">
-            {workspaceMark(workspace)}
-            <span className={`presence presence-${workspace.state}`} aria-hidden="true" />
-          </span>
+          <span className="target-mark">{workspaceMark(workspace)}</span>
           <span className="session-tab-label">{duplicateLabel(workspace)}</span>
+          {(workspace.state !== "connected" || terminalFocusMode) && (
+            <span
+              className={`presence presence-${workspace.state}`}
+              aria-hidden="true"
+              title={`Terminal ${terminalStateLabel(workspace)}`}
+            />
+          )}
           {terminalActivity[workspace.id] && (
             <span
               className={`terminal-activity terminal-activity-${terminalActivity[workspace.id]}`}
@@ -1541,6 +1557,28 @@ export function App() {
       }
     >
       <header className="app-bar" data-tauri-drag-region>
+        {!settingsOpen &&
+          !terminalFocusMode &&
+          settingsContract?.current.hostMetricsEnabled &&
+          activeWorkspace &&
+          (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
+            <HostMetrics
+              key={
+                isLocalWorkspace(activeWorkspace)
+                  ? "local"
+                  : `${activeWorkspace.connectionId}:${activeWorkspace.connectionSnapshot.updatedAt}`
+              }
+              target={isLocalWorkspace(activeWorkspace) ? "local" : activeWorkspace.connectionId}
+              name={
+                isLocalWorkspace(activeWorkspace)
+                  ? "Local machine"
+                  : activeWorkspace.connectionSnapshot.displayName
+              }
+              metrics={settingsContract.current.hostMetrics ?? DEFAULT_HEADER_METRICS}
+              seconds={settingsContract.current.hostMetricsIntervalSeconds ?? 5}
+              onSettings={() => setSettingsOpen(true)}
+            />
+          )}
         <div className="app-bar-actions">
           {!settingsOpen && (
             <UpdateIndicator

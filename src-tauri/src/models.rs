@@ -558,6 +558,9 @@ fn default_shell() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
+    pub host_metrics_enabled: bool,
+    pub host_metrics: Vec<HeaderMetric>,
+    pub host_metrics_interval_seconds: u16,
     pub terminal_font_family: String,
     pub terminal_font_size: u16,
     pub terminal_scrollback: u32,
@@ -592,6 +595,30 @@ pub struct AppSettings {
     pub default_local_shell_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HeaderMetric {
+    Cpu,
+    Ram,
+    Gpu,
+    Disk,
+    Uptime,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeaderMetrics {
+    pub sampled_at: String,
+    pub cpu_percent: Option<f64>,
+    pub memory_total_kib: Option<u64>,
+    pub memory_available_kib: Option<u64>,
+    pub gpu_percent: Option<f64>,
+    pub disk_total_kib: Option<u64>,
+    pub disk_free_kib: Option<u64>,
+    pub disk_label: Option<String>,
+    pub uptime_seconds: Option<u64>,
+}
+
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
 
 #[derive(Debug, Clone, Serialize)]
@@ -605,6 +632,15 @@ pub struct SettingsContract {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            host_metrics_enabled: false,
+            host_metrics: vec![
+                HeaderMetric::Cpu,
+                HeaderMetric::Ram,
+                HeaderMetric::Gpu,
+                HeaderMetric::Disk,
+                HeaderMetric::Uptime,
+            ],
+            host_metrics_interval_seconds: 5,
             terminal_font_family: "Cascadia Mono, Consolas, monospace".into(),
             terminal_font_size: 14,
             terminal_scrollback: 10_000,
