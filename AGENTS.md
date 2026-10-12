@@ -29,13 +29,15 @@ Find nearby tests and existing implementation before changing a feature contract
 
 Start with the smallest relevant validation, then expand according to the surface area of the change.
 
+Run only tests relevant to the changes; skip validation for trivial or documentation-only edits. Avoid rerunning checks already passed for unchanged code or enforced by Git hooks/CI. Run the full suite only when explicitly requested or when changes affect multiple independent subsystems.
+
 - **Frontend-only changes:** Run the relevant frontend tests and static checks.
 - **Rust/backend changes:** Run the relevant Rust tests and checks.
 - **Changes crossing the Tauri boundary:** Validate both frontend and Rust layers.
 - **Persistence, process, terminal, or native-window changes:** Run their dedicated integration/desktop tests where available.
 - **UI behavior changes:** Run the relevant browser/accessibility tests when applicable.
 - **Build/package changes:** Perform the appropriate Windows application build.
-- **Local SSH validation:** When this checkout has `.env.local`, run `npm run test:local-gate` before any commit or push. It uses the ignored Ubuntu fixture and real Windows SSH, so keep it out of CI. Checkout-local Git hooks run the same gate. Do not bypass them or stage `.env.local`.
+- **Local SSH validation:** When this checkout has `.env.local`, rely on the checkout-local Git hooks to enforce `npm run test:local-gate` when applicable. Do not run it redundantly or bypass the hooks, and never stage `.env.local`.
 
 Fix failures introduced by the requested change and rerun the affected checks.
 
@@ -44,7 +46,6 @@ Fix failures introduced by the requested change and rerun the affected checks.
 Before finishing:
 
 - Review the final diff for accidental or unrelated changes.
-- Confirm the requested behavior is covered by focused tests.
-- Run the validation appropriate to the affected layers.
+- Confirm behavior changes are covered by focused tests where appropriate.
 - Update documentation only when the documented behavior changed. See `docs/AGENTS.md` for documentation guidelines.
 - Report what changed, what was validated, what could not be validated, and any remaining risks or follow-up work.
