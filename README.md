@@ -4,7 +4,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/YounesCodes/control-room?display_name=tag)](https://github.com/YounesCodes/control-room/releases/latest) [![CI](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml)
 
-Control Room gives you one place to keep and work with your Linux machines from Windows. Save each host once, open it as a Workspace, and get a real SSH terminal next to views of that machine's services, containers, ports, and logs.
+Control Room gives you one place to work with Linux and Windows machines over SSH. Save each host once and open it as a Workspace. Linux hosts offer inspection views for services, containers, ports, and logs. Windows 10 and 11 hosts offer a choice of installed shells and WSL distributions before connecting.
 
 - A real terminal with tabs and splits. It runs through the Windows OpenSSH client and ConPTY already on your machine, so your existing keys, `~/.ssh/config`, and ssh-agent keep working.
 - Saved connections with groups and tags, and several Workspaces per host.

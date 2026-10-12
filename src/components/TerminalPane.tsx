@@ -450,7 +450,13 @@ export function TerminalPane({
     const started =
       workspace.kind === "local"
         ? api.startLocalSession(workspace.shell.id, terminal.cols, terminal.rows, output)
-        : api.startSession(workspace.connectionId, terminal.cols, terminal.rows, output);
+        : api.startSession(
+            workspace.connectionId,
+            terminal.cols,
+            terminal.rows,
+            output,
+            workspace.remoteShell?.id ?? null,
+          );
 
     void started
       .then(async ({ sessionId }) => {

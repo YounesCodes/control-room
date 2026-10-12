@@ -3,6 +3,7 @@ import type {
   LocalShellProfile,
   LocalWorkspace,
   RemoteWorkspace,
+  RemoteShellProfile,
   SavedConnection,
   Workspace,
 } from "../types";
@@ -26,7 +27,9 @@ export function workspaceTargetKey(workspace: Workspace): string {
 
 export function workspaceTargetName(workspace: Workspace): string {
   return isRemoteWorkspace(workspace)
-    ? workspace.connectionSnapshot.displayName
+    ? workspace.remoteShell
+      ? `${workspace.connectionSnapshot.displayName} · ${workspace.remoteShell.label}`
+      : workspace.connectionSnapshot.displayName
     : workspace.shell.elevated
       ? `${workspace.shell.label} (Administrator)`
       : workspace.shell.label;
@@ -52,13 +55,17 @@ export function terminalStateLabel(workspace: Workspace): string {
 }
 
 /// A new Workspace on a Remote Host, asked to connect.
-export function createRemoteWorkspace(connection: SavedConnection): RemoteWorkspace {
+export function createRemoteWorkspace(
+  connection: SavedConnection,
+  remoteShell?: RemoteShellProfile | null,
+): RemoteWorkspace {
   return {
     kind: "remote",
     id: crypto.randomUUID(),
     label: null,
     connectionId: connection.id,
     connectionSnapshot: { ...connection },
+    ...(remoteShell ? { remoteShell } : {}),
     sessionId: null,
     state: "connecting",
     reason: null,

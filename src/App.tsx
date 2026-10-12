@@ -56,6 +56,7 @@ import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { useAppUpdater } from "./hooks/use-app-updater";
 import { updateInfo } from "./lib/app-update";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { RemoteShellDialog } from "./components/RemoteShellDialog";
 import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
@@ -129,6 +130,7 @@ import type {
   LocalShellProfile,
   LogSourceSelection,
   RemoteWorkspace,
+  RemoteShellProfile,
   SavedConnection,
   SettingsContract,
   SystemdUnit,
@@ -176,6 +178,10 @@ const TerminalPane = lazy(() =>
 );
 
 export function App() {
+  const [remoteShellRequest, setRemoteShellRequest] = useState<{
+    connection: SavedConnection;
+    split: boolean;
+  } | null>(null);
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [localShells, setLocalShells] = useState<LocalShellProfile[]>([]);
   const [administratorTerminalStatus, setAdministratorTerminalStatus] =
@@ -406,6 +412,13 @@ export function App() {
   const activeRemoteWorkspace =
     activeWorkspace && isRemoteWorkspace(activeWorkspace) ? activeWorkspace : null;
   const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
+  const windowsWorkspace =
+    !!activeRemoteWorkspace &&
+    (!!activeRemoteWorkspace.remoteShell ||
+      hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "windows");
+  const offeredNavigation = windowsWorkspace
+    ? navigation.filter((item) => ["overview", "terminal", "scratchpad"].includes(item.id))
+    : navigation;
   const activeSavedConnection = activeRemoteWorkspace
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
@@ -882,9 +895,9 @@ export function App() {
     }
   }
 
-  function openConnection(connection: SavedConnection, forceNew = false) {
+  function openConnection(connection: SavedConnection, forceNew = false, split = false) {
     closeSettings(() => {
-      if (!forceNew) {
+      if (!forceNew && !split) {
         const existing = [...workspaces]
           .reverse()
           .find(
@@ -895,8 +908,26 @@ export function App() {
           return;
         }
       }
-      openWorkspace(createRemoteWorkspace(connection));
+      if (
+        hostCapabilities[connection.id]?.osId &&
+        hostCapabilities[connection.id]?.osId !== "windows"
+      ) {
+        const workspace = createRemoteWorkspace(connection);
+        if (split) splitWithNewWorkspace(workspace);
+        else openWorkspace(workspace);
+      } else {
+        setSplitMenuOpen(false);
+        setRemoteShellRequest({ connection, split });
+      }
     });
+  }
+
+  function selectRemoteShell(shell: RemoteShellProfile | null) {
+    if (!remoteShellRequest) return;
+    const workspace = createRemoteWorkspace(remoteShellRequest.connection, shell);
+    if (remoteShellRequest.split) splitWithNewWorkspace(workspace);
+    else openWorkspace(workspace);
+    setRemoteShellRequest(null);
   }
 
   /// Opens a local Windows shell as its own Workspace. Each launch is a new
@@ -996,7 +1027,7 @@ export function App() {
         id: connection.id,
         label: connection.displayName,
         icon: <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />,
-        onSelect: () => splitWithNewWorkspace(createRemoteWorkspace(connection)),
+        onSelect: () => openConnection(connection, true, true),
       })),
     },
   ];
@@ -1561,6 +1592,7 @@ export function App() {
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
+          !windowsWorkspace &&
           (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
             <HostMetrics
               key={
@@ -1671,7 +1703,7 @@ export function App() {
             activeRemoteWorkspace && (
               <div className="workspace-navigation">
                 <nav className="feature-nav" aria-label="Workspace features">
-                  {navigation.map(({ id, label, icon: Icon }) => (
+                  {offeredNavigation.map(({ id, label, icon: Icon }) => (
                     <button
                       className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
                       type="button"
@@ -2332,6 +2364,14 @@ export function App() {
           onSaved={saveConnection}
         />
       )}
+      {remoteShellRequest && (
+        <RemoteShellDialog
+          connection={remoteShellRequest.connection}
+          onCapabilities={rememberCapabilities}
+          onClose={() => setRemoteShellRequest(null)}
+          onSelect={selectRemoteShell}
+        />
+      )}
 
       {connectionGroupsOpen && (
         <ConnectionGroupsDialog
@@ -2416,7 +2456,7 @@ export function App() {
           canSplitTerminal={canSplitTerminal}
           // Inspection views exist on a Remote Host only, so a local Workspace
           // offers none to go to.
-          views={activeRemoteWorkspace ? navigation : []}
+          views={activeRemoteWorkspace ? offeredNavigation : []}
           hostCapabilities={hostCapabilities}
           labelForWorkspace={duplicateLabel}
           onClose={() => setPaletteOpen(false)}

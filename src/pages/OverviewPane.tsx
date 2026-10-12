@@ -73,6 +73,7 @@ export function OverviewPane({
     return <ErrorState message={error} action={<button onClick={refresh}>Retry</button>} />;
   }
   if (!capabilities) return null;
+  const windows = capabilities.osId === "windows";
 
   const systemRows: [string, string][] = [
     ["Hostname", capabilities.hostname ?? "Unavailable"],
@@ -153,15 +154,17 @@ export function OverviewPane({
           </p>
         )}
 
-        <div className="overview-stats overview-counts">
-          {stats.map((stat) => (
-            <div className="overview-stat" key={stat.label}>
-              <span className="overview-stat-label">{stat.label}</span>
-              <strong className="overview-stat-value">{stat.value}</strong>
-              {stat.hint && <span className="overview-stat-hint">{stat.hint}</span>}
-            </div>
-          ))}
-        </div>
+        {!windows && (
+          <div className="overview-stats overview-counts">
+            {stats.map((stat) => (
+              <div className="overview-stat" key={stat.label}>
+                <span className="overview-stat-label">{stat.label}</span>
+                <strong className="overview-stat-value">{stat.value}</strong>
+                {stat.hint && <span className="overview-stat-hint">{stat.hint}</span>}
+              </div>
+            ))}
+          </div>
+        )}
 
         <section className="overview-section">
           <h3 className="overview-section-title">System</h3>
@@ -175,18 +178,25 @@ export function OverviewPane({
           </dl>
         </section>
 
-        <section className="overview-section">
-          <h3 className="overview-section-title">Runtime and capabilities</h3>
-          <ul className="capability-list">
-            {capabilityRows.map((row) => (
-              <li className="capability-row" key={row.label}>
-                <span className={`cap-dot cap-${row.tone}`} aria-hidden="true" />
-                <span className="capability-label">{row.label}</span>
-                <span className="capability-value">{row.value}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {windows ? (
+          <p>
+            Windows hosts support SSH terminals, including installed WSL distributions, and
+            Scratchpad. Linux inspection and Enhanced History are unavailable on this host.
+          </p>
+        ) : (
+          <section className="overview-section">
+            <h3 className="overview-section-title">Runtime and capabilities</h3>
+            <ul className="capability-list">
+              {capabilityRows.map((row) => (
+                <li className="capability-row" key={row.label}>
+                  <span className={`cap-dot cap-${row.tone}`} aria-hidden="true" />
+                  <span className="capability-label">{row.label}</span>
+                  <span className="capability-value">{row.value}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </section>
   );

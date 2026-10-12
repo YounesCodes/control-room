@@ -263,12 +263,31 @@ describe("TerminalPane sessions", () => {
     const onState = renderPane(createRemoteWorkspace(connection));
 
     await vi.waitFor(() =>
-      expect(api.startSession).toHaveBeenCalledWith(connection.id, 100, 30, expect.anything()),
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        100,
+        30,
+        expect.anything(),
+        null,
+      ),
     );
     expect(api.startLocalSession).not.toHaveBeenCalled();
     // The connected marker comes from the remote shell, not from the start call.
     expect(onState).toHaveBeenCalledWith("connecting", null);
     expect(onState).not.toHaveBeenCalledWith("connected", null);
+  });
+
+  it("passes the selected WSL distribution on remote startup", async () => {
+    renderPane(createRemoteWorkspace(connection, { id: "wsl:Ubuntu", label: "WSL: Ubuntu" }));
+    await vi.waitFor(() =>
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        100,
+        30,
+        expect.anything(),
+        "wsl:Ubuntu",
+      ),
+    );
   });
 
   it("captures no command history for a local shell", async () => {

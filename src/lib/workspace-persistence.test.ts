@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTerminalLayout, splitTerminalLayout } from "./terminal-layout";
 import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
+import { createRemoteWorkspace } from "./workspace-target";
 import type {
   LocalShellProfile,
   PersistedWorkspaceState,
@@ -34,6 +35,34 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
+  it.each(["overview", "scratchpad"] as const)(
+    "preserves the supported Windows %s view",
+    (view) => {
+      const workspace = createRemoteWorkspace(connection("windows-host"), {
+        id: "powershell",
+        label: "Windows PowerShell",
+      });
+      workspace.view = view;
+      const saved = persistWorkspaceState([workspace], workspace.id, []);
+      const restored = restoreWorkspaceState([connection("windows-host")], saved);
+      expect(restored.workspaces[0].view).toBe(view);
+      saved.workspaces[0].view = "ports";
+      expect(restoreWorkspaceState([connection("windows-host")], saved).workspaces[0].view).toBe(
+        "terminal",
+      );
+    },
+  );
+  it("preserves a Windows WSL selection across saving and restoring a tab", () => {
+    const workspace = createRemoteWorkspace(connection("windows-host"), {
+      id: "wsl:Ubuntu",
+      label: "WSL: Ubuntu",
+    });
+    const saved = persistWorkspaceState([workspace], workspace.id, []);
+    const restored = restoreWorkspaceState([connection("windows-host")], saved);
+    expect((restored.workspaces[0] as RemoteWorkspace).remoteShell).toEqual(workspace.remoteShell);
+    expect(restored.workspaces[0].connectRequested).toBe(true);
+    expect(restored.workspaces[0].sessionId).toBeNull();
+  });
   it("restores tabs and splits with fresh connection requests and no session IDs", () => {
     const state: PersistedWorkspaceState = {
       workspaces: [

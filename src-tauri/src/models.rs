@@ -829,6 +829,8 @@ pub struct PersistedWorkspace {
     pub connection_id: Option<String>,
     #[serde(default)]
     pub local_shell_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_shell: Option<crate::windows_ssh::RemoteShellProfile>,
     pub view: String,
     pub history_paused: bool,
 }

@@ -13,6 +13,12 @@ const api = vi.hoisted(() => ({
   listConnectionTags: vi.fn(),
   listLocalShells: vi.fn(),
   saveWorkspaceState: vi.fn(),
+  discoverRemoteShells: vi.fn().mockResolvedValue({
+    platform: "linux",
+    shells: [],
+    windowsTerminalAvailable: false,
+    wslError: null,
+  }),
   cachedCapabilities: vi.fn(),
   refreshCapabilities: vi.fn(),
   closeSession: vi.fn(),
@@ -167,6 +173,12 @@ describe("Local Terminal", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    api.discoverRemoteShells.mockResolvedValue({
+      platform: "linux",
+      shells: [],
+      windowsTerminalAvailable: false,
+      wslError: null,
+    });
     api.listConnections.mockResolvedValue([]);
     api.settingsContract.mockResolvedValue({
       current: settings,
@@ -945,6 +957,30 @@ describe("Local Terminal", () => {
       expect(state.workspaces).toHaveLength(1);
       expect(state.workspaces[0].localShellId).toBe("powershell-7");
       expect(state.workspaces[0].connectionId).toBeNull();
+    });
+  });
+  it("requires a remote shell choice for Windows and keeps Linux features out of the workspace", async () => {
+    const user = userEvent.setup();
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Windows host");
+    api.listConnections.mockResolvedValue([saved]);
+    api.discoverRemoteShells.mockResolvedValue({
+      platform: "windows",
+      shells: [{ id: "wsl:Ubuntu", label: "WSL: Ubuntu" }],
+      windowsTerminalAvailable: false,
+      wslError: null,
+    });
+    const { container } = render(<App />);
+    await openConnection(user, "Windows host");
+    await screen.findByRole("combobox", { name: "Remote shell" });
+    expect(screen.queryByTestId(/^terminal-/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+    await screen.findByTestId(/^terminal-/);
+    expect(container.querySelector(".feature-nav")?.textContent).toContain("Overview");
+    expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Systemd");
+    expect(container.querySelector(".feature-nav")?.textContent).not.toContain("History");
+    await waitFor(() => {
+      const [state] = api.saveWorkspaceState.mock.calls.at(-1) as [PersistedWorkspaceState];
+      expect(state.workspaces[0].remoteShell?.id).toBe("wsl:Ubuntu");
     });
   });
 });

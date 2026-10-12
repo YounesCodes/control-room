@@ -403,8 +403,22 @@ pub(crate) fn parse_host_resources(text: &str) -> HostResources {
 
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
     let command = capability_command();
-    let text = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)?
-        .success_text()?;
+    let linux = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)
+        .and_then(CommandOutput::success_text);
+    let text = match linux {
+        Ok(text)
+            if parse_key_values(&text).contains_key("os_id")
+                && !parse_key_values(&text)
+                    .get("kernel")
+                    .is_some_and(|kernel| kernel.to_ascii_lowercase().contains("microsoft")) =>
+        {
+            text
+        }
+        result => match crate::windows_ssh::discover_windows(connection) {
+            Ok(host) => return Ok(host.capabilities),
+            Err(_) => result?,
+        },
+    };
     let values = parse_key_values(&text);
     Ok(HostCapabilities {
         connection_id: connection.id.clone(),

@@ -147,9 +147,15 @@ trigger and within the window.
 
 ### Navigation and terminal work
 
-Host OS marks use the Debian and Ubuntu logos, with a generic server glyph
+Host OS marks use the Debian, Ubuntu, and Windows marks, with a generic server glyph
 for other distributions. A generic mark does not mean the OS was undetected;
 its accessible label names the detected distribution when available.
+
+Before opening a new Windows SSH terminal, offer the shells and WSL distributions
+available to the connecting account. Keep shell choice in a focused connection
+dialog and retain the chosen shell across reconnects and workspace restoration.
+Windows hosts offer Overview, Terminal, and Scratchpad. Linux inspection pages
+and remote header metrics are unavailable for Windows hosts, including their WSL terminals.
 
 Use host marks and session presence to help users find a connection or
 Workspace. Put session indicators after labels, separate from OS and shell marks.

@@ -18,6 +18,7 @@ use crate::{
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
+    windows_ssh::{self, RemoteShellCatalog},
 };
 
 #[tauri::command(async)]
@@ -173,12 +174,15 @@ pub fn move_connection_group(
     database.move_connection_group(&id, &direction)
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn start_session(
     app: AppHandle,
     database: State<'_, Database>,
     sessions: State<'_, SessionManager>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
+    remote_shell_id: Option<String>,
     cols: u16,
     rows: u16,
     output: Channel<Response>,
@@ -198,8 +202,36 @@ pub fn start_session(
     if !database.get_settings()?.global_history_enabled {
         connection.history_enabled = false;
     }
-    let started = sessions.start(app, &connection, cols, rows, output)?;
+    let windows = database
+        .get_capabilities(&connection_id)?
+        .is_some_and(|caps| caps.os_id.as_deref() == Some("windows"));
+    let _permit = if remote_shell_id.is_some() || windows {
+        Some(limiter.acquire(&connection_id)?)
+    } else {
+        None
+    };
+    let remote_command = match remote_shell_id {
+        Some(id) => Some(windows_ssh::selected_command(&connection, &id)?),
+        None if windows => Some(windows_ssh::default_command(&connection)?),
+        None => None,
+    };
+    let started = sessions.start(app, &connection, remote_command, cols, rows, output)?;
     Ok(started)
+}
+
+#[tauri::command(async)]
+pub fn discover_remote_shells(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+) -> Result<RemoteShellCatalog, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    let catalog = windows_ssh::discover(&connection)?;
+    if let Some(capabilities) = &catalog.capabilities {
+        database.save_capabilities(capabilities)?;
+    }
+    Ok(catalog)
 }
 
 /// The local shells this machine actually has, plus whether administrator
@@ -904,6 +936,7 @@ mod tests {
         for command in [
             "get_environment_info",
             "start_session",
+            "discover_remote_shells",
             "list_local_shells",
             "start_local_session",
             "refresh_capabilities",

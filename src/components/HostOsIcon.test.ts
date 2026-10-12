@@ -5,6 +5,8 @@ describe("hostOsKind", () => {
   it("recognizes supported distro IDs without case or whitespace sensitivity", () => {
     expect(hostOsKind("debian")).toBe("debian");
     expect(hostOsKind(" Ubuntu ")).toBe("ubuntu");
+    expect(hostOsKind(" WINDOWS ")).toBe("windows");
+    expect(hostOsLabel("windows")).toBe("Windows host");
   });
 
   it("uses a neutral fallback when the distro is missing or unsupported", () => {
