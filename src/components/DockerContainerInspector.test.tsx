@@ -97,21 +97,27 @@ describe("DockerContainerInspector", () => {
     expect(document.body.textContent).not.toContain("secret=value");
   });
 
-  it("offers sudo only for permission errors", () => {
-    render(
-      <DockerContainerInspector
-        summary={summary}
-        cache={{
-          value: null,
-          fetchedAt: null,
-          loading: false,
-          error: "Permission denied while opening Docker",
-        }}
-        onRefresh={vi.fn()}
-        onRetryWithSudo={vi.fn()}
-        onViewLogs={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Retry with sudo" })).toBeTruthy();
-  });
+  it.each([false, true])(
+    "offers sudo only for Linux permission errors (Windows: %s)",
+    (windowsHost) => {
+      render(
+        <DockerContainerInspector
+          summary={summary}
+          windowsHost={windowsHost}
+          cache={{
+            value: null,
+            fetchedAt: null,
+            loading: false,
+            error: "Permission denied while opening Docker",
+          }}
+          onRefresh={vi.fn()}
+          onRetryWithSudo={vi.fn()}
+          onViewLogs={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByRole("button", { name: windowsHost ? "Retry" : "Retry with sudo" }),
+      ).toBeTruthy();
+    },
+  );
 });

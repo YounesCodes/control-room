@@ -20,3 +20,5 @@ In **Logs**, choose a systemd unit or Docker container, choose the last 50, 100,
 **Receive new lines** keeps reading after the initial lines load. **Pause** freezes the display while the stream continues; **Stop** ends the stream. Search filters the lines already loaded. You can clear the view or turn line wrapping off. Scrolling up keeps your reading position; **Jump to latest** returns to new lines.
 
 Systemd logs come from `journalctl`; container logs come from `docker logs`. Closing the view stops the stream. Fetched logs stay in memory and are not saved. For a different journal query, use the terminal.
+
+On Windows hosts, Logs offers Docker containers only. It reads both standard output and error output through the Windows Docker CLI. Windows service event logs are not included.

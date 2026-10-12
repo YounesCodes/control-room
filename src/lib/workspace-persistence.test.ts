@@ -35,7 +35,7 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
-  it.each(["overview", "scratchpad"] as const)(
+  it.each(["overview", "services", "ports", "docker", "logs", "scratchpad"] as const)(
     "preserves the supported Windows %s view",
     (view) => {
       const workspace = createRemoteWorkspace(connection("windows-host"), {
@@ -46,7 +46,7 @@ describe("Workspace restoration", () => {
       const saved = persistWorkspaceState([workspace], workspace.id, []);
       const restored = restoreWorkspaceState([connection("windows-host")], saved);
       expect(restored.workspaces[0].view).toBe(view);
-      saved.workspaces[0].view = "ports";
+      saved.workspaces[0].view = "boot";
       expect(restoreWorkspaceState([connection("windows-host")], saved).workspaces[0].view).toBe(
         "terminal",
       );

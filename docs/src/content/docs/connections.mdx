@@ -24,13 +24,13 @@ Enter a display name, SSH destination, and username. A port (1–65535) and iden
 
 Enable the Windows OpenSSH Server and save the host as a normal SSH connection. Shell detection needs an accepted host key and key or agent authentication that works without a prompt.
 
-When you open a new terminal for a Windows host, Control Room checks what is installed and asks you to choose a **Remote shell** before connecting. It offers Windows PowerShell, Command Prompt, PowerShell 7 and Git Bash when found, other supported shells on the account's PATH, and each available WSL distribution. Select **Connect** to open that shell inside Control Room.
+When you open a new terminal for a Windows host, choose a shell from the grouped list. It offers Windows PowerShell, Command Prompt, PowerShell 7 and Git Bash when found, other supported shells on the account's PATH, and each available WSL distribution. Select **Connect** to open that shell inside Control Room. **Refresh available shells** checks for changes. Recent detection is reused for up to a minute to avoid repeating it before launch.
 
 Installed Windows Terminal profiles that launch a supported shell also appear in the picker. The profile's command and arguments run over SSH. Its graphical window, colors, and other desktop settings remain in Windows Terminal.
 
 Reconnect and restored tabs reuse their chosen shell. **New terminal** lets you choose another shell on the same host. If a selected shell was removed, open a new terminal and choose an available one.
 
-Windows hosts offer Overview, Terminal, and Scratchpad. Linux inspection pages, Enhanced History, and remote header metrics are unavailable, including when the terminal runs WSL. WSL uses the distribution's default user and shell.
+Windows hosts offer Overview, Terminal, Services, Ports, and Scratchpad. Docker and container Logs appear when the Windows Docker CLI is detected and require daemon access for the SSH account. Optional header metrics show Windows resource readings. Inspection always reads Windows itself, including when the terminal runs WSL. WSL uses the distribution's default user and shell. Linux Boot, Baselines, and Enhanced History are unavailable on these connections.
 
 ## Organize and remove hosts
 

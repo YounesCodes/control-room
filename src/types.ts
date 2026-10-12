@@ -103,6 +103,15 @@ export interface SystemdUnit {
   unitFileState: string | null;
 }
 
+export interface WindowsService {
+  id: string;
+  displayName: string;
+  description: string | null;
+  state: string;
+  startMode: string;
+  processId: number | null;
+}
+
 export interface DockerContainer {
   id: string;
   name: string;
@@ -139,7 +148,7 @@ export interface FirewallRule {
 }
 
 export interface FirewallStatus {
-  backend?: "ufw" | "firewalld" | null;
+  backend?: "ufw" | "firewalld" | "windows" | null;
   available: boolean;
   active: boolean | null;
   defaultIncoming: string | null;

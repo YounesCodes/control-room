@@ -1,7 +1,14 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { addConnection, feature, ipc, restartApp, runtime, terminalCommand } from "./helpers";
-import type { HostCapabilities, RemoteShellCatalog } from "../src/types";
+import type {
+  AppSettings,
+  HostCapabilities,
+  RemoteShellCatalog,
+  ListeningSocket,
+  WindowsService,
+  HeaderMetrics,
+} from "../src/types";
 
 // Opt-in fixture identity stays in environment variables, outside the repository.
 const host = process.env.CONTROL_ROOM_WINDOWS_TEST_HOST;
@@ -15,14 +22,16 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
       process.env.CONTROL_ROOM_WINDOWS_TEST_PORT || "22",
     );
     await $(".host-main*=Windows test host").click();
-    await $("select[aria-label='Remote shell']").waitForExist({ timeout: 60_000 });
+    await $("input[name='remote-shell']").waitForExist({ timeout: 60_000 });
     const catalog = await ipc<RemoteShellCatalog>("discover_remote_shells", {
       connectionId: saved.id,
     });
     expect(catalog.platform).toBe("windows");
     const profile = catalog.shells.find((shell) => shell.id === shellId);
     if (!profile) throw new Error(`Expected test shell ${shellId} is not available`);
-    await $("select[aria-label='Remote shell']").selectByAttribute("value", profile.id);
+    await $("[role=dialog]")
+      .$("aria/" + profile.label)
+      .click();
     await $("[role=dialog]").$("button=Connect").click();
     await browser.waitUntil(
       async () => $('.session-tab-wrap.active[data-session-state="connected"]').isExisting(),
@@ -40,7 +49,7 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     await feature("Overview");
     await expect($(".overview-page")).toHaveText(expect.stringContaining("Windows"));
     await expect($(".feature-nav").$("button=Systemd")).not.toExist();
-    await expect($(".feature-nav").$("button=Ports")).not.toExist();
+    await expect($(".feature-nav").$("button=Ports")).toExist();
   });
   it("connects Command Prompt and reconnects after a clean exit", async () => {
     await connect("cmd");
@@ -66,5 +75,48 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
       { timeout: 60_000 },
     );
     await terminalCommand("printf 'WSL_%s\\n' RESTORED_OK", "WSL_RESTORED_OK");
+  });
+  it("reads Windows ports, services, and enabled header resources through the UI", async () => {
+    const saved = await connect("powershell");
+    const sockets = await ipc<ListeningSocket[]>("list_ports", { connectionId: saved.id });
+    expect(sockets.some((socket) => socket.port === 22 && socket.protocol === "tcp")).toBe(true);
+    await feature("Ports");
+    await $("button=Table").click();
+    await browser.waitUntil(
+      async () =>
+        $(".feature-page")
+          .getText()
+          .then((text) => text.includes("sshd")),
+      { timeout: 30_000 },
+    );
+    await feature("Services");
+    await $("input[aria-label='Search Windows services']").setValue("sshd");
+    await $(".dense-row").click();
+    await expect($(".detail-panel")).toHaveText(expect.stringContaining("OpenSSH"));
+    const services = await ipc<WindowsService[]>("list_windows_services", {
+      connectionId: saved.id,
+    });
+    expect(services.some((service) => service.id === "sshd" && service.state === "running")).toBe(
+      true,
+    );
+    const contract = await ipc<{ current: AppSettings }>("get_settings_contract");
+    await ipc("save_settings", {
+      settings: {
+        ...contract.current,
+        hostMetricsEnabled: true,
+        hostMetrics: ["cpu", "ram", "disk", "uptime"],
+        hostMetricsIntervalSeconds: 30,
+      },
+    });
+    await restartApp(true);
+    await $(".host-metrics").waitForExist({ timeout: 30_000 });
+    await $(".host-metrics-status[data-state='live']").waitForExist({ timeout: 30_000 });
+    const metrics = await ipc<HeaderMetrics>("sample_header_metrics", {
+      connectionId: saved.id,
+      metrics: ["cpu", "ram", "disk", "uptime"],
+    });
+    expect(metrics.memoryTotalKib).toBeGreaterThan(0);
+    expect(metrics.diskTotalKib).toBeGreaterThan(0);
+    expect(metrics.uptimeSeconds).toBeGreaterThan(0);
   });
 });

@@ -73,6 +73,21 @@ const details: DockerContainerDetails = {
 };
 
 describe("DockerPane container inspection", () => {
+  it("does not offer Linux sudo for a Windows Docker permission error", async () => {
+    render(
+      <DockerPane
+        connection={connection}
+        windowsHost
+        cache={{ items: [], fetchedAt: null, loading: false, error: "permission denied" }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("permission denied")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry with sudo" })).toBeNull();
+  });
   afterEach(cleanup);
 
   beforeEach(() => {

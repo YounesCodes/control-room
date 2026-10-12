@@ -68,7 +68,7 @@ foreach ($file in $settingsFiles) {
     $terminalAvailable = $true
     try {
         # Remove JSON comments and trailing commas while preserving quoted strings.
-        $json = Get-Content -Raw -LiteralPath $file.FullName
+        $json = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName
         $json = [regex]::Replace($json, '(?s)"(?:\\.|[^"\\])*"|//[^\r\n]*|/\*.*?\*/', {
             param($match) if ($match.Value.StartsWith('"')) { $match.Value } else { '' }
         })
@@ -98,11 +98,39 @@ foreach ($file in $settingsFiles) {
         }
     } catch { $profileError = 'Some Windows Terminal profiles could not be read. Detected shells remain available.' }
 }
+$dockerCommand = Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+$dockerPath = $null
+if ($dockerCommand) { $dockerPath = $dockerCommand.Source }
+if (!$dockerPath) { $dockerPath = Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe' }
+$dockerAvailable = Test-Path -LiteralPath $dockerPath -PathType Leaf
+$dockerAccessible = $false
+$dockerVersion = $null
+if ($dockerAvailable) {
+    # A stopped or remote Docker context must not hold the shell picker open.
+    $dockerProcess = New-Object System.Diagnostics.Process
+    $dockerProcess.StartInfo.FileName = $dockerPath
+    $dockerProcess.StartInfo.Arguments = 'info --format "{{json .ServerVersion}}"'
+    $dockerProcess.StartInfo.UseShellExecute = $false
+    $dockerProcess.StartInfo.CreateNoWindow = $true
+    $dockerProcess.StartInfo.RedirectStandardOutput = $true
+    $dockerProcess.StartInfo.RedirectStandardError = $true
+    try {
+        [void]$dockerProcess.Start()
+        if ($dockerProcess.WaitForExit(1500)) {
+            $output = $dockerProcess.StandardOutput.ReadToEnd()
+            if ($dockerProcess.ExitCode -eq 0) { $dockerAccessible = $true; $dockerVersion = $output | ConvertFrom-Json }
+        } else { $dockerProcess.Kill(); $dockerProcess.WaitForExit() }
+    } catch { $dockerAccessible = $false }
+    finally { $dockerProcess.Dispose() }
+}
+$runningServices = @(Get-Service | Where-Object { $_.Status -eq 'Running' }).Count
 @{
     capabilities = @{
         hostname = $env:COMPUTERNAME; osId = 'windows'; osFamily = 'windows';
         osName = $os.Caption; osVersion = $os.Version; kernel = $os.Version;
         architecture = $os.OSArchitecture; defaultShell = $defaultShell
+        dockerAvailable = $dockerAvailable; dockerAccessible = $dockerAccessible; dockerVersion = $dockerVersion
+        runningServiceCount = $runningServices
     }
     shells = @($shells.ToArray()); windowsTerminalAvailable = $terminalAvailable; wslError = $wslError; profileError = $profileError
 } | ConvertTo-Json -Depth 6 -Compress

@@ -3,7 +3,13 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CachedList, DockerContainer, ListeningSocket, SavedConnection } from "../types";
+import type {
+  CachedList,
+  DockerContainer,
+  HostCapabilities,
+  ListeningSocket,
+  SavedConnection,
+} from "../types";
 import { api } from "../lib/api";
 import { PortsPane } from "./PortsPane";
 
@@ -106,16 +112,16 @@ const containers: CachedList<DockerContainer> = {
   error: null,
 };
 
-function renderPane() {
+function renderPane(capabilities: HostCapabilities | null = null, cache = sockets) {
   const onOpenSystemd = vi.fn();
   const onOpenContainer = vi.fn();
   const onViewLogs = vi.fn();
   render(
     <PortsPane
       connection={connection}
-      capabilities={null}
+      capabilities={capabilities}
       globalSudoEnabled={false}
-      cache={sockets}
+      cache={cache}
       containersCache={containers}
       onCacheChange={vi.fn()}
       onContainersCacheChange={vi.fn()}
@@ -129,6 +135,26 @@ function renderPane() {
 
 describe("PortsPane", () => {
   afterEach(cleanup);
+
+  it("keeps Windows ownership and firewall failures free of sudo prompts", async () => {
+    vi.mocked(api.inspectFirewall).mockRejectedValueOnce("Permission denied by Windows");
+    vi.mocked(api.listContainers).mockClear();
+    renderPane({ osId: "windows", dockerAvailable: false } as HostCapabilities, {
+      ...sockets,
+      items: sockets.items.map((socket) => ({
+        ...socket,
+        processName: null,
+        systemdUnit: null,
+        ownership: "unavailable",
+      })),
+    });
+    await screen.findByText(/Permission denied by Windows/);
+    expect(
+      screen.getByText(/Some owning processes could not be read by this Windows SSH account/),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /sudo/i })).toBeNull();
+    expect(api.listContainers).not.toHaveBeenCalled();
+  });
 
   it("defaults to the Overview graph and navigates only through established owners", async () => {
     const user = userEvent.setup();

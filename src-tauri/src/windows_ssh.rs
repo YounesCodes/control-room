@@ -1,5 +1,11 @@
 use chrono::Utc;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    sync::OnceLock,
+    time::{Duration, Instant},
+};
 
 use crate::{
     models::{HostCapabilities, SavedConnection},
@@ -24,7 +30,7 @@ pub struct RemoteShellCatalog {
     pub profile_error: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct ResolvedShell {
     id: String,
     label: String,
@@ -32,7 +38,7 @@ struct ResolvedShell {
     arguments: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowsHost {
     pub capabilities: HostCapabilities,
@@ -40,6 +46,30 @@ pub struct WindowsHost {
     windows_terminal_available: bool,
     wsl_error: Option<String>,
     profile_error: Option<String>,
+}
+
+const SHELL_CACHE_TTL: Duration = Duration::from_secs(60);
+type ShellCache = Mutex<HashMap<String, (Instant, WindowsHost)>>;
+fn shell_cache() -> &'static ShellCache {
+    static CACHE: OnceLock<ShellCache> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+fn connection_key(connection: &SavedConnection) -> String {
+    serde_json::to_string(&(
+        &connection.id,
+        &connection.destination,
+        &connection.username,
+        connection.port,
+        &connection.identity_file,
+    ))
+    .expect("connection fields serialize")
+}
+fn cached_host(connection: &SavedConnection) -> Option<WindowsHost> {
+    shell_cache()
+        .lock()
+        .get(&connection_key(connection))
+        .filter(|(time, _)| time.elapsed() < SHELL_CACHE_TTL)
+        .map(|(_, host)| host.clone())
 }
 
 // EncodedCommand uses UTF-16LE. Encoding the complete script avoids passing
@@ -102,10 +132,24 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
     }
     host.capabilities.connection_id = connection.id.clone();
     host.capabilities.detected_at = Utc::now().to_rfc3339();
+    let mut cache = shell_cache().lock();
+    cache.retain(|_, (time, _)| time.elapsed() < SHELL_CACHE_TTL);
+    if cache.len() >= 64
+        && let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, (time, _))| *time)
+            .map(|(key, _)| key.clone())
+    {
+        cache.remove(&oldest);
+    }
+    cache.insert(connection_key(connection), (Instant::now(), host.clone()));
     Ok(host)
 }
 
-pub fn discover(connection: &SavedConnection) -> Result<RemoteShellCatalog, String> {
+pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShellCatalog, String> {
+    if !refresh && let Some(host) = cached_host(connection) {
+        return Ok(catalog(host));
+    }
     // A tiny probe keeps Linux connections on their existing launch path.
     if let Ok(output) =
         RemoteCommandExecutor::execute(connection, "detect_host_platform", "uname -s; uname -r")
@@ -126,7 +170,11 @@ pub fn discover(connection: &SavedConnection) -> Result<RemoteShellCatalog, Stri
         });
     }
     let host = discover_windows(connection)?;
-    Ok(RemoteShellCatalog {
+    Ok(catalog(host))
+}
+
+fn catalog(host: WindowsHost) -> RemoteShellCatalog {
+    RemoteShellCatalog {
         platform: "windows".into(),
         shells: host
             .shells
@@ -140,7 +188,7 @@ pub fn discover(connection: &SavedConnection) -> Result<RemoteShellCatalog, Stri
         wsl_error: host.wsl_error,
         capabilities: Some(host.capabilities),
         profile_error: host.profile_error,
-    })
+    }
 }
 
 fn literal(value: &str) -> Result<String, String> {
@@ -175,9 +223,13 @@ fn launch(shell: &ResolvedShell) -> Result<String, String> {
 }
 
 pub fn selected_command(connection: &SavedConnection, shell_id: &str) -> Result<String, String> {
-    // Resolve again at launch. The caller supplies only an ID, never a command,
-    // and an uninstalled shell fails instead of silently selecting another one.
-    let host = discover_windows(connection)?;
+    // Reuse only a recent result for this exact SSH target. The caller supplies
+    // an ID; executable and arguments remain backend-owned. The launch script
+    // verifies that the executable still exists on the remote host.
+    let host = match cached_host(connection) {
+        Some(host) => host,
+        None => discover_windows(connection)?,
+    };
     let shell = host
         .shells
         .iter()
@@ -189,7 +241,10 @@ pub fn selected_command(connection: &SavedConnection, shell_id: &str) -> Result<
 }
 
 pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
-    let host = discover_windows(connection)?;
+    let host = match cached_host(connection) {
+        Some(host) => host,
+        None => discover_windows(connection)?,
+    };
     let shell = host
         .shells
         .iter()
@@ -202,6 +257,77 @@ pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_shells_are_bound_to_target_and_expire() {
+        let mut connection = SavedConnection {
+            id: "cache-boundary".into(),
+            display_name: "Fixture".into(),
+            destination: "host.example".into(),
+            username: Some("fixture".into()),
+            port: Some(22),
+            identity_file: None,
+            history_enabled: false,
+            sudo_enabled: false,
+            group_id: None,
+            tags: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            last_connected_at: None,
+        };
+        let host: WindowsHost = serde_json::from_value(serde_json::json!({ "capabilities": { "osId": "windows" }, "shells": [{"id": "cmd", "label": "Command Prompt", "executable": "C:\\Windows\\cmd.exe", "arguments": []}], "windowsTerminalAvailable": false, "wslError": null, "profileError": null })).unwrap();
+        let key = connection_key(&connection);
+        shell_cache()
+            .lock()
+            .insert(key.clone(), (Instant::now(), host.clone()));
+        assert!(cached_host(&connection).is_some());
+        connection.destination = "different.example".into();
+        assert!(cached_host(&connection).is_none());
+        connection.destination = "host.example".into();
+        connection.username = Some("different-account".into());
+        assert!(cached_host(&connection).is_none());
+        connection.username = Some("fixture".into());
+        shell_cache()
+            .lock()
+            .insert(key.clone(), (Instant::now() - SHELL_CACHE_TTL, host));
+        assert!(cached_host(&connection).is_none());
+        shell_cache().lock().remove(&key);
+    }
+
+    #[test]
+    #[ignore = "requires a configured Windows SSH host"]
+    fn fresh_shell_selection_avoids_a_second_discovery_round_trip() {
+        let connection = SavedConnection {
+            id: "windows-selection-performance".into(),
+            display_name: "Windows fixture".into(),
+            destination: std::env::var("CONTROL_ROOM_WINDOWS_TEST_HOST")
+                .expect("Windows fixture host"),
+            username: Some(
+                std::env::var("CONTROL_ROOM_WINDOWS_TEST_USER").expect("Windows fixture user"),
+            ),
+            port: None,
+            identity_file: None,
+            history_enabled: false,
+            sudo_enabled: false,
+            group_id: None,
+            tags: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            last_connected_at: None,
+        };
+        discover_windows(&connection).unwrap();
+        let started = std::time::Instant::now();
+        selected_command(&connection, "powershell").unwrap();
+        let elapsed = started.elapsed();
+        eprintln!(
+            "Fresh shell selection preparation: {} ms",
+            elapsed.as_millis()
+        );
+        assert!(
+            elapsed < std::time::Duration::from_millis(250),
+            "Freshly detected shell selection repeats a slow discovery call: {elapsed:?}"
+        );
+    }
 
     #[test]
     fn encoded_command_uses_utf16_and_does_not_expose_shell_metacharacters() {

@@ -154,8 +154,14 @@ its accessible label names the detected distribution when available.
 Before opening a new Windows SSH terminal, offer the shells and WSL distributions
 available to the connecting account. Keep shell choice in a focused connection
 dialog and retain the chosen shell across reconnects and workspace restoration.
-Windows hosts offer Overview, Terminal, and Scratchpad. Linux inspection pages
-and remote header metrics are unavailable for Windows hosts, including their WSL terminals.
+Group Windows shells, WSL distributions, and supported Windows Terminal profiles
+in compact radio rows. Use a quiet hover fill, a persistent selected border, and
+an inset focus ring for keyboard navigation. Windows marks stay gray and include
+the detected 10 or 11 version when known.
+Windows hosts offer Overview, Terminal, Services, Ports, and Scratchpad, plus Docker
+and container Logs when the Docker CLI is detected. Optional header metrics inspect
+Windows itself, including when the terminal runs WSL. Service inventory is read-only;
+firewall profiles describe policy without claiming a port is reachable.
 
 Use host marks and session presence to help users find a connection or
 Workspace. Put session indicators after labels, separate from OS and shell marks.

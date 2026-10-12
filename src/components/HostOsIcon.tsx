@@ -25,11 +25,27 @@ export function hostOsLabel(osId: string | null | undefined): string {
   return `${normalized} host`;
 }
 
-export function HostOsIcon({ osId }: { osId: string | null | undefined }) {
+export function windowsVersion(osName: string | null | undefined): "10" | "11" | null {
+  const version = osName?.match(/\bWindows\s+(10|11)\b/i)?.[1];
+  return version === "10" || version === "11" ? version : null;
+}
+
+export function HostOsIcon({
+  osId,
+  osName,
+}: {
+  osId: string | null | undefined;
+  osName?: string | null;
+}) {
   const kind = hostOsKind(osId);
+  const version = kind === "windows" ? windowsVersion(osName) : null;
 
   return (
-    <span className={`host-os-icon host-os-${kind}`} role="img" aria-label={hostOsLabel(osId)}>
+    <span
+      className={`host-os-icon host-os-${kind}${version ? " host-os-versioned" : ""}`}
+      role="img"
+      aria-label={version ? `Windows ${version} host` : hostOsLabel(osId)}
+    >
       {kind === "windows" ? (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M2 3h9v8H2zM13 3h9v8h-9zM2 13h9v8H2zM13 13h9v8h-9z" />
@@ -44,6 +60,11 @@ export function HostOsIcon({ osId }: { osId: string | null | undefined }) {
         </svg>
       ) : (
         <Server size={13} strokeWidth={1.8} aria-hidden="true" />
+      )}
+      {version && (
+        <span className="host-os-version" aria-hidden="true">
+          {version}
+        </span>
       )}
     </span>
   );

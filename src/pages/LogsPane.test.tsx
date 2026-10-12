@@ -126,6 +126,36 @@ describe("LogsPane reading position", () => {
     vi.clearAllMocks();
   });
 
+  it("offers only Docker logs on Windows and keeps access failures free of sudo prompts", async () => {
+    api.startDockerLogStream.mockRejectedValueOnce(new Error("Permission denied by Docker"));
+    render(
+      <LogsPane
+        connection={connection}
+        windowsHost
+        settings={settings}
+        logTailOptions={[200]}
+        servicesCache={servicesCache}
+        containersCache={{
+          items: [
+            { id: "container-fixture", name: "Windows container" },
+          ] as import("../types").DockerContainer[],
+          fetchedAt: Date.now(),
+          loading: false,
+          error: null,
+        }}
+        selectedSource={{ type: "docker", id: "container-fixture" }}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("option", { name: "Systemd" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Permission denied by Docker");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.startJournalStream).not.toHaveBeenCalled();
+  });
+
   it("separates receiving lines, wrapping, and keeping the viewport at the latest line", async () => {
     const user = userEvent.setup();
     render(

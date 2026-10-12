@@ -40,6 +40,11 @@ jobs:
       - run: npm ci
       - run: npm run check:version
       - run: npm run check:frontend
+      - name: Check Windows shell and Docker command fixtures
+        shell: powershell
+        run: |
+          & ./scripts/test-windows-ssh-probe.ps1
+          & ./scripts/test-windows-docker.ps1
       - run: npx playwright install chromium
       - run: npm run test:browser
 

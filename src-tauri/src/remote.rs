@@ -1152,7 +1152,7 @@ fn systemd_unit_list_command() -> &'static str {
     "LC_ALL=C systemctl show --type=service,timer,mount,socket --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState"
 }
 
-fn parse_container(line: &str) -> Result<DockerContainer, String> {
+pub(crate) fn parse_container(line: &str) -> Result<DockerContainer, String> {
     let value: Value = serde_json::from_str(line)
         .map_err(|error| format!("Docker returned invalid JSON: {error}"))?;
     let string = |key: &str| {
@@ -1768,7 +1768,7 @@ fn docker_container_inspect_command(container_id: &str) -> String {
     format!("docker inspect --type container -- '{container_id}'")
 }
 
-fn parse_container_details(text: &str) -> Result<DockerContainerDetails, String> {
+pub(crate) fn parse_container_details(text: &str) -> Result<DockerContainerDetails, String> {
     let parsed: Value = serde_json::from_str(text)
         .map_err(|error| format!("Docker inspect returned invalid JSON: {error}"))?;
     let elements = parsed
@@ -2151,6 +2151,22 @@ impl StreamManager {
         validate_tail(lines)?;
         let command = docker_log_command(container, lines, follow);
         self.start(app, connection, command, elevation, output)
+    }
+
+    pub fn start_windows_docker_logs(
+        &self,
+        app: AppHandle,
+        connection: &SavedConnection,
+        container: &str,
+        options: LogStreamOptions,
+    ) -> Result<StreamStarted, String> {
+        validate_tail(options.lines)?;
+        let command = crate::windows_inspection::docker_log_command(
+            container,
+            options.lines,
+            options.follow,
+        )?;
+        self.start(app, connection, command, Elevation::None, options.output)
     }
 
     fn start(

@@ -11,7 +11,9 @@ Linux inspection views need their own tools: systemd for services and boot infor
 
 The terminal can use normal OpenSSH password prompts. Inspection reads run separately and cannot ask for an SSH password. Use a key or an SSH agent for those reads. A key path in Control Room points to your existing file; the app does not copy it.
 
-Docker inspection also needs an account that can read the Docker daemon. If access requires sudo, you can allow a read-only retry.
+Windows inspection uses Windows PowerShell and the built-in networking and CIM commands for services, ports, TCP peers, and resource readings. Docker requires a Windows `docker.exe` on PATH or in Docker Desktop's standard installation directory, plus daemon access for the SSH account. Control Room does not start Docker or inspect Docker installed only inside WSL.
+
+Docker inspection also needs an account that can read the Docker daemon. On Linux, if access requires sudo, you can allow a read-only retry.
 
 ## Structured remote inspection
 
@@ -37,3 +39,5 @@ The portable views require ordinary POSIX shell tools. Systemd, Boot, and journa
 ## Firewall inspection
 
 Ports reads UFW or firewalld when either front-end is installed. UFW rules include its incoming default policy. The firewalld read reports active zones and explicit numeric port rules. Service-name rules, rich rules, direct rules, nftables-only configurations, and iptables-only configurations remain unavailable, so Control Room does not turn a missing numeric rule into a claim that a port is blocked.
+
+On Windows, Ports reports firewall profile enablement and default inbound policies. It does not evaluate individual Windows firewall rules or decide whether a listener is reachable.

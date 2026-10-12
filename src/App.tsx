@@ -176,6 +176,9 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
 const TerminalPane = lazy(() =>
   import("./components/TerminalPane").then((module) => ({ default: module.TerminalPane })),
 );
+const WindowsServicesPane = lazy(() =>
+  import("./pages/WindowsServicesPane").then((module) => ({ default: module.WindowsServicesPane })),
+);
 
 export function App() {
   const [remoteShellRequest, setRemoteShellRequest] = useState<{
@@ -417,7 +420,20 @@ export function App() {
     (!!activeRemoteWorkspace.remoteShell ||
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "windows");
   const offeredNavigation = windowsWorkspace
-    ? navigation.filter((item) => ["overview", "terminal", "scratchpad"].includes(item.id))
+    ? navigation
+        .filter((item) =>
+          [
+            "overview",
+            "terminal",
+            "services",
+            "ports",
+            "scratchpad",
+            ...(hostCapabilities[activeRemoteWorkspace!.connectionId]?.dockerAvailable
+              ? ["docker", "logs"]
+              : []),
+          ].includes(item.id),
+        )
+        .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
     : navigation;
   const activeSavedConnection = activeRemoteWorkspace
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
@@ -1026,7 +1042,12 @@ export function App() {
       options: connections.map((connection) => ({
         id: connection.id,
         label: connection.displayName,
-        icon: <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />,
+        icon: (
+          <HostOsIcon
+            osId={hostCapabilities[connection.id]?.osId}
+            osName={hostCapabilities[connection.id]?.osName}
+          />
+        ),
         onSelect: () => openConnection(connection, true, true),
       })),
     },
@@ -1042,7 +1063,12 @@ export function App() {
       options: connections.map((connection) => ({
         id: connection.id,
         label: connection.displayName,
-        icon: <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />,
+        icon: (
+          <HostOsIcon
+            osId={hostCapabilities[connection.id]?.osId}
+            osName={hostCapabilities[connection.id]?.osName}
+          />
+        ),
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openConnection(connection, true);
@@ -1326,7 +1352,10 @@ export function App() {
         <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark" />
       )
     ) : (
-      <HostOsIcon osId={hostCapabilities[workspace.connectionId]?.osId} />
+      <HostOsIcon
+        osId={hostCapabilities[workspace.connectionId]?.osId}
+        osName={hostCapabilities[workspace.connectionId]?.osName}
+      />
     );
   }
 
@@ -1350,7 +1379,10 @@ export function App() {
           aria-describedby={`connection-session-${connection.id}`}
         >
           <span className="target-mark">
-            <HostOsIcon osId={hostCapabilities[connection.id]?.osId} />
+            <HostOsIcon
+              osId={hostCapabilities[connection.id]?.osId}
+              osName={hostCapabilities[connection.id]?.osName}
+            />
           </span>
           <span className="host-row-details">
             <strong>{connection.displayName}</strong>
@@ -1592,7 +1624,6 @@ export function App() {
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
-          !windowsWorkspace &&
           (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
             <HostMetrics
               key={
@@ -2178,18 +2209,26 @@ export function App() {
                       onCapabilitiesChange={rememberCapabilities}
                     />
                   )}
-                  {activeRemoteWorkspace.view === "services" && (
-                    <ServicesPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      cache={activeRemoteWorkspace.servicesCache}
-                      onCacheChange={(cache) =>
-                        updateServicesCache(activeRemoteWorkspace.id, cache)
-                      }
-                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
-                      focusId={activeRemoteWorkspace.systemdSelectionId}
-                    />
-                  )}
+                  {activeRemoteWorkspace.view === "services" &&
+                    (windowsWorkspace ? (
+                      <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
+                        <WindowsServicesPane
+                          key={activeRemoteWorkspace.id}
+                          connection={activeConnection}
+                        />
+                      </Suspense>
+                    ) : (
+                      <ServicesPane
+                        key={activeRemoteWorkspace.id}
+                        connection={activeConnection}
+                        cache={activeRemoteWorkspace.servicesCache}
+                        onCacheChange={(cache) =>
+                          updateServicesCache(activeRemoteWorkspace.id, cache)
+                        }
+                        onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
+                        focusId={activeRemoteWorkspace.systemdSelectionId}
+                      />
+                    ))}
                   {activeRemoteWorkspace.view === "ports" && (
                     <PortsPane
                       key={activeRemoteWorkspace.id}
@@ -2221,6 +2260,7 @@ export function App() {
                     <DockerPane
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
+                      windowsHost={windowsWorkspace}
                       cache={activeRemoteWorkspace.containersCache}
                       detailsCache={activeRemoteWorkspace.containerDetailsCache}
                       onCacheChange={(cache) =>
@@ -2248,6 +2288,7 @@ export function App() {
                     <LogsPane
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
+                      windowsHost={windowsWorkspace}
                       settings={settings}
                       logTailOptions={settingsContract.logTailOptions}
                       servicesCache={activeRemoteWorkspace.servicesCache}

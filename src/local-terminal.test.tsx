@@ -971,7 +971,7 @@ describe("Local Terminal", () => {
     });
     const { container } = render(<App />);
     await openConnection(user, "Windows host");
-    await screen.findByRole("combobox", { name: "Remote shell" });
+    await screen.findByRole("radio", { name: "WSL: Ubuntu" });
     expect(screen.queryByTestId(/^terminal-/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Connect" }));
     await screen.findByTestId(/^terminal-/);

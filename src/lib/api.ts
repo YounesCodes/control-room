@@ -23,6 +23,7 @@ import type {
   ListeningSocket,
   LocalShellCatalog,
   RemoteShellCatalog,
+  WindowsService,
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
@@ -108,10 +109,10 @@ export const api = {
     invoke<void>("set_connection_group_collapsed", { id, collapsed }),
   moveConnectionGroup: (id: string, direction: "up" | "down") =>
     invoke<ConnectionGroup[]>("move_connection_group", { id, direction }),
-  discoverRemoteShells: (connectionId: string) =>
+  discoverRemoteShells: (connectionId: string, refresh = false) =>
     invokeRemoteInspection<RemoteShellCatalog>(
       "discover_remote_shells",
-      { connectionId },
+      { connectionId, refresh },
       "Remote shell detection did not respond after 60 seconds",
       60_000,
     ),
@@ -160,6 +161,8 @@ export const api = {
     invokeRemoteInspection<HostResources>("sample_host_resources", { connectionId }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
+  listWindowsServices: (connectionId: string) =>
+    invokeRemoteInspection<WindowsService[]>("list_windows_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   listPorts: (connectionId: string, sudoPassword: string | null = null) =>

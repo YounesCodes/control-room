@@ -162,8 +162,9 @@ describe("OverviewPane", () => {
       }),
     );
     await screen.findByText("Windows 11 Pro 10.0.26100");
-    expect(screen.getByText(/Windows hosts support SSH terminals/)).toBeTruthy();
-    expect(screen.queryByText("Running services")).toBeNull();
+    expect(screen.getByText("Windows services")).toBeTruthy();
+    expect(screen.getByText("TCP and UDP listeners")).toBeTruthy();
+    expect(screen.getByText("Running services")).toBeTruthy();
     expect(screen.queryByText("Password required")).toBeNull();
   });
 });

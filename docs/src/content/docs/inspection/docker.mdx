@@ -30,4 +30,6 @@ Details can include:
 - mount destinations
 - validated Compose project, service, number, and one-off facts
 
-The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). If Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).
+The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). On Linux, if Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).
+
+On Windows hosts, **Docker** and **Logs** appear when the Windows Docker CLI is detected. They use that account's Docker context. The daemon must already be running and accessible to the SSH account. If access fails, check Docker and account permissions, then retry. Docker installed only inside WSL is not included.

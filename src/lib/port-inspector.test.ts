@@ -46,6 +46,20 @@ function container(overrides: Partial<DockerContainer> = {}): DockerContainer {
 }
 
 describe("port inspector", () => {
+  it("keeps Windows firewall profile evidence separate from per-port disposition", () => {
+    const policy: FirewallStatus = {
+      backend: "windows",
+      available: true,
+      active: true,
+      defaultIncoming: "Private: enabled=True, incoming=Block",
+      rules: [],
+      collectedAt: "now",
+    };
+    expect(firewallForSocket(policy, socket({ port: 22 })).state).toBe("unknown");
+    expect(firewallForSocket(policy, socket({ port: 22 })).label).toContain(
+      "profile policies only",
+    );
+  });
   it("correlates only one exact Docker address, port, and protocol match", () => {
     expect(resolveSocketContainer(socket(), [container()])?.container.name).toBe("gateway-1");
     expect(resolveSocketContainer(socket({ protocol: "udp" }), [container()])).toBeNull();

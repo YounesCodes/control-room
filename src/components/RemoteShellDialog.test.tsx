@@ -27,12 +27,12 @@ describe("remote shell selection", () => {
   it("waits for a deliberate choice and sends the selected WSL profile", async () => {
     const onSelect = vi.fn();
     render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={onSelect} />);
-    await screen.findByRole("combobox", { name: "Remote shell" });
+    await screen.findByRole("radio", { name: "Windows PowerShell" });
     expect(onSelect).not.toHaveBeenCalled();
-    await userEvent.selectOptions(screen.getByRole("combobox"), "wsl:Ubuntu");
+    await userEvent.click(screen.getByRole("radio", { name: "WSL: Ubuntu" }));
     await userEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(onSelect).toHaveBeenCalledWith(shells[1]);
-    expect(screen.getByText(/Windows Terminal is installed/)).toBeTruthy();
+    expect(screen.getByRole("group", { name: "WSL distributions" })).toBeTruthy();
   });
   it("opens Linux without offering Windows shells", async () => {
     discoverRemoteShells.mockResolvedValue({ platform: "linux", shells: [] });
@@ -41,14 +41,25 @@ describe("remote shell selection", () => {
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(null));
     expect(screen.queryByRole("combobox")).toBeNull();
   });
+  it("refreshes discovery while retaining a shell that is still available", async () => {
+    render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("radio", { name: "WSL: Ubuntu" }));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh available shells" }));
+    await waitFor(() => expect(discoverRemoteShells).toHaveBeenLastCalledWith(connection.id, true));
+    await waitFor(() =>
+      expect((screen.getByRole("radio", { name: "WSL: Ubuntu" }) as HTMLInputElement).checked).toBe(
+        true,
+      ),
+    );
+  });
   it("shows detection failure and retries without starting a session", async () => {
     discoverRemoteShells.mockRejectedValueOnce("SSH authentication failed");
     const onSelect = vi.fn();
     render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={onSelect} />);
     await screen.findByRole("alert");
     expect(onSelect).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Retry detection" }));
-    await screen.findByRole("combobox");
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByRole("radio", { name: "Windows PowerShell" });
     expect(discoverRemoteShells).toHaveBeenCalledTimes(2);
   });
   it("ignores discovery after cancellation and restores keyboard focus", async () => {

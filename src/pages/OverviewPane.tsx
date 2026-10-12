@@ -92,7 +92,9 @@ export function OverviewPane({
       ? `Version ${capabilities.dockerVersion ?? "unknown"}`
       : capabilities.dockerAccessibleWithSudo
         ? `Version ${capabilities.dockerVersion ?? "unknown"} — reachable with sudo`
-        : "Installed — sudo required"
+        : windows
+          ? "Installed, daemon unavailable"
+          : "Installed — sudo required"
     : "Not detected";
   const dockerTone: CapabilityTone = capabilities.dockerAvailable
     ? capabilities.dockerAccessible
@@ -120,7 +122,9 @@ export function OverviewPane({
   ];
 
   const containersValue = dockerReachable
-    ? `${capabilities.runningContainerCount ?? 0} / ${capabilities.totalContainerCount ?? 0}`
+    ? capabilities.runningContainerCount !== null && capabilities.totalContainerCount !== null
+      ? `${capabilities.runningContainerCount} / ${capabilities.totalContainerCount}`
+      : "Unavailable"
     : "—";
   const stats: { label: string; value: string; hint?: string }[] = [
     {
@@ -154,17 +158,15 @@ export function OverviewPane({
           </p>
         )}
 
-        {!windows && (
-          <div className="overview-stats overview-counts">
-            {stats.map((stat) => (
-              <div className="overview-stat" key={stat.label}>
-                <span className="overview-stat-label">{stat.label}</span>
-                <strong className="overview-stat-value">{stat.value}</strong>
-                {stat.hint && <span className="overview-stat-hint">{stat.hint}</span>}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="overview-stats overview-counts">
+          {stats.map((stat) => (
+            <div className="overview-stat" key={stat.label}>
+              <span className="overview-stat-label">{stat.label}</span>
+              <strong className="overview-stat-value">{stat.value}</strong>
+              {stat.hint && <span className="overview-stat-hint">{stat.hint}</span>}
+            </div>
+          ))}
+        </div>
 
         <section className="overview-section">
           <h3 className="overview-section-title">System</h3>
@@ -178,25 +180,26 @@ export function OverviewPane({
           </dl>
         </section>
 
-        {windows ? (
-          <p>
-            Windows hosts support SSH terminals, including installed WSL distributions, and
-            Scratchpad. Linux inspection and Enhanced History are unavailable on this host.
-          </p>
-        ) : (
-          <section className="overview-section">
-            <h3 className="overview-section-title">Runtime and capabilities</h3>
-            <ul className="capability-list">
-              {capabilityRows.map((row) => (
-                <li className="capability-row" key={row.label}>
-                  <span className={`cap-dot cap-${row.tone}`} aria-hidden="true" />
-                  <span className="capability-label">{row.label}</span>
-                  <span className="capability-value">{row.value}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <section className="overview-section">
+          <h3 className="overview-section-title">Runtime and capabilities</h3>
+          <ul className="capability-list">
+            {(windows
+              ? [
+                  { label: "Windows services", value: "Read-only inventory", tone: "ok" },
+                  { label: "Ports", value: "TCP and UDP listeners", tone: "ok" },
+                  { label: "Connections", value: "Established TCP peers", tone: "ok" },
+                  { label: "Docker", value: dockerValue, tone: dockerTone },
+                ]
+              : capabilityRows
+            ).map((row) => (
+              <li className="capability-row" key={row.label}>
+                <span className={`cap-dot cap-${row.tone}`} aria-hidden="true" />
+                <span className="capability-label">{row.label}</span>
+                <span className="capability-value">{row.value}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </section>
   );
