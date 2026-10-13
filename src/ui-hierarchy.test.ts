@@ -265,7 +265,10 @@ describe("application hierarchy", () => {
 
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
-    expect((appSource + tabScrollerSource).match(/data-tauri-drag-region/g)).toHaveLength(5);
+    expect(tabScrollerSource).toMatch(/className="session-tab-content"[^>]*data-tauri-drag-region/);
+    expect(appSource).toMatch(
+      /className="session-window-drag-region"[\s\S]*?data-tauri-drag-region/,
+    );
   });
 
   it("grants a native permission for every window control the frontend uses", () => {
@@ -341,7 +344,8 @@ describe("application hierarchy", () => {
   it("keeps groups inside focus mode and outlines the active group and pane", () => {
     expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
     expect(appSource).toContain('aria-label="Split terminal"');
-    expect(appSource).toContain("<Plus size={15} /> New terminal");
+    expect(appSource).toContain('aria-label="New terminal"');
+    expect(appSource).toContain("session-pane-tabs");
     expect(appSource).not.toContain("openFocusGroup");
     expect(appSource).toContain("Split vertically");
     expect(appSource).toContain("Split horizontally");

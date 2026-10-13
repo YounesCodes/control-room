@@ -38,7 +38,9 @@ export function WorkspaceTabScroller({
   const snapToTab = useCallback(() => {
     const list = listRef.current;
     if (!list) return;
-    const active = contentRef.current?.querySelector<HTMLElement>(".session-tab-wrap.active");
+    const active = contentRef.current?.querySelector<HTMLElement>(
+      ".session-tab-wrap.active, .session-tab-group.active",
+    );
     if (active && active.offsetWidth > list.clientWidth) return;
     const current = list.scrollLeft;
     const nearest = tabStarts().reduce((best, start) =>
@@ -65,7 +67,7 @@ export function WorkspaceTabScroller({
       endSpace.getBoundingClientRect().left - content.getBoundingClientRect().left;
     const naturalEnd = naturalWidth - list.clientWidth;
     const finalStart = tabStarts().find((start) => start >= naturalEnd - 1);
-    endSpace.style.width = `${Math.max(0, Math.ceil((finalStart ?? naturalEnd) - naturalEnd))}px`;
+    endSpace.style.width = `${naturalEnd > 0 ? Math.max(0, Math.ceil((finalStart ?? naturalEnd) - naturalEnd)) : 0}px`;
     setOverflow(content.scrollWidth > region.clientWidth + 1);
     setListWidth(list.clientWidth);
     setCanScrollLeft(list.scrollLeft > 1);
@@ -99,7 +101,9 @@ export function WorkspaceTabScroller({
   useLayoutEffect(() => {
     if (!activeTabId) return;
     const list = listRef.current;
-    const active = contentRef.current?.querySelector<HTMLElement>(".session-tab-wrap.active");
+    const active = contentRef.current?.querySelector<HTMLElement>(
+      ".session-tab-wrap.active, .session-tab-group.active",
+    );
     if (!list || !active || list.clientWidth === 0) return;
     const listRect = list.getBoundingClientRect();
     const activeRect = active.getBoundingClientRect();
@@ -153,9 +157,14 @@ export function WorkspaceTabScroller({
           event.currentTarget.scrollLeft += event.deltaY;
         }}
       >
-        <div className="session-tab-content" ref={contentRef}>
+        <div className="session-tab-content" ref={contentRef} data-tauri-drag-region>
           {children}
-          <span className="session-tab-end-space" ref={endSpaceRef} aria-hidden="true" />
+          <span
+            className="session-tab-end-space"
+            ref={endSpaceRef}
+            aria-hidden="true"
+            data-tauri-drag-region
+          />
         </div>
       </div>
       {overflow && (

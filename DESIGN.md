@@ -47,7 +47,13 @@ target beside its readings.
 
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
-scan. The active Workspace, group, and pane need a clear non-text state cue.
+scan. Give each split group one tab with its name and pane count. Show the active
+group's terminals in a separate compact pane row, with group rename and delete
+controls at its end. Keep inactive groups' member tabs out of that row. The active
+Workspace, group, and pane need a clear non-text state cue. Keep a reserved window
+drag handle in the Focus Mode header, even when tabs overflow; buttons and tabs
+remain ordinary click targets. Use a compact plus and dropdown control for
+New terminal outside the scrolling tabs.
 Local Terminal Mode starts the default enabled standard local shell in normal focus
 mode, with the Connections rail hidden.
 Leaving focus mode returns to the active Workspace without changing its target

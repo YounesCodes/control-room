@@ -100,6 +100,94 @@ async function split(direction: "vertically" | "horizontally") {
     .click();
 }
 describe("Local Terminal Mode in the real App", () => {
+  it.each([960, 1600])(
+    "uses one tab per group and a keyboard-accessible pane row at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mountApp();
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      await split("vertically");
+      await split("horizontally");
+      const strip = page.getByRole("navigation", { name: "Open Workspaces" }).element();
+      expect(strip.querySelectorAll(".session-tab-group")).toHaveLength(1);
+      expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(0);
+      const paneRow = container!.querySelector<HTMLElement>(".session-pane-tabs")!;
+      expect(paneRow.querySelectorAll(".session-tab-wrap")).toHaveLength(3);
+      await vi.waitFor(() =>
+        expect(paneRow.querySelector(".session-tab-scroll-button")).toBeNull(),
+      );
+      const first = paneRow.querySelector<HTMLButtonElement>(".session-tab-main")!;
+      first.focus();
+      await userEvent.keyboard("{Enter}");
+      await vi.waitFor(() =>
+        expect(paneRow.querySelector(".session-tab-wrap.active .session-tab-main")).toBe(first),
+      );
+      await page.getByRole("button", { name: /^Rename .* group$/ }).click();
+      await page.getByRole("textbox").fill("Build and logs");
+      await page.getByRole("button", { name: "Rename", exact: true }).click();
+      await expect
+        .element(page.getByRole("button", { name: "Open Build and logs 3 terminals" }))
+        .toBeVisible();
+      const result = await axe.run(container!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(
+        result.violations.map(
+          ({ id, nodes }) =>
+            `${id}: ${nodes.map((node) => `${node.target}: ${node.failureSummary}`).join("; ")}`,
+        ),
+      ).toEqual([]);
+      await page.screenshot({ path: `../../test-results/terminal-groups-${width}.png` });
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "New terminal" })
+        .getByRole("button", { name: /Command Prompt/ })
+        .click();
+      expect(container!.querySelector(".session-pane-tabs")).toBeNull();
+      await page.getByRole("button", { name: "Open Build and logs 3 terminals" }).click();
+      expect(
+        container!
+          .querySelector(".session-pane-tabs .session-tab-wrap.active .session-tab-main")
+          ?.getAttribute("title"),
+      ).toBe(first.getAttribute("title"));
+      await page
+        .getByRole("button", { name: "Delete Build and logs; terminals stay open" })
+        .click();
+      expect(container!.querySelector(".session-pane-tabs")).toBeNull();
+      expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+    },
+  );
+  it.each([960, 1600])(
+    "keeps a direct window drag target with overflowing tabs at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mountApp();
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      for (let index = 0; index < 8; index++) {
+        await page.getByRole("button", { name: "New terminal", exact: true }).click();
+        await page
+          .getByRole("dialog", { name: "New terminal" })
+          .getByRole("button", { name: /Command Prompt/ })
+          .click();
+      }
+      const drag = container!.querySelector<HTMLElement>(".session-window-drag-region");
+      expect(drag, "Focus Mode needs reserved space to move the native window").not.toBeNull();
+      const bounds = drag!.getBoundingClientRect();
+      expect(bounds.width).toBeGreaterThanOrEqual(48);
+      const hit = document.elementFromPoint(
+        bounds.left + bounds.width / 2,
+        bounds.top + bounds.height / 2,
+      );
+      expect(hit).toBe(drag);
+      expect(hit).toHaveAttribute("data-tauri-drag-region");
+      expect(
+        container!.querySelector(".session-tab-main")!.hasAttribute("data-tauri-drag-region"),
+      ).toBe(false);
+      await expect
+        .element(page.getByRole("button", { name: "Scroll terminals left" }))
+        .toBeVisible();
+    },
+  );
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
     await page.viewport(1280, 800);
     mountApp();

@@ -22,6 +22,68 @@ async function renameActive(name: string) {
 }
 
 describe("ConPTY and Workspace lifecycle", () => {
+  it("dispatches permitted native dragging from the Focus Mode handle", async () => {
+    await openLocal();
+    await $("aria/Focus terminal").click();
+    // WebDriver input is confined to WebView2. Observe the real native call
+    // and its result rather than treating synthetic motion as OS movement.
+    await browser.execute(() => {
+      const probeWindow = window as unknown as {
+        __TAURI_INTERNALS__: { convertFileSrc: (command: string, protocol: string) => string };
+        __dragProbe: {
+          original: typeof fetch;
+          calls: { complete: boolean; error: string | null }[];
+        };
+      };
+      const original = window.fetch;
+      const dragUrl = probeWindow.__TAURI_INTERNALS__.convertFileSrc(
+        "plugin:window|start_dragging",
+        "ipc",
+      );
+      probeWindow.__dragProbe = { original, calls: [] };
+      window.fetch = async (input, options) => {
+        if (String(input) !== dragUrl) return original(input, options);
+        const call = { complete: false, error: null as string | null };
+        probeWindow.__dragProbe.calls.push(call);
+        try {
+          const response = await original(input, options);
+          if (response.headers.get("Tauri-Response") !== "ok")
+            call.error = await response.clone().text();
+          return response;
+        } catch (error) {
+          call.error = String(error);
+          throw error;
+        } finally {
+          call.complete = true;
+        }
+      };
+    });
+    const calls = () =>
+      browser.execute(
+        () =>
+          (
+            window as unknown as {
+              __dragProbe: { calls: { complete: boolean; error: string | null }[] };
+            }
+          ).__dragProbe.calls,
+      );
+    try {
+      await $(".session-tab-wrap.active .session-tab-main").click();
+      expect(await calls()).toEqual([]);
+      await $(".session-window-drag-region").click();
+      await browser.waitUntil(async () => (await calls())[0]?.complete === true);
+      expect(await calls()).toEqual([{ complete: true, error: null }]);
+    } finally {
+      await browser.execute(() => {
+        const probeWindow = window as unknown as {
+          __dragProbe?: { original: typeof fetch };
+        };
+        window.fetch = probeWindow.__dragProbe!.original;
+        delete probeWindow.__dragProbe;
+      });
+    }
+    await terminalCommand("echo DRAG_PRESERVED_SESSION", "DRAG_PRESERVED_SESSION");
+  });
   it("selects independent terminal groups and deletes a group while keeping its sessions", async () => {
     await openLocal();
     await $("aria/Focus terminal").click();
@@ -29,17 +91,17 @@ describe("ConPTY and Workspace lifecycle", () => {
       if (name === "Second group") await openLocal();
       await $("aria/Split terminal").click();
       await $(".terminal-split-menu").$("button*=Command Prompt").click();
-      await $(".session-tab-group.active button[title='Rename terminal group']").click();
+      await $(".session-pane-tabs button[title='Rename terminal group']").click();
       await $("[role=dialog] input").setValue(name);
       await $("button=Rename").click();
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 4);
-    await $("[aria-label='Open First group, 2 terminals']").click();
+    await $("[aria-label='Open First group 2 terminals']").click();
     await terminalCommand("echo FIRST_GROUP_OK", "FIRST_GROUP_OK");
-    await $("[aria-label='Open Second group, 2 terminals']").click();
+    await $("[aria-label='Open Second group 2 terminals']").click();
     await terminalCommand("echo SECOND_GROUP_OK", "SECOND_GROUP_OK");
     await $("[aria-label='Delete Second group; terminals stay open']").click();
-    await expect($("[aria-label='Open Second group, 2 terminals']")).not.toExist();
+    await expect($("[aria-label='Open Second group 2 terminals']")).not.toExist();
     expect((await runtime()).sessionIds).toHaveLength(4);
     await terminalCommand("echo UNGROUPED_SURVIVOR", "UNGROUPED_SURVIVOR");
   });
@@ -177,7 +239,7 @@ describe("ConPTY and Workspace lifecycle", () => {
       );
       expect(printed[0]).not.toContain("SECOND_PANE_ONLY");
       expect(printed[1]).not.toContain("FIRST_PANE_ONLY");
-      await $(".session-tab-group.active button[title='Rename terminal group']").click();
+      await $(".session-pane-tabs button[title='Rename terminal group']").click();
       await $("[role=dialog] input").setValue("Persistent pair");
       await $("button=Rename").click();
       await browser.waitUntil(

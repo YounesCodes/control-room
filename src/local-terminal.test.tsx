@@ -801,8 +801,10 @@ describe("Local Terminal", () => {
     ]);
     let splitGroup = screen.getByRole("group", { name: "prod-web group" });
     expect(within(splitGroup).getByText("prod-web group")).toBeTruthy();
-    expect(within(splitGroup).getByText("prod-web")).toBeTruthy();
-    expect(within(splitGroup).getByText("PowerShell 7")).toBeTruthy();
+    expect(within(splitGroup).queryByText("prod-web")).toBeNull();
+    const paneTabs = screen.getByRole("navigation", { name: "Terminals in prod-web group" });
+    expect(within(paneTabs).getByText("prod-web")).toBeTruthy();
+    expect(within(paneTabs).getByText("PowerShell 7")).toBeTruthy();
     expect(within(splitGroup).queryByText("Git Bash")).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
     expect(document.querySelectorAll(".terminal-workspace-pane.active")).toHaveLength(1);
@@ -840,7 +842,7 @@ describe("Local Terminal", () => {
     expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
 
-    await user.click(screen.getByRole("button", { name: "Open Proxmox, 2 terminals" }));
+    await user.click(screen.getByRole("button", { name: "Open Proxmox 2 terminals" }));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
     expect(screen.getByRole("group", { name: "Proxmox" }).classList).toContain("active");
 
@@ -864,7 +866,7 @@ describe("Local Terminal", () => {
     expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
-    await user.click(screen.getByRole("button", { name: "Open Git Bash group, 2 terminals" }));
+    await user.click(screen.getByRole("button", { name: "Open Git Bash group 2 terminals" }));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
   });
 

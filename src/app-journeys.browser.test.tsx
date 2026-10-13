@@ -260,6 +260,82 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("keeps grouped session state and activity visible and routes input to the selected pane", async () => {
+    await mount();
+    await navigate("Terminal");
+    await vi.waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === "start_session")).toBe(true),
+    );
+    const remote = native.invoke.mock.calls.find(([command]) => command === "start_session")![1]
+      .output;
+    remote.onmessage(
+      new TextEncoder().encode(
+        "\r\nexample@build-host:~$ git status\r\nOn branch main\r\nWorking tree clean\r\n\r\nexample@build-host:~$ ",
+      ).buffer,
+    );
+    await page.screenshot({ path: "../test-results/terminal-header-normal.png" });
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    await page.getByRole("button", { name: /^Rename .* group$/ }).click();
+    await page
+      .getByRole("dialog", { name: "Rename terminal group" })
+      .getByRole("textbox")
+      .fill("Build and logs");
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
+    const localCall = native.invoke.mock.calls.find(
+      ([command]) => command === "start_local_session",
+    )!;
+    localCall[1].output.onmessage(
+      new TextEncoder().encode("\r\nC:\\demo> npm run build\r\nBuild complete.\r\n\r\nC:\\demo> ")
+        .buffer,
+    );
+    const group = page.getByRole("button", { name: "Open Build and logs 2 terminals" });
+    await expect
+      .element(group)
+      .toHaveAccessibleDescription(/Fixture Alpha: connected.*Command Prompt: running/);
+    await page.screenshot({ path: "../test-results/terminal-header-groups.png" });
+    await page.getByRole("button", { name: "New terminal", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New terminal" })
+      .getByRole("button", { name: /Command Prompt/ })
+      .click();
+    const remoteSession = "session-1";
+    remote.onmessage(new TextEncoder().encode("\x07Background build complete\r\n").buffer);
+    await expect.element(group).toHaveAccessibleDescription(/terminal bell/);
+    expect(group.element().querySelector(".terminal-activity-bell")).not.toBeNull();
+    emit("session-state-changed", {
+      sessionId: remoteSession,
+      state: "disconnected",
+      reason: "Example session ended",
+    });
+    await expect.element(group).toHaveAccessibleDescription(/Fixture Alpha: disconnected/);
+    expect(group.element().querySelector(".presence-disconnected")).not.toBeNull();
+    await group.click();
+    await page
+      .getByRole("navigation", { name: "Terminals in Build and logs" })
+      .getByRole("button", { name: "Command Prompt", exact: true })
+      .click();
+    await userEvent.click(
+      element.querySelector<HTMLElement>(".terminal-workspace-pane.active .xterm-screen")!,
+    );
+    await userEvent.keyboard("echo pane");
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(([command]) => command === "write_session").at(-1)![1]
+          .sessionId,
+      ).toBe("session-2"),
+    );
+    // Pane selection is also reflected in persisted state, so a later restore
+    // and active-pane actions use the same terminal.
+    await vi.waitFor(() =>
+      expect(persisted.activeWorkspaceId).toBe(
+        persisted.workspaces.find((workspace) => workspace.localShellId === "command-prompt")!.id,
+      ),
+    );
+  });
   it("keeps metrics off by default, saves customization, and follows remote and local workspaces", async () => {
     await mount();
     expect(native.invoke.mock.calls.some(([name]) => name === "sample_header_metrics")).toBe(false);

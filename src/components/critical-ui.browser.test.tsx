@@ -314,7 +314,6 @@ describe("critical UI in Chromium", () => {
     const right = page.getByRole("button", { name: "Scroll terminals right" });
     await right.click();
     await vi.waitFor(() => expect(list.scrollLeft).toBeGreaterThan(0));
-    await right.click();
     await vi.waitFor(() => expect((right.element() as HTMLButtonElement).disabled).toBe(true));
 
     const edge = list.getBoundingClientRect().left;
