@@ -98,7 +98,7 @@ export function ServicesPane({
   }
 
   return (
-    <ResizableSplit name="Services" className="feature-page split-page">
+    <ResizableSplit name="Services" className="feature-page split-page services-page">
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
@@ -155,7 +155,7 @@ export function ServicesPane({
             <option value="socket">Sockets</option>
           </select>
         </div>
-        <div className="dense-list">
+        <div className="dense-list" role="region" aria-label="Systemd units" tabIndex={0}>
           {filtered.map((unit) => (
             <button
               className={unit.id === selectedId ? "dense-row selected-row" : "dense-row"}

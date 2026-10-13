@@ -856,7 +856,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
           element.querySelectorAll(".list-panel .dense-row, .list-panel .docker-branch").length,
         ).toBe(100),
       );
-      const panel = element.querySelector<HTMLElement>(".list-panel")!;
+      const panel =
+        element.querySelector<HTMLElement>(".services-page .dense-list") ??
+        element.querySelector<HTMLElement>(".list-panel")!;
       expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
         element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
       );
@@ -967,6 +969,70 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
+  it("expands an open Scratchpad when the window grows", async () => {
+    persisted.panelSizes = { "content:scratchpad": 720 };
+    await mount();
+    await navigate("Scratchpad");
+    await expect
+      .element(page.getByRole("textbox", { name: "Connection note", exact: true }))
+      .toBeVisible();
+    for (const width of [1180, 1920, 2560, 960]) {
+      await page.viewport(width, 900);
+      await vi.waitFor(() => {
+        const section = element.querySelector<HTMLElement>(".connection-section")!;
+        const content = element.querySelector<HTMLElement>(".connection-section-content")!;
+        expect(content.clientWidth).toBe(section.clientWidth);
+        const editor = element.querySelector<HTMLElement>(".scratchpad-editor")!;
+        const heading = element.querySelector<HTMLElement>(".scratchpad-heading")!;
+        const pad = element.querySelector<HTMLElement>(".scratchpad-page")!;
+        const style = getComputedStyle(pad);
+        const available =
+          pad.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        expect(editor.clientWidth).toBeCloseTo(available, 0);
+        expect(heading.clientWidth).toBeCloseTo(available, 0);
+        expect(pad.scrollWidth).toBeLessThanOrEqual(pad.clientWidth);
+      });
+      if (width === 1920) {
+        await page.screenshot({ path: "../test-results/scratchpad-wide.png" });
+      }
+    }
+  });
+
+  it.each([960, 1600])(
+    "scrolls Linux service rows while keeping the filters visible at %s px",
+    async (width) => {
+      await page.viewport(width, 600);
+      overrides.set("list_services", () =>
+        Array.from({ length: 100 }, (_, index) => ({
+          ...fixtures.service,
+          id: `example-${index}.service`,
+        })),
+      );
+      await mount();
+      await navigate("Systemd");
+      await expect
+        .element(page.getByRole("button", { name: /example-99.service/ }))
+        .toBeInTheDocument();
+      const list = element.querySelector<HTMLElement>(".dense-list")!;
+      await userEvent.wheel(list, { delta: { y: 700 } });
+      await vi.waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+      await expect.element(page.getByPlaceholder("Search units")).toBeVisible();
+      list.focus();
+      expect(document.activeElement).toBe(list);
+      await userEvent.keyboard("{End}");
+      await vi.waitFor(() =>
+        expect(list.scrollTop + list.clientHeight).toBeGreaterThanOrEqual(list.scrollHeight - 1),
+      );
+      await userEvent.click(page.getByRole("button", { name: /example-99.service/ }));
+      expect(element.querySelector(".detail-panel h2")?.textContent).toBe("example-99.service");
+      await expect.element(page.getByRole("button", { name: "View journal" })).toBeVisible();
+      expect(
+        (await axe.run(element.querySelector<HTMLElement>(".services-page")!)).violations,
+      ).toEqual([]);
+      await page.screenshot({ path: `../test-results/linux-service-list-${width}.png` });
+    },
+  );
+
   it("offers Windows Docker as its own capability even when detection finds no CLI", async () => {
     const capabilities = {
       ...fixtures.capabilities(),
@@ -983,7 +1049,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       windowsTerminalAvailable: false,
       wslError: null,
     }));
-    failures.set("list_containers", "Docker CLI was not found on this Windows host.");
+    failures.set("list_containers", "Docker is not installed on this host.");
     root.render(<App />);
     await page
       .getByRole("button", { name: /Fixture Alpha/ })
@@ -1000,12 +1066,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toBeVisible();
     await navigate("Docker");
     await expect
-      .element(page.getByText("Docker CLI was not found on this Windows host.", { exact: true }))
+      .element(page.getByText("Docker is not installed on this host.", { exact: true }))
       .toBeVisible();
     await expect.element(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
     await navigate("Logs");
     await expect
-      .element(page.getByText("Docker CLI was not found on this Windows host.", { exact: true }))
+      .element(page.getByText("Docker is not installed on this host.", { exact: true }))
       .toBeVisible();
     expect(native.invoke.mock.calls.some(([command]) => command === "list_services")).toBe(false);
   });

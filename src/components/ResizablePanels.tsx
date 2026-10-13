@@ -287,22 +287,25 @@ export function ConnectionSection({
   const key = `content:${section}`;
   const max = Math.min(PANEL_LIMITS.content.max, width || PANEL_LIMITS.content.max);
   const min = Math.min(PANEL_LIMITS.content.min, max);
-  const size = clampPanelSize(sizes[key] ?? max, min, max);
+  const fullWidth = section === "scratchpad";
+  const size = fullWidth ? width : clampPanelSize(sizes[key] ?? max, min, max);
   if (section === "terminal") return null;
   return (
     <PanelLayoutContext.Provider value={layout ?? context}>
       <div ref={ref} className="connection-section">
         <div className="connection-section-content" style={{ width: width ? size : "100%" }}>
           {children}
-          <ResizeDivider
-            label={`Resize ${section.charAt(0).toUpperCase() + section.slice(1)} content`}
-            value={size}
-            min={min}
-            max={max}
-            className="content-divider"
-            onChange={(next) => setSize(key, next)}
-            onReset={() => setSize(key, null)}
-          />
+          {!fullWidth && (
+            <ResizeDivider
+              label={`Resize ${section.charAt(0).toUpperCase() + section.slice(1)} content`}
+              value={size}
+              min={min}
+              max={max}
+              className="content-divider"
+              onChange={(next) => setSize(key, next)}
+              onReset={() => setSize(key, null)}
+            />
+          )}
         </div>
       </div>
     </PanelLayoutContext.Provider>

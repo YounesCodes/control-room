@@ -1,5 +1,5 @@
 import "./isolation";
-import { $, browser, expect } from "@wdio/globals";
+import { $, $$, browser, expect } from "@wdio/globals";
 import {
   addConnection,
   connectionMenu,
@@ -84,6 +84,21 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     const units = await ipc<SystemdUnit[]>("list_services", { connectionId: saved.id });
     expect(units.length).toBeGreaterThan(0);
     await feature("Systemd");
+    await browser.waitUntil(async () => (await $$(".dense-row").length) === units.length);
+    const list = $(".dense-list");
+    await browser.action("wheel").scroll({ origin: list, deltaY: 700 }).perform();
+    await browser.waitUntil(async () =>
+      browser.execute(() => document.querySelector<HTMLElement>(".dense-list")!.scrollTop > 0),
+    );
+    await expect($("input[placeholder='Search units']")).toBeDisplayed();
+    await list.click();
+    await browser.keys("End");
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const list = document.querySelector<HTMLElement>(".dense-list")!;
+        return list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+      }),
+    );
     await $("input[placeholder='Search units']").setValue(units[0].id);
     await $(".dense-row").click();
     await expect($(".detail-panel")).toHaveText(expect.stringContaining(units[0].id));

@@ -51,6 +51,24 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     await expect($(".feature-nav").$("button=Systemd")).not.toExist();
     await expect($(".feature-nav").$("button=Ports")).toExist();
   });
+  it("reports missing Windows Docker without PowerShell serialization", async function () {
+    const saved = await connect("powershell");
+    const capabilities = await ipc<HostCapabilities>("get_cached_capabilities", {
+      connectionId: saved.id,
+    });
+    if (capabilities.dockerAvailable) this.skip();
+    for (const view of ["Docker", "Logs"]) {
+      await feature(view);
+      await $(".panel-state-error p").waitForExist({ timeout: 30_000 });
+      await expect($(".panel-state-error p")).toHaveText("Docker is not installed on this host.");
+      await expect($("button=Retry")).toBeDisplayed();
+      if (view === "Docker") {
+        await $(".panel-state-error").saveScreenshot(
+          "test-results/desktop/windows-docker-unavailable.png",
+        );
+      }
+    }
+  });
   it("connects Command Prompt and reconnects after a clean exit", async () => {
     await connect("cmd");
     const old = (await runtime()).sessionIds[0];

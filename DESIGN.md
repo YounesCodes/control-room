@@ -74,6 +74,10 @@ navigation reachable. In dialogs, keep the title and actions available while a
 long body scrolls. Menus should open as anchored overlays and must not resize or
 reflow the row that opened them.
 
+Scratchpad uses the full workspace width and grows with the window. Keep its
+heading and editor aligned. Systemd service rows scroll within their own bounded
+area, leaving search, filters, and refresh available above the list.
+
 ## Visual language
 
 ### Color and surfaces

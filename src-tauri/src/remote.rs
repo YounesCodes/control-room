@@ -1061,6 +1061,16 @@ fn log_operation_timing(
 fn classify_failure(code: i32, stderr: &[u8]) -> String {
     let stderr = String::from_utf8_lossy(stderr).trim().to_string();
     let lower = stderr.to_ascii_lowercase();
+    // PowerShell serializes thrown errors as CLIXML under EncodedCommand.
+    // These Windows inspection messages have known recovery steps; keep the
+    // serialization, duplicate stack context, and XML out of the UI.
+    if lower.contains("docker cli was not found on this windows host.") {
+        return "Docker is not installed on this host.".into();
+    }
+    if lower.contains("docker could not read the daemon. check that docker is running and this ssh account has access.") {
+        return "Docker is unavailable. Check that it is running and this SSH account has access."
+            .into();
+    }
     let category = if lower.contains("permission denied")
         || lower.contains("access denied")
         || lower.contains("you need to be root")
@@ -3369,6 +3379,29 @@ esac
             classify_failure(127, b"sh: 1: docker: not found")
                 .starts_with("Feature is not installed")
         );
+    }
+
+    #[test]
+    fn windows_docker_unavailable_errors_are_concise() {
+        for (message, expected) in [
+            (
+                "Docker CLI was not found on this Windows host.",
+                "Docker is not installed on this host.",
+            ),
+            (
+                "Docker could not read the daemon. Check that Docker is running and this SSH account has access.",
+                "Docker is unavailable. Check that it is running and this SSH account has access.",
+            ),
+        ] {
+            for stderr in [
+                message.to_string(),
+                format!(
+                    "#< CLIXML\r\n<Objs Version=\"1.1.0.1\" xmlns=\"http://schemas.microsoft.com/powershell/2004/04\"><S S=\"Error\">{message}_x000D__x000A_</S><S S=\"Error\">At line:15 char:5_x000D__x000A_</S></Objs>"
+                ),
+            ] {
+                assert_eq!(classify_failure(1, stderr.as_bytes()), expected);
+            }
+        }
     }
 
     #[test]
