@@ -136,7 +136,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     }
     await terminalCommand("echo DRAG_PRESERVED_SESSION", "DRAG_PRESERVED_SESSION");
   });
-  it("selects independent terminal groups and deletes a group while keeping its sessions", async () => {
+  it("selects independent terminal groups and ungroups one while keeping its sessions", async () => {
     await openLocal();
     await $("aria/Focus terminal").click();
     for (const name of ["First group", "Second group"]) {
@@ -153,7 +153,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await $("[aria-label='Open Second group 2 terminals']").click();
     await terminalCommand("echo SECOND_GROUP_OK", "SECOND_GROUP_OK");
     await $("[aria-label='Ungroup Second group; terminals stay open']").click();
-    await $("button=Ungroup").click();
+    await $("[role=dialog]").$("button=Ungroup").click();
     await expect($("[aria-label='Open Second group 2 terminals']")).not.toExist();
     expect((await runtime()).sessionIds).toHaveLength(4);
     await terminalCommand("echo UNGROUPED_SURVIVOR", "UNGROUPED_SURVIVOR");
