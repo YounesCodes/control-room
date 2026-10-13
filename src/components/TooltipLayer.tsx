@@ -20,6 +20,11 @@ export function TooltipLayer() {
   const activeRef = useRef<HTMLElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{
+    tooltip: TooltipState;
+    left: number;
+    top: number;
+  } | null>(null);
 
   useLayoutEffect(() => {
     if (!tooltip || !tooltipRef.current) return;
@@ -34,8 +39,7 @@ export function TooltipLayer() {
         window.innerHeight - height - 8,
       ),
     );
-    tooltipRef.current.style.left = `${left}px`;
-    tooltipRef.current.style.top = `${top}px`;
+    setPosition({ tooltip, left, top });
   }, [tooltip]);
 
   useEffect(() => {
@@ -151,7 +155,16 @@ export function TooltipLayer() {
   }, []);
 
   return tooltip ? (
-    <div ref={tooltipRef} className="app-tooltip" role="tooltip" style={{ top: 0, left: 0 }}>
+    <div
+      ref={tooltipRef}
+      className="app-tooltip"
+      role="tooltip"
+      style={
+        position?.tooltip === tooltip
+          ? { top: position.top, left: position.left }
+          : { top: 0, left: 0, visibility: "hidden" }
+      }
+    >
       {tooltip.text}
     </div>
   ) : null;

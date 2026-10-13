@@ -57,9 +57,7 @@ describe("tooltip viewport bounds", () => {
     await page.viewport(320, 240);
     mount("left", "a".repeat(1000));
     await expect.element(page.getByRole("button", { name: "Target" })).toBeVisible();
-    (page.getByRole("button", { name: "Target" }).element() as HTMLElement).focus({
-      preventScroll: true,
-    });
+    await page.getByRole("button", { name: "Target" }).click();
     await expect.element(page.getByRole("tooltip")).toBeVisible();
     const tooltip = page.getByRole("tooltip").element();
     expect(tooltip.scrollWidth).toBeLessThanOrEqual(304);

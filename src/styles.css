@@ -1453,8 +1453,8 @@ code,
 
 .session-tab-content {
   display: flex;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   align-items: stretch;
 }
 
@@ -1485,6 +1485,8 @@ code,
 .session-tab-content > .session-tab-wrap,
 .session-tab-content > .session-tab-group {
   width: var(--session-tab-width, 196px);
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .session-tab-overflow-menu {
