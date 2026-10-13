@@ -73,6 +73,7 @@ export function OverviewPane({
     return <ErrorState message={error} action={<button onClick={refresh}>Retry</button>} />;
   }
   if (!capabilities) return null;
+  const windows = capabilities.osId === "windows";
 
   const systemRows: [string, string][] = [
     ["Hostname", capabilities.hostname ?? "Unavailable"],
@@ -91,7 +92,9 @@ export function OverviewPane({
       ? `Version ${capabilities.dockerVersion ?? "unknown"}`
       : capabilities.dockerAccessibleWithSudo
         ? `Version ${capabilities.dockerVersion ?? "unknown"} — reachable with sudo`
-        : "Installed — sudo required"
+        : windows
+          ? "Installed, daemon unavailable"
+          : "Installed — sudo required"
     : "Not detected";
   const dockerTone: CapabilityTone = capabilities.dockerAvailable
     ? capabilities.dockerAccessible
@@ -119,7 +122,9 @@ export function OverviewPane({
   ];
 
   const containersValue = dockerReachable
-    ? `${capabilities.runningContainerCount ?? 0} / ${capabilities.totalContainerCount ?? 0}`
+    ? capabilities.runningContainerCount !== null && capabilities.totalContainerCount !== null
+      ? `${capabilities.runningContainerCount} / ${capabilities.totalContainerCount}`
+      : "Unavailable"
     : "—";
   const stats: { label: string; value: string; hint?: string }[] = [
     {
@@ -178,7 +183,15 @@ export function OverviewPane({
         <section className="overview-section">
           <h3 className="overview-section-title">Runtime and capabilities</h3>
           <ul className="capability-list">
-            {capabilityRows.map((row) => (
+            {(windows
+              ? [
+                  { label: "Windows services", value: "Read-only inventory", tone: "ok" },
+                  { label: "Ports", value: "TCP and UDP listeners", tone: "ok" },
+                  { label: "Connections", value: "Established TCP peers", tone: "ok" },
+                  { label: "Docker", value: dockerValue, tone: dockerTone },
+                ]
+              : capabilityRows
+            ).map((row) => (
               <li className="capability-row" key={row.label}>
                 <span className={`cap-dot cap-${row.tone}`} aria-hidden="true" />
                 <span className="capability-label">{row.label}</span>

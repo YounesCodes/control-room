@@ -23,6 +23,7 @@ import type {
 
 export function DockerPane({
   connection,
+  windowsHost = false,
   cache,
   detailsCache,
   onCacheChange,
@@ -31,6 +32,7 @@ export function DockerPane({
   focusId = null,
 }: {
   connection: SavedConnection;
+  windowsHost?: boolean;
   cache: CachedList<DockerContainer>;
   detailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   onCacheChange: (cache: CachedList<DockerContainer>) => void;
@@ -135,7 +137,7 @@ export function DockerPane({
     : filtered.length;
   const selected = cache.items.find((container) => container.id === selectedId) ?? null;
   const selectedVisible = filtered.some((container) => container.id === selectedId);
-  const permissionError = cache.error?.toLowerCase().includes("permission denied");
+  const permissionError = !windowsHost && cache.error?.toLowerCase().includes("permission denied");
 
   function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -289,6 +291,7 @@ export function DockerPane({
           <DockerContainerInspector
             key={selected.id}
             summary={selected}
+            windowsHost={windowsHost}
             cache={detailsCache[selected.id]}
             onRefresh={() => loadDetails(selected.id, null, true)}
             onRetryWithSudo={() => setSudoPurpose("details")}

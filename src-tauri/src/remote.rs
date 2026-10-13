@@ -403,8 +403,22 @@ pub(crate) fn parse_host_resources(text: &str) -> HostResources {
 
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
     let command = capability_command();
-    let text = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)?
-        .success_text()?;
+    let linux = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)
+        .and_then(CommandOutput::success_text);
+    let text = match linux {
+        Ok(text)
+            if parse_key_values(&text).contains_key("os_id")
+                && !parse_key_values(&text)
+                    .get("kernel")
+                    .is_some_and(|kernel| kernel.to_ascii_lowercase().contains("microsoft")) =>
+        {
+            text
+        }
+        result => match crate::windows_ssh::discover_windows(connection) {
+            Ok(host) => return Ok(host.capabilities),
+            Err(_) => result?,
+        },
+    };
     let values = parse_key_values(&text);
     Ok(HostCapabilities {
         connection_id: connection.id.clone(),
@@ -1047,6 +1061,16 @@ fn log_operation_timing(
 fn classify_failure(code: i32, stderr: &[u8]) -> String {
     let stderr = String::from_utf8_lossy(stderr).trim().to_string();
     let lower = stderr.to_ascii_lowercase();
+    // PowerShell serializes thrown errors as CLIXML under EncodedCommand.
+    // These Windows inspection messages have known recovery steps; keep the
+    // serialization, duplicate stack context, and XML out of the UI.
+    if lower.contains("docker cli was not found on this windows host.") {
+        return "Docker is not installed on this host.".into();
+    }
+    if lower.contains("docker could not read the daemon. check that docker is running and this ssh account has access.") {
+        return "Docker is unavailable. Check that it is running and this SSH account has access."
+            .into();
+    }
     let category = if lower.contains("permission denied")
         || lower.contains("access denied")
         || lower.contains("you need to be root")
@@ -1138,7 +1162,7 @@ fn systemd_unit_list_command() -> &'static str {
     "LC_ALL=C systemctl show --type=service,timer,mount,socket --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState"
 }
 
-fn parse_container(line: &str) -> Result<DockerContainer, String> {
+pub(crate) fn parse_container(line: &str) -> Result<DockerContainer, String> {
     let value: Value = serde_json::from_str(line)
         .map_err(|error| format!("Docker returned invalid JSON: {error}"))?;
     let string = |key: &str| {
@@ -1754,7 +1778,7 @@ fn docker_container_inspect_command(container_id: &str) -> String {
     format!("docker inspect --type container -- '{container_id}'")
 }
 
-fn parse_container_details(text: &str) -> Result<DockerContainerDetails, String> {
+pub(crate) fn parse_container_details(text: &str) -> Result<DockerContainerDetails, String> {
     let parsed: Value = serde_json::from_str(text)
         .map_err(|error| format!("Docker inspect returned invalid JSON: {error}"))?;
     let elements = parsed
@@ -2137,6 +2161,22 @@ impl StreamManager {
         validate_tail(lines)?;
         let command = docker_log_command(container, lines, follow);
         self.start(app, connection, command, elevation, output)
+    }
+
+    pub fn start_windows_docker_logs(
+        &self,
+        app: AppHandle,
+        connection: &SavedConnection,
+        container: &str,
+        options: LogStreamOptions,
+    ) -> Result<StreamStarted, String> {
+        validate_tail(options.lines)?;
+        let command = crate::windows_inspection::docker_log_command(
+            container,
+            options.lines,
+            options.follow,
+        )?;
+        self.start(app, connection, command, Elevation::None, options.output)
     }
 
     fn start(
@@ -3339,6 +3379,29 @@ esac
             classify_failure(127, b"sh: 1: docker: not found")
                 .starts_with("Feature is not installed")
         );
+    }
+
+    #[test]
+    fn windows_docker_unavailable_errors_are_concise() {
+        for (message, expected) in [
+            (
+                "Docker CLI was not found on this Windows host.",
+                "Docker is not installed on this host.",
+            ),
+            (
+                "Docker could not read the daemon. Check that Docker is running and this SSH account has access.",
+                "Docker is unavailable. Check that it is running and this SSH account has access.",
+            ),
+        ] {
+            for stderr in [
+                message.to_string(),
+                format!(
+                    "#< CLIXML\r\n<Objs Version=\"1.1.0.1\" xmlns=\"http://schemas.microsoft.com/powershell/2004/04\"><S S=\"Error\">{message}_x000D__x000A_</S><S S=\"Error\">At line:15 char:5_x000D__x000A_</S></Objs>"
+                ),
+            ] {
+                assert_eq!(classify_failure(1, stderr.as_bytes()), expected);
+            }
+        }
     }
 
     #[test]

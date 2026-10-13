@@ -18,6 +18,7 @@ interface CommandItem {
   label: string;
   sublabel?: string;
   osId?: string | null;
+  osName?: string | null;
   icon?: IconType;
   shortcut?: string;
   keywords?: string;
@@ -118,6 +119,7 @@ export function CommandPalette({
               label: labelForWorkspace(workspace),
               sublabel: connectionTarget(workspace.connectionSnapshot),
               osId: hostCapabilities[workspace.connectionId]?.osId,
+              osName: hostCapabilities[workspace.connectionId]?.osName,
               keywords: workspace.connectionSnapshot.destination,
               run: run(() => onSelectWorkspace(workspace)),
             },
@@ -144,6 +146,7 @@ export function CommandPalette({
         label: connection.displayName,
         sublabel: connectionTarget(connection),
         osId: hostCapabilities[connection.id]?.osId,
+        osName: hostCapabilities[connection.id]?.osName,
         keywords: connection.destination,
         run: run(() => onOpenConnection(connection)),
       });
@@ -384,7 +387,7 @@ export function CommandPalette({
                   onMouseMove={() => setActiveIndex(index)}
                 >
                   {item.osId !== undefined ? (
-                    <HostOsIcon osId={item.osId} />
+                    <HostOsIcon osId={item.osId} osName={item.osName} />
                   ) : Icon ? (
                     <Icon size={16} strokeWidth={1.8} />
                   ) : (

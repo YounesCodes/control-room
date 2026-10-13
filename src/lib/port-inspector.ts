@@ -266,6 +266,9 @@ export function firewallForSocket(
   if (!firewall || !firewall.available) {
     return { state: "unavailable", label: "Firewall status unavailable" };
   }
+  if (firewall.backend === "windows") {
+    return { state: "unknown", label: "Windows Firewall: profile policies only" };
+  }
   if (firewall.active === false) return { state: "inactive", label: "Firewall inactive" };
   if (firewall.active !== true) return { state: "unknown", label: "Firewall status unknown" };
 

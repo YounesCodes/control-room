@@ -1100,6 +1100,17 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
     }
     let mut ids = std::collections::HashSet::new();
     for workspace in &state.workspaces {
+        if let Some(shell) = &workspace.remote_shell
+            && (workspace.connection_id.is_none()
+                || shell.id.is_empty()
+                || shell.id.len() > 256
+                || shell.label.is_empty()
+                || shell.label.len() > 256
+                || shell.id.chars().any(char::is_control)
+                || shell.label.chars().any(char::is_control))
+        {
+            return Err("Workspace state contains an invalid remote shell".into());
+        }
         if Uuid::parse_str(&workspace.id).is_err() || !ids.insert(workspace.id.as_str()) {
             return Err("Workspace state contains invalid identifiers".into());
         }
@@ -2936,6 +2947,7 @@ mod tests {
                 label: None,
                 connection_id: None,
                 local_shell_id: Some("git-bash".into()),
+                remote_shell: None,
                 view: "terminal".into(),
                 history_paused: false,
             }],
@@ -3011,6 +3023,7 @@ mod tests {
                 label: Some("Deploy".into()),
                 connection_id: Some(saved.id),
                 local_shell_id: None,
+                remote_shell: None,
                 view: "ports".into(),
                 history_paused: false,
             }],
@@ -3036,6 +3049,7 @@ mod tests {
                 label: None,
                 connection_id: None,
                 local_shell_id: Some("powershell-7".into()),
+                remote_shell: None,
                 view: "terminal".into(),
                 history_paused: false,
             }],
@@ -3051,6 +3065,26 @@ mod tests {
     }
 
     #[test]
+    fn windows_remote_shell_workspaces_round_trip_and_validate_their_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let connection = database.create_connection(input("Windows host")).unwrap();
+        let mut state: PersistedWorkspaceState = serde_json::from_value(serde_json::json!({
+            "workspaces": [{ "id": Uuid::new_v4().to_string(), "label": null,
+                "connectionId": connection.id, "localShellId": null, "view": "terminal", "historyPaused": false,
+                "remoteShell": { "id": "wsl:Ubuntu", "label": "WSL: Ubuntu" } }]
+        })).unwrap();
+        database.save_workspace_state(&state).unwrap();
+        assert_eq!(database.get_workspace_state().unwrap(), state);
+        state.workspaces[0].remote_shell.as_mut().unwrap().id = "cmd\n&whoami".into();
+        assert!(database.save_workspace_state(&state).is_err());
+        state.workspaces[0].remote_shell.as_mut().unwrap().id = "cmd".into();
+        state.workspaces[0].connection_id = None;
+        state.workspaces[0].local_shell_id = Some("command-prompt".into());
+        assert!(database.save_workspace_state(&state).is_err());
+    }
+
+    #[test]
     fn a_workspace_names_exactly_one_target() {
         let workspace_id = Uuid::new_v4().to_string();
         let workspace = |connection_id, local_shell_id| PersistedWorkspaceState {
@@ -3059,6 +3093,7 @@ mod tests {
                 label: None,
                 connection_id,
                 local_shell_id,
+                remote_shell: None,
                 view: "terminal".into(),
                 history_paused: false,
             }],
@@ -3525,6 +3560,7 @@ mod tests {
                     label: None,
                     connection_id: Some(Uuid::new_v4().to_string()),
                     local_shell_id: None,
+                    remote_shell: None,
                     view: "terminal".into(),
                     history_paused: false,
                 }],
@@ -3558,6 +3594,7 @@ mod tests {
                 label: None,
                 connection_id,
                 local_shell_id: shell,
+                remote_shell: None,
                 view: "terminal".into(),
                 history_paused: false,
             }
@@ -3615,6 +3652,7 @@ mod tests {
                     label: Some("Deploy".into()),
                     connection_id: Some(saved.id),
                     local_shell_id: None,
+                    remote_shell: None,
                     view: "terminal".into(),
                     history_paused: false,
                 }],
@@ -3838,6 +3876,7 @@ mod tests {
                     label: None,
                     connection_id: Some(Uuid::new_v4().to_string()),
                     local_shell_id: None,
+                    remote_shell: None,
                     view: view.into(),
                     history_paused: false,
                 }],

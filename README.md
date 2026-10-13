@@ -1,10 +1,10 @@
 # Control Room
 
-> A Windows SSH client with read-only Linux host inspection.
+> A Windows SSH client with read-only Linux and Windows host inspection.
 
 [![Latest release](https://img.shields.io/github/v/release/YounesCodes/control-room?display_name=tag)](https://github.com/YounesCodes/control-room/releases/latest) [![CI](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml)
 
-Control Room gives you one place to keep and work with your Linux machines from Windows. Save each host once, open it as a Workspace, and get a real SSH terminal next to views of that machine's services, containers, ports, and logs.
+Control Room gives you one place to work with Linux and Windows machines over SSH. Save each host once and open it as a Workspace. Inspect services, ports, containers, and logs where supported. Windows 10 and 11 hosts offer installed shells, supported Windows Terminal profiles, and WSL distributions before connecting, with Windows services, ports, resource readings, and Docker inspection when available.
 
 - A real terminal with tabs and splits. It runs through the Windows OpenSSH client and ConPTY already on your machine, so your existing keys, `~/.ssh/config`, and ssh-agent keep working.
 - Saved connections with groups and tags, and several Workspaces per host.

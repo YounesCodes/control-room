@@ -46,9 +46,15 @@ export function restoreWorkspaceState(
     if (!connection) return [];
     return [
       {
-        ...createRemoteWorkspace(connection),
+        ...createRemoteWorkspace(connection, saved.remoteShell),
         ...reconnecting,
-        view: saved.view,
+        view:
+          saved.remoteShell &&
+          !["overview", "terminal", "services", "ports", "docker", "logs", "scratchpad"].includes(
+            saved.view,
+          )
+            ? "terminal"
+            : saved.view,
         historyPaused: saved.historyPaused,
       },
     ];
@@ -89,6 +95,9 @@ export function persistWorkspaceState(
       label: workspace.label,
       connectionId: isRemoteWorkspace(workspace) ? workspace.connectionId : null,
       localShellId: isRemoteWorkspace(workspace) ? null : workspace.shell.id,
+      ...(isRemoteWorkspace(workspace) && workspace.remoteShell
+        ? { remoteShell: workspace.remoteShell }
+        : {}),
       view: workspace.view,
       historyPaused: isRemoteWorkspace(workspace) ? workspace.historyPaused : false,
     })),

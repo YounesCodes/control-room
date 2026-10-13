@@ -14,6 +14,18 @@ Control Room uses Rust and Vitest component tests for contracts and failure path
 
 Start with `npm ci`. The normal Windows CI still runs Prettier, ESLint, TypeScript and Vite builds, `cargo audit`, and the NSIS installer build. `src/ui-hierarchy.test.ts` keeps architecture and permission contracts; browser and desktop tests check user behavior. Neither normal test command needs an SSH host.
 
+## Windows SSH hosts
+
+Run `powershell.exe -NoProfile -File scripts/test-windows-ssh-probe.ps1` for local discovery fixtures. They check installed shell paths, Windows Terminal JSON comments, custom profiles, and malformed profile files without changing the real host.
+
+Run `powershell.exe -NoProfile -File scripts/test-windows-docker.ps1` for Windows PowerShell 5 Docker fixtures. They check list and Compose metadata, inspection, and stdout/stderr log streaming using a temporary fake executable. No Docker daemon is required.
+
+For live Windows 10 or 11 SSH checks, set `CONTROL_ROOM_WINDOWS_TEST_HOST`, `CONTROL_ROOM_WINDOWS_TEST_USER`, and optionally `CONTROL_ROOM_WINDOWS_TEST_PORT`. Set `CONTROL_ROOM_WINDOWS_TEST_WSL` to an installed distribution name to include WSL. Keep these values outside tracked files. Build with `npm run test:desktop:build`, then run `npm run test:desktop -- --spec e2e/windows-ssh.spec.ts`.
+
+The live journeys exercise PowerShell output, Windows Overview and navigation, Command Prompt reconnects, WSL restoration after an app restart, and Windows Ports, Services, and opt-in header readings. They use an isolated app database and normal OpenSSH key or agent authentication. The Windows suite is skipped when its host and user variables are absent.
+
+With the same host and user variables, run the ignored Rust tests `fresh_shell_selection_avoids_a_second_discovery_round_trip` and `live_windows_inspection_returns_ports_peers_services_firewall_and_resources` with `cargo test --manifest-path src-tauri/Cargo.toml <test-name> -- --ignored --nocapture`. The first checks that a recent shell selection avoids another discovery round trip. The second checks read-only Windows networking, services, firewall profiles, and resource results.
+
 ## Coverage
 
 `npm run test:coverage` writes a text summary, `coverage/index.html`, and `coverage/lcov.info`. The report includes production frontend files, including `src/lib/api.ts`; it does not enforce a percentage. For Rust, install `llvm-tools-preview` with rustup and `cargo-llvm-cov`, then run `npm run test:rust-coverage`. It writes `src-tauri/target/llvm-cov/html/index.html`. Use `cargo llvm-cov report --manifest-path src-tauri/Cargo.toml --lcov --output-path src-tauri/target/llvm-cov/lcov.info` after the run for LCOV. The manual coverage workflow uploads both reports. The ignored SSH tests are absent from ordinary coverage.

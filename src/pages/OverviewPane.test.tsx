@@ -152,4 +152,19 @@ describe("OverviewPane", () => {
     await screen.findByText("Debian GNU/Linux 12");
     expect(screen.queryByText(/have not been/)).toBeNull();
   });
+  it("shows Windows identity without Linux service counts or sudo advice", async () => {
+    renderPane(
+      capabilities({
+        osId: "windows",
+        osName: "Windows 11 Pro",
+        osVersion: "10.0.26100",
+        defaultShell: "cmd.exe",
+      }),
+    );
+    await screen.findByText("Windows 11 Pro 10.0.26100");
+    expect(screen.getByText("Windows services")).toBeTruthy();
+    expect(screen.getByText("TCP and UDP listeners")).toBeTruthy();
+    expect(screen.getByText("Running services")).toBeTruthy();
+    expect(screen.queryByText("Password required")).toBeNull();
+  });
 });

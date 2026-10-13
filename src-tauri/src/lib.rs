@@ -11,6 +11,8 @@ mod remote;
 mod session;
 mod ssh;
 mod updater;
+mod windows_inspection;
+mod windows_ssh;
 
 #[cfg(feature = "desktop-e2e")]
 mod e2e;
@@ -106,6 +108,7 @@ pub fn run() {
             commands::set_connection_group_collapsed,
             commands::move_connection_group,
             commands::start_session,
+            commands::discover_remote_shells,
             commands::list_local_shells,
             commands::start_local_session,
             commands::write_session,
@@ -117,6 +120,7 @@ pub fn run() {
             commands::sample_host_resources,
             commands::sample_header_metrics,
             commands::list_services,
+            commands::list_windows_services,
             commands::list_containers,
             commands::list_ports,
             commands::inspect_firewall,

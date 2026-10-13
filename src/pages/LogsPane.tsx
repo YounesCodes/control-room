@@ -24,6 +24,7 @@ const MAX_EARLY_STREAM_EVENTS = 16;
 
 export function LogsPane({
   connection,
+  windowsHost = false,
   settings,
   logTailOptions,
   servicesCache,
@@ -34,6 +35,7 @@ export function LogsPane({
   onSourceChange,
 }: {
   connection: SavedConnection;
+  windowsHost?: boolean;
   settings: AppSettings;
   logTailOptions: number[];
   servicesCache: CachedList<SystemdUnit>;
@@ -43,7 +45,9 @@ export function LogsPane({
   onContainersCacheChange: (cache: CachedList<DockerContainer>) => void;
   onSourceChange: (source: LogSourceSelection | null) => void;
 }) {
-  const [sourceType, setSourceType] = useState<LogSourceType>(selectedSource?.type ?? "systemd");
+  const [sourceType, setSourceType] = useState<LogSourceType>(
+    windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
+  );
   const [sourceId, setSourceId] = useState(selectedSource?.id ?? "");
   const [tail, setTail] = useState(settings.defaultLogTail);
   const [follow, setFollow] = useState(true);
@@ -308,7 +312,8 @@ export function LogsPane({
       startingRef.current = false;
       setError(message);
       setStreamStatus("stopped");
-      if (message.toLowerCase().includes("permission denied")) setSudoPurpose("stream");
+      if (!windowsHost && message.toLowerCase().includes("permission denied"))
+        setSudoPurpose("stream");
     }
   }
 
@@ -386,7 +391,9 @@ export function LogsPane({
     return <LoadingState label="Finding available log sources…" />;
   if (sourceCache.error && !sourceCache.items.length) {
     const dockerPermissionError =
-      sourceType === "docker" && sourceCache.error.toLowerCase().includes("permission denied");
+      !windowsHost &&
+      sourceType === "docker" &&
+      sourceCache.error.toLowerCase().includes("permission denied");
     return (
       <>
         <ErrorState
@@ -468,7 +475,7 @@ export function LogsPane({
             onChange={(event) => void changeType(event.target.value as LogSourceType)}
             disabled={controlsLocked}
           >
-            <option value="systemd">systemd</option>
+            {!windowsHost && <option value="systemd">systemd</option>}
             <option value="docker">Docker</option>
           </select>
         </label>
@@ -533,7 +540,7 @@ export function LogsPane({
       {error && (
         <div className="inline-error" role="alert">
           <span>{error}</span>
-          {error.toLowerCase().includes("permission denied") && (
+          {!windowsHost && error.toLowerCase().includes("permission denied") && (
             <button
               className="inline-action"
               type="button"

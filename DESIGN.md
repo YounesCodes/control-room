@@ -74,6 +74,10 @@ navigation reachable. In dialogs, keep the title and actions available while a
 long body scrolls. Menus should open as anchored overlays and must not resize or
 reflow the row that opened them.
 
+Scratchpad uses the full workspace width and grows with the window. Keep its
+heading and editor aligned. Systemd service rows scroll within their own bounded
+area, leaving search, filters, and refresh available above the list.
+
 ## Visual language
 
 ### Color and surfaces
@@ -147,9 +151,22 @@ trigger and within the window.
 
 ### Navigation and terminal work
 
-Host OS marks use the Debian and Ubuntu logos, with a generic server glyph
+Host OS marks use the Debian, Ubuntu, and Windows marks, with a generic server glyph
 for other distributions. A generic mark does not mean the OS was undetected;
 its accessible label names the detected distribution when available.
+
+Before opening a new Windows SSH terminal, offer the shells and WSL distributions
+available to the connecting account. Keep shell choice in a focused connection
+dialog and retain the chosen shell across reconnects and workspace restoration.
+Group Windows shells, WSL distributions, and supported Windows Terminal profiles
+in compact radio rows. Use a quiet hover fill, a persistent selected border, and
+an inset focus ring for keyboard navigation. Windows marks stay gray and include
+the detected 10 or 11 version when known.
+Windows hosts offer Overview, Terminal, Services, Ports, Docker, container Logs,
+and Scratchpad. Keep Docker and Logs discoverable even when Docker is missing;
+their views report installation or daemon access failures. Optional header metrics inspect
+Windows itself, including when the terminal runs WSL. Service inventory is read-only;
+firewall profiles describe policy without claiming a port is reachable.
 
 Use host marks and session presence to help users find a connection or
 Workspace. Put session indicators after labels, separate from OS and shell marks.

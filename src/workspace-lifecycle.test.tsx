@@ -13,6 +13,12 @@ const api = vi.hoisted(() => ({
   listConnectionTags: vi.fn(),
   saveWorkspaceState: vi.fn(),
   listLocalShells: vi.fn(),
+  discoverRemoteShells: vi.fn().mockResolvedValue({
+    platform: "linux",
+    shells: [],
+    windowsTerminalAvailable: false,
+    wslError: null,
+  }),
   cachedCapabilities: vi.fn(),
   deleteConnection: vi.fn(),
   deleteScratchpadNote: vi.fn(),

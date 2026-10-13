@@ -63,6 +63,20 @@ export interface HostCapabilities {
   detectedAt: string;
 }
 
+export interface RemoteShellProfile {
+  id: string;
+  label: string;
+}
+
+export interface RemoteShellCatalog {
+  platform: "linux" | "windows";
+  shells: RemoteShellProfile[];
+  windowsTerminalAvailable: boolean;
+  wslError: string | null;
+  profileError?: string | null;
+  capabilities?: HostCapabilities | null;
+}
+
 /// One bounded sample of current load. Every field is nullable because a host
 /// may expose part of /proc and not the rest, and a missing reading is shown as
 /// missing rather than as zero, which would read as an idle host.
@@ -87,6 +101,15 @@ export interface SystemdUnit {
   activeState: string;
   subState: string;
   unitFileState: string | null;
+}
+
+export interface WindowsService {
+  id: string;
+  displayName: string;
+  description: string | null;
+  state: string;
+  startMode: string;
+  processId: number | null;
 }
 
 export interface DockerContainer {
@@ -125,7 +148,7 @@ export interface FirewallRule {
 }
 
 export interface FirewallStatus {
-  backend?: "ufw" | "firewalld" | null;
+  backend?: "ufw" | "firewalld" | "windows" | null;
   available: boolean;
   active: boolean | null;
   defaultIncoming: string | null;
@@ -557,6 +580,7 @@ export interface RemoteWorkspace extends WorkspaceBase {
   kind: "remote";
   connectionId: string;
   connectionSnapshot: SavedConnection;
+  remoteShell?: RemoteShellProfile | null;
   historyPaused: boolean;
   servicesCache: CachedList<SystemdUnit>;
   portsCache: CachedList<ListeningSocket>;
@@ -589,6 +613,7 @@ interface PersistedWorkspace {
   label: string | null;
   connectionId: string | null;
   localShellId: string | null;
+  remoteShell?: RemoteShellProfile | null;
   view: WorkspaceView;
   historyPaused: boolean;
 }

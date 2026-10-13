@@ -19,6 +19,16 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("IPC data and lifetime contracts", () => {
+  it("allows two platform probes before timing out remote shell detection", async () => {
+    invoke.mockImplementation(() => new Promise(() => undefined));
+    const failed = vi.fn();
+    const result = api.discoverRemoteShells("host").catch((error: Error) => failed(error.message));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(failed).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await result;
+    expect(failed).toHaveBeenCalledWith("Remote shell detection did not respond after 60 seconds");
+  });
   it("sends the exact UTF-8 bytes including NUL and non-ASCII input", async () => {
     const data = new TextEncoder().encode("é سلام\u0000\r\n");
     await api.writeSession("session-a", data);
@@ -39,6 +49,17 @@ describe("IPC data and lifetime contracts", () => {
       cols: 120,
       rows: 40,
       output,
+    });
+  });
+  it("sends only the selected remote shell ID when starting a Windows terminal", async () => {
+    const output = new Channel<ArrayBuffer>();
+    await api.startSession("host", 120, 40, output, "wsl:Ubuntu");
+    expect(invoke).toHaveBeenCalledWith("start_session", {
+      connectionId: "host",
+      cols: 120,
+      rows: 40,
+      output,
+      remoteShellId: "wsl:Ubuntu",
     });
   });
   it("keeps baseline progress channels and cancellation IDs intact", async () => {

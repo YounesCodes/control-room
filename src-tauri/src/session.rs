@@ -201,6 +201,7 @@ impl SessionManager {
         &self,
         app: AppHandle,
         connection: &SavedConnection,
+        remote_command: Option<String>,
         cols: u16,
         rows: u16,
         output: Channel<Response>,
@@ -212,7 +213,10 @@ impl SessionManager {
         let mut command = CommandBuilder::new(ssh_path);
         command.env("TERM", TERMINAL_TYPE);
         command.args(connection_arguments(connection, true));
-        command.arg(interactive_shell_command(connection.history_enabled));
+        command.arg(
+            remote_command
+                .unwrap_or_else(|| interactive_shell_command(connection.history_enabled).into()),
+        );
         let session_id = self.spawn(
             app,
             command,

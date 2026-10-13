@@ -29,7 +29,9 @@ export function SocketDetail({
       ? "firewalld"
       : firewall?.backend === "ufw"
         ? "UFW"
-        : "Firewall";
+        : firewall?.backend === "windows"
+          ? "Windows Firewall"
+          : "Firewall";
   return (
     <>
       <header>
@@ -67,6 +69,12 @@ export function SocketDetail({
           <dt>{firewallLabel}</dt>
           <dd>{disposition.label}</dd>
         </div>
+        {firewall?.backend === "windows" && (
+          <div>
+            <dt>Profile policies</dt>
+            <dd>{firewall.defaultIncoming ?? "Unavailable"}</dd>
+          </div>
+        )}
       </dl>
       <p className="unit-scope-note">
         Binding and firewall policy are independent of Internet reachability.
@@ -83,10 +91,12 @@ export function SocketDetail({
           <dt>PID</dt>
           <dd>{socket.processId ?? "Unavailable"}</dd>
         </div>
-        <div>
-          <dt>Systemd unit</dt>
-          <dd>{socket.systemdUnit ?? "Not established"}</dd>
-        </div>
+        {firewall?.backend !== "windows" && (
+          <div>
+            <dt>Systemd unit</dt>
+            <dd>{socket.systemdUnit ?? "Not established"}</dd>
+          </div>
+        )}
         <div>
           <dt>Container</dt>
           <dd>{containerOwner?.container.name ?? "Not established"}</dd>

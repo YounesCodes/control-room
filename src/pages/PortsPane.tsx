@@ -88,6 +88,10 @@ export function PortsPane({
   containersRef.current = containersCache;
 
   async function loadContainers(force = false) {
+    if (capabilities?.osId === "windows" && !capabilities.dockerAvailable) {
+      onContainersCacheChange({ items: [], fetchedAt: Date.now(), loading: false, error: null });
+      return;
+    }
     const current = containersRef.current;
     if (!force && isCacheFresh(current)) return;
     const request = ++ownerRequestRef.current;
@@ -222,7 +226,15 @@ export function PortsPane({
 
   const showProtocol = tab !== "connections";
   const showExposure = tab === "overview" || tab === "table";
-  const ownerGap = ownerGapNotice(cache.items, portsElevated);
+  const ownerGap =
+    capabilities?.osId === "windows"
+      ? cache.items.some((socket) => socket.ownership === "unavailable")
+        ? {
+            message: "Some owning processes could not be read by this Windows SSH account.",
+            offerSudo: false,
+          }
+        : null
+      : ownerGapNotice(cache.items, portsElevated);
 
   return (
     <section className="feature-page ports-page">
@@ -269,11 +281,12 @@ export function PortsPane({
       {firewallError && (tab === "overview" || tab === "table") && (
         <p className="inline-warning firewall-warning">
           <ShieldAlert size={14} /> Firewall status unavailable: {firewallError}
-          {firewallError.toLowerCase().includes("permission denied") && (
-            <button type="button" className="link-button" onClick={() => setFirewallSudo(true)}>
-              Retry with sudo
-            </button>
-          )}
+          {capabilities?.osId !== "windows" &&
+            firewallError.toLowerCase().includes("permission denied") && (
+              <button type="button" className="link-button" onClick={() => setFirewallSudo(true)}>
+                Retry with sudo
+              </button>
+            )}
         </p>
       )}
       {ownerGap && (tab === "overview" || tab === "table") && (

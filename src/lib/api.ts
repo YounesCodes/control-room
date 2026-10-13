@@ -22,6 +22,8 @@ import type {
   HeaderMetrics,
   ListeningSocket,
   LocalShellCatalog,
+  RemoteShellCatalog,
+  WindowsService,
   PersistedWorkspaceState,
   SavedConnection,
   SavedConnectionInput,
@@ -61,9 +63,10 @@ function invokeRemoteInspection<T>(
   command: string,
   args: Record<string, unknown>,
   timeoutMessage = REMOTE_INSPECTION_TIMEOUT_MESSAGE,
+  timeoutMs = REMOTE_INSPECTION_TIMEOUT_MS,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(timeoutMessage)), REMOTE_INSPECTION_TIMEOUT_MS);
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
     void invoke<T>(command, args).then(
       (value) => {
         clearTimeout(timer);
@@ -106,9 +109,23 @@ export const api = {
     invoke<void>("set_connection_group_collapsed", { id, collapsed }),
   moveConnectionGroup: (id: string, direction: "up" | "down") =>
     invoke<ConnectionGroup[]>("move_connection_group", { id, direction }),
-  startSession: (connectionId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
+  discoverRemoteShells: (connectionId: string, refresh = false) =>
+    invokeRemoteInspection<RemoteShellCatalog>(
+      "discover_remote_shells",
+      { connectionId, refresh },
+      "Remote shell detection did not respond after 60 seconds",
+      60_000,
+    ),
+  startSession: (
+    connectionId: string,
+    cols: number,
+    rows: number,
+    output: Channel<ArrayBuffer>,
+    remoteShellId: string | null = null,
+  ) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
       connectionId,
+      remoteShellId,
       cols,
       rows,
       output,
@@ -144,6 +161,8 @@ export const api = {
     invokeRemoteInspection<HostResources>("sample_host_resources", { connectionId }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
+  listWindowsServices: (connectionId: string) =>
+    invokeRemoteInspection<WindowsService[]>("list_windows_services", { connectionId }),
   listContainers: (connectionId: string, sudoPassword: string | null = null) =>
     invokeRemoteInspection<DockerContainer[]>("list_containers", { connectionId, sudoPassword }),
   listPorts: (connectionId: string, sudoPassword: string | null = null) =>

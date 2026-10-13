@@ -1657,10 +1657,29 @@ code,
 }
 
 .host-os-debian path,
-.host-os-ubuntu path {
+.host-os-ubuntu path,
+.host-os-windows path {
   fill: currentColor;
 }
 
+.host-os-versioned {
+  position: relative;
+  margin-right: 6px;
+}
+.host-os-version {
+  position: absolute;
+  right: -8px;
+  bottom: -5px;
+  min-width: 15px;
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--surface-overlay);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 13px;
+  text-align: center;
+}
 .host-row.active .host-os-icon,
 .session-tab-wrap.active .host-os-icon {
   color: var(--text-strong);
@@ -2657,7 +2676,6 @@ code,
 
 .scratchpad-heading {
   width: 100%;
-  max-width: 980px;
   align-items: center;
 }
 
@@ -2737,7 +2755,6 @@ code,
 .scratchpad-editor {
   display: flex;
   width: 100%;
-  max-width: 980px;
   min-height: 0;
   flex: 1;
   flex-direction: column;
@@ -3420,6 +3437,35 @@ dd {
   grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(0, 92px));
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.services-page .list-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.services-page .list-panel > :not(.dense-list) {
+  flex-shrink: 0;
+}
+
+.services-page .dense-list {
+  min-height: 104px;
+  flex: 1 1 104px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.services-page .dense-list:focus-visible {
+  outline-offset: -2px;
+}
+
+.windows-service-list-controls {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 110px);
+}
+
+.windows-services-page .detail-panel:focus-visible {
+  outline-offset: -2px;
 }
 
 .port-list-controls {
@@ -4740,6 +4786,172 @@ dd {
    Inline messages
    ========================================================================== */
 
+.remote-shell-body {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+}
+.remote-shell-heading,
+.remote-shell-host {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.remote-shell-heading {
+  justify-content: space-between;
+}
+.remote-shell-host .host-os-icon {
+  width: 23px;
+  height: 23px;
+}
+.remote-shell-host > div {
+  display: grid;
+  gap: 4px;
+}
+.remote-shell-host strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.remote-shell-host > div > span,
+.remote-shell-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.remote-shell-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 65px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.remote-shell-groups {
+  display: grid;
+  gap: 14px;
+  max-height: min(370px, 50vh);
+  overflow: auto;
+}
+.remote-shell-options {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.remote-shell-options legend {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.remote-shell-option {
+  display: flex;
+  min-height: 57px;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  cursor: pointer;
+}
+.remote-shell-option:not(.selected):has(input:enabled):hover {
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+}
+.remote-shell-option.selected {
+  border-color: var(--text-muted);
+  background: var(--surface-raised);
+}
+.remote-shell-option:has(input:focus-visible) {
+  outline: 2px solid var(--text-strong);
+  outline-offset: -2px;
+}
+.remote-shell-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--text-strong);
+  flex: none;
+  order: 3;
+}
+.remote-shell-option input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.remote-shell-option:has(input:disabled) {
+  cursor: default;
+  opacity: 0.55;
+}
+.remote-shell-mark {
+  color: var(--text-muted);
+  flex: none;
+}
+.remote-shell-option-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.remote-shell-option-text strong {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.remote-shell-option-text small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.remote-shell-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-overlay);
+  position: sticky;
+  bottom: 0;
+}
+.remote-shell-actions > span {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-shell-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+}
+.remote-shell-error > svg {
+  color: var(--failure);
+  flex: none;
+}
+.remote-shell-error p {
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+}
+.remote-shell-error small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.remote-shell-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .inline-error,
 .inline-warning,
 .inline-message {
@@ -5794,6 +6006,10 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   right: 6px;
 }
 
+.connection-section-content > .scratchpad-page {
+  right: 0;
+}
+
 .content-divider {
   right: 0;
 }
@@ -5805,7 +6021,8 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .resizable-split {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   container-type: inline-size;
 }
@@ -5829,6 +6046,14 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(240px, 1fr) minmax(240px, 1fr);
   overflow: auto;
+}
+
+.services-page.stacked {
+  grid-template-rows: minmax(min-content, 1fr) minmax(240px, 1fr);
+}
+
+.services-page.stacked .list-panel {
+  min-height: min-content;
 }
 
 .resizable-split.stacked > .detail-panel {

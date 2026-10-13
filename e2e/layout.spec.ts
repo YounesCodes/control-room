@@ -4,6 +4,40 @@ import { addConnection, feature, ipc, restartApp } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
 describe("Resizable panels in the native app", () => {
+  it("fills Scratchpad when the native window is maximized and restored", async () => {
+    await addConnection("Scratchpad host");
+    await $(".host-main*=Scratchpad host").click();
+    // This fixture is deliberately offline; notes only need a saved host.
+    await $("button=Connect as Linux host").waitForDisplayed({ timeout: 30_000 });
+    await $("button=Connect as Linux host").click();
+    await feature("Scratchpad");
+    await $(".scratchpad-editor textarea").waitForDisplayed();
+    const fillsWorkspace = () =>
+      browser.execute(() => {
+        const section = document.querySelector<HTMLElement>(".connection-section")!;
+        const content = document.querySelector<HTMLElement>(".connection-section-content")!;
+        const pad = document.querySelector<HTMLElement>(".scratchpad-page")!;
+        const editor = document.querySelector<HTMLElement>(".scratchpad-editor")!;
+        const style = getComputedStyle(pad);
+        const available =
+          pad.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        return (
+          Math.abs(section.clientWidth - content.clientWidth) <= 1 &&
+          Math.abs(editor.clientWidth - available) <= 1
+        );
+      });
+    await browser.waitUntil(fillsWorkspace);
+    await $("aria/Maximize or restore window").click();
+    await browser.waitUntil(async () =>
+      ipc<boolean>("plugin:window|is_maximized", { label: "main" }),
+    );
+    await browser.waitUntil(fillsWorkspace);
+    await $("aria/Maximize or restore window").click();
+    await browser.waitUntil(
+      async () => !(await ipc<boolean>("plugin:window|is_maximized", { label: "main" })),
+    );
+    await browser.waitUntil(fillsWorkspace);
+  });
   it("drags and saves the Connections width through SQLite and resets it", async () => {
     const divider = $("aria/Resize Connections panel");
     const defaultWidth = await divider.getAttribute("aria-valuenow");

@@ -18,6 +18,8 @@ use crate::{
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
+    windows_inspection,
+    windows_ssh::{self, RemoteShellCatalog},
 };
 
 #[tauri::command(async)]
@@ -173,12 +175,15 @@ pub fn move_connection_group(
     database.move_connection_group(&id, &direction)
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn start_session(
     app: AppHandle,
     database: State<'_, Database>,
     sessions: State<'_, SessionManager>,
+    limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
+    remote_shell_id: Option<String>,
     cols: u16,
     rows: u16,
     output: Channel<Response>,
@@ -198,8 +203,37 @@ pub fn start_session(
     if !database.get_settings()?.global_history_enabled {
         connection.history_enabled = false;
     }
-    let started = sessions.start(app, &connection, cols, rows, output)?;
+    let windows = database
+        .get_capabilities(&connection_id)?
+        .is_some_and(|caps| caps.os_id.as_deref() == Some("windows"));
+    let _permit = if remote_shell_id.is_some() || windows {
+        Some(limiter.acquire(&connection_id)?)
+    } else {
+        None
+    };
+    let remote_command = match remote_shell_id {
+        Some(id) => Some(windows_ssh::selected_command(&connection, &id)?),
+        None if windows => Some(windows_ssh::default_command(&connection)?),
+        None => None,
+    };
+    let started = sessions.start(app, &connection, remote_command, cols, rows, output)?;
     Ok(started)
+}
+
+#[tauri::command(async)]
+pub fn discover_remote_shells(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+    refresh: Option<bool>,
+) -> Result<RemoteShellCatalog, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    let catalog = windows_ssh::discover(&connection, refresh.unwrap_or(false))?;
+    if let Some(capabilities) = &catalog.capabilities {
+        database.save_capabilities(capabilities)?;
+    }
+    Ok(catalog)
 }
 
 /// The local shells this machine actually has, plus whether administrator
@@ -271,6 +305,12 @@ pub fn get_cached_capabilities(
     database.get_capabilities(&connection_id)
 }
 
+fn windows_host(database: &Database, connection_id: &str) -> Result<bool, String> {
+    Ok(database
+        .get_capabilities(connection_id)?
+        .is_some_and(|caps| caps.os_id.as_deref() == Some("windows")))
+}
+
 #[tauri::command(async)]
 pub fn refresh_capabilities(
     database: State<'_, Database>,
@@ -310,6 +350,12 @@ pub async fn sample_header_metrics(
             Some(id) => {
                 let limiter = app.state::<RemoteOperationLimiter>();
                 let _permit = limiter.acquire(&id)?;
+                if windows_host(&app.state::<Database>(), &id)? {
+                    return windows_inspection::metrics(
+                        &app.state::<Database>().get_connection(&id)?,
+                        &metrics,
+                    );
+                }
                 header_metrics::collect_remote(
                     &app.state::<Database>().get_connection(&id)?,
                     &metrics,
@@ -348,6 +394,19 @@ pub fn list_services(
     remote::list_services(&connection)
 }
 
+#[tauri::command(async)]
+pub fn list_windows_services(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+) -> Result<Vec<windows_inspection::WindowsService>, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    if !windows_host(&database, &connection_id)? {
+        return Err("Windows service inspection requires a detected Windows host".into());
+    }
+    windows_inspection::services(&database.get_connection(&connection_id)?)
+}
+
 /// Decides how one Structured Operation should run on one host. The global
 /// setting is an override, not a default: while it is on, a connection that
 /// never opted in is still elevated, which is what "allow sudo everywhere"
@@ -370,6 +429,9 @@ pub fn list_containers(
 ) -> Result<Vec<DockerContainer>, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    if windows_host(&database, &connection_id)? {
+        return windows_inspection::containers(&connection);
+    }
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     remote::list_containers(&connection, elevation)
 }
@@ -383,6 +445,9 @@ pub fn list_ports(
 ) -> Result<Vec<ListeningSocket>, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    if windows_host(&database, &connection_id)? {
+        return windows_inspection::ports(&connection);
+    }
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     remote::list_ports(&connection, elevation)
 }
@@ -396,6 +461,9 @@ pub fn inspect_firewall(
 ) -> Result<FirewallStatus, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    if windows_host(&database, &connection_id)? {
+        return windows_inspection::firewall(&connection);
+    }
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     remote::list_firewall(&connection, elevation)
 }
@@ -408,6 +476,9 @@ pub fn inspect_connections(
 ) -> Result<EstablishedConnections, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    if windows_host(&database, &connection_id)? {
+        return windows_inspection::connections(&connection);
+    }
     // Peer ownership is only visible for the caller's own processes without
     // privilege, so this read benefits from an allowance even though it has no
     // password retry of its own.
@@ -425,6 +496,9 @@ pub fn inspect_container(
 ) -> Result<DockerContainerDetails, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    if windows_host(&database, &connection_id)? {
+        return windows_inspection::container(&connection, &container_id);
+    }
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     remote::inspect_container(&connection, &container_id, elevation)
 }
@@ -489,6 +563,19 @@ pub fn start_docker_log_stream(
 ) -> Result<StreamStarted, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
+    if windows_host(&database, &connection_id)? {
+        return streams.start_windows_docker_logs(
+            app,
+            &connection,
+            &container,
+            LogStreamOptions {
+                lines,
+                follow,
+                elevation: Elevation::None,
+                output,
+            },
+        );
+    }
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     streams.start_docker_logs(
         app,
@@ -904,11 +991,13 @@ mod tests {
         for command in [
             "get_environment_info",
             "start_session",
+            "discover_remote_shells",
             "list_local_shells",
             "start_local_session",
             "refresh_capabilities",
             "sample_header_metrics",
             "list_services",
+            "list_windows_services",
             "list_containers",
             "list_ports",
             "inspect_firewall",
