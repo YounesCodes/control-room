@@ -1942,9 +1942,7 @@ export function App() {
                 data-tauri-drag-region
                 title="Drag to move window"
                 aria-hidden="true"
-              >
-                <span />
-              </div>
+              />
             )}
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
               <div className="session-tab-actions" data-terminal-split-menu>

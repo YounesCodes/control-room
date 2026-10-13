@@ -359,7 +359,7 @@ describe("application hierarchy", () => {
     expect(appSource).not.toContain("terminal-pane-header");
     expect(stylesSource).not.toContain(".terminal-pane-header");
     expect(stylesSource).toMatch(
-      /\.terminal-pane-layout \.terminal-workspace-pane\.active\s*\{[^}]*outline:\s*1px solid var\(--accent\);[^}]*outline-offset:\s*-1px;/s,
+      /\.terminal-pane-layout \.terminal-workspace-pane\.active::after\s*\{[^}]*border:\s*1px solid var\(--accent\);/s,
     );
     expect(stylesSource).toContain(".terminal-pane-layout");
   });

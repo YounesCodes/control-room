@@ -1564,19 +1564,9 @@ code,
 }
 
 .session-window-drag-region {
-  display: grid;
   width: 48px;
   flex: none;
-  place-items: center;
   cursor: grab;
-}
-
-.session-window-drag-region > span {
-  width: 18px;
-  height: 4px;
-  border-top: 1px solid var(--border-strong);
-  border-bottom: 1px solid var(--border-strong);
-  pointer-events: none;
 }
 
 .session-pane-tabs {
@@ -2504,14 +2494,25 @@ code,
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
 }
 
 .terminal-pane-layout .terminal-workspace-pane.active {
   z-index: 1;
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
+}
+
+/* Paint the frame above terminal backgrounds, inside the pane's rectangle. */
+.terminal-pane-layout .terminal-workspace-pane::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.terminal-pane-layout .terminal-workspace-pane.active::after {
+  border: 1px solid var(--accent);
 }
 
 .terminal-pane-layout .terminal-workspace-pane-visible {

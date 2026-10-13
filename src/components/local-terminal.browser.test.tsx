@@ -8,7 +8,11 @@ const savedLayout = vi.hoisted(() => ({ save: vi.fn(async () => {}) }));
 vi.mock("./WindowControls", () => ({ WindowControls: () => null }));
 vi.mock("./TerminalPane", () => ({
   TerminalPane: () => (
-    <div role="region" aria-label="Local terminal surface" style={{ height: "100%" }} />
+    <div
+      role="region"
+      aria-label="Local terminal surface"
+      style={{ height: "100%", background: "#050505", position: "relative" }}
+    />
   ),
 }));
 vi.mock("../lib/api", () => {
@@ -100,6 +104,59 @@ async function split(direction: "vertically" | "horizontally") {
     .click();
 }
 describe("Local Terminal Mode in the real App", () => {
+  it("paints the selected frame on all four edges above terminal contents in nested splits", async () => {
+    await page.viewport(960, 641);
+    mountApp();
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    await split("vertically");
+    await split("horizontally");
+    const tabs = [
+      ...container!.querySelectorAll<HTMLButtonElement>(".session-pane-tabs .session-tab-main"),
+    ];
+    for (const [index, tab] of tabs.entries()) {
+      await userEvent.click(tab);
+      const pane = container!.querySelector<HTMLElement>(
+        ".terminal-workspace-pane-visible.active",
+      )!;
+      const screenshot = await page.screenshot({
+        element: pane,
+        base64: true,
+        path: `../../test-results/selected-pane-${index}.png`,
+      });
+      const bitmap = new Image();
+      bitmap.src = `data:image/png;base64,${screenshot.base64}`;
+      await bitmap.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = getComputedStyle(pane).getPropertyValue("--accent").trim();
+      context.fillRect(0, 0, 1, 1);
+      const expected = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+      context.drawImage(bitmap, 0, 0);
+      const edges = {
+        top: [Math.floor(bitmap.width / 2), 0],
+        right: [bitmap.width - 1, Math.floor(bitmap.height / 2)],
+        bottom: [Math.floor(bitmap.width / 2), bitmap.height - 1],
+        left: [0, Math.floor(bitmap.height / 2)],
+        topLeft: [0, 0],
+        topRight: [bitmap.width - 1, 0],
+        bottomLeft: [0, bitmap.height - 1],
+        bottomRight: [bitmap.width - 1, bitmap.height - 1],
+      };
+      for (const [edge, [x, y]] of Object.entries(edges)) {
+        const actual = [...context.getImageData(x, y, 1, 1).data].slice(0, 3);
+        expect(actual, `${tab.title}: ${edge} edge should show the selected frame`).toEqual(
+          expected,
+        );
+      }
+      const bounds = pane.getBoundingClientRect();
+      // Stay clear of the split dividers' intentional mouse hit areas.
+      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + 30);
+      expect(pane.contains(hit)).toBe(true);
+      expect(hit, "The painted frame must leave terminal input clickable").not.toBe(pane);
+    }
+  });
   it.each([960, 1600])(
     "uses one tab per group and a keyboard-accessible pane row at %s pixels",
     async (width) => {
