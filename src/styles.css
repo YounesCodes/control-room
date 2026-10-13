@@ -1437,6 +1437,7 @@ code,
 }
 
 .session-tab-scroll-region {
+  position: relative;
   display: flex;
   min-width: 0;
   flex: 1;
@@ -1446,7 +1447,7 @@ code,
   display: flex;
   min-width: 0;
   flex: 1;
-  overflow-x: auto;
+  overflow: hidden;
   scrollbar-width: none;
 }
 
@@ -1455,11 +1456,6 @@ code,
   width: max-content;
   min-width: 100%;
   align-items: stretch;
-}
-
-.session-tab-end-space {
-  flex: none;
-  pointer-events: none;
 }
 
 .session-tab-list::-webkit-scrollbar {
@@ -1484,6 +1480,59 @@ code,
 .session-tab-scroll-button:hover:not(:disabled) {
   background: var(--fill-hover);
   color: var(--text-strong);
+}
+
+.session-tab-content > .session-tab-wrap,
+.session-tab-content > .session-tab-group {
+  width: var(--session-tab-width, 196px);
+}
+
+.session-tab-overflow-menu {
+  position: fixed;
+  z-index: 1200;
+  width: min(360px, calc(100vw - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+}
+
+.session-tab-overflow-menu > button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.session-tab-overflow-menu > button:hover,
+.session-tab-overflow-menu > button:focus-visible {
+  background: var(--fill-hover);
+}
+
+.session-tab-menu-check {
+  width: 14px;
+  flex: none;
+}
+
+.session-tab-menu-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.session-tab-menu-name small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .session-tab-group {
@@ -1588,7 +1637,7 @@ code,
 }
 
 .session-pane-tabs .session-tab-wrap {
-  width: 180px;
+  width: var(--session-tab-width, 180px);
 }
 
 .session-tab-wrap {

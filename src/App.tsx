@@ -1612,6 +1612,34 @@ export function App() {
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
   const settings = settingsContract.current;
+  const listedGroups = new Set<string>();
+  const workspaceTabOptions = workspaces.flatMap((workspace) => {
+    const group = terminalFocusMode
+      ? terminalGroupForWorkspace(terminalGroups, workspace.id)
+      : null;
+    if (group) {
+      if (listedGroups.has(group.id)) return [];
+      listedGroups.add(group.id);
+      return [
+        {
+          id: group.id,
+          label: group.name,
+          detail: `${getTerminalLayoutIds(group.layout).length} terminals`,
+          active: activeTerminalGroup?.id === group.id && !settingsOpen,
+          onSelect: () => selectTerminalGroup(group),
+        },
+      ];
+    }
+    return [
+      {
+        id: workspace.id,
+        label: duplicateLabel(workspace),
+        detail: terminalStateLabel(workspace),
+        active: workspace.id === activeWorkspaceId && !settingsOpen,
+        onSelect: () => selectWorkspaceTab(workspace),
+      },
+    ];
+  });
 
   return (
     <div
@@ -1852,6 +1880,7 @@ export function App() {
             <WorkspaceTabScroller
               activeTabId={settingsOpen ? null : activeWorkspaceId}
               arrangementKey={tabArrangementKey}
+              items={workspaceTabOptions}
             >
               {terminalFocusMode
                 ? (() => {
@@ -2123,6 +2152,21 @@ export function App() {
             <WorkspaceTabScroller
               activeTabId={activeWorkspaceId}
               arrangementKey={tabArrangementKey}
+              menuLabel="All panes"
+              items={getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
+                const workspace = workspaces.find((item) => item.id === id);
+                return workspace
+                  ? [
+                      {
+                        id,
+                        label: duplicateLabel(workspace),
+                        detail: terminalStateLabel(workspace),
+                        active: id === activeWorkspaceId,
+                        onSelect: () => selectWorkspaceTab(workspace),
+                      },
+                    ]
+                  : [];
+              })}
             >
               {getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
                 const workspace = workspaces.find((item) => item.id === id);

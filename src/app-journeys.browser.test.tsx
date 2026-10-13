@@ -260,6 +260,85 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
+    await page.viewport(960, 640);
+    await mount();
+    await navigate("Terminal");
+    for (let index = 0; index < 7; index++) {
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "New terminal" })
+        .getByRole("button", { name: /Command Prompt/ })
+        .click();
+    }
+    const sessions = native.invoke.mock.calls.filter(
+      ([command]) => command === "start_session" || command === "start_local_session",
+    ).length;
+    await page.getByRole("button", { name: "All terminals", exact: true }).click();
+    await page
+      .getByRole("menu", { name: "All terminals" })
+      .getByRole("menuitem", { name: /^Fixture Alpha/ })
+      .click();
+    await expect
+      .element(page.getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha$/ }))
+      .toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    for (let index = 0; index < 5; index++) {
+      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await page
+        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+        .click();
+      if (index === 0) {
+        const local = native.invoke.mock.calls
+          .filter(([command]) => command === "start_local_session")
+          .at(-1)!;
+        local[1].output.onmessage(
+          new TextEncoder().encode(
+            "\r\nC:\\demo> npm run build\r\nBuild complete.\r\n\r\nC:\\demo> ",
+          ).buffer,
+        );
+        await page.getByRole("button", { name: "All terminals", exact: true }).click();
+        await page.screenshot({ path: "../test-results/terminal-overflow.png" });
+        await userEvent.keyboard("{Escape}");
+      }
+    }
+    await page.getByRole("button", { name: "Scroll terminals right" }).first().click();
+    await page.getByRole("button", { name: "All terminals", exact: true }).click();
+    const groupItem = page
+      .getByRole("menu", { name: "All terminals" })
+      .getByRole("menuitem", { name: /^Fixture Alpha group/ });
+    await expect.element(groupItem).toHaveTextContent("Fixture Alpha group6 terminals");
+    await groupItem.click();
+    await expect
+      .element(page.getByRole("button", { name: "Open Fixture Alpha group 6 terminals" }))
+      .toBeVisible();
+    await page.getByRole("button", { name: "All panes", exact: true }).click();
+    const paneMenu = page.getByRole("menu", { name: "All panes" });
+    expect(paneMenu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(6);
+    await paneMenu.getByRole("menuitem", { name: /^Fixture Alpha/ }).click();
+    await expect
+      .element(page.getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha$/ }))
+      .toHaveAttribute("aria-current", "page");
+    const panes = element.querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible");
+    expect(panes).toHaveLength(6);
+    for (const list of element.querySelectorAll<HTMLElement>(".session-tab-list")) {
+      const bounds = list.getBoundingClientRect();
+      for (const tab of list.querySelectorAll<HTMLElement>(
+        ".session-tab-wrap, .session-tab-group",
+      )) {
+        const rect = tab.getBoundingClientRect();
+        expect(rect.left).toBeGreaterThanOrEqual(bounds.left - 1);
+        expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
+      }
+    }
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "start_session" || command === "start_local_session",
+      ),
+    ).toHaveLength(sessions + 5);
+    expect(native.invoke.mock.calls.some(([command]) => command === "close_session")).toBe(false);
+  });
+
   it("keeps grouped session state and activity visible and routes input to the selected pane", async () => {
     await mount();
     await navigate("Terminal");

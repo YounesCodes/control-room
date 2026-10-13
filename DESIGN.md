@@ -70,9 +70,12 @@ small windows without overwriting the saved proportions. Reset a divider to equa
 sizes with a double-click or Enter.
 
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
-Show controls to move through the tabs and reveal the selected tab when it
-changes, including in focus mode. Where a tab fits in the strip, settle scrolling
-on a complete tab or group edge so its status and actions stay visible.
+Use equal-width tabs that shrink within readable limits. When they no longer fit,
+show a window of complete tabs with previous/next controls; never paint a partial
+tab at either edge. The All terminals menu lists full names and marks the selected
+item. The pane row has its own All panes menu. Selecting a hidden item reveals
+its complete tab, including in focus mode. Keep overflow menus within the window
+and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.
 

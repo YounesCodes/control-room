@@ -22,6 +22,47 @@ async function renameActive(name: string) {
 }
 
 describe("ConPTY and Workspace lifecycle", () => {
+  it("selects hidden terminals from overflow without clipping tabs or restarting sessions", async () => {
+    for (let index = 1; index <= 8; index++) {
+      await openLocal();
+      await renameActive(`Shell ${index}`);
+    }
+    await $("aria/Focus terminal").click();
+    const sessions = (await runtime()).sessionIds;
+    await $("[aria-label='All terminals']").click();
+    await $("[role=menu]").$("button*=Shell 1").click();
+    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
+    await terminalCommand("echo OVERFLOW_FIRST", "OVERFLOW_FIRST");
+    await $("[aria-label='Scroll terminals right']").click();
+    await $("[aria-label='All terminals']").click();
+    await browser.keys("Home");
+    await browser.keys("Enter");
+    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
+    await $("[aria-label='All terminals']").click();
+    await browser.keys("End");
+    await browser.keys("Enter");
+    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 8");
+    await terminalCommand("echo OVERFLOW_LAST", "OVERFLOW_LAST");
+    const clipped = await browser.execute(() =>
+      Array.from(document.querySelectorAll<HTMLElement>(".session-tab-list")).flatMap((list) => {
+        const bounds = list.getBoundingClientRect();
+        return Array.from(
+          list.querySelectorAll<HTMLElement>(".session-tab-wrap, .session-tab-group"),
+        )
+          .filter((tab) => {
+            const rect = tab.getBoundingClientRect();
+            return rect.left < bounds.left - 1 || rect.right > bounds.right + 1;
+          })
+          .map((tab) => tab.textContent);
+      }),
+    );
+    expect(clipped).toEqual([]);
+    expect((await runtime()).sessionIds).toEqual(sessions);
+    await closeWorkspace("Shell 8");
+    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 7");
+    expect((await runtime()).sessionIds).toHaveLength(7);
+  });
+
   it("renames and closes specific split panes, cancels group actions, and restores the survivors", async () => {
     await openLocal();
     await renameActive("Original pane");
