@@ -807,6 +807,166 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/overview-full.png" });
   });
 
+  it.each([960, 1600])("keeps long inspection lists scrollable at %s px", async (width) => {
+    await page.viewport(width, 700);
+    const records = Array.from({ length: 100 }, (_, index) => index);
+    overrides.set("list_services", () =>
+      records.map((index) => ({ ...fixtures.service, id: `example-${index}.service` })),
+    );
+    overrides.set("list_containers", () =>
+      records.map((index) => ({
+        ...fixtures.container,
+        id: index.toString(16).padStart(64, "0"),
+        name: `example-${index}`,
+        composeProject: null,
+        ports: `0.0.0.0:${8000 + index}->80/tcp`,
+      })),
+    );
+    overrides.set("list_ports", () =>
+      records.map((index) => ({
+        ...fixtures.socket,
+        id: `socket-${index}`,
+        port: 8000 + index,
+        systemdUnit: null,
+      })),
+    );
+    overrides.set("inspect_connections", () => ({
+      groups: records.map((index) => ({
+        key: `peer-${index}`,
+        protocol: "tcp",
+        localPort: 8000 + index,
+        processName: "example",
+        processId: index + 1,
+        systemdUnit: null,
+        established: 1,
+        remoteAddressCount: 1,
+        remotes: [{ address: "203.0.113.1", count: 1 }],
+      })),
+      totalEstablished: 100,
+      truncated: false,
+      collectedAt: new Date().toISOString(),
+    }));
+    captures = records.map((index) =>
+      fixtures.baseline(`baseline-${index}`, `Example baseline ${index}`),
+    );
+    await mount();
+    async function checkList() {
+      await vi.waitFor(() =>
+        expect(
+          element.querySelectorAll(".list-panel .dense-row, .list-panel .docker-branch").length,
+        ).toBe(100),
+      );
+      const panel = element.querySelector<HTMLElement>(".list-panel")!;
+      expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
+        element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
+      );
+      expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+      const rows = panel.querySelectorAll<HTMLElement>(".dense-row, .docker-branch");
+      rows[0].focus();
+      await userEvent.keyboard("{End}");
+      await vi.waitFor(() =>
+        expect(panel.scrollTop + panel.clientHeight).toBeGreaterThanOrEqual(panel.scrollHeight - 1),
+      );
+      const last = rows[rows.length - 1].getBoundingClientRect();
+      expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
+      expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    }
+    for (const view of ["Systemd", "Docker", "Baselines"]) {
+      await navigate(view);
+      await checkList();
+    }
+    await navigate("Ports");
+    for (const tab of ["Table", "Connections", "Docker"]) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
+      await checkList();
+    }
+  });
+
+  it.each([960, 1600])(
+    "scrolls long History, Boot, Logs, and Scratchpad content at %s px",
+    async (width) => {
+      await page.viewport(width, 700);
+      const records = Array.from({ length: 100 }, (_, index) => index);
+      overrides.set("get_history", () =>
+        records.map((index) => ({
+          id: `entry-${index}`,
+          connectionId: "host-a",
+          sessionId: "old-session",
+          command: `printf example-${index}`,
+          cwd: "/",
+          startedAt: "2026-10-13T00:00:00Z",
+          finishedAt: null,
+          exitCode: 0,
+          shell: "bash",
+        })),
+      );
+      overrides.set("collect_boot_diagnostics", () => {
+        const snapshot = fixtures.boot();
+        return {
+          ...snapshot,
+          journal: {
+            ...snapshot.journal,
+            data: records.slice(0, 30).map((index) => `warning: example-${index}`),
+          },
+        };
+      });
+      overrides.set("get_scratchpad_note", () => ({
+        id: "example-note",
+        scope: "connection",
+        ownerId: "host-a",
+        text: records.map((index) => `Example note ${index}`).join("\n"),
+        createdAt: "",
+        updatedAt: "",
+      }));
+      await mount();
+      for (const view of ["History", "Boot"]) {
+        await navigate(view);
+        await expect
+          .element(
+            page.getByText(view === "History" ? "printf example-99" : "warning: example-29", {
+              exact: true,
+            }),
+          )
+          .toBeInTheDocument();
+        const panel = element.querySelector<HTMLElement>(".feature-page")!;
+        expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
+          element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
+        );
+        expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+        panel.scrollTop = panel.scrollHeight;
+        expect(panel.scrollTop).toBeGreaterThan(0);
+        expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+      }
+      await navigate("Scratchpad");
+      await vi.waitFor(() =>
+        expect(
+          element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")?.value,
+        ).toContain("Example note 99"),
+      );
+      const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
+      expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
+      textarea.focus();
+      await userEvent.keyboard("{Control>}{End}{/Control}");
+      expect(textarea.scrollTop).toBeGreaterThan(0);
+      await navigate("Logs");
+      await page.getByRole("button", { name: "Start", exact: true }).click();
+      streamOutput!.onmessage(
+        new TextEncoder().encode(records.map((index) => `Example log ${index}`).join("\n")).buffer,
+      );
+      await expect.element(page.getByText(/Example log 99/)).toBeInTheDocument();
+      const output = element.querySelector<HTMLElement>("pre.log-output")!;
+      expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
+      output.scrollTop = output.scrollHeight;
+      expect(output.scrollTop).toBeGreaterThan(0);
+      await navigate("Overview");
+      await expect
+        .element(page.getByRole("heading", { name: "Overview", exact: true }))
+        .toBeVisible();
+      await navigate("Terminal");
+      await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+    },
+  );
+
   it("navigates every remote page through the real app and keeps the terminal Workspace", async () => {
     await mount();
     for (const [view, heading] of [

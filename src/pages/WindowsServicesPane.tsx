@@ -62,7 +62,7 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
       />
     );
   return (
-    <ResizableSplit name="Services" className="feature-page split-page">
+    <ResizableSplit name="Services" className="feature-page split-page windows-services-page">
       <div className="list-panel">
         <header className="page-heading">
           <div>
@@ -84,7 +84,7 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
         {error && (
           <p className="inline-warning">Showing previous services. Refresh failed: {error}</p>
         )}
-        <div className="filter-bar">
+        <div className="systemd-list-controls windows-service-list-controls">
           <label className="search-field">
             <Search size={15} />
             <input
@@ -129,7 +129,7 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
           )}
         </div>
       </div>
-      <aside className="detail-panel">
+      <aside className="detail-panel" tabIndex={0} aria-label="Windows service details">
         {selected && filtered.some((service) => service.id === selected.id) ? (
           <>
             <header>

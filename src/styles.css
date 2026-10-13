@@ -3441,6 +3441,14 @@ dd {
   margin-bottom: 12px;
 }
 
+.windows-service-list-controls {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 110px);
+}
+
+.windows-services-page .detail-panel:focus-visible {
+  outline-offset: -2px;
+}
+
 .port-list-controls {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) auto auto;
@@ -5990,7 +5998,8 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .resizable-split {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   container-type: inline-size;
 }
