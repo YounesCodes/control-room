@@ -4521,9 +4521,60 @@ dd {
 
 .connection-organization-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 13px;
+}
+
+.modal.connection-dialog {
+  width: min(640px, calc(100vw - 40px));
+}
+
+.connection-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.connection-form label:not(.checkbox-label) {
+  min-width: 0;
+  gap: 5px;
+}
+
+.connection-form input:not([type="checkbox"]),
+.connection-form select {
+  min-width: 0;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.connection-form > .form-row,
+.connection-key-field,
+.connection-organization-fields,
+.connection-form > .elevation-field,
+.connection-form > .inline-message,
+.connection-form > .inline-error,
+.connection-form > .modal-actions {
+  grid-column: 1 / -1;
+}
+
+.connection-form .elevation-field,
+.connection-form .connection-tag-selector {
+  gap: 5px;
+}
+
+.connection-form .modal-actions {
+  margin: 0 -16px -16px;
+  padding: 12px 16px;
+}
+
+@media (max-width: 640px) {
+  .connection-form,
+  .connection-organization-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .known-tag-list {
@@ -4549,7 +4600,6 @@ dd {
 .connection-tag-selector .connection-tag-badge {
   max-width: 160px;
   cursor: pointer;
-  opacity: 0.55;
 }
 
 .connection-tag-selector .connection-tag-badge[aria-pressed="true"] {

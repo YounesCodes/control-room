@@ -128,8 +128,12 @@ export function ConnectionDialog({
   const capabilityNote = elevationCapabilityNote(testResult?.passwordlessSudo ?? null);
 
   return (
-    <Modal title={connection ? "Edit Saved Connection" : "Add Saved Connection"} onClose={onClose}>
-      <form className="form-stack" onSubmit={submit} noValidate>
+    <Modal
+      title={connection ? "Edit Saved Connection" : "Add Saved Connection"}
+      onClose={onClose}
+      className="connection-dialog"
+    >
+      <form className="form-stack connection-form" onSubmit={submit} noValidate>
         <label>
           <span>Display name (required)</span>
           <input
@@ -153,7 +157,7 @@ export function ConnectionDialog({
             required
             spellCheck={false}
           />
-          <small>OpenSSH resolves this value using your normal Windows configuration.</small>
+          <small>Uses your Windows OpenSSH configuration.</small>
         </label>
         <div className="form-row">
           <label>
@@ -180,7 +184,7 @@ export function ConnectionDialog({
             />
           </label>
         </div>
-        <label>
+        <label className="connection-key-field">
           <span>Existing private key override</span>
           <div className="input-action">
             <input
@@ -209,6 +213,38 @@ export function ConnectionDialog({
               ))}
             </select>
           </label>
+          <div className="connection-tag-selector">
+            <span>Tags</span>
+            {knownTags.length ? (
+              <div className="known-tag-list" aria-label="Available tags">
+                {knownTags.map((tag) => (
+                  <button
+                    className="connection-tag-badge"
+                    style={tagBadgeStyle(tag.color)}
+                    type="button"
+                    aria-pressed={selectedTagIds.includes(tag.id)}
+                    disabled={
+                      !selectedTagIds.includes(tag.id) &&
+                      selectedTagIds.length >= MAX_TAGS_PER_CONNECTION
+                    }
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <small>Create tags from Manage groups and tags, then assign them here.</small>
+            )}
+            {!!knownTags.length && (
+              <small>
+                {selectedTagIds.length > MAX_TAGS_PER_CONNECTION
+                  ? `Remove ${selectedTagIds.length - MAX_TAGS_PER_CONNECTION} ${selectedTagIds.length - MAX_TAGS_PER_CONNECTION === 1 ? "tag" : "tags"} to continue.`
+                  : `Select up to ${MAX_TAGS_PER_CONNECTION} local tags.`}
+              </small>
+            )}
+          </div>
         </div>
         <div className="elevation-field">
           <label className="checkbox-label">
@@ -221,43 +257,7 @@ export function ConnectionDialog({
             Allow sudo for Structured Operations on this host
           </label>
           <small>{elevationSummary(elevationSource(globalSudoEnabled, sudoEnabled))}</small>
-          {capabilityNote ? (
-            <small>{capabilityNote}</small>
-          ) : (
-            <small>Test structured access to see whether this account needs a sudo password.</small>
-          )}
-        </div>
-        <div className="connection-tag-selector">
-          <span>Tags</span>
-          {knownTags.length ? (
-            <div className="known-tag-list" aria-label="Available tags">
-              {knownTags.map((tag) => (
-                <button
-                  className="connection-tag-badge"
-                  style={tagBadgeStyle(tag.color)}
-                  type="button"
-                  aria-pressed={selectedTagIds.includes(tag.id)}
-                  disabled={
-                    !selectedTagIds.includes(tag.id) &&
-                    selectedTagIds.length >= MAX_TAGS_PER_CONNECTION
-                  }
-                  key={tag.id}
-                  onClick={() => toggleTag(tag.id)}
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <small>Create tags from Manage groups and tags, then assign them here.</small>
-          )}
-          {!!knownTags.length && (
-            <small>
-              {selectedTagIds.length > MAX_TAGS_PER_CONNECTION
-                ? `Remove ${selectedTagIds.length - MAX_TAGS_PER_CONNECTION} ${selectedTagIds.length - MAX_TAGS_PER_CONNECTION === 1 ? "tag" : "tags"} to continue.`
-                : `Select up to ${MAX_TAGS_PER_CONNECTION} local tags.`}
-            </small>
-          )}
+          {capabilityNote && <small>{capabilityNote}</small>}
         </div>
         {testResult && (
           <p className="inline-message" role="status">

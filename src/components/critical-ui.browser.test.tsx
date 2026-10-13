@@ -242,6 +242,71 @@ function TabNameFixture() {
 }
 
 describe("critical UI in Chromium", () => {
+  it("keeps connection actions visible when a large tag list needs scrolling", async () => {
+    await page.viewport(960, 640);
+    mount(
+      <ConnectionDialog
+        groups={[]}
+        knownTags={Array.from({ length: 40 }, (_, index) => ({
+          id: `tag-${index}`,
+          name: `Environment ${index + 1}`,
+          color: "#3a3a3a",
+        }))}
+        globalSudoEnabled={false}
+        onClose={() => undefined}
+        onSaved={() => undefined}
+      />,
+    );
+    await expect.element(page.getByRole("textbox", { name: "Display name" })).toHaveFocus();
+    const dialog = page.getByRole("dialog").element();
+    expect(dialog.scrollHeight).toBeGreaterThan(dialog.clientHeight);
+    dialog.scrollTop = dialog.scrollHeight;
+    const bounds = dialog.getBoundingClientRect();
+    const header = dialog.querySelector(".modal-header")!.getBoundingClientRect();
+    const actions = dialog.querySelector(".modal-actions")!.getBoundingClientRect();
+    expect(header.top).toBeGreaterThanOrEqual(bounds.top);
+    expect(actions.bottom).toBeLessThanOrEqual(bounds.bottom);
+    await expect
+      .element(page.getByRole("button", { name: "Environment 40", exact: true }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Add connection", exact: true }))
+      .toBeVisible();
+  });
+  it.each([false, true])(
+    "fits the connection form without scrolling at minimum window size with global sudo %s",
+    async (globalSudoEnabled) => {
+      await page.viewport(960, 640);
+      mount(
+        <ConnectionDialog
+          groups={[{ id: "example-group", name: "Servers", collapsed: false, position: 0 }]}
+          knownTags={Array.from({ length: 5 }, (_, index) => ({
+            id: `tag-${index}`,
+            name: `Tag ${index + 1}`,
+            color: "#3a3a3a",
+          }))}
+          globalSudoEnabled={globalSudoEnabled}
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />,
+      );
+      await expect.element(page.getByRole("textbox", { name: "Display name" })).toHaveFocus();
+      const dialog = page.getByRole("dialog", { name: "Add Saved Connection" }).element();
+      expect(dialog.scrollHeight).toBeLessThanOrEqual(dialog.clientHeight);
+      const bounds = dialog.getBoundingClientRect();
+      for (const name of ["Tag 5", "Browse", "Test structured access", "Add connection"]) {
+        const button = page.getByRole("button", { name, exact: true });
+        await expect.element(button).toBeVisible();
+        const buttonBounds = button.element().getBoundingClientRect();
+        expect(buttonBounds.top).toBeGreaterThanOrEqual(bounds.top);
+        expect(buttonBounds.bottom).toBeLessThanOrEqual(bounds.bottom);
+      }
+      await expectAccessibleDialog();
+      await page.screenshot({
+        path: `../../test-results/connection-dialog-compact-${globalSudoEnabled ? "global-sudo" : "per-host"}.png`,
+      });
+    },
+  );
   it("gives active tab names the action space until hover or keyboard focus", async () => {
     mount(<TabNameFixture />);
     const main = page.getByRole("button", { name: "Open production database workspace" });
