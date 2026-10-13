@@ -13,6 +13,9 @@ const session = vi.hoisted(() => ({
   output: null as { onmessage: ((message: ArrayBuffer) => void) | null } | null,
   acknowledgeSessionOutput: vi.fn(() => Promise.resolve()),
   writeSession: vi.fn<(id: string, data: Uint8Array) => Promise<void>>(() => Promise.resolve()),
+  resizeSession: vi.fn<(id: string, cols: number, rows: number) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -34,7 +37,7 @@ vi.mock("../lib/api", () => ({
       },
     ),
     acknowledgeSessionOutput: session.acknowledgeSessionOutput,
-    resizeSession: vi.fn(() => Promise.resolve()),
+    resizeSession: session.resizeSession,
     closeSession: vi.fn(() => Promise.resolve()),
     writeSession: session.writeSession,
   },
@@ -72,7 +75,46 @@ afterEach(() => {
   session.output = null;
   session.acknowledgeSessionOutput.mockClear();
   session.writeSession.mockClear();
+  session.resizeSession.mockClear();
   vi.restoreAllMocks();
+});
+
+it("refits terminal columns and rows and resizes the same session when its pane changes", async () => {
+  await page.viewport(1280, 800);
+  container = document.createElement("div");
+  Object.assign(container.style, { position: "relative", width: "800px", height: "500px" });
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(
+    <TerminalPane
+      workspace={createLocalWorkspace({
+        id: "test-shell",
+        label: "Test shell",
+        kind: "command-prompt",
+        elevated: false,
+      })}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+    />,
+  );
+  await vi.waitFor(() => expect(session.resizeSession).toHaveBeenCalled());
+  const initial = session.resizeSession.mock.calls.at(-1)!;
+  container.style.width = "450px";
+  container.style.height = "250px";
+  await vi.waitFor(() => {
+    const resized = session.resizeSession.mock.calls.at(-1)!;
+    expect(resized[0]).toBe(initial[0]);
+    expect(resized[1]).toBeLessThan(initial[1]);
+    expect(resized[2]).toBeLessThan(initial[2]);
+    expect(resized[1]).toBeGreaterThan(0);
+    expect(resized[2]).toBeGreaterThan(0);
+  });
+  session.output!.onmessage!(new TextEncoder().encode("RESIZED_SESSION_OK\r\n").buffer);
+  await expect.element(page.getByText("RESIZED_SESSION_OK", { exact: true })).toBeVisible();
 });
 
 function paintedPixels(canvas: HTMLCanvasElement) {

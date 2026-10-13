@@ -1217,11 +1217,15 @@ fn validate_persisted_layout(
         }
         PersistedTerminalLayout::Split {
             direction,
+            ratio,
             first,
             second,
         } => {
             if direction != "vertical" && direction != "horizontal" {
                 return Err("Terminal split direction is invalid".into());
+            }
+            if ratio.is_some_and(|ratio| !ratio.is_finite() || !(0.05..=0.95).contains(&ratio)) {
+                return Err("Terminal split ratio is invalid".into());
             }
             validate_persisted_layout(first, workspace_ids, depth + 1)?;
             validate_persisted_layout(second, workspace_ids, depth + 1)
@@ -3548,6 +3552,7 @@ mod tests {
             for _ in 0..depth {
                 layout = PersistedTerminalLayout::Split {
                     direction: "vertical".into(),
+                    ratio: None,
                     first: Box::new(PersistedTerminalLayout::Leaf {
                         workspace_id: workspace_id.clone(),
                     }),
@@ -3603,6 +3608,7 @@ mod tests {
         for direction in ["horizontal", "vertical"] {
             let layout = PersistedTerminalLayout::Split {
                 direction: direction.into(),
+                ratio: Some(0.65),
                 first: Box::new(PersistedTerminalLayout::Leaf {
                     workspace_id: left.clone(),
                 }),
@@ -3632,6 +3638,46 @@ mod tests {
                 database.get_workspace_state().unwrap(),
                 state,
                 "{direction}"
+            );
+        }
+    }
+
+    #[test]
+    fn terminal_split_ratios_validate_and_legacy_splits_default_to_equal_sizes() {
+        let workspace_id = Uuid::new_v4().to_string();
+        let ids = std::collections::HashSet::from([workspace_id.as_str()]);
+        let legacy = serde_json::json!({
+            "kind": "split", "direction": "vertical",
+            "first": { "kind": "leaf", "workspaceId": workspace_id },
+            "second": { "kind": "leaf", "workspaceId": workspace_id }
+        });
+        let layout: PersistedTerminalLayout = serde_json::from_value(legacy.clone()).unwrap();
+        assert!(validate_persisted_layout(&layout, &ids, 0).is_ok());
+        assert_eq!(serde_json::to_value(&layout).unwrap(), legacy);
+        for ratio in [
+            0.05,
+            0.35,
+            0.5,
+            0.95,
+            0.0,
+            1.0,
+            -0.2,
+            f64::NAN,
+            f64::INFINITY,
+        ] {
+            let layout = PersistedTerminalLayout::Split {
+                direction: "horizontal".into(),
+                ratio: Some(ratio),
+                first: Box::new(PersistedTerminalLayout::Leaf {
+                    workspace_id: workspace_id.clone(),
+                }),
+                second: Box::new(PersistedTerminalLayout::Leaf {
+                    workspace_id: workspace_id.clone(),
+                }),
+            };
+            assert_eq!(
+                validate_persisted_layout(&layout, &ids, 0).is_ok(),
+                ratio.is_finite() && (0.05..=0.95).contains(&ratio)
             );
         }
     }

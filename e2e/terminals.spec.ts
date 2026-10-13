@@ -154,6 +154,15 @@ describe("ConPTY and Workspace lifecycle", () => {
       expect(panes).toHaveLength(2);
       if (direction === "vertically") expect(panes[0].left).not.toBe(panes[1].left);
       else expect(panes[0].top).not.toBe(panes[1].top);
+      const divider = $("aria/Resize terminal split 1");
+      const beforeResize = Number(await divider.getAttribute("aria-valuenow"));
+      const sessionIds = (await runtime()).sessionIds;
+      await divider.click();
+      await browser.keys(["Shift", direction === "vertically" ? "ArrowRight" : "ArrowDown"]);
+      await browser.waitUntil(
+        async () => Number(await divider.getAttribute("aria-valuenow")) > beforeResize + 40,
+      );
+      expect((await runtime()).sessionIds).toEqual(sessionIds);
       await terminalCommand("echo ACTIVE_PANE_OK", "ACTIVE_PANE_OK");
       const terminals = await $$(".terminal-workspace-pane-visible .xterm-screen");
       await terminals[0].click();
@@ -176,9 +185,17 @@ describe("ConPTY and Workspace lifecycle", () => {
           (await ipc<PersistedWorkspaceState>("get_workspace_state")).terminalGroups?.[0]?.name ===
           "Persistent pair",
       );
+      const savedLayout = (await ipc<PersistedWorkspaceState>("get_workspace_state"))
+        .terminalGroups![0].layout;
+      expect(savedLayout.kind).toBe("split");
+      if (savedLayout.kind === "split") expect(savedLayout.ratio).toBeGreaterThan(0.5);
       await restartApp();
       await $("aria/Focus terminal").click();
       await expect($(".session-tab-group-label*=Persistent pair")).toBeDisplayed();
+      expect(
+        (await ipc<PersistedWorkspaceState>("get_workspace_state")).terminalGroups![0].layout,
+      ).toEqual(savedLayout);
+      await expect($("aria/Resize terminal split 1")).toBeDisplayed();
       expect(
         await browser.execute(
           () => document.querySelectorAll(".terminal-workspace-pane-visible").length,

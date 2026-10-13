@@ -74,7 +74,8 @@ import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib
 import {
   createTerminalLayout,
   getTerminalLayoutIds,
-  getResponsiveTerminalPaneRects,
+  getResponsiveTerminalGeometry,
+  resizeTerminalLayout,
   splitTerminalLayout,
 } from "./lib/terminal-layout";
 import type { TerminalSplitDirection } from "./lib/terminal-layout";
@@ -473,10 +474,11 @@ export function App() {
   const ungroupedWorkspaces = workspaces.filter(
     (workspace) => !groupedWorkspaceIds.has(workspace.id),
   );
-  const terminalPaneRects =
+  const terminalGeometry =
     terminalSplitMode && activeTerminalGroup
-      ? getResponsiveTerminalPaneRects(activeTerminalGroup.layout, terminalLayoutViewport)
-      : {};
+      ? getResponsiveTerminalGeometry(activeTerminalGroup.layout, terminalLayoutViewport)
+      : { panes: {}, dividers: [] };
+  const terminalPaneRects = terminalGeometry.panes;
   const existingSplitCandidates = terminalFocusMode
     ? ungroupedWorkspaces.filter((workspace) => workspace.id !== activeWorkspaceId)
     : [];
@@ -2191,6 +2193,49 @@ export function App() {
                   );
                 })}
               </Suspense>
+              {!settingsOpen &&
+                activeTerminalGroup &&
+                terminalGeometry.dividers.map((divider, index) => {
+                  const vertical = divider.direction === "vertical";
+                  const { rectangle } = divider;
+                  const changeRatio = (ratio: number) =>
+                    setTerminalGroups((groups) =>
+                      groups.map((group) =>
+                        group.id === activeTerminalGroup.id
+                          ? {
+                              ...group,
+                              layout: resizeTerminalLayout(group.layout, divider.path, ratio),
+                            }
+                          : group,
+                      ),
+                    );
+                  return (
+                    <ResizeDivider
+                      key={`${activeTerminalGroup.id}:${divider.path}:${divider.direction}`}
+                      label={`Resize terminal split ${index + 1}`}
+                      orientation={vertical ? "vertical" : "horizontal"}
+                      value={divider.position}
+                      min={divider.min}
+                      max={divider.max}
+                      className="terminal-layout-divider"
+                      style={
+                        vertical
+                          ? {
+                              left: `${rectangle.left + (rectangle.width * divider.position) / divider.size}%`,
+                              top: `${rectangle.top}%`,
+                              height: `${rectangle.height}%`,
+                            }
+                          : {
+                              top: `${rectangle.top + (rectangle.height * divider.position) / divider.size}%`,
+                              left: `${rectangle.left}%`,
+                              width: `${rectangle.width}%`,
+                            }
+                      }
+                      onChange={(size) => changeRatio(size / divider.size)}
+                      onReset={() => changeRatio(0.5)}
+                    />
+                  );
+                })}
               {/* Inspection views need a Remote Host and its Saved
                   Connection. A local Workspace renders its terminal only. */}
               {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
