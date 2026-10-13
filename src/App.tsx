@@ -422,16 +422,9 @@ export function App() {
   const offeredNavigation = windowsWorkspace
     ? navigation
         .filter((item) =>
-          [
-            "overview",
-            "terminal",
-            "services",
-            "ports",
-            "scratchpad",
-            ...(hostCapabilities[activeRemoteWorkspace!.connectionId]?.dockerAvailable
-              ? ["docker", "logs"]
-              : []),
-          ].includes(item.id),
+          ["overview", "terminal", "services", "ports", "docker", "logs", "scratchpad"].includes(
+            item.id,
+          ),
         )
         .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
     : navigation;

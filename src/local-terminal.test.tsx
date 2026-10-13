@@ -976,6 +976,8 @@ describe("Local Terminal", () => {
     await user.click(screen.getByRole("button", { name: "Connect" }));
     await screen.findByTestId(/^terminal-/);
     expect(container.querySelector(".feature-nav")?.textContent).toContain("Overview");
+    expect(container.querySelector(".feature-nav")?.textContent).toContain("Docker");
+    expect(container.querySelector(".feature-nav")?.textContent).toContain("Logs");
     expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Systemd");
     expect(container.querySelector(".feature-nav")?.textContent).not.toContain("History");
     await waitFor(() => {

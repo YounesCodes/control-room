@@ -158,8 +158,9 @@ Group Windows shells, WSL distributions, and supported Windows Terminal profiles
 in compact radio rows. Use a quiet hover fill, a persistent selected border, and
 an inset focus ring for keyboard navigation. Windows marks stay gray and include
 the detected 10 or 11 version when known.
-Windows hosts offer Overview, Terminal, Services, Ports, and Scratchpad, plus Docker
-and container Logs when the Docker CLI is detected. Optional header metrics inspect
+Windows hosts offer Overview, Terminal, Services, Ports, Docker, container Logs,
+and Scratchpad. Keep Docker and Logs discoverable even when Docker is missing;
+their views report installation or daemon access failures. Optional header metrics inspect
 Windows itself, including when the terminal runs WSL. Service inventory is read-only;
 firewall profiles describe policy without claiming a port is reachable.
 

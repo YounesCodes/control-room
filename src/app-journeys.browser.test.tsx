@@ -967,6 +967,49 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
+  it("offers Windows Docker as its own capability even when detection finds no CLI", async () => {
+    const capabilities = {
+      ...fixtures.capabilities(),
+      osId: "windows",
+      osName: "Microsoft Windows 10 Pro",
+      dockerAvailable: false,
+      dockerAccessible: false,
+    };
+    overrides.set("get_cached_capabilities", () => capabilities);
+    overrides.set("discover_remote_shells", () => ({
+      platform: "windows",
+      shells: [{ id: "powershell", label: "Windows PowerShell" }],
+      capabilities,
+      windowsTerminalAvailable: false,
+      wslError: null,
+    }));
+    failures.set("list_containers", "Docker CLI was not found on this Windows host.");
+    root.render(<App />);
+    await page
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.element(page.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect
+      .element(
+        page
+          .getByRole("navigation", { name: "Workspace features" })
+          .getByRole("button", { name: "Docker", exact: true }),
+      )
+      .toBeVisible();
+    await navigate("Docker");
+    await expect
+      .element(page.getByText("Docker CLI was not found on this Windows host.", { exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await navigate("Logs");
+    await expect
+      .element(page.getByText("Docker CLI was not found on this Windows host.", { exact: true }))
+      .toBeVisible();
+    expect(native.invoke.mock.calls.some(([command]) => command === "list_services")).toBe(false);
+  });
+
   it("navigates every remote page through the real app and keeps the terminal Workspace", async () => {
     await mount();
     for (const [view, heading] of [

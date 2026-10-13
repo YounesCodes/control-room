@@ -32,4 +32,4 @@ Details can include:
 
 The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). On Linux, if Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).
 
-On Windows hosts, **Docker** and **Logs** appear when the Windows Docker CLI is detected. They use that account's Docker context. The daemon must already be running and accessible to the SSH account. If access fails, check Docker and account permissions, then retry. Docker installed only inside WSL is not included.
+On Windows hosts, **Docker** has its own sidebar entry, alongside **Ports**, and **Logs** offers container logs. These views stay visible even when Docker is unavailable. They use the Windows Docker CLI and that account's Docker context. The daemon must already be running and accessible to the SSH account. If Docker is missing or access fails, the view reports the error. Check Docker and account permissions, then retry. Docker installed only inside WSL is not included.
