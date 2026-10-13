@@ -133,8 +133,11 @@ h3 {
 .app-tooltip {
   position: fixed;
   z-index: 1200;
-  max-width: 260px;
-  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(260px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--surface-overlay);
@@ -1624,9 +1627,31 @@ code,
   padding-right: 56px;
 }
 
-.session-tab-wrap.in-layout:hover .session-tab-main,
-.session-tab-wrap.in-layout:focus-within .session-tab-main {
-  padding-right: 32px;
+.session-tab-wrap.in-layout .session-tab-main {
+  padding-right: 56px;
+}
+
+.session-tab-wrap.in-layout .session-tab-rename,
+.session-tab-wrap.in-layout .session-tab-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.session-group-action {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 5px;
+  padding: 0 10px;
+  border-left: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.session-group-action:hover {
+  background: var(--fill-hover);
+  color: var(--text-strong);
 }
 
 .session-tab-label {

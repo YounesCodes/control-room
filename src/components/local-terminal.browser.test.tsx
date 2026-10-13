@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import { App } from "../App";
+import { TooltipLayer } from "./TooltipLayer";
 import "../styles.css";
 const savedLayout = vi.hoisted(() => ({ save: vi.fn(async () => {}) }));
 vi.mock("./WindowControls", () => ({ WindowControls: () => null }));
@@ -82,12 +83,17 @@ afterEach(() => {
   savedLayout.save.mockClear();
 });
 
-function mountApp() {
+function mountApp(withTooltips = false) {
   container = document.createElement("div");
   container.style.height = "100vh";
   document.body.append(container);
   root = createRoot(container);
-  root.render(<App />);
+  root.render(
+    <>
+      <App />
+      {withTooltips && <TooltipLayer />}
+    </>,
+  );
 }
 
 function paneBounds() {
@@ -104,6 +110,70 @@ async function split(direction: "vertically" | "horizontally") {
     .click();
 }
 describe("Local Terminal Mode in the real App", () => {
+  it.each([800, 1600])(
+    "keeps individual pane controls separate from group actions at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mountApp(true);
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      await split("vertically");
+      await split("horizontally");
+      const controls = [
+        ...container!.querySelectorAll<HTMLButtonElement>(
+          ".session-pane-tabs .session-tab-rename, .session-pane-tabs .session-tab-close",
+        ),
+      ];
+      expect(controls).toHaveLength(6);
+      for (const control of controls) {
+        expect(getComputedStyle(control).opacity).toBe("1");
+        const rect = control.getBoundingClientRect();
+        expect(
+          document
+            .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+            ?.closest("button"),
+        ).toBe(control);
+      }
+      const groupButton = container!.querySelector<HTMLButtonElement>(".session-tab-group-main")!;
+      await userEvent.hover(groupButton);
+      await expect.element(page.getByRole("tooltip")).toBeVisible();
+      expect(
+        page.getByRole("tooltip").element().getBoundingClientRect().left,
+      ).toBeGreaterThanOrEqual(8);
+      await page
+        .getByRole("button", { name: "Rename Command Prompt 2 Workspace", exact: true })
+        .click();
+      await page.getByRole("textbox").fill("Background logs");
+      await userEvent.keyboard("{Enter}");
+      await expect
+        .element(page.getByRole("button", { name: "Close Background logs Workspace" }))
+        .toBeVisible();
+      expect(
+        container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
+      ).toBe("Command Prompt 3");
+      await page.getByRole("button", { name: "Close Background logs Workspace" }).click();
+      await expect
+        .element(page.getByRole("button", { name: "Open Command Prompt group 2 terminals" }))
+        .toBeVisible();
+      expect(container!.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+      expect(
+        container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
+      ).toBe("Command Prompt 2");
+      await page.getByRole("button", { name: "Close Command Prompt 2 Workspace" }).click();
+      expect(container!.querySelector(".session-pane-tabs")).toBeNull();
+      await expect
+        .element(page.getByRole("button", { name: "Command Prompt", exact: true }))
+        .toHaveAttribute("aria-current", "page");
+      await vi.waitFor(() =>
+        expect(savedLayout.save).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            terminalGroups: [],
+            workspaces: [expect.objectContaining({ label: null })],
+          }),
+        ),
+      );
+    },
+  );
+
   it("paints the selected frame on all four edges above terminal contents in nested splits", async () => {
     await page.viewport(960, 641);
     mountApp();
@@ -208,8 +278,9 @@ describe("Local Terminal Mode in the real App", () => {
           ?.getAttribute("title"),
       ).toBe(first.getAttribute("title"));
       await page
-        .getByRole("button", { name: "Delete Build and logs; terminals stay open" })
+        .getByRole("button", { name: "Ungroup Build and logs; terminals stay open" })
         .click();
+      await page.getByRole("button", { name: "Ungroup", exact: true }).click();
       expect(container!.querySelector(".session-pane-tabs")).toBeNull();
       expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
     },

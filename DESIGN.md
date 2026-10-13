@@ -48,8 +48,10 @@ target beside its readings.
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
 scan. Give each split group one tab with its name and pane count. Show the active
-group's terminals in a separate compact pane row, with group rename and delete
-controls at its end. Keep inactive groups' member tabs out of that row. The active
+group's terminals in a separate compact pane row. Keep individual Rename and Close
+controls visible on each pane tab. Use labeled Rename group and Ungroup buttons
+at the row's end, and confirm ungrouping with its effect on the open terminals.
+Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected
 split pane on all four edges, above terminal content, without blocking input or
 divider interaction. Keep a reserved empty window drag area in the Focus Mode

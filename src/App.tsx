@@ -244,6 +244,7 @@ export function App() {
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
+  const closingWorkspaceIdsRef = useRef(new Set<string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
   const [terminalLayoutViewport, setTerminalLayoutViewport] = useState({
     width: Number.POSITIVE_INFINITY,
@@ -906,6 +907,15 @@ export function App() {
     }
   }
 
+  function confirmUngroup(group: TerminalGroup) {
+    setConfirmState({
+      title: "Ungroup terminals",
+      message: `Ungroup “${group.name}”? Its terminals will stay open as separate tabs.`,
+      confirmLabel: "Ungroup",
+      onConfirm: () => removeTerminalGroup(group.id),
+    });
+  }
+
   function openConnection(connection: SavedConnection, forceNew = false, split = false) {
     closeSettings(() => {
       if (!forceNew && !split) {
@@ -1104,8 +1114,8 @@ export function App() {
       setConfirmState({
         title: "Close workspace",
         message: local
-          ? "Stop the local shell and close this Workspace?"
-          : "Disconnect the active SSH session and close this Workspace?",
+          ? `Stop the local shell and close “${duplicateLabel(workspace)}”?`
+          : `Disconnect the SSH session and close “${duplicateLabel(workspace)}”?`,
         confirmLabel: local ? "Stop & close" : "Disconnect & close",
         danger: true,
         onConfirm: () => void performCloseWorkspace(id),
@@ -1116,8 +1126,9 @@ export function App() {
   }
 
   async function performCloseWorkspace(id: string) {
-    const workspace = workspaces.find((item) => item.id === id);
-    if (!workspace) return;
+    const workspace = workspaceStateRef.current.workspaces.find((item) => item.id === id);
+    if (!workspace || closingWorkspaceIdsRef.current.has(id)) return;
+    closingWorkspaceIdsRef.current.add(id);
     setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     // Whatever the list holds now, not what it held when the confirmation was
@@ -1133,7 +1144,11 @@ export function App() {
     const remainingGroup = previousGroup
       ? nextGroups.find((group) => group.id === previousGroup.id)
       : null;
-    const remainingSplitIds = remainingGroup ? getTerminalLayoutIds(remainingGroup.layout) : [];
+    const remainingSplitIds = remainingGroup
+      ? getTerminalLayoutIds(remainingGroup.layout)
+      : previousGroup
+        ? getTerminalLayoutIds(previousGroup.layout).filter((memberId) => memberId !== id)
+        : [];
     const closingActiveWorkspace = current.activeWorkspaceId === id;
     const keepFocusGroup = current.terminalFocusMode && previousGroup;
     const nextActive = closingActiveWorkspace
@@ -1153,6 +1168,7 @@ export function App() {
     }
     setTerminalGroups(nextGroups);
     if (!remaining.length) exitTerminalFocus();
+    closingWorkspaceIdsRef.current.delete(id);
   }
 
   function deleteConnection(connection: SavedConnection) {
@@ -1538,22 +1554,21 @@ export function App() {
         <span className="sr-only" id={`workspace-session-${workspace.id}`}>
           Terminal {terminalStateLabel(workspace)}
         </span>
-        {!grouped ? (
-          <button
-            className="session-tab-rename"
-            type="button"
-            onClick={() => renameWorkspace(workspace)}
-            aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
-            title="Rename Workspace"
-          >
-            <Pencil size={12} />
-          </button>
-        ) : null}
+        <button
+          className="session-tab-rename"
+          type="button"
+          onClick={() => renameWorkspace(workspace)}
+          aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
+          title={grouped ? `Rename terminal: ${duplicateLabel(workspace)}` : "Rename Workspace"}
+        >
+          <Pencil size={12} />
+        </button>
         <button
           className="session-tab-close"
           type="button"
           onClick={() => void closeWorkspace(workspace.id)}
           aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
+          title={`Close terminal: ${duplicateLabel(workspace)}`}
         >
           <X size={14} />
         </button>
@@ -2115,22 +2130,23 @@ export function App() {
               })}
             </WorkspaceTabScroller>
             <button
-              className="session-strip-button"
+              className="session-group-action"
               type="button"
               onClick={() => setRenameGroupTarget(activeTerminalGroup)}
-              aria-label={`Rename ${activeTerminalGroup.name}`}
+              aria-label={`Rename group ${activeTerminalGroup.name}`}
               title="Rename terminal group"
             >
               <Pencil size={14} />
+              Rename group
             </button>
             <button
-              className="session-strip-button"
+              className="session-group-action"
               type="button"
-              onClick={() => removeTerminalGroup(activeTerminalGroup.id)}
-              aria-label={`Delete ${activeTerminalGroup.name}; terminals stay open`}
-              title="Delete group; terminals stay open"
+              onClick={() => confirmUngroup(activeTerminalGroup)}
+              aria-label={`Ungroup ${activeTerminalGroup.name}; terminals stay open`}
+              title="Ungroup terminals; keep every terminal open"
             >
-              <Trash2 size={14} />
+              Ungroup
             </button>
           </nav>
         )}

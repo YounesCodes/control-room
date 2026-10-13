@@ -22,6 +22,58 @@ async function renameActive(name: string) {
 }
 
 describe("ConPTY and Workspace lifecycle", () => {
+  it("renames and closes specific split panes, cancels group actions, and restores the survivors", async () => {
+    await openLocal();
+    await renameActive("Original pane");
+    await $("aria/Focus terminal").click();
+    for (const name of ["Logs pane", "Build pane"]) {
+      await $("aria/Split terminal").click();
+      await $(".terminal-split-menu").$("button*=Command Prompt").click();
+      await renameActive(name);
+    }
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
+    const sessions = (await runtime()).sessionIds;
+    await $("[aria-label='Rename Logs pane Workspace']").click();
+    await $("[role=dialog] input").setValue("Renamed logs");
+    await $("button=Rename").click();
+    await expect($("[aria-label='Close Renamed logs Workspace']")).toExist();
+    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
+      "Build pane",
+    );
+    await $("[aria-label^='Ungroup ']").click();
+    await $("button=Cancel").click();
+    expect((await runtime()).sessionIds).toEqual(sessions);
+    await $("[aria-label='Close Renamed logs Workspace']").click();
+    await $("button=Cancel").click();
+    expect((await runtime()).sessionIds).toEqual(sessions);
+    await $("[aria-label='Close Renamed logs Workspace']").click();
+    await $("button=Stop & close").click();
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
+    await expect($(".session-tab-group-main small")).toHaveText("2");
+    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
+      "Build pane",
+    );
+    await terminalCommand("echo BUILD_SURVIVES", "BUILD_SURVIVES");
+    await browser.waitUntil(async () => {
+      const saved = await ipc<PersistedWorkspaceState>("get_workspace_state");
+      return (
+        saved.workspaces.length === 2 &&
+        saved.workspaces.some((workspace) => workspace.label === "Build pane")
+      );
+    });
+    await restartApp(true);
+    await $("aria/Focus terminal").click();
+    await expect($("[aria-label='Close Original pane Workspace']")).toExist();
+    await expect($("[aria-label='Close Build pane Workspace']")).toExist();
+    await closeWorkspace("Build pane");
+    await expect($(".session-pane-tabs")).not.toExist();
+    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Original pane");
+    await terminalCommand("echo ORIGINAL_SURVIVES", "ORIGINAL_SURVIVES");
+    await closeWorkspace("Original pane");
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
+    await expect($("[aria-label='Exit terminal focus']")).not.toExist();
+  });
+
   it("dispatches permitted native dragging from the Focus Mode handle", async () => {
     await openLocal();
     await $("aria/Focus terminal").click();
@@ -100,7 +152,8 @@ describe("ConPTY and Workspace lifecycle", () => {
     await terminalCommand("echo FIRST_GROUP_OK", "FIRST_GROUP_OK");
     await $("[aria-label='Open Second group 2 terminals']").click();
     await terminalCommand("echo SECOND_GROUP_OK", "SECOND_GROUP_OK");
-    await $("[aria-label='Delete Second group; terminals stay open']").click();
+    await $("[aria-label='Ungroup Second group; terminals stay open']").click();
+    await $("button=Ungroup").click();
     await expect($("[aria-label='Open Second group 2 terminals']")).not.toExist();
     expect((await runtime()).sessionIds).toHaveLength(4);
     await terminalCommand("echo UNGROUPED_SURVIVOR", "UNGROUPED_SURVIVOR");
