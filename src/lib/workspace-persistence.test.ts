@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTerminalLayout, splitTerminalLayout } from "./terminal-layout";
+import { createTerminalLayout, splitTerminalLayout, resizeTerminalLayout } from "./terminal-layout";
 import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
 import { createRemoteWorkspace } from "./workspace-target";
 import type {
@@ -35,6 +35,49 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
+  it("round-trips independent nested split sizes in a mixed local and remote group", () => {
+    const state: PersistedWorkspaceState = {
+      workspaces: ["local", "remote", "logs"].map((id) => ({
+        id,
+        label: null,
+        connectionId: id === "local" ? null : "host",
+        localShellId: id === "local" ? powershell.id : null,
+        view: "terminal",
+        historyPaused: false,
+      })),
+      activeWorkspaceId: "remote",
+      terminalGroups: [
+        {
+          id: "mixed",
+          name: "Mixed",
+          layout: resizeTerminalLayout(
+            resizeTerminalLayout(
+              splitTerminalLayout(
+                splitTerminalLayout(createTerminalLayout("local"), "local", "remote", "vertical"),
+                "remote",
+                "logs",
+                "horizontal",
+              ),
+              "",
+              0.65,
+            ),
+            "second",
+            0.35,
+          ),
+        },
+      ],
+    };
+    const restored = restoreWorkspaceState([connection("host")], state, [powershell]);
+    const saved = persistWorkspaceState(
+      restored.workspaces,
+      restored.activeWorkspaceId,
+      restored.terminalGroups,
+    );
+    expect(saved.terminalGroups).toEqual(state.terminalGroups);
+    expect(restoreWorkspaceState([connection("host")], saved, [powershell]).terminalGroups).toEqual(
+      state.terminalGroups,
+    );
+  });
   it.each(["overview", "services", "ports", "docker", "logs", "scratchpad"] as const)(
     "preserves the supported Windows %s view",
     (view) => {

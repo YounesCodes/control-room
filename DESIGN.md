@@ -53,6 +53,12 @@ mode, with the Connections rail hidden.
 Leaving focus mode returns to the active Workspace without changing its target
 or its session.
 
+Every terminal split has a draggable, keyboard-operable divider, including nested
+splits and groups that mix local and remote terminals. Save pane proportions with
+their group and retain them when switching views. Constrain displayed sizes in
+small windows without overwriting the saved proportions. Reset a divider to equal
+sizes with a double-click or Enter.
+
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Show controls to move through the tabs and reveal the selected tab when it
 changes, including in focus mode. Where a tab fits in the strip, settle scrolling

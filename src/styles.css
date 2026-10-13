@@ -2517,6 +2517,26 @@ code,
   flex: 1;
 }
 
+.terminal-layout-divider {
+  bottom: auto;
+  transform: translateX(-50%);
+}
+
+.terminal-layout-divider[aria-orientation="horizontal"] {
+  height: 24px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.terminal-layout-divider[aria-orientation="horizontal"]::after {
+  top: calc(50% - 1px);
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: 2px;
+}
+
 .terminal-pane,
 .feature-page {
   position: absolute;

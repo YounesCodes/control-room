@@ -10,6 +10,7 @@ interface TerminalLayoutLeaf {
 interface TerminalLayoutSplit {
   kind: "split";
   direction: TerminalSplitDirection;
+  ratio?: number;
   first: TerminalLayout;
   second: TerminalLayout;
 }
@@ -19,6 +20,16 @@ interface TerminalPaneRect {
   top: number;
   width: number;
   height: number;
+}
+
+export interface TerminalLayoutDivider {
+  path: string;
+  direction: TerminalSplitDirection;
+  rectangle: TerminalPaneRect;
+  position: number;
+  size: number;
+  min: number;
+  max: number;
 }
 
 export interface TerminalLayoutViewport {
@@ -100,6 +111,20 @@ export function selectTerminalTab(layout: TerminalLayout, workspaceId: string): 
   return terminalLayoutContains(layout, workspaceId) ? layout : createTerminalLayout(workspaceId);
 }
 
+/** Paths identify splits inside one group's current tree, never terminal sessions. */
+export function resizeTerminalLayout(
+  layout: TerminalLayout,
+  path: string,
+  ratio: number,
+): TerminalLayout {
+  if (layout.kind === "leaf" || !Number.isFinite(ratio)) return layout;
+  if (path === "") return { ...layout, ratio: Math.max(0.05, Math.min(0.95, ratio)) };
+  const [child, ...rest] = path.split(".");
+  if (child !== "first" && child !== "second") return layout;
+  const next = resizeTerminalLayout(layout[child], rest.join("."), ratio);
+  return next === layout[child] ? layout : { ...layout, [child]: next };
+}
+
 export function getTerminalPaneRects(layout: TerminalLayout): Record<string, TerminalPaneRect> {
   return getResponsiveTerminalPaneRects(layout, {
     width: Number.POSITIVE_INFINITY,
@@ -117,12 +142,21 @@ export function getResponsiveTerminalPaneRects(
   layout: TerminalLayout,
   viewport: TerminalLayoutViewport,
 ): Record<string, TerminalPaneRect> {
+  return getResponsiveTerminalGeometry(layout, viewport).panes;
+}
+
+export function getResponsiveTerminalGeometry(
+  layout: TerminalLayout,
+  viewport: TerminalLayoutViewport,
+): { panes: Record<string, TerminalPaneRect>; dividers: TerminalLayoutDivider[] } {
   const rectangles: Record<string, TerminalPaneRect> = {};
+  const dividers: TerminalLayoutDivider[] = [];
 
   function visit(
     node: TerminalLayout,
     rectangle: TerminalPaneRect,
     available: TerminalLayoutViewport,
+    path: string,
   ) {
     if (node.kind === "leaf") {
       rectangles[node.workspaceId] = rectangle;
@@ -138,20 +172,59 @@ export function getResponsiveTerminalPaneRects(
           ? "vertical"
           : node.direction;
 
+    const size = direction === "vertical" ? available.width : available.height;
+    // Crowded layouts still allow every divider to move. Window constraints
+    // affect only the displayed ratio, leaving the saved preference intact.
+    const minimum = direction === "vertical" ? MIN_TERMINAL_PANE_WIDTH : MIN_TERMINAL_PANE_HEIGHT;
+    const minRatio =
+      Number.isFinite(size) && size > 0 ? Math.max(0.05, Math.min(minimum / size, 0.2)) : 0.05;
+    const savedRatio = Number.isFinite(node.ratio) ? (node.ratio ?? 0.5) : 0.5;
+    const ratio = Math.max(minRatio, Math.min(1 - minRatio, savedRatio));
+    if (Number.isFinite(size) && size > 0) {
+      dividers.push({
+        path,
+        direction,
+        rectangle,
+        position: size * ratio,
+        size,
+        min: size * minRatio,
+        max: size * (1 - minRatio),
+      });
+    }
+    const childPath = (child: string) => (path ? `${path}.${child}` : child);
+
     if (direction === "vertical") {
-      const width = rectangle.width / 2;
-      const childSpace = { ...available, width: available.width / 2 };
-      visit(node.first, { ...rectangle, width }, childSpace);
-      visit(node.second, { ...rectangle, left: rectangle.left + width, width }, childSpace);
+      const width = rectangle.width * ratio;
+      visit(
+        node.first,
+        { ...rectangle, width },
+        { ...available, width: available.width * ratio },
+        childPath("first"),
+      );
+      visit(
+        node.second,
+        { ...rectangle, left: rectangle.left + width, width: rectangle.width - width },
+        { ...available, width: available.width * (1 - ratio) },
+        childPath("second"),
+      );
       return;
     }
 
-    const height = rectangle.height / 2;
-    const childSpace = { ...available, height: available.height / 2 };
-    visit(node.first, { ...rectangle, height }, childSpace);
-    visit(node.second, { ...rectangle, top: rectangle.top + height, height }, childSpace);
+    const height = rectangle.height * ratio;
+    visit(
+      node.first,
+      { ...rectangle, height },
+      { ...available, height: available.height * ratio },
+      childPath("first"),
+    );
+    visit(
+      node.second,
+      { ...rectangle, top: rectangle.top + height, height: rectangle.height - height },
+      { ...available, height: available.height * (1 - ratio) },
+      childPath("second"),
+    );
   }
 
-  visit(layout, { left: 0, top: 0, width: 100, height: 100 }, viewport);
-  return rectangles;
+  visit(layout, { left: 0, top: 0, width: 100, height: 100 }, viewport, "");
+  return { panes: rectangles, dividers };
 }

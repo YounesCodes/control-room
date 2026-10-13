@@ -799,7 +799,7 @@ pub struct EnvironmentInfo {
     pub platform_supported: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PersistedWorkspaceState {
     pub panel_sizes: std::collections::BTreeMap<String, u32>,
@@ -809,7 +809,7 @@ pub struct PersistedWorkspaceState {
     pub terminal_layout: Option<PersistedTerminalLayout>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedTerminalGroup {
     pub id: String,
@@ -856,7 +856,7 @@ pub struct ScratchpadNoteInput {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PersistedTerminalLayout {
     Leaf {
@@ -865,6 +865,8 @@ pub enum PersistedTerminalLayout {
     },
     Split {
         direction: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ratio: Option<f64>,
         first: Box<PersistedTerminalLayout>,
         second: Box<PersistedTerminalLayout>,
     },
