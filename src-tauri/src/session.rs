@@ -21,7 +21,7 @@ use crate::{
 };
 
 struct ManagedSession {
-    master: Mutex<Box<dyn MasterPty + Send>>,
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     writer: Mutex<Box<dyn Write + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     output_flow: OutputFlow,
@@ -307,7 +307,7 @@ impl SessionManager {
         let killer = child.clone_killer();
         let session_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedSession {
-            master: Mutex::new(pair.master),
+            master: Mutex::new(Some(pair.master)),
             writer: Mutex::new(writer),
             killer: Mutex::new(killer),
             output_flow: OutputFlow::new(),
@@ -322,7 +322,7 @@ impl SessionManager {
         let output_session_id = session_id.clone();
         let output_app = app.clone();
         let output_managed = managed.clone();
-        thread::spawn(move || {
+        let output_reader = thread::spawn(move || {
             let mut buffer = vec![0_u8; OUTPUT_READ_BUFFER_BYTES];
             loop {
                 match reader.read(&mut buffer) {
@@ -384,7 +384,19 @@ impl SessionManager {
         let wait_managed = managed;
         thread::spawn(move || {
             let result = child.wait();
-            wait_managed.output_flow.close();
+            if result.is_err() {
+                let _ = wait_managed.killer.lock().kill();
+            }
+            // ConPTY keeps the output pipe open until its master is dropped.
+            // Keep the reader and acknowledgements alive while it drains, then
+            // report the exit. Closing flow control first discards queued bytes.
+            if let Err(error) = drain_pty_output(
+                &wait_managed.master,
+                output_reader,
+                &wait_managed.output_flow,
+            ) {
+                *wait_managed.failure.lock() = Some(error);
+            }
             sessions.lock().remove(&wait_session_id);
             match result {
                 Ok(status) => {
@@ -437,6 +449,8 @@ impl SessionManager {
         session
             .master
             .lock()
+            .as_ref()
+            .ok_or_else(|| "Terminal Session is no longer active".to_string())?
             .resize(PtySize {
                 rows: rows.clamp(2, 500),
                 cols: cols.clamp(2, 1_000),
@@ -474,6 +488,20 @@ impl SessionManager {
             .cloned()
             .ok_or_else(|| "Terminal Session is no longer active".into())
     }
+}
+
+fn drain_pty_output<T>(
+    master: &Mutex<Option<Box<dyn MasterPty + Send>>>,
+    reader: thread::JoinHandle<T>,
+    flow: &OutputFlow,
+) -> Result<T, String> {
+    let master = master.lock().take();
+    drop(master);
+    let result = reader
+        .join()
+        .map_err(|_| "Terminal output reader panicked".into());
+    flow.close();
+    result
 }
 
 /// The terminal type requested for the remote pty. ssh forwards whatever `TERM`
@@ -1439,6 +1467,63 @@ mod tests {
             }
         }
         assert!(String::from_utf8_lossy(&output).contains("CONTROL_ROOM_CONPTY_OK"));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn process_exit_drains_conpty_output_before_closing_flow_control() {
+        let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+        let mut command = CommandBuilder::new("cmd.exe");
+        command.args([
+            "/Q",
+            "/D",
+            "/C",
+            "for /L %i in (1,1,2000) do @echo CONTROL_ROOM_DRAIN_%i",
+        ]);
+        let mut child = pair.slave.spawn_command(command).unwrap();
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let mut writer = pair.master.take_writer().unwrap();
+        let flow = Arc::new(OutputFlow::new());
+        let reading_flow = flow.clone();
+        let reading = std::thread::spawn(move || {
+            let mut output = Vec::new();
+            let mut buffer = [0; OUTPUT_READ_BUFFER_BYTES];
+            while let Ok(count) = reader.read(&mut buffer) {
+                if count == 0 {
+                    break;
+                }
+                if buffer[..count].windows(4).any(|bytes| bytes == b"\x1b[6n") {
+                    let _ = writer.write_all(b"\x1b[1;1R");
+                    let _ = writer.flush();
+                }
+                if !reading_flow.reserve(count) {
+                    break;
+                }
+                output.extend_from_slice(&buffer[..count]);
+                reading_flow.acknowledge(count);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            output
+        });
+        let (sender, receiver) = mpsc::channel();
+        let mut killer = child.clone_killer();
+        std::thread::spawn(move || {
+            let status = child.wait().unwrap();
+            assert!(status.success());
+            let master = parking_lot::Mutex::new(Some(pair.master));
+            let output = super::drain_pty_output(&master, reading, &flow).unwrap();
+            let _ = sender.send(output);
+        });
+        let output = receiver
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|error| {
+                let _ = killer.kill();
+                panic!("ConPTY output did not drain: {error}");
+            });
+        let output = String::from_utf8_lossy(&output);
+        assert!(output.contains("CONTROL_ROOM_DRAIN_2000"));
+        assert_eq!(output.matches("CONTROL_ROOM_DRAIN_").count(), 2000);
     }
 
     #[test]

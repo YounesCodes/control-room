@@ -50,14 +50,21 @@ function asFailure(error: unknown, fallbackKind: UpdateFailure["kind"]): UpdateF
  * and its own update feed being unreachable is not the user's problem.
  */
 export function useAppUpdater(automaticChecks: boolean) {
-  const [state, setState] = useState<AppUpdateState>(idleUpdateState);
+  const [state, setRenderedState] = useState<AppUpdateState>(idleUpdateState);
   const [notice, setNotice] = useState<PendingUpdateNotice | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
 
   // Refs rather than state: the scheduler reads these without wanting a
   // re-render, and the timer must not restart every time progress ticks.
   const stateRef = useRef(state);
-  stateRef.current = state;
+  const setState = useCallback(
+    (next: AppUpdateState | ((previous: AppUpdateState) => AppUpdateState)) => {
+      const value = typeof next === "function" ? next(stateRef.current) : next;
+      stateRef.current = value;
+      setRenderedState(value);
+    },
+    [],
+  );
   const lastCheckedAt = useRef<number | null>(null);
   const automaticRef = useRef(automaticChecks);
   automaticRef.current = automaticChecks;
@@ -75,30 +82,43 @@ export function useAppUpdater(automaticChecks: boolean) {
    * and says nothing, and stays eligible for the next scheduled pass, so a
    * bad moment never becomes a permanent failed state or a tight retry loop.
    */
-  const runCheck = useCallback(async (eligible: boolean) => {
-    if (!eligible || checkInFlight.current) return;
-    checkInFlight.current = true;
-    setState({ status: "checking" });
-    try {
-      const info = await api.checkForUpdate();
-      lastCheckedAt.current = Date.now();
-      setState(info ? { status: "available", info } : idleUpdateState);
-    } catch {
-      // Deliberately swallowed. An automatic check that fails says nothing: the
-      // reason is only actionable for a manual check, which reports its own.
-      lastCheckedAt.current = Date.now();
-      setState(idleUpdateState);
-    } finally {
-      checkInFlight.current = false;
-    }
-  }, []);
+  const runCheck = useCallback(
+    async (eligible: boolean) => {
+      if (
+        !eligible ||
+        checkInFlight.current ||
+        stateRef.current.status === "downloading" ||
+        stateRef.current.status === "installing"
+      )
+        return;
+      checkInFlight.current = true;
+      setState({ status: "checking" });
+      try {
+        const info = await api.checkForUpdate();
+        lastCheckedAt.current = Date.now();
+        setState(info ? { status: "available", info } : idleUpdateState);
+      } catch {
+        // Deliberately swallowed. An automatic check that fails says nothing: the
+        // reason is only actionable for a manual check, which reports its own.
+        lastCheckedAt.current = Date.now();
+        setState(idleUpdateState);
+      } finally {
+        checkInFlight.current = false;
+      }
+    },
+    [setState],
+  );
 
   /** The manual Settings check, which does report its outcome. */
   const checkNow = useCallback(async (): Promise<ManualCheckResult> => {
-    if (checkInFlight.current) {
+    if (
+      checkInFlight.current ||
+      stateRef.current.status === "downloading" ||
+      stateRef.current.status === "installing"
+    ) {
       return {
         outcome: "failed",
-        failure: { kind: "check", message: "A check is already running." },
+        failure: { kind: "check", message: "Another update operation is already running." },
       };
     }
     checkInFlight.current = true;
@@ -115,7 +135,7 @@ export function useAppUpdater(automaticChecks: boolean) {
     } finally {
       checkInFlight.current = false;
     }
-  }, []);
+  }, [setState]);
 
   const download = useCallback(async () => {
     const current = stateRef.current;
@@ -144,7 +164,7 @@ export function useAppUpdater(automaticChecks: boolean) {
     } catch (error) {
       setState({ status: "failed", info, failure: asFailure(error, "download") });
     }
-  }, []);
+  }, [setState]);
 
   /**
    * Installs and does not return on Windows: the NSIS installer replaces this
@@ -164,7 +184,7 @@ export function useAppUpdater(automaticChecks: boolean) {
         failure: asFailure(error, "install"),
       });
     }
-  }, []);
+  }, [setState]);
 
   const dismissNotice = useCallback(() => {
     setNotice(null);
@@ -176,7 +196,7 @@ export function useAppUpdater(automaticChecks: boolean) {
     setState((previous) =>
       previous.status === "failed" ? { status: "available", info: previous.info } : previous,
     );
-  }, []);
+  }, [setState]);
 
   useEffect(() => {
     let cancelled = false;

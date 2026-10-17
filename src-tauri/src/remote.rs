@@ -344,7 +344,9 @@ fn distribution_family(os_id: Option<&str>, os_like: Option<&str>) -> Option<Str
 /// hoping the next request arrives on schedule. Everything is a plain read: no
 /// process list, no command lines, no per-process accounting.
 pub(crate) fn resource_command() -> &'static str {
-    r#"LC_ALL=C; if test -r /proc/stat; then awk '/^cpu /{t=0; for(n=2;n<=NF;n++) t+=$n; printf "cpu_total_1=%d\ncpu_idle_1=%d\n", t, $5+$6}' /proc/stat; sleep 0.25; awk '/^cpu /{t=0; for(n=2;n<=NF;n++) t+=$n; printf "cpu_total_2=%d\ncpu_idle_2=%d\n", t, $5+$6}' /proc/stat; fi; printf 'cores=%s\n' "$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null)"; if test -r /proc/loadavg; then printf 'load=%s\n' "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"; fi; if test -r /proc/meminfo; then awk '/^MemTotal:|^MemAvailable:|^SwapTotal:|^SwapFree:/{key=tolower(substr($1,1,length($1)-1)); printf "%s=%s\n", key, $2}' /proc/meminfo; fi"#
+    // Guest counters are already included in user/nice. Sum only through steal,
+    // and avoid awk's platform-dependent integer printf range for long uptimes.
+    r#"LC_ALL=C; if test -r /proc/stat; then awk '/^cpu /{t=0; for(n=2;n<=9 && n<=NF;n++) t+=$n; printf "cpu_total_1=%.0f\ncpu_idle_1=%.0f\n", t, $5+$6}' /proc/stat; sleep 0.25; awk '/^cpu /{t=0; for(n=2;n<=9 && n<=NF;n++) t+=$n; printf "cpu_total_2=%.0f\ncpu_idle_2=%.0f\n", t, $5+$6}' /proc/stat; fi; printf 'cores=%s\n' "$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null)"; if test -r /proc/loadavg; then printf 'load=%s\n' "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"; fi; if test -r /proc/meminfo; then awk '/^MemTotal:|^MemAvailable:|^SwapTotal:|^SwapFree:/{key=tolower(substr($1,1,length($1)-1)); printf "%s=%s\n", key, $2}' /proc/meminfo; fi"#
 }
 
 /// Busy share over the window. Returns `None` unless both reads landed and the
@@ -933,35 +935,29 @@ fn run_ssh(
     remote_command: &str,
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
-    let started_at = Instant::now();
     let ssh_path =
         detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
-    let mut child = background_command(ssh_path)
-        .args(arguments)
+    let mut command = background_command(ssh_path);
+    command.args(arguments);
+    run_process(command, operation, stdin, COMMAND_TIMEOUT)
+}
+
+fn run_process(
+    mut command: std::process::Command,
+    operation: &'static str,
+    stdin: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<CommandOutput, String> {
+    let started_at = Instant::now();
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("SSH process could not start: {error}"))?;
     let spawned_at = Instant::now();
-
-    if let Some(bytes) = stdin {
-        let Some(mut child_stdin) = child.stdin.take() else {
-            terminate_child(&mut child);
-            return Err("SSH process stdin was unavailable".into());
-        };
-        if let Err(error) = child_stdin
-            .write_all(bytes)
-            .and_then(|_| child_stdin.write_all(b"\n"))
-        {
-            terminate_child(&mut child);
-            return Err(format!("Could not send process input: {error}"));
-        }
-    } else {
-        drop(child.stdin.take());
-    }
 
     let stdout = child.stdout.take().ok_or_else(|| {
         terminate_child(&mut child);
@@ -975,28 +971,53 @@ fn run_ssh(
     let stdout_first_byte = first_byte_tx.clone();
     let stdout_reader = thread::spawn(move || read_limited(stdout, stdout_first_byte));
     let stderr_reader = thread::spawn(move || read_limited(stderr, first_byte_tx));
-    let status = match child.wait_timeout(COMMAND_TIMEOUT) {
+    // Input may exceed the OS pipe capacity, and an SSH peer can stop reading
+    // it. Write on a worker so the same deadline still applies while sending.
+    // Drain both output pipes concurrently to avoid a full-pipe deadlock.
+    let child_stdin = child.stdin.take().expect("stdin was piped");
+    let input_writer = stdin.map(|bytes| spawn_input_writer(child_stdin, bytes));
+    let status = match child.wait_timeout(timeout) {
         Ok(Some(status)) => status,
         Ok(None) => {
             terminate_child(&mut child);
+            if let Some(writer) = input_writer {
+                let _ = writer.join();
+            }
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
             log_operation_timing(operation, started_at, spawned_at, None, "timeout");
-            return Err("Remote command timed out after 20 seconds".into());
+            return Err(format!(
+                "Remote command timed out after {} seconds",
+                timeout.as_secs_f64()
+            ));
         }
         Err(error) => {
             terminate_child(&mut child);
+            if let Some(writer) = input_writer {
+                let _ = writer.join();
+            }
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
             return Err(format!("Could not wait for SSH process: {error}"));
         }
     };
-    let stdout = stdout_reader
+    let input_result = input_writer
+        .map(|writer| {
+            writer
+                .join()
+                .map_err(|_| "Remote input writer panicked".to_string())?
+                .map_err(|error| format!("Could not send process input: {error}"))
+        })
+        .unwrap_or(Ok(()));
+    let stdout_result = stdout_reader
         .join()
-        .map_err(|_| "Remote output reader panicked".to_string())??;
-    let stderr = stderr_reader
+        .map_err(|_| "Remote output reader panicked".to_string());
+    let stderr_result = stderr_reader
         .join()
-        .map_err(|_| "Remote error reader panicked".to_string())??;
+        .map_err(|_| "Remote error reader panicked".to_string());
+    input_result?;
+    let stdout = stdout_result??;
+    let stderr = stderr_result??;
     let first_byte_at = first_byte_rx.try_iter().min();
     log_operation_timing(
         operation,
@@ -1015,6 +1036,14 @@ fn run_ssh(
 fn terminate_child(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
+}
+
+fn spawn_input_writer(
+    mut pipe: std::process::ChildStdin,
+    bytes: &[u8],
+) -> thread::JoinHandle<std::io::Result<()>> {
+    let bytes = Zeroizing::new(bytes.to_vec());
+    thread::spawn(move || pipe.write_all(&bytes).and_then(|_| pipe.write_all(b"\n")))
 }
 
 fn read_limited(
@@ -2198,19 +2227,15 @@ impl StreamManager {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| format!("Log stream could not start: {error}"))?;
-        if let Elevation::Password(password) = &elevation {
-            if let Some(mut stdin) = child.stdin.take()
-                && let Err(error) = stdin
-                    .write_all(password.as_bytes())
-                    .and_then(|_| stdin.write_all(b"\n"))
-            {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(error.to_string());
-            }
+        let input_writer = if let Elevation::Password(password) = &elevation {
+            Some(spawn_input_writer(
+                child.stdin.take().expect("stdin was piped"),
+                password.as_bytes(),
+            ))
         } else {
             drop(child.stdin.take());
-        }
+            None
+        };
         let mut stdout = child.stdout.take().expect("stdout was piped");
         let stderr = child.stderr.take().expect("stderr was piped");
         let stream_id = Uuid::new_v4().to_string();
@@ -2224,7 +2249,7 @@ impl StreamManager {
             .insert(stream_id.clone(), managed.clone());
 
         let output_stream = managed.clone();
-        thread::spawn(move || {
+        let output_reader = thread::spawn(move || {
             let mut buffer = vec![0_u8; 16 * 1024];
             loop {
                 match stdout.read(&mut buffer) {
@@ -2257,6 +2282,16 @@ impl StreamManager {
                 let status = managed.child.lock().try_wait();
                 match status {
                     Ok(Some(status)) => {
+                        if let Some(writer) = input_writer {
+                            let result = writer.join();
+                            if status.success() && !matches!(result, Ok(Ok(()))) {
+                                *managed.failure.lock() =
+                                    Some("Could not send log stream input".into());
+                            }
+                        }
+                        if output_reader.join().is_err() {
+                            *managed.failure.lock() = Some("Log output reader panicked".into());
+                        }
                         streams.lock().remove(&wait_id);
                         let error_bytes = stderr_reader.join().unwrap_or_else(|_| {
                             b"Remote error reader panicked while collecting diagnostics".to_vec()
@@ -2277,6 +2312,12 @@ impl StreamManager {
                         streams.lock().remove(&wait_id);
                         managed.stop_requested.store(true, Ordering::SeqCst);
                         let _ = managed.child.lock().kill();
+                        let _ = managed.child.lock().wait();
+                        if let Some(writer) = input_writer {
+                            let _ = writer.join();
+                        }
+                        let _ = output_reader.join();
+                        let _ = stderr_reader.join();
                         emit_stream_state(&wait_app, &wait_id, "error", Some(error.to_string()));
                         break;
                     }
@@ -2394,6 +2435,45 @@ swaptotal=1048576\n\
 swapfree=1048576\n";
 
     #[test]
+    #[cfg(windows)]
+    fn sending_input_to_a_process_that_never_reads_it_is_bounded() {
+        let mut command = background_command("powershell.exe");
+        command.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-Command",
+            "[Threading.Thread]::Sleep(30000)",
+        ]);
+        let started = Instant::now();
+        let error = run_process(
+            command,
+            "blocked_stdin_test",
+            Some(&vec![b'x'; 1024 * 1024]),
+            Duration::from_millis(250),
+        )
+        .unwrap_err();
+        assert!(error.contains("timed out"), "{error}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn process_input_and_output_pipes_are_drained_concurrently() {
+        let mut command = background_command("powershell.exe");
+        command.args(["-NoLogo", "-NoProfile", "-Command", "[Console]::Write('x' * 131072); $inputText=[Console]::In.ReadToEnd(); [Console]::Write($inputText.Length)"]);
+        let output = run_process(
+            command,
+            "pipe_drain_test",
+            Some(&vec![b'y'; 131072]),
+            Duration::from_secs(10),
+        )
+        .unwrap();
+        assert_eq!(output.exit_code, 0);
+        assert!(output.stdout.starts_with(&vec![b'x'; 131072]));
+        assert!(output.stdout.ends_with(b"131073"));
+    }
+
+    #[test]
     fn reads_cpu_busy_share_from_the_two_proc_stat_samples() {
         let resources = parse_host_resources(RESOURCE_OUTPUT);
         // 200 jiffies elapsed, 150 of them idle, so a quarter was busy.
@@ -2404,6 +2484,36 @@ swapfree=1048576\n";
         assert_eq!(resources.memory_total_kib, Some(8_123_456));
         assert_eq!(resources.memory_available_kib, Some(5_123_456));
         assert_eq!(resources.swap_free_kib, Some(1_048_576));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn cpu_probe_does_not_double_count_guests_or_truncate_large_counters() {
+        let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
+        let command = resource_command().replace("/proc/stat", "\"$fixture\"");
+        let script = format!(
+            r#"fixture=$(mktemp)
+trap 'rm -f "$fixture"' EXIT
+printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
+{command}
+"#
+        );
+        let mut process = background_command(bash.program());
+        process.args(["--noprofile", "--norc", "-c", &script]);
+        let output = run_process(process, "cpu_fixture", None, Duration::from_secs(5))
+            .unwrap()
+            .success_text()
+            .unwrap();
+        let values = parse_key_values(&output);
+        assert_eq!(
+            values.get("cpu_total_1").map(String::as_str),
+            Some("8589934722")
+        );
+        assert_eq!(values.get("cpu_total_2"), values.get("cpu_total_1"));
+        assert_eq!(
+            values.get("cpu_idle_1").map(String::as_str),
+            Some("4294967306")
+        );
     }
 
     // A host that exposes no /proc/stat must not read as an idle one.

@@ -91,11 +91,20 @@ function byteLength(value: string): number {
 }
 
 function trimUtf8Tail(value: string, maxBytes: number): string {
-  let start = Math.max(0, value.length - maxBytes);
-  let result = value.slice(start);
-  while (byteLength(result) > maxBytes && start < value.length) {
-    start += 1;
-    result = value.slice(start);
+  let start = value.length;
+  let bytes = 0;
+  while (start > 0) {
+    let next = start - 1;
+    const last = value.charCodeAt(next);
+    if (last >= 0xdc00 && last <= 0xdfff && next > 0) {
+      const first = value.charCodeAt(next - 1);
+      if (first >= 0xd800 && first <= 0xdbff) next -= 1;
+    }
+    const point = value.codePointAt(next)!;
+    const width = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+    if (bytes + width > maxBytes) break;
+    bytes += width;
+    start = next;
   }
-  return result;
+  return value.slice(start);
 }

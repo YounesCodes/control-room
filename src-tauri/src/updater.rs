@@ -145,6 +145,7 @@ struct Inner {
     downloaded: Option<Vec<u8>>,
     checking: bool,
     downloading: bool,
+    installing: bool,
 }
 
 impl UpdaterState {
@@ -152,7 +153,7 @@ impl UpdaterState {
     /// queued: two checks would race to replace `pending`.
     fn begin_check(&self) -> bool {
         let mut inner = self.inner.lock();
-        if inner.checking {
+        if inner.checking || inner.downloading || inner.installing {
             return false;
         }
         inner.checking = true;
@@ -174,10 +175,10 @@ impl UpdaterState {
     /// Claims the right to download, returning the update to download.
     fn begin_download(&self) -> Result<Arc<Update>, UpdateFailure> {
         let mut inner = self.inner.lock();
-        if inner.downloading {
+        if inner.checking || inner.downloading || inner.installing {
             return Err(UpdateFailure::new(
                 UpdateFailureKind::Download,
-                "A download is already running.",
+                "Another update operation is already running.",
             ));
         }
         let Some(update) = inner.pending.clone() else {
@@ -198,11 +199,19 @@ impl UpdaterState {
 
     /// The pending update together with its verified bytes, or nothing. Both
     /// come from the same lock acquisition so they cannot disagree.
-    fn installable(&self) -> Option<(Arc<Update>, Vec<u8>)> {
-        let inner = self.inner.lock();
+    fn begin_install(&self) -> Option<(Arc<Update>, Vec<u8>)> {
+        let mut inner = self.inner.lock();
+        if inner.checking || inner.downloading || inner.installing {
+            return None;
+        }
         let update = inner.pending.clone()?;
-        let bytes = inner.downloaded.clone()?;
+        let bytes = inner.downloaded.take()?;
+        inner.installing = true;
         Some((update, bytes))
+    }
+
+    fn end_install(&self) {
+        self.inner.lock().installing = false;
     }
 }
 
@@ -241,13 +250,11 @@ pub async fn check_for_update(
     if !state.begin_check() {
         return Err(UpdateFailure::new(
             UpdateFailureKind::Check,
-            "A check is already running.",
+            "Another update operation is already running.",
         ));
     }
     let result = run_check(&app).await;
-    state.end_check();
-
-    match result {
+    let result = match result {
         Ok(Some(update)) => {
             let info = describe_update(&update);
             state.set_pending(Some(Arc::new(update)));
@@ -258,7 +265,9 @@ pub async fn check_for_update(
             Ok(None)
         }
         Err(failure) => Err(failure),
-    }
+    };
+    state.end_check();
+    result
 }
 
 async fn run_check(app: &AppHandle) -> Result<Option<Update>, UpdateFailure> {
@@ -337,7 +346,7 @@ pub async fn install_update(
     state: State<'_, UpdaterState>,
     database: State<'_, Database>,
 ) -> Result<(), UpdateFailure> {
-    let Some((update, bytes)) = state.installable() else {
+    let Some((update, bytes)) = state.begin_install() else {
         return Err(UpdateFailure::new(
             UpdateFailureKind::Install,
             "No downloaded update is ready to install.",
@@ -356,9 +365,13 @@ pub async fn install_update(
         let _ = database.set_app_metadata(PENDING_NOTICE_KEY, &payload);
     }
 
-    update
-        .install(bytes)
-        .map_err(|error| UpdateFailure::new(UpdateFailureKind::Install, describe(&error)))?;
+    if let Err(error) = update.install(bytes) {
+        state.end_install();
+        return Err(UpdateFailure::new(
+            UpdateFailureKind::Install,
+            describe(&error),
+        ));
+    }
 
     // Reached only on platforms whose installer leaves this process alive.
     app.restart();
@@ -453,13 +466,42 @@ mod tests {
     }
 
     #[test]
+    fn update_operations_cannot_overlap() {
+        let state = UpdaterState::default();
+        for (checking, downloading, installing) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            {
+                let mut inner = state.inner.lock();
+                inner.checking = checking;
+                inner.downloading = downloading;
+                inner.installing = installing;
+            }
+            assert!(!state.begin_check());
+            let Err(failure) = state.begin_download() else {
+                panic!("an overlapping download was admitted");
+            };
+            assert_eq!(
+                failure.message,
+                "Another update operation is already running."
+            );
+            assert!(state.begin_install().is_none());
+        }
+        state.inner.lock().downloading = false;
+        state.end_install();
+        assert!(state.begin_check());
+    }
+
+    #[test]
     fn installing_requires_downloaded_bytes() {
         let state = UpdaterState::default();
-        assert!(state.installable().is_none());
+        assert!(state.begin_install().is_none());
         state.end_download(Some(vec![1, 2, 3]));
         // Bytes without a pending update are not installable: the pair has to
         // come from the same check.
-        assert!(state.installable().is_none());
+        assert!(state.begin_install().is_none());
     }
 
     #[test]

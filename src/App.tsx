@@ -70,6 +70,7 @@ import { organizeConnections } from "./lib/connection-organization";
 import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
+import { connectionTargetKey } from "./lib/connection-validation";
 import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
 import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib/scratchpad-draft";
 import {
@@ -188,6 +189,8 @@ export function App() {
     split: boolean;
   } | null>(null);
   const [connections, setConnections] = useState<SavedConnection[]>([]);
+  const connectionsRef = useRef(connections);
+  connectionsRef.current = connections;
   const [localShells, setLocalShells] = useState<LocalShellProfile[]>([]);
   const [administratorTerminalStatus, setAdministratorTerminalStatus] =
     useState<AdministratorTerminalStatus>("unsupportedWindows");
@@ -371,12 +374,22 @@ export function App() {
             );
           }
           if (connectionsResult.status === "fulfilled") {
+            connectionsRef.current = connectionsResult.value;
             setConnections(connectionsResult.value);
             for (const connection of connectionsResult.value) {
               void api
                 .cachedCapabilities(connection.id)
                 .then((capabilities) => {
-                  if (current && capabilities) rememberCapabilities(capabilities);
+                  if (
+                    current &&
+                    capabilities &&
+                    connectionsRef.current.some(
+                      (saved) =>
+                        saved.id === connection.id &&
+                        connectionTargetKey(saved) === connectionTargetKey(connection),
+                    )
+                  )
+                    rememberCapabilities(capabilities);
                 })
                 .catch(() => undefined);
             }
@@ -849,8 +862,13 @@ export function App() {
   function detectConnectionCapabilities(connectionId: string) {
     if (capabilityDetectionsRef.current.has(connectionId)) return;
     capabilityDetectionsRef.current.add(connectionId);
+    const target = connectionsRef.current.find((connection) => connection.id === connectionId);
     void detectHostCapabilities(api, connectionId)
-      .then(rememberCapabilities)
+      .then((capabilities) => {
+        const current = connectionsRef.current.find((connection) => connection.id === connectionId);
+        if (target && current && connectionTargetKey(target) === connectionTargetKey(current))
+          rememberCapabilities(capabilities);
+      })
       .catch(() => undefined)
       .finally(() => capabilityDetectionsRef.current.delete(connectionId));
   }
@@ -1193,6 +1211,7 @@ export function App() {
       return;
     }
     clearScratchpadDraft("connection", connection.id);
+    connectionsRef.current = connectionsRef.current.filter((item) => item.id !== connection.id);
     // The record is gone from the database, so take it out of the rail before
     // anything else awaits. That also closes the only door a new Workspace for
     // it could still come through while its sessions are being torn down, which
@@ -1236,6 +1255,17 @@ export function App() {
   }
 
   function saveConnection(saved: SavedConnection) {
+    const previous = connectionsRef.current.find((connection) => connection.id === saved.id);
+    if (previous && connectionTargetKey(previous) !== connectionTargetKey(saved)) {
+      connectionsRef.current = connectionsRef.current.map((connection) =>
+        connection.id === saved.id ? saved : connection,
+      );
+      setHostCapabilities((current) => {
+        const next = { ...current };
+        delete next[saved.id];
+        return next;
+      });
+    }
     setConnections((current) => {
       const exists = current.some((connection) => connection.id === saved.id);
       const next = exists
@@ -2370,7 +2400,11 @@ export function App() {
               {/* Inspection views need a Remote Host and its Saved
                   Connection. A local Workspace renders its terminal only. */}
               {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
-                <ConnectionSection section={activeRemoteWorkspace.view} layout={panelLayout}>
+                <ConnectionSection
+                  key={connectionTargetKey(activeConnection)}
+                  section={activeRemoteWorkspace.view}
+                  layout={panelLayout}
+                >
                   {activeRemoteWorkspace.view === "overview" && (
                     <OverviewPane
                       key={activeRemoteWorkspace.id}
