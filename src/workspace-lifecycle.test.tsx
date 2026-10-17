@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,6 +20,8 @@ const api = vi.hoisted(() => ({
     wslError: null,
   }),
   cachedCapabilities: vi.fn(),
+  refreshCapabilities: vi.fn(),
+  updateConnection: vi.fn(),
   deleteConnection: vi.fn(),
   deleteScratchpadNote: vi.fn(),
   scratchpadNote: vi.fn(),
@@ -71,6 +73,7 @@ vi.mock("./components/TerminalPane", () => ({
 }));
 
 import { App } from "./App";
+import { capabilities } from "./test/app-fixtures";
 import type { AppSettings, PersistedWorkspaceState, SavedConnection } from "./types";
 
 const settings: AppSettings = {
@@ -191,6 +194,8 @@ describe("App Workspace behavior", () => {
       administratorStatus: "unsupportedWindows",
     });
     api.cachedCapabilities.mockResolvedValue(null);
+    api.refreshCapabilities.mockReset();
+    api.refreshCapabilities.mockImplementation(async (id: string) => capabilities(id));
     api.deleteConnection.mockResolvedValue(undefined);
     api.deleteScratchpadNote.mockResolvedValue(undefined);
     api.scratchpadNote.mockResolvedValue(null);
@@ -220,6 +225,42 @@ describe("App Workspace behavior", () => {
 
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(screen.getByTestId("terminal-workspace-1")).toBeTruthy();
+  });
+
+  it("discovers an edited target after an old target read finishes without restarting its terminal", async () => {
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    api.workspaceState.mockResolvedValue(restoredState([saved.id]));
+    let finish!: (value: ReturnType<typeof capabilities>) => void;
+    api.refreshCapabilities
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValue({
+        ...capabilities(saved.id),
+        osId: "windows",
+        osName: "Windows",
+        osVersion: "11",
+      });
+    api.updateConnection.mockResolvedValue({ ...saved, destination: "new-target" });
+    render(<App />);
+    const terminal = await screen.findByTestId("terminal-workspace-0");
+    fireEvent.click(ptyButton("workspace-0", "connect"));
+    await waitFor(() => expect(api.refreshCapabilities).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByLabelText("Open actions for Host A"));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Edit connection/i }));
+    await userEvent.clear(screen.getByLabelText("SSH destination"));
+    await userEvent.type(screen.getByLabelText("SSH destination"), "new-target");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(api.updateConnection).toHaveBeenCalled());
+    await act(async () => finish(capabilities(saved.id)));
+    await waitFor(() => expect(api.refreshCapabilities).toHaveBeenCalledTimes(2));
+    expect(await screen.findAllByRole("img", { name: "Windows host" })).not.toHaveLength(0);
+    expect(screen.getByTestId("terminal-workspace-0")).toBe(terminal);
+    expect(terminal.getAttribute("data-reconnect-token")).toBe("0");
   });
 
   it("asks before leaving a dirty Settings page", async () => {

@@ -22,7 +22,7 @@ demonstrated application impact.
 | R03 | P1       | Sending SSH input can block before the timeout starts                                  | `src-tauri/src/remote.rs:947`, `:1041`                                                           |
 | R04 | P1       | Unicode log trimming repeatedly encodes the same large string                          | `src/lib/log-buffer.ts:93`                                                                       |
 | R05 | P2       | Process exit can discard terminal output and race log completion                       | `src-tauri/src/session.rs:386`, `:493`; `src-tauri/src/remote.rs:2292`                           |
-| R06 | P2       | Editing an SSH target reuses facts and inspection results from the old target          | `src-tauri/src/database.rs:126`, `:480`; `src/App.tsx:1257`; `src/lib/workspace-lifecycle.ts:68` |
+| R06 | P2       | Editing an SSH target reuses facts and inspection results from the old target          | `src-tauri/src/database.rs:126`, `:480`; `src/App.tsx:1263`; `src/lib/workspace-lifecycle.ts:68` |
 | R07 | P2       | Late baseline reads can restore a comparison the user cleared or show the wrong detail | `src/pages/BaselinesPane.tsx:58`, `:87`, `:164`                                                  |
 | R08 | P2       | Linux CPU sampling counts guest time twice and uses a limited integer format           | `src-tauri/src/remote.rs:346`                                                                    |
 | R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:99`, `:165`                                                               |
@@ -123,7 +123,7 @@ Target edits now clear capabilities and the previous connection timestamp in
 the update transaction. Capability writes compare the original SSH target with
 the current saved target before accepting results. The frontend clears host
 facts, inspection lists, container details, and target-specific shell choices,
-remounts inspection panes, and rejects old target detections. Overview refreshes
+remounts inspection panes, rejects old target detections, and discovers the new target. If an old detection is still running, the new read follows it. Overview refreshes
 cannot publish after unmount. Metadata-only edits preserve valid caches.
 Existing terminal sessions remain open until the user reconnects; the
 Connections documentation now states this explicitly.
@@ -131,7 +131,7 @@ Connections documentation now states this explicitly.
 Validation: a real SQLite regression verifies rename preservation, target-change
 invalidation, timestamp reset, and rejection of a late old-target write.
 Workspace tests verify cache invalidation without restarting the terminal;
-Overview tests verify rejection of a refresh after unmount.
+Overview tests verify rejection of a refresh after unmount. An App regression verifies that an edited target is discovered after an old read finishes, displays the new Windows identity, and keeps its terminal mounted.
 
 ### R07: stale baseline responses
 

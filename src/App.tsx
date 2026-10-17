@@ -870,7 +870,13 @@ export function App() {
           rememberCapabilities(capabilities);
       })
       .catch(() => undefined)
-      .finally(() => capabilityDetectionsRef.current.delete(connectionId));
+      .finally(() => {
+        capabilityDetectionsRef.current.delete(connectionId);
+        const current = connectionsRef.current.find((connection) => connection.id === connectionId);
+        if (target && current && connectionTargetKey(target) !== connectionTargetKey(current)) {
+          detectConnectionCapabilities(connectionId);
+        }
+      });
   }
 
   function openLogs(id: string, logSource: LogSourceSelection) {
@@ -1256,7 +1262,8 @@ export function App() {
 
   function saveConnection(saved: SavedConnection) {
     const previous = connectionsRef.current.find((connection) => connection.id === saved.id);
-    if (previous && connectionTargetKey(previous) !== connectionTargetKey(saved)) {
+    const targetChanged = previous && connectionTargetKey(previous) !== connectionTargetKey(saved);
+    if (targetChanged) {
       connectionsRef.current = connectionsRef.current.map((connection) =>
         connection.id === saved.id ? saved : connection,
       );
@@ -1279,6 +1286,7 @@ export function App() {
       return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name));
     });
     setWorkspaces((current) => updateWorkspaceConnectionSnapshots(current, saved));
+    if (targetChanged) detectConnectionCapabilities(saved.id);
     setDialogConnection(null);
   }
 
