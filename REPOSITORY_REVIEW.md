@@ -161,6 +161,11 @@ The total now sums only user through steal, and prints counters using `%.0f`.
 Validation executes the actual production probe against a fixture with guest
 time and counters exceeding 32 bits. Both samples return the exact expected
 total and idle values. Existing percentage parsing tests remain unchanged.
+The first push gate exposed an overly short five-second budget in this new
+Git Bash fixture during parallel Rust tests: it timed out before any output.
+The same fixture passed alone in 1.71 seconds. It now uses the existing
+20-second process budget while preserving the exact counter assertions; this
+regression tests arithmetic, not shell startup speed.
 
 ### R09: discovery timeout mismatch
 
@@ -281,8 +286,10 @@ delivery results are recorded in the PR and handoff.
 The docs check passed with zero errors, warnings, or hints, and the updated docs
 lockfile built all 24 static pages successfully.
 
-No real updater installation or real font installation was performed. A live
-Windows SSH host, the optional Docker distribution matrix, and every possible
+No real updater installation or end-to-end catalog font installation was
+performed. The Rust suite exercised reversible native font registration with a
+temporary fixture. A live Windows SSH host, the optional Docker distribution
+matrix, and every possible
 network failure/interleaving were not independently exercised by this review.
 No claim of complete security, race freedom, or universal OS compatibility is
 made. Local audit snapshots and reproduction output are in ignored

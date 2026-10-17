@@ -2500,7 +2500,8 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
         );
         let mut process = background_command(bash.program());
         process.args(["--noprofile", "--norc", "-c", &script]);
-        let output = run_process(process, "cpu_fixture", None, Duration::from_secs(5))
+        // This verifies counter arithmetic, not Git Bash startup under parallel tests.
+        let output = run_process(process, "cpu_fixture", None, COMMAND_TIMEOUT)
             .unwrap()
             .success_text()
             .unwrap();
