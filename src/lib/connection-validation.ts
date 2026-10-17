@@ -1,4 +1,13 @@
-import type { SavedConnectionInput } from "../types";
+import type { SavedConnection, SavedConnectionInput } from "../types";
+
+export function connectionTargetKey(connection: SavedConnection): string {
+  return JSON.stringify([
+    connection.destination,
+    connection.username,
+    connection.port,
+    connection.identityFile,
+  ]);
+}
 
 const USERNAME = /^[A-Za-z0-9._-]+$/;
 export const MAX_TAGS_PER_CONNECTION = 5;

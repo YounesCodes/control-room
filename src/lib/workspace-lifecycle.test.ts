@@ -64,6 +64,26 @@ function localWorkspace(id: string, shellId: string, label: string): LocalWorksp
 }
 
 describe("Saved Connection workspace removal", () => {
+  it("discards host inspection caches when a Saved Connection changes target", () => {
+    const remote = workspace("remote", "connection-a");
+    remote.remoteShell = { id: "powershell", label: "PowerShell" };
+    remote.portsCache = { ...emptyCachedList(), fetchedAt: Date.now() };
+    const updated = updateWorkspaceConnectionSnapshots([remote], {
+      ...remote.connectionSnapshot,
+      destination: "different-host",
+    })[0] as RemoteWorkspace;
+    expect(updated.portsCache.fetchedAt).toBeNull();
+    expect(updated.remoteShell).toBeNull();
+    expect(updated.sessionId).toBe(remote.sessionId);
+    expect(updated.connectRequested).toBe(remote.connectRequested);
+    const renamed = updateWorkspaceConnectionSnapshots([remote], {
+      ...remote.connectionSnapshot,
+      displayName: "Renamed",
+    })[0] as RemoteWorkspace;
+    expect(renamed.portsCache).toBe(remote.portsCache);
+    expect(renamed.remoteShell).toBe(remote.remoteShell);
+  });
+
   it("selects and preserves an unrelated Workspace when the active connection is deleted", () => {
     const first = workspace("first", "connection-a");
     const second = workspace("second", "connection-b");

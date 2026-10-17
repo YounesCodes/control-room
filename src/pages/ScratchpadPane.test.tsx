@@ -74,29 +74,38 @@ describe("ScratchpadPane", () => {
     expect(window.localStorage.getItem(scratchpadDraftKey("connection", connection.id))).toBeNull();
   });
 
-  it("keeps text and its fallback draft when deletion fails, then retries deletion", async () => {
-    api.scratchpadNote.mockResolvedValue(
-      savedNote({
-        scope: "connection",
-        ownerId: connection.id,
-        connectionId: connection.id,
-        text: "keep me",
-      }),
-    );
-    api.deleteScratchpadNote.mockRejectedValueOnce(new Error("database locked"));
-    render(<ScratchpadPane connection={connection} />);
-    const editor = await screen.findByLabelText("Connection note");
-    fireEvent.change(editor, { target: { value: "keep newer text" } });
-    await userEvent.click(screen.getByRole("button", { name: "Delete note" }));
-    await userEvent.click(screen.getAllByRole("button", { name: "Delete note" }).at(-1)!);
-    await screen.findByText(/Could not delete the note: database locked/);
-    expect(editor).toHaveProperty("value", "keep newer text");
-    expect(window.localStorage.getItem(scratchpadDraftKey("connection", connection.id))).toBe(
-      "keep newer text",
-    );
-    await userEvent.click(screen.getAllByRole("button", { name: "Delete note" }).at(-1)!);
-    await waitFor(() => expect(editor).toHaveProperty("value", ""));
-  });
+  it.each(["pending", "saved"] as const)(
+    "keeps %s text when deletion fails, then retries deletion",
+    async (saveState) => {
+      api.scratchpadNote.mockResolvedValue(
+        savedNote({
+          scope: "connection",
+          ownerId: connection.id,
+          connectionId: connection.id,
+          text: "keep me",
+        }),
+      );
+      api.deleteScratchpadNote.mockRejectedValueOnce(new Error("database locked"));
+      render(<ScratchpadPane connection={connection} />);
+      const editor = await screen.findByLabelText("Connection note");
+      fireEvent.change(editor, { target: { value: "keep newer text" } });
+      if (saveState === "saved") {
+        await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalled(), { timeout: 2_000 });
+        await screen.findByText("Saved locally");
+      }
+      // Keep queued deletion in one event turn so it cannot race the debounce.
+      fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "Delete note" }).at(-1)!);
+      if (saveState === "pending") expect(api.saveScratchpadNote).not.toHaveBeenCalled();
+      await screen.findByText(/Could not delete the note: database locked/);
+      expect(editor).toHaveProperty("value", "keep newer text");
+      expect(window.localStorage.getItem(scratchpadDraftKey("connection", connection.id))).toBe(
+        saveState === "saved" ? null : "keep newer text",
+      );
+      await userEvent.click(screen.getAllByRole("button", { name: "Delete note" }).at(-1)!);
+      await waitFor(() => expect(editor).toHaveProperty("value", ""));
+    },
+  );
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();

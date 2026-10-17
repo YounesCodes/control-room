@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { relativeTime } from "../lib/format";
@@ -27,18 +27,21 @@ export function OverviewPane({
   const [capabilities, setCapabilities] = useState<HostCapabilities | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
   async function refresh() {
+    const request = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
       const result = await api.refreshCapabilities(connection.id);
+      if (request !== requestRef.current) return;
       setCapabilities(result);
       onCapabilitiesChange?.(result);
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (request === requestRef.current) setError(errorMessage(caught));
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
   }
 
@@ -65,6 +68,7 @@ export function OverviewPane({
       });
     return () => {
       current = false;
+      requestRef.current += 1;
     };
   }, [connection.id]);
 

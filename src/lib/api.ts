@@ -56,6 +56,9 @@ import type {
 /// scheduling variance instead of racing it.
 /// `api-timeout.test.ts` pins the relationship against the Rust constants.
 export const REMOTE_INSPECTION_TIMEOUT_MS = 30_000;
+// Platform discovery can try Linux and Windows in sequence, each with its own
+// backend command budget. Give both attempts time to return their real result.
+export const REMOTE_DISCOVERY_TIMEOUT_MS = 60_000;
 const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
 const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
 
@@ -89,7 +92,12 @@ export const api = {
   updateConnection: (id: string, input: SavedConnectionInput) =>
     invoke<SavedConnection>("update_connection", { id, input }),
   testConnection: (input: SavedConnectionInput) =>
-    invokeRemoteInspection<HostCapabilities>("test_connection", { input }),
+    invokeRemoteInspection<HostCapabilities>(
+      "test_connection",
+      { input },
+      "Remote discovery did not respond after 60 seconds",
+      REMOTE_DISCOVERY_TIMEOUT_MS,
+    ),
   deleteConnection: (id: string) => invoke<void>("delete_connection", { id }),
   listConnectionGroups: () => invoke<ConnectionGroup[]>("list_connection_groups"),
   listConnectionTags: () => invoke<ConnectionTag[]>("list_connection_tags"),
@@ -114,7 +122,7 @@ export const api = {
       "discover_remote_shells",
       { connectionId, refresh },
       "Remote shell detection did not respond after 60 seconds",
-      60_000,
+      REMOTE_DISCOVERY_TIMEOUT_MS,
     ),
   startSession: (
     connectionId: string,
@@ -150,7 +158,12 @@ export const api = {
   cachedCapabilities: (connectionId: string) =>
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>
-    invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
+    invokeRemoteInspection<HostCapabilities>(
+      "refresh_capabilities",
+      { connectionId },
+      "Remote discovery did not respond after 60 seconds",
+      REMOTE_DISCOVERY_TIMEOUT_MS,
+    ),
   sampleHeaderMetrics: (connectionId: string | null, metrics: HeaderMetric[]) =>
     invokeRemoteInspection<HeaderMetrics>(
       "sample_header_metrics",

@@ -9,7 +9,7 @@ chmod 700 "$integration_dir"
 touch "$bashrc"
 start_count="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"
 end_count="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"
-if { test "$start_count" -ne 0 || test "$end_count" -ne 0; } && { test "$start_count" -ne 1 || test "$end_count" -ne 1; }; then
+if { test "$start_count" -ne 0 || test "$end_count" -ne 0; } && { test "$start_count" -ne 1 || test "$end_count" -ne 1 || ! awk '$0 == "# >>> Control Room shell integration >>>" { opened=1 } $0 == "# <<< Control Room shell integration <<<" && !opened { exit 1 }' "$bashrc"; }; then
   printf 'Control Room markers in .bashrc are incomplete or duplicated; no changes were made\n' >&2
   exit 2
 fi
@@ -122,7 +122,7 @@ bashrc="$HOME/.bashrc"
 if test -f "$bashrc"; then
   start_count="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"
   end_count="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"
-  if { test "$start_count" -ne 0 || test "$end_count" -ne 0; } && { test "$start_count" -ne 1 || test "$end_count" -ne 1; }; then
+  if { test "$start_count" -ne 0 || test "$end_count" -ne 0; } && { test "$start_count" -ne 1 || test "$end_count" -ne 1 || ! awk '$0 == "# >>> Control Room shell integration >>>" { opened=1 } $0 == "# <<< Control Room shell integration <<<" && !opened { exit 1 }' "$bashrc"; }; then
     printf 'Control Room markers in .bashrc are incomplete or duplicated; no changes were made\n' >&2
     exit 2
   fi
@@ -144,12 +144,20 @@ rmdir "$HOME/.local/share/control-room" 2>/dev/null || true
 printf 'removed\n'
 "##;
 
+const STATUS_SCRIPT: &str = r##"bashrc="$HOME/.bashrc"
+file=0; test -r "$HOME/.local/share/control-room/shell-integration.bash" && file=1
+start=0; end=0
+if test -f "$bashrc"; then
+  start="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"
+  end="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"
+fi
+if test "$file" -eq 1 && test "$start" -eq 1 && test "$end" -eq 1 && awk '$0 == "# >>> Control Room shell integration >>>" { opened=1 } $0 == "# <<< Control Room shell integration <<<" && !opened { exit 1 }' "$bashrc"; then exit 0; fi
+if test "$file" -eq 0 && test "$start" -eq 0 && test "$end" -eq 0; then exit 1; fi
+exit 2
+"##;
+
 pub fn integration_status(connection: &SavedConnection) -> Result<bool, String> {
-    let output = RemoteCommandExecutor::execute(
-        connection,
-        "history_status",
-        r#"bashrc="$HOME/.bashrc"; file=0; test -r "$HOME/.local/share/control-room/shell-integration.bash" && file=1; start=0; end=0; if test -f "$bashrc"; then start="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"; end="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"; fi; if test "$file" -eq 1 && test "$start" -eq 1 && test "$end" -eq 1; then exit 0; fi; if test "$file" -eq 0 && test "$start" -eq 0 && test "$end" -eq 0; then exit 1; fi; exit 2"#,
-    )?;
+    let output = RemoteCommandExecutor::execute(connection, "history_status", STATUS_SCRIPT)?;
     match output.exit_code {
         0 => Ok(true),
         1 => Ok(false),
@@ -375,6 +383,13 @@ rm -rf "$root"
     fn damaged_markers_stop_both_scripts_before_they_edit_anything() {
         for (name, bashrc) in [
             (
+                "a closing marker before the opening marker",
+                "# <<< Control Room shell integration <<<\n\
+                 export EDITOR=vim\n\
+                 # >>> Control Room shell integration >>>\n\
+                 alias ll=ls\n",
+            ),
+            (
                 "an opening marker with no closing one",
                 "export EDITOR=vim\n# >>> Control Room shell integration >>>\n",
             ),
@@ -390,7 +405,11 @@ rm -rf "$root"
                  # <<< Control Room shell integration <<<\n",
             ),
         ] {
-            for (action, body) in [("install", INSTALL_SCRIPT), ("uninstall", UNINSTALL_SCRIPT)] {
+            for (action, body) in [
+                ("install", INSTALL_SCRIPT),
+                ("uninstall", UNINSTALL_SCRIPT),
+                ("status", STATUS_SCRIPT),
+            ] {
                 let script = format!(
                     r##"set -eu
 root="$(mktemp -d)"
@@ -417,11 +436,13 @@ rm -rf "$root"
                     Some("1"),
                     "{action} with {name} edited the file anyway"
                 );
-                assert_eq!(
-                    found.get("explained").map(String::as_str),
-                    Some("1"),
-                    "{action} with {name} refused without saying why"
-                );
+                if action != "status" {
+                    assert_eq!(
+                        found.get("explained").map(String::as_str),
+                        Some("1"),
+                        "{action} with {name} refused without saying why"
+                    );
+                }
             }
         }
     }

@@ -12,7 +12,8 @@ import {
 import type { PersistedWorkspaceState } from "../src/types";
 
 async function renameActive(name: string) {
-  await $(".session-tab-wrap.active .session-tab-main").moveTo();
+  // Focus keeps tab actions revealed if native hover changes during reflow.
+  await $(".session-tab-wrap.active .session-tab-main").click();
   const rename = $(".session-tab-wrap.active .session-tab-rename");
   await rename.moveTo();
   await rename.waitForClickable();
