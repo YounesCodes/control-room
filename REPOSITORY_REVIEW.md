@@ -3,7 +3,7 @@
 Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Nine application defects and one native test setup issue were confirmed and
+Nine application defects and two test setup issues were confirmed and
 fixed. Eight dependency families received compatible security updates. Third-party advisories that remain are
 listed separately below. This review does not establish that the repository has
 no other defects.
@@ -27,6 +27,7 @@ demonstrated application impact.
 | R08 | P2       | Linux CPU sampling counts guest time twice and uses a limited integer format           | `src-tauri/src/remote.rs:346`                                                                    |
 | R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:99`, `:165`                                                               |
 | R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
+| R11 | P2       | Scratchpad deletion test assumes autosave cannot finish during its clicks              | `src/pages/ScratchpadPane.test.tsx:77`                                                           |
 
 ### R01: reversed history markers
 
@@ -196,6 +197,22 @@ actions. No product CSS or interaction behavior changed, and browser hover
 coverage remains in place. All 12 native terminal cases passed after the change.
 Temporary diagnostic instrumentation was removed.
 
+### R11: Scratchpad deletion test races autosave
+
+The original regression expected a recovery draft after a failed deletion, but
+used two asynchronous clicks before checking it. Under load those clicks can
+cross the 600 ms autosave delay. Successful persistence correctly removes the
+recovery draft, making the assertion fail even though the editor and saved note
+retain the latest text. This blocked the second push attempt. Waiting explicitly
+for autosave reproduced the same failure in isolation.
+
+The test now covers two explicit states. Pending-save deletion is triggered in
+one event turn and verifies that the save never started and the draft survives.
+The saved case waits for persistence and correctly expects no recovery draft.
+Both verify that failed deletion preserves editor text and that retrying deletion
+succeeds. All eight Scratchpad tests pass. No Scratchpad product code changed;
+this finding concerns a false failure in the test, not demonstrated data loss.
+
 ## Dependency findings and remaining work
 
 Compatible lockfile updates were applied without changing direct dependency
@@ -270,7 +287,7 @@ completed application-fix gate passed with the following results:
 
 | Validation                                               | Result                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------ |
-| Frontend unit/component tests                            | 578 passed across 70 files                             |
+| Frontend unit/component tests                            | 579 passed across 70 files                             |
 | Rust tests                                               | 276 passed; 11 opt-in tests ignored in the default run |
 | Browser/accessibility tests                              | 98 passed across 10 files                              |
 | Live Linux SSH Rust integration tests                    | 4 passed, explicitly running opt-in tests              |
@@ -280,7 +297,7 @@ completed application-fix gate passed with the following results:
 | Windows native desktop test build                        | Passed                                                 |
 
 The remaining opt-in tests and platform limits are not represented as passing.
-Git hooks enforce the gate again for the final test-helper commit and push;
+Git hooks enforce the gate again for the final test changes and push;
 delivery results are recorded in the PR and handoff.
 
 The docs check passed with zero errors, warnings, or hints, and the updated docs
