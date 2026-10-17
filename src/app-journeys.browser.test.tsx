@@ -262,19 +262,45 @@ afterEach(() => {
 describe("complete app journeys with typed IPC fixtures", () => {
   it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
     await page.viewport(960, 640);
+    const shellKinds = [
+      "git-bash",
+      "windows-powershell",
+      "powershell-7",
+      "command-prompt",
+    ] as const;
+    const shellLabels = ["Git Bash", "Windows PowerShell", "PowerShell 7", "Command Prompt"];
+    overrides.set("list_local_shells", () => ({
+      profiles: shellKinds.map((kind, index) => ({
+        id: kind,
+        kind,
+        label: shellLabels[index],
+        elevated: false,
+      })),
+      administratorStatus: "disabled",
+    }));
     await mount();
     await navigate("Terminal");
     for (let index = 0; index < 7; index++) {
       await page.getByRole("button", { name: "New terminal", exact: true }).click();
       await page
         .getByRole("dialog", { name: "New terminal" })
-        .getByRole("button", { name: /Command Prompt/ })
+        .getByRole("button", { name: new RegExp(shellLabels[Math.min(index, 3)]) })
         .click();
     }
     const sessions = native.invoke.mock.calls.filter(
       ([command]) => command === "start_session" || command === "start_local_session",
     ).length;
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
+    const terminalMenu = page.getByRole("menu", { name: "All terminals" }).element();
+    for (const kind of shellKinds) {
+      expect(
+        terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
+      ).not.toBeNull();
+    }
+    expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
+    expect(
+      terminalMenu.querySelector('[aria-current="page"] .session-tab-menu-check svg'),
+    ).not.toBeNull();
     await page
       .getByRole("menu", { name: "All terminals" })
       .getByRole("menuitem", { name: /^Fixture Alpha/ })
@@ -308,6 +334,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .getByRole("menu", { name: "All terminals" })
       .getByRole("menuitem", { name: /^Fixture Alpha group/ });
     await expect.element(groupItem).toHaveTextContent("Fixture Alpha group6 terminals");
+    expect(
+      groupItem.element().querySelector(".session-tab-menu-icon .lucide-columns-2"),
+    ).not.toBeNull();
     await groupItem.click();
     await expect
       .element(page.getByRole("button", { name: "Open Fixture Alpha group 6 terminals" }))
@@ -315,6 +344,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "All panes", exact: true }).click();
     const paneMenu = page.getByRole("menu", { name: "All panes" });
     expect(paneMenu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(6);
+    expect(
+      paneMenu
+        .element()
+        .querySelectorAll(".session-tab-menu-icon .local-shell-icon-command-prompt svg"),
+    ).toHaveLength(5);
+    expect(
+      paneMenu.element().querySelector(".session-tab-menu-icon .host-os-ubuntu svg"),
+    ).not.toBeNull();
     await paneMenu.getByRole("menuitem", { name: /^Fixture Alpha/ }).click();
     await expect
       .element(page.getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha$/ }))

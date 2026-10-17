@@ -285,7 +285,7 @@ describe("Local Terminal Mode in the real App", () => {
       expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
     },
   );
-  it.each([960, 1600])(
+  it.each([800, 960, 1600])(
     "keeps a direct window drag target with overflowing tabs at %s pixels",
     async (width) => {
       await page.viewport(width, 640);
@@ -299,15 +299,29 @@ describe("Local Terminal Mode in the real App", () => {
           .click();
       }
       const drag = container!.querySelector<HTMLElement>(".session-window-drag-region");
-      expect(drag, "Focus Mode needs reserved space to move the native window").not.toBeNull();
+      expect(drag, "Focus Mode needs a direct target to move the native window").not.toBeNull();
       const bounds = drag!.getBoundingClientRect();
-      expect(bounds.width).toBeGreaterThanOrEqual(48);
-      const hit = document.elementFromPoint(
-        bounds.left + bounds.width / 2,
-        bounds.top + bounds.height / 2,
-      );
-      expect(hit).toBe(drag);
-      expect(hit).toHaveAttribute("data-tauri-drag-region");
+      const strip = container!.querySelector(".session-tabs")!.getBoundingClientRect();
+      expect(bounds.width).toBeCloseTo(strip.width, 0);
+      expect(bounds.height).toBe(6);
+      expect(bounds.top).toBe(strip.top);
+      for (const fraction of [0.01, 0.5, 0.99]) {
+        const hit = document.elementFromPoint(
+          bounds.left + bounds.width * fraction,
+          bounds.top + bounds.height / 2,
+        );
+        expect(hit).toBe(drag);
+        expect(hit).toHaveAttribute("data-tauri-drag-region");
+      }
+      const newTerminal = container!
+        .querySelector(".session-new-terminal")!
+        .getBoundingClientRect();
+      const find = container!
+        .querySelector('[aria-label="Find in terminal"]')!
+        .getBoundingClientRect();
+      expect(find.left - newTerminal.right).toBeLessThanOrEqual(1);
+      expect(newTerminal.top).toBeGreaterThanOrEqual(bounds.bottom);
+      expect(find.top).toBeGreaterThanOrEqual(bounds.bottom);
       expect(
         container!.querySelector(".session-tab-main")!.hasAttribute("data-tauri-drag-region"),
       ).toBe(false);

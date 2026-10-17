@@ -54,8 +54,8 @@ at the row's end, and confirm ungrouping with its effect on the open terminals.
 Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected
 split pane on all four edges, above terminal content, without blocking input or
-divider interaction. Keep a reserved empty window drag area in the Focus Mode
-header, even when tabs overflow; buttons and tabs
+divider interaction. Keep a thin window drag strip across the top of the Focus Mode
+header, even when tabs overflow, without a blank column between controls. Buttons and tabs
 remain ordinary click targets. Use a compact plus and dropdown control for
 New terminal outside the scrolling tabs.
 Local Terminal Mode starts the default enabled standard local shell in normal focus
@@ -73,7 +73,8 @@ When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
 show a window of complete tabs with previous/next controls; never paint a partial
 tab at either edge. The All terminals menu lists full names and marks the selected
-item. The pane row has its own All panes menu. Selecting a hidden item reveals
+item. Include shell logos and remote host OS marks beside each entry, and a group
+icon for split groups. The pane row has its own All panes menu. Selecting a hidden item reveals
 its complete tab, including in focus mode. Keep overflow menus within the window
 and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is

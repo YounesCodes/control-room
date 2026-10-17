@@ -1524,6 +1524,22 @@ code,
   flex: none;
 }
 
+.session-tab-menu-icon,
+.local-shell-icon {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  color: var(--text-muted);
+}
+
+.local-shell-icon svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
 .session-tab-menu-name {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1617,9 +1633,14 @@ code,
   text-align: center;
 }
 
+.terminal-focus-mode .session-tabs {
+  padding-top: 6px;
+}
+
 .session-window-drag-region {
-  width: 48px;
-  flex: none;
+  position: absolute;
+  inset: 0 0 auto;
+  height: 6px;
   cursor: grab;
 }
 

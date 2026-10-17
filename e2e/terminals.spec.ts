@@ -115,7 +115,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await expect($("[aria-label='Exit terminal focus']")).not.toExist();
   });
 
-  it("dispatches permitted native dragging from the Focus Mode handle", async () => {
+  it("dispatches permitted native dragging from the Focus Mode top strip", async () => {
     await openLocal();
     await $("aria/Focus terminal").click();
     // WebDriver input is confined to WebView2. Observe the real native call

@@ -61,6 +61,7 @@ import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
+import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
@@ -1624,6 +1625,7 @@ export function App() {
         {
           id: group.id,
           label: group.name,
+          icon: <Columns2 size={17} strokeWidth={1.8} />,
           detail: `${getTerminalLayoutIds(group.layout).length} terminals`,
           active: activeTerminalGroup?.id === group.id && !settingsOpen,
           onSelect: () => selectTerminalGroup(group),
@@ -1634,6 +1636,11 @@ export function App() {
       {
         id: workspace.id,
         label: duplicateLabel(workspace),
+        icon: isLocalWorkspace(workspace) ? (
+          <LocalShellIcon kind={workspace.shell.kind} />
+        ) : (
+          workspaceMark(workspace)
+        ),
         detail: terminalStateLabel(workspace),
         active: workspace.id === activeWorkspaceId && !settingsOpen,
         onSelect: () => selectWorkspaceTab(workspace),
@@ -2160,6 +2167,11 @@ export function App() {
                       {
                         id,
                         label: duplicateLabel(workspace),
+                        icon: isLocalWorkspace(workspace) ? (
+                          <LocalShellIcon kind={workspace.shell.kind} />
+                        ) : (
+                          workspaceMark(workspace)
+                        ),
                         detail: terminalStateLabel(workspace),
                         active: id === activeWorkspaceId,
                         onSelect: () => selectWorkspaceTab(workspace),
