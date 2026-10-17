@@ -245,9 +245,6 @@ export function WorkspaceTabScroller({
                 item.onSelect();
               }}
             >
-              <span className="session-tab-menu-check" aria-hidden="true">
-                {item.active && <Check size={14} />}
-              </span>
               {item.icon && (
                 <span className="session-tab-menu-icon" aria-hidden="true">
                   {item.icon}
@@ -256,6 +253,9 @@ export function WorkspaceTabScroller({
               <span className="session-tab-menu-name">
                 {item.label}
                 {item.detail && <small>{item.detail}</small>}
+              </span>
+              <span className="session-tab-menu-check" aria-hidden="true">
+                {item.active && <Check size={14} />}
               </span>
             </button>
           ))}

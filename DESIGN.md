@@ -73,9 +73,10 @@ When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
 show a window of complete tabs with previous/next controls; never paint a partial
 tab at either edge. The All terminals menu lists full names and marks the selected
-item. Include shell logos and remote host OS marks beside each entry, and a group
-icon for split groups. The pane row has its own All panes menu. Selecting a hidden item reveals
-its complete tab, including in focus mode. Keep overflow menus within the window
+item at the right edge. Keep icons and names aligned at the left. Include shell
+logos and remote host OS marks beside each entry, and a group icon for split groups.
+The pane row has its own All panes menu. Selecting a hidden item reveals its
+complete tab, including in focus mode. Keep overflow menus within the window
 and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.

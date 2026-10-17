@@ -1542,6 +1542,7 @@ code,
 
 .session-tab-menu-name {
   min-width: 0;
+  flex: 1;
   overflow-wrap: anywhere;
   font-size: 12px;
 }
