@@ -161,19 +161,30 @@ function SettingsFixture() {
   );
 }
 
-function TabOverflowFixture() {
+function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
   const [active, setActive] = useState(0);
   const [count, setCount] = useState(4);
   const [narrow, setNarrow] = useState(false);
   const tabs = Array.from({ length: count }, (_, index) => index);
+  const label = (index: number) =>
+    longNames ? `Terminal ${index + 1} ${"production".repeat(12)}` : `Terminal ${index + 1}`;
   return (
     <div style={{ width: narrow ? 340 : 740 }}>
       <nav className="session-tabs" aria-label="Open Workspaces">
-        <WorkspaceTabScroller activeTabId={`tab-${active}`} arrangementKey={`count-${count}`}>
+        <WorkspaceTabScroller
+          activeTabId={`tab-${active}`}
+          arrangementKey={`count-${count}`}
+          items={tabs.map((index) => ({
+            id: `tab-${index}`,
+            label: label(index),
+            active: index === active,
+            onSelect: () => setActive(index),
+          }))}
+        >
           {tabs.map((index) => (
             <div className={`session-tab-wrap ${index === active ? "active" : ""}`} key={index}>
               <button className="session-tab-main" type="button" onClick={() => setActive(index)}>
-                Terminal {index + 1}
+                {label(index)}
               </button>
             </div>
           ))}
@@ -199,6 +210,24 @@ function TabOverflowFixture() {
       </button>
       <button type="button" onClick={() => setActive(0)}>
         Select first terminal
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setActive(19);
+          setCount(20);
+        }}
+      >
+        Add many terminals
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setCount((current) => Math.max(1, current - 1));
+          setActive((current) => Math.min(current, count - 2));
+        }}
+      >
+        Remove terminal
       </button>
     </div>
   );
@@ -242,6 +271,71 @@ function TabNameFixture() {
 }
 
 describe("critical UI in Chromium", () => {
+  it("keeps connection actions visible when a large tag list needs scrolling", async () => {
+    await page.viewport(960, 640);
+    mount(
+      <ConnectionDialog
+        groups={[]}
+        knownTags={Array.from({ length: 40 }, (_, index) => ({
+          id: `tag-${index}`,
+          name: `Environment ${index + 1}`,
+          color: "#3a3a3a",
+        }))}
+        globalSudoEnabled={false}
+        onClose={() => undefined}
+        onSaved={() => undefined}
+      />,
+    );
+    await expect.element(page.getByRole("textbox", { name: "Display name" })).toHaveFocus();
+    const dialog = page.getByRole("dialog").element();
+    expect(dialog.scrollHeight).toBeGreaterThan(dialog.clientHeight);
+    dialog.scrollTop = dialog.scrollHeight;
+    const bounds = dialog.getBoundingClientRect();
+    const header = dialog.querySelector(".modal-header")!.getBoundingClientRect();
+    const actions = dialog.querySelector(".modal-actions")!.getBoundingClientRect();
+    expect(header.top).toBeGreaterThanOrEqual(bounds.top);
+    expect(actions.bottom).toBeLessThanOrEqual(bounds.bottom);
+    await expect
+      .element(page.getByRole("button", { name: "Environment 40", exact: true }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Add connection", exact: true }))
+      .toBeVisible();
+  });
+  it.each([false, true])(
+    "fits the connection form without scrolling at minimum window size with global sudo %s",
+    async (globalSudoEnabled) => {
+      await page.viewport(960, 640);
+      mount(
+        <ConnectionDialog
+          groups={[{ id: "example-group", name: "Servers", collapsed: false, position: 0 }]}
+          knownTags={Array.from({ length: 5 }, (_, index) => ({
+            id: `tag-${index}`,
+            name: `Tag ${index + 1}`,
+            color: "#3a3a3a",
+          }))}
+          globalSudoEnabled={globalSudoEnabled}
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />,
+      );
+      await expect.element(page.getByRole("textbox", { name: "Display name" })).toHaveFocus();
+      const dialog = page.getByRole("dialog", { name: "Add Saved Connection" }).element();
+      expect(dialog.scrollHeight).toBeLessThanOrEqual(dialog.clientHeight);
+      const bounds = dialog.getBoundingClientRect();
+      for (const name of ["Tag 5", "Browse", "Test structured access", "Add connection"]) {
+        const button = page.getByRole("button", { name, exact: true });
+        await expect.element(button).toBeVisible();
+        const buttonBounds = button.element().getBoundingClientRect();
+        expect(buttonBounds.top).toBeGreaterThanOrEqual(bounds.top);
+        expect(buttonBounds.bottom).toBeLessThanOrEqual(bounds.bottom);
+      }
+      await expectAccessibleDialog();
+      await page.screenshot({
+        path: `../../test-results/connection-dialog-compact-${globalSudoEnabled ? "global-sudo" : "per-host"}.png`,
+      });
+    },
+  );
   it("gives active tab names the action space until hover or keyboard focus", async () => {
     mount(<TabNameFixture />);
     const main = page.getByRole("button", { name: "Open production database workspace" });
@@ -267,6 +361,22 @@ describe("critical UI in Chromium", () => {
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
   });
 
+  it("never paints a partial terminal at either overflow edge", async () => {
+    mount(<TabOverflowFixture />);
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    await page.getByRole("button", { name: "Select first terminal" }).click();
+    const list = document.querySelector<HTMLElement>(".session-tab-list")!;
+    await vi.waitFor(() => {
+      const bounds = list.getBoundingClientRect();
+      for (const tab of list.querySelectorAll<HTMLElement>(".session-tab-wrap")) {
+        const rect = tab.getBoundingClientRect();
+        if (rect.left >= bounds.right || rect.right <= bounds.left) continue;
+        expect(rect.left).toBeGreaterThanOrEqual(bounds.left - 1);
+        expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
+      }
+    });
+  });
+
   it("keeps New terminal reachable and reveals tabs when the strip overflows", async () => {
     mount(<TabOverflowFixture />);
     await expect
@@ -289,11 +399,13 @@ describe("critical UI in Chromium", () => {
     await expect
       .element(page.getByRole("button", { name: "Scroll terminals right" }))
       .toBeVisible();
-    expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+    expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth + 1);
     await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
 
     await page.getByRole("button", { name: "Scroll terminals right" }).click();
-    await vi.waitFor(() => expect(list.scrollLeft).toBeGreaterThan(0));
+    await expect
+      .element(page.getByRole("button", { name: "Terminal 2", exact: true }))
+      .toBeVisible();
 
     await page.getByRole("button", { name: "Select last terminal" }).click();
     await vi.waitFor(() => {
@@ -313,8 +425,9 @@ describe("critical UI in Chromium", () => {
     const list = document.querySelector<HTMLElement>(".session-tab-list")!;
     const right = page.getByRole("button", { name: "Scroll terminals right" });
     await right.click();
-    await vi.waitFor(() => expect(list.scrollLeft).toBeGreaterThan(0));
-    await right.click();
+    await expect
+      .element(page.getByRole("button", { name: "Terminal 4", exact: true }))
+      .toBeVisible();
     await vi.waitFor(() => expect((right.element() as HTMLButtonElement).disabled).toBe(true));
 
     const edge = list.getBoundingClientRect().left;
@@ -323,12 +436,79 @@ describe("critical UI in Chromium", () => {
     )!;
     expect(firstVisible.getBoundingClientRect().left).toBeGreaterThanOrEqual(edge - 1);
 
-    list.scrollLeft = 470;
-    await vi.waitFor(() => expect(Math.abs(list.scrollLeft - 392)).toBeLessThanOrEqual(1));
+    list.dispatchEvent(new WheelEvent("wheel", { deltaY: -150, bubbles: true }));
+    await expect
+      .element(page.getByRole("button", { name: "Terminal 1", exact: true }))
+      .toBeVisible();
     const wheelVisible = Array.from(list.querySelectorAll<HTMLElement>(".session-tab-wrap")).find(
       (tab) => tab.getBoundingClientRect().right > edge + 1,
     )!;
     expect(wheelVisible.getBoundingClientRect().left).toBeGreaterThanOrEqual(edge - 1);
+    for (let index = 0; index < 3; index++) {
+      list.dispatchEvent(new WheelEvent("wheel", { deltaX: 20, bubbles: true }));
+    }
+    await expect
+      .element(page.getByRole("button", { name: "Terminal 1", exact: true }))
+      .toBeVisible();
+    list.dispatchEvent(new WheelEvent("wheel", { deltaX: 20, bubbles: true }));
+    await expect
+      .element(page.getByRole("button", { name: "Terminal 1", exact: true }))
+      .not.toBeInTheDocument();
+  });
+
+  it("selects a hidden terminal by its full name and restores an already-selected hidden tab", async () => {
+    await page.viewport(800, 640);
+    mount(<TabOverflowFixture longNames />);
+    await page.getByRole("button", { name: "Add many terminals" }).click();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    await picker.click();
+    const menu = page.getByRole("menu", { name: "All terminals" });
+    await expect.element(menu).toBeVisible();
+    expect(menu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(20);
+    const active = menu.getByRole("menuitem", { name: /^Terminal 20 / });
+    await expect.element(active).toHaveFocus();
+    await userEvent.keyboard("{Home}{Enter}");
+    await expect.element(menu).not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
+      .toBeVisible();
+    await page.getByRole("button", { name: "Scroll terminals right" }).click();
+    await expect
+      .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
+      .not.toBeInTheDocument();
+    await picker.click();
+    await userEvent.keyboard("{Enter}");
+    await expect
+      .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
+      .toBeVisible();
+    await picker.click();
+    await userEvent.keyboard("{End}");
+    const bounds = menu.element().getBoundingClientRect();
+    expect(bounds.left).toBeGreaterThanOrEqual(8);
+    expect(bounds.right).toBeLessThanOrEqual(792);
+    expect(bounds.bottom).toBeLessThanOrEqual(632);
+    const violations = await axe.run(menu.element(), {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    });
+    expect(violations.violations.map((violation) => violation.id)).toEqual([]);
+    await userEvent.keyboard("{Escape}");
+    await expect.element(picker).toHaveFocus();
+    await expect.element(menu).not.toBeInTheDocument();
+  });
+
+  it("closes the overflow picker on outside click and resize, and removes it when all tabs fit", async () => {
+    mount(<TabOverflowFixture />);
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    await picker.click();
+    await page.getByRole("button", { name: "New terminal", exact: true }).click();
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+    await picker.click();
+    await page.viewport(900, 600);
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+    await page.getByRole("button", { name: "Remove terminal" }).click();
+    await expect.element(picker).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
   });
 
   it("traps dialog focus, closes on Escape, and restores the trigger", async () => {

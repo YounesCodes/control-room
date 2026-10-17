@@ -47,7 +47,17 @@ target beside its readings.
 
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
-scan. The active Workspace, group, and pane need a clear non-text state cue.
+scan. Give each split group one tab with its name and pane count. Show the active
+group's terminals in a separate compact pane row. Keep individual Rename and Close
+controls visible on each pane tab. Use labeled Rename group and Ungroup buttons
+at the row's end, and confirm ungrouping with its effect on the open terminals.
+Keep inactive groups' member tabs out of that row. The active
+Workspace, group, and pane need a clear non-text state cue. Frame the selected
+split pane on all four edges, above terminal content, without blocking input or
+divider interaction. Keep a thin window drag strip across the top of the Focus Mode
+header, even when tabs overflow, without a blank column between controls. Buttons and tabs
+remain ordinary click targets. Use a compact plus and dropdown control for
+New terminal outside the scrolling tabs.
 Local Terminal Mode starts the default enabled standard local shell in normal focus
 mode, with the Connections rail hidden.
 Leaving focus mode returns to the active Workspace without changing its target
@@ -60,9 +70,14 @@ small windows without overwriting the saved proportions. Reset a divider to equa
 sizes with a double-click or Enter.
 
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
-Show controls to move through the tabs and reveal the selected tab when it
-changes, including in focus mode. Where a tab fits in the strip, settle scrolling
-on a complete tab or group edge so its status and actions stay visible.
+Use equal-width tabs that shrink within readable limits. When they no longer fit,
+show a window of complete tabs with previous/next controls; never paint a partial
+tab at either edge. The All terminals menu lists full names and marks the selected
+item at the right edge. Keep icons and names aligned at the left. Include shell
+logos and remote host OS marks beside each entry, and a group icon for split groups.
+The pane row has its own All panes menu. Selecting a hidden item reveals its
+complete tab, including in focus mode. Keep overflow menus within the window
+and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.
 

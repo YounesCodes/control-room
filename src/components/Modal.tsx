@@ -5,9 +5,10 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 }
 
-export function Modal({ title, children, onClose }: ModalProps) {
+export function Modal({ title, children, onClose, className }: ModalProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const titleId = useId();
   const onCloseRef = useRef(onClose);
@@ -57,7 +58,7 @@ export function Modal({ title, children, onClose }: ModalProps) {
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         ref={dialogRef}
-        className="modal"
+        className={["modal", className].filter(Boolean).join(" ")}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

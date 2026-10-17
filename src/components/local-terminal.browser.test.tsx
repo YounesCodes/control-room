@@ -3,12 +3,17 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import { App } from "../App";
+import { TooltipLayer } from "./TooltipLayer";
 import "../styles.css";
 const savedLayout = vi.hoisted(() => ({ save: vi.fn(async () => {}) }));
 vi.mock("./WindowControls", () => ({ WindowControls: () => null }));
 vi.mock("./TerminalPane", () => ({
   TerminalPane: () => (
-    <div role="region" aria-label="Local terminal surface" style={{ height: "100%" }} />
+    <div
+      role="region"
+      aria-label="Local terminal surface"
+      style={{ height: "100%", background: "#050505", position: "relative" }}
+    />
   ),
 }));
 vi.mock("../lib/api", () => {
@@ -78,12 +83,17 @@ afterEach(() => {
   savedLayout.save.mockClear();
 });
 
-function mountApp() {
+function mountApp(withTooltips = false) {
   container = document.createElement("div");
   container.style.height = "100vh";
   document.body.append(container);
   root = createRoot(container);
-  root.render(<App />);
+  root.render(
+    <>
+      <App />
+      {withTooltips && <TooltipLayer />}
+    </>,
+  );
 }
 
 function paneBounds() {
@@ -100,6 +110,226 @@ async function split(direction: "vertically" | "horizontally") {
     .click();
 }
 describe("Local Terminal Mode in the real App", () => {
+  it.each([800, 1600])(
+    "keeps individual pane controls separate from group actions at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mountApp(true);
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      await split("vertically");
+      await split("horizontally");
+      const controls = [
+        ...container!.querySelectorAll<HTMLButtonElement>(
+          ".session-pane-tabs .session-tab-rename, .session-pane-tabs .session-tab-close",
+        ),
+      ];
+      expect(controls).toHaveLength(6);
+      for (const control of controls) {
+        expect(getComputedStyle(control).opacity).toBe("1");
+        const rect = control.getBoundingClientRect();
+        expect(
+          document
+            .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+            ?.closest("button"),
+        ).toBe(control);
+      }
+      const groupButton = container!.querySelector<HTMLButtonElement>(".session-tab-group-main")!;
+      await userEvent.hover(groupButton);
+      await expect.element(page.getByRole("tooltip")).toBeVisible();
+      expect(
+        page.getByRole("tooltip").element().getBoundingClientRect().left,
+      ).toBeGreaterThanOrEqual(8);
+      await page
+        .getByRole("button", { name: "Rename Command Prompt 2 Workspace", exact: true })
+        .click();
+      await page.getByRole("textbox").fill("Background logs");
+      await userEvent.keyboard("{Enter}");
+      await expect
+        .element(page.getByRole("button", { name: "Close Background logs Workspace" }))
+        .toBeVisible();
+      expect(
+        container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
+      ).toBe("Command Prompt 3");
+      await page.getByRole("button", { name: "Close Background logs Workspace" }).click();
+      await expect
+        .element(page.getByRole("button", { name: "Open Command Prompt group 2 terminals" }))
+        .toBeVisible();
+      expect(container!.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+      expect(
+        container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
+      ).toBe("Command Prompt 2");
+      await page.getByRole("button", { name: "Close Command Prompt 2 Workspace" }).click();
+      expect(container!.querySelector(".session-pane-tabs")).toBeNull();
+      await expect
+        .element(page.getByRole("button", { name: "Command Prompt", exact: true }))
+        .toHaveAttribute("aria-current", "page");
+      await vi.waitFor(() =>
+        expect(savedLayout.save).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            terminalGroups: [],
+            workspaces: [expect.objectContaining({ label: null })],
+          }),
+        ),
+      );
+    },
+  );
+
+  it("paints the selected frame on all four edges above terminal contents in nested splits", async () => {
+    await page.viewport(960, 641);
+    mountApp();
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    await split("vertically");
+    await split("horizontally");
+    const tabs = [
+      ...container!.querySelectorAll<HTMLButtonElement>(".session-pane-tabs .session-tab-main"),
+    ];
+    for (const [index, tab] of tabs.entries()) {
+      await userEvent.click(tab);
+      const pane = container!.querySelector<HTMLElement>(
+        ".terminal-workspace-pane-visible.active",
+      )!;
+      const screenshot = await page.screenshot({
+        element: pane,
+        base64: true,
+        path: `../../test-results/selected-pane-${index}.png`,
+      });
+      const bitmap = new Image();
+      bitmap.src = `data:image/png;base64,${screenshot.base64}`;
+      await bitmap.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = getComputedStyle(pane).getPropertyValue("--accent").trim();
+      context.fillRect(0, 0, 1, 1);
+      const expected = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+      context.drawImage(bitmap, 0, 0);
+      const edges = {
+        top: [Math.floor(bitmap.width / 2), 0],
+        right: [bitmap.width - 1, Math.floor(bitmap.height / 2)],
+        bottom: [Math.floor(bitmap.width / 2), bitmap.height - 1],
+        left: [0, Math.floor(bitmap.height / 2)],
+        topLeft: [0, 0],
+        topRight: [bitmap.width - 1, 0],
+        bottomLeft: [0, bitmap.height - 1],
+        bottomRight: [bitmap.width - 1, bitmap.height - 1],
+      };
+      for (const [edge, [x, y]] of Object.entries(edges)) {
+        const actual = [...context.getImageData(x, y, 1, 1).data].slice(0, 3);
+        expect(actual, `${tab.title}: ${edge} edge should show the selected frame`).toEqual(
+          expected,
+        );
+      }
+      const bounds = pane.getBoundingClientRect();
+      // Stay clear of the split dividers' intentional mouse hit areas.
+      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + 30);
+      expect(pane.contains(hit)).toBe(true);
+      expect(hit, "The painted frame must leave terminal input clickable").not.toBe(pane);
+    }
+  });
+  it.each([960, 1600])(
+    "uses one tab per group and a keyboard-accessible pane row at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mountApp();
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      await split("vertically");
+      await split("horizontally");
+      const strip = page.getByRole("navigation", { name: "Open Workspaces" }).element();
+      expect(strip.querySelectorAll(".session-tab-group")).toHaveLength(1);
+      expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(0);
+      const paneRow = container!.querySelector<HTMLElement>(".session-pane-tabs")!;
+      expect(paneRow.querySelectorAll(".session-tab-wrap")).toHaveLength(3);
+      await vi.waitFor(() =>
+        expect(paneRow.querySelector(".session-tab-scroll-button")).toBeNull(),
+      );
+      const first = paneRow.querySelector<HTMLButtonElement>(".session-tab-main")!;
+      first.focus();
+      await userEvent.keyboard("{Enter}");
+      await vi.waitFor(() =>
+        expect(paneRow.querySelector(".session-tab-wrap.active .session-tab-main")).toBe(first),
+      );
+      await page.getByRole("button", { name: /^Rename .* group$/ }).click();
+      await page.getByRole("textbox").fill("Build and logs");
+      await page.getByRole("button", { name: "Rename", exact: true }).click();
+      await expect
+        .element(page.getByRole("button", { name: "Open Build and logs 3 terminals" }))
+        .toBeVisible();
+      const result = await axe.run(container!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(
+        result.violations.map(
+          ({ id, nodes }) =>
+            `${id}: ${nodes.map((node) => `${node.target}: ${node.failureSummary}`).join("; ")}`,
+        ),
+      ).toEqual([]);
+      await page.screenshot({ path: `../../test-results/terminal-groups-${width}.png` });
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "New terminal" })
+        .getByRole("button", { name: /Command Prompt/ })
+        .click();
+      expect(container!.querySelector(".session-pane-tabs")).toBeNull();
+      await page.getByRole("button", { name: "Open Build and logs 3 terminals" }).click();
+      expect(
+        container!
+          .querySelector(".session-pane-tabs .session-tab-wrap.active .session-tab-main")
+          ?.getAttribute("title"),
+      ).toBe(first.getAttribute("title"));
+      await page
+        .getByRole("button", { name: "Ungroup Build and logs; terminals stay open" })
+        .click();
+      await page.getByRole("button", { name: "Ungroup", exact: true }).click();
+      expect(container!.querySelector(".session-pane-tabs")).toBeNull();
+      expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+    },
+  );
+  it.each([800, 960, 1600])(
+    "keeps a direct window drag target with overflowing tabs at %s pixels",
+    async (width) => {
+      await page.viewport(width, 640);
+      mountApp();
+      await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+      for (let index = 0; index < 8; index++) {
+        await page.getByRole("button", { name: "New terminal", exact: true }).click();
+        await page
+          .getByRole("dialog", { name: "New terminal" })
+          .getByRole("button", { name: /Command Prompt/ })
+          .click();
+      }
+      const drag = container!.querySelector<HTMLElement>(".session-window-drag-region");
+      expect(drag, "Focus Mode needs a direct target to move the native window").not.toBeNull();
+      const bounds = drag!.getBoundingClientRect();
+      const strip = container!.querySelector(".session-tabs")!.getBoundingClientRect();
+      expect(bounds.width).toBeCloseTo(strip.width, 0);
+      expect(bounds.height).toBe(6);
+      expect(bounds.top).toBe(strip.top);
+      for (const fraction of [0.01, 0.5, 0.99]) {
+        const hit = document.elementFromPoint(
+          bounds.left + bounds.width * fraction,
+          bounds.top + bounds.height / 2,
+        );
+        expect(hit).toBe(drag);
+        expect(hit).toHaveAttribute("data-tauri-drag-region");
+      }
+      const newTerminal = container!
+        .querySelector(".session-new-terminal")!
+        .getBoundingClientRect();
+      const find = container!
+        .querySelector('[aria-label="Find in terminal"]')!
+        .getBoundingClientRect();
+      expect(find.left - newTerminal.right).toBeLessThanOrEqual(1);
+      expect(newTerminal.top).toBeGreaterThanOrEqual(bounds.bottom);
+      expect(find.top).toBeGreaterThanOrEqual(bounds.bottom);
+      expect(
+        container!.querySelector(".session-tab-main")!.hasAttribute("data-tauri-drag-region"),
+      ).toBe(false);
+      await expect
+        .element(page.getByRole("button", { name: "Scroll terminals left" }))
+        .toBeVisible();
+    },
+  );
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
     await page.viewport(1280, 800);
     mountApp();

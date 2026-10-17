@@ -139,7 +139,7 @@ export async function openLocal() {
   if (await launcher.isDisplayed()) {
     await launcher.click();
   } else {
-    await $("button=New terminal").click();
+    await $("aria/New terminal").click();
   }
   await $(".local-shell-menu, .new-terminal-menu").$("button*=Command Prompt").click();
   await expect($(".terminal-workspace-pane.active .xterm-screen")).toBeDisplayed();

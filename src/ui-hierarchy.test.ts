@@ -265,7 +265,10 @@ describe("application hierarchy", () => {
 
   it("keeps direct titlebar targets draggable with the required native permission", () => {
     expect(windowCapabilities.permissions).toContain("core:window:allow-start-dragging");
-    expect((appSource + tabScrollerSource).match(/data-tauri-drag-region/g)).toHaveLength(5);
+    expect(tabScrollerSource).toMatch(/className="session-tab-content"[^>]*data-tauri-drag-region/);
+    expect(appSource).toMatch(
+      /className="session-window-drag-region"[\s\S]*?data-tauri-drag-region/,
+    );
   });
 
   it("grants a native permission for every window control the frontend uses", () => {
@@ -341,13 +344,14 @@ describe("application hierarchy", () => {
   it("keeps groups inside focus mode and outlines the active group and pane", () => {
     expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
     expect(appSource).toContain('aria-label="Split terminal"');
-    expect(appSource).toContain("<Plus size={15} /> New terminal");
+    expect(appSource).toContain('aria-label="New terminal"');
+    expect(appSource).toContain("session-pane-tabs");
     expect(appSource).not.toContain("openFocusGroup");
     expect(appSource).toContain("Split vertically");
     expect(appSource).toContain("Split horizontally");
     expect(appSource).toContain("New from Saved Connections");
     expect(appSource).not.toContain("Remove from terminal group");
-    expect(appSource).toContain("Delete group; terminals stay open");
+    expect(appSource).toContain("Ungroup terminals; keep every terminal open");
     expect(appSource).toContain("nextTerminalGroupName");
     expect(appSource).toContain("session-tab-group-label");
     expect(stylesSource).toContain(".session-tab-group");
@@ -355,7 +359,7 @@ describe("application hierarchy", () => {
     expect(appSource).not.toContain("terminal-pane-header");
     expect(stylesSource).not.toContain(".terminal-pane-header");
     expect(stylesSource).toMatch(
-      /\.terminal-pane-layout \.terminal-workspace-pane\.active\s*\{[^}]*outline:\s*1px solid var\(--accent\);[^}]*outline-offset:\s*-1px;/s,
+      /\.terminal-pane-layout \.terminal-workspace-pane\.active::after\s*\{[^}]*border:\s*1px solid var\(--accent\);/s,
     );
     expect(stylesSource).toContain(".terminal-pane-layout");
   });

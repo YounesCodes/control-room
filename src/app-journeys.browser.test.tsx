@@ -48,6 +48,22 @@ function emit(name: string, payload: any) {
   native.listeners.get(name)?.forEach((callback) => callback({ payload }));
 }
 
+function expectTerminalMenuAlignment(menu: Element) {
+  for (const row of menu.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
+    const icon = row.querySelector<HTMLElement>(".session-tab-menu-icon")!;
+    const name = row.querySelector<HTMLElement>(".session-tab-menu-name")!;
+    const check = row.querySelector<HTMLElement>(".session-tab-menu-check")!;
+    expect(row.firstElementChild).toBe(icon);
+    expect(row.lastElementChild).toBe(check);
+    const bounds = row.getBoundingClientRect();
+    expect(icon.getBoundingClientRect().left).toBeCloseTo(bounds.left + 8, 0);
+    expect(check.getBoundingClientRect().right).toBeCloseTo(bounds.right - 8, 0);
+    expect(check.getBoundingClientRect().left).toBeGreaterThanOrEqual(
+      name.getBoundingClientRect().right,
+    );
+  }
+}
+
 async function respond(command: string, args: any = {}) {
   if (failures.has(command)) throw new Error(failures.get(command));
   if (overrides.has(command)) return overrides.get(command)!(args);
@@ -260,6 +276,201 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
+    await page.viewport(960, 640);
+    const shellKinds = [
+      "git-bash",
+      "windows-powershell",
+      "powershell-7",
+      "command-prompt",
+    ] as const;
+    const shellLabels = ["Git Bash", "Windows PowerShell", "PowerShell 7", "Command Prompt"];
+    overrides.set("list_local_shells", () => ({
+      profiles: shellKinds.map((kind, index) => ({
+        id: kind,
+        kind,
+        label: shellLabels[index],
+        elevated: false,
+      })),
+      administratorStatus: "disabled",
+    }));
+    await mount();
+    await navigate("Terminal");
+    for (let index = 0; index < 7; index++) {
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "New terminal" })
+        .getByRole("button", { name: new RegExp(shellLabels[Math.min(index, 3)]) })
+        .click();
+    }
+    const sessions = native.invoke.mock.calls.filter(
+      ([command]) => command === "start_session" || command === "start_local_session",
+    ).length;
+    await page.getByRole("button", { name: "All terminals", exact: true }).click();
+    const terminalMenu = page.getByRole("menu", { name: "All terminals" }).element();
+    expectTerminalMenuAlignment(terminalMenu);
+    for (const kind of shellKinds) {
+      expect(
+        terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
+      ).not.toBeNull();
+    }
+    expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
+    expect(
+      terminalMenu.querySelector('[aria-current="page"] .session-tab-menu-check svg'),
+    ).not.toBeNull();
+    await page
+      .getByRole("menu", { name: "All terminals" })
+      .getByRole("menuitem", { name: /^Fixture Alpha/ })
+      .click();
+    await expect
+      .element(page.getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha$/ }))
+      .toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    for (let index = 0; index < 5; index++) {
+      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await page
+        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+        .click();
+      if (index === 0) {
+        const local = native.invoke.mock.calls
+          .filter(([command]) => command === "start_local_session")
+          .at(-1)!;
+        local[1].output.onmessage(
+          new TextEncoder().encode(
+            "\r\nC:\\demo> npm run build\r\nBuild complete.\r\n\r\nC:\\demo> ",
+          ).buffer,
+        );
+        await page.getByRole("button", { name: "All terminals", exact: true }).click();
+        await page.screenshot({ path: "../test-results/terminal-overflow.png" });
+        await userEvent.keyboard("{Escape}");
+      }
+    }
+    await page.getByRole("button", { name: "Scroll terminals right" }).first().click();
+    await page.getByRole("button", { name: "All terminals", exact: true }).click();
+    const groupItem = page
+      .getByRole("menu", { name: "All terminals" })
+      .getByRole("menuitem", { name: /^Fixture Alpha group/ });
+    await expect.element(groupItem).toHaveTextContent("Fixture Alpha group6 terminals");
+    expectTerminalMenuAlignment(page.getByRole("menu", { name: "All terminals" }).element());
+    expect(
+      groupItem.element().querySelector(".session-tab-menu-icon .lucide-columns-2"),
+    ).not.toBeNull();
+    await groupItem.click();
+    await expect
+      .element(page.getByRole("button", { name: "Open Fixture Alpha group 6 terminals" }))
+      .toBeVisible();
+    await page.getByRole("button", { name: "All panes", exact: true }).click();
+    const paneMenu = page.getByRole("menu", { name: "All panes" });
+    expectTerminalMenuAlignment(paneMenu.element());
+    expect(paneMenu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(6);
+    expect(
+      paneMenu
+        .element()
+        .querySelectorAll(".session-tab-menu-icon .local-shell-icon-command-prompt svg"),
+    ).toHaveLength(5);
+    expect(
+      paneMenu.element().querySelector(".session-tab-menu-icon .host-os-ubuntu svg"),
+    ).not.toBeNull();
+    await paneMenu.getByRole("menuitem", { name: /^Fixture Alpha/ }).click();
+    await expect
+      .element(page.getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha$/ }))
+      .toHaveAttribute("aria-current", "page");
+    const panes = element.querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible");
+    expect(panes).toHaveLength(6);
+    for (const list of element.querySelectorAll<HTMLElement>(".session-tab-list")) {
+      const bounds = list.getBoundingClientRect();
+      for (const tab of list.querySelectorAll<HTMLElement>(
+        ".session-tab-wrap, .session-tab-group",
+      )) {
+        const rect = tab.getBoundingClientRect();
+        expect(rect.left).toBeGreaterThanOrEqual(bounds.left - 1);
+        expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
+      }
+    }
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "start_session" || command === "start_local_session",
+      ),
+    ).toHaveLength(sessions + 5);
+    expect(native.invoke.mock.calls.some(([command]) => command === "close_session")).toBe(false);
+  });
+
+  it("keeps grouped session state and activity visible and routes input to the selected pane", async () => {
+    await mount();
+    await navigate("Terminal");
+    await vi.waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === "start_session")).toBe(true),
+    );
+    const remote = native.invoke.mock.calls.find(([command]) => command === "start_session")![1]
+      .output;
+    remote.onmessage(
+      new TextEncoder().encode(
+        "\r\nexample@build-host:~$ git status\r\nOn branch main\r\nWorking tree clean\r\n\r\nexample@build-host:~$ ",
+      ).buffer,
+    );
+    await page.screenshot({ path: "../test-results/terminal-header-normal.png" });
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    await page.getByRole("button", { name: /^Rename .* group$/ }).click();
+    await page
+      .getByRole("dialog", { name: "Rename terminal group" })
+      .getByRole("textbox")
+      .fill("Build and logs");
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
+    const localCall = native.invoke.mock.calls.find(
+      ([command]) => command === "start_local_session",
+    )!;
+    localCall[1].output.onmessage(
+      new TextEncoder().encode("\r\nC:\\demo> npm run build\r\nBuild complete.\r\n\r\nC:\\demo> ")
+        .buffer,
+    );
+    const group = page.getByRole("button", { name: "Open Build and logs 2 terminals" });
+    await expect
+      .element(group)
+      .toHaveAccessibleDescription(/Fixture Alpha: connected.*Command Prompt: running/);
+    await page.screenshot({ path: "../test-results/terminal-header-groups.png" });
+    await page.getByRole("button", { name: "New terminal", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New terminal" })
+      .getByRole("button", { name: /Command Prompt/ })
+      .click();
+    const remoteSession = "session-1";
+    remote.onmessage(new TextEncoder().encode("\x07Background build complete\r\n").buffer);
+    await expect.element(group).toHaveAccessibleDescription(/terminal bell/);
+    expect(group.element().querySelector(".terminal-activity-bell")).not.toBeNull();
+    emit("session-state-changed", {
+      sessionId: remoteSession,
+      state: "disconnected",
+      reason: "Example session ended",
+    });
+    await expect.element(group).toHaveAccessibleDescription(/Fixture Alpha: disconnected/);
+    expect(group.element().querySelector(".presence-disconnected")).not.toBeNull();
+    await group.click();
+    await page
+      .getByRole("navigation", { name: "Terminals in Build and logs" })
+      .getByRole("button", { name: "Command Prompt", exact: true })
+      .click();
+    await userEvent.click(
+      element.querySelector<HTMLElement>(".terminal-workspace-pane.active .xterm-screen")!,
+    );
+    await userEvent.keyboard("echo pane");
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(([command]) => command === "write_session").at(-1)![1]
+          .sessionId,
+      ).toBe("session-2"),
+    );
+    // Pane selection is also reflected in persisted state, so a later restore
+    // and active-pane actions use the same terminal.
+    await vi.waitFor(() =>
+      expect(persisted.activeWorkspaceId).toBe(
+        persisted.workspaces.find((workspace) => workspace.localShellId === "command-prompt")!.id,
+      ),
+    );
+  });
   it("keeps metrics off by default, saves customization, and follows remote and local workspaces", async () => {
     await mount();
     expect(native.invoke.mock.calls.some(([name]) => name === "sample_header_metrics")).toBe(false);

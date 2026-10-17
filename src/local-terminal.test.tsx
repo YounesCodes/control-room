@@ -801,8 +801,12 @@ describe("Local Terminal", () => {
     ]);
     let splitGroup = screen.getByRole("group", { name: "prod-web group" });
     expect(within(splitGroup).getByText("prod-web group")).toBeTruthy();
-    expect(within(splitGroup).getByText("prod-web")).toBeTruthy();
-    expect(within(splitGroup).getByText("PowerShell 7")).toBeTruthy();
+    expect(within(splitGroup).queryByText("prod-web")).toBeNull();
+    const paneTabs = screen.getByRole("navigation", { name: "Terminals in prod-web group" });
+    expect(within(paneTabs).getByText("prod-web")).toBeTruthy();
+    expect(within(paneTabs).getByText("PowerShell 7")).toBeTruthy();
+    expect(within(paneTabs).getByLabelText("Rename prod-web Workspace")).toBeTruthy();
+    expect(within(paneTabs).getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(within(splitGroup).queryByText("Git Bash")).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
     expect(document.querySelectorAll(".terminal-workspace-pane.active")).toHaveLength(1);
@@ -818,7 +822,7 @@ describe("Local Terminal", () => {
     await user.click(screen.getByLabelText("Focus terminal"));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
 
-    await user.click(screen.getByLabelText("Rename prod-web group"));
+    await user.click(screen.getByLabelText("Rename group prod-web group"));
     const groupName = screen.getByRole("textbox", { name: /^Group name/ });
     await user.clear(groupName);
     await user.type(groupName, "Proxmox");
@@ -840,11 +844,12 @@ describe("Local Terminal", () => {
     expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
 
-    await user.click(screen.getByRole("button", { name: "Open Proxmox, 2 terminals" }));
+    await user.click(screen.getByRole("button", { name: "Open Proxmox 2 terminals" }));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
     expect(screen.getByRole("group", { name: "Proxmox" }).classList).toContain("active");
 
-    await user.click(screen.getByLabelText("Delete Proxmox; terminals stay open"));
+    await user.click(screen.getByLabelText("Ungroup Proxmox; terminals stay open"));
+    await user.click(screen.getByRole("button", { name: "Ungroup" }));
     expect(screen.queryByRole("group", { name: "Proxmox" })).toBeNull();
     expect(screen.getByRole("group", { name: "Git Bash group" }).classList).not.toContain("active");
     expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
@@ -864,8 +869,150 @@ describe("Local Terminal", () => {
     expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
-    await user.click(screen.getByRole("button", { name: "Open Git Bash group, 2 terminals" }));
+    await user.click(screen.getByRole("button", { name: "Open Git Bash group 2 terminals" }));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
+  });
+
+  it.each(["first", "last"])(
+    "selects the survivor when closing the %s member of an interleaved two-pane group",
+    async (closing) => {
+      const user = userEvent.setup();
+      api.workspaceState.mockResolvedValue({
+        workspaces: ["first", "unrelated", "last"].map((id) => ({
+          id,
+          label: id,
+          connectionId: null,
+          localShellId: "git-bash",
+          view: "terminal",
+          historyPaused: false,
+        })),
+        activeWorkspaceId: closing,
+        terminalGroups: [
+          {
+            id: "group",
+            name: "Pair",
+            layout: {
+              kind: "split",
+              direction: "vertical",
+              ratio: 0.4,
+              first: { kind: "leaf", workspaceId: "first" },
+              second: { kind: "leaf", workspaceId: "last" },
+            },
+          },
+        ],
+      });
+      render(<App />);
+      await user.click(await screen.findByLabelText("Focus terminal"));
+      await user.click(screen.getByLabelText(`Close ${closing} Workspace`));
+      const survivor = closing === "first" ? "last" : "first";
+      await waitFor(() => expect(screen.queryByTestId(`terminal-${closing}`)).toBeNull());
+      expect(screen.getByRole("button", { name: survivor }).getAttribute("aria-current")).toBe(
+        "page",
+      );
+      expect(screen.queryByRole("group", { name: "Pair" })).toBeNull();
+      expect(screen.getAllByTestId(/^terminal-/)).toHaveLength(2);
+      await waitFor(() =>
+        expect(api.saveWorkspaceState).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            activeWorkspaceId: survivor,
+            terminalGroups: [],
+          }),
+        ),
+      );
+    },
+  );
+
+  it("renames and closes individual grouped terminals without changing their neighbors", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openLocalShell(user, "Git Bash");
+    await user.click(screen.getByLabelText("Focus terminal"));
+    for (let index = 0; index < 2; index++) {
+      await user.click(screen.getByLabelText("Split terminal"));
+      await user.click(screen.getByRole("button", { name: "New local terminal: Git Bash" }));
+    }
+    const [first, second, third] = screen.getAllByTestId(/^terminal-/);
+    await user.click(screen.getByLabelText("Rename Git Bash 2 Workspace"));
+    let input = screen.getByRole("textbox", { name: /Workspace label/ });
+    await user.clear(input);
+    await user.type(input, "Cancelled name");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByLabelText("Rename Git Bash 2 Workspace")).toBeTruthy();
+    await user.click(screen.getByLabelText("Rename Git Bash 2 Workspace"));
+    input = screen.getByRole("textbox", { name: /Workspace label/ });
+    await user.clear(input);
+    await user.type(input, "  Logs العربية  ");
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    expect(screen.getByLabelText("Close Logs العربية Workspace")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Git Bash group 3 terminals" })).toBeTruthy();
+    // A blank label restores the shell name; it does not rename the group.
+    await user.click(screen.getByLabelText("Rename Logs العربية Workspace"));
+    await user.clear(screen.getByRole("textbox", { name: /Workspace label/ }));
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    expect(screen.getByLabelText("Rename Git Bash 2 Workspace")).toBeTruthy();
+    await user.click(within(second).getByText("report session"));
+    await user.click(screen.getByLabelText("Close Git Bash 2 Workspace"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(api.closeSession).not.toHaveBeenCalled();
+    await user.click(screen.getByLabelText("Close Git Bash 2 Workspace"));
+    await user.click(screen.getByRole("button", { name: "Stop & close" }));
+    await waitFor(() => expect(screen.queryByTestId(second.dataset.testid!)).toBeNull());
+    expect(api.closeSession).toHaveBeenCalledExactlyOnceWith(
+      `${second.dataset.testid!.slice(9)}-session`,
+    );
+    expect(screen.getByRole("button", { name: "Open Git Bash group 2 terminals" })).toBeTruthy();
+    expect(first.isConnected && third.isConnected).toBe(true);
+    expect(third.closest(".terminal-workspace-pane")?.classList.contains("active")).toBe(true);
+    await user.click(screen.getByLabelText("Ungroup Git Bash group; terminals stay open"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
+    await user.click(screen.getByLabelText("Close Git Bash 2 Workspace"));
+    expect(screen.queryByRole("group", { name: "Git Bash group" })).toBeNull();
+    expect(first.closest(".terminal-workspace-pane")?.classList.contains("active")).toBe(true);
+    await user.click(screen.getByLabelText("Close Git Bash Workspace"));
+    expect(screen.queryByLabelText("Exit terminal focus")).toBeNull();
+    expect(screen.queryAllByTestId(/^terminal-/)).toHaveLength(0);
+  });
+
+  it("coalesces repeated closes and preserves a terminal opened during teardown", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openLocalShell(user, "Git Bash");
+    await user.click(screen.getByLabelText("Focus terminal"));
+    await user.click(screen.getByLabelText("Split terminal"));
+    await user.click(screen.getByRole("button", { name: "New local terminal: PowerShell 7" }));
+    const [first, closing] = screen.getAllByTestId(/^terminal-/);
+    await user.click(within(closing).getByText("report session"));
+    let finishClose!: () => void;
+    api.closeSession.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishClose = resolve;
+        }),
+    );
+    await user.click(screen.getByLabelText("Close PowerShell 7 Workspace"));
+    await user.click(screen.getByRole("button", { name: "Stop & close" }));
+    await user.click(screen.getByLabelText("Close PowerShell 7 Workspace"));
+    await user.click(screen.getByRole("button", { name: "Stop & close" }));
+    expect(api.closeSession).toHaveBeenCalledTimes(1);
+    await openNewTerminal(user, "Local terminals: Git Bash");
+    const added = screen.getAllByTestId(/^terminal-/)[2];
+    finishClose();
+    await waitFor(() => expect(screen.queryByTestId(closing.dataset.testid!)).toBeNull());
+    expect(first.isConnected && added.isConnected).toBe(true);
+    expect(added.closest(".terminal-workspace-pane")?.classList.contains("active")).toBe(true);
+    await waitFor(() =>
+      expect(api.saveWorkspaceState).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          activeWorkspaceId: added.dataset.testid!.slice(9),
+          terminalGroups: [],
+          workspaces: expect.arrayContaining([
+            expect.objectContaining({ id: first.dataset.testid!.slice(9) }),
+            expect.objectContaining({ id: added.dataset.testid!.slice(9) }),
+          ]),
+        }),
+      ),
+    );
   });
 
   it("starts a restored local shell without pressing Restart", async () => {
@@ -908,7 +1055,7 @@ describe("Local Terminal", () => {
 
     await user.click(screen.getByRole("button", { name: /Close Git Bash Workspace/ }));
     // A running shell is confirmed in local words before it is stopped.
-    expect(screen.getByText("Stop the local shell and close this Workspace?")).toBeTruthy();
+    expect(screen.getByText("Stop the local shell and close “Git Bash”?")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Stop & close" }));
 
     await waitFor(() => expect(screen.queryByTestId(bashTerminal.dataset.testid!)).toBeNull());

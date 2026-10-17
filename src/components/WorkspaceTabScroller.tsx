@@ -1,130 +1,151 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Children, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+
+export interface WorkspaceTabOption {
+  id: string;
+  label: string;
+  detail?: string;
+  icon?: ReactNode;
+  active: boolean;
+  onSelect: () => void;
+}
 
 interface WorkspaceTabScrollerProps {
   children: ReactNode;
+  items: WorkspaceTabOption[];
   activeTabId: string | null;
   arrangementKey: string;
+  menuLabel?: string;
 }
+
+const MIN_TAB_WIDTH = 160;
+const MAX_TAB_WIDTH = 196;
+const OVERFLOW_CONTROLS_WIDTH = 84;
 
 export function WorkspaceTabScroller({
   children,
+  items,
   activeTabId,
   arrangementKey,
+  menuLabel = "All terminals",
 }: WorkspaceTabScrollerProps) {
   const regionRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const endSpaceRef = useRef<HTMLSpanElement>(null);
-  const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [overflow, setOverflow] = useState(false);
-  const [listWidth, setListWidth] = useState(0);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  const pickerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  const [start, setStart] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, maxHeight: 0 });
+  const tabs = Children.toArray(children);
+  const count = tabs.length;
+  const overflow = width > 0 && count * MIN_TAB_WIDTH > width;
+  const available = Math.max(0, width - (overflow ? OVERFLOW_CONTROLS_WIDTH : 0));
+  const pageSize =
+    width > 0 ? Math.max(1, Math.min(count, Math.floor(available / MIN_TAB_WIDTH))) : count;
+  const tabWidth =
+    width > 0 ? Math.min(MAX_TAB_WIDTH, available / Math.max(1, pageSize)) : MAX_TAB_WIDTH;
+  const lastStart = Math.max(0, count - pageSize);
+  const visibleStart = overflow ? Math.min(start, lastStart) : 0;
+  const activeIndex = items.findIndex((item) => item.active);
 
-  const tabStarts = useCallback(() => {
-    const content = contentRef.current;
-    if (!content) return [0];
-    const contentLeft = content.getBoundingClientRect().left;
-    return [
-      0,
-      ...Array.from(
-        content.querySelectorAll<HTMLElement>(".session-tab-wrap, .session-tab-group"),
-        (tab) => tab.getBoundingClientRect().left - contentLeft,
-      ),
-    ].sort((a, b) => a - b);
-  }, []);
-
-  const snapToTab = useCallback(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const active = contentRef.current?.querySelector<HTMLElement>(".session-tab-wrap.active");
-    if (active && active.offsetWidth > list.clientWidth) return;
-    const current = list.scrollLeft;
-    const nearest = tabStarts().reduce((best, start) =>
-      Math.abs(start - current) < Math.abs(best - current) ? start : best,
-    );
-    if (Math.abs(nearest - current) > 1) list.scrollLeft = nearest;
-  }, [tabStarts]);
-
-  const scheduleSnap = useCallback(() => {
-    if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-    snapTimerRef.current = setTimeout(() => {
-      snapTimerRef.current = null;
-      snapToTab();
-    }, 120);
-  }, [snapToTab]);
-
-  const updateScrollState = useCallback(() => {
-    const region = regionRef.current;
-    const list = listRef.current;
-    const content = contentRef.current;
-    const endSpace = endSpaceRef.current;
-    if (!region || !list || !content || !endSpace) return;
-    const naturalWidth =
-      endSpace.getBoundingClientRect().left - content.getBoundingClientRect().left;
-    const naturalEnd = naturalWidth - list.clientWidth;
-    const finalStart = tabStarts().find((start) => start >= naturalEnd - 1);
-    endSpace.style.width = `${Math.max(0, Math.ceil((finalStart ?? naturalEnd) - naturalEnd))}px`;
-    setOverflow(content.scrollWidth > region.clientWidth + 1);
-    setListWidth(list.clientWidth);
-    setCanScrollLeft(list.scrollLeft > 1);
-    setCanScrollRight(list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
-  }, [tabStarts]);
-
-  useEffect(
-    () => () => {
-      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const region = regionRef.current;
-    const list = listRef.current;
-    const content = contentRef.current;
-    if (!region || !list || !content) return;
-    if (typeof ResizeObserver === "undefined") {
-      updateScrollState();
-      return;
-    }
-    const observer = new ResizeObserver(updateScrollState);
-    observer.observe(region);
-    observer.observe(list);
-    observer.observe(content);
-    updateScrollState();
-    return () => observer.disconnect();
-  }, [updateScrollState]);
+  useEffect(() => setMenuOpen(false), [arrangementKey, overflow]);
 
   useLayoutEffect(() => {
-    if (!activeTabId) return;
-    const list = listRef.current;
-    const active = contentRef.current?.querySelector<HTMLElement>(".session-tab-wrap.active");
-    if (!list || !active || list.clientWidth === 0) return;
-    const listRect = list.getBoundingClientRect();
-    const activeRect = active.getBoundingClientRect();
-    if (activeRect.left < listRect.left || activeRect.right > listRect.right) {
-      list.scrollLeft +=
-        activeRect.width > listRect.width
-          ? activeRect.right - listRect.right
-          : activeRect.left - listRect.left;
-    }
-    updateScrollState();
-  }, [activeTabId, arrangementKey, overflow, listWidth, updateScrollState]);
+    const region = regionRef.current;
+    if (!region) return;
+    const measure = () => setWidth(region.getBoundingClientRect().width);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(region);
+    return () => observer.disconnect();
+  }, []);
 
-  function scrollTabs(direction: -1 | 1) {
-    const list = listRef.current;
-    if (!list) return;
-    const target = list.scrollLeft + direction * Math.max(160, list.clientWidth * 0.8);
-    const starts = tabStarts().filter((start) =>
-      direction > 0 ? start > list.scrollLeft + 1 : start < list.scrollLeft - 1,
+  useLayoutEffect(() => {
+    setStart((current) => {
+      const bounded = Math.min(current, lastStart);
+      if (!activeTabId || activeIndex < 0) return bounded;
+      if (activeIndex < bounded) return activeIndex;
+      if (activeIndex >= bounded + pageSize) return Math.min(lastStart, activeIndex - pageSize + 1);
+      return bounded;
+    });
+  }, [activeTabId, activeIndex, arrangementKey, pageSize, lastStart]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !regionRef.current?.contains(event.target))
+        setMenuOpen(false);
+    };
+    const closeOnResize = () => setMenuOpen(false);
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("resize", closeOnResize);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("resize", closeOnResize);
+    };
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen || !pickerRef.current || !menuRef.current) return;
+    const anchor = pickerRef.current.getBoundingClientRect();
+    const menuWidth = Math.min(360, window.innerWidth - 16);
+    const below = window.innerHeight - anchor.bottom - 16;
+    const above = anchor.top - 16;
+    const useAbove = below < 128 && above > below;
+    const maxHeight = Math.min(480, Math.max(0, useAbove ? above : below));
+    const height = Math.min(menuRef.current.scrollHeight, maxHeight);
+    setMenuPosition({
+      left: Math.max(8, Math.min(anchor.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      top: useAbove ? Math.max(8, anchor.top - height - 8) : anchor.bottom + 8,
+      maxHeight,
+    });
+    menuRef.current.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
+    if (!menuRef.current.contains(document.activeElement))
+      menuRef.current.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [menuOpen]);
+
+  function move(direction: -1 | 1) {
+    setStart((current) =>
+      Math.max(0, Math.min(lastStart, current + direction * Math.max(1, pageSize))),
     );
-    const start =
-      direction > 0
-        ? (starts.filter((value) => value <= target).at(-1) ?? starts[0])
-        : (starts.find((value) => value >= target) ?? starts.at(-1));
-    if (start !== undefined) list.scrollLeft = start;
   }
+
+  function closeMenu() {
+    setMenuOpen(false);
+    pickerRef.current?.focus();
+  }
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !overflow) return;
+    let accumulated = 0;
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+    const wheel = (event: WheelEvent) => {
+      const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const delta =
+        raw * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? list.clientWidth : 1);
+      if (!delta) return;
+      event.preventDefault();
+      if (Math.sign(accumulated) !== Math.sign(delta)) accumulated = 0;
+      accumulated += delta;
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        accumulated = 0;
+      }, 120);
+      if (Math.abs(accumulated) < 80) return;
+      accumulated = 0;
+      setStart((current) =>
+        Math.max(0, Math.min(lastStart, current + (delta > 0 ? 1 : -1) * pageSize)),
+      );
+    };
+    list.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      list.removeEventListener("wheel", wheel);
+      clearTimeout(resetTimer);
+    };
+  }, [overflow, lastStart, pageSize]);
 
   return (
     <div className="session-tab-scroll-region" ref={regionRef}>
@@ -132,43 +153,113 @@ export function WorkspaceTabScroller({
         <button
           className="session-tab-scroll-button"
           type="button"
-          onClick={() => scrollTabs(-1)}
-          disabled={!canScrollLeft}
+          disabled={visibleStart === 0}
+          onClick={() => move(-1)}
           aria-label="Scroll terminals left"
-          title="Scroll terminals left"
+          title="Previous terminals"
         >
           <ChevronLeft size={15} />
         </button>
       )}
-      <div
-        className="session-tab-list"
-        ref={listRef}
-        data-tauri-drag-region
-        onScroll={() => {
-          updateScrollState();
-          scheduleSnap();
-        }}
-        onWheel={(event) => {
-          if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-          event.currentTarget.scrollLeft += event.deltaY;
-        }}
-      >
-        <div className="session-tab-content" ref={contentRef}>
-          {children}
-          <span className="session-tab-end-space" ref={endSpaceRef} aria-hidden="true" />
+      <div className="session-tab-list" ref={listRef} data-tauri-drag-region>
+        <div
+          className="session-tab-content"
+          data-tauri-drag-region
+          style={{ "--session-tab-width": `${tabWidth}px` } as React.CSSProperties}
+        >
+          {tabs.slice(visibleStart, visibleStart + pageSize)}
         </div>
       </div>
       {overflow && (
-        <button
-          className="session-tab-scroll-button"
-          type="button"
-          onClick={() => scrollTabs(1)}
-          disabled={!canScrollRight}
-          aria-label="Scroll terminals right"
-          title="Scroll terminals right"
+        <>
+          <button
+            className="session-tab-scroll-button"
+            type="button"
+            disabled={visibleStart === lastStart}
+            onClick={() => move(1)}
+            aria-label="Scroll terminals right"
+            title="Next terminals"
+          >
+            <ChevronRight size={15} />
+          </button>
+          <button
+            ref={pickerRef}
+            className="session-tab-scroll-button session-tab-picker"
+            type="button"
+            aria-label={menuLabel}
+            title={`${menuLabel} (${count})`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((current) => !current)}
+          >
+            <ChevronDown size={15} />
+          </button>
+        </>
+      )}
+      {overflow && menuOpen && (
+        <div
+          ref={menuRef}
+          className="session-tab-overflow-menu"
+          role="menu"
+          aria-label={menuLabel}
+          style={menuPosition}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" || event.key === "Tab") {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+              closeMenu();
+              return;
+            }
+            const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+            if (!keys.includes(event.key)) return;
+            event.preventDefault();
+            const buttons = [
+              ...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+            ];
+            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? buttons.length - 1
+                  : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                    buttons.length;
+            buttons[next]?.focus();
+          }}
         >
-          <ChevronRight size={15} />
-        </button>
+          {items.map((item, index) => (
+            <button
+              key={item.id}
+              role="menuitem"
+              type="button"
+              aria-current={item.active ? "page" : undefined}
+              onClick={() => {
+                closeMenu();
+                setStart((current) =>
+                  index < current || index >= current + pageSize
+                    ? Math.min(index, lastStart)
+                    : current,
+                );
+                item.onSelect();
+              }}
+            >
+              {item.icon && (
+                <span className="session-tab-menu-icon" aria-hidden="true">
+                  {item.icon}
+                </span>
+              )}
+              <span className="session-tab-menu-name">
+                {item.label}
+                {item.detail && <small>{item.detail}</small>}
+              </span>
+              <span className="session-tab-menu-check" aria-hidden="true">
+                {item.active && <Check size={14} />}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

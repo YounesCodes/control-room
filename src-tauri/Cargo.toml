@@ -28,7 +28,8 @@ serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-wdio = { version = "1.4", optional = true }
-tauri-plugin-updater = "2"
+# Releases use signed NSIS executables, so legacy ZIP installers are unnecessary.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 time = { version = "0.3", default-features = false }
 uuid = { version = "1", features = ["v4", "serde"] }
 wait-timeout = "0.2"

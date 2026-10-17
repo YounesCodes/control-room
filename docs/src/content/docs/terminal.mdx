@@ -4,6 +4,7 @@ description: Open SSH and local shells, split panes, and reconnect.
 ---
 
 import terminalScreenshot from "../../assets/screenshots/terminal.png";
+import terminalGroupsScreenshot from "../../assets/screenshots/terminal-groups.png";
 
 The SSH terminal uses Windows OpenSSH. Type commands as you would in any other SSH client. Local shells use the same terminal controls.
 
@@ -11,23 +12,39 @@ The SSH terminal uses Windows OpenSSH. Type commands as you would in any other S
   <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={terminalScreenshot.src}
-      alt="An SSH terminal with New terminal, search, copy, paste, and focus controls in the tab strip."
+      alt="Complete terminal tabs and the All terminals menu listing full names with the selected group marked."
     />
   </a>
-  <figcaption>An SSH terminal and its controls. Example data shown.</figcaption>
+  <figcaption>
+    All terminals lists every tab and group by its full name. Example data shown.
+  </figcaption>
 </figure>
 
 **Local terminal** starts the shell directly when only one is enabled in Settings. With several enabled, it opens a chooser. Administrator setup guidance appears only for enabled shells that support it and need Windows sudo setup. Git Bash does not need that setup.
 
-**New terminal** opens a new tab for any saved host or installed local shell. Choosing the current host again gives you a separate SSH session.
+**New terminal**, the plus and arrow button beside the tabs, opens a new tab for any saved host or installed local shell. Choosing the current host again gives you a separate SSH session.
 
-When there are more tabs than fit, scroll them with the arrow controls or mouse wheel. **New terminal** stays visible. Hover over a tab or focus it with the keyboard to show **Rename** and **Close**.
+Tabs shrink to fit within readable limits. When there are more tabs than fit, the arrow controls and mouse wheel move through complete tabs. The down arrow beside those controls opens **All terminals**, showing full names and the selected terminal. Choose any entry to reveal its tab. **New terminal** stays visible. Hover over a tab or focus it with the keyboard to show **Rename** and **Close**.
 
 Search, Copy, and Paste are in the tab strip. In a split group, they act on the selected pane. Search opens over the terminal and marks matches along its right edge. Each tab's status dot shows whether its session is connected, stopped, or failed.
 
 ## Splits and focus mode
 
-Focus mode gives the terminal more room. Use its split menu for side-by-side or top-and-bottom panes. A split group can mix SSH hosts and local shells. You can name groups and switch between them. Removing a group leaves its terminals open as regular tabs.
+Focus mode gives the terminal more room. Use its split menu for side-by-side or top-and-bottom panes. A split group can mix SSH hosts and local shells. Each group has one tab with its name and terminal count. Select it to show its panes, then use the **Panes** row or click a terminal to select where you type. Use the pencil or close button on a pane tab to rename or close that terminal. **Rename group** changes the group name. **Ungroup** asks for confirmation and leaves all its terminals open as regular tabs. Closing a pane removes only that terminal; the group remains while it has at least two panes.
+
+Drag the thin strip along the top of the tab row to move the window in Focus Mode, even when tabs overflow. A thin border surrounds the selected split terminal on all four sides.
+
+When a group's pane tabs overflow, **All panes** lists its terminals. Both lists show local shell logos and remote host OS icons beside their names. Use the arrow keys, Home, or End to move through either list, Enter to select, and Escape to close it.
+
+<figure class="docs-screenshot">
+  <a href={terminalGroupsScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={terminalGroupsScreenshot.src}
+      alt="Focus Mode with a Build and logs group tab, a pane selector row, and a thin border around the selected terminal."
+    />
+  </a>
+  <figcaption>A split group with an SSH terminal and a local shell. Example data shown.</figcaption>
+</figure>
 
 Drag the divider between terminals to change their sizes, including inside nested splits. You can also focus a divider with Tab and use the arrow keys, or hold Shift for larger steps. Double-click a divider or press Enter to reset it to equal sizes. Each group remembers its sizes across switching views and app restarts. Small windows temporarily limit pane sizes; widening the window restores your saved proportions.
 

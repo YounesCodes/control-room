@@ -61,6 +61,7 @@ import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
+import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
@@ -244,6 +245,7 @@ export function App() {
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
+  const closingWorkspaceIdsRef = useRef(new Set<string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
   const [terminalLayoutViewport, setTerminalLayoutViewport] = useState({
     width: Number.POSITIVE_INFINITY,
@@ -906,6 +908,15 @@ export function App() {
     }
   }
 
+  function confirmUngroup(group: TerminalGroup) {
+    setConfirmState({
+      title: "Ungroup terminals",
+      message: `Ungroup “${group.name}”? Its terminals will stay open as separate tabs.`,
+      confirmLabel: "Ungroup",
+      onConfirm: () => removeTerminalGroup(group.id),
+    });
+  }
+
   function openConnection(connection: SavedConnection, forceNew = false, split = false) {
     closeSettings(() => {
       if (!forceNew && !split) {
@@ -1104,8 +1115,8 @@ export function App() {
       setConfirmState({
         title: "Close workspace",
         message: local
-          ? "Stop the local shell and close this Workspace?"
-          : "Disconnect the active SSH session and close this Workspace?",
+          ? `Stop the local shell and close “${duplicateLabel(workspace)}”?`
+          : `Disconnect the SSH session and close “${duplicateLabel(workspace)}”?`,
         confirmLabel: local ? "Stop & close" : "Disconnect & close",
         danger: true,
         onConfirm: () => void performCloseWorkspace(id),
@@ -1116,8 +1127,9 @@ export function App() {
   }
 
   async function performCloseWorkspace(id: string) {
-    const workspace = workspaces.find((item) => item.id === id);
-    if (!workspace) return;
+    const workspace = workspaceStateRef.current.workspaces.find((item) => item.id === id);
+    if (!workspace || closingWorkspaceIdsRef.current.has(id)) return;
+    closingWorkspaceIdsRef.current.add(id);
     setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     // Whatever the list holds now, not what it held when the confirmation was
@@ -1133,7 +1145,11 @@ export function App() {
     const remainingGroup = previousGroup
       ? nextGroups.find((group) => group.id === previousGroup.id)
       : null;
-    const remainingSplitIds = remainingGroup ? getTerminalLayoutIds(remainingGroup.layout) : [];
+    const remainingSplitIds = remainingGroup
+      ? getTerminalLayoutIds(remainingGroup.layout)
+      : previousGroup
+        ? getTerminalLayoutIds(previousGroup.layout).filter((memberId) => memberId !== id)
+        : [];
     const closingActiveWorkspace = current.activeWorkspaceId === id;
     const keepFocusGroup = current.terminalFocusMode && previousGroup;
     const nextActive = closingActiveWorkspace
@@ -1153,6 +1169,7 @@ export function App() {
     }
     setTerminalGroups(nextGroups);
     if (!remaining.length) exitTerminalFocus();
+    closingWorkspaceIdsRef.current.delete(id);
   }
 
   function deleteConnection(connection: SavedConnection) {
@@ -1538,22 +1555,21 @@ export function App() {
         <span className="sr-only" id={`workspace-session-${workspace.id}`}>
           Terminal {terminalStateLabel(workspace)}
         </span>
-        {!grouped ? (
-          <button
-            className="session-tab-rename"
-            type="button"
-            onClick={() => renameWorkspace(workspace)}
-            aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
-            title="Rename Workspace"
-          >
-            <Pencil size={12} />
-          </button>
-        ) : null}
+        <button
+          className="session-tab-rename"
+          type="button"
+          onClick={() => renameWorkspace(workspace)}
+          aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
+          title={grouped ? `Rename terminal: ${duplicateLabel(workspace)}` : "Rename Workspace"}
+        >
+          <Pencil size={12} />
+        </button>
         <button
           className="session-tab-close"
           type="button"
           onClick={() => void closeWorkspace(workspace.id)}
           aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
+          title={`Close terminal: ${duplicateLabel(workspace)}`}
         >
           <X size={14} />
         </button>
@@ -1597,6 +1613,40 @@ export function App() {
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
   const settings = settingsContract.current;
+  const listedGroups = new Set<string>();
+  const workspaceTabOptions = workspaces.flatMap((workspace) => {
+    const group = terminalFocusMode
+      ? terminalGroupForWorkspace(terminalGroups, workspace.id)
+      : null;
+    if (group) {
+      if (listedGroups.has(group.id)) return [];
+      listedGroups.add(group.id);
+      return [
+        {
+          id: group.id,
+          label: group.name,
+          icon: <Columns2 size={17} strokeWidth={1.8} />,
+          detail: `${getTerminalLayoutIds(group.layout).length} terminals`,
+          active: activeTerminalGroup?.id === group.id && !settingsOpen,
+          onSelect: () => selectTerminalGroup(group),
+        },
+      ];
+    }
+    return [
+      {
+        id: workspace.id,
+        label: duplicateLabel(workspace),
+        icon: isLocalWorkspace(workspace) ? (
+          <LocalShellIcon kind={workspace.shell.kind} />
+        ) : (
+          workspaceMark(workspace)
+        ),
+        detail: terminalStateLabel(workspace),
+        active: workspace.id === activeWorkspaceId && !settingsOpen,
+        onSelect: () => selectWorkspaceTab(workspace),
+      },
+    ];
+  });
 
   return (
     <div
@@ -1837,6 +1887,7 @@ export function App() {
             <WorkspaceTabScroller
               activeTabId={settingsOpen ? null : activeWorkspaceId}
               arrangementKey={tabArrangementKey}
+              items={workspaceTabOptions}
             >
               {terminalFocusMode
                 ? (() => {
@@ -1851,6 +1902,20 @@ export function App() {
                         return workspace ? [workspace] : [];
                       });
                       const active = activeTerminalGroup?.id === group.id;
+                      const state = members.some((member) => member.state === "error")
+                        ? "error"
+                        : members.some((member) => member.state === "connecting")
+                          ? "connecting"
+                          : members.some((member) => member.state === "disconnected")
+                            ? "disconnected"
+                            : "connected";
+                      const activity = members.some(
+                        (member) => terminalActivity[member.id] === "bell",
+                      )
+                        ? "bell"
+                        : members.some((member) => terminalActivity[member.id])
+                          ? "output"
+                          : null;
                       return (
                         <div
                           className={active ? "session-tab-group active" : "session-tab-group"}
@@ -1864,30 +1929,31 @@ export function App() {
                               type="button"
                               onClick={() => selectTerminalGroup(group)}
                               aria-current={active ? "page" : undefined}
-                              aria-label={`Open ${group.name}, ${members.length} ${members.length === 1 ? "terminal" : "terminals"}`}
+                              aria-label={`Open ${group.name} ${members.length} ${members.length === 1 ? "terminal" : "terminals"}`}
+                              aria-describedby={`terminal-group-status-${group.id}`}
+                              title={`${group.name}: ${members.map(duplicateLabel).join(", ")}`}
                             >
                               <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
-                              <span>{group.name}</span>
-                              <small>{members.length}</small>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setRenameGroupTarget(group)}
-                              aria-label={`Rename ${group.name}`}
-                              title="Rename terminal group"
-                            >
-                              <Pencil size={11} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeTerminalGroup(group.id)}
-                              aria-label={`Delete ${group.name}; terminals stay open`}
-                              title="Delete group; terminals stay open"
-                            >
-                              <Trash2 size={11} />
+                              <span>{group.name}</span> <small>{members.length}</small>
+                              <span className={`presence presence-${state}`} aria-hidden="true" />
+                              {activity && (
+                                <span
+                                  className={`terminal-activity terminal-activity-${activity}`}
+                                  aria-label={
+                                    activity === "bell" ? "Terminal bell" : "New terminal output"
+                                  }
+                                />
+                              )}
                             </button>
                           </span>
-                          {members.map((workspace) => renderWorkspaceTab(workspace, true))}
+                          <span className="sr-only" id={`terminal-group-status-${group.id}`}>
+                            {members
+                              .map(
+                                (member) =>
+                                  `${duplicateLabel(member)}: ${terminalStateLabel(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
+                              )
+                              .join("; ")}
+                          </span>
                         </div>
                       );
                     });
@@ -1902,10 +1968,11 @@ export function App() {
                 onClick={openNewTerminalMenu}
                 disabled={!canOpenNewTerminal}
                 aria-haspopup="dialog"
+                aria-label="New terminal"
                 aria-expanded={newTerminalMenuOpen}
                 title="Open a terminal for a Saved Connection or a local shell"
               >
-                <Plus size={15} /> New terminal
+                <Plus size={16} /> <ChevronDown size={12} />
               </button>
               {newTerminalMenuOpen && (
                 <TerminalTargetMenu
@@ -1920,6 +1987,14 @@ export function App() {
                 />
               )}
             </span>
+            {terminalFocusMode && (
+              <div
+                className="session-window-drag-region"
+                data-tauri-drag-region
+                title="Drag to move window"
+                aria-hidden="true"
+              />
+            )}
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
               <div className="session-tab-actions" data-terminal-split-menu>
                 <div
@@ -2073,6 +2148,62 @@ export function App() {
                 )}
               </div>
             )}
+          </nav>
+        )}
+        {terminalFocusMode && activeTerminalGroup && !settingsOpen && (
+          <nav
+            className="session-pane-tabs"
+            aria-label={`Terminals in ${activeTerminalGroup.name}`}
+          >
+            <span className="session-pane-heading">Panes</span>
+            <WorkspaceTabScroller
+              activeTabId={activeWorkspaceId}
+              arrangementKey={tabArrangementKey}
+              menuLabel="All panes"
+              items={getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
+                const workspace = workspaces.find((item) => item.id === id);
+                return workspace
+                  ? [
+                      {
+                        id,
+                        label: duplicateLabel(workspace),
+                        icon: isLocalWorkspace(workspace) ? (
+                          <LocalShellIcon kind={workspace.shell.kind} />
+                        ) : (
+                          workspaceMark(workspace)
+                        ),
+                        detail: terminalStateLabel(workspace),
+                        active: id === activeWorkspaceId,
+                        onSelect: () => selectWorkspaceTab(workspace),
+                      },
+                    ]
+                  : [];
+              })}
+            >
+              {getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
+                const workspace = workspaces.find((item) => item.id === id);
+                return workspace ? [renderWorkspaceTab(workspace, true)] : [];
+              })}
+            </WorkspaceTabScroller>
+            <button
+              className="session-group-action"
+              type="button"
+              onClick={() => setRenameGroupTarget(activeTerminalGroup)}
+              aria-label={`Rename group ${activeTerminalGroup.name}`}
+              title="Rename terminal group"
+            >
+              <Pencil size={14} />
+              Rename group
+            </button>
+            <button
+              className="session-group-action"
+              type="button"
+              onClick={() => confirmUngroup(activeTerminalGroup)}
+              aria-label={`Ungroup ${activeTerminalGroup.name}; terminals stay open`}
+              title="Ungroup terminals; keep every terminal open"
+            >
+              Ungroup
+            </button>
           </nav>
         )}
 
