@@ -3,8 +3,8 @@
 Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Nine first-party defects were confirmed and fixed. Eight dependency families
-received compatible security updates. Third-party advisories that remain are
+Nine application defects and one native test setup issue were confirmed and
+fixed. Eight dependency families received compatible security updates. Third-party advisories that remain are
 listed separately below. This review does not establish that the repository has
 no other defects.
 
@@ -26,6 +26,7 @@ demonstrated application impact.
 | R07 | P2       | Late baseline reads can restore a comparison the user cleared or show the wrong detail | `src/pages/BaselinesPane.tsx:58`, `:87`, `:164`                                                  |
 | R08 | P2       | Linux CPU sampling counts guest time twice and uses a limited integer format           | `src-tauri/src/remote.rs:346`                                                                    |
 | R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:99`, `:165`                                                               |
+| R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
 
 ### R01: reversed history markers
 
@@ -174,6 +175,22 @@ platform-discovery allowance. Ordinary one-command inspections retain their
 constants and verifies that discovery remains pending at 30 seconds and reports
 its own timeout at 60 seconds. All nine API timeout tests pass.
 
+### R10: native rename test setup
+
+The native terminal suite passed 10 cases but failed two rename journeys because
+the helper's Rename button was no longer clickable after moving over the tab.
+Those controls depend on hover or focus. A diagnostic run at 150% Windows
+scaling found correct button geometry and hit targets, and passed with the
+extra timing introduced by the probe. This establishes timing-sensitive test
+setup; it does not establish a persistent product hit-target defect.
+
+The helper now clicks the active tab before approaching Rename. The existing
+focus-within behavior keeps its actions revealed while layout changes. The
+test still uses native clicks and checks that terminal process IDs survive the
+actions. No product CSS or interaction behavior changed, and browser hover
+coverage remains in place. All 12 native terminal cases passed after the change.
+Temporary diagnostic instrumentation was removed.
+
 ## Dependency findings and remaining work
 
 Compatible lockfile updates were applied without changing direct dependency
@@ -243,8 +260,23 @@ Focused frontend, SQLite, PowerShell pipe, ConPTY, shell-integration, updater,
 CPU-fixture, and API timeout regressions passed. Windows shell-discovery and
 Docker command fixtures passed. The checkout's pre-commit and pre-push hooks run
 `test:local-gate`, including static checks, frontend/Rust/browser suites, live
-Linux SSH checks, the native desktop build, and live SSH desktop tests. Final
-gate counts and delivery results are recorded in the PR and handoff.
+Linux SSH checks, the native desktop build, and live SSH desktop tests. The
+completed application-fix gate passed with the following results:
+
+| Validation                                               | Result                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| Frontend unit/component tests                            | 578 passed across 70 files                             |
+| Rust tests                                               | 276 passed; 11 opt-in tests ignored in the default run |
+| Browser/accessibility tests                              | 98 passed across 10 files                              |
+| Live Linux SSH Rust integration tests                    | 4 passed, explicitly running opt-in tests              |
+| Live Linux SSH desktop journeys                          | 9 passed                                               |
+| Dedicated native terminal/workspace suite                | 12 passed after R10                                    |
+| Formatting, lint, TypeScript/Vite build, Rust fmt/clippy | Passed                                                 |
+| Windows native desktop test build                        | Passed                                                 |
+
+The remaining opt-in tests and platform limits are not represented as passing.
+Git hooks enforce the gate again for the final test-helper commit and push;
+delivery results are recorded in the PR and handoff.
 
 The docs check passed with zero errors, warnings, or hints, and the updated docs
 lockfile built all 24 static pages successfully.
