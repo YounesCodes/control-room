@@ -20,6 +20,9 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+#[path = "updater_network.rs"]
+mod network;
+
 use crate::database::Database;
 
 /// Long enough for a slow link, short enough that a hung endpoint never becomes
@@ -99,7 +102,11 @@ impl UpdateFailure {
         let kind = match error {
             tauri_plugin_updater::Error::Minisign(_)
             | tauri_plugin_updater::Error::Base64(_)
-            | tauri_plugin_updater::Error::SignatureUtf8(_) => UpdateFailureKind::Signature,
+            | tauri_plugin_updater::Error::SignatureUtf8(_)
+            | tauri_plugin_updater::Error::MissingSignedVersion
+            | tauri_plugin_updater::Error::SignedVersionMismatch { .. } => {
+                UpdateFailureKind::Signature
+            }
             _ => UpdateFailureKind::Download,
         };
         Self::new(kind, describe(&error))
@@ -116,9 +123,11 @@ fn describe(error: &tauri_plugin_updater::Error) -> String {
         Error::TargetNotFound(_) | Error::TargetsNotFound(_) => {
             "That release has no package for this platform.".into()
         }
-        Error::Minisign(_) | Error::Base64(_) | Error::SignatureUtf8(_) => {
-            "The update signature did not verify.".into()
-        }
+        Error::Minisign(_)
+        | Error::Base64(_)
+        | Error::SignatureUtf8(_)
+        | Error::MissingSignedVersion
+        | Error::SignedVersionMismatch { .. } => "The update signature did not verify.".into(),
         Error::Reqwest(_) | Error::Network(_) | Error::Io(_) => {
             "Could not reach the update endpoint.".into()
         }
@@ -276,8 +285,7 @@ async fn run_check(app: &AppHandle) -> Result<Option<Update>, UpdateFailure> {
         .timeout(CHECK_TIMEOUT)
         .build()
         .map_err(|error| UpdateFailure::new(UpdateFailureKind::Check, describe(&error)))?;
-    updater
-        .check()
+    network::check_with_download_timeout(updater, network::DOWNLOAD_TIMEOUT)
         .await
         .map_err(|error| UpdateFailure::new(UpdateFailureKind::Check, describe(&error)))
 }
@@ -523,6 +531,17 @@ mod tests {
 
         let failure = UpdateFailure::from_download(tauri_plugin_updater::Error::ReleaseNotFound);
         assert_eq!(failure.kind, UpdateFailureKind::Download);
+        for error in [
+            tauri_plugin_updater::Error::MissingSignedVersion,
+            tauri_plugin_updater::Error::SignedVersionMismatch {
+                signed: "1.0.0".into(),
+                announced: "9.9.9".into(),
+            },
+        ] {
+            let failure = UpdateFailure::from_download(error);
+            assert_eq!(failure.kind, UpdateFailureKind::Signature);
+            assert_eq!(failure.message, "The update signature did not verify.");
+        }
     }
 
     fn notice(version: &str) -> String {

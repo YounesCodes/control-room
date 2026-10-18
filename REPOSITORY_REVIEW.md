@@ -4,7 +4,7 @@ Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
 Dependency and input-order follow-up: 2026-10-18.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Eleven application defects, one release-verification defect, and seven test setup
+Thirteen application defects, one release-verification defect, and seven test setup
 issues were confirmed and fixed. Eight dependency families received compatible security updates. Follow-up
 work upgrades the desktop test stack, patches the docs selector parser, and
 replaces the unmaintained font parser. Upstream platform warnings are listed
@@ -21,7 +21,7 @@ demonstrated application impact.
 | ID  | Priority | Finding                                                                                | Exact location in this branch                                                                    |
 | --- | -------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | R01 | P1       | Reversed history markers can remove unrelated shell configuration                      | `src-tauri/src/history.rs:12`, `:125`, `:147`                                                    |
-| R02 | P1       | Update checks can replace the release during a download                                | `src-tauri/src/updater.rs:154`, `:202`; `src/hooks/use-app-updater.ts:59`                        |
+| R02 | P1       | Update checks can replace the release during a download                                | `src-tauri/src/updater.rs:163`, `:185`; `src/hooks/use-app-updater.ts:59`                        |
 | R03 | P1       | Sending SSH input can block before the timeout starts                                  | `src-tauri/src/remote.rs:947`, `:1041`                                                           |
 | R04 | P1       | Unicode log trimming repeatedly encodes the same large string                          | `src/lib/log-buffer.ts:93`                                                                       |
 | R12 | P1       | Concurrent terminal input requests can execute out of order                            | `src/lib/api.ts:67`                                                                              |
@@ -32,6 +32,8 @@ demonstrated application impact.
 | R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:115`, `:180`                                                              |
 | R18 | P2       | Reinstalling a font leaks an extra Windows font resource reference                     | `src-tauri/src/fonts.rs:475`, `:481`                                                             |
 | R19 | P2       | Release signature verification accepts metadata the actual updater rejects             | `scripts/verify-updater-signature.mjs:28`, `:108`                                                |
+| R20 | P2       | A stalled updater download has no deadline and blocks subsequent update operations     | `src-tauri/src/updater.rs:282`; `src-tauri/src/updater_network.rs:9`                             |
+| R21 | P2       | A modified update feed can replay a legacy signed installer under a newer version      | `src-tauri/tauri.conf.json:33`; `src-tauri/src/updater.rs:101`                                   |
 | R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
 | R11 | P2       | Scratchpad deletion test assumes autosave cannot finish during its clicks              | `src/pages/ScratchpadPane.test.tsx:77`                                                           |
 | R13 | P2       | Offline native fixtures try to use a workspace before completing shell selection       | `e2e/helpers.ts:139`; `e2e/layout.spec.ts:77`; `e2e/local-data.spec.ts:25`                       |
@@ -72,7 +74,8 @@ evidence that unsigned executables could be installed.
 Validation: 11 updater Rust tests passed, including the new overlap regression.
 Frontend tests verify that two immediate download requests and a concurrent
 manual check produce only one download and preserve its completed state.
-No real application update was installed during review.
+The updater's native installer handoff was subsequently exercised with an isolated
+signed NSIS fixture, described under R20/R21. The user's installed app was not replaced.
 
 ### R03: SSH input outside the deadline
 
@@ -313,9 +316,14 @@ passed against Ubuntu 24.04, Fedora 42, Alpine 3.21, Arch base, openSUSE Leap
 15.6, and Amazon Linux 2 using Docker over SSH to the existing fixture. Each
 container was temporary and used `--rm`; local Docker Desktop was not started.
 
-Amazon Linux 2023 was attempted but could not start because the fixture's
-virtual CPU lacks x86-64-v2 support. That image is not counted as passing, and
-no virtual-machine hardware was changed to bypass the limitation.
+Amazon Linux 2023 could not start on the fixture's older virtual CPU. The
+official image's filesystem was subsequently exported and its actual capability
+command passed inside a temporary WSL chroot on a CPU supporting x86-64-v2.
+Assertions checked `amzn`, version `2023`, uptime, and the default shell.
+The child had private mount/PID/network namespaces; its mounts, filesystem, and
+temporary Docker container were removed. No VM hardware or Docker Desktop state
+was changed. This validates the AL2023 userland probe, not an AL2023 kernel or
+full service-management session.
 
 ### R18: repeated native font registration leaks a resource
 
@@ -353,6 +361,51 @@ API asset URL was downloaded with `Accept: application/octet-stream`, matching
 the updater plugin; omitting that header returns JSON asset metadata.
 Its SHA-256 also matches both the published checksum file and GitHub asset
 digest. No downloaded installer was executed.
+
+### R20: updater downloads have no deadline
+
+The twelve-second timeout configured by `run_check` only bounds the manifest
+request. In the current updater plugin, `check()` explicitly creates returned
+updates with `timeout: None`. A server that sends part of an installer and then
+stalls can therefore keep `download_update` pending indefinitely, leaving other
+update operations blocked. The initial hypothesis that the short check timeout
+was inherited by downloads was disproved by the actual HTTP test and plugin code.
+
+`updater_network.rs` now assigns a separate five-minute deadline to the returned
+update. A loopback HTTP regression sends one byte then stalls: without this
+assignment the transfer succeeds after the test deadline, reproducing the missing
+bound; with it the real plugin reports a timeout. Separate cases verify that a
+healthy download may outlive the check deadline and that stalled manifest reads
+retain their shorter deadline. Tests use short injected limits rather than
+waiting five minutes.
+
+### R21: legacy update signatures permit rollback through a modified feed
+
+An attacker controlling the update feed could announce a high version number
+while serving an older validly signed installer whose trusted comment contained
+no version. The default plugin policy accepts that legacy signature. This does
+not let an attacker sign arbitrary code, but bypasses the application's intended
+upgrade-only policy and can restore an outdated signed build. A real loopback
+HTTP/Minisign test reproduced acceptance of this combination before the fix.
+
+The production configuration now requires a signed version. The already-published
+v0.8.6 signature contains `version:0.8.6` and passes the stricter verifier.
+Missing/mismatched version errors are classified as signature failures. The
+release verifier checks the authenticated version against the configured build;
+the release workflow invokes it on the actual installer, and the signing probe
+now signs with `--app-version`. Regression tests reject both legacy signatures
+and signatures for another version, and guard production HTTPS/trust settings.
+
+`npm run test:updater-install` also builds a harmless NSIS package, signs it with a
+disposable in-memory key, and exercises real HTTP download, Minisign verification,
+Windows installer launch, and process exit in a child test. It successfully
+replaced a text fixture in an owned temporary directory and verified `/P`,
+`/UPDATE`, and `/R` arguments. The package writes no registry entries or shortcuts
+and launches no app. Its installer, installed files, and public fixture were
+removed afterward; no signing private key was written to disk. Integration-test
+binaries link Tauri's existing Common Controls manifest so the mock App can load
+on Windows. This covers the plugin's actual installation handoff without
+replacing the user's installed Control Room or publishing a release.
 
 ## Dependency findings and remaining work
 
@@ -451,24 +504,25 @@ Docker command fixtures passed. The checkout's pre-commit and pre-push hooks run
 Linux SSH checks, the native desktop build, and live SSH desktop tests. The
 completed application-fix gate passed with the following results:
 
-| Validation                                               | Result                                                 |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| Frontend unit/component/tooling tests                    | 591 passed across 73 files                             |
-| Rust tests                                               | 278 passed; 12 opt-in tests ignored in the default run |
-| Browser/accessibility tests                              | 98 passed across 10 files                              |
-| Live Linux SSH Rust integration tests                    | 5 passed, explicitly running opt-in tests              |
-| Live Windows SSH inspection and shell selection          | 2 passed against the user-selected Gaming PC           |
-| Public font catalog/download and native installation     | 2 passed, including explicit registry/file cleanup     |
-| Git Bash/OpenCode terminal recovery                      | 2 passed for Ctrl+C and slash-command exit             |
-| Docker distribution probe                                | 1 passed across six distribution families              |
-| Live Linux SSH desktop journeys                          | 9 passed                                               |
-| Dedicated native terminal/workspace suite                | 12 passed with WDIO 10 and ordered terminal input      |
-| Broader native desktop suite                             | 38 passed across eight specs, including Windows WSL    |
-| Published updater package                                | v0.8.6 download and both signatures verified read-only |
-| Formatting, lint, TypeScript/Vite build, Rust fmt/clippy | Passed                                                 |
-| Windows native desktop test build                        | Passed                                                 |
+| Validation                                               | Result                                                           |
+| -------------------------------------------------------- | ---------------------------------------------------------------- |
+| Frontend unit/component/tooling tests                    | 593 passed across 73 files                                       |
+| Rust tests                                               | 278 unit and 6 integration passed; 13 opt-in excluded by default |
+| Browser/accessibility tests                              | 98 passed across 10 files                                        |
+| Live Linux SSH Rust integration tests                    | 5 passed, explicitly running opt-in tests                        |
+| Live Windows SSH inspection and shell selection          | 2 passed against the user-selected Gaming PC                     |
+| Public font catalog/download and native installation     | 2 passed, including explicit registry/file cleanup               |
+| Git Bash/OpenCode terminal recovery                      | 2 passed for Ctrl+C and slash-command exit                       |
+| Docker distribution probe                                | 1 passed across six distribution families                        |
+| Live Linux SSH desktop journeys                          | 9 passed                                                         |
+| Dedicated native terminal/workspace suite                | 12 passed with WDIO 10 and ordered terminal input                |
+| Broader native desktop suite                             | 38 passed across eight specs, including Windows WSL              |
+| Published updater package                                | v0.8.6 download and both signatures verified read-only           |
+| Isolated signed NSIS updater installation                | Passed; fixture replaced, arguments checked, files removed       |
+| Formatting, lint, TypeScript/Vite build, Rust fmt/clippy | Passed                                                           |
+| Windows native desktop test build                        | Passed                                                           |
 
-All 12 opt-in Rust tests have now been explicitly exercised during this review;
+All 13 opt-in Rust tests have now been explicitly exercised during this review;
 they remain ignored in the default suite because they require external fixtures
 or public services. Hardware/platform limits are not represented as passing.
 The broader desktop result combines the five initially passing specs with
@@ -483,8 +537,9 @@ lockfile built all 24 static pages successfully. All 38 docs browser checks
 passed. The Windows release build produced an NSIS installer with the new font
 parser, final input-order change, and font resource fix.
 
-No real in-place updater installation was performed. The actual published
-installer was downloaded through the feed and verified with the committed key.
+The actual published installer was downloaded through the feed and verified with
+the committed key and its signed version. It was not installed over the user's
+app. A real isolated signed NSIS installation passed as described under R21.
 The font suite downloaded and installed real catalog regular/bold fonts under
 temporary registration names, verified their registry paths, then explicitly
 removed the registrations and files. No permanent font installation was left.
@@ -495,8 +550,9 @@ both existing Windows SSH tests passed. They verified 60 listening sockets,
 PowerShell selection without a second discovery round trip.
 Five Windows desktop journeys passed with real PowerShell, Command Prompt,
 and WSL sessions. Both ignored OpenCode recovery cases and the six-family Docker
-matrix passed. Amazon Linux 2023 could not run under the fixture's CPU model;
-Amazon Linux 2 passed. Every possible network failure/interleaving was not
+matrix passed. Amazon Linux 2023's userland capability probe also passed under
+isolated WSL namespaces; the original VM's CPU limit remains unchanged.
+Every possible network failure/interleaving was not
 independently exercised by this review.
 No claim of complete security, race freedom, or universal OS compatibility is
 made. Local audit snapshots and reproduction output are in ignored

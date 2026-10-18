@@ -19,7 +19,7 @@ afterEach(() => {
   }
 });
 
-function fixture(algorithm = "ED") {
+function fixture(algorithm = "ED", version = "1.0.0") {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const id = Buffer.from("0102030405060708", "hex");
   const rawKey = publicKey.export({ type: "spki", format: "der" }).subarray(-32);
@@ -27,7 +27,7 @@ function fixture(algorithm = "ED") {
   const message =
     algorithm === "ED" ? createHash("blake2b512").update(contents).digest() : contents;
   const signature = sign(null, message, privateKey);
-  const comment = "timestamp:123456 file:installer.exe";
+  const comment = "timestamp:123456\tfile:installer.exe" + (version ? `\tversion:${version}` : "");
   const lines = [
     "untrusted comment: fixture",
     Buffer.concat([Buffer.from(algorithm), id, signature]).toString("base64"),
@@ -46,7 +46,10 @@ function run(input, signatureText = Buffer.from(input.lines.join("\n") + "\n").t
   mkdirSync(join(directory, "src-tauri"));
   writeFileSync(
     join(directory, "src-tauri/tauri.conf.json"),
-    JSON.stringify({ plugins: { updater: { pubkey: input.key } } }),
+    JSON.stringify({
+      version: "1.0.0",
+      plugins: { updater: { pubkey: input.key, requireSignedVersion: true } },
+    }),
   );
   writeFileSync(join(directory, "installer.exe"), input.contents);
   writeFileSync(join(directory, "installer.exe.sig"), signatureText);
@@ -87,5 +90,11 @@ describe("updater release signature verification", () => {
     const input = fixture();
     const encoded = Buffer.from(input.lines.join("\n") + "\n").toString("base64");
     expect(run(input, "!" + encoded).status).toBe(1);
+  });
+  it("rejects a valid legacy signature with no signed version", () => {
+    expect(run(fixture("ED", null)).status).toBe(1);
+  });
+  it("rejects a valid signature for a different version", () => {
+    expect(run(fixture("ED", "0.9.0")).status).toBe(1);
   });
 });

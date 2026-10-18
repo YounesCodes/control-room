@@ -113,5 +113,17 @@ if (!verify(null, globalMessage, publicKey, globalSignature)) {
   fail("the trusted comment or global signature does not verify against the committed public key");
 }
 
+const signedVersion = signatureLines[2]
+  .slice("trusted comment: ".length)
+  .split("\t")
+  .find((field) => field.startsWith("version:"))
+  ?.slice("version:".length);
+if (config.plugins.updater.requireSignedVersion && !signedVersion) {
+  fail("the signature does not bind the installer to a version");
+}
+if (signedVersion && signedVersion.replace(/^v/, "") !== config.version?.replace(/^v/, "")) {
+  fail("the signed installer version does not match src-tauri/tauri.conf.json");
+}
+
 console.log("OK    signature verifies against the public key in src-tauri/tauri.conf.json");
 console.log(`      key id ${publicKeyId.toString("hex")}, algorithm ${algorithm}`);
