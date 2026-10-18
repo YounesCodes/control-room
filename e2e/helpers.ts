@@ -134,6 +134,26 @@ export async function connectionMenu(name: string) {
   await button.click();
 }
 
+// Offline fixtures cannot discover a platform. Complete the explicit Linux
+// fallback before testing local workspace data or layout.
+export async function openOfflineConnection(name: string, forceNew = false) {
+  if (forceNew) {
+    await $("aria/New terminal").click();
+    await $(".new-terminal-menu").$(`button*=${name}`).click();
+  } else {
+    await $(`.host-main*=${name}`).click();
+  }
+  const dialog = $("[role=dialog]");
+  if (await dialog.isExisting()) {
+    await expect(dialog.$("h2")).toHaveText(`Connect to ${name}`);
+    const fallback = dialog.$("button=Connect as Linux host");
+    await fallback.waitForDisplayed({ timeout: 30_000 });
+    await fallback.click();
+    await dialog.waitForExist({ reverse: true });
+  }
+  await $("nav[aria-label='Workspace features']").waitForDisplayed();
+}
+
 export async function openLocal() {
   const launcher = $("button=Local terminal");
   if (await launcher.isDisplayed()) {

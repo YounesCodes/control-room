@@ -4,7 +4,7 @@ Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
 Dependency and input-order follow-up: 2026-10-18.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Ten application defects and two test setup issues were confirmed and
+Ten application defects and four test setup issues were confirmed and
 fixed. Eight dependency families received compatible security updates. Follow-up
 work upgrades the desktop test stack, patches the docs selector parser, and
 replaces the unmaintained font parser. Upstream platform warnings are listed
@@ -32,6 +32,8 @@ demonstrated application impact.
 | R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:115`, `:180`                                                              |
 | R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
 | R11 | P2       | Scratchpad deletion test assumes autosave cannot finish during its clicks              | `src/pages/ScratchpadPane.test.tsx:77`                                                           |
+| R13 | P2       | Offline native fixtures try to use a workspace before completing shell selection       | `e2e/helpers.ts:139`; `e2e/layout.spec.ts:77`; `e2e/local-data.spec.ts:25`                       |
+| R14 | P2       | Windows native shell tests use ambiguous selectors and silently pass unconfigured WSL  | `e2e/windows-ssh.spec.ts:25`, `:33`, `:86`                                                       |
 
 ### R01: reversed history markers
 
@@ -236,6 +238,41 @@ terminal/API tests pass after the fix. All 12 native terminal/workspace cases
 passed using the rebuilt app and WebdriverIO 10, including the previously
 failing horizontal split input case.
 
+### R13: offline native fixtures stop at shell selection
+
+The broader native run failed two layout tests and all four local-data tests.
+Their offline SSH fixtures selected a saved connection but never completed the
+shell discovery error dialog. Captured native DOM showed that no workspace had
+opened, so feature navigation and New terminal were correctly unavailable.
+The Scratchpad sizing test already chose the explicit Linux fallback; the other
+fixtures had not followed the same contract.
+
+The offline helper now completes that dialog through its visible Linux fallback,
+then waits for workspace navigation. Reopening an existing workspace reuses it;
+opening another terminal explicitly uses New terminal and completes discovery
+again. The affected tests retain their native resizing, SQLite persistence,
+Scratchpad, history, and unrelated-session survival assertions. Production
+connection behavior is unchanged. All four layout and four local-data native
+tests passed after the correction.
+
+### R14: Windows native test compatibility and skipped coverage
+
+WebdriverIO 10 rejects ambiguous single-element selectors. All four configured
+Windows journeys stopped at `input[name='remote-shell']`, which matched three
+available shells. The accessible-name selector also matched radio controls and
+their surrounding labels. They now wait for the unique checked shell option and
+select the requested profile's radio input by its ID. Strict selection remains
+enabled.
+
+The WSL journey previously returned successfully without assertions when no test
+distribution was configured. It now calls Mocha's skip operation, so an absent
+fixture is reported as pending instead of passing. WSL was excluded from the
+first broad run and is explicitly skipped in the corrected Windows run.
+All four configured Windows desktop journeys then passed against Gaming PC,
+including PowerShell identity, missing Docker handling, Command Prompt exit and
+reconnection, and ports/services/header metrics. WSL is reported as one skipped
+test.
+
 ## Dependency findings and remaining work
 
 Compatible lockfile updates were applied without changing direct dependency
@@ -335,17 +372,22 @@ completed application-fix gate passed with the following results:
 | Public font catalog/download integration                 | 1 passed for regular/bold and Latin/Cyrillic glyphs    |
 | Live Linux SSH desktop journeys                          | 9 passed                                               |
 | Dedicated native terminal/workspace suite                | 12 passed with WDIO 10 and ordered terminal input      |
+| Broader native desktop suite                             | 37 passed across eight specs; WSL explicitly skipped   |
 | Formatting, lint, TypeScript/Vite build, Rust fmt/clippy | Passed                                                 |
 | Windows native desktop test build                        | Passed                                                 |
 
 The remaining opt-in tests and platform limits are not represented as passing.
+The broader desktop result combines the five initially passing specs with
+focused reruns of corrected layout, local-data, and Windows-shell specs. The
+initial failures and their test setup corrections are recorded in R13 and R14;
+unchanged passing specs were not rerun without cause.
 Git hooks enforce the gate again for the final test changes and push;
 delivery results are recorded in the PR and handoff.
 
 The docs check passed with zero errors, warnings, or hints, and the updated docs
 lockfile built all 24 static pages successfully. All 38 docs browser checks
 passed. The Windows release build produced an NSIS installer with the new font
-parser; the final input-order change also receives a rebuilt native app.
+parser and final input-order change.
 
 No real updater installation or end-to-end catalog font installation was
 performed. The Rust suite exercised reversible native font registration with a
@@ -354,6 +396,8 @@ timed out while Tailscale was unavailable. After the user made it reachable,
 both existing Windows SSH tests passed. They verified 60 listening sockets,
 295 services, connection/firewall/resource evidence, shell discovery, and cached
 PowerShell selection without a second discovery round trip.
+Four Windows desktop journeys also passed with real PowerShell and Command
+Prompt sessions. No WSL test distribution was configured.
 The optional Docker distribution matrix and every possible network
 failure/interleaving were not independently exercised by this review.
 No claim of complete security, race freedom, or universal OS compatibility is

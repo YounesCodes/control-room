@@ -22,7 +22,7 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
       process.env.CONTROL_ROOM_WINDOWS_TEST_PORT || "22",
     );
     await $(".host-main*=Windows test host").click();
-    await $("input[name='remote-shell']").waitForExist({ timeout: 60_000 });
+    await $("input[name='remote-shell']:checked").waitForExist({ timeout: 60_000 });
     const catalog = await ipc<RemoteShellCatalog>("discover_remote_shells", {
       connectionId: saved.id,
     });
@@ -30,7 +30,7 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     const profile = catalog.shells.find((shell) => shell.id === shellId);
     if (!profile) throw new Error(`Expected test shell ${shellId} is not available`);
     await $("[role=dialog]")
-      .$("aria/" + profile.label)
+      .$(`input[name="remote-shell"][value=${JSON.stringify(profile.id)}]`)
       .click();
     await $("[role=dialog]").$("button=Connect").click();
     await browser.waitUntil(
@@ -81,9 +81,9 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     await terminalCommand("echo CMD_RECONNECTED_OK", "CMD_RECONNECTED_OK");
     expect((await runtime()).sessionIds[0]).not.toBe(old);
   });
-  it("opens the selected WSL distribution and preserves it across an app restart", async () => {
+  it("opens the selected WSL distribution and preserves it across an app restart", async function () {
     const distribution = process.env.CONTROL_ROOM_WINDOWS_TEST_WSL;
-    if (!distribution) return;
+    if (!distribution) this.skip();
     await connect(`wsl:${distribution}`);
     await terminalCommand("printf 'WSL_%s\\n' SSH_OK", "WSL_SSH_OK");
     await browser.pause(600);

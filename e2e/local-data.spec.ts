@@ -6,6 +6,7 @@ import {
   feature,
   ipc,
   openLocal,
+  openOfflineConnection,
   restartApp,
   runtime,
   terminalCommand,
@@ -21,20 +22,20 @@ describe("Local data in remote Workspaces", () => {
   it("isolates connection notes, shares the global note, and restores SQLite after restart", async () => {
     const first = await addConnection("First offline host");
     await addConnection("Second offline host");
-    await $(".host-main*=First offline host").click();
+    await openOfflineConnection("First offline host");
     await feature("Scratchpad");
     await note("First connection note");
     await $("aria/Global note for all connections").click();
     await $("textarea[aria-label='Global note']").setValue("Shared global note");
     await expect($(".scratchpad-save-state")).toHaveText("Saved locally");
-    await $(".host-main*=Second offline host").click();
+    await openOfflineConnection("Second offline host");
     await feature("Scratchpad");
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("");
     await note("Second connection note");
     await $("aria/Global note for all connections").click();
     await expect($("textarea[aria-label='Global note']")).toHaveValue("Shared global note");
     await restartApp();
-    await $(".host-main*=First offline host").click();
+    await openOfflineConnection("First offline host");
     await feature("Scratchpad");
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("First connection note");
     expect(
@@ -50,7 +51,7 @@ describe("Local data in remote Workspaces", () => {
 
   it("undoes clear, cancels note deletion and deletes only the selected connection's data", async () => {
     await addConnection("Note owner");
-    await $(".host-main*=Note owner").click();
+    await openOfflineConnection("Note owner");
     await feature("Scratchpad");
     await note("Keep this note");
     await $("button=Clear text").click();
@@ -79,7 +80,7 @@ describe("Local data in remote Workspaces", () => {
       shell: "bash",
     };
     const entry = await ipc<HistoryEntry>("add_history_entry", { input });
-    await $(".host-main*=History owner").click();
+    await openOfflineConnection("History owner");
     await feature("History");
     await expect($("code=printf HISTORY_FIXTURE")).toBeDisplayed();
     await $("input[placeholder='Search commands']").setValue("missing");
@@ -107,9 +108,8 @@ describe("Local data in remote Workspaces", () => {
 
   it("deletes every Workspace of a connection and keeps an unrelated local terminal running", async () => {
     const deleted = await addConnection("Deleted host");
-    await $(".host-main*=Deleted host").click();
-    await $("button=New terminal").click();
-    await $(".new-terminal-menu").$("button*=Deleted host").click();
+    await openOfflineConnection("Deleted host");
+    await openOfflineConnection("Deleted host", true);
     expect(await $$(".session-tab-main*=Deleted host")).toHaveLength(2);
     const existingSessions = (await runtime()).sessionIds;
     await openLocal();
