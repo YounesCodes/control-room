@@ -7,7 +7,15 @@ use super::{capability_command, distribution_family, parse_key_values};
 fn docker_images_report_expected_distribution_families() {
     let matrix = std::env::var("CONTROL_ROOM_DOCKER_IMAGES")
         .expect("CONTROL_ROOM_DOCKER_IMAGES=image=family,... is required");
-    for entry in matrix.split(',').filter(|entry| !entry.trim().is_empty()) {
+    let entries = matrix
+        .split(',')
+        .filter(|entry| !entry.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert!(
+        !entries.is_empty(),
+        "Docker matrix must contain at least one image=family entry"
+    );
+    for entry in entries {
         let (image, expected_family) = entry
             .split_once('=')
             .expect("each Docker matrix entry must be image=family");

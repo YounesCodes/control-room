@@ -4084,7 +4084,10 @@ esac
         let resources = collect_host_resources(&connection).unwrap();
         assert!(resources.memory_total_kib.is_some());
         let _filesystems = list_filesystems(&connection).unwrap();
-        let _firewall = list_firewall(&connection, Elevation::None).unwrap();
+        match list_firewall(&connection, Elevation::None) {
+            Ok(firewall) => assert!(!firewall.available || firewall.active.is_some()),
+            Err(error) => assert!(error.to_ascii_lowercase().contains("permission"), "{error}"),
+        }
         if capabilities.systemd_available {
             let services = list_services(&connection).unwrap();
             assert!(!services.is_empty());

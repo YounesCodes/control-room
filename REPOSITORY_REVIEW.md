@@ -4,8 +4,8 @@ Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
 Dependency and input-order follow-up: 2026-10-18.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Ten application defects and four test setup issues were confirmed and
-fixed. Eight dependency families received compatible security updates. Follow-up
+Eleven application defects, one release-verification defect, and seven test setup
+issues were confirmed and fixed. Eight dependency families received compatible security updates. Follow-up
 work upgrades the desktop test stack, patches the docs selector parser, and
 replaces the unmaintained font parser. Upstream platform warnings are listed
 separately below. This review does not establish that the repository has
@@ -30,10 +30,15 @@ demonstrated application impact.
 | R07 | P2       | Late baseline reads can restore a comparison the user cleared or show the wrong detail | `src/pages/BaselinesPane.tsx:58`, `:87`, `:164`                                                  |
 | R08 | P2       | Linux CPU sampling counts guest time twice and uses a limited integer format           | `src-tauri/src/remote.rs:346`                                                                    |
 | R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:115`, `:180`                                                              |
+| R18 | P2       | Reinstalling a font leaks an extra Windows font resource reference                     | `src-tauri/src/fonts.rs:475`, `:481`                                                             |
+| R19 | P2       | Release signature verification accepts metadata the actual updater rejects             | `scripts/verify-updater-signature.mjs:28`, `:108`                                                |
 | R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
 | R11 | P2       | Scratchpad deletion test assumes autosave cannot finish during its clicks              | `src/pages/ScratchpadPane.test.tsx:77`                                                           |
 | R13 | P2       | Offline native fixtures try to use a workspace before completing shell selection       | `e2e/helpers.ts:139`; `e2e/layout.spec.ts:77`; `e2e/local-data.spec.ts:25`                       |
 | R14 | P2       | Windows native shell tests use ambiguous selectors and silently pass unconfigured WSL  | `e2e/windows-ssh.spec.ts:25`, `:33`, `:86`                                                       |
+| R15 | P2       | New font regression fails CI's newer Clippy despite passing the local toolchain        | `src-tauri/src/fonts.rs:872`, `:886`                                                             |
+| R16 | P2       | Generic Linux fixture test assumes an unprivileged account can read firewall rules     | `src-tauri/src/remote.rs:4087`                                                                   |
+| R17 | P2       | An empty Docker distribution matrix reports a passing integration test                 | `src-tauri/src/remote_distro_matrix_tests.rs:11`                                                 |
 
 ### R01: reversed history markers
 
@@ -273,6 +278,82 @@ including PowerShell identity, missing Docker handling, Command Prompt exit and
 reconnection, and ports/services/header metrics. WSL is reported as one skipped
 test.
 
+The final verification pass discovered Ubuntu 24.04 in WSL on the same host and
+ran that journey explicitly. WSL launch and restoration across a native app
+restart passed. The earlier skip is no longer an untested coverage gap.
+
+### R15: CI Clippy incompatibility
+
+The pushed commit passed local Clippy 1.93 but failed CI's Clippy 1.99.1 at the
+two constant-size chunk iterators added in the malformed-font regression. CI
+rejects these under `-D warnings`. The fixture now uses typed `as_chunks` and
+`as_chunks_mut` iterators, as requested by that diagnostic. The font assertions
+are unchanged. Local font tests pass; the updated commit must also pass the
+current CI toolchain before handoff.
+
+### R16: fixture firewall permission assumption
+
+The previously unrun generic Linux fixture test unconditionally unwrapped the
+firewall read under `Elevation::None`. Against the configured non-root Ubuntu
+account, the real executor returned `Permission denied: ERROR: You need to be
+root to run this script`, and the test failed. The dedicated Ubuntu fixture
+already handled this expected outcome.
+
+The generic test now accepts a classified permission failure and still rejects
+other failures. Successful firewall reads must include an active state when a
+firewall is available. The corrected live test passed with ports and OS identity
+assertions enabled. No privilege was added and no firewall rules were changed.
+
+### R17: empty Docker matrix false pass
+
+With `CONTROL_ROOM_DOCKER_IMAGES=' , '`, the ignored matrix test ran one test and
+reported success without starting a container. It now requires at least one
+image/family pair. The same empty input is explicitly rejected. The real matrix
+passed against Ubuntu 24.04, Fedora 42, Alpine 3.21, Arch base, openSUSE Leap
+15.6, and Amazon Linux 2 using Docker over SSH to the existing fixture. Each
+container was temporary and used `--rm`; local Docker Desktop was not started.
+
+Amazon Linux 2023 was attempted but could not start because the fixture's
+virtual CPU lacks x86-64-v2 support. That image is not counted as passing, and
+no virtual-machine hardware was changed to bypass the limitation.
+
+### R18: repeated native font registration leaks a resource
+
+The installer returned `false` for an existing identical registry entry but
+still called `AddFontResourceExW`. Each reinstall added another public GDI
+reference that its rollback bookkeeping did not own. One unregister therefore
+left the font loaded, potentially retaining its file until further removal or
+sign-out. Microsoft's [resource-removal documentation](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-removefontresourceexw)
+describes these reference counts.
+
+Existing matching registrations now return without adding another reference.
+New registrations retain validation, error rollback, and notifications. A native
+regression registered the same temporary font twice, removed it once, then
+checked the remaining resource count. Before the fix it returned 1; after the
+fix it returns 0. All 17 font tests passed, including real regular/bold catalog
+downloads, native installation under unique temporary registration names,
+registry/path verification, and explicit removal of those entries and files.
+
+### R19: incomplete release signature verification
+
+The release verifier checked the installer-byte signature but ignored Minisign's
+second signature over the trusted comment and payload signature. It also used
+Node's permissive base64 decoder without checking the result. Consequently the
+gate approved altered comments, altered global signatures, incomplete signature
+containers, and invalid base64 that the updater's actual Minisign parser or
+verifier rejects. This could allow an unusable release through validation.
+
+The script now validates base64 and UTF-8 containers, requires the trusted
+comment and complete global signature, and verifies both signatures against the
+committed public key. Seven subprocess tests cover valid prehashed and legacy
+signatures, tampering, incomplete containers, changed installer bytes, and bad
+base64. Four cases failed on the original script; all seven now pass. The actual
+published v0.8.6 installer also passes the stricter verification. Its feed's
+API asset URL was downloaded with `Accept: application/octet-stream`, matching
+the updater plugin; omitting that header returns JSON asset metadata.
+Its SHA-256 also matches both the published checksum file and GitHub asset
+digest. No downloaded installer was executed.
+
 ## Dependency findings and remaining work
 
 Compatible lockfile updates were applied without changing direct dependency
@@ -337,6 +418,14 @@ the lockfile by hand. Replacing Tauri's Linux GUI stack is outside this Windows
 application's dependency contract. Cargo audit still reports zero vulnerability
 entries; these two full-lock warnings remain visible.
 
+This was rechecked against upstream, not treated as a missing local patch:
+[RustSec requires glib 0.20 or newer](https://rustsec.org/advisories/RUSTSEC-2024-0429.html),
+while the current [Tao](https://github.com/tauri-apps/tao/blob/dev/Cargo.toml) and
+[Wry](https://github.com/tauri-apps/wry/blob/dev/Cargo.toml) manifests still select
+GTK 0.18. [proc-macro-error has no patched release](https://rustsec.org/advisories/RUSTSEC-2024-0370.html).
+A compatible dependency update cannot remove these warnings; changing the
+upstream Linux GUI stack would require a separate port or maintained fork.
+
 Root and docs `npm audit` both report zero advisories. These results do not cover
 unknown vulnerabilities, compromised upstream releases, or flaws in Windows,
 OpenSSH, WebView2, or the updater plugin itself.
@@ -364,19 +453,24 @@ completed application-fix gate passed with the following results:
 
 | Validation                                               | Result                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------ |
-| Frontend unit/component/tooling tests                    | 584 passed across 72 files                             |
-| Rust tests                                               | 277 passed; 11 opt-in tests ignored in the default run |
+| Frontend unit/component/tooling tests                    | 591 passed across 73 files                             |
+| Rust tests                                               | 278 passed; 12 opt-in tests ignored in the default run |
 | Browser/accessibility tests                              | 98 passed across 10 files                              |
-| Live Linux SSH Rust integration tests                    | 4 passed, explicitly running opt-in tests              |
+| Live Linux SSH Rust integration tests                    | 5 passed, explicitly running opt-in tests              |
 | Live Windows SSH inspection and shell selection          | 2 passed against the user-selected Gaming PC           |
-| Public font catalog/download integration                 | 1 passed for regular/bold and Latin/Cyrillic glyphs    |
+| Public font catalog/download and native installation     | 2 passed, including explicit registry/file cleanup     |
+| Git Bash/OpenCode terminal recovery                      | 2 passed for Ctrl+C and slash-command exit             |
+| Docker distribution probe                                | 1 passed across six distribution families              |
 | Live Linux SSH desktop journeys                          | 9 passed                                               |
 | Dedicated native terminal/workspace suite                | 12 passed with WDIO 10 and ordered terminal input      |
-| Broader native desktop suite                             | 37 passed across eight specs; WSL explicitly skipped   |
+| Broader native desktop suite                             | 38 passed across eight specs, including Windows WSL    |
+| Published updater package                                | v0.8.6 download and both signatures verified read-only |
 | Formatting, lint, TypeScript/Vite build, Rust fmt/clippy | Passed                                                 |
 | Windows native desktop test build                        | Passed                                                 |
 
-The remaining opt-in tests and platform limits are not represented as passing.
+All 12 opt-in Rust tests have now been explicitly exercised during this review;
+they remain ignored in the default suite because they require external fixtures
+or public services. Hardware/platform limits are not represented as passing.
 The broader desktop result combines the five initially passing specs with
 focused reruns of corrected layout, local-data, and Windows-shell specs. The
 initial failures and their test setup corrections are recorded in R13 and R14;
@@ -387,19 +481,23 @@ delivery results are recorded in the PR and handoff.
 The docs check passed with zero errors, warnings, or hints, and the updated docs
 lockfile built all 24 static pages successfully. All 38 docs browser checks
 passed. The Windows release build produced an NSIS installer with the new font
-parser and final input-order change.
+parser, final input-order change, and font resource fix.
 
-No real updater installation or end-to-end catalog font installation was
-performed. The Rust suite exercised reversible native font registration with a
-temporary fixture. The selected installed-app Gaming PC connection initially
+No real in-place updater installation was performed. The actual published
+installer was downloaded through the feed and verified with the committed key.
+The font suite downloaded and installed real catalog regular/bold fonts under
+temporary registration names, verified their registry paths, then explicitly
+removed the registrations and files. No permanent font installation was left.
+The selected installed-app Gaming PC connection initially
 timed out while Tailscale was unavailable. After the user made it reachable,
 both existing Windows SSH tests passed. They verified 60 listening sockets,
 295 services, connection/firewall/resource evidence, shell discovery, and cached
 PowerShell selection without a second discovery round trip.
-Four Windows desktop journeys also passed with real PowerShell and Command
-Prompt sessions. No WSL test distribution was configured.
-The optional Docker distribution matrix and every possible network
-failure/interleaving were not independently exercised by this review.
+Five Windows desktop journeys passed with real PowerShell, Command Prompt,
+and WSL sessions. Both ignored OpenCode recovery cases and the six-family Docker
+matrix passed. Amazon Linux 2023 could not run under the fixture's CPU model;
+Amazon Linux 2 passed. Every possible network failure/interleaving was not
+independently exercised by this review.
 No claim of complete security, race freedom, or universal OS compatibility is
 made. Local audit snapshots and reproduction output are in ignored
 `test-results/review-*` files; machine-specific SSH configuration is not included
