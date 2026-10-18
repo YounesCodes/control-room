@@ -248,7 +248,9 @@ Focus Mode hides the header and stops its resource reads.
 Use compact labeled values with neutral styling, readable numbers, and a visible
 reading state. Use one compact status button to open reading details, separated from
 the numeric readings. Keep the active host name in its tooltip, accessible label,
-and details rather than repeating it in the header. Use green
+and details rather than repeating it in the header. The metric labels, values,
+and surrounding space drag the native window. Keep the status button and reading
+details as ordinary click targets, and preserve scrolling when the row overflows. Use green
 for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
 Settings and native window controls reachable at narrow widths;
 scroll the metric row when needed. Host details must open with a keyboard or click

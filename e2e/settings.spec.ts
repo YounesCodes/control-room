@@ -65,6 +65,60 @@ describe("Settings and native window", () => {
     await expect($(".host-metrics")).not.toExist();
   });
 
+  it("dispatches permitted native dragging from metric text and spacing", async () => {
+    await ipc("save_settings", {
+      settings: { ...(await savedSettings()), hostMetricsEnabled: true },
+    });
+    await restartApp();
+    await openLocal();
+    await $(".host-metrics-values").waitForDisplayed();
+    for (const selector of [
+      ".host-metrics",
+      ".host-metrics-values",
+      ".host-metric",
+      ".host-metric > span",
+      ".host-metric > strong",
+      ".host-metrics-status",
+    ]) {
+      // Observe the real native request. WebDriver cannot move the OS pointer.
+      const calls = await browser.execute(async (target) => {
+        const internals = (
+          window as unknown as {
+            __TAURI_INTERNALS__: {
+              convertFileSrc: (command: string, protocol: string) => string;
+            };
+          }
+        ).__TAURI_INTERNALS__;
+        const dragUrl = internals.convertFileSrc("plugin:window|start_dragging", "ipc");
+        const original = window.fetch;
+        const requests: Promise<string>[] = [];
+        window.fetch = (input, options) => {
+          const request = original(input, options);
+          if (String(input) === dragUrl)
+            requests.push(
+              request.then(async (response) =>
+                response.headers.get("Tauri-Response") === "ok" ? "ok" : response.clone().text(),
+              ),
+            );
+          return request;
+        };
+        try {
+          document
+            .querySelector(target)!
+            .dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }));
+          return await Promise.all(requests);
+        } finally {
+          window.fetch = original;
+        }
+      }, selector);
+      expect(calls).toEqual(selector === ".host-metrics-status" ? [] : ["ok"]);
+    }
+    await $(".host-metrics-trigger").click();
+    await expect($(".host-metrics-panel")).toBeDisplayed();
+    await $("aria/Close host metrics").click();
+    await expect($(".host-metrics-panel")).not.toExist();
+  });
+
   it("saves terminal settings and restores them after a native app restart", async () => {
     expect((await savedSettings()).automaticUpdateChecks).toBe(false);
     await $("aria/Open Settings").click();

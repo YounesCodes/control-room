@@ -572,6 +572,26 @@ describe("complete app journeys with typed IPC fixtures", () => {
     strip.style.maxWidth = "";
     await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
   });
+  it("offers window drag targets across metric text and spacing while keeping details clickable", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    await mount();
+    const strip = element.querySelector<HTMLElement>(".host-metrics")!;
+    const row = strip.querySelector<HTMLElement>(".host-metrics-values")!;
+    for (const target of [...row.querySelectorAll<HTMLElement>(".host-metric > *"), row, strip]) {
+      const bounds = target.getBoundingClientRect();
+      const x = target === strip ? bounds.right - 2 : bounds.left + 2;
+      const y = target === row ? bounds.top + 2 : bounds.top + bounds.height / 2;
+      const hit = document.elementFromPoint(x, y)!;
+      expect(hit).toBe(target);
+      expect(hit).toHaveAttribute("data-tauri-drag-region");
+    }
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
+    const panel = strip.querySelector<HTMLElement>(".host-metrics-panel")!;
+    expect(panel.querySelector("[data-tauri-drag-region]")).toBeNull();
+    await expect.element(page.getByRole("button", { name: "Close host metrics" })).toHaveFocus();
+    await page.getByRole("button", { name: "Close host metrics" }).click();
+    expect(strip.querySelector(".host-metrics-panel")).toBeNull();
+  });
   it("keeps normal connection state in the sidebar and restores tab indicators in Focus Mode", async () => {
     await mount();
     const host = element.querySelector<HTMLElement>(".host-row.active")!;

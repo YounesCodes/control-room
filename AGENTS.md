@@ -22,7 +22,8 @@ Find nearby tests and existing implementation before changing a feature contract
 - Keep `DESIGN.md` and `docs/` accurate when behavior or project boundaries change.
 - Avoid adding or upgrading dependencies unless required by the task.
 - Do not modify `AGENTS.md` files unless explicitly asked to.
-- Always work in a dedicated branch and worktree unless explicitly asked not to.
+- Do not create additional `.md` file unless explicitly asked to.
+- Always work in a dedicated branch unless explicitly asked not to.
 - After completing and validating the task, commit and push all task-related changes to that branch, then open a PR against main.
 
 ## Validation
@@ -43,9 +44,8 @@ Fix failures introduced by the requested change and rerun the affected checks.
 
 ## Completion
 
-Before finishing:
-
 - Review the final diff for accidental or unrelated changes.
 - Confirm behavior changes are covered by focused tests where appropriate.
 - Update documentation only when the documented behavior changed. See `docs/AGENTS.md` for documentation guidelines.
 - Report what changed, what was validated, what could not be validated, and any remaining risks or follow-up work.
+- When the PR is either merged or closed, make sure to cleanup the branch and its respective remote.

@@ -89,7 +89,7 @@ export function HostMetrics({
     };
   }, [open]);
   return (
-    <div className="host-metrics" ref={container}>
+    <div className="host-metrics" ref={container} data-tauri-drag-region>
       <button
         type="button"
         className="host-metrics-trigger"
@@ -113,6 +113,7 @@ export function HostMetrics({
       </button>
       <div
         className="host-metrics-values"
+        data-tauri-drag-region
         ref={values}
         tabIndex={overflow ? 0 : undefined}
         role="group"
@@ -121,9 +122,9 @@ export function HostMetrics({
         }
       >
         {metrics.map((metric) => (
-          <span className="host-metric" key={metric}>
-            <span>{HEADER_METRIC_LABELS[metric]}</span>
-            <strong>
+          <span className="host-metric" key={metric} data-tauri-drag-region>
+            <span data-tauri-drag-region>{HEADER_METRIC_LABELS[metric]}</span>
+            <strong data-tauri-drag-region>
               {reading.sample
                 ? headerMetricValue(metric, reading.sample)
                 : reading.error
