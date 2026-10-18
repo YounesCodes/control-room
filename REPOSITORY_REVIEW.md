@@ -4,7 +4,7 @@ Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
 Dependency and input-order follow-up: 2026-10-18.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Thirteen application defects, one release-verification defect, and seven test setup
+Fourteen application defects, one release-verification defect, and seven test setup
 issues were confirmed and fixed. Eight dependency families received compatible security updates. Follow-up
 work upgrades the desktop test stack, patches the docs selector parser, and
 replaces the unmaintained font parser. Upstream platform warnings are listed
@@ -34,6 +34,7 @@ demonstrated application impact.
 | R19 | P2       | Release signature verification accepts metadata the actual updater rejects             | `scripts/verify-updater-signature.mjs:28`, `:108`                                                |
 | R20 | P2       | A stalled updater download has no deadline and blocks subsequent update operations     | `src-tauri/src/updater.rs:282`; `src-tauri/src/updater_network.rs:9`                             |
 | R21 | P2       | A modified update feed can replay a legacy signed installer under a newer version      | `src-tauri/tauri.conf.json:33`; `src-tauri/src/updater.rs:101`                                   |
+| R22 | P2       | Dialog text can inherit an unreadable foreground                                       | `src/styles.css:4923`; `src/components/critical-ui.browser.test.tsx:274`                         |
 | R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
 | R11 | P2       | Scratchpad deletion test assumes autosave cannot finish during its clicks              | `src/pages/ScratchpadPane.test.tsx:77`                                                           |
 | R13 | P2       | Offline native fixtures try to use a workspace before completing shell selection       | `e2e/helpers.ts:139`; `e2e/layout.spec.ts:77`; `e2e/local-data.spec.ts:25`                       |
@@ -407,6 +408,17 @@ binaries link Tauri's existing Common Controls manifest so the mock App can load
 on Windows. This covers the plugin's actual installation handoff without
 replacing the user's installed Control Room or publishing a release.
 
+### R22: dialog contrast depends on its parent's text color
+
+CI reported a dialog heading with black text against the modal's dark background,
+giving only 1.23:1 contrast. The modal owned its background but inherited its
+foreground. A deterministic browser regression reproduced the same contrast
+failure by mounting the real Modal under a parent with black text; its label and
+input text were also unreadable. The modal now sets `color: var(--text)` alongside
+its existing background. The new case and existing connection-dialog accessibility
+checks pass with the standard text palette. No animation or accessibility rule was
+disabled to make the test pass.
+
 ## Dependency findings and remaining work
 
 Compatible lockfile updates were applied without changing direct dependency
@@ -508,7 +520,7 @@ completed application-fix gate passed with the following results:
 | -------------------------------------------------------- | ---------------------------------------------------------------- |
 | Frontend unit/component/tooling tests                    | 593 passed across 73 files                                       |
 | Rust tests                                               | 278 unit and 6 integration passed; 13 opt-in excluded by default |
-| Browser/accessibility tests                              | 98 passed across 10 files                                        |
+| Browser/accessibility tests                              | 99 passed across 10 files                                        |
 | Live Linux SSH Rust integration tests                    | 5 passed, explicitly running opt-in tests                        |
 | Live Windows SSH inspection and shell selection          | 2 passed against the user-selected Gaming PC                     |
 | Public font catalog/download and native installation     | 2 passed, including explicit registry/file cleanup               |

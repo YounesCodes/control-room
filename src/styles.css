@@ -4920,6 +4920,7 @@ dd {
 }
 
 .modal {
+  color: var(--text);
   width: min(530px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   overflow: auto;
