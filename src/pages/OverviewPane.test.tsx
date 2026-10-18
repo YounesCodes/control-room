@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,6 +77,23 @@ afterEach(() => {
 });
 
 describe("OverviewPane", () => {
+  it("does not publish host facts from a refresh after the pane is unmounted", async () => {
+    let finish!: (value: HostCapabilities) => void;
+    api.refreshCapabilities.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const changed = vi.fn();
+    const view = render(<OverviewPane connection={connection} onCapabilitiesChange={changed} />);
+    await screen.findByText("Debian GNU/Linux 12");
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    view.unmount();
+    await act(async () => finish(capabilities({ hostname: "old-host" })));
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
   it("shows host facts and capabilities without duplicate resource readings", async () => {
     renderPane();
     expect(await screen.findByText("Debian GNU/Linux 12")).toBeTruthy();

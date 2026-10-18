@@ -12,12 +12,20 @@ import {
 import { api } from "../lib/api";
 import type { AppUpdateInfo } from "../types";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  Channel: class {
+    onmessage = null;
+  },
+}));
+
 vi.mock("../lib/api", () => ({
   api: {
     checkForUpdate: vi.fn(async () => null),
     currentAppVersion: vi.fn(async () => "0.7.0"),
     pendingUpdateNotice: vi.fn(async () => null),
     dismissUpdateNotice: vi.fn(async () => undefined),
+    downloadUpdate: vi.fn(async () => undefined),
+    installUpdate: vi.fn(async () => undefined),
   },
 }));
 
@@ -53,6 +61,34 @@ afterEach(() => {
 });
 
 describe("automatic update scheduler", () => {
+  it("refuses duplicate downloads and checks while a download is in flight", async () => {
+    checkForUpdate.mockResolvedValue(info);
+    let finish!: () => void;
+    vi.mocked(api.downloadUpdate).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useAppUpdater(false));
+    await act(async () => {
+      await result.current.checkNow();
+    });
+    let download!: Promise<void>;
+    await act(async () => {
+      download = result.current.download();
+      await result.current.download();
+      expect(await result.current.checkNow()).toMatchObject({ outcome: "failed" });
+    });
+    expect(api.downloadUpdate).toHaveBeenCalledTimes(1);
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finish();
+      await download;
+    });
+    expect(result.current.state.status).toBe("downloaded");
+  });
+
   it("runs its first check after the startup delay", async () => {
     renderHook(() => useAppUpdater(true));
     expect(checkForUpdate).not.toHaveBeenCalled();

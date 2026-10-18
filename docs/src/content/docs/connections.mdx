@@ -20,6 +20,8 @@ Enter a display name, SSH destination, and username. A port (1–65535) and iden
 
 **Test structured access** checks whether the inspection views can connect without an SSH password prompt. It does not save the connection. The terminal can still use an interactive password login if that test fails.
 
+Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A Windows shell selected for the previous target is cleared.
+
 ## Windows 10 and 11 hosts
 
 Enable the Windows OpenSSH Server and save the host as a normal SSH connection. Shell detection needs an accepted host key and key or agent authentication that works without a prompt.

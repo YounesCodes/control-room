@@ -1,15 +1,12 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { addConnection, feature, ipc, restartApp } from "./helpers";
+import { addConnection, feature, ipc, openOfflineConnection, restartApp } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
 describe("Resizable panels in the native app", () => {
   it("fills Scratchpad when the native window is maximized and restored", async () => {
     await addConnection("Scratchpad host");
-    await $(".host-main*=Scratchpad host").click();
-    // This fixture is deliberately offline; notes only need a saved host.
-    await $("button=Connect as Linux host").waitForDisplayed({ timeout: 30_000 });
-    await $("button=Connect as Linux host").click();
+    await openOfflineConnection("Scratchpad host");
     await feature("Scratchpad");
     await $(".scratchpad-editor textarea").waitForDisplayed();
     const fillsWorkspace = () =>
@@ -77,7 +74,7 @@ describe("Resizable panels in the native app", () => {
     };
     await create("Layout host A");
     await create("Layout host B");
-    await $(".host-main*=Layout host A").click();
+    await openOfflineConnection("Layout host A");
     const openBaselines = async () => {
       await $("nav[aria-label='Workspace features']").$("button=Baselines").click();
     };
@@ -101,7 +98,7 @@ describe("Resizable panels in the native app", () => {
         state.panelSizes["split:Baselines"] === splitWidth
       );
     });
-    await $(".host-main*=Layout host B").click();
+    await openOfflineConnection("Layout host B");
     await openBaselines();
     await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
     await restartApp();
@@ -132,7 +129,7 @@ describe("Resizable panels in the native app", () => {
 
   it("saves Hosts and Capabilities heights across native restarts and resets them", async () => {
     await addConnection("Layout host");
-    await $(".host-main*=Layout host").click();
+    await openOfflineConnection("Layout host");
     await feature("Baselines");
     let divider = $("aria/Resize Hosts and Capabilities");
     const original = Number(await divider.getAttribute("aria-valuenow"));

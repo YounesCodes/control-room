@@ -1,4 +1,6 @@
 import { getTerminalLayoutIds } from "./terminal-layout";
+import { connectionTargetKey } from "./connection-validation";
+import { emptyCachedList } from "./workspace-cache";
 import {
   pruneTerminalGroups,
   terminalGroupForWorkspace,
@@ -61,7 +63,23 @@ export function updateWorkspaceConnectionSnapshots(
 ): Workspace[] {
   return workspaces.map((workspace) =>
     isRemoteWorkspace(workspace) && workspace.connectionId === connection.id
-      ? { ...workspace, connectionSnapshot: { ...connection } }
+      ? {
+          ...workspace,
+          ...(connectionTargetKey(workspace.connectionSnapshot) !== connectionTargetKey(connection)
+            ? {
+                remoteShell: null,
+                servicesCache: emptyCachedList(),
+                portsCache: emptyCachedList(),
+                containersCache: emptyCachedList(),
+                containerDetailsCache: {},
+                bootDiagnostics: null,
+                systemdSelectionId: null,
+                containerSelectionId: null,
+                logSource: null,
+              }
+            : {}),
+          connectionSnapshot: { ...connection },
+        }
       : workspace,
   );
 }

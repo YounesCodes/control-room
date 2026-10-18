@@ -134,6 +134,28 @@ impl Database {
             .transaction()
             .map_err(|error| error.to_string())?;
         validate_group_reference(&transaction, input.group_id.as_deref())?;
+        let username = normalize_optional(input.username);
+        let identity_file = normalize_optional(input.identity_file);
+        let target_changed: bool = transaction.query_row(
+            "SELECT destination != ?2 OR username IS NOT ?3 OR port IS NOT ?4 OR identity_file IS NOT ?5 FROM saved_connections WHERE id = ?1",
+            params![id, input.destination.trim(), username, input.port, identity_file],
+            |row| row.get(0),
+        ).optional().map_err(|error| error.to_string())?
+            .ok_or_else(|| "Saved Connection not found".to_string())?;
+        if target_changed {
+            transaction
+                .execute(
+                    "DELETE FROM host_capabilities WHERE connection_id = ?1",
+                    [id],
+                )
+                .map_err(|error| error.to_string())?;
+            transaction
+                .execute(
+                    "UPDATE saved_connections SET last_connected_at = NULL WHERE id = ?1",
+                    [id],
+                )
+                .map_err(|error| error.to_string())?;
+        }
         let changed = transaction
             .execute(
                 "UPDATE saved_connections SET display_name = ?2, destination = ?3, username = ?4, port = ?5, identity_file = ?6, history_enabled = ?7, group_id = ?8, updated_at = ?9, sudo_enabled = ?10 WHERE id = ?1",
@@ -141,9 +163,9 @@ impl Database {
                     id,
                     input.display_name.trim(),
                     input.destination.trim(),
-                    normalize_optional(input.username),
+                    username,
                     input.port,
-                    normalize_optional(input.identity_file),
+                    identity_file,
                     input.history_enabled,
                     input.group_id,
                     Utc::now().to_rfc3339(),
@@ -455,15 +477,27 @@ impl Database {
         Ok(())
     }
 
-    pub fn save_capabilities(&self, capabilities: &HostCapabilities) -> Result<(), String> {
+    pub fn save_capabilities(
+        &self,
+        target: &SavedConnection,
+        capabilities: &HostCapabilities,
+    ) -> Result<(), String> {
+        if target.id != capabilities.connection_id {
+            return Err("Host capabilities do not belong to this Saved Connection".into());
+        }
         let payload = serde_json::to_string(capabilities).map_err(|error| error.to_string())?;
-        self.connection
+        let changed = self.connection
             .lock()
             .execute(
-                "INSERT INTO host_capabilities (connection_id, payload, detected_at) VALUES (?1, ?2, ?3) ON CONFLICT(connection_id) DO UPDATE SET payload = excluded.payload, detected_at = excluded.detected_at",
-                params![capabilities.connection_id, payload, capabilities.detected_at],
+                "INSERT INTO host_capabilities (connection_id, payload, detected_at) SELECT ?1, ?2, ?3 FROM saved_connections WHERE id = ?1 AND destination = ?4 AND username IS ?5 AND port IS ?6 AND identity_file IS ?7 ON CONFLICT(connection_id) DO UPDATE SET payload = excluded.payload, detected_at = excluded.detected_at",
+                params![capabilities.connection_id, payload, capabilities.detected_at, target.destination, target.username, target.port, target.identity_file],
             )
             .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err(
+                "Saved Connection changed while host capabilities were being read. Retry.".into(),
+            );
+        }
         Ok(())
     }
 
@@ -2634,6 +2668,33 @@ mod tests {
     }
 
     #[test]
+    fn connection_target_edits_invalidate_capabilities_and_reject_old_reads() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        let caps = HostCapabilities {
+            connection_id: saved.id.clone(),
+            os_id: Some("windows".into()),
+            ..HostCapabilities::default()
+        };
+        database.save_capabilities(&saved, &caps).unwrap();
+        database.mark_connected(&saved.id).unwrap();
+        let mut renamed = input("Renamed");
+        database
+            .update_connection(&saved.id, renamed.clone())
+            .unwrap();
+        assert!(database.get_capabilities(&saved.id).unwrap().is_some());
+        renamed.destination = "different-host".into();
+        let updated = database.update_connection(&saved.id, renamed).unwrap();
+        assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+        assert!(updated.last_connected_at.is_none());
+        assert!(database.save_capabilities(&saved, &caps).is_err());
+        assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+        database.save_capabilities(&updated, &caps).unwrap();
+        assert!(database.get_capabilities(&saved.id).unwrap().is_some());
+    }
+
+    #[test]
     fn invalid_settings_are_discarded_before_the_frontend_uses_them() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -3301,10 +3362,13 @@ mod tests {
             })
             .unwrap();
         database
-            .save_capabilities(&HostCapabilities {
-                connection_id: saved.id.clone(),
-                ..HostCapabilities::default()
-            })
+            .save_capabilities(
+                &saved,
+                &HostCapabilities {
+                    connection_id: saved.id.clone(),
+                    ..HostCapabilities::default()
+                },
+            )
             .unwrap();
         database
             .save_host_baseline(&baseline_for(
@@ -3805,10 +3869,13 @@ mod tests {
             })
             .unwrap();
         database
-            .save_capabilities(&HostCapabilities {
-                connection_id: saved.id.clone(),
-                ..HostCapabilities::default()
-            })
+            .save_capabilities(
+                &saved,
+                &HostCapabilities {
+                    connection_id: saved.id.clone(),
+                    ..HostCapabilities::default()
+                },
+            )
             .unwrap();
         database
             .save_host_baseline(&baseline_for(

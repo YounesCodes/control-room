@@ -55,6 +55,7 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
   const [renameDraft, setRenameDraft] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<HostBaselineSummary | null>(null);
   const detailRequestRef = useRef(0);
+  const comparisonRequestRef = useRef(0);
 
   const selected = baselines.find((baseline) => baseline.id === selectedId) ?? null;
   const others = useMemo(
@@ -82,7 +83,12 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
   }, [connection.id]);
 
   useEffect(() => {
+    const request = ++detailRequestRef.current;
+    comparisonRequestRef.current += 1;
     setComparison(null);
+    setComparing(false);
+    setDetail(null);
+    setDetailLoading(false);
     setCompareWithId("");
     setLiveProgress([]);
     setRenaming(false);
@@ -90,7 +96,6 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
       setDetail(null);
       return;
     }
-    const request = ++detailRequestRef.current;
     setDetailLoading(true);
     void api
       .getHostBaseline(selectedId)
@@ -103,6 +108,10 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
       .finally(() => {
         if (request === detailRequestRef.current) setDetailLoading(false);
       });
+    return () => {
+      detailRequestRef.current += 1;
+      comparisonRequestRef.current += 1;
+    };
   }, [selectedId]);
 
   async function capture() {
@@ -152,6 +161,8 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
   }
 
   async function compare(otherId: string) {
+    const request = ++comparisonRequestRef.current;
+    setComparing(false);
     setCompareWithId(otherId);
     setComparison(null);
     if (!selected || !otherId) return;
@@ -165,11 +176,12 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
     setComparing(true);
     setActionError(null);
     try {
-      setComparison(await api.compareHostBaselines(baseId, targetId));
+      const result = await api.compareHostBaselines(baseId, targetId);
+      if (request === comparisonRequestRef.current) setComparison(result);
     } catch (caught) {
-      setActionError(errorMessage(caught));
+      if (request === comparisonRequestRef.current) setActionError(errorMessage(caught));
     } finally {
-      setComparing(false);
+      if (request === comparisonRequestRef.current) setComparing(false);
     }
   }
 
@@ -177,6 +189,7 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
   // the save: the comparison is the only thing that outlives it.
   async function compareWithLive() {
     if (!selected || liveReadId) return;
+    const request = ++comparisonRequestRef.current;
     const readId = crypto.randomUUID();
     setLiveReadId(readId);
     setLiveProgress([]);
@@ -185,15 +198,17 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
     setActionError(null);
     const channel = new Channel<BaselineProgress>();
     channel.onmessage = (event) => {
-      setLiveProgress((current) => [...current, event]);
+      if (request === comparisonRequestRef.current)
+        setLiveProgress((current) => [...current, event]);
     };
     try {
-      setComparison(await api.compareHostBaselineWithLive(selected.id, readId, channel));
+      const result = await api.compareHostBaselineWithLive(selected.id, readId, channel);
+      if (request === comparisonRequestRef.current) setComparison(result);
     } catch (caught) {
-      setActionError(errorMessage(caught));
+      if (request === comparisonRequestRef.current) setActionError(errorMessage(caught));
     } finally {
       setLiveReadId(null);
-      setComparing(false);
+      if (request === comparisonRequestRef.current) setComparing(false);
     }
   }
 

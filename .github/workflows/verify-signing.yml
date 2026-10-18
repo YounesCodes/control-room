@@ -64,7 +64,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           "control-room updater signing probe" | Set-Content -LiteralPath probe.bin -Encoding ascii
-          npx tauri signer sign probe.bin
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          npx tauri signer sign probe.bin --app-version $version
           if (-not (Test-Path probe.bin.sig)) {
             Write-Host "::error::No signature was produced. The key or its password was rejected."
             exit 1

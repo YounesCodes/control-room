@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke,
 }));
 
-import { api, REMOTE_INSPECTION_TIMEOUT_MS } from "./api";
+import { api, REMOTE_INSPECTION_TIMEOUT_MS, REMOTE_DISCOVERY_TIMEOUT_MS } from "./api";
 
 const remoteSource = readFileSync(
   new URL("../../src-tauri/src/remote.rs", import.meta.url),
@@ -35,6 +35,13 @@ function rustTimeoutSeconds(name: string): number {
 const CLEANUP_SLACK_SECONDS = 6;
 
 describe("structured discovery timeout budget", () => {
+  it("allows both platform discovery attempts plus queueing and cleanup", () => {
+    expect(REMOTE_DISCOVERY_TIMEOUT_MS / 1000).toBeGreaterThanOrEqual(
+      2 * rustTimeoutSeconds("COMMAND_TIMEOUT") +
+        rustTimeoutSeconds("MAX_STRUCTURED_QUEUE_WAIT") +
+        CLEANUP_SLACK_SECONDS,
+    );
+  });
   // The frontend guard is a backstop, not the policy. If Rust's budget ever
   // grows past it, every slow inspection reports the generic timeout below
   // instead of the classified failure Rust produces, and the reason is lost.
@@ -61,6 +68,18 @@ describe("structured discovery timeout", () => {
     vi.useRealTimers();
   });
 
+  it("keeps discovery pending beyond a single inspection budget", async () => {
+    let resolved = false;
+    const result = api.refreshCapabilities("connection-id").catch((error: Error) => {
+      resolved = true;
+      return error.message;
+    });
+    await vi.advanceTimersByTimeAsync(REMOTE_INSPECTION_TIMEOUT_MS);
+    expect(resolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(REMOTE_DISCOVERY_TIMEOUT_MS - REMOTE_INSPECTION_TIMEOUT_MS);
+    expect(await result).toBe("Remote discovery did not respond after 60 seconds");
+  });
+
   it.each([null, "connection-id"])(
     "names a stalled header reading correctly for target %s",
     async (connectionId) => {
@@ -79,7 +98,6 @@ describe("structured discovery timeout", () => {
   );
 
   it.each([
-    ["capabilities", () => api.refreshCapabilities("connection-id")],
     ["services", () => api.listServices("connection-id")],
     ["Docker containers", () => api.listContainers("connection-id")],
     ["listening ports", () => api.listPorts("connection-id")],

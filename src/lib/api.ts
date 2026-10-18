@@ -56,8 +56,27 @@ import type {
 /// scheduling variance instead of racing it.
 /// `api-timeout.test.ts` pins the relationship against the Rust constants.
 export const REMOTE_INSPECTION_TIMEOUT_MS = 30_000;
+// Platform discovery can try Linux and Windows in sequence, each with its own
+// backend command budget. Give both attempts time to return their real result.
+export const REMOTE_DISCOVERY_TIMEOUT_MS = 60_000;
 const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
 const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
+
+const terminalInputWrites = new Map<string, Promise<void>>();
+
+function writeTerminalInput(sessionId: string, bytes: Uint8Array): Promise<void> {
+  const data = Array.from(bytes);
+  // Concurrent IPC requests have no execution-order guarantee. Keep input
+  // ordered within each session while independent terminals can still write.
+  const write = (terminalInputWrites.get(sessionId) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => invoke<void>("write_session", { sessionId, data }))
+    .finally(() => {
+      if (terminalInputWrites.get(sessionId) === write) terminalInputWrites.delete(sessionId);
+    });
+  terminalInputWrites.set(sessionId, write);
+  return write;
+}
 
 function invokeRemoteInspection<T>(
   command: string,
@@ -89,7 +108,12 @@ export const api = {
   updateConnection: (id: string, input: SavedConnectionInput) =>
     invoke<SavedConnection>("update_connection", { id, input }),
   testConnection: (input: SavedConnectionInput) =>
-    invokeRemoteInspection<HostCapabilities>("test_connection", { input }),
+    invokeRemoteInspection<HostCapabilities>(
+      "test_connection",
+      { input },
+      "Remote discovery did not respond after 60 seconds",
+      REMOTE_DISCOVERY_TIMEOUT_MS,
+    ),
   deleteConnection: (id: string) => invoke<void>("delete_connection", { id }),
   listConnectionGroups: () => invoke<ConnectionGroup[]>("list_connection_groups"),
   listConnectionTags: () => invoke<ConnectionTag[]>("list_connection_tags"),
@@ -114,7 +138,7 @@ export const api = {
       "discover_remote_shells",
       { connectionId, refresh },
       "Remote shell detection did not respond after 60 seconds",
-      60_000,
+      REMOTE_DISCOVERY_TIMEOUT_MS,
     ),
   startSession: (
     connectionId: string,
@@ -140,8 +164,7 @@ export const api = {
       rows,
       output,
     }),
-  writeSession: (sessionId: string, data: Uint8Array) =>
-    invoke<void>("write_session", { sessionId, data: Array.from(data) }),
+  writeSession: writeTerminalInput,
   resizeSession: (sessionId: string, cols: number, rows: number) =>
     invoke<void>("resize_session", { sessionId, cols, rows }),
   acknowledgeSessionOutput: (sessionId: string, bytes: number) =>
@@ -150,7 +173,12 @@ export const api = {
   cachedCapabilities: (connectionId: string) =>
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>
-    invokeRemoteInspection<HostCapabilities>("refresh_capabilities", { connectionId }),
+    invokeRemoteInspection<HostCapabilities>(
+      "refresh_capabilities",
+      { connectionId },
+      "Remote discovery did not respond after 60 seconds",
+      REMOTE_DISCOVERY_TIMEOUT_MS,
+    ),
   sampleHeaderMetrics: (connectionId: string | null, metrics: HeaderMetric[]) =>
     invokeRemoteInspection<HeaderMetrics>(
       "sample_header_metrics",

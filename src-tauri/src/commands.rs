@@ -231,7 +231,7 @@ pub fn discover_remote_shells(
     let connection = database.get_connection(&connection_id)?;
     let catalog = windows_ssh::discover(&connection, refresh.unwrap_or(false))?;
     if let Some(capabilities) = &catalog.capabilities {
-        database.save_capabilities(capabilities)?;
+        database.save_capabilities(&connection, capabilities)?;
     }
     Ok(catalog)
 }
@@ -320,7 +320,7 @@ pub fn refresh_capabilities(
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     let capabilities = remote::discover_capabilities(&connection)?;
-    database.save_capabilities(&capabilities)?;
+    database.save_capabilities(&connection, &capabilities)?;
     Ok(capabilities)
 }
 

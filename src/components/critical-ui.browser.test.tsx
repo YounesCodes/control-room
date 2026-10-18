@@ -271,6 +271,21 @@ function TabNameFixture() {
 }
 
 describe("critical UI in Chromium", () => {
+  it("keeps dialog text readable inside a parent with a dark foreground", async () => {
+    mount(
+      <div style={{ color: "#000" }}>
+        <Modal title="Readable dialog" onClose={() => undefined}>
+          <div className="form-stack">
+            <label>
+              Name <input defaultValue="Example" />
+            </label>
+          </div>
+        </Modal>
+      </div>,
+    );
+    await expect.element(page.getByRole("dialog", { name: "Readable dialog" })).toBeVisible();
+    await expectAccessibleDialog();
+  });
   it("keeps connection actions visible when a large tag list needs scrolling", async () => {
     await page.viewport(960, 640);
     mount(

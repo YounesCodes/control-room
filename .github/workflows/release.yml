@@ -154,6 +154,9 @@ jobs:
         run: |
           $signature = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe.sig" | Select-Object -First 1
           if (-not $signature) { throw "No .sig was produced: the updater could not verify this build" }
+          $installer = $signature.FullName.Substring(0, $signature.FullName.Length - 4)
+          node scripts/verify-updater-signature.mjs $installer $signature.FullName
+          if ($LASTEXITCODE -ne 0) { throw "The installer signature or its signed version was rejected" }
 
           $assets = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[].name'
           Write-Host "Published assets:`n$assets"

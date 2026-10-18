@@ -33,6 +33,20 @@ describe("BoundedLogBuffer", () => {
     expect(buffer.snapshot().endsWith(chunk)).toBe(true);
   });
 
+  it("trims a large Unicode line without splitting a surrogate pair", () => {
+    const buffer = new BoundedLogBuffer(100, 5 * 1024 * 1024);
+    buffer.append("😀".repeat(2 * 1024 * 1024));
+    expect(buffer.snapshot()).toBe("😀".repeat((5 * 1024 * 1024) / 4));
+    expect(buffer.byteCount).toBe(5 * 1024 * 1024);
+  });
+
+  it("drops a code point that cannot fit instead of retaining half of it", () => {
+    const buffer = new BoundedLogBuffer(100, 3);
+    buffer.append("abcd😀");
+    expect(buffer.snapshot()).toBe("");
+    expect(buffer.byteCount).toBe(0);
+  });
+
   it("clears all retained data", () => {
     const buffer = new BoundedLogBuffer();
     buffer.append("old logs");

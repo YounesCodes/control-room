@@ -199,6 +199,49 @@ afterEach(() => {
 });
 
 describe("baselines pane", () => {
+  it("ignores a comparison that finishes after No comparison is selected", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+    ]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    let finish!: (value: BaselineComparison) => void;
+    api.compareHostBaselines.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    renderPane();
+    await screen.findAllByText("before upgrade");
+    await userEvent.selectOptions(screen.getByRole("combobox"), "earlier");
+    await waitFor(() => expect(finish).toBeDefined());
+    await userEvent.selectOptions(screen.getByRole("combobox"), "");
+    await act(async () => finish(comparison));
+    expect(screen.queryByText("postgresql.service")).toBeNull();
+    expect(screen.queryByText("Comparing baselines…")).toBeNull();
+  });
+
+  it("clears the previous detail when the next selection cannot be read", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("earlier", "2026-09-01T10:00:00Z", null),
+      summary("later", "2026-09-02T10:00:00Z", null),
+    ]);
+    api.getHostBaseline
+      .mockResolvedValueOnce(detail)
+      .mockRejectedValueOnce(new Error("Unreadable capture"));
+    const onSelect = vi.fn();
+    const view = render(
+      <BaselinesPane connection={connection} selectedId="later" onSelect={onSelect} />,
+    );
+    await screen.findByText("Docker is not installed");
+    view.rerender(
+      <BaselinesPane connection={connection} selectedId="earlier" onSelect={onSelect} />,
+    );
+    await screen.findByText("Unreadable capture");
+    expect(screen.queryByText("Docker is not installed")).toBeNull();
+  });
+
   it("shows capture progress and cancels the active capture without requesting another", async () => {
     api.listHostBaselines.mockResolvedValue([]);
     let finish!: (value: HostBaselineSummary) => void;

@@ -10,6 +10,9 @@ use std::{
 use parking_lot::Mutex;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use skrifa::{
+    FontRef, MetadataProvider, raw::TableProvider, raw::types::Version16Dot16, string::StringId,
+};
 use tauri::{
     AppHandle, Manager, State,
     ipc::{Channel, Response},
@@ -188,20 +191,30 @@ fn ttf_urls(css: &str) -> Result<Vec<String>, String> {
 }
 
 fn validate_font(bytes: &[u8], family: &str, weight: u16) -> Result<(), String> {
-    let face = ttf_parser::Face::parse(bytes, 0).map_err(|_| {
-        "Downloaded file is not a valid TrueType font. Retry the download.".to_string()
-    })?;
-    if face.weight().to_number() != weight {
+    let invalid =
+        || "Downloaded file is not a valid TrueType font. Retry the download.".to_string();
+    let face = FontRef::from_index(bytes, 0).map_err(|_| invalid())?;
+    // FontRef reads tables lazily. Preserve the previous parser's mandatory
+    // header checks before trusting downloaded metadata or registering a font.
+    let head = face.head().map_err(|_| invalid())?;
+    face.hhea().map_err(|_| invalid())?;
+    let maxp = face.maxp().map_err(|_| invalid())?;
+    if !(16..=16384).contains(&head.units_per_em())
+        || !matches!(head.index_to_loc_format(), 0 | 1)
+        || maxp.num_glyphs() == 0
+        || ![Version16Dot16::VERSION_0_5, Version16Dot16::VERSION_1_0].contains(&maxp.version())
+    {
+        return Err(invalid());
+    }
+    if face.os2().map(|os2| os2.us_weight_class()).unwrap_or(400) != weight {
         return Err(
             "Downloaded font does not match the requested weight. Retry the download.".into(),
         );
     }
-    let matches = face.names().into_iter().any(|n| {
-        matches!(
-            n.name_id,
-            ttf_parser::name_id::FAMILY | ttf_parser::name_id::TYPOGRAPHIC_FAMILY
-        ) && n.to_string().is_some_and(|s| s == family)
-    });
+    let matches = [StringId::FAMILY_NAME, StringId::TYPOGRAPHIC_FAMILY_NAME]
+        .into_iter()
+        .flat_map(|id| face.localized_strings(id))
+        .any(|name| name.chars().eq(family.chars()));
     if !matches {
         return Err(
             "Downloaded font does not match the selected family. The current font was kept.".into(),
@@ -463,37 +476,38 @@ mod windows {
             if already_registered && existing[..length as usize / 2] != path {
                 return Err("An existing Windows font registration uses this name. Remove the conflicting font in Windows Settings before retrying.".into());
             }
-            if status != 0 && status != 2 {
+            // Reusing an installed registration must not add another public
+            // GDI reference. One unregister would otherwise leave it loaded.
+            if already_registered {
+                return Ok(false);
+            }
+            if status != 2 {
                 return Err(format!(
                     "Cannot read the Windows font registration. Windows error {status}."
                 ));
             }
-            if !already_registered {
-                let status = unsafe {
-                    RegSetValueExW(
-                        key.0,
-                        name.as_ptr(),
-                        0,
-                        REG_SZ,
-                        path.as_ptr().cast(),
-                        (path.len() * 2) as u32,
-                    )
-                };
-                if status != 0 {
-                    return Err(format!(
-                        "Cannot register the font for your Windows account. Check account policy and retry. Windows error {status}."
-                    ));
-                }
+            let status = unsafe {
+                RegSetValueExW(
+                    key.0,
+                    name.as_ptr(),
+                    0,
+                    REG_SZ,
+                    path.as_ptr().cast(),
+                    (path.len() * 2) as u32,
+                )
+            };
+            if status != 0 {
+                return Err(format!(
+                    "Cannot register the font for your Windows account. Check account policy and retry. Windows error {status}."
+                ));
             }
             if unsafe { AddFontResourceExW(path.as_ptr(), 0, ptr::null()) } == 0 {
-                if !already_registered {
-                    unsafe {
-                        RegDeleteValueW(key.0, name.as_ptr());
-                    }
+                unsafe {
+                    RegDeleteValueW(key.0, name.as_ptr());
                 }
                 return Err("Windows could not load the downloaded font. Retry, or remove a conflicting font in Windows Settings.".into());
             }
-            Ok(!already_registered)
+            Ok(true)
         }
         fn unregister(&self, path: &Path, name: &str) {
             unsafe {
@@ -750,10 +764,10 @@ mod tests {
             .unwrap();
             assert!(bytes.len() > 1000);
             assert_eq!(events.last().unwrap().0, bytes.len() as u64);
-            let face = ttf_parser::Face::parse(&bytes, 0).unwrap();
-            assert_eq!(face.weight().to_number(), weight);
-            assert!(face.glyph_index('A').is_some());
-            assert!(face.glyph_index('Ж').is_some());
+            let face = FontRef::from_index(&bytes, 0).unwrap();
+            assert_eq!(face.os2().unwrap().us_weight_class(), weight);
+            assert!(face.charmap().map('A').is_some());
+            assert!(face.charmap().map('Ж').is_some());
         }
     }
     fn font() -> CatalogFont {
@@ -847,6 +861,41 @@ mod tests {
                 .contains("weight")
         );
     }
+    #[cfg(windows)]
+    #[test]
+    fn lazy_font_metadata_cannot_bypass_required_header_validation() {
+        let (font, bytes) = windows_font_fixture();
+        let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
+        for tag in [b"head", b"hhea", b"maxp"] {
+            let mut corrupt = bytes.clone();
+            let record = corrupt[12..12 + count * 16]
+                .as_chunks_mut::<16>()
+                .0
+                .iter_mut()
+                .find(|record| &record[..4] == tag)
+                .unwrap();
+            record[..4].copy_from_slice(b"xxxx");
+            assert!(
+                validate_font(&corrupt, &font.family, 400).is_err(),
+                "{tag:?}"
+            );
+        }
+        for (tag, field, value) in [(b"head", 18, 0_u16), (b"head", 50, 2), (b"maxp", 4, 0)] {
+            let mut corrupt = bytes.clone();
+            let record = bytes[12..12 + count * 16]
+                .as_chunks::<16>()
+                .0
+                .iter()
+                .find(|record| &record[..4] == tag)
+                .unwrap();
+            let offset = u32::from_be_bytes(record[8..12].try_into().unwrap()) as usize;
+            corrupt[offset + field..offset + field + 2].copy_from_slice(&value.to_be_bytes());
+            assert!(
+                validate_font(&corrupt, &font.family, 400).is_err(),
+                "{tag:?}:{field}"
+            );
+        }
+    }
     #[test]
     fn font_download_urls_are_restricted_to_google_truetype() {
         assert_eq!(
@@ -892,52 +941,158 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn native_registration_uses_current_user_registry_and_is_reversible() {
-        use windows_sys::Win32::System::Registry::*;
+    fn repeated_native_registration_does_not_leak_font_resources() {
+        use windows_sys::Win32::Graphics::Gdi::RemoveFontResourceExW;
         let (mut font, bytes) = windows_font_fixture();
         font.id = format!("test-{}", uuid::Uuid::new_v4());
         let directory = tempfile::tempdir().unwrap();
         let path = directory
             .path()
             .join(format!("ControlRoom-{}-400.ttf", font.id));
-        let key_name = format!("Control Room {} 400 (TrueType)", font.id);
+        let key = format!("Control Room {} 400 (TrueType)", font.id);
         struct Cleanup(std::path::PathBuf, String);
         impl Drop for Cleanup {
             fn drop(&mut self) {
                 windows::UserFonts.unregister(&self.0, &self.1);
+                let wide = self
+                    .0
+                    .to_string_lossy()
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>();
+                // Clean up the original bug's extra reference even on assertion failure.
+                for _ in 0..2 {
+                    if unsafe { RemoveFontResourceExW(wide.as_ptr(), 0, std::ptr::null()) } == 0 {
+                        break;
+                    }
+                }
             }
         }
-        let _cleanup = Cleanup(path.clone(), key_name.clone());
+        let _cleanup = Cleanup(path.clone(), key.clone());
+        std::fs::write(&path, bytes).unwrap();
+        assert!(windows::UserFonts.register(&path, &key).unwrap());
+        assert!(!windows::UserFonts.register(&path, &key).unwrap());
+        windows::UserFonts.unregister(&path, &key);
+        let wide = path
+            .to_string_lossy()
+            .encode_utf16()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        let remaining = unsafe { RemoveFontResourceExW(wide.as_ptr(), 0, std::ptr::null()) };
+        assert_eq!(
+            remaining, 0,
+            "reinstallation left a native font reference behind"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_registration_uses_current_user_registry_and_is_reversible() {
+        let (font, bytes) = windows_font_fixture();
+        assert_reversible_native_install(font, &[(400, bytes)]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Requires public font services and reversible current-user font registration"]
+    fn live_catalog_installation_registers_regular_and_bold_reversibly() {
+        let client = client().unwrap();
+        let catalog = read_catalog(&client).unwrap();
+        let font = catalog
+            .into_iter()
+            .find(|font| font.id == "jetbrains-mono")
+            .unwrap();
+        let files = [400, 700]
+            .into_iter()
+            .map(|weight| {
+                (
+                    weight,
+                    font_bytes(&client, &font, weight, |_, _| {}).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_reversible_native_install(font, &files);
+    }
+
+    #[cfg(windows)]
+    fn assert_reversible_native_install(mut font: CatalogFont, files: &[(u16, Vec<u8>)]) {
+        use windows_sys::Win32::System::Registry::*;
+        font.id = format!("test-{}", uuid::Uuid::new_v4());
+        let directory = tempfile::tempdir().unwrap();
+        let entries = files
+            .iter()
+            .map(|(weight, _)| {
+                (
+                    directory
+                        .path()
+                        .join(format!("ControlRoom-{}-{weight}.ttf", font.id)),
+                    format!("Control Room {} {weight} (TrueType)", font.id),
+                )
+            })
+            .collect::<Vec<_>>();
+        struct Cleanup(Vec<(std::path::PathBuf, String)>);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                for (path, name) in self.0.iter().rev() {
+                    windows::UserFonts.unregister(path, name);
+                }
+            }
+        }
+        let cleanup = Cleanup(entries.clone());
+        let mut progress = Vec::new();
         install_files(
             directory.path(),
             &font,
-            &[(400, bytes)],
+            files,
             &windows::UserFonts,
-            |_, _| {},
+            |done, total| progress.push((done, total)),
         )
         .unwrap();
+        windows::notify();
+        assert_eq!(progress.len(), files.len());
+        assert_eq!(
+            progress.last(),
+            Some(&(files.len() as u64, files.len() as u64))
+        );
         let key = "Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"
             .encode_utf16()
             .chain(Some(0))
             .collect::<Vec<_>>();
-        let name = key_name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-        let mut stored = [0_u16; 32768];
-        let mut length = std::mem::size_of_val(&stored) as u32;
-        let status = unsafe {
-            RegGetValueW(
-                HKEY_CURRENT_USER,
-                key.as_ptr(),
-                name.as_ptr(),
-                RRF_RT_REG_SZ,
-                std::ptr::null_mut(),
-                stored.as_mut_ptr().cast(),
-                &mut length,
-            )
+        let stored_path = |key_name: &str| {
+            let name = key_name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+            let mut stored = [0_u16; 32768];
+            let mut length = std::mem::size_of_val(&stored) as u32;
+            let status = unsafe {
+                RegGetValueW(
+                    HKEY_CURRENT_USER,
+                    key.as_ptr(),
+                    name.as_ptr(),
+                    RRF_RT_REG_SZ,
+                    std::ptr::null_mut(),
+                    stored.as_mut_ptr().cast(),
+                    &mut length,
+                )
+            };
+            assert!(
+                matches!(status, 0 | 2),
+                "Unexpected registry error {status}"
+            );
+            (status == 0).then(|| String::from_utf16_lossy(&stored[..length as usize / 2 - 1]))
         };
-        assert_eq!(status, 0);
-        assert_eq!(
-            String::from_utf16_lossy(&stored[..length as usize / 2 - 1]),
-            path.to_string_lossy()
-        );
+        for ((path, name), (_, bytes)) in entries.iter().zip(files) {
+            assert_eq!(std::fs::read(path).unwrap(), *bytes);
+            assert_eq!(stored_path(name).as_deref(), Some(path.to_str().unwrap()));
+        }
+        drop(cleanup);
+        for (_, name) in &entries {
+            assert_eq!(
+                stored_path(name),
+                None,
+                "Temporary registration survived cleanup"
+            );
+        }
+        directory
+            .close()
+            .expect("Temporary font files remained in use after removal");
     }
 }
