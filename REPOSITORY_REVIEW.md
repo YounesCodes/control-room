@@ -1,11 +1,14 @@
 # Control Room adversarial review
 
 Review date: 2026-10-17. Baseline: `edb317d`, v0.8.6.
+Dependency and input-order follow-up: 2026-10-18.
 Branch: `codex/repository-adversarial-review`, in the existing checkout.
 
-Nine application defects and two test setup issues were confirmed and
-fixed. Eight dependency families received compatible security updates. Third-party advisories that remain are
-listed separately below. This review does not establish that the repository has
+Ten application defects and two test setup issues were confirmed and
+fixed. Eight dependency families received compatible security updates. Follow-up
+work upgrades the desktop test stack, patches the docs selector parser, and
+replaces the unmaintained font parser. Upstream platform warnings are listed
+separately below. This review does not establish that the repository has
 no other defects.
 
 P1 means high priority because of data loss, blocked operations, or unsafe update
@@ -21,11 +24,12 @@ demonstrated application impact.
 | R02 | P1       | Update checks can replace the release during a download                                | `src-tauri/src/updater.rs:154`, `:202`; `src/hooks/use-app-updater.ts:59`                        |
 | R03 | P1       | Sending SSH input can block before the timeout starts                                  | `src-tauri/src/remote.rs:947`, `:1041`                                                           |
 | R04 | P1       | Unicode log trimming repeatedly encodes the same large string                          | `src/lib/log-buffer.ts:93`                                                                       |
+| R12 | P1       | Concurrent terminal input requests can execute out of order                            | `src/lib/api.ts:67`                                                                              |
 | R05 | P2       | Process exit can discard terminal output and race log completion                       | `src-tauri/src/session.rs:386`, `:493`; `src-tauri/src/remote.rs:2292`                           |
 | R06 | P2       | Editing an SSH target reuses facts and inspection results from the old target          | `src-tauri/src/database.rs:126`, `:480`; `src/App.tsx:1263`; `src/lib/workspace-lifecycle.ts:68` |
 | R07 | P2       | Late baseline reads can restore a comparison the user cleared or show the wrong detail | `src/pages/BaselinesPane.tsx:58`, `:87`, `:164`                                                  |
 | R08 | P2       | Linux CPU sampling counts guest time twice and uses a limited integer format           | `src-tauri/src/remote.rs:346`                                                                    |
-| R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:99`, `:165`                                                               |
+| R09 | P2       | Discovery can outlive the frontend's single-command timeout                            | `src/lib/api.ts:61`, `:115`, `:180`                                                              |
 | R10 | P2       | Native rename test setup loses its transient hover state                               | `e2e/terminals.spec.ts:14`                                                                       |
 | R11 | P2       | Scratchpad deletion test assumes autosave cannot finish during its clicks              | `src/pages/ScratchpadPane.test.tsx:77`                                                           |
 
@@ -213,6 +217,25 @@ Both verify that failed deletion preserves editor text and that retrying deletio
 succeeds. All eight Scratchpad tests pass. No Scratchpad product code changed;
 this finding concerns a false failure in the test, not demonstrated data loss.
 
+### R12: terminal input ordering
+
+The upgraded native runner exposed a command received as `ecoh` instead of
+`echo`. The input API submitted each keyboard chunk independently, without
+waiting for the preceding IPC operation. The backend writer mutex prevents
+simultaneous writes, but cannot impose the frontend's intended order on
+independent requests. Reordered input can change a command's meaning.
+
+Input writes now wait for the preceding write to that session. Separate
+terminals remain independent. Queued bytes are copied at submission, individual
+failures still reach callers, and the queue entry is removed after its final
+operation. A failed operation does not permanently block later writes.
+
+The regression failed on the original API because a second invocation started
+while the first was blocked. All three new input-order tests and 34 focused
+terminal/API tests pass after the fix. All 12 native terminal/workspace cases
+passed using the rebuilt app and WebdriverIO 10, including the previously
+failing horizontal split input case.
+
 ## Dependency findings and remaining work
 
 Compatible lockfile updates were applied without changing direct dependency
@@ -229,38 +252,55 @@ ranges or adding dependencies:
 | Docs: smol-toml                      | 1.8.0    | 1.9.1  |
 | Docs: source-map-js                  | 1.2.1    | 1.2.2  |
 
-Remaining findings are not resolved by this branch:
+The initially remaining dependency findings were addressed in follow-up work:
 
-- Root npm audit reports 21 high-severity affected package entries, all in dev
-  dependencies. These are dependency chains rooted in basic-ftp, braces,
-  extract-zip, and serialize-javascript, not 21 independent application bugs.
+- D01, high advisory severity, development tooling. Root npm audit initially
+  reported 21 affected entries in chains rooted in basic-ftp, braces,
+  extract-zip, and serialize-javascript.
   Relevant advisories include
   [basic-ftp](https://github.com/advisories/GHSA-c475-qrg2-pj4r),
   [braces](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm),
   [extract-zip traversal](https://github.com/advisories/GHSA-jmr9-qjv8-65gv),
   [extract-zip writes](https://github.com/advisories/GHSA-7pqw-9j4j-h8q3), and
   [serialize-javascript](https://github.com/advisories/GHSA-5c6j-r48x-rmvq).
-  The installed WDIO/Mocha/Tauri service dependency ranges do not admit the
-  patched versions through a compatible audit fix. Forced ecosystem upgrades
-  or overriding incompatible dependency ranges were not applied. Desktop test
-  tooling still downloads and extracts external driver archives, so this remains
-  a developer/CI supply-chain concern. A working exploit against this repository
-  was not demonstrated.
-- Docs npm audit reports 10 moderate entries, inherited from
+  `package.json` and `package-lock.json` now use WebdriverIO 10, Mocha 12,
+  Puppeteer Browsers 3, and serialize-javascript 7.1.2. The other three vulnerable
+  families are removed. Scoped overrides align Tauri service 1.5's WebdriverIO
+  and globals with the root packages. Its removed callback helper is supplied
+  by `e2e/async-script-service.ts` through the retained W3C async-script endpoint,
+  including session reload setup in `wdio.conf.ts`. Two compatibility tests
+  cover function/string callbacks, repeated setup, and protocol errors.
+  The initial npm transition required peer-set resolution with `--force`;
+  the resulting lockfile then passed a clean `npm ci --ignore-scripts` without
+  peer bypass flags and `npm ls --all` reported no invalid dependencies. Root
+  audit now reports zero advisories, including development dependencies.
+- D02, moderate advisory severity, docs build tooling. Ten remaining entries
+  were inherited from
   [postcss-selector-parser](https://github.com/advisories/GHSA-rj75-hqrm-r3gf).
-  The compatible updates removed all four high-severity docs entries. npm's
-  proposed direct-package change for the remaining chain is a Starlight
-  downgrade from 0.41 to 0.21. That downgrade was not applied. The current site is
-  built from repository content as static files; no attacker-controlled CSS
-  parser input was demonstrated.
-- Cargo audit reports zero vulnerability entries and informational warnings for
-  unmaintained ttf-parser and proc-macro-error, plus glib iterator unsoundness.
-  The Windows target dependency tree contains neither glib nor proc-macro-error.
-  ttf-parser is used directly for font validation and remains an upstream
-  maintenance concern. No replacement parser or unrelated dependency migration
-  was introduced.
+  `docs/package.json` scopes an override to postcss-nested's selector parser,
+  upgrading 6.1.4 to patched 7.1.6 without downgrading Starlight or changing the
+  site's authored CSS. Docs audit now reports zero advisories. The docs check,
+  24-page build, and all 38 desktop/mobile browser tests passed using installed
+  Chrome. The first browser attempt lacked its Playwright browser binary;
+  that was an environment prerequisite, not a docs assertion failure.
+- D03, maintenance warning in the shipped font path. `src-tauri/Cargo.toml`
+  replaces ttf-parser 0.25.1 with maintained Skrifa 0.48.0. The parser migration
+  in `src-tauri/src/fonts.rs` preserves mandatory header validation, family and
+  weight checks, and registration rollback. A new malformed-header regression
+  covers absent tables, invalid units/location format, and zero glyphs.
+  All 14 focused font tests passed. The opt-in public-service test also passed,
+  downloading regular/bold fonts and checking Latin/Cyrillic character mappings.
+  Cargo audit no longer reports the ttf-parser warning.
 
-Root `npm audit --omit=dev` reports zero advisories. These results do not cover
+Two upstream warnings remain in the complete cross-platform Cargo lockfile:
+unmaintained proc-macro-error and glib iterator unsoundness. Both are pulled in
+by Tauri's Linux GTK3 dependencies. The Windows target dependency graph contains
+neither crate. They have not been hidden with advisory ignores or removed from
+the lockfile by hand. Replacing Tauri's Linux GUI stack is outside this Windows
+application's dependency contract. Cargo audit still reports zero vulnerability
+entries; these two full-lock warnings remain visible.
+
+Root and docs `npm audit` both report zero advisories. These results do not cover
 unknown vulnerabilities, compromised upstream releases, or flaws in Windows,
 OpenSSH, WebView2, or the updater plugin itself.
 
@@ -287,12 +327,14 @@ completed application-fix gate passed with the following results:
 
 | Validation                                               | Result                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------ |
-| Frontend unit/component tests                            | 579 passed across 70 files                             |
-| Rust tests                                               | 276 passed; 11 opt-in tests ignored in the default run |
+| Frontend unit/component/tooling tests                    | 584 passed across 72 files                             |
+| Rust tests                                               | 277 passed; 11 opt-in tests ignored in the default run |
 | Browser/accessibility tests                              | 98 passed across 10 files                              |
 | Live Linux SSH Rust integration tests                    | 4 passed, explicitly running opt-in tests              |
+| Live Windows SSH inspection and shell selection          | 2 passed against the user-selected Gaming PC           |
+| Public font catalog/download integration                 | 1 passed for regular/bold and Latin/Cyrillic glyphs    |
 | Live Linux SSH desktop journeys                          | 9 passed                                               |
-| Dedicated native terminal/workspace suite                | 12 passed after R10                                    |
+| Dedicated native terminal/workspace suite                | 12 passed with WDIO 10 and ordered terminal input      |
 | Formatting, lint, TypeScript/Vite build, Rust fmt/clippy | Passed                                                 |
 | Windows native desktop test build                        | Passed                                                 |
 
@@ -301,13 +343,19 @@ Git hooks enforce the gate again for the final test changes and push;
 delivery results are recorded in the PR and handoff.
 
 The docs check passed with zero errors, warnings, or hints, and the updated docs
-lockfile built all 24 static pages successfully.
+lockfile built all 24 static pages successfully. All 38 docs browser checks
+passed. The Windows release build produced an NSIS installer with the new font
+parser; the final input-order change also receives a rebuilt native app.
 
 No real updater installation or end-to-end catalog font installation was
 performed. The Rust suite exercised reversible native font registration with a
-temporary fixture. A live Windows SSH host, the optional Docker distribution
-matrix, and every possible
-network failure/interleaving were not independently exercised by this review.
+temporary fixture. The selected installed-app Gaming PC connection initially
+timed out while Tailscale was unavailable. After the user made it reachable,
+both existing Windows SSH tests passed. They verified 60 listening sockets,
+295 services, connection/firewall/resource evidence, shell discovery, and cached
+PowerShell selection without a second discovery round trip.
+The optional Docker distribution matrix and every possible network
+failure/interleaving were not independently exercised by this review.
 No claim of complete security, race freedom, or universal OS compatibility is
 made. Local audit snapshots and reproduction output are in ignored
 `test-results/review-*` files; machine-specific SSH configuration is not included

@@ -10,6 +10,9 @@ use std::{
 use parking_lot::Mutex;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use skrifa::{
+    FontRef, MetadataProvider, raw::TableProvider, raw::types::Version16Dot16, string::StringId,
+};
 use tauri::{
     AppHandle, Manager, State,
     ipc::{Channel, Response},
@@ -188,20 +191,30 @@ fn ttf_urls(css: &str) -> Result<Vec<String>, String> {
 }
 
 fn validate_font(bytes: &[u8], family: &str, weight: u16) -> Result<(), String> {
-    let face = ttf_parser::Face::parse(bytes, 0).map_err(|_| {
-        "Downloaded file is not a valid TrueType font. Retry the download.".to_string()
-    })?;
-    if face.weight().to_number() != weight {
+    let invalid =
+        || "Downloaded file is not a valid TrueType font. Retry the download.".to_string();
+    let face = FontRef::from_index(bytes, 0).map_err(|_| invalid())?;
+    // FontRef reads tables lazily. Preserve the previous parser's mandatory
+    // header checks before trusting downloaded metadata or registering a font.
+    let head = face.head().map_err(|_| invalid())?;
+    face.hhea().map_err(|_| invalid())?;
+    let maxp = face.maxp().map_err(|_| invalid())?;
+    if !(16..=16384).contains(&head.units_per_em())
+        || !matches!(head.index_to_loc_format(), 0 | 1)
+        || maxp.num_glyphs() == 0
+        || ![Version16Dot16::VERSION_0_5, Version16Dot16::VERSION_1_0].contains(&maxp.version())
+    {
+        return Err(invalid());
+    }
+    if face.os2().map(|os2| os2.us_weight_class()).unwrap_or(400) != weight {
         return Err(
             "Downloaded font does not match the requested weight. Retry the download.".into(),
         );
     }
-    let matches = face.names().into_iter().any(|n| {
-        matches!(
-            n.name_id,
-            ttf_parser::name_id::FAMILY | ttf_parser::name_id::TYPOGRAPHIC_FAMILY
-        ) && n.to_string().is_some_and(|s| s == family)
-    });
+    let matches = [StringId::FAMILY_NAME, StringId::TYPOGRAPHIC_FAMILY_NAME]
+        .into_iter()
+        .flat_map(|id| face.localized_strings(id))
+        .any(|name| name.chars().eq(family.chars()));
     if !matches {
         return Err(
             "Downloaded font does not match the selected family. The current font was kept.".into(),
@@ -750,10 +763,10 @@ mod tests {
             .unwrap();
             assert!(bytes.len() > 1000);
             assert_eq!(events.last().unwrap().0, bytes.len() as u64);
-            let face = ttf_parser::Face::parse(&bytes, 0).unwrap();
-            assert_eq!(face.weight().to_number(), weight);
-            assert!(face.glyph_index('A').is_some());
-            assert!(face.glyph_index('Ж').is_some());
+            let face = FontRef::from_index(&bytes, 0).unwrap();
+            assert_eq!(face.os2().unwrap().us_weight_class(), weight);
+            assert!(face.charmap().map('A').is_some());
+            assert!(face.charmap().map('Ж').is_some());
         }
     }
     fn font() -> CatalogFont {
@@ -846,6 +859,37 @@ mod tests {
                 .unwrap_err()
                 .contains("weight")
         );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn lazy_font_metadata_cannot_bypass_required_header_validation() {
+        let (font, bytes) = windows_font_fixture();
+        let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
+        for tag in [b"head", b"hhea", b"maxp"] {
+            let mut corrupt = bytes.clone();
+            let record = corrupt[12..12 + count * 16]
+                .chunks_exact_mut(16)
+                .find(|record| &record[..4] == tag)
+                .unwrap();
+            record[..4].copy_from_slice(b"xxxx");
+            assert!(
+                validate_font(&corrupt, &font.family, 400).is_err(),
+                "{tag:?}"
+            );
+        }
+        for (tag, field, value) in [(b"head", 18, 0_u16), (b"head", 50, 2), (b"maxp", 4, 0)] {
+            let mut corrupt = bytes.clone();
+            let record = bytes[12..12 + count * 16]
+                .chunks_exact(16)
+                .find(|record| &record[..4] == tag)
+                .unwrap();
+            let offset = u32::from_be_bytes(record[8..12].try_into().unwrap()) as usize;
+            corrupt[offset + field..offset + field + 2].copy_from_slice(&value.to_be_bytes());
+            assert!(
+                validate_font(&corrupt, &font.family, 400).is_err(),
+                "{tag:?}:{field}"
+            );
+        }
     }
     #[test]
     fn font_download_urls_are_restricted_to_google_truetype() {

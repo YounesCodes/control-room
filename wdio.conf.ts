@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 import TauriService from "@wdio/tauri-service";
+import AsyncScriptService, { installAsyncScriptCommand } from "./e2e/async-script-service";
 import { recordDrivers, stopOwnedDrivers } from "./e2e/driver-processes";
 
 if (process.platform !== "win32") {
@@ -32,6 +33,7 @@ export const config: WebdriverIO.Config = {
   maxInstances: 1,
   outputDir: resolve("test-results/desktop/driver"),
   services: [
+    [AsyncScriptService, {}],
     [
       "@wdio/tauri-service",
       {
@@ -57,6 +59,7 @@ export const config: WebdriverIO.Config = {
   before: () => recordDrivers(dataDirectory, Number(process.env.CONTROL_ROOM_E2E_RUNNER_PID)),
   onReload: async () => {
     const { browser } = await import("@wdio/globals");
+    installAsyncScriptCommand(browser);
     // The service caches provider metadata by session ID. A native restart needs initialization too.
     await new TauriService({ driverProvider: "external" }, tauriCapabilities).before(
       tauriCapabilities,

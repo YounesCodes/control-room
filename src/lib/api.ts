@@ -62,6 +62,22 @@ export const REMOTE_DISCOVERY_TIMEOUT_MS = 60_000;
 const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
 const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
 
+const terminalInputWrites = new Map<string, Promise<void>>();
+
+function writeTerminalInput(sessionId: string, bytes: Uint8Array): Promise<void> {
+  const data = Array.from(bytes);
+  // Concurrent IPC requests have no execution-order guarantee. Keep input
+  // ordered within each session while independent terminals can still write.
+  const write = (terminalInputWrites.get(sessionId) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => invoke<void>("write_session", { sessionId, data }))
+    .finally(() => {
+      if (terminalInputWrites.get(sessionId) === write) terminalInputWrites.delete(sessionId);
+    });
+  terminalInputWrites.set(sessionId, write);
+  return write;
+}
+
 function invokeRemoteInspection<T>(
   command: string,
   args: Record<string, unknown>,
@@ -148,8 +164,7 @@ export const api = {
       rows,
       output,
     }),
-  writeSession: (sessionId: string, data: Uint8Array) =>
-    invoke<void>("write_session", { sessionId, data: Array.from(data) }),
+  writeSession: writeTerminalInput,
   resizeSession: (sessionId: string, cols: number, rows: number) =>
     invoke<void>("resize_session", { sessionId, cols, rows }),
   acknowledgeSessionOutput: (sessionId: string, bytes: number) =>
