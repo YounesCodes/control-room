@@ -1635,14 +1635,10 @@ code,
 }
 
 .terminal-focus-mode .session-tabs {
-  /* Strip cells run to the window's top edge so every button's hover fills
-     the full header height; the tab list keeps the 6px top inset for the
-     drag strip, and the overlay above it stays the drag target. */
+  /* Every strip cell — tabs included — runs to the window's top edge so its
+     highlight fills the full header height; the overlay drag strip above the
+     top pixels stays the drag target. */
   padding-top: 0;
-}
-
-.terminal-focus-mode .session-tab-list {
-  padding-top: 6px;
 }
 
 .session-window-drag-region {

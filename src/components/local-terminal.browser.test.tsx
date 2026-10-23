@@ -328,11 +328,12 @@ describe("Local Terminal Mode in the real App", () => {
         .querySelector('[aria-label="Scroll terminals left"]')!
         .getBoundingClientRect();
       expect(scrollBack.top).toBe(strip.top);
-      // Tabs keep their 6px inset below the drag strip.
+      // Tabs fill the header's full height too, so their highlight reaches
+      // the top edge under the drag overlay.
       const firstTab = container!.querySelector(
         ".session-tab-content > .session-tab-wrap, .session-tab-content > .session-tab-group",
       ) as HTMLElement | null;
-      expect(firstTab?.getBoundingClientRect().top).toBeCloseTo(bounds.bottom, 0);
+      expect(firstTab?.getBoundingClientRect().top).toBe(strip.top);
       expect(
         container!.querySelector(".session-tab-main")!.hasAttribute("data-tauri-drag-region"),
       ).toBe(false);
