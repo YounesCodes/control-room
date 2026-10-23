@@ -320,8 +320,19 @@ describe("Local Terminal Mode in the real App", () => {
         .querySelector('[aria-label="Find in terminal"]')!
         .getBoundingClientRect();
       expect(find.left - newTerminal.right).toBeLessThanOrEqual(1);
-      expect(newTerminal.top).toBeGreaterThanOrEqual(bounds.bottom);
-      expect(find.top).toBeGreaterThanOrEqual(bounds.bottom);
+      // Strip buttons own the window's top edge so their hover fills the full
+      // header height; the overlay drag strip stays the hit target above them.
+      expect(newTerminal.top).toBe(strip.top);
+      expect(find.top).toBe(strip.top);
+      const scrollBack = container!
+        .querySelector('[aria-label="Scroll terminals left"]')!
+        .getBoundingClientRect();
+      expect(scrollBack.top).toBe(strip.top);
+      // Tabs keep their 6px inset below the drag strip.
+      const firstTab = container!.querySelector(
+        ".session-tab-content > .session-tab-wrap, .session-tab-content > .session-tab-group",
+      ) as HTMLElement | null;
+      expect(firstTab?.getBoundingClientRect().top).toBeCloseTo(bounds.bottom, 0);
       expect(
         container!.querySelector(".session-tab-main")!.hasAttribute("data-tauri-drag-region"),
       ).toBe(false);
@@ -330,6 +341,34 @@ describe("Local Terminal Mode in the real App", () => {
         .toBeVisible();
     },
   );
+  it("keeps the New terminal plus and chevron clustered as one control beside the picker", async () => {
+    await page.viewport(1200, 640);
+    mountApp();
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    for (let index = 0; index < 8; index++) {
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "New terminal" })
+        .getByRole("button", { name: /Command Prompt/ })
+        .click();
+    }
+    const control = container!.querySelector(".session-new-terminal") as HTMLElement;
+    const [plus, menuChevron] = control.querySelectorAll<SVGSVGElement>("svg");
+    const plusBox = plus.getBoundingClientRect();
+    const chevronBox = menuChevron.getBoundingClientRect();
+    const picker = container!
+      .querySelector('[aria-label="All terminals"] svg')!
+      .getBoundingClientRect();
+    // The two glyphs sit far closer to each other than to any neighboring
+    // control, so the pair reads as one button rather than two fused ones.
+    const innerGap = chevronBox.left - plusBox.right;
+    expect(innerGap).toBeLessThanOrEqual(4);
+    expect(plusBox.left - picker.right).toBeGreaterThan(innerGap * 2);
+    // The chevron is the control's menu affordance: quieter than the plus and
+    // smaller than the neighboring All-terminals picker chevron.
+    expect(getComputedStyle(menuChevron).color).not.toBe(getComputedStyle(plus).color);
+    expect(chevronBox.height).toBeLessThan(picker.height);
+  });
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
     await page.viewport(1280, 800);
     mountApp();
