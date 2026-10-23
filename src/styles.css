@@ -1635,11 +1635,15 @@ code,
 }
 
 .terminal-focus-mode .session-tabs {
-  padding-top: 6px;
+  /* Every strip cell — tabs included — runs to the window's top edge so its
+     highlight fills the full header height; the overlay drag strip above the
+     top pixels stays the drag target. */
+  padding-top: 0;
 }
 
 .session-window-drag-region {
   position: absolute;
+  z-index: 1;
   inset: 0 0 auto;
   height: 6px;
   cursor: grab;
@@ -1885,11 +1889,11 @@ code,
 
 .session-new-terminal {
   display: inline-flex;
-  width: 52px;
+  width: 46px;
   flex: none;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   padding: 0 8px;
@@ -1897,6 +1901,13 @@ code,
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1;
+}
+
+/* The chevron is the menu affordance of one "New terminal" control, not a
+   second glyph button: it stays smaller and quieter than the plus and than
+   the neighboring All-terminals picker chevron. */
+.session-new-terminal > svg:last-of-type {
+  color: var(--text-muted);
 }
 
 .session-new-terminal > svg {

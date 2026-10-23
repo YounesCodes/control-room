@@ -55,9 +55,13 @@ Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected
 split pane on all four edges, above terminal content, without blocking input or
 divider interaction. Keep a thin window drag strip across the top of the Focus Mode
-header, even when tabs overflow, without a blank column between controls. Buttons and tabs
+header, even when tabs overflow, without a blank column between controls. Focus Mode
+header cells — tabs and buttons — fill the strip's full height so their highlight
+reaches the top edge; the drag strip overlays the top pixels of the whole strip and
+stays the drag target. Buttons and tabs
 remain ordinary click targets. Use a compact plus and dropdown control for
-New terminal outside the scrolling tabs.
+New terminal outside the scrolling tabs, its two glyphs clustered and the chevron quieter
+than the plus so the pair reads as one button.
 Local Terminal Mode starts the default enabled standard local shell in normal focus
 mode, with the Connections rail hidden.
 Leaving focus mode returns to the active Workspace without changing its target
