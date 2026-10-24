@@ -100,7 +100,10 @@ long body scrolls. Menus should open as anchored overlays and must not resize or
 reflow the row that opened them.
 
 Scratchpad uses the full workspace width and grows with the window. Keep its
-heading and editor aligned. Systemd service rows scroll within their own bounded
+heading and editor aligned. A terminal's Scratchpad popup reuses the same editor
+and autosave behavior in a compact anchored overlay, follows the active
+terminal's own note or the shared note, and pastes note text without running it.
+Systemd service rows scroll within their own bounded
 area, leaving search, filters, and refresh available above the list.
 
 ## Visual language

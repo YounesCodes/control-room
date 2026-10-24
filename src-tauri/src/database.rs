@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 9;
+const LATEST_SCHEMA_VERSION: i64 = 10;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -1063,12 +1063,16 @@ fn validate_scratchpad_owner(
     owner_id: &str,
     connection_id: Option<&str>,
 ) -> Result<(), String> {
-    if scope != "connection" && scope != "global" {
+    if scope != "connection" && scope != "global" && scope != "local" {
         return Err("Scratchpad scope is invalid".into());
     }
     if scope == "global" {
         if owner_id != "global" || connection_id.is_some() {
             return Err("Global scratchpad ownership is invalid".into());
+        }
+    } else if scope == "local" {
+        if connection_id.is_some() || owner_id == "global" || Uuid::parse_str(owner_id).is_err() {
+            return Err("Local terminal scratchpad ownership is invalid".into());
         }
     } else {
         let Some(connection_id) = connection_id else {
@@ -1589,6 +1593,50 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
 
                 PRAGMA user_version = 9;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    // Local terminal workspaces get their own scratchpad scope (#138). The
+    // owner is the workspace UUID the frontend persists and restores verbatim,
+    // so a note follows its terminal tab across restarts. There is no Saved
+    // Connection behind such a note, so connection_id stays NULL and nothing
+    // cascades when the tab is eventually closed.
+    if version < 10 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE scratchpad_notes_v10 (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL CHECK(scope IN ('connection', 'global', 'local')),
+                    owner_id TEXT NOT NULL,
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    text TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(scope, owner_id),
+                    CHECK(
+                        (scope = 'connection' AND connection_id IS NOT NULL AND owner_id = connection_id)
+                        OR (scope = 'global' AND owner_id = 'global' AND connection_id IS NULL)
+                        OR (scope = 'local' AND owner_id <> 'global' AND connection_id IS NULL)
+                    )
+                );
+
+                INSERT INTO scratchpad_notes_v10
+                    (id, scope, owner_id, connection_id, text, created_at, updated_at)
+                SELECT id, scope, owner_id, connection_id, text, created_at, updated_at
+                FROM scratchpad_notes;
+
+                DROP TABLE scratchpad_notes;
+                ALTER TABLE scratchpad_notes_v10 RENAME TO scratchpad_notes;
+                CREATE INDEX idx_scratchpad_notes_connection
+                ON scratchpad_notes(connection_id);
+
+                PRAGMA user_version = 10;
                 "#,
             )
             .map_err(|error| error.to_string())?;
@@ -2500,6 +2548,36 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+
+        // A local terminal workspace owns a note keyed by its persisted
+        // workspace UUID. It survives Saved Connection changes because no
+        // connection is involved, and deleting the connection above must not
+        // have touched it.
+        let workspace_id = "22222222-2222-4222-8222-222222222222";
+        let local_note = database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "local".into(),
+                owner_id: workspace_id.into(),
+                connection_id: None,
+                text: "Build flags for this tab".into(),
+            })
+            .unwrap();
+        assert_eq!(local_note.connection_id, None);
+        assert_eq!(
+            database
+                .get_scratchpad_note("local", workspace_id, None)
+                .unwrap(),
+            Some(local_note)
+        );
+        database
+            .delete_scratchpad_note("local", workspace_id, None)
+            .unwrap();
+        assert!(
+            database
+                .get_scratchpad_note("local", workspace_id, None)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -2528,6 +2606,101 @@ mod tests {
                 })
                 .unwrap_err(),
             "Scratchpad text must be at most 16384 characters"
+        );
+        let workspace_id = "33333333-3333-4333-8333-333333333333";
+        assert_eq!(
+            database
+                .save_scratchpad_note(ScratchpadNoteInput {
+                    scope: "local".into(),
+                    owner_id: workspace_id.into(),
+                    connection_id: Some(workspace_id.into()),
+                    text: "claims a connection".into(),
+                })
+                .unwrap_err(),
+            "Local terminal scratchpad ownership is invalid"
+        );
+        assert_eq!(
+            database
+                .save_scratchpad_note(ScratchpadNoteInput {
+                    scope: "local".into(),
+                    owner_id: "global".into(),
+                    connection_id: None,
+                    text: "collides with the global owner".into(),
+                })
+                .unwrap_err(),
+            "Local terminal scratchpad ownership is invalid"
+        );
+    }
+
+    #[test]
+    fn local_scratchpad_scope_migrates_without_disturbing_existing_notes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let connection_id = "11111111-1111-4111-8111-111111111111";
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(&format!(
+                r#"
+                CREATE TABLE saved_connections (id TEXT PRIMARY KEY);
+                INSERT INTO saved_connections (id) VALUES ('{connection_id}');
+                CREATE TABLE scratchpad_notes (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL CHECK(scope IN ('connection', 'global')),
+                    owner_id TEXT NOT NULL,
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    text TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(scope, owner_id),
+                    CHECK(
+                        (scope = 'connection' AND connection_id IS NOT NULL AND owner_id = connection_id)
+                        OR (scope = 'global' AND owner_id = 'global' AND connection_id IS NULL)
+                    )
+                );
+                INSERT INTO scratchpad_notes VALUES
+                    ('connection-note', 'connection', '{connection_id}', '{connection_id}', 'Host note', '2026-01-01', '2026-01-02'),
+                    ('global-note', 'global', 'global', NULL, 'Shared note', '2026-01-01', '2026-01-03');
+                CREATE INDEX idx_scratchpad_notes_connection
+                ON scratchpad_notes(connection_id);
+                PRAGMA user_version = 9;
+                "#,
+            ))
+            .unwrap();
+        drop(connection);
+
+        let database = Database::open(&path).unwrap();
+        assert_eq!(
+            database
+                .get_scratchpad_note("connection", connection_id, Some(connection_id))
+                .unwrap()
+                .unwrap()
+                .text,
+            "Host note"
+        );
+        assert_eq!(
+            database
+                .get_scratchpad_note("global", "global", None)
+                .unwrap()
+                .unwrap()
+                .text,
+            "Shared note"
+        );
+        let workspace_id = "44444444-4444-4444-8444-444444444444";
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "local".into(),
+                owner_id: workspace_id.into(),
+                connection_id: None,
+                text: "Terminal tab note".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            database
+                .get_scratchpad_note("local", workspace_id, None)
+                .unwrap()
+                .unwrap()
+                .text,
+            "Terminal tab note"
         );
     }
 
@@ -3331,13 +3504,13 @@ mod tests {
             !migrations.contains("PRAGMA user_version = 7"),
             "step 7 was never released, so no database reports it"
         );
-        for released in [1, 2, 3, 4, 5, 6, 8, 9] {
+        for released in [1, 2, 3, 4, 5, 6, 8, 9, 10] {
             assert!(
                 migrations.contains(&format!("PRAGMA user_version = {released}")),
                 "migration step {released} disappeared"
             );
         }
-        assert_eq!(LATEST_SCHEMA_VERSION, 9);
+        assert_eq!(LATEST_SCHEMA_VERSION, 10);
     }
 
     /// A Saved Connection owns everything collected about that host. Deleting

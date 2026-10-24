@@ -63,6 +63,7 @@ import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls } from "./components/WindowControls";
+import { TerminalScratchpad } from "./components/TerminalScratchpad";
 import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
@@ -244,9 +245,11 @@ export function App() {
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
+  const [scratchpadOpen, setScratchpadOpen] = useState(false);
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
+  const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
   const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
   const closingWorkspaceIdsRef = useRef(new Set<string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
@@ -663,6 +666,12 @@ export function App() {
     document.addEventListener("mousedown", pointerDown);
     return () => document.removeEventListener("mousedown", pointerDown);
   }, [newTerminalMenuOpen]);
+
+  // The Scratchpad popover belongs to the terminal view; leaving it (Settings,
+  // an inspection page, or the workspace closing) closes the popover with it.
+  useEffect(() => {
+    if (settingsOpen || activeWorkspace?.view !== "terminal") setScratchpadOpen(false);
+  }, [settingsOpen, activeWorkspace?.view]);
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -1391,6 +1400,21 @@ export function App() {
     updateWorkspace(activeRemoteWorkspace.id, { view: "terminal" });
   }
 
+  /// The Scratchpad popover's paste works on any terminal — local or remote —
+  /// and follows the selected pane, so it takes the live workspace rather than
+  /// the remote-only view the History paste is bound to. writeSession sends
+  /// raw bytes with no trailing newline, so the note is typed, never run.
+  function pasteNoteIntoTerminal(text: string) {
+    if (!activeWorkspace?.sessionId) {
+      setActionError("Reconnect the terminal before pasting a note.");
+      return;
+    }
+    setActionError(null);
+    void api
+      .writeSession(activeWorkspace.sessionId, new TextEncoder().encode(text))
+      .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
+  }
+
   /// The identity mark for a Workspace: the host OS mark for a Remote Host, a
   /// terminal mark for a local shell, since there is no operating system to
   /// report about the machine the app is already running on.
@@ -2078,7 +2102,41 @@ export function App() {
                   >
                     <Clipboard size={15} />
                   </button>
+                  <button
+                    ref={scratchpadButtonRef}
+                    className="session-strip-button"
+                    type="button"
+                    data-scratchpad-trigger
+                    onClick={() => setScratchpadOpen((open) => !open)}
+                    aria-label="Scratchpad"
+                    title="Scratchpad"
+                    aria-haspopup="dialog"
+                    aria-expanded={scratchpadOpen}
+                  >
+                    <StickyNote size={15} />
+                  </button>
                 </div>
+                {scratchpadOpen && activeWorkspace?.view === "terminal" && (
+                  <TerminalScratchpad
+                    terminalScope={isLocalWorkspace(activeWorkspace) ? "local" : "connection"}
+                    ownerId={
+                      isLocalWorkspace(activeWorkspace)
+                        ? activeWorkspace.id
+                        : activeWorkspace.connectionId
+                    }
+                    ownerLabel={
+                      isLocalWorkspace(activeWorkspace)
+                        ? (activeWorkspace.label ?? activeWorkspace.shell.label)
+                        : activeWorkspace.connectionSnapshot.displayName
+                    }
+                    canPaste={Boolean(activeWorkspace.sessionId) && !activeTerminalEnded}
+                    onPaste={pasteNoteIntoTerminal}
+                    onClose={() => {
+                      setScratchpadOpen(false);
+                      scratchpadButtonRef.current?.focus();
+                    }}
+                  />
+                )}
                 {activeTerminalEnded && (
                   <button
                     className="session-strip-button"

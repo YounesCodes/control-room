@@ -55,22 +55,33 @@ export function ScratchpadPane({ connection }: { connection: SavedConnection }) 
       </header>
       <ScratchpadEditor
         key={`${scope}:${ownerId}`}
-        connection={connection}
         scope={scope}
         ownerId={ownerId}
+        connectionId={scope === "connection" ? connection.id : null}
+        ownerLabel={connection.displayName}
       />
     </section>
   );
 }
 
-function ScratchpadEditor({
-  connection,
+export function ScratchpadEditor({
   scope,
   ownerId,
+  connectionId,
+  ownerLabel,
+  variant = "page",
+  onTextChange,
 }: {
-  connection: SavedConnection;
   scope: ScratchpadScope;
   ownerId: string;
+  /** The Saved Connection behind a connection note; null for global and local. */
+  connectionId: string | null;
+  /** Names the connection in the page subtitle; unused by the compact variant. */
+  ownerLabel?: string;
+  /** "page" fills the Scratchpad view; "compact" backs the terminal popover. */
+  variant?: "page" | "compact";
+  /** Reports the editor's current text so a compact caller can copy or paste it. */
+  onTextChange?: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -100,7 +111,7 @@ function ScratchpadEditor({
     setLoadFailed(false);
     setError(null);
     void api
-      .scratchpadNote(scope, ownerId, scope === "connection" ? connection.id : null)
+      .scratchpadNote(scope, ownerId, connectionId)
       .then((note) => {
         if (!current) return;
         const draft = readScratchpadDraft(scope, ownerId);
@@ -136,7 +147,7 @@ function ScratchpadEditor({
       current = false;
       mountedRef.current = false;
     };
-  }, [connection.id, loadVersion, ownerId, scope]);
+  }, [connectionId, loadVersion, ownerId, scope]);
 
   function setEditedText(nextText: string) {
     const currentText = textRef.current;
@@ -187,7 +198,7 @@ function ScratchpadEditor({
         await api.saveScratchpadNote({
           scope,
           ownerId,
-          connectionId: scope === "connection" ? connection.id : null,
+          connectionId,
           text: snapshot,
         });
         savedTextRef.current = snapshot;
@@ -258,11 +269,19 @@ function ScratchpadEditor({
     return () => window.clearTimeout(timer);
   }, [loadFailed, loaded, ownerId, scope, text]);
 
+  // Reported through a ref so a compact caller can copy or paste the current
+  // text without re-running the autosave effect on every callback identity.
+  const onTextChangeRef = useRef(onTextChange);
+  onTextChangeRef.current = onTextChange;
+  useEffect(() => {
+    onTextChangeRef.current?.(text);
+  }, [text]);
+
   async function deleteNote() {
     await quiesce();
     setError(null);
     try {
-      await api.deleteScratchpadNote(scope, ownerId, scope === "connection" ? connection.id : null);
+      await api.deleteScratchpadNote(scope, ownerId, connectionId);
       savedTextRef.current = "";
       textRef.current = "";
       undoRef.current = [];
@@ -291,7 +310,55 @@ function ScratchpadEditor({
     );
   }
 
-  const scopeLabel = scope === "connection" ? "Connection note" : "Global note";
+  const scopeLabel =
+    scope === "connection"
+      ? "Connection note"
+      : scope === "local"
+        ? "Terminal note"
+        : "Global note";
+  const saveState = (
+    <span className={`scratchpad-save-state scratchpad-save-${status}`} role="status">
+      {status === "saving"
+        ? "Saving…"
+        : status === "unsaved"
+          ? "Waiting to save"
+          : status === "error"
+            ? "Not saved"
+            : "Saved locally"}
+    </span>
+  );
+  if (variant === "compact") {
+    return (
+      <div className="scratchpad-editor scratchpad-editor-compact">
+        {saveState}
+        <textarea
+          ref={textareaRef}
+          aria-label={scopeLabel}
+          value={text}
+          maxLength={MAX_SCRATCHPAD_CHARS}
+          autoFocus
+          onChange={(event) => setEditedText(event.target.value)}
+          onKeyDown={(event) => {
+            if (!(event.ctrlKey || event.metaKey)) return;
+            const key = event.key.toLowerCase();
+            if (key === "z") {
+              event.preventDefault();
+              if (event.shiftKey) redoEdit();
+              else undoEdit();
+            } else if (key === "y") {
+              event.preventDefault();
+              redoEdit();
+            }
+          }}
+          placeholder={
+            scope === "global" ? "Notes for every terminal…" : "Notes for this terminal…"
+          }
+          spellCheck={false}
+        />
+        {error && <p className="inline-error">{error}</p>}
+      </div>
+    );
+  }
   return (
     <div className="scratchpad-editor">
       <div className="scratchpad-meta">
@@ -299,19 +366,11 @@ function ScratchpadEditor({
           <strong>{scopeLabel}</strong>
           <span>
             {scope === "connection"
-              ? `Shared by every Workspace for ${connection.displayName}`
+              ? `Shared by every Workspace for ${ownerLabel ?? "this connection"}`
               : "Shared by every Saved Connection and Workspace"}
           </span>
         </div>
-        <span className={`scratchpad-save-state scratchpad-save-${status}`} role="status">
-          {status === "saving"
-            ? "Saving…"
-            : status === "unsaved"
-              ? "Waiting to save"
-              : status === "error"
-                ? "Not saved"
-                : "Saved locally"}
-        </span>
+        {saveState}
       </div>
       <textarea
         ref={textareaRef}

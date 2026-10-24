@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
   closeSession: vi.fn(),
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
+  writeSession: vi.fn(),
   // Control Room's own updater. Mounted once by App, so every test that renders
   // App reaches it.
   currentAppVersion: vi.fn(),
@@ -203,6 +204,8 @@ describe("Local Terminal", () => {
     api.refreshCapabilities.mockResolvedValue({});
     api.closeSession.mockResolvedValue(undefined);
     api.scratchpadNote.mockResolvedValue(null);
+    api.saveScratchpadNote.mockResolvedValue(undefined);
+    api.writeSession.mockResolvedValue(undefined);
     api.currentAppVersion.mockResolvedValue("0.6.1");
     api.checkForUpdate.mockResolvedValue(null);
     api.pendingUpdateNotice.mockResolvedValue(null);
@@ -509,6 +512,58 @@ describe("Local Terminal", () => {
     expect(screen.getByText("No connections yet")).toBeTruthy();
   });
 
+  it("keeps a Scratchpad note for a local terminal and pastes it without running", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await openLocalShell(user, "PowerShell 7");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    const workspaceId = terminal.dataset.testid!.slice("terminal-".length);
+    await user.click(within(terminal).getByRole("button", { name: "report connected" }));
+    await user.click(within(terminal).getByRole("button", { name: "report session" }));
+
+    await user.click(await screen.findByRole("button", { name: "Scratchpad" }));
+    const dialog = await screen.findByRole("dialog", { name: "Scratchpad" });
+    const editor = within(dialog).getByLabelText("Terminal note") as HTMLTextAreaElement;
+    await user.type(editor, "cargo build");
+    await waitFor(() =>
+      expect(api.saveScratchpadNote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: "local",
+          ownerId: workspaceId,
+          connectionId: null,
+          text: "cargo build",
+        }),
+      ),
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Paste into terminal" }));
+    // Raw bytes with no trailing newline: the note is typed, never executed.
+    await waitFor(() =>
+      expect(api.writeSession).toHaveBeenCalledWith(
+        `${workspaceId}-session`,
+        new TextEncoder().encode("cargo build"),
+      ),
+    );
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Scratchpad" })).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Scratchpad" }));
+
+    api.scratchpadNote.mockResolvedValue({
+      id: "note-1",
+      scope: "local",
+      ownerId: workspaceId,
+      connectionId: null,
+      text: "cargo build",
+      createdAt: "c",
+      updatedAt: "u",
+    });
+    await user.click(screen.getByRole("button", { name: "Scratchpad" }));
+    const reopened = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
+    expect(reopened.value).toBe("cargo build");
+  });
+
   it("keeps a local Workspace terminal-only", async () => {
     const user = userEvent.setup();
     const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
@@ -517,7 +572,9 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "Git Bash");
 
-    // None of the Remote Host views are offered for a local shell.
+    // None of the Remote Host views are offered for a local shell. The
+    // feature-nav entries are plain text buttons; the action strip's own
+    // Scratchpad button is a different control and is expected to exist.
     for (const view of [
       "Overview",
       "Systemd",
@@ -527,10 +584,12 @@ describe("Local Terminal", () => {
       "Logs",
       "Baselines",
       "History",
-      "Scratchpad",
     ]) {
       expect(screen.queryByRole("button", { name: view })).toBeNull();
     }
+    // The whole feature navigation stays remote-only; the action strip's own
+    // Scratchpad button is a separate control and is expected to exist.
+    expect(screen.queryByRole("navigation", { name: "Workspace features" })).toBeNull();
 
     // Opening the Saved Connection brings them back.
     await openConnection(user, "prod-web");

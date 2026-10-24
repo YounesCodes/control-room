@@ -70,6 +70,7 @@ vi.mock("../lib/api", () => {
         administratorStatus: "disabled",
       }),
       saveWorkspaceState: savedLayout.save,
+      scratchpadNote: async () => null,
       currentAppVersion: async () => "0.8.2",
       pendingUpdateNotice: async () => null,
     },
@@ -369,6 +370,28 @@ describe("Local Terminal Mode in the real App", () => {
     // smaller than the neighboring All-terminals picker chevron.
     expect(getComputedStyle(menuChevron).color).not.toBe(getComputedStyle(plus).color);
     expect(chevronBox.height).toBeLessThan(picker.height);
+  });
+  it("anchors the Scratchpad popup over the terminal without reflowing the action strip", async () => {
+    await page.viewport(1200, 640);
+    mountApp();
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    const stripBefore = container!.querySelector(".session-tabs")!.getBoundingClientRect();
+    await page.getByRole("button", { name: "Scratchpad" }).click();
+    const dialog = page.getByRole("dialog", { name: "Scratchpad" });
+    await expect.element(dialog).toBeVisible();
+    // An anchored overlay: the strip that opened it neither moves nor resizes.
+    const stripAfter = container!.querySelector(".session-tabs")!.getBoundingClientRect();
+    expect(stripAfter.top).toBe(stripBefore.top);
+    expect(stripAfter.height).toBe(stripBefore.height);
+    const popover = dialog.element().getBoundingClientRect();
+    expect(popover.top).toBeGreaterThanOrEqual(stripAfter.bottom);
+    expect(popover.right).toBeLessThanOrEqual(window.innerWidth);
+    // Opens on the terminal's context, driven entirely from the keyboard.
+    await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(page.getByRole("button", { name: "Scratchpad" })).toHaveFocus();
+    // Escape unmounts the popover rather than merely hiding it.
+    expect(container!.querySelector(".scratchpad-popover")).toBeNull();
   });
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
     await page.viewport(1280, 800);
