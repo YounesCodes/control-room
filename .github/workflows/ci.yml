@@ -59,12 +59,12 @@ jobs:
       - name: Cache Rust compiler outputs for validation
         uses: Mozilla-Actions/sccache-action@v0.0.11
       - name: Cache Rust dependencies for validation
-        uses: Swatinem/rust-cache@v2.9.2
+        uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
       - name: Install cargo-audit from a prebuilt release
-        uses: taiki-e/install-action@v2.87.28
+        uses: taiki-e/install-action@v2.87.30
         with:
           tool: cargo-audit
           fallback: none
@@ -89,7 +89,7 @@ jobs:
       - name: Cache Rust compiler outputs for installer builds
         uses: Mozilla-Actions/sccache-action@v0.0.11
       - name: Cache Rust dependencies for installer builds
-        uses: Swatinem/rust-cache@v2.9.2
+        uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
