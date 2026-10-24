@@ -10,7 +10,9 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
-    timeout-minutes: 45
+    # Warm-cache releases take about five minutes. The timeout leaves room for
+    # a release whose Rust caches miss and compiles everything from scratch.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with:
@@ -20,8 +22,6 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
       - name: Install cargo-audit from a prebuilt release
         uses: taiki-e/install-action@v2.87.30
         with:
@@ -59,12 +59,28 @@ jobs:
           }
 
       - run: npm ci
-      # Includes check:version, which is what keeps package.json, Cargo.toml,
-      # and tauri.conf.json from disagreeing with the tag being released.
-      - run: npm run check
+      # The tagged commit already passed the full frontend and Rust suites on
+      # main through CI, so re-running them here only re-tests the source, not
+      # the artifact. What a release itself needs is that its manifests agree
+      # with the tag being published — check:version is what keeps package.json,
+      # Cargo.toml, and tauri.conf.json from disagreeing with it.
+      - run: npm run check:version
       - name: Check Rust dependencies for known security issues
         shell: pwsh
         run: cargo audit --file src-tauri/Cargo.lock
+
+      # The Rust caches share their key with CI's installer job, which compiles
+      # the same release profile on main. A tag points at a commit main CI has
+      # already built, so the dependency graph is restored instead of compiled,
+      # and only the app crate, link, NSIS bundling, and signing remain.
+      - name: Cache Rust compiler outputs for the release build
+        uses: Mozilla-Actions/sccache-action@v0.0.11
+      - name: Cache Rust dependencies for the release build
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+          sharedKey: "tauri-release-build"
 
       # tauri-action builds, signs, creates the GitHub Release, and uploads the
       # installer alongside its .sig and a latest.json describing them. Writing
@@ -81,6 +97,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: sccache
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}

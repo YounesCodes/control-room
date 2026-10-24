@@ -45,6 +45,12 @@ jobs:
         run: |
           & ./scripts/test-windows-ssh-probe.ps1
           & ./scripts/test-windows-docker.ps1
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\ms-playwright
+          # The Chromium build rides the pinned playwright version in the lock.
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install chromium
       - run: npm run test:browser
 
@@ -93,6 +99,10 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          # Shared with the release workflow's build, so a tag restores the
+          # release-profile dependencies this job compiled on main instead of
+          # building them again from scratch.
+          sharedKey: "tauri-release-build"
       - run: npm ci
       - run: npm run tauri build
         env:
