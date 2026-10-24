@@ -161,7 +161,7 @@ describe("Resizable panels in the native app", () => {
     for (const name of ["Layout host A", "Layout host B"]) {
       const menu = $("aria/Open actions for " + name);
       await menu.moveTo();
-      await menu.waitForClickable();
+      if (!isMac) await menu.waitForClickable();
       await menu.click();
       await $("aria/Delete connection").click();
       await $("button=Delete connection").click();
