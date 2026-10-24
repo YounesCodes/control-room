@@ -80,7 +80,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
-          sharedKey: "tauri-release-build"
+          shared-key: "tauri-release-build"
 
       # tauri-action builds, signs, creates the GitHub Release, and uploads the
       # installer alongside its .sig and a latest.json describing them. Writing

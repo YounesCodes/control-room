@@ -102,7 +102,7 @@ jobs:
           # Shared with the release workflow's build, so a tag restores the
           # release-profile dependencies this job compiled on main instead of
           # building them again from scratch.
-          sharedKey: "tauri-release-build"
+          shared-key: "tauri-release-build"
       - run: npm ci
       - run: npm run tauri build
         env:
