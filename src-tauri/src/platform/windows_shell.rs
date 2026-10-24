@@ -1,6 +1,10 @@
 //! Windows shell discovery, including Sudo for Windows profiles.
-use std::{env, path::{Path, PathBuf}};
 use super::*;
+use crate::models::{AdministratorTerminalStatus, LocalShellCatalog, LocalShellProfile};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 /// The Windows locations discovery is allowed to look at, captured once so
 /// detection can be tested without depending on what the machine has installed.
 #[derive(Debug, Clone, Default)]

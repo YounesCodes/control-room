@@ -31,7 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="crash-shell">
         <header className="crash-titlebar" data-tauri-drag-region>
-          <WindowControls />
+          <WindowControls platform={navigator.platform.startsWith("Mac") ? "macos" : "windows"} />
         </header>
         <section className="crash-screen" role="alert">
           <h1>Something went wrong</h1>

@@ -646,7 +646,12 @@ impl Default for AppSettings {
                 HeaderMetric::Uptime,
             ],
             host_metrics_interval_seconds: 5,
-            terminal_font_family: "Cascadia Mono, Consolas, monospace".into(),
+            terminal_font_family: if cfg!(target_os = "macos") {
+                "Menlo, Monaco, monospace"
+            } else {
+                "Cascadia Mono, Consolas, monospace"
+            }
+            .into(),
             terminal_font_size: 14,
             terminal_scrollback: 10_000,
             terminal_foreground: "#f2f2ee".into(),
@@ -749,7 +754,10 @@ impl LocalShellKind {
             LocalShellKind::PowerShell7 => Some("powershell-7-administrator"),
             LocalShellKind::WindowsPowerShell => Some("windows-powershell-administrator"),
             LocalShellKind::CommandPrompt => Some("command-prompt-administrator"),
-            LocalShellKind::GitBash | LocalShellKind::Zsh | LocalShellKind::Bash | LocalShellKind::Fish => None,
+            LocalShellKind::GitBash
+            | LocalShellKind::Zsh
+            | LocalShellKind::Bash
+            | LocalShellKind::Fish => None,
         }
     }
 

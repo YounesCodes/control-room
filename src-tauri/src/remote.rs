@@ -935,8 +935,7 @@ fn run_ssh(
     remote_command: &str,
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
-    let ssh_path =
-        detect_ssh_path().ok_or_else(ssh_not_found_message)?;
+    let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
     let mut command = background_command(ssh_path);

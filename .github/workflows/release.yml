@@ -88,7 +88,7 @@ jobs:
       # createUpdaterArtifacts lives in a release-only config overlay rather
       # than the main config, so an ordinary `npm run tauri build` on a
       # developer machine never needs the signing key.
-      - name: Build, sign, and publish
+      - name: Build and sign the Windows draft release
         uses: tauri-apps/tauri-action@v1.0.0
         id: tauri
         env:
@@ -101,7 +101,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
           releaseBody: ${{ steps.release-notes.outputs.body }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           # Use the notes written for this version, not generated PR titles.
           generateReleaseNotes: false
@@ -199,3 +199,139 @@ jobs:
           }
           Write-Host "latest.json announces $($feed.version) with $($feed.platforms.PSObject.Properties.Name -join ', ')"
           Write-Host "notes: $($feed.notes.Length) characters"
+
+  macos:
+    name: Sign and notarize ${{ matrix.target }}
+    needs: release
+    if: vars.MACOS_RELEASES == 'true'
+    strategy:
+      fail-fast: false
+      # Each tauri-action merges latest.json. Serialize the uploads to avoid
+      # one architecture overwriting the other's updater entry.
+      max-parallel: 1
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Require Developer ID signing and notarization credentials
+        run: |
+          node --input-type=module <<'NODE'
+          const required = ['APPLE_CERTIFICATE', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID'];
+          const missing = required.filter(key => !process.env[key]?.trim());
+          if (missing.length || process.env.APPLE_SIGNING_IDENTITY === '-') {
+            throw new Error(`macOS releases require Developer ID signing and notarization. Missing: ${missing.join(', ')}`);
+          }
+          NODE
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - run: npm ci
+      - name: Build signed and notarized app, DMG, and updater archive
+        uses: tauri-apps/tauri-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          generateReleaseNotes: false
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+      - name: Verify the signature and notarization, then attach a checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          root="src-tauri/target/$TARGET/release/bundle"
+          codesign --verify --deep --strict "$root/macos/Control Room.app"
+          spctl --assess --type execute --verbose "$root/macos/Control Room.app"
+          xcrun stapler validate "$root/macos/Control Room.app"
+          dmg=$(find "$root/dmg" -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          gh release view "$GITHUB_REF_NAME" --json assets > release-assets.json
+          name=$(LOCAL_DMG="$dmg" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { basename } from 'node:path';
+          const normalize = name => name.replace(/[^a-z0-9]/gi, '').toLowerCase();
+          const assets = JSON.parse(readFileSync('release-assets.json', 'utf8')).assets;
+          const matches = assets.filter(asset => normalize(asset.name) === normalize(basename(process.env.LOCAL_DMG)));
+          if (matches.length !== 1) throw new Error('Could not identify the published DMG');
+          console.log(matches[0].name);
+          NODE
+          )
+          checksum=$(shasum -a 256 "$dmg" | cut -d ' ' -f 1)
+          printf '%s  %s\n' "$checksum" "$name" > "$name.sha256"
+          gh release upload "$GITHUB_REF_NAME" "$name.sha256" --clobber
+
+  publish:
+    name: Verify all enabled platforms and publish
+    needs: [release, macos]
+    if: >-
+      always() && needs.release.result == 'success' &&
+      (needs.macos.result == 'success' || (needs.macos.result == 'skipped' && vars.MACOS_RELEASES != 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Validate the complete updater feed and Mac signatures
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INCLUDE_MACOS: ${{ vars.MACOS_RELEASES }}
+        run: |
+          gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir . --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not download the updater feed" }
+          $feed = Get-Content -LiteralPath latest.json -Raw | ConvertFrom-Json
+          $body = (gh release view $env:GITHUB_REF_NAME --json body | ConvertFrom-Json).body
+          $feed.notes = $body
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'latest.json'), ($feed | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+          node scripts/generate-release-notes.mjs --validate-feed latest.json
+          if ($LASTEXITCODE -ne 0) { throw "Invalid release notes" }
+          if ($feed.version -ne $env:GITHUB_REF_NAME.TrimStart('v')) { throw "Updater version differs from the tag" }
+          $platforms = @($feed.platforms.PSObject.Properties.Name)
+          if (-not ($platforms -match '^windows-x86_64')) { throw "Missing Windows updater entry" }
+          if ($env:INCLUDE_MACOS -eq 'true') {
+            foreach ($arch in @('aarch64', 'x86_64')) {
+              if (-not ($platforms -contains "darwin-$arch")) { throw "Missing darwin-$arch updater entry" }
+            }
+            New-Item -ItemType Directory -Path macos-artifacts | Out-Null
+            gh release download $env:GITHUB_REF_NAME --pattern '*.app.tar.gz' --pattern '*.app.tar.gz.sig' --dir macos-artifacts
+            if ($LASTEXITCODE -ne 0) { throw "Missing Mac updater artifacts" }
+            $archives = @(Get-ChildItem -LiteralPath macos-artifacts -Filter '*.app.tar.gz')
+            if ($archives.Count -ne 2) { throw "Expected both Mac updater archives" }
+            foreach ($archive in $archives) {
+              node scripts/verify-updater-signature.mjs $archive.FullName ($archive.FullName + '.sig')
+              if ($LASTEXITCODE -ne 0) { throw "Rejected Mac updater signature" }
+            }
+            $assets = (gh release view $env:GITHUB_REF_NAME --json assets | ConvertFrom-Json).assets
+            if (@($assets | Where-Object name -Match '\.dmg$').Count -ne 2) { throw "Expected both Mac DMGs" }
+            if (@($assets | Where-Object name -Match '\.dmg\.sha256$').Count -ne 2) { throw "Expected both Mac checksums" }
+          }
+          gh release upload $env:GITHUB_REF_NAME latest.json --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not upload the complete updater feed" }
+          gh release edit $env:GITHUB_REF_NAME --draft=false
+          if ($LASTEXITCODE -ne 0) { throw "Could not publish the verified release" }

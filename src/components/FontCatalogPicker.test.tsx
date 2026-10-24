@@ -179,7 +179,7 @@ describe("catalog font lifecycle", () => {
     expect((screen.getByRole("combobox") as HTMLInputElement).disabled).toBe(true);
     const channel = api.installCatalogFont.mock.calls.at(-1)![1];
     act(() => channel.onmessage({ stage: "installing", completed: 1, total: 2 }));
-    expect(screen.getByText(/Installing for your Windows account/)).toBeTruthy();
+    expect(screen.getByText(/Installing for your account/)).toBeTruthy();
     await act(async () => finish("JetBrains Mono"));
     expect(props.onUse).toHaveBeenCalledWith("JetBrains Mono");
     expect(
@@ -200,7 +200,7 @@ describe("catalog font lifecycle", () => {
     );
     expect(screen.queryByText(/is installed and selected/)).toBeNull();
     expect(screen.getByRole("button", { name: "Retry apply font" })).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toContain("installed for your Windows account");
+    expect(screen.getByRole("alert").textContent).toContain("installed for your account");
     expect(screen.getByRole("alert").textContent).not.toContain("current font is unchanged");
     const face = add.mock.calls.find(([face]) => face.family === "JetBrains Mono")![0];
     expect(remove).toHaveBeenCalledWith(face);

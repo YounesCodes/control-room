@@ -1,6 +1,15 @@
+import { isMac } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { addConnection, feature, ipc, openOfflineConnection, restartApp } from "./helpers";
+import {
+  addConnection,
+  feature,
+  ipc,
+  openOfflineConnection,
+  restartApp,
+  focusElement,
+  pressBoundaryKey,
+} from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
 describe("Resizable panels in the native app", () => {
@@ -24,21 +33,26 @@ describe("Resizable panels in the native app", () => {
         );
       });
     await browser.waitUntil(fillsWorkspace);
-    await $("aria/Maximize or restore window").click();
+    if (isMac) await ipc("plugin:window|toggle_maximize", { label: "main" });
+    else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () =>
       ipc<boolean>("plugin:window|is_maximized", { label: "main" }),
     );
     await browser.waitUntil(fillsWorkspace);
-    await $("aria/Maximize or restore window").click();
+    if (isMac) await ipc("plugin:window|toggle_maximize", { label: "main" });
+    else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(
       async () => !(await ipc<boolean>("plugin:window|is_maximized", { label: "main" })),
     );
     await browser.waitUntil(fillsWorkspace);
   });
-  it("drags and saves the Connections width through SQLite and resets it", async () => {
+  it("resizes and saves the Connections width through SQLite and resets it", async () => {
     const divider = $("aria/Resize Connections panel");
     const defaultWidth = await divider.getAttribute("aria-valuenow");
-    await divider.dragAndDrop({ x: 100, y: 0 });
+    if (isMac) {
+      await focusElement(await divider);
+      for (let i = 0; i < 2; i++) await pressBoundaryKey("ArrowRight", true);
+    } else await divider.dragAndDrop({ x: 100, y: 0 });
     const chosen = Number(await divider.getAttribute("aria-valuenow"));
     expect(chosen).toBeGreaterThan(300);
     await browser.waitUntil(async () => {
@@ -80,12 +94,12 @@ describe("Resizable panels in the native app", () => {
     };
     await openBaselines();
     let content = $("aria/Resize Baselines content");
-    await content.click();
+    await focusElement(await content);
     await browser.keys("ArrowLeft");
     const contentWidth = Number(await content.getAttribute("aria-valuenow"));
     let split = $("aria/Resize Baselines panes");
-    await split.click();
-    await browser.keys(["Shift", "ArrowLeft", "NULL"]);
+    await focusElement(await split);
+    await pressBoundaryKey("ArrowLeft", true);
     const splitWidth = Number(await split.getAttribute("aria-valuenow"));
     const saved = async () =>
       (await browser.tauri.execute(({ core }) => core.invoke("get_workspace_state"))) as {
@@ -101,6 +115,18 @@ describe("Resizable panels in the native app", () => {
     await openOfflineConnection("Layout host B");
     await openBaselines();
     await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
+    // View changes use the same debounced save as tab state. Wait for that
+    // write before terminating the process to test restoration deterministically.
+    await browser.waitUntil(async () => {
+      const state = await ipc<{
+        activeWorkspaceId: string;
+        workspaces: { id: string; view: string }[];
+      }>("get_workspace_state");
+      return (
+        state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.view ===
+        "baselines"
+      );
+    });
     await restartApp();
     content = $("aria/Resize Baselines content");
     split = $("aria/Resize Baselines panes");
@@ -114,7 +140,10 @@ describe("Resizable panels in the native app", () => {
     expect((await saved()).panelSizes["content:baselines"]).toBe(contentWidth);
     await browser.setWindowSize(window.width, window.height);
     await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
-    await split.doubleClick();
+    if (isMac) {
+      await focusElement(await split);
+      await browser.keys("Enter");
+    } else await split.doubleClick();
     await browser.waitUntil(async () => !("split:Baselines" in (await saved()).panelSizes));
     await $("aria/Reset layout").click();
     await browser.waitUntil(async () => Object.keys((await saved()).panelSizes).length === 0);
@@ -133,7 +162,10 @@ describe("Resizable panels in the native app", () => {
     await feature("Baselines");
     let divider = $("aria/Resize Hosts and Capabilities");
     const original = Number(await divider.getAttribute("aria-valuenow"));
-    await divider.dragAndDrop({ x: 0, y: -60 });
+    if (isMac) {
+      await focusElement(await divider);
+      await pressBoundaryKey("ArrowUp", true);
+    } else await divider.dragAndDrop({ x: 0, y: -60 });
     const chosen = Number(await divider.getAttribute("aria-valuenow"));
     expect(chosen).toBeLessThan(original - 30);
     const saved = () => ipc<PersistedWorkspaceState>("get_workspace_state");
@@ -141,8 +173,8 @@ describe("Resizable panels in the native app", () => {
     await restartApp();
     divider = $("aria/Resize Hosts and Capabilities");
     await expect(divider).toHaveAttribute("aria-valuenow", String(chosen));
-    await divider.click();
-    await browser.keys("End");
+    await focusElement(await divider);
+    await pressBoundaryKey("End");
     await browser.waitUntil(async () =>
       browser.execute(() => {
         const nav = document.querySelector<HTMLElement>(".workspace-navigation")!;
@@ -151,11 +183,14 @@ describe("Resizable panels in the native app", () => {
     );
     await $("aria/Resize Connections panel").moveTo();
     await browser.saveScreenshot("test-results/desktop/layout-dividers.png");
-    await divider.doubleClick();
+    if (isMac) {
+      await focusElement(await divider);
+      await browser.keys("Enter");
+    } else await divider.doubleClick();
     await browser.waitUntil(async () => !("sidebar:hosts" in ((await saved()).panelSizes ?? {})));
     await expect(divider).toHaveAttribute("aria-valuenow", String(original));
-    await divider.click();
-    await browser.keys("Home");
+    await focusElement(await divider);
+    await pressBoundaryKey("Home");
     await $("aria/Reset layout").click();
     await browser.waitUntil(async () => Object.keys((await saved()).panelSizes ?? {}).length === 0);
     await restartApp();

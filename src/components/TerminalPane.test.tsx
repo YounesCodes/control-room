@@ -239,12 +239,13 @@ function renderPane(
     onSelectionChange?: (hasSelection: boolean) => void;
     onProcessing?: (busy: boolean) => void;
     findRequest?: number;
+    platform?: "windows" | "macos";
   } = {},
 ) {
   render(
     <TerminalPane
-      workspace={workspace}
       platform="windows"
+      workspace={workspace}
       settings={settings}
       visible
       active
@@ -733,6 +734,35 @@ describe("TerminalPane sessions", () => {
     expect(writtenText()).toEqual(["echo once"]);
   });
 
+  it("uses Command shortcuts on macOS while leaving Control input to the shell", async () => {
+    api.startSession.mockResolvedValue({ sessionId: "session-mac" });
+    renderPane(createRemoteWorkspace(connection), vi.fn(), { platform: "macos" });
+    await vi.waitFor(() => expect(xterm.customKeyHandler).toBeTruthy());
+    for (const key of ["t", "w", "r", "p", "f"]) {
+      expect(
+        xterm.customKeyHandler?.(
+          new KeyboardEvent("keydown", { key, metaKey: true, shiftKey: true }),
+        ),
+      ).toBe(false);
+      expect(
+        xterm.customKeyHandler?.(
+          new KeyboardEvent("keydown", { key, ctrlKey: true, shiftKey: true }),
+        ),
+      ).toBe(true);
+    }
+    xterm.selection = "Mac selection";
+    expect(
+      xterm.customKeyHandler?.(
+        new KeyboardEvent("keydown", { key: "c", metaKey: true, shiftKey: true }),
+      ),
+    ).toBe(false);
+    expect(clipboard.writeText).toHaveBeenCalledWith("Mac selection");
+    expect(
+      xterm.customKeyHandler?.(new KeyboardEvent("keydown", { key: "v", metaKey: true })),
+    ).toBe(true);
+    expect(clipboard.readText).not.toHaveBeenCalled();
+  });
+
   it("keeps the original connection failure when input is attempted", () => {
     renderPane({
       ...createRemoteWorkspace(connection),
@@ -825,6 +855,7 @@ describe("TerminalPane sessions", () => {
     const onActivity = vi.fn();
     render(
       <TerminalPane
+        platform="windows"
         workspace={createLocalWorkspace(shell)}
         settings={settings}
         visible={false}

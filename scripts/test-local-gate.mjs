@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 
-if (process.platform !== "win32") {
-  console.error("The local gate runs on the Windows development checkout.");
+if (!["win32", "darwin"].includes(process.platform)) {
+  console.error("The local gate requires a Windows or macOS development checkout.");
   process.exit(1);
 }
 

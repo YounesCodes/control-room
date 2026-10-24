@@ -13,7 +13,9 @@ export default defineConfig({
     browser: {
       enabled: true,
       provider: playwright({ contextOptions: { reducedMotion: "reduce" } }),
-      instances: [{ browser: "chromium" }],
+      instances: [
+        { browser: process.env.CONTROL_ROOM_TEST_BROWSER === "webkit" ? "webkit" : "chromium" },
+      ],
       headless: true,
     },
   },

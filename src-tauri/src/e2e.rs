@@ -1,5 +1,7 @@
 //! Read-only diagnostics and isolated startup for debug desktop tests.
-use std::{ffi::OsStr, path::PathBuf};
+#[cfg(any(windows, test))]
+use std::ffi::OsStr;
+use std::path::PathBuf;
 
 use serde::Serialize;
 use tauri::State;
@@ -50,6 +52,7 @@ pub fn e2e_runtime_status(
     }
 }
 
+#[cfg(any(windows, test))]
 pub fn automation_browser_args(arguments: &str) -> Option<String> {
     let port = arguments
         .split_ascii_whitespace()
@@ -62,6 +65,7 @@ pub fn automation_browser_args(arguments: &str) -> Option<String> {
     ))
 }
 
+#[cfg(any(windows, test))]
 pub fn webview_data_directory(folder: Option<&OsStr>, fallback: PathBuf) -> PathBuf {
     folder
         .map(PathBuf::from)

@@ -184,6 +184,24 @@ export function HostMetrics({
       </button>
       <div
         className="host-metrics-values"
+        onKeyDown={(event) => {
+          if (!overflow) return;
+          const row = event.currentTarget;
+          const next =
+            event.key === "ArrowLeft"
+              ? row.scrollLeft - 80
+              : event.key === "ArrowRight"
+                ? row.scrollLeft + 80
+                : event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? row.scrollWidth
+                    : null;
+          if (next !== null) {
+            event.preventDefault();
+            row.scrollLeft = next;
+          }
+        }}
         data-tauri-drag-region
         ref={values}
         tabIndex={overflow ? 0 : undefined}

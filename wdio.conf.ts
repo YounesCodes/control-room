@@ -1,23 +1,22 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { spawn } from "node:child_process";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 import TauriService from "@wdio/tauri-service";
 import AsyncScriptService, { installAsyncScriptCommand } from "./e2e/async-script-service";
 import { recordDrivers, stopOwnedDrivers } from "./e2e/driver-processes";
+import { application, driverProvider, isMac } from "./e2e/platform";
+import { stopOwnedMacApplications } from "./e2e/macos-processes";
 
-if (process.platform !== "win32") {
-  throw new Error("Control Room desktop E2E tests require Windows.");
+if (!["win32", "darwin"].includes(process.platform)) {
+  throw new Error("Control Room desktop E2E tests require Windows or macOS.");
 }
 
 const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
 process.env.CONTROL_ROOM_E2E_RUNNER_PID ||= String(process.pid);
-const application = resolve(
-  process.env.CARGO_TARGET_DIR ?? "src-tauri/target",
-  "debug/control-room.exe",
-);
 const tauriCapabilities: TauriCapabilities = {
   browserName: "tauri",
   "tauri:options": { application },
@@ -37,10 +36,10 @@ export const config: WebdriverIO.Config = {
     [
       "@wdio/tauri-service",
       {
-        driverProvider: "external",
+        driverProvider,
         appBinaryPath: application,
-        autoInstallTauriDriver: true,
-        autoDownloadEdgeDriver: true,
+        autoInstallTauriDriver: !isMac,
+        autoDownloadEdgeDriver: !isMac,
         captureBackendLogs: true,
         captureFrontendLogs: true,
       },
@@ -55,13 +54,25 @@ export const config: WebdriverIO.Config = {
   waitforTimeout: 10_000,
   connectionRetryTimeout: 60_000,
   connectionRetryCount: 1,
+  onPrepare: () => {
+    if (isMac) {
+      // SSH and embedded WebDriver events do not reset macOS's idle timer.
+      // Keep the display awake only while this test runner is alive.
+      const assertion = spawn(
+        "/usr/bin/caffeinate",
+        ["-d", "-i", "-u", "-w", String(process.pid)],
+        { stdio: "ignore" },
+      );
+      assertion.unref();
+    }
+  },
   onWorkerStart: () => recordDrivers(dataDirectory, process.pid),
   before: () => recordDrivers(dataDirectory, Number(process.env.CONTROL_ROOM_E2E_RUNNER_PID)),
   onReload: async () => {
     const { browser } = await import("@wdio/globals");
     installAsyncScriptCommand(browser);
     // The service caches provider metadata by session ID. A native restart needs initialization too.
-    await new TauriService({ driverProvider: "external" }, tauriCapabilities).before(
+    await new TauriService({ driverProvider }, tauriCapabilities).before(
       tauriCapabilities,
       [],
       browser,
@@ -69,6 +80,7 @@ export const config: WebdriverIO.Config = {
   },
   onComplete: async () => {
     await stopOwnedDrivers(dataDirectory);
+    await stopOwnedMacApplications(dataDirectory);
     const pidFile = join(dataDirectory, "app-pids.txt");
     const pids = existsSync(pidFile)
       ? readFileSync(pidFile, "utf8").trim().split(/\s+/).map(Number)

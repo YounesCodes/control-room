@@ -27,7 +27,7 @@ export function isControlRoomShortcut(
   if (modifier === "meta" ? !event.metaKey : !event.ctrlKey) return false;
   const key = event.key.toLowerCase();
   if (!event.shiftKey) return false;
-  return key === "t" || key === "w" || key === "r" || key === "p";
+  return key === "t" || key === "w" || key === "r" || key === "p" || key === "f";
 }
 
 /// Who owns a right click inside the terminal.

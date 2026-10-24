@@ -1,7 +1,11 @@
 //! Allowlisted local shell discovery and PTY command construction.
-use std::path::PathBuf;
+use crate::models::LocalShellKind;
+#[cfg(not(windows))]
+use crate::models::{AdministratorTerminalStatus, LocalShellCatalog};
 use portable_pty::CommandBuilder;
-use crate::models::{AdministratorTerminalStatus, LocalShellCatalog, LocalShellKind, LocalShellProfile};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 #[cfg(windows)]
 #[path = "platform/windows_shell.rs"]
 mod windows;
@@ -53,7 +57,7 @@ impl ResolvedLocalShell {
 }
 
 /// Builds the pty command for a resolved shell. The local shell inherits the
-/// user's normal Windows environment, with Git Bash's terminal type and OpenTUI
+/// user's normal environment, with Git Bash's terminal type and OpenTUI
 /// compatibility default added by `configure_terminal_environment`.
 pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
     let mut command = if let Some(sudo) = &shell.administrator_launcher {
@@ -66,21 +70,32 @@ pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
     command.args(shell.arguments);
     #[cfg(windows)]
     windows::configure_terminal_environment(&mut command, shell.kind);
-    if shell.kind.uses_terminal_type() { command.env("TERM", "xterm-256color"); }
+    if shell.kind.uses_terminal_type() {
+        command.env("TERM", "xterm-256color");
+    }
     if let Some(directory) = &shell.working_directory {
         command.cwd(directory);
     }
     command
 }
 
-
 #[cfg(not(windows))]
 pub fn installed_shells() -> LocalShellCatalog {
-    LocalShellCatalog { profiles: crate::platform::installed_local_shells(), administrator_status: AdministratorTerminalStatus::UnsupportedWindows }
+    LocalShellCatalog {
+        profiles: crate::platform::installed_local_shells(),
+        administrator_status: AdministratorTerminalStatus::UnsupportedWindows,
+    }
 }
 #[cfg(not(windows))]
 pub fn resolve_installed(shell_id: &str) -> Result<ResolvedLocalShell, String> {
     let kind = LocalShellKind::from_id(shell_id).ok_or("Unknown local shell")?;
-    let shell = crate::platform::resolve_local_shell(kind).ok_or_else(|| format!("{} is not available on this machine.",kind.label()))?;
-    Ok(ResolvedLocalShell { kind: shell.kind, program: shell.program, arguments: shell.arguments, working_directory: shell.working_directory, administrator_launcher: None })
+    let shell = crate::platform::resolve_local_shell(kind)
+        .ok_or_else(|| format!("{} is not available on this machine.", kind.label()))?;
+    Ok(ResolvedLocalShell {
+        kind: shell.kind,
+        program: shell.program,
+        arguments: shell.arguments,
+        working_directory: shell.working_directory,
+        administrator_launcher: None,
+    })
 }

@@ -1,3 +1,5 @@
+#[cfg(test)]
+use std::env;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},

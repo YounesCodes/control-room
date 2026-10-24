@@ -246,22 +246,23 @@ mod tests {
     fn run_under_bash(script: &str) -> std::process::Output {
         use std::io::Write;
 
-        let bash = crate::local_shell::resolve_installed("git-bash")
-            .expect("Git Bash is required to exercise the shell integration scripts");
+        let bash =
+            crate::local_shell::resolve_installed(if cfg!(windows) { "git-bash" } else { "bash" })
+                .expect("Bash is required to exercise the shell integration scripts");
         let mut child = crate::ssh::background_command(bash.program())
             .args(["--noprofile", "--norc", "-s"])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
-            .expect("Git Bash could not be started");
+            .expect("Bash could not be started");
         child
             .stdin
             .take()
             .expect("stdin")
             .write_all(script.as_bytes())
             .expect("the script could not be written");
-        child.wait_with_output().expect("Git Bash did not finish")
+        child.wait_with_output().expect("Bash did not finish")
     }
 
     /// Reads the `key=value` lines the wrapper prints, so a scenario reports
@@ -287,7 +288,7 @@ mod tests {
     /// The source-text guard beside this says the markers exist. It cannot say
     /// what running the script does to a file that already has content in it.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn installing_history_twice_leaves_one_reversible_block() {
         let script = format!(
             r##"set -eu
@@ -379,7 +380,7 @@ rm -rf "$root"
     /// somebody's shell configuration with it, so both scripts refuse and say
     /// so, and leave the file exactly as they found it.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn damaged_markers_stop_both_scripts_before_they_edit_anything() {
         for (name, bashrc) in [
             (
@@ -452,7 +453,7 @@ rm -rf "$root"
     /// no-op, or opting in on one host would follow the user into every shell
     /// on that machine.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn the_integration_stays_inert_in_a_shell_control_room_did_not_start() {
         let script = format!(
             r##"set -eu

@@ -626,7 +626,7 @@ export function App() {
         });
       }
       if (
-        event.ctrlKey &&
+        appModifier &&
         event.shiftKey &&
         event.key.toLowerCase() === "f" &&
         activeWorkspace?.view === "terminal"
@@ -1138,7 +1138,7 @@ export function App() {
     setRemoteShellRequest(null);
   }
 
-  /// Opens a local Windows shell as its own Workspace. Each launch is a new
+  /// Opens a local shell as its own Workspace. Each launch is a new
   /// shell, so there is nothing to reuse, and no Saved Connection is involved.
   function openLocalShell(shell: LocalShellProfile) {
     setLocalShellMenuOpen(false);
@@ -1876,6 +1876,13 @@ export function App() {
   return (
     <div
       ref={shellSize.ref}
+      onClickCapture={(event) => {
+        // Safari does not focus buttons on mouse clicks. Keep keyboard return
+        // targets and subsequent shortcuts consistent across desktop webviews.
+        if (event.button === 0 && event.target instanceof Element) {
+          event.target.closest("button")?.focus({ preventScroll: true });
+        }
+      }}
       className={
         settingsOpen
           ? "app-shell settings-mode"
@@ -2048,7 +2055,7 @@ export function App() {
                 onClick={toggleLocalShellMenu}
                 aria-haspopup={offeredShells.length > 1 ? "menu" : undefined}
                 aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
-                title="Open a shell on this Windows machine"
+                title="Open a shell on this machine"
               >
                 <SquareTerminal size={16} className="local-shell-mark identity-mark" /> Local
                 terminal

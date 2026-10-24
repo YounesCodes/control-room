@@ -35,7 +35,7 @@ To use an installed font or a fallback list, type it in **Font family** and choo
 **Save settings** to apply it. Search text is never saved automatically.
 
 Select **Install and use** to download and install the regular font and bold
-weight when available for your Windows account. The app shows download and
+weight when available for your account. The app shows download and
 installation progress, then applies and saves the font for all terminals. Other
 unsaved settings still need **Save settings**. Installation needs no administrator
 access and the font remains installed when Control Room closes.
@@ -43,17 +43,21 @@ access and the font remains installed when Control Room closes.
 If the new font is not visible after installation, restart Control Room.
 
 If a download, installation, or save fails, the current terminal font stays in
-use. If Windows installed the font but saving or applying it failed, the app says so. Choose **Retry apply font** to apply it without reinstalling. Otherwise, choose **Retry install and use**. **Retry preview** and
+use. If the system installed the font but saving or applying it failed, the app says so. Choose **Retry apply font** to apply it without reinstalling. Otherwise, choose **Retry install and use**. **Retry preview** and
 **Retry catalog** retry their own requests. When the catalog is unavailable,
 you can keep using installed fonts through **Font family**, including a list of
 fallbacks such as `"JetBrains Mono", Consolas, monospace`. Cached catalog names
 remain available during the current app session.
+
+On macOS, installed catalog fonts are saved in `~/Library/Fonts`. The default terminal font is Menlo.
 
 ## Host metrics
 
 Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and a **Host metrics refresh interval** of 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
 
 **Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**.
+
+On macOS, CPU, RAM, and uptime are available. GPU and Disk I/O readings currently show unavailable.
 
 Click the reading status, such as **Live**, beside the metrics for the last reading time, **Refresh**, and **Customize in Settings**. The CPU, RAM, and GPU charts show up to twenty recent readings on a 0–100% scale and reset when you change hosts or monitoring pauses. These short trends stay in memory and are not saved. Disk I/O shows separate read and write speeds without a graph.
 

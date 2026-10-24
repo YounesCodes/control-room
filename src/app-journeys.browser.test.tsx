@@ -71,6 +71,7 @@ async function respond(command: string, args: any = {}) {
   switch (command) {
     case "get_environment_info":
       return {
+        platform: "windows",
         sshPath: "fixture-ssh",
         sshConfigPath: "fixture-config",
         sshAgentAvailable: false,
@@ -1804,8 +1805,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const rows = panel.querySelectorAll<HTMLElement>(".dense-row, .docker-branch");
       rows[0].focus();
       await userEvent.keyboard("{End}");
+      // WebKit may leave trailing padding below the keyboard scroll endpoint.
+      // The last record, rather than empty padding, must be fully reachable.
       await vi.waitFor(() =>
-        expect(panel.scrollTop + panel.clientHeight).toBeGreaterThanOrEqual(panel.scrollHeight - 1),
+        expect(rows[rows.length - 1].getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          panel.getBoundingClientRect().bottom + 1,
+        ),
       );
       const last = rows[rows.length - 1].getBoundingClientRect();
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
@@ -1887,7 +1892,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
       expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
       textarea.focus();
-      await userEvent.keyboard("{Control>}{End}{/Control}");
+      await userEvent.keyboard(
+        navigator.platform.startsWith("Mac")
+          ? "{Meta>}{ArrowDown}{/Meta}"
+          : "{Control>}{End}{/Control}",
+      );
       expect(textarea.scrollTop).toBeGreaterThan(0);
       await navigate("Logs");
       await page.getByRole("button", { name: "Start", exact: true }).click();

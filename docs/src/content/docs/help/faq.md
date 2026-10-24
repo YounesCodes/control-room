@@ -3,7 +3,7 @@ title: FAQ
 description: Quick answers about SSH, local shells, and saved data.
 ---
 
-**Does it use my usual SSH setup?** Yes. The terminal uses Windows OpenSSH, including your SSH config and agent.
+**Does it use my usual SSH setup?** Yes. The terminal uses your system OpenSSH client, including your SSH config and agent.
 
 **Does it save passwords or keys?** No. It can save the path to an existing private key, but never copies the key or stores SSH or sudo passwords.
 

@@ -510,11 +510,12 @@ export interface EnvironmentInfo {
   platformSupported: boolean;
 }
 
-/// The local Windows shells Control Room can host. The id, including its fixed
+/// The allowlisted local shells Control Room can host. The id, including its fixed
 /// administrator variant, is the whole vocabulary the frontend may send back
 /// to Rust: there is no executable path, argument, or command string on this
 /// side of the boundary.
-export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash" | "zsh" | "bash" | "fish";
+export type LocalShellKind =
+  "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash" | "zsh" | "bash" | "fish";
 
 export interface LocalShellProfile {
   id: string;
@@ -596,8 +597,8 @@ export interface RemoteWorkspace extends WorkspaceBase {
   baselineSelectionId: string | null;
 }
 
-/// A Workspace on a local Windows shell. It is terminal-only: there is no
-/// Saved Connection, no remote inspection pages, and no History. Optional header metrics read Windows usage.
+/// A Workspace on a local shell. It is terminal-only: there is no
+/// Saved Connection, no remote inspection pages, and no History. Optional header metrics read local system usage.
 export interface LocalWorkspace extends WorkspaceBase {
   kind: "local";
   shell: LocalShellProfile;

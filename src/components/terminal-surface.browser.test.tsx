@@ -87,6 +87,7 @@ it("refits terminal columns and rows and resizes the same session when its pane 
   root = createRoot(container);
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={createLocalWorkspace({
         id: "test-shell",
         label: "Test shell",
@@ -137,6 +138,7 @@ it("pastes Unicode and multiple lines once and copies the actual terminal select
   const handle = createRef<TerminalPaneHandle>();
   root.render(
     <TerminalPane
+      platform="windows"
       ref={handle}
       workspace={createLocalWorkspace({
         id: "test-shell",
@@ -182,6 +184,7 @@ it("keeps the terminal edge empty until search has matches", async () => {
   const renderPane = (findRequest: number) =>
     root!.render(
       <TerminalPane
+        platform="windows"
         workspace={workspace}
         settings={settings}
         visible

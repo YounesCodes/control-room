@@ -499,9 +499,18 @@ fn local_disk_io() -> Option<(f64, f64)> {
     Some((rates[0], rates[1]))
 }
 
-#[cfg(not(windows))]
+#[cfg(any(target_os = "macos", test))]
+#[path = "platform/macos_metrics.rs"]
+mod macos;
+
+#[cfg(target_os = "macos")]
+pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
+    macos::collect(metrics)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
-    Err("Local host metrics require Windows".into())
+    Err("Local host metrics require Windows or macOS".into())
 }
 
 #[cfg(test)]

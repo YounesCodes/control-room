@@ -163,6 +163,7 @@ export function RemoteShellDialog({
                       value={shell.id}
                       aria-label={shell.label}
                       checked={selected === shell.id}
+                      onClick={(event) => event.currentTarget.focus()}
                       onChange={() => setSelected(shell.id)}
                     />
                     <SquareTerminal size={18} className="remote-shell-mark" aria-hidden="true" />

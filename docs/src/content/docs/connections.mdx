@@ -16,7 +16,7 @@ Select **Add connection** in the sidebar. To change one, open its menu and choos
   <figcaption>Connection fields. Example data shown.</figcaption>
 </figure>
 
-Enter a display name, SSH destination, and username. A port (1–65535) and identity-file path are optional. The key stays in its existing location. Control Room uses Windows OpenSSH and your normal SSH configuration.
+Enter a display name, SSH destination, and username. A port (1–65535) and identity-file path are optional. The key stays in its existing location. Control Room uses your system OpenSSH client and your normal SSH configuration.
 
 **Test structured access** checks whether the inspection views can connect without an SSH password prompt. It does not save the connection. The terminal can still use an interactive password login if that test fails.
 
@@ -36,7 +36,7 @@ Windows hosts offer Overview, Terminal, Services, Ports, Docker, and container L
 
 ## Organize and remove hosts
 
-Put a connection in one group and add up to five tags to help find it. Groups and tags are stored on this Windows machine; they do not change the host. Search finds names, addresses, groups, and tags.
+Put a connection in one group and add up to five tags to help find it. Groups and tags are stored on this client machine; they do not change the host. Search finds names, addresses, groups, and tags.
 
 **Delete connection** also removes its open host tabs, saved command history, and baselines. Local terminal tabs are unaffected.
 

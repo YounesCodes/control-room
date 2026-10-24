@@ -194,7 +194,7 @@ export function FontCatalogPicker({
 
   const progressLabel =
     progress?.stage === "installing"
-      ? "Installing for your Windows account"
+      ? "Installing for your account"
       : progress?.stage === "ready"
         ? "Applying font"
         : progress?.stage === "downloadingBold"
@@ -233,6 +233,15 @@ export function FontCatalogPicker({
                 event.currentTarget.select();
                 setOpen(true);
                 if (!catalog && !loading) void loadCatalog();
+              }}
+              onMouseDown={(event) => {
+                if (query === null || picked !== null) {
+                  // Prevent WebKit's mouse default from replacing the selected
+                  // current value with a caret after the focus handler runs.
+                  event.preventDefault();
+                  event.currentTarget.focus();
+                  event.currentTarget.select();
+                }
               }}
               onClick={(event) => {
                 if (query === null || picked !== null) event.currentTarget.select();
@@ -411,7 +420,7 @@ export function FontCatalogPicker({
         <p role="alert" className="inline-warning">
           {failure}{" "}
           {installed.current?.id === active?.id
-            ? "The font is installed for your Windows account but has not been applied or saved. Retry apply font."
+            ? "The font is installed for your account but has not been applied or saved. Retry apply font."
             : "Your current font is unchanged. Retry install and use."}
         </p>
       )}

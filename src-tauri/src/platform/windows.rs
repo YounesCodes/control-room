@@ -7,7 +7,6 @@ use std::{
 use std::os::windows::process::CommandExt;
 use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
-
 pub(super) const CLIENT_ID: &str = "windows";
 
 pub(super) fn is_supported() -> bool {
@@ -93,5 +92,4 @@ mod tests {
             Some(PathBuf::from(r"C:\Tools\OpenSSH\ssh-add.exe"))
         );
     }
-
 }

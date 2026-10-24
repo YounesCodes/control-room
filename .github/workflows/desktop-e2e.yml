@@ -27,9 +27,9 @@ jobs:
           workspaces: "./src-tauri -> target"
           cache-bin: false
       - run: npm ci
-      - run: npm run test:desktop:build
       - name: Check debug automation settings
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e e2e::tests
+      - run: npm run test:desktop:build
       - name: Check desktop driver environment
         shell: pwsh
         run: |

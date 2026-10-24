@@ -50,7 +50,13 @@ function ModalFixture({ long = false }: { long?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          setOpen(true);
+        }}
+      >
         Open dialog
       </button>
       {open && (
@@ -77,7 +83,13 @@ function PaletteFixture({ onSettings }: { onSettings: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          setOpen(true);
+        }}
+      >
         Open palette
       </button>
       {open && (
@@ -137,6 +149,7 @@ const settings: AppSettings = {
 };
 
 const environment: EnvironmentInfo = {
+  platform: "windows",
   sshPath: null,
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: false,
@@ -633,6 +646,7 @@ describe("critical UI in Chromium", () => {
           onSaved={() => undefined}
         />
         <WindowControls
+          platform="windows"
           windowActions={{
             close: async () => undefined,
             minimize: async () => undefined,

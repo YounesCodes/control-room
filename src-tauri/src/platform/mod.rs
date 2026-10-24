@@ -10,7 +10,10 @@ use std::{
     process::{Command, Stdio},
 };
 
-use crate::models::{LocalShellKind, LocalShellProfile};
+#[cfg(any(not(windows), test))]
+use crate::models::LocalShellKind;
+#[cfg(not(windows))]
+use crate::models::LocalShellProfile;
 
 #[cfg(target_os = "macos")]
 #[path = "macos.rs"]

@@ -35,7 +35,7 @@ interface CommandItem {
 }
 
 interface CommandPaletteProps {
-  shortcutModifier: "Ctrl" | "Cmd";
+  shortcutModifier?: "Ctrl" | "Cmd";
   connections: SavedConnection[];
   localShells: LocalShellProfile[];
   workspaces: Workspace[];
@@ -68,7 +68,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({
-  shortcutModifier,
+  shortcutModifier = "Ctrl",
   connections,
   localShells,
   workspaces,
@@ -221,7 +221,7 @@ export function CommandPalette({
           group: "Actions",
           label: "Find in terminal",
           icon: Search,
-          shortcut: "Ctrl+Shift+F",
+          shortcut: `${shortcutModifier}+Shift+F`,
           run: run(onFindTerminal),
         });
         result.push({

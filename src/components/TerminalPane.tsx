@@ -15,7 +15,13 @@ import {
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { isRemoteWorkspace } from "../lib/workspace-target";
-import type { AppSettings, ConnectionState, EnvironmentInfo, SessionStateEvent, Workspace } from "../types";
+import type {
+  AppSettings,
+  ConnectionState,
+  EnvironmentInfo,
+  SessionStateEvent,
+  Workspace,
+} from "../types";
 
 export interface TerminalPaneHandle {
   copySelection: () => void;
@@ -68,6 +74,8 @@ export function TerminalPane({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wasActiveRef = useRef(false);
+  const platformRef = useRef(platform);
+  platformRef.current = platform;
   const terminalThemeRef = useRef<ReturnType<typeof buildTerminalTheme> | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
@@ -222,7 +230,7 @@ export function TerminalPane({
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
     );
     terminal.attachCustomKeyEventHandler((event) => {
-      const useMetaKey = platform === "macos";
+      const useMetaKey = platformRef.current === "macos";
       if (isControlRoomShortcut(event, useMetaKey ? "meta" : "control")) return false;
       if (
         event.type !== "keydown" ||

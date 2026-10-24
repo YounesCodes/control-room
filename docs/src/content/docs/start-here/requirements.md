@@ -1,9 +1,11 @@
 ---
 title: Requirements
-description: What you need on Windows and on the SSH host.
+description: What you need on your client and the SSH host.
 ---
 
 Control Room runs on Windows 11 x64 and uses the Windows OpenSSH Client. Local terminals use installed PowerShell 7, Windows PowerShell, Command Prompt, or Git Bash.
+
+The macOS preview runs on Intel and Apple Silicon Macs with macOS 12 or newer. It uses the included OpenSSH client and installed zsh, Bash, or fish shells. See [Install and update](/control-room/start-here/installation/#macos-preview).
 
 For an SSH terminal, you need a Linux host or a Windows 10 or 11 host with OpenSSH Server that accepts your SSH login. Windows shell detection requires noninteractive key or agent authentication. See [Connections](/control-room/connections/) to choose installed Windows shells, Windows Terminal profiles, or WSL distributions.
 
