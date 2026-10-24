@@ -53,12 +53,13 @@ export function sanitizeDirectory(directory, output) {
       else if (entry.isFile() && /\.(?:txt|log|json|jsonl|html)$/i.test(entry.name)) {
         if (statSync(file).size > 1024 * 1024) throw new Error("Diagnostic exceeds 1 MiB");
         const bytes = readFileSync(file);
-        if (bytes.includes(0) && entry.name === "wdio.log") {
-          // Shared launcher log writers can truncate each other's file and leave NUL padding.
-          // Omit its contents; per-spec logs still go through strict decoding and redaction.
+        if (bytes.includes(0) && /^(?:wdio|[\w-]+\.spec-\d+-\d+)\.log$/.test(entry.name)) {
+          // Concurrent launcher and app writers can truncate driver logs and
+          // leave NUL padding. Never upload corrupt contents. State files and
+          // intact logs still require strict decoding and redaction.
           writeFileSync(
             join(output, entry.name),
-            "Corrupt shared launcher log omitted. See per-spec logs.\n",
+            "Corrupt driver log omitted. See sanitized state and intact logs.\n",
           );
           continue;
         }

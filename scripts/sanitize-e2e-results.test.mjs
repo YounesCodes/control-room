@@ -41,17 +41,22 @@ describe("desktop diagnostic redaction", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
-  it("omits a corrupt shared launcher log and preserves sanitized per-spec diagnostics", () => {
+  it("omits corrupt concurrent driver logs and preserves sanitized diagnostics", () => {
     const directory = mkdtempSync(join(tmpdir(), "control-room-redaction-"));
     const source = join(directory, "raw");
     const output = join(directory, "safe");
     mkdirSync(source);
     try {
       writeFileSync(join(source, "wdio.log"), Buffer.from("password=private\0padding"));
+      writeFileSync(join(source, "documentation.spec-0-1.log"), Buffer.from("private\0padding"));
       writeFileSync(join(source, "connections.spec-0-0.log"), "password=private; session failed");
       sanitizeDirectory(source, output);
       expect(readFileSync(join(output, "wdio.log"), "utf8")).toContain("omitted");
       expect(readFileSync(join(output, "wdio.log"), "utf8")).not.toContain("private");
+      expect(readFileSync(join(output, "documentation.spec-0-1.log"), "utf8")).toContain("omitted");
+      expect(readFileSync(join(output, "documentation.spec-0-1.log"), "utf8")).not.toContain(
+        "private",
+      );
       expect(readFileSync(join(output, "connections.spec-0-0.log"), "utf8")).toBe(
         "password=[redacted]; session failed",
       );

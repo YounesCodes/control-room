@@ -166,33 +166,45 @@ describe("Settings and native window", () => {
     await terminalCommand("echo RESTORED_SHELL_OK", "RESTORED_SHELL_OK");
   });
 
-  it("maximizes and restores actual native dimensions", async () => {
+  it(`${isMac ? "enters full screen" : "maximizes"} and restores actual native dimensions`, async () => {
     const maximized = () =>
-      browser.tauri.execute(({ core }) =>
-        core.invoke("plugin:window|is_maximized", { label: "main" }),
-      );
+      ipc<boolean>(isMac ? "plugin:window|is_fullscreen" : "plugin:window|is_maximized", {
+        label: "main",
+      });
     const dimensions = () =>
-      ipc<{ width: number; height: number }>("plugin:window|inner_size", { label: "main" });
-    const monitor = await ipc<{ workArea: { size: { width: number; height: number } } } | null>(
-      "plugin:window|current_monitor",
-    );
+      ipc<{ width: number; height: number }>(
+        isMac ? "plugin:window|outer_size" : "plugin:window|inner_size",
+        { label: "main" },
+      );
+    const monitor = await ipc<{
+      size: { width: number; height: number };
+      workArea: { size: { width: number; height: number } };
+    } | null>("plugin:window|current_monitor");
     expect(monitor).not.toBeNull();
     const before = await dimensions();
-    if (isMac) await ipc("plugin:window|toggle_maximize", { label: "main" });
+    const originalWindow = await browser.getWindowRect();
+    if (isMac) await browser.fullscreenWindow();
     else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === true);
-    // Maximizing fills the work area, even if the initial window exceeds a small CI display.
+    // Mac full screen covers the display; Windows maximize fills its work area.
+    const expected = isMac ? monitor!.size : monitor!.workArea.size;
     await browser.waitUntil(
       async () => {
         const expanded = await dimensions();
         return (
-          Math.abs(expanded.width - monitor!.workArea.size.width) <= 2 &&
-          Math.abs(expanded.height - monitor!.workArea.size.height) <= 2
+          Math.abs(expanded.width - expected.width) <= 2 &&
+          Math.abs(expanded.height - expected.height) <= 2
         );
       },
-      { timeoutMsg: "Maximized native window did not fill the monitor work area" },
+      { timeoutMsg: "Expanded native window did not fill the expected monitor area" },
     );
-    if (isMac) await ipc("plugin:window|toggle_maximize", { label: "main" });
+    if (isMac)
+      await browser.setWindowRect(
+        originalWindow.x,
+        originalWindow.y,
+        originalWindow.width,
+        originalWindow.height,
+      );
     else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === false);
     await browser.waitUntil(

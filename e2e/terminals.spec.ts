@@ -13,6 +13,7 @@ import {
   focusElement,
   pressBoundaryKey,
   activateFocusedButton,
+  pointerClick,
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
@@ -347,9 +348,9 @@ describe("Native PTY and Workspace lifecycle", () => {
       expect((await runtime()).sessionIds).toEqual(sessionIds);
       await terminalCommand("echo ACTIVE_PANE_OK", "ACTIVE_PANE_OK");
       const terminals = await $$(".terminal-workspace-pane-visible .xterm-screen");
-      await terminals[0].click();
+      await pointerClick(await terminals[0]);
       await terminalCommand("echo FIRST_PANE_ONLY", "FIRST_PANE_ONLY");
-      await terminals[1].click();
+      await pointerClick(await terminals[1]);
       await terminalCommand("echo SECOND_PANE_ONLY", "SECOND_PANE_ONLY");
       const printed = await browser.execute(() =>
         Array.from(

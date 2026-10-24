@@ -41,6 +41,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          cache-on-failure: true
       - name: Verify native runner architecture
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
@@ -69,7 +70,6 @@ jobs:
 
   bundle:
     name: App and DMG (${{ matrix.target }})
-    needs: native
     strategy:
       fail-fast: false
       matrix:

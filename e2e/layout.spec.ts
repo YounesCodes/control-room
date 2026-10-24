@@ -13,7 +13,7 @@ import {
 import type { PersistedWorkspaceState } from "../src/types";
 
 describe("Resizable panels in the native app", () => {
-  it("fills Scratchpad when the native window is maximized and restored", async () => {
+  it(`fills Scratchpad when the native window is ${isMac ? "full screen" : "maximized"} and restored`, async () => {
     await addConnection("Scratchpad host");
     await openOfflineConnection("Scratchpad host");
     await feature("Scratchpad");
@@ -33,17 +33,26 @@ describe("Resizable panels in the native app", () => {
         );
       });
     await browser.waitUntil(fillsWorkspace);
-    if (isMac) await ipc("plugin:window|toggle_maximize", { label: "main" });
+    const originalWindow = await browser.getWindowRect();
+    const expanded = () =>
+      ipc<boolean>(isMac ? "plugin:window|is_fullscreen" : "plugin:window|is_maximized", {
+        label: "main",
+      });
+    // The normal Mac traffic-light action enters full screen. Windows uses
+    // maximize; AppKit's optional zoom has different standard-frame semantics.
+    if (isMac) await browser.fullscreenWindow();
     else await $("aria/Maximize or restore window").click();
-    await browser.waitUntil(async () =>
-      ipc<boolean>("plugin:window|is_maximized", { label: "main" }),
-    );
+    await browser.waitUntil(expanded);
     await browser.waitUntil(fillsWorkspace);
-    if (isMac) await ipc("plugin:window|toggle_maximize", { label: "main" });
+    if (isMac)
+      await browser.setWindowRect(
+        originalWindow.x,
+        originalWindow.y,
+        originalWindow.width,
+        originalWindow.height,
+      );
     else await $("aria/Maximize or restore window").click();
-    await browser.waitUntil(
-      async () => !(await ipc<boolean>("plugin:window|is_maximized", { label: "main" })),
-    );
+    await browser.waitUntil(async () => !(await expanded()));
     await browser.waitUntil(fillsWorkspace);
   });
   it("resizes and saves the Connections width through SQLite and resets it", async () => {
@@ -93,11 +102,11 @@ describe("Resizable panels in the native app", () => {
       await $("nav[aria-label='Workspace features']").$("button=Baselines").click();
     };
     await openBaselines();
-    let content = $("aria/Resize Baselines content");
+    let content = await $("aria/Resize Baselines content");
     await focusElement(await content);
     await browser.keys("ArrowLeft");
     const contentWidth = Number(await content.getAttribute("aria-valuenow"));
-    let split = $("aria/Resize Baselines panes");
+    let split = await $("aria/Resize Baselines panes");
     await focusElement(await split);
     await pressBoundaryKey("ArrowLeft", true);
     const splitWidth = Number(await split.getAttribute("aria-valuenow"));
@@ -128,8 +137,10 @@ describe("Resizable panels in the native app", () => {
       );
     });
     await restartApp();
-    content = $("aria/Resize Baselines content");
-    split = $("aria/Resize Baselines panes");
+    // Embedded find-elements uses shared temporary storage. Resolve selectors
+    // sequentially so concurrent queries cannot exchange the two dividers.
+    content = await $("aria/Resize Baselines content");
+    split = await $("aria/Resize Baselines panes");
     await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
     await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
     const window = await browser.getWindowRect();
@@ -150,6 +161,7 @@ describe("Resizable panels in the native app", () => {
     for (const name of ["Layout host A", "Layout host B"]) {
       const menu = $("aria/Open actions for " + name);
       await menu.moveTo();
+      await menu.waitForClickable();
       await menu.click();
       await $("aria/Delete connection").click();
       await $("button=Delete connection").click();
