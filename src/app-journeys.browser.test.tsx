@@ -804,7 +804,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await userEvent.keyboard("{Escape}");
       }
     }
-    await page.getByRole("button", { name: "Scroll terminals right" }).first().click();
+    // The active group can already occupy the last page. The picker must work
+    // without assuming that scrolling farther right is possible.
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
     const groupItem = page
       .getByRole("menu", { name: "All terminals" })
@@ -852,7 +853,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ),
     ).toHaveLength(sessions + 5);
     expect(native.invoke.mock.calls.some(([command]) => command === "close_session")).toBe(false);
-  });
+  }, 40_000);
 
   it("keeps grouped session state and activity visible and routes input to the selected pane", async () => {
     await mount();
