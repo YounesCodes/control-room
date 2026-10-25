@@ -5,9 +5,9 @@ description: Write a note for a host or the whole app.
 
 import scratchpadScreenshot from "../../../assets/screenshots/scratchpad.png";
 
-Scratchpad lets you keep one plain-text note per SSH host and one note shared across the app. Notes save automatically after you stop typing and remain when you close a tab. You can edit, undo, redo, or delete them.
+Scratchpad lets you keep one plain-text note per SSH host, one note per local terminal tab, and one note shared across the app. Notes save automatically after you stop typing and remain when you close a tab. You can edit, undo, redo, or delete them.
 
-The editor fills the workspace as you resize the window.
+The editor fills the workspace as you resize the window. Local terminals have the same page in their navigation for their own tab's note. From a terminal, the **Scratchpad** button beside Copy and Paste opens a compact popup for the active terminal's note and the shared note, with buttons to copy the note or paste it into the terminal without running it. In a split group, the popup follows the selected pane.
 
 <figure class="docs-screenshot">
   <a href={scratchpadScreenshot.src} target="_blank" rel="noreferrer">

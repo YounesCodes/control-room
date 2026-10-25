@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Eraser, Globe2, Redo2, RefreshCw, Server, Trash2, Undo2 } from "lucide-react";
+import {
+  Eraser,
+  Globe2,
+  Redo2,
+  RefreshCw,
+  Server,
+  SquareTerminal,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
@@ -15,28 +24,54 @@ import type { SavedConnection, ScratchpadScope } from "../types";
 type SaveStatus = "saved" | "unsaved" | "saving" | "error";
 const EDIT_HISTORY_LIMIT = 100;
 
-export function ScratchpadPane({ connection }: { connection: SavedConnection }) {
-  const [scope, setScope] = useState<ScratchpadScope>("connection");
-  const ownerId = scope === "connection" ? connection.id : "global";
+export function ScratchpadPane({
+  connection,
+  terminal,
+}: {
+  /** The Saved Connection whose note this page edits, for remote Workspaces. */
+  connection?: SavedConnection;
+  /** The terminal tab whose note this page edits, for local Workspaces. */
+  terminal?: { id: string; label: string };
+}) {
+  const isTerminal = Boolean(terminal);
+  const [scope, setScope] = useState<ScratchpadScope>(isTerminal ? "local" : "connection");
+  const ownerId = isTerminal
+    ? scope === "global"
+      ? "global"
+      : terminal!.id
+    : scope === "connection"
+      ? connection!.id
+      : "global";
+  const ownerLabel = isTerminal ? terminal!.label : connection!.displayName;
 
   return (
     <section className="feature-page scratchpad-page">
       <header className="page-heading scratchpad-heading">
         <div>
           <h2>Scratchpad</h2>
-          <p>Plain local notes for this connection or the whole app.</p>
+          <p>
+            {isTerminal
+              ? "Plain local notes for this terminal or the whole app."
+              : "Plain local notes for this connection or the whole app."}
+          </p>
         </div>
         <div className="scratchpad-scope-switch" role="group" aria-label="Scratchpad scope">
           <button
             type="button"
-            aria-pressed={scope === "connection"}
-            aria-label={`Connection note for ${connection.displayName}`}
-            onClick={() => setScope("connection")}
+            aria-pressed={!isTerminal ? scope === "connection" : scope === "local"}
+            aria-label={
+              isTerminal ? `Terminal note for ${ownerLabel}` : `Connection note for ${ownerLabel}`
+            }
+            onClick={() => setScope(isTerminal ? "local" : "connection")}
           >
-            <Server size={17} aria-hidden="true" />
+            {isTerminal ? (
+              <SquareTerminal size={17} aria-hidden="true" />
+            ) : (
+              <Server size={17} aria-hidden="true" />
+            )}
             <span className="scratchpad-scope-copy">
-              <strong>Connection</strong>
-              <span title={connection.displayName}>{connection.displayName}</span>
+              <strong>{isTerminal ? "Terminal" : "Connection"}</strong>
+              <span title={ownerLabel}>{ownerLabel}</span>
             </span>
           </button>
           <button
@@ -55,22 +90,33 @@ export function ScratchpadPane({ connection }: { connection: SavedConnection }) 
       </header>
       <ScratchpadEditor
         key={`${scope}:${ownerId}`}
-        connection={connection}
         scope={scope}
         ownerId={ownerId}
+        connectionId={!isTerminal && scope === "connection" ? connection!.id : null}
+        ownerLabel={ownerLabel}
       />
     </section>
   );
 }
 
-function ScratchpadEditor({
-  connection,
+export function ScratchpadEditor({
   scope,
   ownerId,
+  connectionId,
+  ownerLabel,
+  variant = "page",
+  onTextChange,
 }: {
-  connection: SavedConnection;
   scope: ScratchpadScope;
   ownerId: string;
+  /** The Saved Connection behind a connection note; null for global and local. */
+  connectionId: string | null;
+  /** Names the connection in the page subtitle; unused by the compact variant. */
+  ownerLabel?: string;
+  /** "page" fills the Scratchpad view; "compact" backs the terminal popover. */
+  variant?: "page" | "compact";
+  /** Reports the editor's current text so a compact caller can copy or paste it. */
+  onTextChange?: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -100,7 +146,7 @@ function ScratchpadEditor({
     setLoadFailed(false);
     setError(null);
     void api
-      .scratchpadNote(scope, ownerId, scope === "connection" ? connection.id : null)
+      .scratchpadNote(scope, ownerId, connectionId)
       .then((note) => {
         if (!current) return;
         const draft = readScratchpadDraft(scope, ownerId);
@@ -136,7 +182,7 @@ function ScratchpadEditor({
       current = false;
       mountedRef.current = false;
     };
-  }, [connection.id, loadVersion, ownerId, scope]);
+  }, [connectionId, loadVersion, ownerId, scope]);
 
   function setEditedText(nextText: string) {
     const currentText = textRef.current;
@@ -187,7 +233,7 @@ function ScratchpadEditor({
         await api.saveScratchpadNote({
           scope,
           ownerId,
-          connectionId: scope === "connection" ? connection.id : null,
+          connectionId,
           text: snapshot,
         });
         savedTextRef.current = snapshot;
@@ -258,11 +304,19 @@ function ScratchpadEditor({
     return () => window.clearTimeout(timer);
   }, [loadFailed, loaded, ownerId, scope, text]);
 
+  // Reported through a ref so a compact caller can copy or paste the current
+  // text without re-running the autosave effect on every callback identity.
+  const onTextChangeRef = useRef(onTextChange);
+  onTextChangeRef.current = onTextChange;
+  useEffect(() => {
+    onTextChangeRef.current?.(text);
+  }, [text]);
+
   async function deleteNote() {
     await quiesce();
     setError(null);
     try {
-      await api.deleteScratchpadNote(scope, ownerId, scope === "connection" ? connection.id : null);
+      await api.deleteScratchpadNote(scope, ownerId, connectionId);
       savedTextRef.current = "";
       textRef.current = "";
       undoRef.current = [];
@@ -291,7 +345,55 @@ function ScratchpadEditor({
     );
   }
 
-  const scopeLabel = scope === "connection" ? "Connection note" : "Global note";
+  const scopeLabel =
+    scope === "connection"
+      ? "Connection note"
+      : scope === "local"
+        ? "Terminal note"
+        : "Global note";
+  const saveState = (
+    <span className={`scratchpad-save-state scratchpad-save-${status}`} role="status">
+      {status === "saving"
+        ? "Saving…"
+        : status === "unsaved"
+          ? "Waiting to save"
+          : status === "error"
+            ? "Not saved"
+            : "Saved locally"}
+    </span>
+  );
+  if (variant === "compact") {
+    return (
+      <div className="scratchpad-editor scratchpad-editor-compact">
+        {saveState}
+        <textarea
+          ref={textareaRef}
+          aria-label={scopeLabel}
+          value={text}
+          maxLength={MAX_SCRATCHPAD_CHARS}
+          autoFocus
+          onChange={(event) => setEditedText(event.target.value)}
+          onKeyDown={(event) => {
+            if (!(event.ctrlKey || event.metaKey)) return;
+            const key = event.key.toLowerCase();
+            if (key === "z") {
+              event.preventDefault();
+              if (event.shiftKey) redoEdit();
+              else undoEdit();
+            } else if (key === "y") {
+              event.preventDefault();
+              redoEdit();
+            }
+          }}
+          placeholder={
+            scope === "global" ? "Notes for every terminal…" : "Notes for this terminal…"
+          }
+          spellCheck={false}
+        />
+        {error && <p className="inline-error">{error}</p>}
+      </div>
+    );
+  }
   return (
     <div className="scratchpad-editor">
       <div className="scratchpad-meta">
@@ -299,19 +401,13 @@ function ScratchpadEditor({
           <strong>{scopeLabel}</strong>
           <span>
             {scope === "connection"
-              ? `Shared by every Workspace for ${connection.displayName}`
-              : "Shared by every Saved Connection and Workspace"}
+              ? `Shared by every Workspace for ${ownerLabel ?? "this connection"}`
+              : scope === "local"
+                ? "Only this terminal tab keeps it"
+                : "Shared by every Saved Connection and Workspace"}
           </span>
         </div>
-        <span className={`scratchpad-save-state scratchpad-save-${status}`} role="status">
-          {status === "saving"
-            ? "Saving…"
-            : status === "unsaved"
-              ? "Waiting to save"
-              : status === "error"
-                ? "Not saved"
-                : "Saved locally"}
-        </span>
+        {saveState}
       </div>
       <textarea
         ref={textareaRef}

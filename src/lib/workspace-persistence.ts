@@ -39,8 +39,15 @@ export function restoreWorkspaceState(
       // a deleted Saved Connection is.
       const shell = shellsById.get(saved.localShellId);
       if (!shell) return [];
-      // A local Workspace is terminal-only, whatever view the payload names.
-      return [{ ...createLocalWorkspace(shell), ...reconnecting, view: "terminal" }];
+      // A local Workspace keeps only its terminal and Scratchpad views,
+      // whatever else an older payload named.
+      return [
+        {
+          ...createLocalWorkspace(shell),
+          ...reconnecting,
+          view: saved.view === "scratchpad" ? saved.view : "terminal",
+        },
+      ];
     }
     const connection = saved.connectionId ? connectionsById.get(saved.connectionId) : undefined;
     if (!connection) return [];

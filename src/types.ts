@@ -626,7 +626,7 @@ export interface PersistedWorkspaceState {
   terminalLayout?: import("./lib/terminal-layout").TerminalLayout | null;
 }
 
-export type ScratchpadScope = "connection" | "global";
+export type ScratchpadScope = "connection" | "global" | "local";
 
 export interface ScratchpadNote {
   id: string;
