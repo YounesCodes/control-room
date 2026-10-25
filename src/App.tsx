@@ -10,7 +10,16 @@ import {
   restorePanelSizes,
   type PanelSizes,
 } from "./lib/panel-layout";
-import { useCallback, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   RotateCcw,
   Boxes,
@@ -66,6 +75,7 @@ import { TerminalScratchpad } from "./components/TerminalScratchpad";
 import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { api, errorMessage } from "./lib/api";
+import { hostProcessing } from "./lib/host-processing";
 import { organizeConnections } from "./lib/connection-organization";
 import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
@@ -263,6 +273,8 @@ export function App() {
   } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
+  const [terminalProcessing, setTerminalProcessing] = useState<Record<string, boolean>>({});
+  const hostOperations = useSyncExternalStore(hostProcessing.subscribe, hostProcessing.getSnapshot);
   const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
   const [terminalHasSelection, setTerminalHasSelection] = useState<Record<string, boolean>>({});
   const terminalHandlesRef = useRef(new Map<string, TerminalPaneHandle>());
@@ -723,6 +735,33 @@ export function App() {
     }
     return map;
   }, [workspaces]);
+
+  const processingConnections = new Set(hostOperations);
+  for (const workspace of workspaces) {
+    if (
+      isRemoteWorkspace(workspace) &&
+      (terminalProcessing[workspace.id] || workspace.state === "connecting")
+    ) {
+      processingConnections.add(workspace.connectionId);
+    }
+  }
+
+  function workspaceProcessing(workspace: Workspace) {
+    return (
+      workspace.state === "connecting" ||
+      !!terminalProcessing[workspace.id] ||
+      (isRemoteWorkspace(workspace) && hostOperations.has(workspace.connectionId))
+    );
+  }
+
+  function workspaceStatus(workspace: Workspace) {
+    return `${terminalStateLabel(workspace)}${workspaceProcessing(workspace) && workspace.state !== "connecting" ? ", processing" : ""}`;
+  }
+
+  function connectionStatus(connectionId: string) {
+    const state = connectionSessionStates[connectionId];
+    return `${state ? `Terminal ${state}` : "No open terminal"}${processingConnections.has(connectionId) ? ", processing" : ""}`;
+  }
 
   function updateWorkspace(id: string, patch: WorkspacePatch) {
     setWorkspaces((current) =>
@@ -1472,17 +1511,10 @@ export function App() {
             <strong>{connection.displayName}</strong>
             <small>{connectionTarget(connection)}</small>
           </span>
-          <span
-            className="host-session-status"
-            title={
-              connectionSessionStates[connection.id]
-                ? `Terminal ${connectionSessionStates[connection.id]}`
-                : "No open terminal"
-            }
-          >
+          <span className="host-session-status" title={connectionStatus(connection.id)}>
             {connectionSessionStates[connection.id] && (
               <span
-                className={`presence presence-${connectionSessionStates[connection.id]}`}
+                className={`presence presence-${connectionSessionStates[connection.id]}${processingConnections.has(connection.id) ? " presence-busy" : ""}`}
                 aria-hidden="true"
               />
             )}
@@ -1503,9 +1535,7 @@ export function App() {
           )}
         </button>
         <span className="sr-only" id={`connection-session-${connection.id}`}>
-          {connectionSessionStates[connection.id]
-            ? `Terminal ${connectionSessionStates[connection.id]}`
-            : "No open terminal"}
+          {connectionStatus(connection.id)}
         </span>
         <button
           className="host-menu"
@@ -1604,11 +1634,13 @@ export function App() {
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
           <span className="session-tab-label">{duplicateLabel(workspace)}</span>
-          {(workspace.state !== "connected" || terminalFocusMode) && (
+          {(workspace.state !== "connected" ||
+            terminalFocusMode ||
+            workspaceProcessing(workspace)) && (
             <span
-              className={`presence presence-${workspace.state}`}
+              className={`presence presence-${workspace.state}${workspaceProcessing(workspace) ? " presence-busy" : ""}`}
               aria-hidden="true"
-              title={`Terminal ${terminalStateLabel(workspace)}`}
+              title={`Terminal ${workspaceStatus(workspace)}`}
             />
           )}
           {terminalActivity[workspace.id] && (
@@ -1624,7 +1656,7 @@ export function App() {
           )}
         </button>
         <span className="sr-only" id={`workspace-session-${workspace.id}`}>
-          Terminal {terminalStateLabel(workspace)}
+          Terminal {workspaceStatus(workspace)}
         </span>
         <button
           className="session-tab-rename"
@@ -2006,7 +2038,10 @@ export function App() {
                             >
                               <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
                               <span>{group.name}</span> <small>{members.length}</small>
-                              <span className={`presence presence-${state}`} aria-hidden="true" />
+                              <span
+                                className={`presence presence-${state}${members.some(workspaceProcessing) ? " presence-busy" : ""}`}
+                                aria-hidden="true"
+                              />
                               {activity && (
                                 <span
                                   className={`terminal-activity terminal-activity-${activity}`}
@@ -2021,7 +2056,7 @@ export function App() {
                             {members
                               .map(
                                 (member) =>
-                                  `${duplicateLabel(member)}: ${terminalStateLabel(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
+                                  `${duplicateLabel(member)}: ${workspaceStatus(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
                               )
                               .join("; ")}
                           </span>
@@ -2426,6 +2461,15 @@ export function App() {
                                 ? kind
                                 : current[workspace.id],
                           }))
+                        }
+                        onProcessing={(busy) =>
+                          setTerminalProcessing((current) => {
+                            if (!!current[workspace.id] === busy) return current;
+                            const next = { ...current };
+                            if (busy) next[workspace.id] = true;
+                            else delete next[workspace.id];
+                            return next;
+                          })
                         }
                         findRequest={terminalFindRequests[workspace.id] ?? 0}
                       />

@@ -13,6 +13,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { api, REMOTE_INSPECTION_TIMEOUT_MS, REMOTE_DISCOVERY_TIMEOUT_MS } from "./api";
+import { hostProcessing } from "./host-processing";
 
 const remoteSource = readFileSync(
   new URL("../../src-tauri/src/remote.rs", import.meta.url),
@@ -108,10 +109,13 @@ describe("structured discovery timeout", () => {
       (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
 
+    expect(hostProcessing.getSnapshot().has("connection-id")).toBe(true);
+
     await vi.advanceTimersByTimeAsync(REMOTE_INSPECTION_TIMEOUT_MS);
 
     expect(await Promise.race([result, Promise.resolve("still pending")])).toBe(
       `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_MS / 1000} seconds`,
     );
+    expect(hostProcessing.getSnapshot().has("connection-id")).toBe(false);
   });
 });

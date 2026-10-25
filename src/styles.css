@@ -1845,31 +1845,39 @@ code,
 }
 
 .presence {
+  --presence-color: var(--text-faint);
   display: inline-block;
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--presence-color);
   transition: background-color var(--motion-fast) var(--ease);
 }
 
 .presence-connected {
-  background: var(--success);
+  --presence-color: var(--success);
 }
 
 .presence-connecting {
-  background: var(--warning);
-  animation: state-pulse 1.4s var(--ease) infinite;
+  --presence-color: var(--warning);
 }
 
 .presence-error {
-  background: var(--failure);
-  border-radius: 1px;
+  --presence-color: var(--failure);
 }
 
 .presence-disconnected {
-  background: #6a6a6a;
+  --presence-color: #6a6a6a;
+}
+
+.presence.presence-busy,
+.presence.presence-connecting {
+  box-sizing: border-box;
+  background: transparent;
+  border: 1.5px solid var(--presence-color);
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
 }
 
 .session-tab-close,

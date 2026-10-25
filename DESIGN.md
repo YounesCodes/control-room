@@ -217,6 +217,13 @@ they also show normal connection state because the sidebar is hidden. Keep sessi
 state accessible in every mode. Local shells use running, stopped, and restarted;
 remote sessions use connected, disconnected, and reconnected.
 
+Session indicators keep a circular shape in every state, including errors.
+Connecting sessions and ongoing host reads or terminal commands replace the
+solid dot with a rotating ring in the same status color. This also applies to
+pane and group tabs. Reduced motion keeps the open ring without rotation.
+Command activity uses shell markers where available, otherwise the return of
+the rendered prompt. It never treats a pause in output as command completion.
+
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for
 local and remote sessions. Open terminal search as a compact overlay so it does

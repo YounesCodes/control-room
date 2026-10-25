@@ -276,6 +276,93 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("spins during commands and host reads, including grouped panes, and keeps errors circular", async () => {
+    await mount();
+    await navigate("Terminal");
+    await expect.element(page.getByText("fixture$", { exact: true })).toBeVisible();
+    const started = native.invoke.mock.calls.find(([command]) => command === "start_session")![1];
+    const output = (text: string) =>
+      started.output.onmessage(new TextEncoder().encode(text).buffer);
+    const idle = element.querySelector<HTMLElement>(".host-row.active .presence")!;
+    expect(getComputedStyle(idle).borderRadius).toBe("50%");
+    expect(idle.classList.contains("presence-busy")).toBe(false);
+
+    await userEvent.click(
+      element.querySelector<HTMLElement>(".terminal-workspace-pane.active .xterm-screen")!,
+    );
+    await userEvent.keyboard("sleep 60{Enter}");
+    output("\r\n");
+    await vi.waitFor(() =>
+      expect(element.querySelector(".host-row.active .presence-busy")).not.toBeNull(),
+    );
+    const ring = element.querySelector<HTMLElement>(".session-tab-wrap.active .presence-busy")!;
+    expect(getComputedStyle(ring).animationName).toBe("spin");
+    expect(ring.offsetWidth).toBe(8);
+    await page.screenshot({ path: "../test-results/processing-terminal.png" });
+
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page.getByRole("button", { name: /^Split vertically/ }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    await vi.waitFor(() => {
+      expect(element.querySelector(".session-tab-group-main .presence-busy")).not.toBeNull();
+      expect(element.querySelector(".session-pane-tabs .presence-busy")).not.toBeNull();
+    });
+    await page.screenshot({ path: "../test-results/processing-focus.png" });
+    output("done\r\nfixture$ ");
+    await vi.waitFor(() => expect(element.querySelector(".presence-busy")).toBeNull());
+
+    emit("session-state-changed", {
+      sessionId: "session-1",
+      state: "error",
+      reason: "Fixture connection lost",
+    });
+    await vi.waitFor(() =>
+      expect(element.querySelector(".session-pane-tabs .presence-error")).not.toBeNull(),
+    );
+    const error = element.querySelector<HTMLElement>(".session-pane-tabs .presence-error")!;
+    expect(getComputedStyle(error).borderRadius).toBe("50%");
+    expect(error.classList.contains("presence-busy")).toBe(false);
+    await page.screenshot({ path: "../test-results/processing-error-circle.png" });
+  });
+
+  it("keeps host reads spinning until all concurrent requests settle", async () => {
+    await mount();
+    let finish!: () => void;
+    let fail!: (error: Error) => void;
+    overrides.set(
+      "list_services",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    overrides.set(
+      "list_ports",
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    const { api } = await import("./lib/api");
+    const hostId = fixtures.connection().id;
+    const services = api.listServices(hostId);
+    const ports = api.listPorts(hostId).catch(() => undefined);
+    await vi.waitFor(() =>
+      expect(element.querySelector(".host-row.active .presence-busy")).not.toBeNull(),
+    );
+    finish();
+    await services;
+    expect(element.querySelector(".host-row.active .presence-busy")).not.toBeNull();
+    fail(new Error("fixture read failed"));
+    await ports;
+    await vi.waitFor(() =>
+      expect(element.querySelector(".host-row.active .presence-busy")).toBeNull(),
+    );
+  });
+
   it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
     await page.viewport(960, 640);
     const shellKinds = [

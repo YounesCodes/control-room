@@ -253,12 +253,13 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("api.startSession(");
     expect(terminalSource.match(/new Terminal\(/g)).toHaveLength(1);
     expect(terminalSource.match(/new ResizeObserver\(/g)).toHaveLength(1);
-    // Enhanced History needs a Saved Connection, so the shell integration
-    // handler is registered only for a remote session.
-    expect(terminalSource).toMatch(
-      /connectionIdRef\.current\s*\?\s*terminal\.parser\.registerOscHandler/,
-    );
-    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(1);
+    // Both shell kinds report processing, but only a Saved Connection can
+    // reach command-history capture. TerminalPane's behavioral tests also
+    // send real markers to the local handler and assert no history is saved.
+    expect(terminalSource).toContain("if (!connectionIdRef.current) return true;");
+    expect(terminalSource).toContain("registerOscHandler(133");
+    expect(terminalSource).toContain("registerOscHandler(633");
+    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(2);
   });
 
   it("detects a newly connected host without requiring an Overview visit", () => {

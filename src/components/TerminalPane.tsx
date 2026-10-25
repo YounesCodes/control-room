@@ -13,6 +13,7 @@ import {
   terminalRightClickAction,
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
+import { TerminalProcessing } from "../lib/terminal-processing";
 import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
 
@@ -32,6 +33,7 @@ interface TerminalPaneProps {
   onState: (state: ConnectionState, reason: string | null) => void;
   onSelectionChange?: (hasSelection: boolean) => void;
   onActivity?: (kind: "output" | "bell") => void;
+  onProcessing?: (busy: boolean) => void;
   findRequest?: number;
 }
 
@@ -44,9 +46,8 @@ interface PendingHistory {
 const MAX_EARLY_SESSION_EVENTS = 16;
 
 /// One xterm host and one session lifecycle for both kinds of Terminal Session.
-/// A Workspace never changes kind, so the remote-only part (the shell
-/// integration handler that feeds Enhanced History) is decided when the
-/// terminal is built, and a local shell never reaches it.
+/// Both shell kinds report command activity; only a remote Workspace with a
+/// Saved Connection can record Enhanced History.
 export function TerminalPane({
   ref,
   workspace,
@@ -58,6 +59,7 @@ export function TerminalPane({
   onState,
   onSelectionChange,
   onActivity = () => undefined,
+  onProcessing = () => undefined,
   findRequest = 0,
 }: TerminalPaneProps) {
   const remote = isRemoteWorkspace(workspace) ? workspace : null;
@@ -83,6 +85,11 @@ export function TerminalPane({
   const onStateRef = useRef(onState);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onActivityRef = useRef(onActivity);
+  const onProcessingRef = useRef(onProcessing);
+  const processingRef = useRef<TerminalProcessing | null>(null);
+  if (!processingRef.current) {
+    processingRef.current = new TerminalProcessing((busy) => onProcessingRef.current(busy));
+  }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -105,10 +112,12 @@ export function TerminalPane({
   onStateRef.current = onState;
   onSelectionChangeRef.current = onSelectionChange;
   onActivityRef.current = onActivity;
+  onProcessingRef.current = onProcessing;
 
   handleSessionStateRef.current = (event) => {
     onStateRef.current(event.state, event.reason);
     if (event.state !== "disconnected" && event.state !== "error") return;
+    processingRef.current?.reset();
     acceptingInputRef.current = false;
     pendingInputRef.current.clear();
     sessionIdRef.current = null;
@@ -119,7 +128,17 @@ export function TerminalPane({
   sendInputRef.current = (bytes) => {
     const sessionId = sessionIdRef.current;
     if (sessionId) {
-      void api.writeSession(sessionId, bytes).catch((error) => setLocalError(errorMessage(error)));
+      const terminal = terminalRef.current;
+      const buffer = terminal?.buffer?.active;
+      const prompt =
+        buffer
+          ?.getLine(buffer.baseY + buffer.cursorY)
+          ?.translateToString(false, 0, buffer.cursorX) ?? null;
+      if (workspace.state === "connected") processingRef.current?.input(bytes, prompt);
+      void api.writeSession(sessionId, bytes).catch((error) => {
+        processingRef.current?.reset();
+        setLocalError(errorMessage(error));
+      });
       return;
     }
     if (!acceptingInputRef.current) {
@@ -258,60 +277,64 @@ export function TerminalPane({
     };
     container.addEventListener("contextmenu", handleContextMenu);
 
-    // Enhanced History is remote, Bash-only, and opt-in, so the shell
-    // integration handler exists only for a Workspace with a Saved Connection
-    // to record against. A local shell has no history capture at all.
-    const oscDisposable = connectionIdRef.current
-      ? terminal.parser.registerOscHandler(633, (data) => {
-          if (!data.startsWith("ControlRoom;")) return false;
-          if (isControlRoomConnectedOsc(data)) return true;
-          try {
-            const event = parseHistoryOsc(data);
-            if (!event) {
-              pendingHistoryRef.current = null;
-              return true;
-            }
-            if (event.kind === "start") {
-              pendingHistoryRef.current = {
-                startedAt: event.startedAt,
-                cwd: event.cwd,
-                command: event.command,
-              };
-            } else {
-              const pending = pendingHistoryRef.current;
-              pendingHistoryRef.current = null;
-              const sessionId = sessionIdRef.current;
-              const connectionId = connectionIdRef.current;
-              if (
-                pending &&
-                sessionId &&
-                connectionId &&
-                globalHistoryEnabledRef.current &&
-                !historyPausedRef.current
-              ) {
-                void api
-                  .addHistory({
-                    connectionId,
-                    sessionId,
-                    command: pending.command,
-                    cwd: event.cwd || pending.cwd,
-                    startedAt: pending.startedAt,
-                    finishedAt: event.finishedAt,
-                    exitCode: event.exitCode,
-                    shell: "bash",
-                  })
-                  .catch((error) =>
-                    setLocalError(`History capture failed: ${errorMessage(error)}`),
-                  );
-              }
-            }
-          } catch (error) {
-            pendingHistoryRef.current = null;
-            setLocalError(`History capture failed: ${errorMessage(error)}`);
-          }
+    const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
+      processingRef.current?.shellMarker(data);
+      return false;
+    });
+    // All shells can report command activity. Only remote, opted-in Bash
+    // sessions record Enhanced History; command state never enables capture.
+    const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
+      if (!data.startsWith("ControlRoom;")) {
+        processingRef.current?.shellMarker(data);
+        return false;
+      }
+      if (isControlRoomConnectedOsc(data)) return true;
+      try {
+        const event = parseHistoryOsc(data);
+        if (!event) {
+          pendingHistoryRef.current = null;
           return true;
-        })
-      : null;
+        }
+        processingRef.current?.command(event.kind === "start");
+        if (!connectionIdRef.current) return true;
+        if (event.kind === "start") {
+          pendingHistoryRef.current = {
+            startedAt: event.startedAt,
+            cwd: event.cwd,
+            command: event.command,
+          };
+        } else {
+          const pending = pendingHistoryRef.current;
+          pendingHistoryRef.current = null;
+          const sessionId = sessionIdRef.current;
+          const connectionId = connectionIdRef.current;
+          if (
+            pending &&
+            sessionId &&
+            connectionId &&
+            globalHistoryEnabledRef.current &&
+            !historyPausedRef.current
+          ) {
+            void api
+              .addHistory({
+                connectionId,
+                sessionId,
+                command: pending.command,
+                cwd: event.cwd || pending.cwd,
+                startedAt: pending.startedAt,
+                finishedAt: event.finishedAt,
+                exitCode: event.exitCode,
+                shell: "bash",
+              })
+              .catch((error) => setLocalError(`History capture failed: ${errorMessage(error)}`));
+          }
+        }
+      } catch (error) {
+        pendingHistoryRef.current = null;
+        setLocalError(`History capture failed: ${errorMessage(error)}`);
+      }
+      return true;
+    });
 
     let listenerDisposed = false;
     let unlisten: (() => void) | undefined;
@@ -366,7 +389,9 @@ export function TerminalPane({
       selectionDisposable.dispose();
       bellDisposable.dispose();
       searchDisposable.dispose();
-      oscDisposable?.dispose();
+      promptDisposable.dispose();
+      oscDisposable.dispose();
+      processingRef.current?.reset();
       search.dispose();
       terminal.dispose();
       terminalRef.current = null;
@@ -395,6 +420,7 @@ export function TerminalPane({
     const terminal = terminalRef.current;
     if (!terminal) return;
     if (!workspace.connectRequested) {
+      processingRef.current?.reset();
       acceptingInputRef.current = false;
       pendingInputRef.current.clear();
       sessionIdRef.current = null;
@@ -408,6 +434,7 @@ export function TerminalPane({
     let disposed = false;
 
     acceptingInputRef.current = true;
+    processingRef.current?.reset();
     pendingInputRef.current.clear();
     pendingHistoryRef.current = null;
     earlySessionEventsRef.current.clear();
@@ -442,7 +469,16 @@ export function TerminalPane({
       if (disposed || generation !== sessionGenerationRef.current) return;
       const bytes = new Uint8Array(message);
       if (!activeRef.current) onActivityRef.current("output");
-      terminal.write(bytes, () => acknowledge(bytes.byteLength));
+      terminal.write(bytes, () => {
+        if (disposed || generation !== sessionGenerationRef.current) return;
+        const buffer = terminal.buffer?.active;
+        const prompt =
+          buffer
+            ?.getLine(buffer.baseY + buffer.cursorY)
+            ?.translateToString(false, 0, buffer.cursorX) ?? null;
+        processingRef.current?.output(prompt);
+        acknowledge(bytes.byteLength);
+      });
     };
 
     // A local session names a validated shell profile; a remote one names a
@@ -498,6 +534,7 @@ export function TerminalPane({
         pendingInputRef.current.clear();
         const message = errorMessage(error);
         setLocalError(message);
+        processingRef.current?.reset();
         onStateRef.current("error", message);
       });
 
@@ -507,6 +544,7 @@ export function TerminalPane({
       acceptingInputRef.current = false;
       pendingInputRef.current.clear();
       pendingHistoryRef.current = null;
+      processingRef.current?.reset();
       window.clearTimeout(acknowledgementTimer);
       if (sessionIdRef.current === ownedSessionId) {
         sessionIdRef.current = null;

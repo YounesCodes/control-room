@@ -67,7 +67,7 @@ describe("motion guardrails", () => {
   });
 
   it("breathes while connecting and pops in the terminal activity cue", () => {
-    expect(rule(".presence-connecting")).toContain("animation: state-pulse");
+    expect(stylesSource).toMatch(/\.presence\.presence-connecting\s*\{[^}]*animation: spin/);
     expect(rule(".status-connecting")).toContain("animation: state-pulse");
     expect(rule(".terminal-activity")).toContain("animation: cue-in");
     expect(rule(".terminal-activity-bell")).toContain("bell-ping");

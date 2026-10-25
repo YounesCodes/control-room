@@ -8,6 +8,7 @@ import {
   restartApp,
   runtime,
   terminalCommand,
+  terminalContains,
 } from "./helpers";
 import type {
   BootDiagnostics,
@@ -41,6 +42,20 @@ async function connect() {
 }
 
 describe("read-only Ubuntu SSH journeys with independent native processes", () => {
+  it("keeps the host and tab processing rings active during a silent command", async () => {
+    await connect();
+    await terminalCommand("printf 'PROCESSING_READY\\n'", "PROCESSING_READY");
+    await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
+    await $(".terminal-workspace-pane.active .xterm-screen").click();
+    await browser.keys("sleep 3; printf 'PROCESSING_DONE\\n'");
+    await browser.keys("Enter");
+    await expect($(".host-row.active .presence-busy")).toExist();
+    await expect($(".session-tab-wrap.active .presence-busy")).toExist();
+    await terminalContains("PROCESSING_DONE");
+    await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
+    await expect($(".host-row.active .presence-connected")).toExist();
+  });
+
   it("validates configured access and reads terminal output", async () => {
     await connect();
     await connectionMenu("Live fixture");

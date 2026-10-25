@@ -21,6 +21,8 @@ const channels = vi.hoisted(
 /// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
+  osc: new Map<number, (data: string) => boolean>(),
+  prompt: "$ ",
   writes: [] as string[],
   pastes: [] as string[],
   searchNext: vi.fn(),
@@ -39,6 +41,8 @@ const xterm = vi.hoisted(() => ({
     this.selectionChange = null;
     this.customKeyHandler = null;
     this.oscHandlers = 0;
+    this.osc.clear();
+    this.prompt = "$ ";
     this.writes = [];
     this.pastes = [];
     this.searchNext.mockReset();
@@ -102,8 +106,9 @@ vi.mock("@xterm/xterm", () => ({
       this.options = options;
     }
     parser = {
-      registerOscHandler: () => {
+      registerOscHandler: (id: number, handler: (data: string) => boolean) => {
         xterm.oscHandlers += 1;
+        xterm.osc.set(id, handler);
         return { dispose: () => undefined };
       },
     };
@@ -136,8 +141,19 @@ vi.mock("@xterm/xterm", () => ({
       return xterm.selection;
     }
     reset() {}
-    write(data: unknown) {
+    get buffer() {
+      return {
+        active: {
+          cursorX: xterm.prompt.length,
+          cursorY: 0,
+          baseY: 0,
+          getLine: () => ({ translateToString: () => xterm.prompt }),
+        },
+      };
+    }
+    write(data: unknown, done?: () => void) {
       if (typeof data === "string") xterm.writes.push(data);
+      done?.();
     }
     paste(data: string) {
       xterm.pastes.push(data);
@@ -202,6 +218,7 @@ function renderPane(
   options: {
     ref?: Ref<TerminalPaneHandle>;
     onSelectionChange?: (hasSelection: boolean) => void;
+    onProcessing?: (busy: boolean) => void;
     findRequest?: number;
   } = {},
 ) {
@@ -241,6 +258,8 @@ describe("TerminalPane sessions", () => {
     api.startSession.mockResolvedValue({ sessionId: "ssh-session" });
     api.startLocalSession.mockResolvedValue({ sessionId: "local-session" });
     api.closeSession.mockResolvedValue(undefined);
+    api.writeSession.mockResolvedValue(undefined);
+    api.acknowledgeSessionOutput.mockResolvedValue(undefined);
   });
 
   it("starts a local Workspace through the local session API", async () => {
@@ -294,16 +313,39 @@ describe("TerminalPane sessions", () => {
     renderPane(createLocalWorkspace(shell));
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    // Enhanced History is remote and Bash-only, so a local session installs no
-    // shell integration handler to record from.
-    expect(xterm.oscHandlers).toBe(0);
+    // Local shells report command activity without recording command history.
+    expect(xterm.oscHandlers).toBe(2);
+    xterm.osc.get(633)?.("ControlRoom;start;0;L3RtcA==;cHdk");
+    xterm.osc.get(633)?.("ControlRoom;finish;1;0;L3RtcA==");
     expect(api.addHistory).not.toHaveBeenCalled();
 
     cleanup();
     xterm.reset();
     renderPane(createRemoteWorkspace(connection));
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
-    expect(xterm.oscHandlers).toBe(1);
+    expect(xterm.oscHandlers).toBe(2);
+  });
+
+  it("reports command processing until the rendered prompt returns and clears on unmount", async () => {
+    const onProcessing = vi.fn();
+    renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onProcessing });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    await act(async () => {
+      xterm.onData?.("sleep 60\r");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    xterm.prompt = "working";
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("working").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    xterm.prompt = "$ ";
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("$ ").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+    act(() => {
+      xterm.osc.get(133)?.("C");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    cleanup();
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
   });
 
   it("does not start a restored Workspace of either kind", async () => {
