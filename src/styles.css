@@ -1721,6 +1721,9 @@ code,
   background: transparent;
   padding: 0 4px 0 12px;
   color: inherit;
+  /* Hovering reserves room for Rename and Close; animating the padding drags
+     the trailing session dot and label across instead of letting them jump. */
+  transition: padding var(--motion-med) var(--ease);
 }
 
 .session-tab-wrap:hover .session-tab-main,
@@ -1736,6 +1739,7 @@ code,
 .session-tab-wrap.in-layout .session-tab-close {
   opacity: 1;
   pointer-events: auto;
+  transform: translateX(0);
 }
 
 .session-group-action {
@@ -1882,11 +1886,14 @@ code,
   color: #767673;
   opacity: 0;
   pointer-events: none;
+  /* Hidden controls rest a step to the right, so revealing them reads as the
+     tools sliding into the space the label just vacated. */
+  transform: translateX(6px);
   transition:
     opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease),
     background-color var(--motion-fast) var(--ease),
-    color var(--motion-fast) var(--ease),
-    transform var(--motion-fast) var(--ease);
+    color var(--motion-fast) var(--ease);
 }
 
 .session-tab-close {
@@ -1901,6 +1908,7 @@ code,
 .session-tab-rename:focus-visible {
   opacity: 1;
   pointer-events: auto;
+  transform: translateX(0);
 }
 
 .session-tab-close:hover,

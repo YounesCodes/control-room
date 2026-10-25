@@ -366,7 +366,11 @@ describe("critical UI in Chromium", () => {
 
     await main.hover();
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
-    expect(label.getBoundingClientRect().width).toBeLessThan(initialLabelWidth - 40);
+    // The action space opens with a short transition; wait for the label to
+    // hand over its width rather than catching it mid-drag.
+    await vi.waitFor(() =>
+      expect(label.getBoundingClientRect().width).toBeLessThan(initialLabelWidth - 40),
+    );
     expect(Math.abs(tab.getBoundingClientRect().width - initialTabWidth)).toBeLessThanOrEqual(1);
     expect(Math.abs(nextTab.getBoundingClientRect().left - nextTabLeft)).toBeLessThanOrEqual(1);
 

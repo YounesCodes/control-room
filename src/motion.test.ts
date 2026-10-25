@@ -87,6 +87,20 @@ describe("motion guardrails", () => {
     expect(rule(".session-tab-wrap")).toContain("border-bottom-color var(--motion-fast)");
   });
 
+  it("drags the trailing tab dot across and slides the tab tools into place", () => {
+    // Hovering reserves the action space by animating padding, so the label
+    // and session dot glide instead of jumping, and Rename and Close ride in
+    // from the right edge they occupy when hidden.
+    expect(rule(".session-tab-main")).toContain("transition: padding var(--motion-med)");
+    expect(stylesSource).toContain("transform: translateX(6px)");
+    expect(stylesSource).toMatch(
+      /\.session-tab-wrap:hover \.session-tab-close,[\s\S]{0,400}?transform: translateX\(0\);/,
+    );
+    expect(stylesSource).toMatch(
+      /\.session-tab-wrap\.in-layout \.session-tab-rename,[\s\S]{0,200}?transform: translateX\(0\);/,
+    );
+  });
+
   it("opens anchored menus and panels with the shared popover entrance", () => {
     for (const selector of [
       ".host-context-menu",
