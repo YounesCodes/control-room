@@ -37,6 +37,28 @@ export interface TerminalLayoutViewport {
   height: number;
 }
 
+/** Round shared edges together so adjacent panes meet on complete CSS pixels. */
+export function getTerminalPanePixels(
+  rectangle: TerminalPaneRect,
+  viewport: TerminalLayoutViewport,
+): TerminalPaneRect | null {
+  if (
+    !Number.isFinite(viewport.width) ||
+    !Number.isFinite(viewport.height) ||
+    viewport.width <= 0 ||
+    viewport.height <= 0
+  )
+    return null;
+  const left = Math.round((rectangle.left * viewport.width) / 100);
+  const top = Math.round((rectangle.top * viewport.height) / 100);
+  return {
+    left,
+    top,
+    width: Math.round(((rectangle.left + rectangle.width) * viewport.width) / 100) - left,
+    height: Math.round(((rectangle.top + rectangle.height) * viewport.height) / 100) - top,
+  };
+}
+
 const MIN_TERMINAL_PANE_WIDTH = 280;
 const MIN_TERMINAL_PANE_HEIGHT = 180;
 

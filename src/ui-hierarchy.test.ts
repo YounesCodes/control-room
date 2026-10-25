@@ -338,8 +338,9 @@ describe("application hierarchy", () => {
 
   it("keeps terminal actions visible in focus mode", () => {
     expect(appSource).toContain("terminalFocusMode");
-    expect(appSource).toContain('aria-label="Exit terminal focus"');
-    expect(appSource).toContain('aria-label="Focus terminal"');
+    expect(appSource).toContain(
+      'aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}',
+    );
     expect(stylesSource).toMatch(
       /\.terminal-focus-mode \.app-bar,[\s\S]*\.terminal-focus-mode \.sidebar\s*\{[^}]*display: none;/,
     );
@@ -347,7 +348,7 @@ describe("application hierarchy", () => {
   });
 
   it("keeps groups inside focus mode and outlines the active group and pane", () => {
-    expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
+    expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(1);
     expect(appSource).toContain('aria-label="Split terminal"');
     expect(appSource).toContain('aria-label="New terminal"');
     expect(appSource).toContain("session-pane-tabs");

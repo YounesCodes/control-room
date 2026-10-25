@@ -679,6 +679,79 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Close host metrics" }).click();
     expect(strip.querySelector(".host-metrics-panel")).toBeNull();
   });
+  for (const width of [840, 1440]) {
+    it(`anchors the focus toggle beside window controls across modes and groups at ${width}px`, async () => {
+      await page.viewport(width, 700);
+      currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+      await mount();
+      await navigate("Terminal");
+      const button = page.getByRole("button", { name: "Focus terminal", exact: true });
+      const original = button.element();
+      const position = () => {
+        const rect = original.getBoundingClientRect();
+        return [rect.x, rect.y, rect.width, rect.height];
+      };
+      const normalBounds = position();
+      expect(normalBounds[0]).toBe(width - 179);
+      expect(normalBounds[1]).toBe(1);
+      await expect.element(button).toHaveAttribute("aria-pressed", "false");
+      await page.screenshot({ path: `../test-results/focus-toggle-normal-${width}.png` });
+      await button.click();
+      const exit = page.getByRole("button", { name: "Exit terminal focus", exact: true });
+      await expect.element(exit).toHaveAttribute("aria-pressed", "true");
+      expect(exit.element()).toBe(original);
+      expect(position()).toEqual(normalBounds);
+      await expect.element(exit).toHaveFocus();
+      expect(element.querySelectorAll('[aria-label="Close window"]')).toHaveLength(1);
+      await expect.element(page.getByRole("button", { name: "Close window" })).toBeVisible();
+      const closeBounds = page
+        .getByRole("button", { name: "Close window" })
+        .element()
+        .getBoundingClientRect();
+      expect(closeBounds.y).toBe(normalBounds[1]);
+      expect(closeBounds.height).toBe(normalBounds[3]);
+      expect(closeBounds.right).toBe(width - 1);
+      const actions = element.querySelector(".app-window-actions")!;
+      const strip = element.querySelector(".session-tabs")!;
+      await expect
+        .poll(() => element.querySelector(".session-tab-actions")!.getBoundingClientRect().right)
+        .toBeLessThanOrEqual(actions.getBoundingClientRect().left);
+      expect(strip.getBoundingClientRect().height).toBe(42);
+      await page.screenshot({ path: `../test-results/focus-toggle-focus-${width}.png` });
+      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await page
+        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+        .click();
+      await expect
+        .element(page.getByRole("navigation", { name: /Terminals in .* group/ }))
+        .toBeVisible();
+      expect(position()).toEqual(normalBounds);
+      for (let index = 0; index < 10; index++) {
+        await page.getByRole("button", { name: "New terminal", exact: true }).click();
+        await page
+          .getByRole("dialog", { name: "New terminal" })
+          .getByRole("button", { name: /Command Prompt/ })
+          .click();
+      }
+      await expect
+        .element(page.getByRole("button", { name: "All terminals", exact: true }))
+        .toBeVisible();
+      expect(position()).toEqual(normalBounds);
+      expect(element.scrollWidth).toBeLessThanOrEqual(width);
+      expect((await axe.run(actions)).violations).toEqual([]);
+      await exit.click();
+      await expect.element(button).toHaveAttribute("aria-pressed", "false");
+      expect(button.element()).toBe(original);
+      expect(position()).toEqual(normalBounds);
+      await userEvent.keyboard("{Space}");
+      await expect.element(exit).toHaveAttribute("aria-pressed", "true");
+      expect(position()).toEqual(normalBounds);
+      await userEvent.keyboard("{Space}");
+      await expect.element(button).toHaveAttribute("aria-pressed", "false");
+      expect(position()).toEqual(normalBounds);
+    });
+  }
+
   it("keeps normal connection state in the sidebar and restores tab indicators in Focus Mode", async () => {
     await mount();
     const host = element.querySelector<HTMLElement>(".host-row.active")!;

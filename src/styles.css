@@ -331,8 +331,11 @@ code,
    ========================================================================== */
 
 .app-shell {
+  position: relative;
   display: grid;
   --connection-rail-width: 244px;
+  --window-control-width: 46px;
+  --window-actions-width: calc(40px + 3 * var(--window-control-width));
   grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
   grid-template-rows: 42px minmax(0, 1fr);
   height: 100%;
@@ -353,6 +356,37 @@ code,
   justify-content: flex-end;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--topbar-bg);
+  padding-right: var(--window-actions-width);
+}
+
+/* One window-anchored control group serves both titlebar and Focus Mode. */
+.app-window-actions {
+  position: absolute;
+  z-index: 35;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: var(--window-actions-width);
+  height: 42px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--topbar-bg);
+}
+
+.app-window-actions > .window-controls {
+  grid-column: 2;
+}
+
+.app-window-actions .app-focus-toggle {
+  width: 40px;
+  height: 100%;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.app-focus-toggle[aria-pressed="true"] {
+  background: var(--fill-active);
+  color: var(--text-strong);
 }
 
 .app-bar-actions {
@@ -756,13 +790,6 @@ code,
   font-size: 11px;
 }
 
-.window-controls-divider {
-  width: 1px;
-  height: 22px;
-  margin-left: 4px;
-  background: #303030;
-}
-
 .window-controls {
   display: flex;
   height: 100%;
@@ -771,7 +798,7 @@ code,
 
 .window-control-button {
   display: grid;
-  width: 46px;
+  width: var(--window-control-width, 46px);
   height: 100%;
   place-items: center;
   background: transparent;
@@ -1670,12 +1697,14 @@ code,
      highlight fills the full header height; the overlay drag strip above the
      top pixels stays the drag target. */
   padding-top: 0;
+  min-height: 42px;
+  padding-right: var(--window-actions-width);
 }
 
 .session-window-drag-region {
   position: absolute;
   z-index: 1;
-  inset: 0 0 auto;
+  inset: 0 var(--window-actions-width) auto 0;
   height: 6px;
   cursor: grab;
 }
@@ -2001,16 +2030,6 @@ code,
 .session-strip-button[aria-expanded="true"] {
   background: var(--fill-active);
   color: var(--text-strong);
-}
-
-.session-tab-actions .window-controls-divider {
-  height: 22px;
-  align-self: center;
-  margin-left: 2px;
-}
-
-.session-tab-actions .window-control-button {
-  width: 44px;
 }
 
 .terminal-target-menu {

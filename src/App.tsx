@@ -86,6 +86,7 @@ import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib
 import {
   createTerminalLayout,
   getTerminalLayoutIds,
+  getTerminalPanePixels,
   getResponsiveTerminalGeometry,
   resizeTerminalLayout,
   splitTerminalLayout,
@@ -1810,10 +1811,24 @@ export function App() {
               <Settings size={18} />
             </button>
           )}
-          <span className="window-controls-divider" aria-hidden="true" />
-          <WindowControls />
         </div>
       </header>
+
+      <div className="app-window-actions" role="group" aria-label="Window actions">
+        {!settingsOpen && activeWorkspace?.view === "terminal" && (
+          <button
+            className="app-bar-button app-focus-toggle"
+            type="button"
+            onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
+            aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+            aria-pressed={terminalFocusMode}
+            title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+          >
+            {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        )}
+        <WindowControls />
+      </div>
 
       <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
@@ -2159,29 +2174,6 @@ export function App() {
                   >
                     <StickyNote size={15} />
                   </button>
-                  {/* One toggle in one slot: entering and leaving terminal
-                      focus never moves the control between tool groups. */}
-                  {terminalFocusMode ? (
-                    <button
-                      className="session-strip-button"
-                      type="button"
-                      onClick={exitTerminalFocus}
-                      aria-label="Exit terminal focus"
-                      title="Exit terminal focus"
-                    >
-                      <Minimize2 size={15} />
-                    </button>
-                  ) : (
-                    <button
-                      className="session-strip-button"
-                      type="button"
-                      onClick={enterTerminalFocus}
-                      aria-label="Focus terminal"
-                      title="Focus terminal"
-                    >
-                      <Maximize2 size={15} />
-                    </button>
-                  )}
                 </div>
                 {scratchpadOpen && activeWorkspace?.view === "terminal" && (
                   <TerminalScratchpad
@@ -2282,12 +2274,6 @@ export function App() {
                         </div>
                       </TerminalTargetMenu>
                     )}
-                  </>
-                )}
-                {terminalFocusMode && (
-                  <>
-                    <span className="window-controls-divider" aria-hidden="true" />
-                    <WindowControls />
                   </>
                 )}
               </div>
@@ -2391,6 +2377,8 @@ export function App() {
                     activeWorkspace.view === "terminal" &&
                     visibleTerminalIds.includes(workspace.id);
                   const paneRect = terminalPaneRects[workspace.id];
+                  const panePixels =
+                    paneRect && getTerminalPanePixels(paneRect, terminalLayoutViewport);
                   return (
                     <div
                       className={[
@@ -2404,12 +2392,12 @@ export function App() {
                       aria-hidden={!terminalVisible || undefined}
                       style={
                         terminalSplitMode && terminalVisible && paneRect
-                          ? {
+                          ? (panePixels ?? {
                               left: `${paneRect.left}%`,
                               top: `${paneRect.top}%`,
                               width: `${paneRect.width}%`,
                               height: `${paneRect.height}%`,
-                            }
+                            })
                           : undefined
                       }
                     >
