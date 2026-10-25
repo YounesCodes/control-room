@@ -1876,6 +1876,7 @@ export function App() {
   return (
     <div
       ref={shellSize.ref}
+      data-platform={environment.platform}
       onClickCapture={(event) => {
         // Safari does not focus buttons on mouse clicks. Keep keyboard return
         // targets and subsequent shortcuts consistent across desktop webviews.

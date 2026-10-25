@@ -1,5 +1,23 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "Control Room",
+        "width": 1180,
+        "height": 700,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 12, "y": 26 },
+        "fullscreen": false,
+        "center": true
+      }
+    ]
+  },
   "bundle": {
     "targets": ["app", "dmg"],
     "icon": ["icons/icon.icns"],

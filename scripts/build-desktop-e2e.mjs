@@ -12,6 +12,15 @@ const configuration = JSON.parse(
 // preserving production window chrome for each platform.
 configuration.app.windows[0].decorations = process.platform === "darwin";
 if (process.platform === "darwin") {
+  const macConfiguration = JSON.parse(
+    readFileSync(new URL("../src-tauri/tauri.macos.conf.json", import.meta.url), "utf8"),
+  );
+  const { titleBarStyle, hiddenTitle, trafficLightPosition } = macConfiguration.app.windows[0];
+  Object.assign(configuration.app.windows[0], {
+    titleBarStyle,
+    hiddenTitle,
+    trafficLightPosition,
+  });
   configuration.app.windows[0].create = true;
   // Automation relaunches the app outside Launch Services. Keep WKWebView's
   // rendering callbacks running while the OS changes native window activation.

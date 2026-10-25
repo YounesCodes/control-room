@@ -34,7 +34,7 @@ guardrails, not every choice described below.
   patterns. Add a new pattern when the work needs one, then document its intent
   and test its important behavior.
 
-On macOS, keep the native titlebar and traffic-light controls. Use Command for application shortcuts, leaving Control combinations available to terminal programs. Windows retains its custom window controls. Local Mac tabs offer installed zsh, Bash, and fish profiles; administrator profiles remain a Windows feature. Dialogs cycle every focusable control with Tab, including buttons on macOS. Mouse activation gives buttons a keyboard return target, and overflowing header metrics handle arrow-key scrolling explicitly.
+On macOS, overlay the native traffic-light controls on the existing top row, without a separate system titlebar or visible application name. Reserve their space in the Connections heading, Settings bar, and Focus Mode tab strip. Use Command for application shortcuts, leaving Control combinations available to terminal programs. Windows retains its custom window controls. Local Mac tabs offer installed zsh, Bash, and fish profiles; administrator profiles remain a Windows feature. Dialogs cycle every focusable control with Tab, including buttons on macOS. Mouse activation gives buttons a keyboard return target, and overflowing header metrics handle arrow-key scrolling explicitly.
 
 ## Layout and hierarchy
 

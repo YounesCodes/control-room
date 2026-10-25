@@ -13,7 +13,7 @@ interface WindowControlsProps {
 }
 
 export function WindowControls({ platform, windowActions }: WindowControlsProps) {
-  // macOS uses the native decorated titlebar and its traffic lights. Windows
+  // macOS overlays native traffic lights on the app's existing top row. Windows
   // keeps the existing custom controls because its window remains undecorated.
   if (platform !== "windows") return null;
   const appWindow = windowActions ?? getCurrentWindow();

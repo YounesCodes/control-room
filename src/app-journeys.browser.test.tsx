@@ -734,6 +734,50 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(element.querySelector(".host-row.active .presence-busy")).toBeNull(),
     );
   });
+  for (const platform of ["macos", "windows"] as const) {
+    it(`keeps ${platform} window controls in the existing row across workspace, Focus Mode, and Settings`, async () => {
+      await page.viewport(960, 640);
+      overrides.set("get_environment_info", () => ({
+        platform,
+        sshPath: "fixture-ssh",
+        sshConfigPath: "fixture-config",
+        sshAgentAvailable: false,
+        platformSupported: true,
+      }));
+      persisted.panelSizes = { connections: 200 };
+      await mount();
+      const shell = element.querySelector<HTMLElement>(".app-shell")!;
+      await expect.poll(() => shell.dataset.platform).toBe(platform);
+      const header = element.querySelector<HTMLElement>(".sidebar-top-heading")!;
+      const label = header.querySelector<HTMLElement>("span")!;
+      expect(header.getBoundingClientRect().top).toBe(1);
+      expect(header.getBoundingClientRect().height).toBe(42);
+      expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+      if (platform === "macos") {
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
+        expect(element.querySelector(".window-controls")).toBeNull();
+      }
+      await navigate("Terminal");
+      await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      const tabs = element.querySelector<HTMLElement>(".session-tabs")!;
+      await expect.poll(() => tabs.getBoundingClientRect().top).toBe(1);
+      await expect
+        .poll(() => getComputedStyle(tabs).paddingLeft)
+        .toBe(platform === "macos" ? "80px" : "0px");
+      expect(element.querySelector<HTMLElement>(".app-bar")!.getBoundingClientRect().height).toBe(
+        0,
+      );
+      await page.screenshot({ path: `../test-results/${platform}-integrated-focus-controls.png` });
+      await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+      await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+      const bar = element.querySelector<HTMLElement>(".app-bar")!;
+      await expect.poll(() => bar.getBoundingClientRect().top).toBe(1);
+      expect(bar.getBoundingClientRect().height).toBe(42);
+      await expect
+        .poll(() => getComputedStyle(bar).paddingLeft)
+        .toBe(platform === "macos" ? "80px" : "0px");
+    });
+  }
 
   it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
     await page.viewport(960, 640);
