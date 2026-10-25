@@ -1873,6 +1873,22 @@ export function App() {
   });
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
+  const connectionsHeading = (
+    <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
+      <span data-tauri-drag-region>Connections</span>
+      <span data-tauri-drag-region>{connections.length}</span>
+      <button
+        type="button"
+        className="icon-button layout-reset"
+        aria-label="Reset layout"
+        title="Reset all panel sizes"
+        onClick={() => setPanelSizes({})}
+      >
+        <RotateCcw size={14} />
+      </button>
+    </div>
+  );
+
   return (
     <div
       ref={shellSize.ref}
@@ -1898,6 +1914,7 @@ export function App() {
       }
     >
       <header className="app-bar" data-tauri-drag-region>
+        {environment.platform === "macos" && !settingsOpen && connectionsHeading}
         {!settingsOpen &&
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
@@ -1960,19 +1977,7 @@ export function App() {
       </div>
 
       <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
-        <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
-          <span data-tauri-drag-region>Connections</span>
-          <span data-tauri-drag-region>{connections.length}</span>
-          <button
-            type="button"
-            className="icon-button layout-reset"
-            aria-label="Reset layout"
-            title="Reset all panel sizes"
-            onClick={() => setPanelSizes({})}
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
+        {environment.platform !== "macos" && connectionsHeading}
         <div className="sidebar-filter-row">
           <label className="search-field sidebar-search">
             <Search size={14} />

@@ -1043,37 +1043,34 @@ code,
   pointer-events: none;
 }
 
-/* AppKit draws the native traffic lights over the existing first row. Reserve
-   their hit area in each layout instead of adding a second titlebar. */
-.app-shell[data-platform="macos"] .sidebar-top-heading {
-  gap: 2px;
-  padding-right: 8px;
-  padding-left: 80px;
+/* One continuous Mac toolbar owns the native controls and Connections heading.
+   Its leading space stays fixed while the sidebar resizes or collapses. */
+.app-shell[data-platform="macos"] {
+  --mac-window-controls-space: 104px;
 }
 
-.app-shell[data-platform="macos"] .sidebar-top-heading > span:first-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.app-shell[data-platform="macos"] .app-bar {
+  grid-column: 1 / -1;
+  padding-left: var(--mac-window-controls-space);
+}
+
+.app-shell[data-platform="macos"] .sidebar {
+  grid-row: 2 / -1;
+}
+
+.app-shell[data-platform="macos"] .app-bar .sidebar-top-heading {
+  align-self: stretch;
+  min-height: 0;
+  gap: 8px;
+  padding: 0 16px 0 0;
 }
 
 .app-shell[data-platform="macos"] .sidebar-top-heading .layout-reset {
   margin-left: 0;
 }
 
-@container (max-width: 240px) {
-  .app-shell[data-platform="macos"] .sidebar-top-heading > span:nth-child(2) {
-    display: none;
-  }
-}
-
-.app-shell[data-platform="macos"].settings-mode .app-bar,
 .app-shell[data-platform="macos"].terminal-focus-mode .session-tabs {
-  padding-left: 80px;
-}
-
-.app-shell[data-platform="macos"].terminal-focus-mode .session-tabs {
+  padding-left: var(--mac-window-controls-space);
   min-height: 42px;
 }
 

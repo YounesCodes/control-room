@@ -746,16 +746,41 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }));
       persisted.panelSizes = { connections: 200 };
       await mount();
+      await navigate("Overview");
       const shell = element.querySelector<HTMLElement>(".app-shell")!;
       await expect.poll(() => shell.dataset.platform).toBe(platform);
       const header = element.querySelector<HTMLElement>(".sidebar-top-heading")!;
       const label = header.querySelector<HTMLElement>("span")!;
       expect(header.getBoundingClientRect().top).toBe(1);
-      expect(header.getBoundingClientRect().height).toBe(42);
+      expect(header.getBoundingClientRect().height).toBe(platform === "macos" ? 41 : 42);
       expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
       if (platform === "macos") {
-        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
+        const bar = element.querySelector<HTMLElement>(".app-bar")!;
+        const sidebar = element.querySelector<HTMLElement>(".sidebar")!;
+        const workspace = element.querySelector<HTMLElement>(".workspace-shell")!;
+        expect(bar.getBoundingClientRect().left).toBe(1);
+        expect(bar.getBoundingClientRect().width).toBe(shell.clientWidth);
+        expect(header.closest(".app-bar")).toBe(bar);
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
+        expect(sidebar.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
+        expect(workspace.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
+        expect(getComputedStyle(header.querySelectorAll("span")[1]).display).not.toBe("none");
         expect(element.querySelector(".window-controls")).toBeNull();
+        const divider = page.getByRole("separator", { name: "Resize Connections panel" });
+        await userEvent.click(divider);
+        await userEvent.keyboard("{End}");
+        await expect.poll(() => sidebar.clientWidth).toBe(479);
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
+        expect(bar.getBoundingClientRect().left).toBe(1);
+        await expect.element(divider).toHaveFocus();
+        await userEvent.keyboard("{Home}");
+        await expect.poll(() => sidebar.clientWidth).toBe(199);
+        await page.viewport(1440, 900);
+        await expect.poll(() => bar.clientWidth).toBe(1438);
+        await page.getByRole("button", { name: "Reset layout", exact: true }).click();
+        await expect.poll(() => sidebar.clientWidth).toBe(243);
+        await page.viewport(960, 640);
+        await expect.poll(() => bar.clientWidth).toBe(958);
       }
       await navigate("Terminal");
       await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
@@ -763,7 +788,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect.poll(() => tabs.getBoundingClientRect().top).toBe(1);
       await expect
         .poll(() => getComputedStyle(tabs).paddingLeft)
-        .toBe(platform === "macos" ? "80px" : "0px");
+        .toBe(platform === "macos" ? "104px" : "0px");
       expect(element.querySelector<HTMLElement>(".app-bar")!.getBoundingClientRect().height).toBe(
         0,
       );
@@ -775,7 +800,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(bar.getBoundingClientRect().height).toBe(42);
       await expect
         .poll(() => getComputedStyle(bar).paddingLeft)
-        .toBe(platform === "macos" ? "80px" : "0px");
+        .toBe(platform === "macos" ? "104px" : "0px");
     });
   }
 
