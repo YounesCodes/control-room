@@ -385,7 +385,10 @@ describe("Local Terminal Mode in the real App", () => {
     expect(stripAfter.height).toBe(stripBefore.height);
     const popover = dialog.element().getBoundingClientRect();
     expect(popover.top).toBeGreaterThanOrEqual(stripAfter.bottom);
-    expect(popover.right).toBeLessThanOrEqual(window.innerWidth);
+    // A gutter keeps the popover's border readable instead of merging with
+    // the window's.
+    expect(window.innerWidth - popover.right).toBeGreaterThanOrEqual(4);
+    expect(popover.width).toBeLessThanOrEqual(370);
     // Opens on the terminal's context, driven entirely from the keyboard.
     await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");

@@ -39,7 +39,8 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Local Workspaces are terminal-only, so do not show remote
-inspection navigation for them. Optional header metrics may read system usage
+inspection navigation for them; their navigation carries only Terminal and
+Scratchpad. Optional header metrics may read system usage
 for a local tab without adding inspection pages. Keep connection and Workspace identity visible
 where it helps navigation, but do not repeat the same identity in a second
 header or a separate status rail. An enabled metrics strip may name the active
@@ -100,9 +101,12 @@ long body scrolls. Menus should open as anchored overlays and must not resize or
 reflow the row that opened them.
 
 Scratchpad uses the full workspace width and grows with the window. Keep its
-heading and editor aligned. A terminal's Scratchpad popup reuses the same editor
-and autosave behavior in a compact anchored overlay, follows the active
-terminal's own note or the shared note, and pastes note text without running it.
+heading and editor aligned. Every Workspace kind gets the page: a remote host
+edits its connection note, a local terminal edits its own tab's note, and both
+switch to the shared global note. A terminal's Scratchpad popup reuses the same
+editor and autosave behavior in a compact anchored overlay that keeps a gutter
+from the window edge, follows the active terminal's own note or the shared
+note, and pastes note text without running it.
 Systemd service rows scroll within their own bounded
 area, leaving search, filters, and refresh available above the list.
 

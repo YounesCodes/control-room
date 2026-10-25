@@ -438,15 +438,26 @@ export function App() {
     !!activeRemoteWorkspace &&
     (!!activeRemoteWorkspace.remoteShell ||
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "windows");
-  const offeredNavigation = windowsWorkspace
-    ? navigation
-        .filter((item) =>
-          ["overview", "terminal", "services", "ports", "docker", "logs", "scratchpad"].includes(
-            item.id,
-          ),
-        )
-        .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
-    : navigation;
+  // A local Workspace stays out of the remote inspection navigation, but its
+  // Scratchpad note gets a full page of its own, exactly like a host's.
+  const offeredNavigation =
+    activeWorkspace && isLocalWorkspace(activeWorkspace)
+      ? navigation.filter((item) => ["terminal", "scratchpad"].includes(item.id))
+      : windowsWorkspace
+        ? navigation
+            .filter((item) =>
+              [
+                "overview",
+                "terminal",
+                "services",
+                "ports",
+                "docker",
+                "logs",
+                "scratchpad",
+              ].includes(item.id),
+            )
+            .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
+        : navigation;
   const activeSavedConnection = activeRemoteWorkspace
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
@@ -1774,7 +1785,7 @@ export function App() {
         </div>
       </header>
 
-      <aside className={activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}>
+      <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
@@ -1838,19 +1849,19 @@ export function App() {
             </nav>
           }
           capabilities={
-            activeRemoteWorkspace && (
+            activeWorkspace && (
               <div className="workspace-navigation">
                 <nav className="feature-nav" aria-label="Workspace features">
                   {offeredNavigation.map(({ id, label, icon: Icon }) => (
                     <button
-                      className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
+                      className={activeWorkspace.view === id && !settingsOpen ? "active" : ""}
                       type="button"
                       key={id}
                       aria-current={
-                        activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
+                        activeWorkspace.view === id && !settingsOpen ? "page" : undefined
                       }
                       onClick={() =>
-                        closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
+                        closeSettings(() => updateWorkspace(activeWorkspace.id, { view: id }))
                       }
                     >
                       <Icon size={17} strokeWidth={1.8} /> {label}
@@ -2612,6 +2623,17 @@ export function App() {
                   )}
                 </ConnectionSection>
               )}
+              {activeWorkspace &&
+                isLocalWorkspace(activeWorkspace) &&
+                activeWorkspace.view === "scratchpad" && (
+                  <ScratchpadPane
+                    key={activeWorkspace.id}
+                    terminal={{
+                      id: activeWorkspace.id,
+                      label: activeWorkspace.label ?? activeWorkspace.shell.label,
+                    }}
+                  />
+                )}
             </div>
           </section>
         )}
@@ -2764,9 +2786,9 @@ export function App() {
           activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
           canSplitTerminal={canSplitTerminal}
-          // Inspection views exist on a Remote Host only, so a local Workspace
-          // offers none to go to.
-          views={activeRemoteWorkspace ? offeredNavigation : []}
+          // A local Workspace offers only Terminal and Scratchpad; remote
+          // Workspaces offer the inspection views their platform supports.
+          views={activeWorkspace ? offeredNavigation : []}
           hostCapabilities={hostCapabilities}
           labelForWorkspace={duplicateLabel}
           onClose={() => setPaletteOpen(false)}

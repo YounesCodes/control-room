@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Eraser, Globe2, Redo2, RefreshCw, Server, Trash2, Undo2 } from "lucide-react";
+import {
+  Eraser,
+  Globe2,
+  Redo2,
+  RefreshCw,
+  Server,
+  SquareTerminal,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
@@ -15,28 +24,54 @@ import type { SavedConnection, ScratchpadScope } from "../types";
 type SaveStatus = "saved" | "unsaved" | "saving" | "error";
 const EDIT_HISTORY_LIMIT = 100;
 
-export function ScratchpadPane({ connection }: { connection: SavedConnection }) {
-  const [scope, setScope] = useState<ScratchpadScope>("connection");
-  const ownerId = scope === "connection" ? connection.id : "global";
+export function ScratchpadPane({
+  connection,
+  terminal,
+}: {
+  /** The Saved Connection whose note this page edits, for remote Workspaces. */
+  connection?: SavedConnection;
+  /** The terminal tab whose note this page edits, for local Workspaces. */
+  terminal?: { id: string; label: string };
+}) {
+  const isTerminal = Boolean(terminal);
+  const [scope, setScope] = useState<ScratchpadScope>(isTerminal ? "local" : "connection");
+  const ownerId = isTerminal
+    ? scope === "global"
+      ? "global"
+      : terminal!.id
+    : scope === "connection"
+      ? connection!.id
+      : "global";
+  const ownerLabel = isTerminal ? terminal!.label : connection!.displayName;
 
   return (
     <section className="feature-page scratchpad-page">
       <header className="page-heading scratchpad-heading">
         <div>
           <h2>Scratchpad</h2>
-          <p>Plain local notes for this connection or the whole app.</p>
+          <p>
+            {isTerminal
+              ? "Plain local notes for this terminal or the whole app."
+              : "Plain local notes for this connection or the whole app."}
+          </p>
         </div>
         <div className="scratchpad-scope-switch" role="group" aria-label="Scratchpad scope">
           <button
             type="button"
-            aria-pressed={scope === "connection"}
-            aria-label={`Connection note for ${connection.displayName}`}
-            onClick={() => setScope("connection")}
+            aria-pressed={!isTerminal ? scope === "connection" : scope === "local"}
+            aria-label={
+              isTerminal ? `Terminal note for ${ownerLabel}` : `Connection note for ${ownerLabel}`
+            }
+            onClick={() => setScope(isTerminal ? "local" : "connection")}
           >
-            <Server size={17} aria-hidden="true" />
+            {isTerminal ? (
+              <SquareTerminal size={17} aria-hidden="true" />
+            ) : (
+              <Server size={17} aria-hidden="true" />
+            )}
             <span className="scratchpad-scope-copy">
-              <strong>Connection</strong>
-              <span title={connection.displayName}>{connection.displayName}</span>
+              <strong>{isTerminal ? "Terminal" : "Connection"}</strong>
+              <span title={ownerLabel}>{ownerLabel}</span>
             </span>
           </button>
           <button
@@ -57,8 +92,8 @@ export function ScratchpadPane({ connection }: { connection: SavedConnection }) 
         key={`${scope}:${ownerId}`}
         scope={scope}
         ownerId={ownerId}
-        connectionId={scope === "connection" ? connection.id : null}
-        ownerLabel={connection.displayName}
+        connectionId={!isTerminal && scope === "connection" ? connection!.id : null}
+        ownerLabel={ownerLabel}
       />
     </section>
   );
@@ -367,7 +402,9 @@ export function ScratchpadEditor({
           <span>
             {scope === "connection"
               ? `Shared by every Workspace for ${ownerLabel ?? "this connection"}`
-              : "Shared by every Saved Connection and Workspace"}
+              : scope === "local"
+                ? "Only this terminal tab keeps it"
+                : "Shared by every Saved Connection and Workspace"}
           </span>
         </div>
         {saveState}

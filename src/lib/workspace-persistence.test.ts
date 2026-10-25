@@ -339,6 +339,41 @@ describe("Workspace restoration", () => {
     expect(restored.terminalGroups).toEqual([]);
   });
 
+  it("keeps a local Workspace's Scratchpad view across a restart and drops other views", () => {
+    const state: PersistedWorkspaceState = {
+      workspaces: [
+        {
+          id: "workspace-a",
+          label: null,
+          connectionId: null,
+          localShellId: "powershell-7",
+          view: "scratchpad",
+          historyPaused: false,
+        },
+        {
+          id: "workspace-b",
+          label: null,
+          connectionId: null,
+          localShellId: "git-bash",
+          // An unknown or remote-only view falls back to the terminal.
+          view: "overview" as PersistedWorkspaceState["workspaces"][number]["view"],
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "workspace-a",
+      terminalLayout: null,
+    };
+
+    const restored = restoreWorkspaceState([], state, [
+      powershell,
+      { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
+    ]);
+    expect(restored.workspaces.map((workspace) => workspace.view)).toEqual([
+      "scratchpad",
+      "terminal",
+    ]);
+  });
+
   it("restores Workspace state written before Local Terminal existed", () => {
     // Exactly the payload older releases wrote: no local shell field at all.
     const legacy = JSON.parse(

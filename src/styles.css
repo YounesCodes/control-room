@@ -2974,10 +2974,12 @@ code,
 .scratchpad-popover {
   position: absolute;
   z-index: 30;
-  top: calc(100% + 1px);
-  right: 0;
+  top: calc(100% + 3px);
+  /* A gutter from the window edge keeps the popover's own border readable
+     instead of merging with the window's. */
+  right: 6px;
   display: flex;
-  width: min(380px, calc(100vw - 24px));
+  width: min(356px, calc(100vw - 40px));
   flex-direction: column;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);

@@ -522,7 +522,8 @@ describe("Local Terminal", () => {
     await user.click(within(terminal).getByRole("button", { name: "report connected" }));
     await user.click(within(terminal).getByRole("button", { name: "report session" }));
 
-    await user.click(await screen.findByRole("button", { name: "Scratchpad" }));
+    const actions = screen.getByRole("group", { name: "Terminal actions" });
+    await user.click(within(actions).getByRole("button", { name: "Scratchpad" }));
     const dialog = await screen.findByRole("dialog", { name: "Scratchpad" });
     const editor = within(dialog).getByLabelText("Terminal note") as HTMLTextAreaElement;
     await user.type(editor, "cargo build");
@@ -548,7 +549,9 @@ describe("Local Terminal", () => {
 
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Scratchpad" })).toBeNull());
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Scratchpad" }));
+    expect(document.activeElement).toBe(
+      within(actions).getByRole("button", { name: "Scratchpad" }),
+    );
 
     api.scratchpadNote.mockResolvedValue({
       id: "note-1",
@@ -559,7 +562,7 @@ describe("Local Terminal", () => {
       createdAt: "c",
       updatedAt: "u",
     });
-    await user.click(screen.getByRole("button", { name: "Scratchpad" }));
+    await user.click(within(actions).getByRole("button", { name: "Scratchpad" }));
     const reopened = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
     expect(reopened.value).toBe("cargo build");
   });
@@ -572,9 +575,13 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "Git Bash");
 
-    // None of the Remote Host views are offered for a local shell. The
-    // feature-nav entries are plain text buttons; the action strip's own
-    // Scratchpad button is a different control and is expected to exist.
+    // A local shell offers only its terminal and Scratchpad views. None of
+    // the Remote Host inspection views are offered.
+    const features = within(await screen.findByRole("navigation", { name: "Workspace features" }));
+    expect(features.getAllByRole("button").map((button) => button.textContent?.trim())).toEqual([
+      "Terminal",
+      "Scratchpad",
+    ]);
     for (const view of [
       "Overview",
       "Systemd",
@@ -587,9 +594,6 @@ describe("Local Terminal", () => {
     ]) {
       expect(screen.queryByRole("button", { name: view })).toBeNull();
     }
-    // The whole feature navigation stays remote-only; the action strip's own
-    // Scratchpad button is a separate control and is expected to exist.
-    expect(screen.queryByRole("navigation", { name: "Workspace features" })).toBeNull();
 
     // Opening the Saved Connection brings them back.
     await openConnection(user, "prod-web");
@@ -605,15 +609,12 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "PowerShell 7");
 
-    // The capped list only makes room for the Remote Host view switcher. A
-    // local Workspace has none, so capping it would leave the sidebar blank.
-    const sidebar = container.querySelector("aside.sidebar");
-    expect(sidebar?.className).not.toContain("workspace-open");
-
-    await openConnection(user, "prod-web");
+    // The capped list makes room for the view switcher, which a local
+    // Workspace now also carries for its Terminal and Scratchpad views.
     await waitFor(() =>
       expect(container.querySelector("aside.sidebar")?.className).toContain("workspace-open"),
     );
+    expect(container.querySelector(".feature-nav")?.textContent).toContain("Scratchpad");
   });
 
   it("never runs host capability discovery for a local shell", async () => {
@@ -1165,6 +1166,43 @@ describe("Local Terminal", () => {
       expect(state.workspaces[0].connectionId).toBeNull();
     });
   });
+  it("gives a local Workspace its own Scratchpad page bound to that tab", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await openLocalShell(user, "PowerShell 7");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    const workspaceId = terminal.dataset.testid!.slice("terminal-".length);
+
+    await user.click(
+      within(screen.getByRole("navigation", { name: "Workspace features" })).getByRole("button", {
+        name: "Scratchpad",
+      }),
+    );
+    const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
+    await user.type(editor, "full-page note");
+    await waitFor(() =>
+      expect(api.saveScratchpadNote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: "local",
+          ownerId: workspaceId,
+          connectionId: null,
+          text: "full-page note",
+        }),
+      ),
+    );
+
+    // The same note the terminal popover edits, on one page per tab.
+    await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
+    expect(await screen.findByLabelText("Global note")).toBeTruthy();
+    await user.click(
+      within(screen.getByRole("navigation", { name: "Workspace features" })).getByRole("button", {
+        name: "Terminal",
+      }),
+    );
+    await expect(await screen.findByTestId(/^terminal-/)).toBeTruthy();
+  });
+
   it("requires a remote shell choice for Windows and keeps Linux features out of the workspace", async () => {
     const user = userEvent.setup();
     const saved = connection("11111111-1111-4111-8111-111111111111", "Windows host");
