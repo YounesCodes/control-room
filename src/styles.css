@@ -1395,6 +1395,7 @@ code,
 .local-shell-mark {
   flex: none;
   color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease);
 }
 
 /* ==========================================================================
@@ -5823,7 +5824,18 @@ kbd {
 
 .session-tab-wrap:hover .local-shell-icon,
 .session-tab-wrap:focus-within .local-shell-icon,
-.session-tab-wrap.active .local-shell-icon {
+.session-tab-wrap.active .local-shell-icon,
+.session-tab-wrap:hover .local-shell-mark:not(.local-shell-admin-mark),
+.session-tab-wrap:focus-within .local-shell-mark:not(.local-shell-admin-mark),
+.session-tab-wrap.active .local-shell-mark:not(.local-shell-admin-mark),
+.local-shell-launcher button:hover .local-shell-mark,
+.local-shell-launcher button:focus-visible .local-shell-mark,
+.local-shell-launcher button[aria-expanded="true"] .local-shell-mark,
+.terminal-target-group button:hover .local-shell-mark:not(.local-shell-admin-mark),
+.terminal-target-group button:focus-visible .local-shell-mark:not(.local-shell-admin-mark),
+.session-tab-overflow-menu > button:hover .local-shell-icon,
+.session-tab-overflow-menu > button:focus-visible .local-shell-icon,
+.session-tab-overflow-menu > button[aria-current="page"] .local-shell-icon {
   color: var(--shell-accent);
 }
 

@@ -1113,7 +1113,7 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        icon: <SquareTerminal size={16} strokeWidth={1.8} className="local-shell-mark" />,
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -1169,7 +1169,7 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        icon: <SquareTerminal size={16} strokeWidth={1.8} className="local-shell-mark" />,
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -1928,7 +1928,7 @@ export function App() {
                 aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
                 title="Open a shell on this Windows machine"
               >
-                <SquareTerminal size={16} /> Local terminal
+                <SquareTerminal size={16} className="local-shell-mark" /> Local terminal
               </button>
               {localShellMenuOpen && (
                 <div className="local-shell-menu" role="menu" aria-label="Local terminal">
@@ -1942,7 +1942,11 @@ export function App() {
                           key={shell.id}
                           onClick={() => openLocalShell(shell)}
                         >
-                          <SquareTerminal size={14} strokeWidth={1.8} />
+                          <SquareTerminal
+                            size={14}
+                            strokeWidth={1.8}
+                            className="local-shell-mark"
+                          />
                           <span>{shell.label}</span>
                         </button>
                       ))}

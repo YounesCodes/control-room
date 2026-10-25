@@ -22,6 +22,8 @@ guardrails, not every choice described below.
   brand color on a hovered or selected tab or host row to identify the target;
   the color is identity, never health, and it never shows at rest. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
+  Plain local-terminal marks use the shared soft blue on hover, keyboard focus,
+  or selection, including launchers, menus, and Focus Mode pane tabs.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.

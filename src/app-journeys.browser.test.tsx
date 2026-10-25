@@ -276,6 +276,90 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("colors local terminal identities on hover, focus, and selection in both layouts", async () => {
+    await page.viewport(960, 640);
+    overrides.set("list_local_shells", () => ({
+      profiles: [
+        { id: "command-prompt", label: "Command Prompt", kind: "command-prompt", elevated: false },
+        { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
+      ],
+      administratorStatus: "disabled",
+    }));
+    await mount();
+    const blue = "rgb(83, 145, 254)";
+    const neutral = "rgb(173, 173, 170)";
+    const color = (mark: Element) => getComputedStyle(mark).color;
+    const launcher = page.getByRole("button", { name: "Local terminal", exact: true });
+    const launcherMark = launcher.element().querySelector(".local-shell-mark")!;
+    await expect.poll(() => color(launcherMark)).toBe(neutral);
+    await userEvent.hover(launcher.element());
+    await expect.poll(() => color(launcherMark)).toBe(blue);
+    await launcher.click();
+    await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
+    await expect.poll(() => color(launcherMark)).toBe(blue);
+    const choice = page.getByRole("menuitem", { name: "Command Prompt", exact: true });
+    await userEvent.hover(choice.element());
+    await expect.poll(() => color(choice.element().querySelector(".local-shell-mark")!)).toBe(blue);
+    await choice.click();
+    const local = page.getByRole("button", { name: "Command Prompt", exact: true });
+    const tab = local.element().closest(".session-tab-wrap")!;
+    const mark = tab.querySelector(".local-shell-mark")!;
+    await expect.poll(() => color(mark)).toBe(blue);
+    const host = page
+      .getByRole("navigation", { name: "Saved connections" })
+      .getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha/ });
+    await host.click();
+    await expect.poll(() => color(mark)).toBe(neutral);
+    await userEvent.hover(local.element());
+    await expect.poll(() => color(mark)).toBe(blue);
+    await userEvent.hover(host.element());
+    await expect.poll(() => color(mark)).toBe(neutral);
+    (local.element() as HTMLButtonElement).focus();
+    await expect.poll(() => color(mark)).toBe(blue);
+    await userEvent.keyboard("{Enter}");
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await expect.poll(() => color(mark)).toBe(blue);
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    const splitChoice = page.getByRole("button", {
+      name: "New local terminal: Git Bash",
+      exact: true,
+    });
+    await userEvent.hover(splitChoice.element());
+    await expect
+      .poll(() => color(splitChoice.element().querySelector(".local-shell-mark")!))
+      .toBe(blue);
+    await splitChoice.click();
+    const pane = page
+      .getByRole("navigation", { name: /Terminals in .* group/ })
+      .getByRole("button", { name: "Command Prompt", exact: true });
+    const paneMark = pane.element().querySelector(".local-shell-mark")!;
+    await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
+    await expect.poll(() => color(paneMark)).toBe(neutral);
+    await userEvent.hover(pane.element());
+    await expect.poll(() => color(paneMark)).toBe(blue);
+    await pane.click();
+    await expect.poll(() => color(paneMark)).toBe(blue);
+    await page.screenshot({ path: "../test-results/local-terminal-identity-focus.png" });
+    await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+    await expect.poll(() => color(local.element().querySelector(".local-shell-mark")!)).toBe(blue);
+    await page.screenshot({ path: "../test-results/local-terminal-identity-normal.png" });
+    for (let index = 0; index < 5; index++) {
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "New terminal" })
+        .getByRole("button", { name: /Command Prompt/ })
+        .click();
+    }
+    await page.getByRole("button", { name: "All terminals", exact: true }).click();
+    const menu = page.getByRole("menu", { name: "All terminals" }).element();
+    await expect
+      .poll(() => color(menu.querySelector('[aria-current="page"] .local-shell-icon')!))
+      .toBe(blue);
+    const git = page.getByRole("menuitem", { name: /^Git Bash/ });
+    await userEvent.hover(git.element());
+    await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(blue);
+  });
+
   it("spins during commands and host reads, including grouped panes, and keeps errors circular", async () => {
     await mount();
     await navigate("Terminal");
