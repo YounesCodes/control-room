@@ -743,7 +743,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect.element(button).toHaveAttribute("aria-pressed", "false");
       expect(button.element()).toBe(original);
       expect(position()).toEqual(normalBounds);
-      await userEvent.keyboard("{Space}");
+      await userEvent.keyboard("{Space>}");
+      expect(position()).toEqual(normalBounds);
+      await userEvent.keyboard("{/Space}");
       await expect.element(exit).toHaveAttribute("aria-pressed", "true");
       expect(position()).toEqual(normalBounds);
       await userEvent.keyboard("{Space}");

@@ -389,6 +389,11 @@ code,
   color: var(--text-strong);
 }
 
+.app-window-actions .app-focus-toggle:active:not(:disabled) {
+  background: var(--fill-active);
+  transform: none;
+}
+
 .app-bar-actions {
   flex-shrink: 0;
   margin-left: auto;
