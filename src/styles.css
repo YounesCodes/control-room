@@ -104,6 +104,7 @@
   /* Motion. */
   --motion-fast: 110ms;
   --motion-med: 160ms;
+  --motion-slow: 240ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -182,7 +183,8 @@ button {
     background-color var(--motion-fast) var(--ease),
     color var(--motion-fast) var(--ease),
     border-color var(--motion-fast) var(--ease),
-    opacity var(--motion-fast) var(--ease);
+    opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease);
 }
 
 button:not(:disabled) {
@@ -403,6 +405,9 @@ code,
   border-color: var(--border);
   background: var(--fill-hover);
 }
+.host-metrics-trigger > svg {
+  transition: transform var(--motion-med) var(--ease);
+}
 .host-metrics-trigger[aria-expanded="true"] > svg {
   transform: rotate(180deg);
 }
@@ -462,6 +467,7 @@ code,
   color: var(--text-strong);
   max-height: calc(100vh - 100px);
   overflow-y: auto;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 .host-metrics-panel header,
 .host-metrics-panel footer {
@@ -589,6 +595,9 @@ code,
 
 .update-indicator-dot[data-state="ready"] {
   background: var(--success);
+  /* Three soft halos announce the download, then the dot rests; the label
+     beside it stays the persistent signal. */
+  animation: ready-ping 2.2s var(--ease) 0.3s 3;
 }
 
 .update-panel {
@@ -616,6 +625,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 14px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .update-panel-header,
@@ -923,6 +933,16 @@ code,
   text-align: left;
 }
 
+/* One chevron rotates between collapsed and expanded instead of swapping
+   glyphs, so the state change reads as a movement of the same control. */
+.connection-group-heading > svg {
+  transition: transform var(--motion-med) var(--ease);
+}
+
+.connection-group-heading[aria-expanded="false"] > svg {
+  transform: rotate(-90deg);
+}
+
 .connection-group-heading:hover,
 .connection-group-heading:focus-visible {
   background: var(--fill-hover);
@@ -1107,6 +1127,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .host-context-menu button {
@@ -1266,6 +1287,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .local-shell-menu-group {
@@ -1500,6 +1522,7 @@ code,
   border-radius: var(--radius-sm);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .session-tab-overflow-menu > button {
@@ -1680,7 +1703,8 @@ code,
   font-size: 11.5px;
   transition:
     background-color var(--motion-fast) var(--ease),
-    color var(--motion-fast) var(--ease);
+    color var(--motion-fast) var(--ease),
+    border-bottom-color var(--motion-fast) var(--ease);
 }
 
 .session-tab-wrap:hover {
@@ -1739,6 +1763,8 @@ code,
   white-space: nowrap;
 }
 
+/* The cue pops in when output or a bell arrives on an inactive terminal, so
+   the eye is drawn to the new mark instead of it silently appearing. */
 .terminal-activity {
   width: 7px;
   height: 7px;
@@ -1746,10 +1772,14 @@ code,
   border-radius: 50%;
   background: var(--text-muted);
   box-shadow: 0 0 0 2px var(--surface-chrome);
+  animation: cue-in var(--motion-fast) var(--ease);
 }
 
 .terminal-activity-bell {
   background: var(--warning);
+  animation:
+    cue-in var(--motion-fast) var(--ease),
+    bell-ping 0.7s var(--ease) 0.05s 1;
 }
 
 .host-os-icon {
@@ -1817,6 +1847,7 @@ code,
   height: 8px;
   border-radius: 50%;
   background: var(--text-faint);
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .presence-connected {
@@ -1825,6 +1856,7 @@ code,
 
 .presence-connecting {
   background: var(--warning);
+  animation: state-pulse 1.4s var(--ease) infinite;
 }
 
 .presence-error {
@@ -1853,7 +1885,8 @@ code,
   transition:
     opacity var(--motion-fast) var(--ease),
     background-color var(--motion-fast) var(--ease),
-    color var(--motion-fast) var(--ease);
+    color var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease);
 }
 
 .session-tab-close {
@@ -1979,6 +2012,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 8px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .terminal-split-directions {
@@ -2096,6 +2130,7 @@ code,
   flex: none;
   border-radius: 50%;
   background: var(--text-faint);
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .status-connected {
@@ -2105,6 +2140,7 @@ code,
 .status-connecting {
   border: 2px solid var(--warning);
   background: transparent;
+  animation: state-pulse 1.4s var(--ease) infinite;
 }
 
 .status-error {
@@ -2725,6 +2761,7 @@ code,
   box-shadow: var(--shadow-popover);
   padding: 5px;
   color: var(--text-muted);
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .terminal-search input {
@@ -4088,6 +4125,7 @@ dd {
   padding: 30px;
   color: var(--text-muted);
   text-align: center;
+  animation: overlay-in var(--motion-slow) var(--ease);
 }
 
 .panel-state svg {
@@ -5017,7 +5055,7 @@ dd {
   border-radius: var(--radius-lg);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-modal);
-  animation: popover-in var(--motion-med) var(--ease);
+  animation: dialog-in var(--motion-med) var(--ease);
 }
 
 .modal-header {
@@ -5501,6 +5539,14 @@ kbd {
   padding: 8px 10px;
   color: var(--text-muted);
   text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.command-item:hover {
+  background: var(--fill-hover);
+  color: var(--text);
 }
 
 .command-item svg,
@@ -5596,6 +5642,107 @@ kbd {
   }
 }
 
+/* Centered dialogs rise in place like native Windows sheets instead of
+   dropping from above like anchored menus. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A cue that mounts (new terminal output) pops into place rather than
+   silently appearing. */
+@keyframes cue-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* An in-progress state (connecting) breathes until it resolves. */
+@keyframes state-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* One-shot halos: the bell asks for attention once, and the downloaded-update
+   dot announces readiness three times before resting. */
+@keyframes bell-ping {
+  from {
+    box-shadow:
+      0 0 0 2px var(--surface-chrome),
+      0 0 0 0 color-mix(in srgb, var(--warning) 45%, transparent);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px var(--surface-chrome),
+      0 0 0 6px transparent;
+  }
+}
+
+@keyframes ready-ping {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* ==========================================================================
+   Press feedback
+   Compact controls dip under the pointer; dense rows, tabs, and list items
+   deepen their fill instead, so high-frequency targets never wobble. Native
+   window controls stay exempt: they mimic the operating system, not the app.
+   ========================================================================== */
+
+.icon-button:active:not(:disabled),
+.toolbar-button:active:not(:disabled),
+.app-bar-button:active:not(:disabled),
+.host-menu:active:not(:disabled),
+.session-strip-button:active:not(:disabled),
+.session-tab-scroll-button:active:not(:disabled),
+.session-new-terminal:active:not(:disabled),
+.session-tab-close:active:not(:disabled),
+.session-tab-rename:active:not(:disabled),
+.update-indicator-button:active:not(:disabled),
+.host-metrics-trigger:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+/* The host menu button carries its own centering transform. */
+.host-menu:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.93);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled),
+.panel-state button:active:not(:disabled),
+.sidebar-primary:active:not(:disabled),
+.sidebar-secondary:active:not(:disabled),
+.host-metrics-status:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.host-row:not(.active):active,
+.feature-nav button:not(.active):active,
+.session-tab-wrap:not(.active):active,
+.session-tab-group:not(.active):active,
+.connection-group-heading:active {
+  background: var(--fill-active);
+}
+
 /* ==========================================================================
    Responsive / density
    ========================================================================== */
@@ -5681,8 +5828,10 @@ kbd {
   *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }
 
@@ -5712,10 +5861,18 @@ kbd {
   color: var(--text-muted);
   font-size: 12.5px;
   cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease),
+    border-bottom-color var(--motion-fast) var(--ease);
 }
 
 .ports-tab:hover {
   color: var(--text);
+}
+
+.ports-tab:not(.active):active {
+  background: var(--fill-hover);
 }
 
 .ports-tab.active {
@@ -6069,6 +6226,7 @@ kbd {
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .font-suggestions li:hover {
@@ -6083,6 +6241,7 @@ kbd {
   min-height: 36px;
   padding: 7px 9px;
   cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .font-suggestions li[aria-selected="true"] {
@@ -6185,6 +6344,7 @@ kbd {
   left: calc(50% - 1px);
   width: 2px;
   pointer-events: none;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 .resize-divider:hover::after {
   background: var(--text-muted);

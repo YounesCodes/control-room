@@ -16,7 +16,6 @@ import {
   Boxes,
   Camera,
   ChevronDown,
-  ChevronRight,
   Clipboard,
   Columns2,
   Copy,
@@ -1833,7 +1832,7 @@ export function App() {
                       onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
                       aria-expanded={!collapsed}
                     >
-                      {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                      <ChevronDown size={13} />
                       <span>{section.name}</span>
                       <small>{section.connections.length}</small>
                     </button>

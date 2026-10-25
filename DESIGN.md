@@ -153,9 +153,15 @@ one-off margins. Keep related controls grouped and leave enough room between
 labels, values, and outlines. Use the shared shape scale rather than inventing
 new radii for each screen.
 
-Transitions should clarify a state change without delaying work. Respect
-`prefers-reduced-motion`. Use Lucide icons consistently, and pair icon-only
-actions with accessible names and tooltips where useful.
+Transitions should clarify a state change without delaying work. Presses
+acknowledge with movement: compact controls dip slightly, while dense rows,
+tabs, and list items deepen their fill so high-frequency targets never shift.
+Anchored menus, panels, and popovers share one entrance motion. Live states —
+connecting, new terminal output, a bell, a downloaded update — use small
+one-purpose cues that rest once their point is made. Never animate the terminal
+surface itself. Respect `prefers-reduced-motion`. Use Lucide icons
+consistently, and pair icon-only actions with accessible names and tooltips
+where useful.
 
 ## Interaction patterns
 
