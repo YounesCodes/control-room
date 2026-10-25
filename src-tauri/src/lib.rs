@@ -94,6 +94,10 @@ pub fn run() {
                 }
                 window.build()?;
             }
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                platform::macos_window::align(&window.as_ref().window());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -179,6 +183,16 @@ pub fn run() {
             updater::current_app_version,
         ])
         .on_window_event(|window, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(
+                event,
+                tauri::WindowEvent::Resized(_)
+                    | tauri::WindowEvent::ScaleFactorChanged { .. }
+                    | tauri::WindowEvent::Focused(true)
+                    | tauri::WindowEvent::ThemeChanged(_)
+            ) {
+                platform::macos_window::align(window);
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<SessionManager>().close_all();
                 window.state::<StreamManager>().stop_all();
@@ -208,6 +222,9 @@ pub fn run() {
                         .and_then(|builder| builder.build())
                 {
                     eprintln!("Could not reopen Control Room: {error}");
+                }
+                if let Some(window) = app.get_webview_window("main") {
+                    platform::macos_window::align(&window.as_ref().window());
                 }
             }
             #[cfg(not(target_os = "macos"))]

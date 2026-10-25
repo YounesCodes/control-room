@@ -4,6 +4,9 @@
 //! home-directory conventions, local shell allowlists, and process flags here
 //! rather than spreading target checks through session and remote code.
 
+#[cfg(target_os = "macos")]
+pub(crate) mod macos_window;
+
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},

@@ -87,6 +87,12 @@ pub fn e2e_window_buttons(window: tauri::Window) -> Result<Vec<WindowButtonBound
         let button = native
             .standardWindowButton(kind)
             .ok_or("Missing native button")?;
+        if button
+            .window()
+            .is_none_or(|owner| !std::ptr::eq(&*owner, native))
+        {
+            return Err("Native buttons are transitioning between windows".into());
+        }
         let bounds = button.convertRect_toView(button.bounds(), Some(&content));
         let middle = bounds.origin.y + bounds.size.height / 2.0;
         Ok(WindowButtonBounds {
