@@ -61,6 +61,11 @@ pub struct WindowButtonBounds {
     center_y: f64,
     width: f64,
     height: f64,
+    frame_y: f64,
+    parent_flipped: bool,
+    parent_height: f64,
+    parent_bounds_height: f64,
+    content_height: f64,
 }
 
 /// Measure the real AppKit controls in the same logical coordinates as the
@@ -94,6 +99,9 @@ pub fn e2e_window_buttons(window: tauri::Window) -> Result<Vec<WindowButtonBound
             return Err("Native buttons are transitioning between windows".into());
         }
         let bounds = button.convertRect_toView(button.bounds(), Some(&content));
+        // SAFETY: The live native window retains its button view hierarchy;
+        // inspection is confined to the main thread.
+        let parent = unsafe { button.superview() }.ok_or("Missing native button parent")?;
         let middle = bounds.origin.y + bounds.size.height / 2.0;
         Ok(WindowButtonBounds {
             name,
@@ -105,9 +113,22 @@ pub fn e2e_window_buttons(window: tauri::Window) -> Result<Vec<WindowButtonBound
             },
             width: bounds.size.width,
             height: bounds.size.height,
+            frame_y: button.frame().origin.y,
+            parent_flipped: parent.isFlipped(),
+            parent_height: parent.frame().size.height,
+            parent_bounds_height: parent.bounds().size.height,
+            content_height: content_bounds.size.height,
         })
     })
     .collect()
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn e2e_window_chrome_lifecycle(
+    window: tauri::Window,
+) -> Result<crate::platform::macos_window::LifecycleProbe, String> {
+    crate::platform::macos_window::lifecycle_probe(&window)
 }
 
 #[cfg(any(windows, test))]

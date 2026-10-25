@@ -437,9 +437,11 @@ dependencies = [
 name = "control-room"
 version = "0.8.9"
 dependencies = [
+ "block2",
  "chrono",
  "objc2",
  "objc2-app-kit",
+ "objc2-foundation",
  "parking_lot",
  "portable-pty",
  "regex",

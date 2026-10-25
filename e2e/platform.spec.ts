@@ -39,6 +39,34 @@ describe("Native client platform", () => {
   });
 
   (isMac ? it : it.skip)(
+    "realigns native frame changes and removes observers before window teardown",
+    async () => {
+      const result = await ipc<{
+        windowsBefore: number;
+        windowsObserved: number;
+        windowsAfterClose: number;
+        centersAfterContainerChange: number[];
+        centersAfterButtonChange: number[];
+        unobservedDelta: number;
+      }>("e2e_window_chrome_lifecycle");
+      const center = await browser.execute(() => {
+        const bar = document.querySelector<HTMLElement>(".app-bar")!;
+        return bar.getBoundingClientRect().top + bar.clientHeight / 2;
+      });
+      expect(result.windowsBefore).toBe(1);
+      expect(result.windowsObserved).toBe(2);
+      expect(result.windowsAfterClose).toBe(1);
+      for (const actual of [
+        ...result.centersAfterContainerChange,
+        ...result.centersAfterButtonChange,
+      ]) {
+        expect(Math.abs(actual - center)).toBeLessThanOrEqual(0.5);
+      }
+      expect(result.unobservedDelta).toBe(7);
+    },
+  );
+
+  (isMac ? it : it.skip)(
     "keeps one native Mac header through resize, sidebar collapse, Settings, and full screen",
     async () => {
       const original = await browser.getWindowRect();
@@ -58,7 +86,11 @@ describe("Native client platform", () => {
           }, mode);
           expect(buttons.map((button) => button.name)).toEqual(["close", "minimize", "fullscreen"]);
           for (const button of buttons) {
-            expect(Math.abs(button.centerY - center)).toBeLessThanOrEqual(0.5);
+            if (!(Math.abs(button.centerY - center) <= 0.5)) {
+              throw new Error(
+                `Native button centers in ${mode}: ${JSON.stringify({ expected: center, buttons })}`,
+              );
+            }
             expect(button.width).toBeGreaterThanOrEqual(12);
             expect(button.height).toBeGreaterThanOrEqual(12);
           }

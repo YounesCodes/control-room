@@ -96,7 +96,7 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
-                platform::macos_window::align(&window.as_ref().window());
+                platform::macos_window::watch(&window.as_ref().window());
             }
             Ok(())
         })
@@ -105,6 +105,8 @@ pub fn run() {
             e2e::e2e_runtime_status,
             #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
             e2e::e2e_window_buttons,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            e2e::e2e_window_chrome_lifecycle,
             commands::get_environment_info,
             documentation::open_documentation,
             fonts::list_catalog_fonts,
@@ -183,16 +185,6 @@ pub fn run() {
             updater::current_app_version,
         ])
         .on_window_event(|window, event| {
-            #[cfg(target_os = "macos")]
-            if matches!(
-                event,
-                tauri::WindowEvent::Resized(_)
-                    | tauri::WindowEvent::ScaleFactorChanged { .. }
-                    | tauri::WindowEvent::Focused(true)
-                    | tauri::WindowEvent::ThemeChanged(_)
-            ) {
-                platform::macos_window::align(window);
-            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<SessionManager>().close_all();
                 window.state::<StreamManager>().stop_all();
@@ -224,7 +216,7 @@ pub fn run() {
                     eprintln!("Could not reopen Control Room: {error}");
                 }
                 if let Some(window) = app.get_webview_window("main") {
-                    platform::macos_window::align(&window.as_ref().window());
+                    platform::macos_window::watch(&window.as_ref().window());
                 }
             }
             #[cfg(not(target_os = "macos"))]

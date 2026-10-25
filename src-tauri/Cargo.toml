@@ -39,8 +39,10 @@ zeroize = "1"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_SystemInformation", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_System_Threading", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
 objc2 = "0.6.4"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow", "NSView", "NSControl", "NSButton", "NSResponder"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow", "NSView", "NSControl", "NSButton", "NSResponder", "NSGraphics"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSGeometry", "NSNotification", "NSObject", "NSOperation", "NSString", "block2"] }
 tauri-plugin-wdio-webdriver = { version = "1.5", optional = true }
 
 [dev-dependencies]
