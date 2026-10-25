@@ -42,8 +42,32 @@ describe("Native client platform", () => {
     "keeps one native Mac header through resize, sidebar collapse, Settings, and full screen",
     async () => {
       const original = await browser.getWindowRect();
-      const headerFits = (mode: "normal" | "focus" | "settings") =>
-        browser.execute((layout) => {
+      const headerFits = async (mode: "normal" | "focus" | "settings") => {
+        // Native NSButtons live outside the DOM. Compare their actual centers
+        // with the HTML header so this also catches a wrong Tauri inset.
+        if (!(await ipc<boolean>("plugin:window|is_fullscreen", { label: "main" }))) {
+          const buttons =
+            await ipc<
+              { name: string; left: number; centerY: number; width: number; height: number }[]
+            >("e2e_window_buttons");
+          const center = await browser.execute((layout) => {
+            const bar = document.querySelector<HTMLElement>(
+              layout === "focus" ? ".session-tabs" : ".app-bar",
+            )!;
+            return bar.getBoundingClientRect().top + bar.clientHeight / 2;
+          }, mode);
+          expect(buttons.map((button) => button.name)).toEqual(["close", "minimize", "fullscreen"]);
+          for (const button of buttons) {
+            expect(Math.abs(button.centerY - center)).toBeLessThanOrEqual(0.5);
+            expect(button.width).toBeGreaterThanOrEqual(12);
+            expect(button.height).toBeGreaterThanOrEqual(12);
+          }
+          expect(buttons[0].left).toBe(16);
+          expect(buttons[1].left).toBeGreaterThan(buttons[0].left + buttons[0].width);
+          expect(buttons[2].left).toBeGreaterThan(buttons[1].left + buttons[1].width);
+          expect(buttons[2].left + buttons[2].width).toBeLessThan(104);
+        }
+        return browser.execute((layout) => {
           const shell = document.querySelector<HTMLElement>(".app-shell")!;
           const bar = shell.querySelector<HTMLElement>(
             layout === "focus" ? ".session-tabs" : ".app-bar",
@@ -91,6 +115,7 @@ describe("Native client platform", () => {
             reset.getBoundingClientRect().left >= label.getBoundingClientRect().right
           );
         }, mode);
+      };
 
       await browser.setWindowRect(original.x, original.y, 960, 640);
       await browser.waitUntil(() => headerFits("normal"));

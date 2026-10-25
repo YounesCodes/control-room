@@ -99,6 +99,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            e2e::e2e_window_buttons,
             commands::get_environment_info,
             documentation::open_documentation,
             fonts::list_catalog_fonts,

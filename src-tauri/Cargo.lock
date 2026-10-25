@@ -438,6 +438,8 @@ name = "control-room"
 version = "0.8.9"
 dependencies = [
  "chrono",
+ "objc2",
+ "objc2-app-kit",
  "parking_lot",
  "portable-pty",
  "regex",

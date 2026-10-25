@@ -52,6 +52,58 @@ pub fn e2e_runtime_status(
     }
 }
 
+#[cfg(target_os = "macos")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowButtonBounds {
+    name: &'static str,
+    left: f64,
+    center_y: f64,
+    width: f64,
+    height: f64,
+}
+
+/// Measure the real AppKit controls in the same logical coordinates as the
+/// overlay webview. DOM-only layout checks cannot detect native-button drift.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn e2e_window_buttons(window: tauri::Window) -> Result<Vec<WindowButtonBounds>, String> {
+    use objc2_app_kit::{NSWindow, NSWindowButton};
+
+    let _main_thread = objc2::MainThreadMarker::new().ok_or("AppKit requires the main thread")?;
+    let pointer = window.ns_window().map_err(|error| error.to_string())?;
+    // SAFETY: Tauri owns this live NSWindow; this synchronous command is on the
+    // main thread, and the reference does not outlive the command's Window.
+    let native = unsafe { &*pointer.cast::<NSWindow>() };
+    let content = native.contentView().ok_or("Missing native content view")?;
+    let content_bounds = content.bounds();
+    [
+        ("close", NSWindowButton::CloseButton),
+        ("minimize", NSWindowButton::MiniaturizeButton),
+        ("fullscreen", NSWindowButton::ZoomButton),
+    ]
+    .into_iter()
+    .map(|(name, kind)| {
+        let button = native
+            .standardWindowButton(kind)
+            .ok_or("Missing native button")?;
+        let bounds = button.convertRect_toView(button.bounds(), Some(&content));
+        let middle = bounds.origin.y + bounds.size.height / 2.0;
+        Ok(WindowButtonBounds {
+            name,
+            left: bounds.origin.x - content_bounds.origin.x,
+            center_y: if content.isFlipped() {
+                middle - content_bounds.origin.y
+            } else {
+                content_bounds.origin.y + content_bounds.size.height - middle
+            },
+            width: bounds.size.width,
+            height: bounds.size.height,
+        })
+    })
+    .collect()
+}
+
 #[cfg(any(windows, test))]
 pub fn automation_browser_args(arguments: &str) -> Option<String> {
     let port = arguments
