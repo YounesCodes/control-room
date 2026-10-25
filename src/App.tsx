@@ -1588,7 +1588,6 @@ export function App() {
         className={[
           "session-tab-wrap",
           workspace.id === activeWorkspaceId && !settingsOpen ? "active" : "",
-          grouped ? "in-layout" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -2125,6 +2124,29 @@ export function App() {
                   >
                     <StickyNote size={15} />
                   </button>
+                  {/* One toggle in one slot: entering and leaving terminal
+                      focus never moves the control between tool groups. */}
+                  {terminalFocusMode ? (
+                    <button
+                      className="session-strip-button"
+                      type="button"
+                      onClick={exitTerminalFocus}
+                      aria-label="Exit terminal focus"
+                      title="Exit terminal focus"
+                    >
+                      <Minimize2 size={15} />
+                    </button>
+                  ) : (
+                    <button
+                      className="session-strip-button"
+                      type="button"
+                      onClick={enterTerminalFocus}
+                      aria-label="Focus terminal"
+                      title="Focus terminal"
+                    >
+                      <Maximize2 size={15} />
+                    </button>
+                  )}
                 </div>
                 {scratchpadOpen && activeWorkspace?.view === "terminal" && (
                   <TerminalScratchpad
@@ -2227,30 +2249,11 @@ export function App() {
                     )}
                   </>
                 )}
-                {terminalFocusMode ? (
+                {terminalFocusMode && (
                   <>
-                    <button
-                      className="session-strip-button"
-                      type="button"
-                      onClick={exitTerminalFocus}
-                      aria-label="Exit terminal focus"
-                      title="Exit terminal focus"
-                    >
-                      <Minimize2 size={15} />
-                    </button>
                     <span className="window-controls-divider" aria-hidden="true" />
                     <WindowControls />
                   </>
-                ) : (
-                  <button
-                    className="session-strip-button"
-                    type="button"
-                    onClick={enterTerminalFocus}
-                    aria-label="Focus terminal"
-                    title="Focus terminal"
-                  >
-                    <Maximize2 size={15} />
-                  </button>
                 )}
               </div>
             )}

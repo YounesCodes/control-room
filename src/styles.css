@@ -68,6 +68,13 @@
   --warning: #d6a84a;
   --failure: #ef5b6b;
 
+  /* Identity marks: OS and shell brand hues, revealed on hover or selection
+     as identification — never at rest and never a status signal. */
+  --os-ubuntu: #e95420;
+  --os-debian: #d70a53;
+  --os-windows: #0078d4;
+  --shell-accent: #5391fe;
+
   /* Surface elevation ramp — lighter reads as higher. */
   --surface-base: #090909;
   --surface-sunken: #050505;
@@ -1555,6 +1562,7 @@ code,
   flex: none;
   place-items: center;
   color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease);
 }
 
 .local-shell-icon svg {
@@ -1733,17 +1741,6 @@ code,
   padding-right: 56px;
 }
 
-.session-tab-wrap.in-layout .session-tab-main {
-  padding-right: 56px;
-}
-
-.session-tab-wrap.in-layout .session-tab-rename,
-.session-tab-wrap.in-layout .session-tab-close {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0);
-}
-
 .session-group-action {
   display: flex;
   align-items: center;
@@ -1795,6 +1792,7 @@ code,
   flex: none;
   place-items: center;
   color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease);
 }
 
 .host-os-icon svg {
@@ -5751,6 +5749,50 @@ kbd {
 .session-tab-group:not(.active):active,
 .connection-group-heading:active {
   background: var(--fill-active);
+}
+
+/* ==========================================================================
+   Identity marks
+   OS and shell marks stay neutral at rest and reveal their brand color where
+   the user is headed: the hovered, keyboard-focused, or selected tab and the
+   hovered, focused, menu-open, or selected host row. Generic marks have no
+   brand to reveal. The color identifies; it never signals health.
+   ========================================================================== */
+
+.session-tab-wrap:hover .host-os-ubuntu,
+.session-tab-wrap:focus-within .host-os-ubuntu,
+.session-tab-wrap.active .host-os-ubuntu,
+.host-row:hover .host-os-ubuntu,
+.host-row:focus-within .host-os-ubuntu,
+.host-row.active .host-os-ubuntu,
+.host-row.menu-open .host-os-ubuntu {
+  color: var(--os-ubuntu);
+}
+
+.session-tab-wrap:hover .host-os-debian,
+.session-tab-wrap:focus-within .host-os-debian,
+.session-tab-wrap.active .host-os-debian,
+.host-row:hover .host-os-debian,
+.host-row:focus-within .host-os-debian,
+.host-row.active .host-os-debian,
+.host-row.menu-open .host-os-debian {
+  color: var(--os-debian);
+}
+
+.session-tab-wrap:hover .host-os-windows,
+.session-tab-wrap:focus-within .host-os-windows,
+.session-tab-wrap.active .host-os-windows,
+.host-row:hover .host-os-windows,
+.host-row:focus-within .host-os-windows,
+.host-row.active .host-os-windows,
+.host-row.menu-open .host-os-windows {
+  color: var(--os-windows);
+}
+
+.session-tab-wrap:hover .local-shell-icon,
+.session-tab-wrap:focus-within .local-shell-icon,
+.session-tab-wrap.active .local-shell-icon {
+  color: var(--shell-accent);
 }
 
 /* ==========================================================================

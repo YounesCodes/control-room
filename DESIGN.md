@@ -18,8 +18,10 @@ guardrails, not every choice described below.
   cards.
 - **Monochrome with intent.** The application chrome stays neutral. Built-in
   color signals success, warning, or failure. User-selected tag colors identify
-  connections; they do not imply health. Terminal ANSI colors belong to host
-  output and remain separate from the application palette.
+  connections; they do not imply health. OS and shell marks may reveal their
+  brand color on a hovered or selected tab or host row to identify the target;
+  the color is identity, never health, and it never shows at rest. Terminal ANSI
+  colors belong to host output and remain separate from the application palette.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
@@ -49,8 +51,9 @@ target beside its readings.
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
 scan. Give each split group one tab with its name and pane count. Show the active
-group's terminals in a separate compact pane row. Keep individual Rename and Close
-controls visible on each pane tab. Use labeled Rename group and Ungroup buttons
+group's terminals in a separate compact pane row. Pane tabs reveal their
+individual Rename and Close controls on hover or keyboard focus, the same way
+every other tab does. Use labeled Rename group and Ungroup buttons
 at the row's end, and confirm ungrouping with its effect on the open terminals.
 Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected

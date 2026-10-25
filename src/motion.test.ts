@@ -90,15 +90,27 @@ describe("motion guardrails", () => {
   it("drags the trailing tab dot across and slides the tab tools into place", () => {
     // Hovering reserves the action space by animating padding, so the label
     // and session dot glide instead of jumping, and Rename and Close ride in
-    // from the right edge they occupy when hidden.
+    // from the right edge they occupy when hidden. This includes the focus
+    // mode pane tabs, which reveal the same controls the same way.
     expect(rule(".session-tab-main")).toContain("transition: padding var(--motion-med)");
     expect(stylesSource).toContain("transform: translateX(6px)");
     expect(stylesSource).toMatch(
       /\.session-tab-wrap:hover \.session-tab-close,[\s\S]{0,400}?transform: translateX\(0\);/,
     );
-    expect(stylesSource).toMatch(
-      /\.session-tab-wrap\.in-layout \.session-tab-rename,[\s\S]{0,200}?transform: translateX\(0\);/,
-    );
+  });
+
+  it("reveals brand colors on identity marks only where the user is headed", () => {
+    for (const token of ["--os-ubuntu:", "--os-debian:", "--os-windows:", "--shell-accent:"]) {
+      expect(stylesSource).toContain(token);
+    }
+    for (const mark of ["ubuntu", "debian", "windows"]) {
+      expect(stylesSource).toContain(`.session-tab-wrap.active .host-os-${mark}`);
+      expect(stylesSource).toContain(`.host-row.active .host-os-${mark}`);
+    }
+    expect(stylesSource).toContain(".session-tab-wrap.active .local-shell-icon");
+    // The generic mark carries no brand and must stay neutral everywhere.
+    expect(stylesSource).not.toContain(".host-os-unknown");
+    expect(stylesSource).not.toContain("in-layout");
   });
 
   it("opens anchored menus and panels with the shared popover entrance", () => {

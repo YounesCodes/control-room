@@ -119,14 +119,32 @@ describe("Local Terminal Mode in the real App", () => {
       await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
       await split("vertically");
       await split("horizontally");
-      const controls = [
-        ...container!.querySelectorAll<HTMLButtonElement>(
-          ".session-pane-tabs .session-tab-rename, .session-pane-tabs .session-tab-close",
-        ),
+      // Pane tabs reveal Rename and Close exactly like every other tab: hidden
+      // at rest, slid in by the hover (or keyboard focus) that also drags the
+      // trailing session dot aside.
+      const paneTabs = [
+        ...container!.querySelectorAll<HTMLElement>(".session-pane-tabs .session-tab-wrap"),
       ];
+      const controls = paneTabs.flatMap((tab) => [
+        ...tab.querySelectorAll<HTMLButtonElement>(".session-tab-rename, .session-tab-close"),
+      ]);
+      expect(paneTabs.length).toBeGreaterThanOrEqual(3);
       expect(controls).toHaveLength(6);
       for (const control of controls) {
-        expect(getComputedStyle(control).opacity).toBe("1");
+        expect(getComputedStyle(control).opacity).toBe("0");
+      }
+      await userEvent.hover(paneTabs[0]);
+      const revealed = [
+        ...paneTabs[0].querySelectorAll<HTMLButtonElement>(
+          ".session-tab-rename, .session-tab-close",
+        ),
+      ];
+      await vi.waitFor(() => {
+        for (const control of revealed) {
+          expect(Number(getComputedStyle(control).opacity)).toBeGreaterThan(0.9);
+        }
+      });
+      for (const control of revealed) {
         const rect = control.getBoundingClientRect();
         expect(
           document
@@ -140,6 +158,11 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         page.getByRole("tooltip").element().getBoundingClientRect().left,
       ).toBeGreaterThanOrEqual(8);
+      // A pane tab's tools exist for the pointer only once the tab is hovered
+      // or focused, so drive the pointer there like a user would first.
+      const paneTabByLabel = (label: string) =>
+        paneTabs.find((tab) => tab.querySelector(".session-tab-label")?.textContent === label)!;
+      await userEvent.hover(paneTabByLabel("Command Prompt 2"));
       await page
         .getByRole("button", { name: "Rename Command Prompt 2 Workspace", exact: true })
         .click();
@@ -151,6 +174,7 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
       ).toBe("Command Prompt 3");
+      await userEvent.hover(paneTabByLabel("Background logs"));
       await page.getByRole("button", { name: "Close Background logs Workspace" }).click();
       await expect
         .element(page.getByRole("button", { name: "Open Command Prompt group 2 terminals" }))
@@ -159,6 +183,7 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
       ).toBe("Command Prompt 2");
+      await userEvent.hover(paneTabByLabel("Command Prompt 2"));
       await page.getByRole("button", { name: "Close Command Prompt 2 Workspace" }).click();
       expect(container!.querySelector(".session-pane-tabs")).toBeNull();
       await expect
