@@ -617,9 +617,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const started = native.invoke.mock.calls.find(([command]) => command === "start_session")![1];
     const output = (text: string) =>
       started.output.onmessage(new TextEncoder().encode(text).buffer);
+    await expect
+      .poll(() => element.querySelector(".host-row.active .presence-connected"))
+      .not.toBeNull();
     const idle = element.querySelector<HTMLElement>(".host-row.active .presence")!;
     expect(getComputedStyle(idle).borderRadius).toBe("50%");
     expect(idle.classList.contains("presence-busy")).toBe(false);
+    await expect.poll(() => getComputedStyle(idle).backgroundColor).toBe("rgb(66, 209, 122)");
 
     await userEvent.click(
       element.querySelector<HTMLElement>(".terminal-workspace-pane.active .xterm-screen")!,
@@ -631,7 +635,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
     );
     const ring = element.querySelector<HTMLElement>(".session-tab-wrap.active .presence-busy")!;
     expect(getComputedStyle(ring).animationName).toBe("spin");
-    expect(ring.offsetWidth).toBe(8);
+    expect(ring.offsetWidth).toBe(10);
+    expect(ring.offsetHeight).toBe(10);
+    expect(getComputedStyle(ring).borderTopColor).toBe("rgb(173, 173, 170)");
+    for (const state of ["connecting", "connected", "disconnected", "error"]) {
+      const sample = document.createElement("span");
+      sample.className = `presence presence-${state}${state === "connecting" ? "" : " presence-busy"}`;
+      element.appendChild(sample);
+      expect(getComputedStyle(sample).borderTopColor).toBe("rgb(173, 173, 170)");
+      sample.remove();
+    }
     await page.screenshot({ path: "../test-results/processing-terminal.png" });
 
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();

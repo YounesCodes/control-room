@@ -235,7 +235,7 @@ remote sessions use connected, disconnected, and reconnected.
 
 Session indicators keep a circular shape in every state, including errors.
 Connecting sessions and foreground host reads or terminal commands replace the
-solid dot with a rotating ring in the same status color. This also applies to
+solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
 Command activity uses shell markers where available, otherwise the return of
 the rendered prompt, including commands recalled from shell history. It never
