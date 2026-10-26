@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { useState, type ReactNode } from "react";
 import axe from "axe-core";
+import { Plus } from "lucide-react";
 import { Modal } from "./Modal";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionDialog } from "./ConnectionDialog";
@@ -575,6 +576,50 @@ describe("critical UI in Chromium", () => {
     await userEvent.keyboard("{Enter}");
     expect(onSettings).toHaveBeenCalledOnce();
     await expect.element(trigger).toHaveFocus();
+  });
+
+  it("keeps Add connection quiet on a raised charcoal surface with a moving plus", async () => {
+    await page.viewport(960, 640);
+    mount(
+      <div style={{ width: 220, background: "#050505", padding: 12 }}>
+        <button className="sidebar-primary" type="button">
+          <Plus size={16} /> Add connection
+        </button>
+      </div>,
+    );
+    await expect.element(page.getByRole("button", { name: "Add connection" })).toBeVisible();
+    const button = page
+      .getByRole("button", { name: "Add connection" })
+      .element() as HTMLButtonElement;
+    const atRest = getComputedStyle(button);
+    const position = () => {
+      const rect = button.getBoundingClientRect();
+      return [rect.x, rect.y, rect.width, rect.height];
+    };
+    const initialPosition = position();
+    // The rail's persistent action reads as clickable without dominating the
+    // sidebar the way a filled accent button did.
+    expect(atRest.backgroundColor).toBe("rgb(23, 23, 23)");
+    expect(atRest.borderTopWidth).toBe("1px");
+    expect(atRest.borderTopColor).toBe("rgb(52, 52, 52)");
+    expect(atRest.color).toBe("rgb(242, 242, 238)");
+    const plus = button.querySelector("svg")!;
+    expect(getComputedStyle(plus).transform).toBe("none");
+    await userEvent.hover(button);
+    await vi.waitFor(() => {
+      const hovered = getComputedStyle(button);
+      expect(hovered.backgroundColor).toBe("rgb(36, 36, 36)");
+      expect(hovered.borderTopColor).toBe("rgb(69, 69, 69)");
+      expect(getComputedStyle(plus).transform).toBe("matrix(1, 0, 0, 1, 1, 0)");
+    });
+    // Hover feedback animates in place: the button's box never moves.
+    const bounds = button.getBoundingClientRect();
+    expect(bounds.width).toBeGreaterThan(180);
+    expect(position()).toEqual(initialPosition);
+    button.focus();
+    await userEvent.keyboard("{Space>}");
+    expect(position()).toEqual(initialPosition);
+    await userEvent.keyboard("{/Space}");
   });
 
   it("keeps the connection form and native window controls named", async () => {

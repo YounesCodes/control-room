@@ -69,10 +69,27 @@
   --failure: #ef5b6b;
 
   /* Identity marks: OS and shell brand hues, revealed on hover or selection
-     as identification — never at rest and never a status signal. */
+     as identification — never at rest and never a status signal. Alpine,
+     CentOS, and AlmaLinux use their official hue lightened just enough to
+     read on the app's dark surfaces. */
   --os-ubuntu: #e95420;
   --os-debian: #d70a53;
   --os-windows: #0078d4;
+  --os-fedora: #51a2da;
+  --os-arch: #1793d1;
+  --os-opensuse: #73ba25;
+  --os-alpine: #6293ac;
+  --os-mint: #86be43;
+  --os-kali: #557c94;
+  --os-rhel: #ee0000;
+  --os-centos: #8887b4;
+  --os-rocky: #10b981;
+  --os-alma: #7ea4bf;
+  --os-nixos: #5277c3;
+  --os-manjaro: #35bf5c;
+  --os-suse: #5aa48f;
+  --os-oracle: #f80000;
+  --os-amazon: #ff9900;
   --shell-accent: #5391fe;
 
   /* Surface elevation ramp — lighter reads as higher. */
@@ -1263,23 +1280,42 @@ code,
   padding: 10px 14px 12px;
 }
 
+/* The rail's persistent action sits quiet: a raised charcoal surface that
+   reads as clickable without competing with the host list the way a filled
+   accent button did. Filled accent stays reserved for the one main decision
+   inside dialogs. */
 .sidebar-primary {
   display: flex;
   width: 100%;
   min-height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--fill-control);
   padding: 0 11px;
-  background: var(--accent);
-  color: var(--on-accent);
+  color: var(--text);
   font-size: 12.5px;
   font-weight: 650;
 }
 
+.sidebar-primary svg {
+  transition:
+    color var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease);
+}
+
 .sidebar-primary:hover {
-  background: var(--accent-hover);
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+  color: var(--text-strong);
+}
+
+.sidebar-primary:hover svg,
+.sidebar-primary:focus-visible svg {
+  color: var(--text-strong);
+  transform: translateX(1px);
 }
 
 /* The Local Terminal launcher sits above Add connection: a secondary action,
@@ -1319,6 +1355,9 @@ code,
   display: flex;
   width: max-content;
   min-width: 100%;
+  max-width: calc(100vw - 28px);
+  max-height: min(420px, calc(100vh - 100px));
+  overflow-y: auto;
   flex-direction: column;
   gap: 2px;
   border: 1px solid var(--border-strong);
@@ -1341,31 +1380,38 @@ code,
 }
 
 .local-shell-menu-group > strong {
-  padding: 4px 9px 5px;
+  padding: 4px 8px 3px;
   color: var(--text-faint);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .local-shell-menu button {
   display: flex;
-  min-height: 30px;
+  min-height: 28px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-muted);
   font-size: 11.5px;
   text-align: left;
   white-space: nowrap;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
 .local-shell-menu button:hover {
   background: var(--fill-active);
   color: var(--text-strong);
+}
+
+.local-shell-menu button:active {
+  background: var(--fill-selected);
 }
 
 .administrator-terminal-icon,
@@ -1559,7 +1605,7 @@ code,
   overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   animation: popover-in var(--motion-fast) var(--ease);
@@ -1569,17 +1615,24 @@ code,
   display: flex;
   align-items: center;
   width: 100%;
+  min-height: 30px;
   gap: 8px;
-  padding: 8px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   text-align: left;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .session-tab-overflow-menu > button:hover,
+.session-tab-overflow-menu > button:focus,
 .session-tab-overflow-menu > button:focus-visible {
-  background: var(--fill-hover);
+  background: var(--fill-active);
+}
+
+.session-tab-overflow-menu > button:active {
+  background: var(--fill-selected);
 }
 
 .session-tab-menu-check {
@@ -1838,7 +1891,22 @@ code,
 
 .host-os-debian path,
 .host-os-ubuntu path,
-.host-os-windows path {
+.host-os-windows path,
+.host-os-fedora path,
+.host-os-arch path,
+.host-os-opensuse path,
+.host-os-alpine path,
+.host-os-mint path,
+.host-os-kali path,
+.host-os-rhel path,
+.host-os-centos path,
+.host-os-rocky path,
+.host-os-alma path,
+.host-os-nixos path,
+.host-os-manjaro path,
+.host-os-suse path,
+.host-os-oracle path,
+.host-os-amazon path {
   fill: currentColor;
 }
 
@@ -2044,37 +2112,38 @@ code,
   top: calc(100% + 1px);
   right: 0;
   display: flex;
-  width: 284px;
+  width: 248px;
   max-height: 420px;
   flex-direction: column;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 8px;
+  padding: 5px;
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .terminal-split-directions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 5px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 6px;
-  padding-bottom: 8px;
+  margin-bottom: 4px;
+  padding-bottom: 7px;
 }
 
 .terminal-split-directions button {
   display: flex;
   min-width: 0;
-  min-height: 48px;
+  min-height: 42px;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: #111;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-muted);
   text-align: left;
 }
@@ -2104,30 +2173,57 @@ code,
 }
 
 .terminal-target-menu strong {
-  padding: 6px 9px 7px;
+  padding: 5px 8px 3px;
   color: var(--text-faint);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .terminal-target-menu .terminal-target-group > button {
   display: flex;
-  min-height: 34px;
+  min-height: 28px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-muted);
   font-size: 11.5px;
   text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
-.terminal-target-menu .terminal-target-group > button:hover {
+.terminal-target-menu .terminal-target-group > button:hover,
+.terminal-target-menu .terminal-target-group > button[data-active="true"] {
   background: var(--fill-active);
   color: var(--text-strong);
+}
+
+/* After the keyboard moves the selection, the pointer may still rest on
+   another row; until it moves again, that stale hover must not compete with
+   the arrow-key selection, exactly like a native menu. */
+.terminal-target-menu[data-keyboard-nav]
+  .terminal-target-group
+  > button:hover:not([data-active="true"]) {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.terminal-target-menu[data-keyboard-nav]
+  .terminal-target-group
+  > button:hover:not([data-active="true"])
+  .identity-mark {
+  color: var(--text-muted);
+}
+
+/* Dense menu rows deepen their fill on press instead of moving: the row the
+   user is about to click must not shift under the pointer. */
+.terminal-target-menu .terminal-target-group > button:active {
+  background: var(--fill-selected);
 }
 
 .terminal-target-menu .terminal-target-group > button span:last-child {
@@ -2146,7 +2242,9 @@ code,
 }
 
 /* New terminal hangs off the tab strip, so it opens below and to the left of
-   its own control rather than the right edge of the strip. */
+   its own control rather than the right edge of the strip. Inline style owns
+   the anchored top-or-bottom position; the autos here only keep the base
+   menu's absolute offsets from leaking into the fixed placement. */
 /* Contributes no box of its own: the button inside must stay a full-height
    flex cell, or its hover shrinks to the size of the text. */
 .session-new-terminal-anchor {
@@ -2157,7 +2255,16 @@ code,
   position: fixed;
   top: auto;
   right: auto;
-  width: 260px;
+  bottom: auto;
+  width: 248px;
+}
+
+.terminal-split-menu {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 264px;
 }
 
 /* ==========================================================================
@@ -2881,92 +2988,8 @@ code,
 .overview-page,
 .history-page,
 .logs-page,
-.scratchpad-page,
 .boot-page {
   padding: 26px 30px;
-}
-
-.scratchpad-page {
-  display: flex;
-  flex-direction: column;
-}
-
-.scratchpad-heading {
-  width: 100%;
-  align-items: center;
-}
-
-.scratchpad-scope-switch {
-  display: grid;
-  width: min(410px, 48%);
-  flex: none;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-sunken);
-  padding: 4px;
-}
-
-.scratchpad-scope-switch button {
-  display: flex;
-  min-width: 0;
-  min-height: 52px;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 7px 11px;
-  background: var(--surface-raised);
-  color: var(--text);
-  text-align: left;
-}
-
-.scratchpad-scope-switch button svg {
-  flex: none;
-  color: var(--text-faint);
-}
-
-.scratchpad-scope-switch button:hover {
-  background: var(--fill-hover);
-  color: var(--text);
-}
-
-.scratchpad-scope-switch button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--fill-selected);
-  color: var(--text-strong);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
-}
-
-.scratchpad-scope-switch button[aria-pressed="true"] svg {
-  color: var(--accent);
-}
-
-.scratchpad-scope-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.scratchpad-scope-copy strong {
-  font-size: 11.5px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.scratchpad-scope-copy span {
-  overflow: hidden;
-  color: var(--text-faint);
-  font-size: 10px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.scratchpad-scope-switch button[aria-pressed="true"] .scratchpad-scope-copy span {
-  color: var(--text-muted);
 }
 
 .scratchpad-editor {
@@ -2978,27 +3001,6 @@ code,
   border-top: 1px solid var(--border);
 }
 
-.scratchpad-meta {
-  display: flex;
-  min-height: 58px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.scratchpad-meta > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.scratchpad-meta strong {
-  color: var(--text);
-  font-size: 12.5px;
-}
-
-.scratchpad-meta span,
 .scratchpad-save-state {
   color: var(--text-faint);
   font-size: 11px;
@@ -3025,75 +3027,91 @@ code,
   white-space: pre-wrap;
 }
 
-.scratchpad-footer {
+.scratchpad-editor-tools,
+.scratchpad-edit-actions {
   display: flex;
   align-items: center;
+  gap: 3px;
+}
+
+.scratchpad-editor-tools {
   justify-content: space-between;
-  gap: 18px;
-  padding-top: 12px;
+  gap: 8px;
 }
 
-.scratchpad-footer p {
-  max-width: 560px;
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.scratchpad-footer .row-actions {
-  display: flex;
-  flex: none;
-  gap: 7px;
+.scratchpad-edit-actions .icon-button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: var(--radius-sm);
 }
 
 /* The terminal action strip's Scratchpad popover. Anchored like the split
    menu so opening it overlays the workspace instead of reflowing the strip. */
 .scratchpad-popover {
-  position: absolute;
+  position: fixed;
   z-index: 30;
-  top: calc(100% + 3px);
+  top: auto;
   /* A gutter from the window edge keeps the popover's own border readable
      instead of merging with the window's. */
-  right: 6px;
+  right: auto;
+  bottom: auto;
   display: flex;
-  width: min(356px, calc(100vw - 40px));
+  width: min(320px, calc(100vw - 40px));
+  max-height: calc(100vh - 76px);
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 8px;
+  padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
+/* Terminal/Global read as one segmented control: a single quiet well with
+   two segments, where the active note scope raises its fill instead of
+   drawing its own bordered button. */
 .scratchpad-popover-scope {
   display: flex;
-  gap: 6px;
-  padding-bottom: 8px;
+  flex: none;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #0a0a0a;
+  margin-bottom: 6px;
+  padding: 2px;
 }
 
 .scratchpad-popover-scope button {
   display: inline-flex;
   flex: 1;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: #111;
-  padding: 6px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  padding: 4px 8px;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
 .scratchpad-popover-scope button:hover {
-  background: var(--fill-hover);
   color: var(--text-strong);
 }
 
+.scratchpad-popover-scope button:active {
+  background: var(--fill-hover);
+}
+
 .scratchpad-popover-scope button[aria-pressed="true"] {
-  border-color: var(--accent);
   background: var(--fill-active);
   color: var(--text-strong);
 }
@@ -3105,24 +3123,32 @@ code,
 
 .scratchpad-editor-compact .scratchpad-save-state {
   display: block;
-  padding: 2px 2px 6px;
+  padding: 1px 2px 5px;
 }
 
 .scratchpad-editor-compact textarea {
-  min-height: 150px;
-  max-height: 260px;
+  min-height: 116px;
+  max-height: 220px;
   flex: none;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: #0a0a0a;
-  padding: 10px;
+  padding: 8px;
 }
 
 .scratchpad-popover-actions {
   display: flex;
+  flex: none;
   justify-content: flex-end;
-  gap: 7px;
-  padding-top: 8px;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.scratchpad-popover-actions .secondary-button {
+  min-height: 27px;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 11px;
 }
 
 .overview-content {
@@ -5683,6 +5709,26 @@ kbd {
   }
 }
 
+/* The shared exit for anchored popovers: the mirror of popover-in, retreating
+   toward the trigger that opened it. While it plays the popover ignores the
+   pointer, so a fading menu can never catch a click meant for what is under
+   it; unmount follows the animation length (POPOVER_EXIT_MS). */
+@keyframes popover-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+[data-closing] {
+  pointer-events: none;
+  animation: popover-out var(--motion-fast) var(--ease) forwards;
+}
+
 /* Centered dialogs rise in place like native Windows sheets instead of
    dropping from above like anchored menus. */
 @keyframes dialog-in {
@@ -5776,6 +5822,12 @@ kbd {
   transform: scale(0.98);
 }
 
+/* The launcher animates its icon and fill while keeping its hit area fixed. */
+.sidebar-primary:active:not(:disabled) {
+  transform: none;
+  background: var(--fill-selected);
+}
+
 .host-row:not(.active):active,
 .feature-nav button:not(.active):active,
 .session-tab-wrap:not(.active):active,
@@ -5787,56 +5839,111 @@ kbd {
 /* ==========================================================================
    Identity marks
    OS and shell marks stay neutral at rest and reveal their brand color where
-   the user is headed: the hovered, keyboard-focused, or selected tab and the
-   hovered, focused, menu-open, or selected host row. Generic marks have no
-   brand to reveal. The color identifies; it never signals health.
+   the user is headed: the hovered, keyboard-focused, or selected tab, pane
+   tab, menu row, or host row, across workspace tabs, terminal menus, the
+   overflow menus, and the local-shell launcher. Each brand-bearing mark
+   carries its hue in a shared --identity variable, so one reveal rule covers
+   every surface and a new distro only adds a variable. Generic marks and the
+   administrator shield have no brand to reveal and stay neutral. The color
+   identifies; it never signals health.
    ========================================================================== */
 
-.session-tab-wrap:hover .host-os-ubuntu,
-.session-tab-wrap:focus-within .host-os-ubuntu,
-.session-tab-wrap.active .host-os-ubuntu,
-.host-row:hover .host-os-ubuntu,
-.host-row:focus-within .host-os-ubuntu,
-.host-row.active .host-os-ubuntu,
-.host-row.menu-open .host-os-ubuntu {
-  color: var(--os-ubuntu);
+.host-os-ubuntu {
+  --identity: var(--os-ubuntu);
 }
 
-.session-tab-wrap:hover .host-os-debian,
-.session-tab-wrap:focus-within .host-os-debian,
-.session-tab-wrap.active .host-os-debian,
-.host-row:hover .host-os-debian,
-.host-row:focus-within .host-os-debian,
-.host-row.active .host-os-debian,
-.host-row.menu-open .host-os-debian {
-  color: var(--os-debian);
+.host-os-debian {
+  --identity: var(--os-debian);
 }
 
-.session-tab-wrap:hover .host-os-windows,
-.session-tab-wrap:focus-within .host-os-windows,
-.session-tab-wrap.active .host-os-windows,
-.host-row:hover .host-os-windows,
-.host-row:focus-within .host-os-windows,
-.host-row.active .host-os-windows,
-.host-row.menu-open .host-os-windows {
-  color: var(--os-windows);
+.host-os-windows {
+  --identity: var(--os-windows);
 }
 
-.session-tab-wrap:hover .local-shell-icon,
-.session-tab-wrap:focus-within .local-shell-icon,
-.session-tab-wrap.active .local-shell-icon,
-.session-tab-wrap:hover .local-shell-mark:not(.local-shell-admin-mark),
-.session-tab-wrap:focus-within .local-shell-mark:not(.local-shell-admin-mark),
-.session-tab-wrap.active .local-shell-mark:not(.local-shell-admin-mark),
-.local-shell-launcher button:hover .local-shell-mark,
-.local-shell-launcher button:focus-visible .local-shell-mark,
-.local-shell-launcher button[aria-expanded="true"] .local-shell-mark,
-.terminal-target-group button:hover .local-shell-mark:not(.local-shell-admin-mark),
-.terminal-target-group button:focus-visible .local-shell-mark:not(.local-shell-admin-mark),
-.session-tab-overflow-menu > button:hover .local-shell-icon,
-.session-tab-overflow-menu > button:focus-visible .local-shell-icon,
-.session-tab-overflow-menu > button[aria-current="page"] .local-shell-icon {
-  color: var(--shell-accent);
+.host-os-fedora {
+  --identity: var(--os-fedora);
+}
+
+.host-os-arch {
+  --identity: var(--os-arch);
+}
+
+.host-os-opensuse {
+  --identity: var(--os-opensuse);
+}
+
+.host-os-alpine {
+  --identity: var(--os-alpine);
+}
+
+.host-os-mint {
+  --identity: var(--os-mint);
+}
+
+.host-os-kali {
+  --identity: var(--os-kali);
+}
+
+.host-os-rhel {
+  --identity: var(--os-rhel);
+}
+
+.host-os-centos {
+  --identity: var(--os-centos);
+}
+
+.host-os-rocky {
+  --identity: var(--os-rocky);
+}
+
+.host-os-alma {
+  --identity: var(--os-alma);
+}
+
+.host-os-nixos {
+  --identity: var(--os-nixos);
+}
+
+.host-os-manjaro {
+  --identity: var(--os-manjaro);
+}
+.host-os-suse {
+  --identity: var(--os-suse);
+}
+.host-os-oracle {
+  --identity: var(--os-oracle);
+}
+.host-os-amazon {
+  --identity: var(--os-amazon);
+}
+
+/* Plain local-terminal marks share one soft blue; the administrator shield
+   never carries .identity-mark and so never reveals a hue. */
+.local-shell-mark.identity-mark,
+.local-shell-icon.identity-mark {
+  --identity: var(--shell-accent);
+}
+
+.session-tab-wrap:hover .identity-mark,
+.session-tab-wrap:focus-within .identity-mark,
+.session-tab-wrap.active .identity-mark,
+.host-row:hover .identity-mark,
+.host-row:focus-within .identity-mark,
+.host-row.active .identity-mark,
+.host-row.menu-open .identity-mark,
+.terminal-target-group button:hover .identity-mark,
+.terminal-target-group button:focus-visible .identity-mark,
+.terminal-target-group button[data-active="true"] .identity-mark,
+.session-tab-overflow-menu > button:hover .identity-mark,
+.session-tab-overflow-menu > button:focus .identity-mark,
+.session-tab-overflow-menu > button:focus-visible .identity-mark,
+.session-tab-overflow-menu > button[aria-current="page"] .identity-mark,
+.local-shell-launcher button:hover .identity-mark,
+.local-shell-launcher button:focus-visible .identity-mark,
+.local-shell-launcher button[aria-expanded="true"] .identity-mark,
+.local-shell-menu button:hover .identity-mark,
+.local-shell-menu button:focus-visible .identity-mark {
+  color: var(--identity);
 }
 
 /* ==========================================================================
@@ -6530,10 +6637,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   right: 6px;
 }
 
-.connection-section-content > .scratchpad-page {
-  right: 0;
-}
-
 .content-divider {
   right: 0;
 }
@@ -6617,7 +6720,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .overview-page,
   .history-page,
   .logs-page,
-  .scratchpad-page,
   .boot-page {
     padding: 20px;
   }
@@ -6725,9 +6827,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .boot-heading-actions,
   .toolbar-actions,
   .history-tools,
-  .history-tools-actions,
-  .scratchpad-meta,
-  .scratchpad-footer {
+  .history-tools-actions {
     flex-wrap: wrap;
   }
   .boot-heading-actions label {
@@ -6740,7 +6840,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     padding-inline: 0;
     border-right: 0;
   }
-  .scratchpad-scope-switch,
   .history-tools .search-field {
     width: 100%;
   }

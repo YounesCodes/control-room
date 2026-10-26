@@ -63,6 +63,7 @@ export function Modal({ title, children, onClose, className }: ModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        data-app-popover=""
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="modal-header">

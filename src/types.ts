@@ -537,8 +537,7 @@ export type WorkspaceView =
   | "boot"
   | "logs"
   | "baselines"
-  | "history"
-  | "scratchpad";
+  | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -614,7 +613,8 @@ interface PersistedWorkspace {
   connectionId: string | null;
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
-  view: WorkspaceView;
+  /** Older app versions persisted the standalone Scratchpad page. */
+  view: WorkspaceView | "scratchpad";
   historyPaused: boolean;
 }
 

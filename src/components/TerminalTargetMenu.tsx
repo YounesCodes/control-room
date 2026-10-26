@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** One thing a terminal can be opened against. */
 export interface TerminalTargetOption {
@@ -23,6 +23,8 @@ interface TerminalTargetMenuProps {
   className?: string;
   /** Set by a caller that positions the menu itself rather than anchoring it. */
   style?: React.CSSProperties;
+  /** True while the menu plays its closing transition before unmounting. */
+  closing?: boolean;
 }
 
 /**
@@ -34,6 +36,13 @@ interface TerminalTargetMenuProps {
  * rather than derived here: the component owns presentation and keyboard
  * movement, and each caller owns what its targets mean.
  *
+ * One row is always the menu's active target — highlighted, with its identity
+ * mark revealed, exactly like a native menu's selection. Hovering moves it and
+ * the arrow keys continue from it, so keyboard selection stays visible no
+ * matter whether the menu was opened by mouse or keyboard; relying on
+ * :focus-visible alone would drop the highlight, since a script-focused row
+ * after a pointer open is not "focus visible" to the browser.
+ *
  * Empty groups are dropped, so a machine with no local shells installed shows
  * no "Local terminals" heading rather than an empty one.
  */
@@ -44,18 +53,32 @@ export function TerminalTargetMenu({
   onClose,
   className,
   style,
+  closing,
 }: TerminalTargetMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const populated = groups.filter((group) => group.options.length > 0);
+  let rowCounter = -1;
+  const sections = populated.map((group) => ({
+    label: group.label,
+    options: group.options.map((option) => ({ option, index: ++rowCounter })),
+  }));
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [keyboardNav, setKeyboardNav] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // The first target, not the first focusable thing: Split puts its direction
     // switch above the list, and opening the menu on it would make the arrow
-    // keys start somewhere the reader did not ask about.
+    // keys start somewhere the reader did not ask about. Runs on mount and
+    // again when a quick reopen cancels the closing transition, since the
+    // menu element stayed mounted and would otherwise never pull focus back.
+    // A layout effect, so the row owns focus before any further input lands.
+    if (closing) return;
+    setActiveIndex(0);
+    setKeyboardNav(false);
     menuRef.current?.querySelector<HTMLButtonElement>("[data-terminal-target]")?.focus();
-  }, []);
+  }, [closing]);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
@@ -63,18 +86,26 @@ export function TerminalTargetMenu({
       onCloseRef.current();
       return;
     }
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
 
     const targets = [
       ...(menuRef.current?.querySelectorAll<HTMLButtonElement>("[data-terminal-target]") ?? []),
     ];
     if (!targets.length) return;
     event.preventDefault();
-    const current = targets.indexOf(document.activeElement as HTMLButtonElement);
     const step = event.key === "ArrowDown" ? 1 : -1;
-    // Wraps, so a list shorter than the reader expects still moves.
-    const next = (current + step + targets.length) % targets.length;
-    targets[current === -1 ? 0 : next].focus();
+    // Wraps, so a list shorter than the reader expects still moves. Continues
+    // from the active row — where hover left it — not from wherever DOM focus
+    // happens to sit.
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? targets.length - 1
+          : (activeIndex + step + targets.length) % targets.length;
+    targets[next].focus();
+    setActiveIndex(next);
+    setKeyboardNav(true);
   }
 
   return (
@@ -83,20 +114,32 @@ export function TerminalTargetMenu({
       className={className ? `terminal-target-menu ${className}` : "terminal-target-menu"}
       style={style}
       role="dialog"
-      aria-label={label}
+      aria-label={closing ? undefined : label}
+      aria-hidden={closing || undefined}
+      inert={closing || undefined}
+      data-closing={closing || undefined}
+      data-app-popover=""
+      data-keyboard-nav={keyboardNav || undefined}
       onKeyDown={onKeyDown}
     >
       {children}
-      {populated.map((group) => (
-        <div className="terminal-target-group" key={group.label}>
-          <strong>{group.label}</strong>
-          {group.options.map((option) => (
+      {sections.map((section) => (
+        <div className="terminal-target-group" key={section.label}>
+          <strong>{section.label}</strong>
+          {section.options.map(({ option, index }) => (
             <button
               type="button"
               key={option.id}
               data-terminal-target
+              data-active={index === activeIndex ? "true" : undefined}
+              onFocus={() => setActiveIndex(index)}
+              onMouseEnter={(event) => {
+                setActiveIndex(index);
+                setKeyboardNav(false);
+                event.currentTarget.focus({ preventScroll: true });
+              }}
               onClick={option.onSelect}
-              aria-label={`${group.label}: ${option.label}`}
+              aria-label={`${section.label}: ${option.label}`}
             >
               {option.icon}
               <span>{option.label}</span>

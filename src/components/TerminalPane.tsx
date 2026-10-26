@@ -65,6 +65,7 @@ export function TerminalPane({
   const remote = isRemoteWorkspace(workspace) ? workspace : null;
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const wasActiveRef = useRef(false);
   const terminalThemeRef = useRef<ReturnType<typeof buildTerminalTheme> | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
@@ -136,6 +137,7 @@ export function TerminalPane({
           ?.translateToString(false, 0, buffer.cursorX) ?? null;
       if (workspace.state === "connected") processingRef.current?.input(bytes, prompt);
       void api.writeSession(sessionId, bytes).catch((error) => {
+        if (sessionIdRef.current !== sessionId) return;
         processingRef.current?.reset();
         setLocalError(errorMessage(error));
       });
@@ -278,6 +280,7 @@ export function TerminalPane({
     container.addEventListener("contextmenu", handleContextMenu);
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
+      if (!sessionIdRef.current) return false;
       processingRef.current?.shellMarker(data);
       return false;
     });
@@ -285,10 +288,11 @@ export function TerminalPane({
     // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) {
-        processingRef.current?.shellMarker(data);
+        if (sessionIdRef.current) processingRef.current?.shellMarker(data);
         return false;
       }
       if (isControlRoomConnectedOsc(data)) return true;
+      if (!sessionIdRef.current) return true;
       try {
         const event = parseHistoryOsc(data);
         if (!event) {
@@ -442,17 +446,24 @@ export function TerminalPane({
     onSessionRef.current(null);
     onStateRef.current("connecting", null);
     setLocalError(null);
-    terminal.reset();
     onSelectionChangeRef.current?.(false);
 
     const flushAcknowledgements = () => {
       window.clearTimeout(acknowledgementTimer);
       acknowledgementTimer = undefined;
+      if (ownedSessionId && sessionIdRef.current !== ownedSessionId) {
+        acknowledgedBytes = 0;
+        return;
+      }
       if (!ownedSessionId || acknowledgedBytes === 0) return;
       const bytes = acknowledgedBytes;
       acknowledgedBytes = 0;
       void api.acknowledgeSessionOutput(ownedSessionId, bytes).catch((error) => {
-        if (!disposed && generation === sessionGenerationRef.current) {
+        if (
+          !disposed &&
+          generation === sessionGenerationRef.current &&
+          sessionIdRef.current === ownedSessionId
+        ) {
           setLocalError(`Terminal output acknowledgement failed: ${errorMessage(error)}`);
         }
       });
@@ -467,10 +478,12 @@ export function TerminalPane({
     const output = new Channel<ArrayBuffer>();
     output.onmessage = (message) => {
       if (disposed || generation !== sessionGenerationRef.current) return;
+      if (!sessionIdRef.current && !acceptingInputRef.current) return;
       const bytes = new Uint8Array(message);
       if (!activeRef.current) onActivityRef.current("output");
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
+        if (!sessionIdRef.current && !acceptingInputRef.current) return;
         const buffer = terminal.buffer?.active;
         const prompt =
           buffer
@@ -483,8 +496,14 @@ export function TerminalPane({
 
     // A local session names a validated shell profile; a remote one names a
     // Saved Connection. Everything after the start call is the same.
-    const started =
-      workspace.kind === "local"
+    // xterm.reset() does not clear its asynchronous write queue. Drain old
+    // bytes while no session owns the parser, then reset and start anew.
+    const started = new Promise<void>((resolve) => terminal.write("", resolve)).then<{
+      sessionId: string;
+    } | null>(() => {
+      if (disposed || generation !== sessionGenerationRef.current) return null;
+      terminal.reset();
+      return workspace.kind === "local"
         ? api.startLocalSession(workspace.shell.id, terminal.cols, terminal.rows, output)
         : api.startSession(
             workspace.connectionId,
@@ -493,9 +512,12 @@ export function TerminalPane({
             output,
             workspace.remoteShell?.id ?? null,
           );
+    });
 
     void started
-      .then(async ({ sessionId }) => {
+      .then(async (result) => {
+        if (!result) return;
+        const { sessionId } = result;
         if (disposed || generation !== sessionGenerationRef.current) {
           await api.closeSession(sessionId).catch(() => undefined);
           return;
@@ -562,7 +584,15 @@ export function TerminalPane({
     terminal.options.scrollback = settings.terminalScrollback;
     terminal.options.theme = buildTerminalTheme(settings);
     if (visible) fitRef.current?.fit();
-    if (active) terminal.focus();
+    // Focus on the transition to active only, and never take focus from an
+    // app-owned popover or dialog: React re-runs this effect when a Suspense
+    // boundary settles while the pane is already active, and refocusing then
+    // would yank focus back from a menu the user just opened.
+    const focusOwner = document.activeElement;
+    const popoverOwnsFocus =
+      focusOwner instanceof Element && focusOwner.closest("[data-app-popover]") !== null;
+    if (active && !wasActiveRef.current && !popoverOwnsFocus) terminal.focus();
+    wasActiveRef.current = active;
   }, [settings, visible, active]);
 
   useEffect(() => {

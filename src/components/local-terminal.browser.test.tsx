@@ -443,8 +443,12 @@ describe("Local Terminal Mode in the real App", () => {
     await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("button", { name: "Scratchpad" })).toHaveFocus();
-    // Escape unmounts the popover rather than merely hiding it.
-    expect(container!.querySelector(".scratchpad-popover")).toBeNull();
+    // Escape unmounts the popover after its shared closing transition, not
+    // merely hiding it.
+    expect(container!.querySelector(".scratchpad-popover")?.hasAttribute("data-closing")).toBe(
+      true,
+    );
+    await vi.waitFor(() => expect(container!.querySelector(".scratchpad-popover")).toBeNull());
   });
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
     await page.viewport(1280, 800);

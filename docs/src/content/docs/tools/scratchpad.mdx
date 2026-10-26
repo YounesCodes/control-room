@@ -7,13 +7,17 @@ import scratchpadScreenshot from "../../../assets/screenshots/scratchpad.png";
 
 Scratchpad lets you keep one plain-text note per SSH host, one note per local terminal tab, and one note shared across the app. Notes save automatically after you stop typing and remain when you close a tab. You can edit, undo, redo, or delete them.
 
-The editor fills the workspace as you resize the window. Local terminals have the same page in their navigation for their own tab's note. From a terminal, the **Scratchpad** button beside Copy and Paste opens a compact popup for the active terminal's note and the shared note, with buttons to copy the note or paste it into the terminal without running it. In a split group, the popup follows the selected pane.
+Open **Scratchpad** beside Copy and Paste in the terminal toolbar, or search for it in the command palette. It opens beside its button in normal mode and Focus Mode. In a split group, the popup follows the selected pane.
+
+Choose **Connection** for an SSH host's note, **Terminal** for a local tab's note, or **Global** for the shared note. **Copy** copies the note; **Paste into terminal** inserts it without running it. The compact controls provide Undo, Redo, Clear text, and Delete note. Deleting a note asks for confirmation.
+
+Scratchpad no longer has a separate sidebar page. Previously saved Scratchpad views reopen as terminals, with their notes preserved.
 
 <figure class="docs-screenshot">
   <a href={scratchpadScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={scratchpadScreenshot.src}
-      alt="Scratchpad with a connection note, a Global note selector, and saved status."
+      alt="Scratchpad popup beside the terminal toolbar, with Connection and Global selectors, note editing controls, Copy, and Paste into terminal."
     />
   </a>
   <figcaption>Switch between the host's note and the shared note. Example data shown.</figcaption>

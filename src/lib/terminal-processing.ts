@@ -21,6 +21,12 @@ export class TerminalProcessing {
 
   input(bytes: Uint8Array, prompt: string | null) {
     for (const byte of bytes) {
+      // History, completion, and cursor keys can edit the line before any
+      // printable input arrives. Keep the original prompt before that edit.
+      if (!this.busy && !this.editing && !this.pasted && byte !== 3 && prompt?.trim()) {
+        this.prompt = prompt;
+        this.editing = true;
+      }
       if (this.escape) {
         this.escape += String.fromCharCode(byte);
         if (this.escape === "\x1b[200~") this.pasted = true;
@@ -37,10 +43,6 @@ export class TerminalProcessing {
       if (byte === 0x1b) {
         this.escape = "\x1b";
         continue;
-      }
-      if (!this.busy && !this.editing && (byte >= 0x20 || byte === 13 || byte === 10)) {
-        this.prompt = prompt;
-        this.editing = true;
       }
       if (!this.pasted && (byte === 13 || byte === 10)) {
         if (this.marked || this.prompt?.trim()) this.setBusy(true);

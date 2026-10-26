@@ -4,6 +4,16 @@ import { TerminalProcessing } from "./terminal-processing";
 const bytes = (value: string) => new TextEncoder().encode(value);
 
 describe("terminal command processing", () => {
+  it("returns idle after submitting a command recalled with shell history", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.output("$ ");
+    tracker.input(bytes("\x1b[A"), "$ ");
+    tracker.input(bytes("\r"), "$ echo hello");
+    tracker.output("hello");
+    tracker.output("$ ");
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
   it("does not invent command activity before a shell prompt is available", () => {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);

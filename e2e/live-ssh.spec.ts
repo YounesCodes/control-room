@@ -54,6 +54,14 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await terminalContains("PROCESSING_DONE");
     await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
     await expect($(".host-row.active .presence-connected")).toExist();
+    // Recalling the same silent command edits the prompt through an escape
+    // sequence before Enter. It must return idle with History capture off.
+    await $(".terminal-workspace-pane.active .xterm-screen").click();
+    await browser.keys("ArrowUp");
+    await browser.keys("Enter");
+    await expect($(".host-row.active .presence-busy")).toExist();
+    await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
+    await expect($(".host-row.active .presence-connected")).toExist();
   });
 
   it("validates configured access and reads terminal output", async () => {

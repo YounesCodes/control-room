@@ -43,8 +43,9 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Local Workspaces are terminal-only, so do not show remote
-inspection navigation for them; their navigation carries only Terminal and
-Scratchpad. Optional header metrics may read system usage
+inspection navigation for them; their navigation carries only Terminal.
+Scratchpad stays in the terminal toolbar for every Workspace kind.
+Optional header metrics may read system usage
 for a local tab without adding inspection pages. Keep connection and Workspace identity visible
 where it helps navigation, but do not repeat the same identity in a second
 header or a separate status rail. An enabled metrics strip may name the active
@@ -109,13 +110,14 @@ navigation reachable. In dialogs, keep the title and actions available while a
 long body scrolls. Menus should open as anchored overlays and must not resize or
 reflow the row that opened them.
 
-Scratchpad uses the full workspace width and grows with the window. Keep its
-heading and editor aligned. Every Workspace kind gets the page: a remote host
-edits its connection note, a local terminal edits its own tab's note, and both
-switch to the shared global note. A terminal's Scratchpad popup reuses the same
-editor and autosave behavior in a compact anchored overlay that keeps a gutter
-from the window edge, follows the active terminal's own note or the shared
-note, and pastes note text without running it.
+Scratchpad opens from the terminal toolbar or command palette as a compact
+overlay anchored to its own button. Keep a gutter from the window edge and
+reposition it when the window resizes. A remote terminal edits its connection
+note, a local terminal edits its own tab's note, and both can switch to the shared
+global note. Follow the selected split pane without mixing note owners, and
+retain Global selection across pane changes. Keep autosave, recovery drafts,
+Undo, Redo, Clear, and confirmed Delete in this editor. Pasting note text never
+runs it. Restore legacy Scratchpad pages to Terminal without changing saved notes.
 Systemd service rows scroll within their own bounded
 area, leaving search, filters, and refresh available above the list.
 
@@ -165,7 +167,10 @@ new radii for each screen.
 Transitions should clarify a state change without delaying work. Presses
 acknowledge with movement: compact controls dip slightly, while dense rows,
 tabs, and list items deepen their fill so high-frequency targets never shift.
-Anchored menus, panels, and popovers share one entrance motion. Live states —
+Anchored menus, panels, and popovers share one entrance and exit motion. Each
+anchors to its trigger with a small consistent gap, flips above it when the
+window lacks the room, and keeps its edges inside the window gutters; a menu
+dismisses rather than floating away from its anchor after a resize. Live states —
 connecting, new terminal output, a bell, a downloaded update — use small
 one-purpose cues that rest once their point is made. Never animate the terminal
 surface itself. Respect `prefers-reduced-motion`. Use Lucide icons
@@ -180,6 +185,9 @@ Interactive controls need clear default, hover, selected, focus-visible, and
 disabled states. Use the established button hierarchy: one primary action for
 the main decision, secondary actions for alternatives, danger styling for
 confirmed destructive work, and labelled icon buttons for compact controls.
+The connection rail's persistent Add connection action stays quiet on a raised
+charcoal surface with a border, so the host list keeps its dominance; filled
+accent stays reserved for the one main decision inside a dialog or flow.
 
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting
@@ -198,9 +206,11 @@ trigger and within the window.
 
 ### Navigation and terminal work
 
-Host OS marks use the Debian, Ubuntu, and Windows marks, with a generic server glyph
-for other distributions. A generic mark does not mean the OS was undetected;
-its accessible label names the detected distribution when available.
+Host OS marks use each recognized distribution's own logo — Debian, Ubuntu,
+Fedora, Arch Linux, openSUSE, Alpine, Linux Mint, Kali, RHEL, CentOS, Rocky,
+AlmaLinux, NixOS, Manjaro, SUSE, Oracle Linux, and Amazon Linux — with a generic server glyph for other distributions. A
+generic mark does not mean the OS was undetected; its accessible label names
+the detected distribution when available.
 
 Before opening a new Windows SSH terminal, offer the shells and WSL distributions
 available to the connecting account. Keep shell choice in a focused connection
@@ -209,8 +219,8 @@ Group Windows shells, WSL distributions, and supported Windows Terminal profiles
 in compact radio rows. Use a quiet hover fill, a persistent selected border, and
 an inset focus ring for keyboard navigation. Windows marks stay gray and include
 the detected 10 or 11 version when known.
-Windows hosts offer Overview, Terminal, Services, Ports, Docker, container Logs,
-and Scratchpad. Keep Docker and Logs discoverable even when Docker is missing;
+Windows hosts offer Overview, Terminal, Services, Ports, Docker, and container Logs.
+Scratchpad opens from their terminal toolbar. Keep Docker and Logs discoverable even when Docker is missing;
 their views report installation or daemon access failures. Optional header metrics inspect
 Windows itself, including when the terminal runs WSL. Service inventory is read-only;
 firewall profiles describe policy without claiming a port is reachable.
@@ -224,11 +234,14 @@ state accessible in every mode. Local shells use running, stopped, and restarted
 remote sessions use connected, disconnected, and reconnected.
 
 Session indicators keep a circular shape in every state, including errors.
-Connecting sessions and ongoing host reads or terminal commands replace the
+Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a rotating ring in the same status color. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
 Command activity uses shell markers where available, otherwise the return of
-the rendered prompt. It never treats a pause in output as command completion.
+the rendered prompt, including commands recalled from shell history. It never
+treats a pause in output as command completion. Background header polling uses
+the header's own reading state and does not make idle terminals look busy.
+Retired session callbacks must not change a replacement session's activity.
 
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for

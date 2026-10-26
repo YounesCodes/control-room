@@ -79,13 +79,12 @@ function writeTerminalInput(sessionId: string, bytes: Uint8Array): Promise<void>
   return write;
 }
 
-function invokeRemoteInspection<T>(
+function invokeRemoteRead<T>(
   command: string,
   args: Record<string, unknown>,
   timeoutMessage = REMOTE_INSPECTION_TIMEOUT_MESSAGE,
   timeoutMs = REMOTE_INSPECTION_TIMEOUT_MS,
 ): Promise<T> {
-  const finish = beginHostOperation(args.connectionId);
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
     void invoke<T>(command, args).then(
@@ -98,7 +97,17 @@ function invokeRemoteInspection<T>(
         reject(error);
       },
     );
-  }).finally(finish);
+  });
+}
+
+function invokeRemoteInspection<T>(
+  command: string,
+  args: Record<string, unknown>,
+  timeoutMessage = REMOTE_INSPECTION_TIMEOUT_MESSAGE,
+  timeoutMs = REMOTE_INSPECTION_TIMEOUT_MS,
+): Promise<T> {
+  const finish = beginHostOperation(args.connectionId);
+  return invokeRemoteRead<T>(command, args, timeoutMessage, timeoutMs).finally(finish);
 }
 
 function invokeHostOperation<T>(
@@ -191,7 +200,7 @@ export const api = {
       REMOTE_DISCOVERY_TIMEOUT_MS,
     ),
   sampleHeaderMetrics: (connectionId: string | null, metrics: HeaderMetric[]) =>
-    invokeRemoteInspection<HeaderMetrics>(
+    invokeRemoteRead<HeaderMetrics>(
       "sample_header_metrics",
       { connectionId, metrics },
       `Host metrics did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`,

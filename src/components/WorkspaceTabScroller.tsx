@@ -1,5 +1,6 @@
 import { Children, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { usePopoverExit } from "../hooks/use-popover-exit";
 
 export interface WorkspaceTabOption {
   id: string;
@@ -36,6 +37,7 @@ export function WorkspaceTabScroller({
   const [width, setWidth] = useState(0);
   const [start, setStart] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { present: menuPresent, closing: menuClosing } = usePopoverExit(menuOpen);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, maxHeight: 0 });
   const tabs = Children.toArray(children);
   const count = tabs.length;
@@ -91,14 +93,15 @@ export function WorkspaceTabScroller({
     if (!menuOpen || !pickerRef.current || !menuRef.current) return;
     const anchor = pickerRef.current.getBoundingClientRect();
     const menuWidth = Math.min(360, window.innerWidth - 16);
-    const below = window.innerHeight - anchor.bottom - 16;
-    const above = anchor.top - 16;
+    const gap = 6;
+    const below = window.innerHeight - anchor.bottom - gap - 8;
+    const above = anchor.top - gap - 8;
     const useAbove = below < 128 && above > below;
     const maxHeight = Math.min(480, Math.max(0, useAbove ? above : below));
     const height = Math.min(menuRef.current.scrollHeight, maxHeight);
     setMenuPosition({
       left: Math.max(8, Math.min(anchor.right - menuWidth, window.innerWidth - menuWidth - 8)),
-      top: useAbove ? Math.max(8, anchor.top - height - 8) : anchor.bottom + 8,
+      top: useAbove ? Math.max(8, anchor.top - height - gap) : anchor.bottom + gap,
       maxHeight,
     });
     menuRef.current.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
@@ -196,13 +199,17 @@ export function WorkspaceTabScroller({
           </button>
         </>
       )}
-      {overflow && menuOpen && (
+      {overflow && menuPresent && (
         <div
           ref={menuRef}
           className="session-tab-overflow-menu"
           role="menu"
           aria-label={menuLabel}
           style={menuPosition}
+          aria-hidden={menuClosing || undefined}
+          inert={menuClosing || undefined}
+          data-closing={menuClosing || undefined}
+          data-app-popover=""
           onKeyDown={(event) => {
             if (event.key === "Escape" || event.key === "Tab") {
               if (event.key === "Escape") {

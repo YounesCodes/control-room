@@ -78,7 +78,7 @@ describe("Workspace restoration", () => {
       state.terminalGroups,
     );
   });
-  it.each(["overview", "services", "ports", "docker", "logs", "scratchpad"] as const)(
+  it.each(["overview", "services", "ports", "docker", "logs"] as const)(
     "preserves the supported Windows %s view",
     (view) => {
       const workspace = createRemoteWorkspace(connection("windows-host"), {
@@ -339,7 +339,7 @@ describe("Workspace restoration", () => {
     expect(restored.terminalGroups).toEqual([]);
   });
 
-  it("keeps a local Workspace's Scratchpad view across a restart and drops other views", () => {
+  it("restores legacy local Scratchpad pages and unsupported local views to Terminal", () => {
     const state: PersistedWorkspaceState = {
       workspaces: [
         {
@@ -369,9 +369,24 @@ describe("Workspace restoration", () => {
       { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
     ]);
     expect(restored.workspaces.map((workspace) => workspace.view)).toEqual([
-      "scratchpad",
+      "terminal",
       "terminal",
     ]);
+  });
+
+  it("restores a legacy remote Scratchpad page to the same terminal and host", () => {
+    const host = connection("saved-host");
+    const workspace = createRemoteWorkspace(host);
+    const saved = persistWorkspaceState([workspace], workspace.id, []);
+    saved.workspaces[0].view = "scratchpad";
+    const restored = restoreWorkspaceState([host], saved);
+    expect(restored.activeWorkspaceId).toBe(workspace.id);
+    expect(restored.workspaces[0]).toMatchObject({
+      id: workspace.id,
+      connectionId: host.id,
+      view: "terminal",
+      connectRequested: true,
+    });
   });
 
   it("restores Workspace state written before Local Terminal existed", () => {

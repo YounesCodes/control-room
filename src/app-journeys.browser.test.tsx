@@ -360,6 +360,185 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(blue);
   });
 
+  it("anchors the New terminal menu to its trigger and reveals each row's identity", async () => {
+    await page.viewport(900, 640);
+    // Host B reports Debian, so the two rows reveal different brand hues.
+    const debian = { ...fixtures.capabilities("host-b"), osId: "debian", osName: "Debian" };
+    const perConnection = (args: { connectionId: string }) =>
+      args.connectionId === "host-b" ? debian : fixtures.capabilities(args.connectionId);
+    overrides.set("get_cached_capabilities", perConnection);
+    overrides.set("refresh_capabilities", perConnection);
+    await mount();
+    const neutral = "rgb(173, 173, 170)";
+    const blue = "rgb(83, 145, 254)";
+    const color = (mark: Element) => getComputedStyle(mark).color;
+    const trigger = page.getByRole("button", { name: "New terminal", exact: true });
+    await trigger.click();
+    const menu = page.getByRole("dialog", { name: "New terminal" });
+    await expect.element(menu).toBeVisible();
+    // Settle the shared entrance animation before measuring the anchor.
+    for (const animation of menu.element().getAnimations()) {
+      if (animation.playState === "running") animation.finish();
+    }
+    // Anchored 6px below its own control, clamped inside the window gutters.
+    const menuBox = menu.element().getBoundingClientRect();
+    const triggerBox = trigger.element().getBoundingClientRect();
+    expect(menuBox.top).toBeCloseTo(triggerBox.bottom + 6, 0);
+    expect(window.innerWidth - menuBox.right).toBeGreaterThanOrEqual(8);
+    expect(menuBox.left).toBeGreaterThanOrEqual(0);
+    // The menu opens with its first row active — highlighted, with its brand
+    // revealed, like a native menu's selection — while the others rest neutral.
+    const alphaRow = menu.getByRole("button", { name: "Saved Connections: Fixture Alpha" });
+    const alphaMark = alphaRow.element().querySelector(".host-os-ubuntu")!;
+    const betaRow = menu.getByRole("button", { name: "Saved Connections: Fixture Beta" });
+    const betaMark = betaRow.element().querySelector(".host-os-debian")!;
+    const localRow = menu.getByRole("button", { name: "Local terminals: Command Prompt" });
+    const localMark = localRow.element().querySelector(".local-shell-mark")!;
+    expect(color(alphaMark)).toBe("rgb(233, 84, 32)");
+    expect(color(betaMark)).toBe(neutral);
+    expect(color(localMark)).toBe(neutral);
+    // Hovering anywhere over a row — including just its name — moves the
+    // selection and reveals that row's own brand, one at a time.
+    await userEvent.hover(betaRow.element());
+    await expect.poll(() => color(betaMark)).toBe("rgb(215, 10, 83)");
+    await userEvent.keyboard("{Home}");
+    await expect.element(alphaRow).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    await expect.element(localRow).toHaveFocus();
+    await expect.poll(() => color(alphaMark)).toBe(neutral);
+    await userEvent.hover(alphaRow.element().querySelector("span:last-child")!);
+    await expect.poll(() => color(alphaMark)).toBe("rgb(233, 84, 32)");
+    await expect.poll(() => color(betaMark)).toBe(neutral);
+    // The arrow keys continue from the active row and wrap at the ends; the
+    // menu owns focus from the moment it opens, before any key lands — even
+    // when a lazy pane settles underneath and would otherwise refocus.
+    expect(menu.element().contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}");
+    await expect.poll(() => color(localMark)).toBe(blue);
+    await expect.poll(() => color(alphaMark)).toBe(neutral);
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.poll(() => color(localMark)).toBe(neutral);
+    await expect.poll(() => color(betaMark)).toBe("rgb(215, 10, 83)");
+    await page.screenshot({ path: "../test-results/new-terminal-menu.png" });
+    // Escape keeps the shared contract: focus returns first, the fading menu
+    // drops out of the accessibility tree, then unmounts.
+    const menuNode = menu.element();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(trigger).toHaveFocus();
+    expect(menuNode.hasAttribute("data-closing")).toBe(true);
+    await vi.waitFor(() => expect(element.querySelector(".terminal-target-menu")).toBeNull());
+    // Resizing invalidates the measured anchor, so the menu dismisses.
+    await trigger.click();
+    await expect.element(menu).toBeVisible();
+    await page.viewport(900, 700);
+    await vi.waitFor(() => expect(element.querySelector(".terminal-target-menu")).toBeNull());
+    await expect.element(trigger).toHaveFocus();
+  });
+
+  it("anchors Scratchpad to its own button in both modes and follows a resized window", async () => {
+    await page.viewport(960, 640);
+    await mount();
+    const trigger = page
+      .getByRole("navigation", { name: "Open Workspaces" })
+      .getByRole("button", { name: "Scratchpad", exact: true });
+    for (const focus of [false, true]) {
+      if (focus) await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      await trigger.click();
+      const popup = page.getByRole("dialog", { name: "Scratchpad" });
+      await expect.element(popup).toBeVisible();
+      await expect.element(popup.getByRole("textbox")).toHaveFocus();
+      await expect
+        .poll(() => popup.element().getBoundingClientRect().top)
+        .toBeCloseTo(trigger.element().getBoundingClientRect().bottom + 6, 0);
+      expect(popup.element().getBoundingClientRect().right).toBeCloseTo(
+        Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 8),
+        0,
+      );
+      await page.viewport(1040, 680);
+      await expect
+        .poll(() => popup.element().getBoundingClientRect().right)
+        .toBeCloseTo(
+          Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 8),
+          0,
+        );
+      const node = popup.element();
+      await userEvent.keyboard("{Escape}");
+      await expect.element(trigger).toHaveFocus();
+      expect(node.hasAttribute("inert")).toBe(true);
+      await expect.element(popup).not.toBeInTheDocument();
+    }
+  });
+
+  it("anchors the split menu and returns keyboard focus when dismissed", async () => {
+    await mount();
+    await navigate("Terminal");
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Split terminal", exact: true });
+    await trigger.click();
+    const menu = page.getByRole("dialog", { name: "Split terminal", exact: true });
+    await expect.element(menu).toBeVisible();
+    await expect
+      .poll(() => menu.element().getBoundingClientRect().top)
+      .toBeCloseTo(trigger.element().getBoundingClientRect().bottom + 6, 0);
+    await expect
+      .element(menu.getByRole("button", { name: "New local terminal: Command Prompt" }))
+      .toHaveFocus();
+    const node = menu.element();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(trigger).toHaveFocus();
+    expect(node.hasAttribute("inert")).toBe(true);
+    await expect.element(menu).not.toBeInTheDocument();
+  });
+
+  it("keeps an idle host solid during header polling while foreground reads still spin", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    let finishHeader!: (value: unknown) => void;
+    let finishServices!: (value: unknown) => void;
+    overrides.set(
+      "sample_header_metrics",
+      () =>
+        new Promise((resolve) => {
+          finishHeader = resolve;
+        }),
+    );
+    overrides.set(
+      "list_services",
+      () =>
+        new Promise((resolve) => {
+          finishServices = resolve;
+        }),
+    );
+    await mount();
+    try {
+      await expect
+        .poll(() =>
+          native.invoke.mock.calls.some(([command]) => command === "sample_header_metrics"),
+        )
+        .toBe(true);
+      await expect.poll(() => element.querySelector(".host-row.active .presence-busy")).toBeNull();
+      await navigate("Systemd");
+      await expect
+        .poll(() => element.querySelector(".host-row.active .presence-busy"))
+        .not.toBeNull();
+      finishServices([fixtures.service]);
+      await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+      await expect.poll(() => element.querySelector(".host-row.active .presence-busy")).toBeNull();
+    } finally {
+      finishServices?.([]);
+      finishHeader?.({
+        sampledAt: new Date().toISOString(),
+        cpuPercent: 1,
+        memoryTotalKib: 100,
+        memoryAvailableKib: 50,
+        gpuPercent: null,
+        diskTotalKib: 100,
+        diskFreeKib: 50,
+        diskLabel: "/",
+        uptimeSeconds: 5,
+      });
+    }
+  });
+
   it("spins during commands and host reads, including grouped panes, and keeps errors circular", async () => {
     await mount();
     await navigate("Terminal");
@@ -1416,7 +1595,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(panel.scrollTop).toBeGreaterThan(0);
         expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
       }
-      await navigate("Scratchpad");
+      await navigate("Terminal");
+      await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
       await vi.waitFor(() =>
         expect(
           element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")?.value,
@@ -1446,33 +1626,91 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
-  it("expands an open Scratchpad when the window grows", async () => {
-    persisted.panelSizes = { "content:scratchpad": 720 };
-    await mount();
-    await navigate("Scratchpad");
+  it("restores legacy Scratchpad pages to Terminal and opens notes from the palette", async () => {
+    persisted.workspaces = [
+      {
+        id: "saved-remote",
+        label: null,
+        connectionId: "host-a",
+        localShellId: null,
+        view: "scratchpad",
+        historyPaused: false,
+      },
+      {
+        id: "saved-local",
+        label: null,
+        connectionId: null,
+        localShellId: "command-prompt",
+        view: "scratchpad",
+        historyPaused: false,
+      },
+    ];
+    persisted.activeWorkspaceId = "saved-remote";
+    overrides.set("get_scratchpad_note", ({ scope, ownerId, connectionId }) => ({
+      id: "note",
+      scope,
+      ownerId,
+      connectionId,
+      text:
+        scope === "global"
+          ? "Global reminder"
+          : scope === "connection"
+            ? "Host reminder"
+            : "Terminal reminder",
+      createdAt: "",
+      updatedAt: "",
+    }));
+    root.render(<App />);
+    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+    const navigation = page.getByRole("navigation", { name: "Workspace features" });
     await expect
-      .element(page.getByRole("textbox", { name: "Connection note", exact: true }))
-      .toBeVisible();
-    for (const width of [1180, 1920, 2560, 960]) {
-      await page.viewport(width, 900);
-      await vi.waitFor(() => {
-        const section = element.querySelector<HTMLElement>(".connection-section")!;
-        const content = element.querySelector<HTMLElement>(".connection-section-content")!;
-        expect(content.clientWidth).toBe(section.clientWidth);
-        const editor = element.querySelector<HTMLElement>(".scratchpad-editor")!;
-        const heading = element.querySelector<HTMLElement>(".scratchpad-heading")!;
-        const pad = element.querySelector<HTMLElement>(".scratchpad-page")!;
-        const style = getComputedStyle(pad);
-        const available =
-          pad.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-        expect(editor.clientWidth).toBeCloseTo(available, 0);
-        expect(heading.clientWidth).toBeCloseTo(available, 0);
-        expect(pad.scrollWidth).toBeLessThanOrEqual(pad.clientWidth);
-      });
-      if (width === 1920) {
-        await page.screenshot({ path: "../test-results/scratchpad-wide.png" });
-      }
-    }
+      .element(navigation.getByRole("button", { name: "Scratchpad", exact: true }))
+      .not.toBeInTheDocument();
+    expect(element.querySelector(".scratchpad-page")).toBeNull();
+    await navigate("Overview");
+    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Scratchpad");
+    await userEvent.keyboard("{Enter}");
+    const popup = page.getByRole("dialog", { name: "Scratchpad" });
+    await expect
+      .element(popup.getByRole("textbox", { name: "Connection note" }))
+      .toHaveValue("Host reminder");
+    await expect
+      .poll(() => element.querySelector(".terminal-workspace-pane.active .xterm-rows")?.textContent)
+      .toContain("fixture$");
+    expect((await axe.run(popup.element())).violations).toEqual([]);
+    await page.screenshot({ path: "../test-results/scratchpad-popup.png" });
+    await popup.getByRole("button", { name: "Delete note", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Delete connection note" });
+    await expect.element(confirmation).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(confirmation).not.toBeInTheDocument();
+    await expect
+      .element(popup.getByRole("button", { name: "Delete note", exact: true }))
+      .toHaveFocus();
+    await popup.getByRole("button", { name: "Delete note", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect
+      .element(popup.getByRole("textbox", { name: "Connection note" }))
+      .toHaveValue("Host reminder");
+    await popup.getByRole("button", { name: "Global note for all connections" }).click();
+    await expect
+      .element(popup.getByRole("textbox", { name: "Global note" }))
+      .toHaveValue("Global reminder");
+    await userEvent.keyboard("{Escape}");
+    await expect.element(popup).not.toBeInTheDocument();
+    await page
+      .getByRole("navigation", { name: "Open Workspaces" })
+      .getByRole("button", { name: /^Command Prompt(?: New terminal output)?$/ })
+      .click();
+    await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
+    await expect
+      .element(popup.getByRole("textbox", { name: "Terminal note" }))
+      .toHaveValue("Terminal reminder");
+    expect(native.invoke.mock.calls.some(([command]) => command === "delete_scratchpad_note")).toBe(
+      false,
+    );
+    expect(persisted.workspaces.every((workspace) => workspace.view === "terminal")).toBe(true);
   });
 
   it.each([960, 1600])(
@@ -1564,7 +1802,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ["Logs", "Logs"],
       ["Baselines", "Baselines"],
       ["History", "Enhanced History"],
-      ["Scratchpad", "Scratchpad"],
     ]) {
       await navigate(view);
       await expect.element(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();

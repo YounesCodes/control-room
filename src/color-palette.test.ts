@@ -9,8 +9,10 @@ const settingsModelSource = readFileSync(
   "utf8",
 );
 /** Status colors, plus the OS and shell brand hues that identity marks reveal
- *  on hover or selection: Ubuntu orange, Debian red, Windows blue, and the
- *  PowerShell-family blue standing in for local terminal marks. */
+ *  on hover or selection: the distribution logos' official colors (Alpine,
+ *  CentOS, and AlmaLinux lightened to read on the dark surfaces), Windows
+ *  blue, and the PowerShell-family blue standing in for local terminal
+ *  marks. */
 const semanticUiColors = [
   "#42d17a",
   "#d6a84a",
@@ -19,6 +21,21 @@ const semanticUiColors = [
   "#5391fe",
   "#d70a53",
   "#e95420",
+  "#51a2da",
+  "#1793d1",
+  "#73ba25",
+  "#6293ac",
+  "#86be43",
+  "#557c94",
+  "#ee0000",
+  "#8887b4",
+  "#10b981",
+  "#7ea4bf",
+  "#5277c3",
+  "#35bf5c",
+  "#5aa48f",
+  "#f80000",
+  "#ff9900",
 ];
 
 function hexChannels(value: string) {

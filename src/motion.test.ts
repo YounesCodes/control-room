@@ -103,11 +103,23 @@ describe("motion guardrails", () => {
     for (const token of ["--os-ubuntu:", "--os-debian:", "--os-windows:", "--shell-accent:"]) {
       expect(stylesSource).toContain(token);
     }
-    for (const mark of ["ubuntu", "debian", "windows"]) {
-      expect(stylesSource).toContain(`.session-tab-wrap.active .host-os-${mark}`);
-      expect(stylesSource).toContain(`.host-row.active .host-os-${mark}`);
+    // One reveal rule reads each mark's --identity variable, so every brand
+    // surfaces on the same contexts: tabs and pane tabs, host rows, terminal
+    // menus, the overflow menus, and the local-shell launcher.
+    const reveal = stylesSource.match(/[^{}]*\.identity-mark[^{}]*\{[^}]*color: var\(--identity\)/);
+    expect(reveal, "the shared identity reveal rule is missing").toBeTruthy();
+    for (const context of [
+      ".session-tab-wrap:hover .identity-mark",
+      ".session-tab-wrap.active .identity-mark",
+      ".host-row.menu-open .identity-mark",
+      ".terminal-target-group button:hover .identity-mark",
+      '.session-tab-overflow-menu > button[aria-current="page"] .identity-mark',
+      ".local-shell-launcher button:hover .identity-mark",
+    ]) {
+      expect(reveal?.[0]).toContain(context);
     }
-    expect(stylesSource).toContain(".session-tab-wrap.active .local-shell-icon");
+    expect(stylesSource).toContain(".host-os-ubuntu {\n  --identity: var(--os-ubuntu);\n}");
+    expect(stylesSource).toContain(".local-shell-mark.identity-mark");
     // The generic mark carries no brand and must stay neutral everywhere.
     expect(stylesSource).not.toContain(".host-os-unknown");
     expect(stylesSource).not.toContain("in-layout");
@@ -126,6 +138,13 @@ describe("motion guardrails", () => {
     ]) {
       expect(rule(selector)).toContain("animation: popover-in");
     }
+  });
+
+  it("closes anchored popovers with the shared exit that cannot catch clicks", () => {
+    const closing = rule("[data-closing]");
+    expect(closing).toContain("animation: popover-out");
+    expect(closing).toContain("pointer-events: none");
+    expect(stylesSource).toMatch(/@keyframes popover-out \{[\s\S]*?opacity: 0;/);
   });
 
   it("rises centered dialogs in place and keeps the palette dropping from above", () => {

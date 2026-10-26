@@ -16,6 +16,9 @@ const api = vi.hoisted(() => ({
 const channels = vi.hoisted(
   () => [] as Array<{ onmessage: ((message: ArrayBuffer) => void) | null }>,
 );
+const nativeEvents = vi.hoisted(
+  () => new Map<string, Set<(event: { payload: unknown }) => void>>(),
+);
 
 /// Records what the pane asked of xterm, so the test can see which handlers a
 /// session installs without rendering a real terminal.
@@ -34,10 +37,16 @@ const xterm = vi.hoisted(() => ({
   mouseTrackingMode: "none",
   // The handler xterm calls for typed input, so a test can type.
   onData: null as ((data: string) => void) | null,
+  parseWrite: null as (() => void) | null,
+  deferWrites: false,
+  pendingWrites: [] as Array<() => void>,
   selectionChange: null as (() => void) | null,
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
     this.onData = null;
+    this.parseWrite = null;
+    this.deferWrites = false;
+    this.pendingWrites = [];
     this.selectionChange = null;
     this.customKeyHandler = null;
     this.oscHandlers = 0;
@@ -69,7 +78,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(() => Promise.resolve(() => undefined)),
+  listen: vi.fn(async (name: string, handler: (event: { payload: unknown }) => void) => {
+    const listeners = nativeEvents.get(name) ?? new Set();
+    listeners.add(handler);
+    nativeEvents.set(name, listeners);
+    return () => listeners.delete(handler);
+  }),
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -153,7 +167,12 @@ vi.mock("@xterm/xterm", () => ({
     }
     write(data: unknown, done?: () => void) {
       if (typeof data === "string") xterm.writes.push(data);
-      done?.();
+      const parse = () => {
+        if (typeof data !== "string" || data.length > 0) xterm.parseWrite?.();
+        done?.();
+      };
+      if (xterm.deferWrites) xterm.pendingWrites.push(parse);
+      else parse();
     }
     paste(data: string) {
       xterm.pastes.push(data);
@@ -247,6 +266,7 @@ describe("TerminalPane sessions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    nativeEvents.clear();
     xterm.reset();
     clipboard.readText.mockResolvedValue("");
     clipboard.writeText.mockResolvedValue(undefined);
@@ -346,6 +366,59 @@ describe("TerminalPane sessions", () => {
     expect(onProcessing).toHaveBeenLastCalledWith(true);
     cleanup();
     expect(onProcessing).toHaveBeenLastCalledWith(false);
+  });
+
+  it("ignores command markers arriving after a session has disconnected", async () => {
+    const onProcessing = vi.fn();
+    renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onProcessing });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    act(() => xterm.osc.get(133)?.("C"));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    act(() =>
+      nativeEvents.get("session-state-changed")?.forEach((listener) =>
+        listener({
+          payload: { sessionId: "local-session", state: "disconnected", reason: null },
+        }),
+      ),
+    );
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+    xterm.parseWrite = () => xterm.osc.get(133)?.("C");
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("\x1b]133;C\x07").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+  });
+
+  it("drains old buffered markers before starting a replacement session", async () => {
+    const onProcessing = vi.fn();
+    const workspace = { ...createLocalWorkspace(shell), state: "connected" as const };
+    const pane = (reconnectToken: number) => (
+      <TerminalPane
+        workspace={{ ...workspace, reconnectToken }}
+        settings={settings}
+        visible
+        active
+        onActivate={() => undefined}
+        onSession={() => undefined}
+        onState={() => undefined}
+        onProcessing={onProcessing}
+      />
+    );
+    const view = render(pane(0));
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(1));
+    await act(async () => undefined);
+    xterm.deferWrites = true;
+    xterm.parseWrite = () => xterm.osc.get(133)?.("C");
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("old command marker").buffer));
+    view.rerender(pane(1));
+    await act(async () => undefined);
+    act(() => xterm.pendingWrites.shift()?.());
+    expect(onProcessing).not.toHaveBeenLastCalledWith(true);
+    await act(async () => {
+      while (xterm.pendingWrites.length) xterm.pendingWrites.shift()?.();
+    });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(2));
+    xterm.deferWrites = false;
+    act(() => channels.at(-1)?.onmessage?.(new TextEncoder().encode("new command marker").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
   });
 
   it("does not start a restored Workspace of either kind", async () => {

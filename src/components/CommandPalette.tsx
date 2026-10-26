@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Columns2, FolderCog, Pencil, Plus, Search, Settings, SquareTerminal } from "lucide-react";
+import {
+  Columns2,
+  FolderCog,
+  Pencil,
+  Plus,
+  Search,
+  Settings,
+  SquareTerminal,
+  StickyNote,
+} from "lucide-react";
 import { connectionTarget } from "../lib/format";
 import { HostOsIcon } from "./HostOsIcon";
 import type {
@@ -48,6 +57,7 @@ interface CommandPaletteProps {
   onCloseWorkspace: () => void;
   onFocusTerminal: () => void;
   onFindTerminal: () => void;
+  onOpenScratchpad?: () => void;
   onSplitTerminal: () => void;
   onRenameWorkspace: () => void;
   onManageConnections: () => void;
@@ -79,6 +89,7 @@ export function CommandPalette({
   onCloseWorkspace,
   onFocusTerminal,
   onFindTerminal,
+  onOpenScratchpad,
   onSplitTerminal,
   onRenameWorkspace,
   onManageConnections,
@@ -187,6 +198,14 @@ export function CommandPalette({
         icon: Pencil,
         run: run(onRenameWorkspace),
       });
+      if (onOpenScratchpad)
+        result.push({
+          id: "act-scratchpad",
+          group: "Actions",
+          label: "Scratchpad",
+          icon: StickyNote,
+          run: run(onOpenScratchpad),
+        });
       result.push({
         id: "act-reconnect",
         group: "Actions",
@@ -272,6 +291,7 @@ export function CommandPalette({
     onCloseWorkspace,
     onFocusTerminal,
     onFindTerminal,
+    onOpenScratchpad,
     onSplitTerminal,
     onRenameWorkspace,
     onManageConnections,
@@ -340,6 +360,7 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        data-app-popover=""
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="command-palette-search">

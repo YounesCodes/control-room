@@ -5,10 +5,11 @@ description: Open SSH and local shells, split panes, and reconnect.
 
 import terminalScreenshot from "../../assets/screenshots/terminal.png";
 import terminalGroupsScreenshot from "../../assets/screenshots/terminal-groups.png";
+import terminalMenuScreenshot from "../../assets/screenshots/new-terminal-menu.png";
 
 The SSH terminal uses Windows OpenSSH. Type commands as you would in any other SSH client. Local shells use the same terminal controls.
 
-The status circle becomes a rotating ring while connecting, running a command, or reading host data. It returns to a solid circle when the work finishes. With reduced motion enabled, the ring stays still. Command completion follows the shell's markers or returning prompt; a custom prompt that changes its format may need shell integration to report completion reliably.
+The status circle becomes a rotating ring while connecting, running a command, or opening and refreshing host inspection views. It returns to a solid circle when the work finishes. Automatic header-metric readings use the header's own status and do not spin an idle terminal's circle. With reduced motion enabled, the ring stays still. Command completion follows the shell's markers or returning prompt; a custom prompt that changes its format may need shell integration to report completion reliably.
 
 <figure class="docs-screenshot">
   <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
@@ -25,6 +26,18 @@ The status circle becomes a rotating ring while connecting, running a command, o
 **Local terminal** starts the shell directly when only one is enabled in Settings. With several enabled, it opens a chooser. Administrator setup guidance appears only for enabled shells that support it and need Windows sudo setup. Git Bash does not need that setup.
 
 **New terminal**, the plus and arrow button beside the tabs, opens a new tab for any saved host or installed local shell. Choosing the current host again gives you a separate SSH session.
+
+Terminal menus stay beside their buttons and within the window. Use the arrow keys, Home, or End to move through a menu, Enter to choose, and Escape to close it. OS and shell icons reveal their identity color on hover or keyboard selection.
+
+<figure class="docs-screenshot">
+  <a href={terminalMenuScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={terminalMenuScreenshot.src}
+      alt="New terminal menu anchored below the plus and arrow button, with a Debian connection selected in its identity color."
+    />
+  </a>
+  <figcaption>Choose a saved connection or local shell. Example data shown.</figcaption>
+</figure>
 
 Tabs shrink to fit within readable limits. When there are more tabs than fit, the arrow controls and mouse wheel move through complete tabs. The down arrow beside those controls opens **All terminals**, showing full names and the selected terminal. Choose any entry to reveal its tab. **New terminal** stays visible. Hover over a tab or focus it with the keyboard to show **Rename** and **Close**.
 

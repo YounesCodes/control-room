@@ -98,6 +98,14 @@ describe("structured discovery timeout", () => {
     },
   );
 
+  it("does not advertise a background header reading as active host work", async () => {
+    const pending = api.sampleHeaderMetrics("idle-host", ["cpu"]).catch(() => undefined);
+    const busyWhileReading = hostProcessing.getSnapshot().has("idle-host");
+    await vi.advanceTimersByTimeAsync(REMOTE_INSPECTION_TIMEOUT_MS);
+    await pending;
+    expect(busyWhileReading).toBe(false);
+  });
+
   it.each([
     ["services", () => api.listServices("connection-id")],
     ["Docker containers", () => api.listContainers("connection-id")],
