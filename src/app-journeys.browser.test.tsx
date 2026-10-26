@@ -1258,8 +1258,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
   }
 
-  for (const width of [840, 1440]) {
-    it(`keeps header actions reachable and metrics accessible at ${width}px`, async () => {
+  for (const width of [840, 1174, 1440]) {
+    it(`keeps header actions reachable and metric graphs clearly grouped at ${width}px`, async () => {
       currentSettings = {
         ...currentSettings,
         hostMetricsEnabled: true,
@@ -1277,6 +1277,26 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .toHaveFocus();
       await expect.poll(() => element.querySelector(".host-metrics-panel")).toBeNull();
       const badge = element.querySelector(".host-metrics-status")!;
+      if (width >= 1174) {
+        const row = element.querySelector<HTMLDivElement>(".host-metrics-values")!;
+        expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
+      }
+      const cells = [...element.querySelectorAll<HTMLElement>(".host-metrics-values .host-metric")];
+      expect(cells.filter((cell) => cell.querySelector("svg")).length).toBeGreaterThanOrEqual(2);
+      for (const [index, cell] of cells.entries()) {
+        const graph = cell.querySelector("svg");
+        if (!graph) continue;
+        const value = cell.querySelector(".host-metric-value")!;
+        const ownGap = graph.getBoundingClientRect().left - value.getBoundingClientRect().right;
+        expect(ownGap).toBeGreaterThanOrEqual(8);
+        const next = cells[index + 1];
+        if (next) {
+          const nextGap = next.getBoundingClientRect().left - graph.getBoundingClientRect().right;
+          expect(nextGap).toBeGreaterThanOrEqual(24);
+          expect(nextGap).toBeGreaterThan(ownGap * 2);
+          expect(parseFloat(getComputedStyle(cell).borderRightWidth)).toBeGreaterThan(0);
+        }
+      }
       expect(badge.parentElement).toHaveClass("host-metrics-trigger");
       expect(element.querySelector(".host-metrics")!.textContent).not.toContain("Fixture Alpha");
       expect(badge.parentElement?.getAttribute("title")).toContain("Fixture Alpha");

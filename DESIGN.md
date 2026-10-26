@@ -293,7 +293,9 @@ Header metrics are opt-in and follow the active Workspace in normal mode.
 Focus Mode hides the header and stops its resource reads.
 Use compact labeled values with neutral styling, readable numbers, and a visible
 reading state. Keep each label above its value, reserve space for changing numbers,
-and use small neutral trend lines for CPU, RAM, and GPU. Trends hold
+and use small neutral trend lines for CPU, RAM, and GPU. Keep each value and its
+graph in one group, with a subtle divider and a larger gap before the next metric.
+Preserve this grouping at narrow widths rather than squeezing the metrics together. Trends hold
 at most twenty measured samples in memory, reset on host changes and monitoring
 pauses, and never invent points for missing readings. Trends use a fixed
 0–100 range. Disk I/O shows separate read and write speeds without a graph. Animate value changes
