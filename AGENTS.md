@@ -50,4 +50,4 @@ Fix failures introduced by the requested change and rerun the affected checks.
 - Confirm behavior changes are covered by focused tests where appropriate.
 - Update documentation only when the documented behavior changed. See `docs/AGENTS.md` for documentation guidelines.
 - Report what changed, what was validated, what could not be validated, and any remaining risks or follow-up work.
-- When the PR is either merged or closed, make sure to cleanup the branch and its respective remote.
+- After a PR is merged or closed, clean up its local and remote branches and unused worktree, preserving any needed unmerged work.
