@@ -1,10 +1,43 @@
 import "./isolation";
-import { $, browser, expect } from "@wdio/globals";
-import { focusElement, ipc, openLocal, pressBoundaryKey, terminalCommand } from "./helpers";
+import { $, $$, browser, expect } from "@wdio/globals";
+import {
+  focusElement,
+  ipc,
+  openLocal,
+  pressBoundaryKey,
+  restartApp,
+  terminalCommand,
+} from "./helpers";
 import { isMac, localShellId } from "./platform";
 import type { EnvironmentInfo, LocalShellCatalog } from "../src/types";
 
 describe("Native client platform", () => {
+  (isMac ? it : it.skip)(
+    "opens zsh directly at its first prompt without a stray percent line",
+    async () => {
+      await browser.setWindowRect(0, 0, 960, 640);
+      await openLocal();
+      const lines = () =>
+        browser.execute(() =>
+          Array.from(
+            document.querySelectorAll(".terminal-workspace-pane.active .xterm-rows > div"),
+            (row) => row.textContent?.trim() ?? "",
+          ).filter(Boolean),
+        );
+      await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
+      expect(await lines()).not.toContain("%");
+      await openLocal();
+      await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
+      expect(await lines()).not.toContain("%");
+      await restartApp();
+      for (const tab of await $$(".session-tab-main")) {
+        await tab.click();
+        await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
+        expect(await lines()).not.toContain("%");
+      }
+    },
+  );
+
   it("uses native platform tools, window chrome, and application shortcuts", async () => {
     const environment = await ipc<EnvironmentInfo>("get_environment_info");
     expect(environment.platform).toBe(isMac ? "macos" : "windows");

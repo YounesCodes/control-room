@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createRef } from "react";
 import type { TerminalPaneHandle } from "./TerminalPane";
 import { TerminalPane } from "./TerminalPane";
+import { api } from "../lib/api";
 import { createLocalWorkspace } from "../lib/workspace-target";
 import type { AppSettings } from "../types";
 import "@xterm/xterm/css/xterm.css";
@@ -16,6 +17,7 @@ const session = vi.hoisted(() => ({
   resizeSession: vi.fn<(id: string, cols: number, rows: number) => Promise<void>>(() =>
     Promise.resolve(),
   ),
+  started: null as Promise<{ sessionId: string }> | null,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -33,7 +35,7 @@ vi.mock("../lib/api", () => ({
     startLocalSession: vi.fn(
       (_id: string, _cols: number, _rows: number, output: NonNullable<typeof session.output>) => {
         session.output = output;
-        return Promise.resolve({ sessionId: "browser-terminal" });
+        return session.started ?? Promise.resolve({ sessionId: "browser-terminal" });
       },
     ),
     acknowledgeSessionOutput: session.acknowledgeSessionOutput,
@@ -73,11 +75,77 @@ afterEach(() => {
   root = null;
   container = null;
   session.output = null;
+  session.started = null;
   session.acknowledgeSessionOutput.mockClear();
   session.writeSession.mockClear();
   session.resizeSession.mockClear();
   vi.restoreAllMocks();
 });
+
+it.each(["running", "starting"])(
+  "keeps zsh's end-of-line marker on the prompt row when refitting a %s session",
+  async (state) => {
+    let finishStart: (() => void) | undefined;
+    if (state === "starting") {
+      session.started = new Promise((resolve) => {
+        finishStart = () => resolve({ sessionId: "browser-terminal" });
+      });
+    }
+    container = document.createElement("div");
+    Object.assign(container.style, { position: "relative", width: "800px", height: "500px" });
+    document.body.append(container);
+    root = createRoot(container);
+    const workspace = createLocalWorkspace({
+      id: "zsh",
+      label: "zsh",
+      kind: "zsh",
+      elevated: false,
+    });
+    const renderPane = (fontSize: number) =>
+      root!.render(
+        <TerminalPane
+          platform="macos"
+          workspace={workspace}
+          settings={{ ...settings, terminalFontSize: fontSize }}
+          visible
+          active
+          onActivate={() => undefined}
+          onSession={() => undefined}
+          onState={() => undefined}
+        />,
+      );
+    renderPane(14);
+    await vi.waitFor(() => expect(session.output).not.toBeNull());
+    const [, initialCols] = vi.mocked(api.startLocalSession).mock.calls.at(-1)!;
+    session.resizeSession.mockClear();
+    renderPane(24);
+    await vi.waitFor(() =>
+      expect(getComputedStyle(container!.querySelector(".xterm-rows")!).fontSize).toBe("24px"),
+    );
+    finishStart?.();
+    await vi.waitFor(() => expect(session.resizeSession).toHaveBeenCalled());
+    // zsh fills the PTY width, then returns to column one and clears that row
+    // before writing the prompt. A stale PTY width wraps the marker onto a line
+    // that the carriage returns and erase sequence can no longer clear.
+    const cols = session.resizeSession.mock.calls.at(-1)?.[1] ?? initialCols;
+    const output = `\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m${" ".repeat(cols - 1)}\r \r\r\x1b[0m\x1b[27m\x1b[24m\x1b[Jtest@mac ~ % \x1b[K`;
+    session.output!.onmessage!(new TextEncoder().encode(output).buffer);
+    await expect.element(page.getByText("test@mac ~ %", { exact: true })).toBeVisible();
+    const lines = Array.from(container!.querySelectorAll(".xterm-rows > div"), (row) =>
+      row.textContent?.trim(),
+    );
+    expect(lines).not.toContain("%");
+    expect(session.resizeSession).toHaveBeenCalledWith(
+      "browser-terminal",
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(session.resizeSession.mock.calls.at(-1)![1]).toBeLessThan(initialCols);
+    // Keep zsh's legitimate marker when command output has no final newline.
+    session.output!.onmessage!(new TextEncoder().encode(`\r\npartial${output}`).buffer);
+    await expect.element(page.getByText("partial%", { exact: true })).toBeVisible();
+  },
+);
 
 it("refits terminal columns and rows and resizes the same session when its pane changes", async () => {
   await page.viewport(1280, 800);
@@ -102,15 +170,15 @@ it("refits terminal columns and rows and resizes the same session when its pane 
       onState={() => undefined}
     />,
   );
-  await vi.waitFor(() => expect(session.resizeSession).toHaveBeenCalled());
-  const initial = session.resizeSession.mock.calls.at(-1)!;
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  const [, cols, rows] = vi.mocked(api.startLocalSession).mock.calls.at(-1)!;
   container.style.width = "450px";
   container.style.height = "250px";
   await vi.waitFor(() => {
     const resized = session.resizeSession.mock.calls.at(-1)!;
-    expect(resized[0]).toBe(initial[0]);
-    expect(resized[1]).toBeLessThan(initial[1]);
-    expect(resized[2]).toBeLessThan(initial[2]);
+    expect(resized[0]).toBe("browser-terminal");
+    expect(resized[1]).toBeLessThan(cols);
+    expect(resized[2]).toBeLessThan(rows);
     expect(resized[1]).toBeGreaterThan(0);
     expect(resized[2]).toBeGreaterThan(0);
   });

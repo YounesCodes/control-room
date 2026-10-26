@@ -203,6 +203,18 @@ export function TerminalPane({
     fitRef.current = fit;
     searchRef.current = search;
 
+    // Every fit can change the grid, including font and visibility changes
+    // that do not resize the container. Keep the PTY on that same grid so a
+    // shell's width-dependent prompt output does not wrap onto an extra row.
+    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        void api
+          .resizeSession(sessionId, cols, rows)
+          .catch((error) => setLocalError(errorMessage(error)));
+      }
+    });
+
     const selectionDisposable = terminal.onSelectionChange(() =>
       onSelectionChangeRef.current?.(terminal.hasSelection()),
     );
@@ -386,12 +398,6 @@ export function TerminalPane({
       resizeTimer = window.setTimeout(() => {
         if (!visibleRef.current) return;
         fit.fit();
-        const sessionId = sessionIdRef.current;
-        if (sessionId) {
-          void api
-            .resizeSession(sessionId, terminal.cols, terminal.rows)
-            .catch((error) => setLocalError(errorMessage(error)));
-        }
       }, 60);
     });
     observer.observe(container);
@@ -406,6 +412,7 @@ export function TerminalPane({
       window.clearTimeout(bellTimer);
       dataDisposable.dispose();
       binaryDisposable.dispose();
+      resizeDisposable.dispose();
       selectionDisposable.dispose();
       bellDisposable.dispose();
       searchDisposable.dispose();
@@ -514,17 +521,21 @@ export function TerminalPane({
     // Saved Connection. Everything after the start call is the same.
     // xterm.reset() does not clear its asynchronous write queue. Drain old
     // bytes while no session owns the parser, then reset and start anew.
+    let initialCols = terminal.cols;
+    let initialRows = terminal.rows;
     const started = new Promise<void>((resolve) => terminal.write("", resolve)).then<{
       sessionId: string;
     } | null>(() => {
       if (disposed || generation !== sessionGenerationRef.current) return null;
       terminal.reset();
+      initialCols = terminal.cols;
+      initialRows = terminal.rows;
       return workspace.kind === "local"
-        ? api.startLocalSession(workspace.shell.id, terminal.cols, terminal.rows, output)
+        ? api.startLocalSession(workspace.shell.id, initialCols, initialRows, output)
         : api.startSession(
             workspace.connectionId,
-            terminal.cols,
-            terminal.rows,
+            initialCols,
+            initialRows,
             output,
             workspace.remoteShell?.id ?? null,
           );
@@ -540,6 +551,12 @@ export function TerminalPane({
         }
         ownedSessionId = sessionId;
         sessionIdRef.current = sessionId;
+        // A fit while the start request was pending had no session to resize.
+        // Send the current grid before releasing any queued terminal input.
+        if (terminal.cols !== initialCols || terminal.rows !== initialRows) {
+          await api.resizeSession(sessionId, terminal.cols, terminal.rows);
+          if (disposed || generation !== sessionGenerationRef.current) return;
+        }
         acceptingInputRef.current = false;
         onSessionRef.current(sessionId);
         if (acknowledgedBytes > 0) flushAcknowledgements();

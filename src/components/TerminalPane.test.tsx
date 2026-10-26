@@ -40,6 +40,7 @@ const xterm = vi.hoisted(() => ({
   parseWrite: null as (() => void) | null,
   deferWrites: false,
   pendingWrites: [] as Array<() => void>,
+  resize: null as ((cols: number, rows: number) => void) | null,
   selectionChange: null as (() => void) | null,
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
@@ -47,6 +48,7 @@ const xterm = vi.hoisted(() => ({
     this.parseWrite = null;
     this.deferWrites = false;
     this.pendingWrites = [];
+    this.resize = null;
     this.selectionChange = null;
     this.customKeyHandler = null;
     this.oscHandlers = 0;
@@ -134,6 +136,18 @@ vi.mock("@xterm/xterm", () => ({
     }
     onBinary() {
       return { dispose: () => undefined };
+    }
+    onResize(handler: (size: { cols: number; rows: number }) => void) {
+      xterm.resize = (cols, rows) => {
+        this.cols = cols;
+        this.rows = rows;
+        handler({ cols, rows });
+      };
+      return {
+        dispose: () => {
+          xterm.resize = null;
+        },
+      };
     }
     onSelectionChange(handler: () => void) {
       xterm.selectionChange = handler;
@@ -282,6 +296,7 @@ describe("TerminalPane sessions", () => {
     api.closeSession.mockResolvedValue(undefined);
     api.writeSession.mockResolvedValue(undefined);
     api.acknowledgeSessionOutput.mockResolvedValue(undefined);
+    api.resizeSession.mockResolvedValue(undefined);
   });
 
   it("starts a local Workspace through the local session API", async () => {
@@ -316,6 +331,48 @@ describe("TerminalPane sessions", () => {
     // The connected marker comes from the remote shell, not from the start call.
     expect(onState).toHaveBeenCalledWith("connecting", null);
     expect(onState).not.toHaveBeenCalledWith("connected", null);
+  });
+
+  it.each(["local", "remote"])(
+    "resizes a running %s PTY when xterm's grid changes",
+    async (kind) => {
+      renderPane(
+        kind === "local" ? createLocalWorkspace(shell) : createRemoteWorkspace(connection),
+      );
+      await act(async () => {});
+      act(() => xterm.resize!(80, 24));
+      expect(api.resizeSession).toHaveBeenCalledWith(
+        `${kind === "local" ? "local" : "ssh"}-session`,
+        80,
+        24,
+      );
+      cleanup();
+      expect(xterm.resize).toBeNull();
+    },
+  );
+
+  it("synchronizes a grid change during startup before releasing queued input", async () => {
+    let finishStart!: (value: { sessionId: string }) => void;
+    api.startLocalSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishStart = resolve;
+      }),
+    );
+    renderPane(createLocalWorkspace(shell));
+    act(() => {
+      xterm.resize!(80, 24);
+      xterm.onData!("queued input");
+    });
+    expect(api.resizeSession).not.toHaveBeenCalled();
+    await act(async () => finishStart({ sessionId: "local-session" }));
+    expect(api.resizeSession).toHaveBeenCalledWith("local-session", 80, 24);
+    expect(api.writeSession).toHaveBeenCalledWith(
+      "local-session",
+      new TextEncoder().encode("queued input"),
+    );
+    expect(api.resizeSession.mock.invocationCallOrder[0]).toBeLessThan(
+      api.writeSession.mock.invocationCallOrder[0],
+    );
   });
 
   it("passes the selected WSL distribution on remote startup", async () => {
