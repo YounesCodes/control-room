@@ -23,6 +23,8 @@ const nativeEvents = vi.hoisted(
 /// Records what the pane asked of xterm, so the test can see which handlers a
 /// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
+  initialCols: 100,
+  fit: vi.fn(),
   oscHandlers: 0,
   osc: new Map<number, (data: string) => boolean>(),
   prompt: "$ ",
@@ -44,6 +46,8 @@ const xterm = vi.hoisted(() => ({
   selectionChange: null as (() => void) | null,
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
+    this.initialCols = 100;
+    this.fit.mockReset();
     this.onData = null;
     this.parseWrite = null;
     this.deferWrites = false;
@@ -90,7 +94,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
-    fit() {}
+    fit() { xterm.fit(); }
   },
 }));
 
@@ -114,7 +118,7 @@ vi.mock("@xterm/addon-search", () => ({
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
-    cols = 100;
+    cols = xterm.initialCols;
     rows = 30;
     options: Record<string, unknown> = {};
     constructor(options: Record<string, unknown>) {
@@ -339,7 +343,7 @@ describe("TerminalPane sessions", () => {
       renderPane(
         kind === "local" ? createLocalWorkspace(shell) : createRemoteWorkspace(connection),
       );
-      await act(async () => {});
+      await vi.waitFor(() => expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled());
       act(() => xterm.resize!(80, 24));
       expect(api.resizeSession).toHaveBeenCalledWith(
         `${kind === "local" ? "local" : "ssh"}-session`,
@@ -359,6 +363,7 @@ describe("TerminalPane sessions", () => {
       }),
     );
     renderPane(createLocalWorkspace(shell));
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
     act(() => {
       xterm.resize!(80, 24);
       xterm.onData!("queued input");
@@ -373,6 +378,21 @@ describe("TerminalPane sessions", () => {
     expect(api.resizeSession.mock.invocationCallOrder[0]).toBeLessThan(
       api.writeSession.mock.invocationCallOrder[0],
     );
+  });
+
+  it("settles the first rendered grid before starting a shell with width-dependent prompt output", async () => {
+    xterm.initialCols = 107;
+    xterm.fit.mockImplementation(() => xterm.resize?.(106, 30));
+    renderPane(createLocalWorkspace(shell));
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledWith("powershell-7", 106, 30, expect.anything()));
+    expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start a shell when the pane closes while its first grid is settling", async () => {
+    renderPane(createLocalWorkspace(shell));
+    cleanup();
+    await act(async () => { await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())); });
+    expect(api.startLocalSession).not.toHaveBeenCalled();
   });
 
   it("passes the selected WSL distribution on remote startup", async () => {
@@ -680,6 +700,7 @@ describe("TerminalPane sessions", () => {
     xterm.onData?.("b");
     expect(api.writeSession).not.toHaveBeenCalled();
 
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
     startSession({ sessionId: "session-1" });
     // The queue has started going out and none of its writes have come back.
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());

@@ -15,7 +15,7 @@ describe("Native client platform", () => {
   (isMac ? it : it.skip)(
     "opens zsh directly at its first prompt without a stray percent line",
     async () => {
-      await browser.setWindowRect(0, 0, 960, 640);
+      await browser.setWindowRect(0, 0, 1180, 700);
       await openLocal();
       const lines = () =>
         browser.execute(() =>
@@ -26,6 +26,7 @@ describe("Native client platform", () => {
         );
       await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
       expect(await lines()).not.toContain("%");
+      await browser.setWindowRect(0, 0, 960, 640);
       await openLocal();
       await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
       expect(await lines()).not.toContain("%");

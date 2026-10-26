@@ -519,15 +519,26 @@ export function TerminalPane({
 
     // A local session names a validated shell profile; a remote one names a
     // Saved Connection. Everything after the start call is the same.
-    // xterm.reset() does not clear its asynchronous write queue. Drain old
-    // bytes while no session owns the parser, then reset and start anew.
+    // Drain pending writes before resetting, then let the font and grid settle
+    // before the new shell can produce width-dependent output.
     let initialCols = terminal.cols;
     let initialRows = terminal.rows;
-    const started = new Promise<void>((resolve) => terminal.write("", resolve)).then<{
-      sessionId: string;
-    } | null>(() => {
+    const started = (async () => {
+      await new Promise<void>((resolve) => terminal.write("", resolve));
       if (disposed || generation !== sessionGenerationRef.current) return null;
       terminal.reset();
+      await document.fonts?.ready;
+      let measuredCols: number | undefined;
+      let measuredRows: number | undefined;
+      while (!disposed && generation === sessionGenerationRef.current) {
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        if (disposed || generation !== sessionGenerationRef.current) return null;
+        fitRef.current?.fit();
+        if (terminal.cols === measuredCols && terminal.rows === measuredRows) break;
+        measuredCols = terminal.cols;
+        measuredRows = terminal.rows;
+      }
+      if (disposed || generation !== sessionGenerationRef.current) return null;
       initialCols = terminal.cols;
       initialRows = terminal.rows;
       return workspace.kind === "local"
@@ -539,7 +550,7 @@ export function TerminalPane({
             output,
             workspace.remoteShell?.id ?? null,
           );
-    });
+    })();
 
     void started
       .then(async (result) => {
