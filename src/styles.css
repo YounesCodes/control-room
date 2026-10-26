@@ -457,7 +457,7 @@ code,
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  width: 112px;
+  min-width: 78px;
   justify-content: space-between;
   min-height: 30px;
   padding: 5px 7px;

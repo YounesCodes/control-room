@@ -987,6 +987,28 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByText("42%", { exact: true })).toBeVisible();
     expect(element.querySelector(".host-metrics-values")!.textContent).not.toContain("99%");
   });
+  it("keeps the full Unavailable status and dropdown readable in the compact control", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    failures.set("sample_header_metrics", "Fixture unavailable");
+    await mount();
+    const button = page.getByRole("button", {
+      name: "Unavailable: Host metrics for Fixture Alpha",
+    });
+    await expect.element(button).toBeVisible();
+    const trigger = button.element();
+    const status = trigger.querySelector(".host-metrics-status")!;
+    const chevron = trigger.querySelector(":scope > svg")!;
+    expect(status.getBoundingClientRect().right + 4).toBeLessThanOrEqual(
+      chevron.getBoundingClientRect().left,
+    );
+    expect(chevron.getBoundingClientRect().right + 4).toBeLessThanOrEqual(
+      trigger.getBoundingClientRect().right,
+    );
+    await button.click();
+    await expect.element(page.getByText("Fixture unavailable", { exact: true })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(button).toHaveFocus();
+  });
   it("marks a malformed timestamp stale, hides Invalid Date, and recovers on manual refresh", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
     let sampledAt = "broken";
@@ -1187,6 +1209,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         (cell) => cell.getBoundingClientRect().left,
       );
     const before = positions();
+    const trigger = strip.querySelector<HTMLElement>(".host-metrics-trigger")!;
+    expect(trigger.getBoundingClientRect().width).toBeLessThanOrEqual(80);
     const io = strip.querySelector<HTMLElement>('[data-metric="diskIo"]')!;
     expect(strip.querySelector('[data-metric="disk"]')).toBeNull();
     expect(io.textContent).toContain("0 B/s");
@@ -1225,6 +1249,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect.poll(() => strip.dataset.state).toBe("stale");
+    expect(trigger.getBoundingClientRect().width).toBeLessThanOrEqual(80);
     expect(positions()).toEqual(before);
     expect(cpu.querySelector("path")!.getAttribute("d")).toBe(lastPath);
     expect(io.textContent).toContain("MiB/s");

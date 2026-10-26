@@ -302,7 +302,8 @@ pauses, and never invent points for missing readings. Trends use a fixed
 briefly. A refresh cue runs only while a reading is in progress;
 stale and paused charts rest. Respect reduced motion throughout.
 Use one compact status button to open reading details, separated from
-the numeric readings. Keep the active host name in its tooltip, accessible label,
+the numeric readings. Keep Live compact and let longer status labels use only
+the space they need. Keep the active host name in its tooltip, accessible label,
 and details rather than repeating it in the header. The metric labels, values,
 and surrounding space drag the native window. Keep the status button and reading
 details as ordinary click targets, and preserve scrolling when the row overflows. Use green
