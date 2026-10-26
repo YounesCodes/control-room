@@ -602,6 +602,8 @@ pub enum HeaderMetric {
     Ram,
     Gpu,
     Disk,
+    #[serde(rename = "diskIo")]
+    DiskIo,
     Uptime,
 }
 
@@ -616,6 +618,8 @@ pub struct HeaderMetrics {
     pub disk_total_kib: Option<u64>,
     pub disk_free_kib: Option<u64>,
     pub disk_label: Option<String>,
+    pub disk_read_bytes_per_second: Option<f64>,
+    pub disk_write_bytes_per_second: Option<f64>,
     pub uptime_seconds: Option<u64>,
 }
 
@@ -637,6 +641,7 @@ impl Default for AppSettings {
                 HeaderMetric::Cpu,
                 HeaderMetric::Ram,
                 HeaderMetric::Gpu,
+                HeaderMetric::DiskIo,
                 HeaderMetric::Disk,
                 HeaderMetric::Uptime,
             ],

@@ -292,9 +292,8 @@ export function SettingsPane({
               </label>
             </fieldset>
             <small>
-              Disk reads the Windows system drive or the SSH host's root filesystem. GPU
-              availability depends on its driver. Monitoring pauses while Settings is open or the
-              window is hidden.
+              Storage shows space used. Disk I/O shows read and write speeds. Monitoring pauses
+              while Settings is open or the window is hidden.
             </small>
             {draft.hostMetricsEnabled && draft.hostMetrics?.length === 0 && (
               <small>Select a metric to display the header.</small>

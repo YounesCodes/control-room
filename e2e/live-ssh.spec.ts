@@ -42,6 +42,24 @@ async function connect() {
 }
 
 describe("read-only Ubuntu SSH journeys with independent native processes", () => {
+  it("shows live disk read/write rates separately from storage capacity in the native header", async () => {
+    await connect();
+    await $("aria/Open Settings").click();
+    await $("aria/Show host metrics in header").waitForExist();
+    await $("aria/Show host metrics in header").click();
+    await $("button=Save settings").click();
+    await $("aria/Close Settings").click();
+    const io = $('.host-metrics-values [data-metric="diskIo"]');
+    const storage = $('.host-metrics-values [data-metric="disk"]');
+    await browser.waitUntil(async () => (await io.getAttribute("data-available")) === "true", {
+      timeout: 30000,
+    });
+    await expect(io).toHaveAttribute("aria-label", expect.stringContaining("Read "));
+    await expect(io).toHaveAttribute("aria-label", expect.stringContaining("/s"));
+    await expect(storage).toHaveAttribute("aria-label", expect.stringContaining("Storage: "));
+    await expect(storage).toHaveAttribute("aria-label", expect.stringContaining("%"));
+    await expect($(".host-row.active .presence-busy")).not.toExist();
+  });
   it("keeps the host and tab processing rings active during a silent command", async () => {
     await connect();
     await terminalCommand("printf 'PROCESSING_READY\\n'", "PROCESSING_READY");

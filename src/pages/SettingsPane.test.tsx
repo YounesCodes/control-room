@@ -116,7 +116,7 @@ describe("Settings actions", () => {
     expect(api.saveSettings).toHaveBeenCalledWith({
       ...settings,
       hostMetricsEnabled: true,
-      hostMetrics: ["cpu", "ram", "disk", "uptime"],
+      hostMetrics: ["cpu", "ram", "diskIo", "disk", "uptime"],
       hostMetricsIntervalSeconds: 10,
     });
   });

@@ -1275,7 +1275,7 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     if ![2, 5, 10, 30].contains(&settings.host_metrics_interval_seconds) {
         return Err("Unsupported host metrics refresh interval".into());
     }
-    if settings.host_metrics.len() > 5
+    if settings.host_metrics.len() > 6
         || settings
             .host_metrics
             .iter()
@@ -2023,6 +2023,7 @@ mod tests {
             host_metrics_enabled: true,
             host_metrics: vec![
                 crate::models::HeaderMetric::Cpu,
+                crate::models::HeaderMetric::DiskIo,
                 crate::models::HeaderMetric::Uptime,
             ],
             host_metrics_interval_seconds: 10,
@@ -2033,6 +2034,22 @@ mod tests {
         assert!(loaded.host_metrics_enabled);
         assert_eq!(loaded.host_metrics, settings.host_metrics);
         assert_eq!(loaded.host_metrics_interval_seconds, 10);
+        settings.host_metrics = AppSettings::default().host_metrics;
+        assert_eq!(settings.host_metrics.len(), 6);
+        database.save_settings(&settings).unwrap();
+        assert_eq!(
+            database.get_settings().unwrap().host_metrics,
+            settings.host_metrics
+        );
+        settings
+            .host_metrics
+            .retain(|metric| *metric != crate::models::HeaderMetric::DiskIo);
+        database.save_settings(&settings).unwrap();
+        assert_eq!(
+            database.get_settings().unwrap().host_metrics.len(),
+            5,
+            "existing selections stay unchanged"
+        );
         settings.host_metrics_interval_seconds = 1;
         assert!(database.save_settings(&settings).is_err());
         settings.host_metrics_interval_seconds = 5;
@@ -2057,7 +2074,7 @@ mod tests {
         assert_eq!(loaded.default_log_tail, 500);
         assert!(!loaded.host_metrics_enabled);
         assert_eq!(loaded.host_metrics_interval_seconds, 5);
-        assert_eq!(loaded.host_metrics.len(), 5);
+        assert_eq!(loaded.host_metrics.len(), 6);
         assert!(loaded.global_sudo_enabled);
         assert!(
             loaded.automatic_update_checks,

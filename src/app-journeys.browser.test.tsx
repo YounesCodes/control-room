@@ -125,6 +125,8 @@ async function respond(command: string, args: any = {}) {
         diskTotalKib: 8192,
         diskFreeKib: 2048,
         diskLabel: args.connectionId === null ? "C:" : "/",
+        diskReadBytesPerSecond: 12582912,
+        diskWriteBytesPerSecond: 3145728,
         uptimeSeconds: 90000,
       };
     case "sample_host_resources":
@@ -601,6 +603,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         diskTotalKib: 100,
         diskFreeKib: 50,
         diskLabel: "/",
+        diskReadBytesPerSecond: null,
+        diskWriteBytesPerSecond: null,
         uptimeSeconds: 5,
       });
     }
@@ -910,7 +914,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const call = native.invoke.mock.calls
       .filter(([name]) => name === "sample_header_metrics")
       .at(-1)!;
-    expect(call[1]).toEqual({ connectionId: null, metrics: ["cpu", "ram", "disk", "uptime"] });
+    expect(call[1]).toEqual({
+      connectionId: null,
+      metrics: ["cpu", "ram", "diskIo", "disk", "uptime"],
+    });
     await page.getByRole("button", { name: "Open Settings" }).click();
     expect(element.querySelector(".host-metrics")).toBeNull();
     await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
@@ -930,6 +937,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
       diskTotalKib: 8192,
       diskFreeKib: 2048,
       diskLabel: "C:",
+      diskReadBytesPerSecond: null,
+      diskWriteBytesPerSecond: null,
       uptimeSeconds: 59,
     };
     overrides.set("sample_header_metrics", ({ connectionId }) =>
@@ -960,6 +969,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
       diskTotalKib: 8192,
       diskFreeKib: 2048,
       diskLabel: "/",
+      diskReadBytesPerSecond: null,
+      diskWriteBytesPerSecond: null,
       uptimeSeconds: 59,
     }));
     await mount();
@@ -999,15 +1010,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const x = target === strip ? bounds.right - 2 : bounds.left + 2;
       const y = target === row ? bounds.top + 2 : bounds.top + bounds.height / 2;
       const hit = document.elementFromPoint(x, y)!;
-      expect(hit).toBe(target);
       expect(hit).toHaveAttribute("data-tauri-drag-region");
+      expect(hit.closest("button")).toBeNull();
     }
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
     const panel = strip.querySelector<HTMLElement>(".host-metrics-panel")!;
     expect(panel.querySelector("[data-tauri-drag-region]")).toBeNull();
     await expect.element(page.getByRole("button", { name: "Close host metrics" })).toHaveFocus();
     await page.getByRole("button", { name: "Close host metrics" }).click();
-    expect(strip.querySelector(".host-metrics-panel")).toBeNull();
+    expect(panel).toHaveAttribute("inert");
+    await expect.poll(() => strip.querySelector(".host-metrics-panel")).toBeNull();
   });
   for (const width of [840, 1440]) {
     it(`anchors the focus toggle beside window controls across modes and groups at ${width}px`, async () => {
@@ -1112,6 +1124,91 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.poll(() => tab.querySelector(".presence")).toBeNull();
   });
 
+  it("animates real header readings while keeping I/O distinct from capacity and resetting trends for each host", async () => {
+    currentSettings = {
+      ...currentSettings,
+      hostMetricsEnabled: true,
+      hostMetricsIntervalSeconds: 30,
+    };
+    await page.viewport(1440, 700);
+    let sequence = 0;
+    const levels = [12, 48, 28, 66, 38, 84, 52, 74, 22, 64, 36, 58];
+    overrides.set("sample_header_metrics", () => {
+      const index = sequence++;
+      return {
+        sampledAt: new Date(Date.now() + index).toISOString(),
+        cpuPercent: levels[index % levels.length],
+        memoryTotalKib: 1000,
+        memoryAvailableKib: 400,
+        gpuPercent: levels[(index + 2) % levels.length],
+        diskTotalKib: 1000,
+        diskFreeKib: 250,
+        diskLabel: "/",
+        diskReadBytesPerSecond: (index % 7) * 4 * 1048576,
+        diskWriteBytesPerSecond: (index % 4) * 1048576,
+        uptimeSeconds: 86400 + index,
+      };
+    });
+    await mount();
+    const strip = element.querySelector<HTMLElement>(".host-metrics")!;
+    await expect.poll(() => strip.dataset.state).toBe("live");
+    const positions = () =>
+      [...strip.querySelectorAll(".host-metrics-values .host-metric")].map(
+        (cell) => cell.getBoundingClientRect().left,
+      );
+    const before = positions();
+    const storage = strip.querySelector<HTMLElement>('[data-metric="disk"]')!;
+    const io = strip.querySelector<HTMLElement>('[data-metric="diskIo"]')!;
+    expect(storage.textContent).toContain("Storage75%");
+    expect(io.textContent).toContain("0 B/s");
+    expect(io).toHaveAccessibleName("Disk I/O: Read 0 B/s · Write 0 B/s");
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
+    for (let index = 0; index < 11; index++) {
+      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await expect.poll(() => sequence).toBe(index + 2);
+      await expect.poll(() => strip.hasAttribute("data-sampling")).toBe(false);
+    }
+    const path = io.querySelector("path")!;
+    expect(path.getAttribute("d")).toContain("L");
+    expect(positions()).toEqual(before);
+    expect(storage.querySelector(".host-metric-meter")!.getAttribute("style")).toContain("0.75");
+    await page.screenshot({ path: "../test-results/live-metrics-panel.png" });
+    await userEvent.keyboard("{Escape}");
+    await expect.poll(() => strip.querySelector(".host-metrics-panel")).toBeNull();
+    await page.screenshot({
+      element: element.querySelector(".app-bar")!,
+      path: "../test-results/live-metrics-header.png",
+    });
+    const motion = parseFloat(
+      getComputedStyle(io.querySelector(".host-metric-value")!).animationDuration,
+    );
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      expect(motion).toBeLessThanOrEqual(0.00001);
+    else expect(motion).toBeGreaterThan(0.01);
+    const lastPath = path.getAttribute("d");
+    failures.set("sample_header_metrics", "Fixture offline");
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect.poll(() => strip.dataset.state).toBe("stale");
+    expect(positions()).toEqual(before);
+    expect(io.querySelector("path")!.getAttribute("d")).toBe(lastPath);
+    expect(io.textContent).toContain("MiB/s");
+    failures.delete("sample_header_metrics");
+    await userEvent.keyboard("{Escape}");
+    await page
+      .getByRole("navigation", { name: "Saved connections" })
+      .getByRole("button", { name: /Fixture Beta/ })
+      .first()
+      .click();
+    await expect.poll(() => element.querySelector(".host-metrics") !== strip).toBe(true);
+    await expect
+      .poll(() => element.querySelector<HTMLElement>(".host-metrics")!.dataset.state)
+      .toBe("live");
+    await expect
+      .poll(() => element.querySelector(".host-metrics path")?.getAttribute("d") ?? "")
+      .not.toContain("L");
+  });
+
   for (const state of ["connecting", "disconnected", "error"]) {
     it(`keeps a tab indicator for a ${state} session`, async () => {
       await mount();
@@ -1143,6 +1240,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect
         .element(page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }))
         .toHaveFocus();
+      await expect.poll(() => element.querySelector(".host-metrics-panel")).toBeNull();
       const badge = element.querySelector(".host-metrics-status")!;
       expect(badge.parentElement).toHaveClass("host-metrics-trigger");
       expect(element.querySelector(".host-metrics")!.textContent).not.toContain("Fixture Alpha");

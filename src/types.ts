@@ -418,7 +418,7 @@ export interface HistoryInput {
   shell: string;
 }
 
-export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "uptime";
+export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "diskIo" | "uptime";
 
 export interface HeaderMetrics {
   sampledAt: string;
@@ -429,6 +429,8 @@ export interface HeaderMetrics {
   diskTotalKib: number | null;
   diskFreeKib: number | null;
   diskLabel: string | null;
+  diskReadBytesPerSecond: number | null;
+  diskWriteBytesPerSecond: number | null;
   uptimeSeconds: number | null;
 }
 

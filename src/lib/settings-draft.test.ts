@@ -67,7 +67,7 @@ describe("header metric preferences", () => {
       settingsHaveChanges(settings, {
         ...settings,
         hostMetricsEnabled: false,
-        hostMetrics: ["cpu", "ram", "gpu", "disk", "uptime"],
+        hostMetrics: ["cpu", "ram", "gpu", "diskIo", "disk", "uptime"],
         hostMetricsIntervalSeconds: 5,
       }),
     ).toBe(false);

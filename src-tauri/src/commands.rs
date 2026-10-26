@@ -330,13 +330,13 @@ pub async fn sample_header_metrics(
     connection_id: Option<String>,
     metrics: Vec<HeaderMetric>,
 ) -> Result<HeaderMetrics, String> {
-    if metrics.len() > 5
+    if metrics.len() > 6
         || metrics
             .iter()
             .enumerate()
             .any(|(index, metric)| metrics[..index].contains(metric))
     {
-        return Err("Header metrics must be unique, with at most five selections".into());
+        return Err("Header metrics must be unique, with at most six selections".into());
     }
     if metrics.is_empty() {
         return Ok(header_metrics::empty_sample());

@@ -445,11 +445,11 @@ code,
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 .host-metrics-trigger {
@@ -457,9 +457,11 @@ code,
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  min-height: 28px;
-  padding: 5px 8px;
-  border: 1px solid var(--border-subtle);
+  width: 112px;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
@@ -477,23 +479,133 @@ code,
 .host-metrics-values {
   border-left: 1px solid var(--border-subtle);
   display: flex;
-  gap: 16px;
+  gap: 10px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
-  padding: 6px 0 6px 12px;
+  padding: 2px 2px 2px 10px;
+  align-items: center;
 }
 .host-metric {
   display: flex;
-  gap: 6px;
-  align-items: baseline;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 70px;
   white-space: nowrap;
+}
+.host-metric-label {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 12px;
+  letter-spacing: 0.04em;
 }
 .host-metric strong {
   color: var(--text-strong);
-  font-weight: 500;
+  font-weight: 550;
+  font-size: 11.5px;
+  line-height: 16px;
   font-variant-numeric: tabular-nums;
   min-width: 3ch;
+}
+.host-metric-reading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.host-metric-value {
+  min-width: 4ch;
+  animation: metric-value-in var(--motion-med) var(--ease);
+}
+.host-metric-direction {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+}
+.host-metric-direction:not(:first-child) {
+  margin-left: 5px;
+}
+.host-metric[data-metric="diskIo"] {
+  min-width: 180px;
+}
+.host-metric[data-metric="disk"] {
+  min-width: 64px;
+}
+.host-metric[data-metric="uptime"] {
+  min-width: 56px;
+}
+.host-metric[data-available="false"] .host-metric-value {
+  color: var(--text-faint);
+}
+.host-metric-trend {
+  width: 34px;
+  height: 16px;
+  flex: none;
+  color: var(--text-muted);
+  opacity: 0.65;
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity var(--motion-med) var(--ease);
+}
+.host-metric-trend path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: d var(--motion-med) var(--ease);
+}
+.host-metric-meter {
+  display: block;
+  width: 26px;
+  height: 3px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--fill-hover);
+  pointer-events: none;
+}
+.host-metric-meter::after {
+  content: "";
+  display: block;
+  height: 100%;
+  background: var(--text-muted);
+  transform: scaleX(var(--metric-level));
+  transform-origin: left;
+  transition: transform var(--motion-med) var(--ease);
+}
+.host-metrics:not([data-state="live"]) .host-metric-trend {
+  opacity: 0.25;
+}
+.host-metrics[data-state="live"][data-sampling] .host-metrics-status svg {
+  animation: metric-reading 1s var(--ease) infinite;
+}
+.host-metric-detail-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.host-metric-detail-value .host-metric-trend {
+  width: 68px;
+  height: 22px;
+}
+@keyframes metric-value-in {
+  from {
+    opacity: 0.5;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes metric-reading {
+  50% {
+    opacity: 0.4;
+  }
 }
 .host-metrics-status {
   display: inline-flex;
@@ -522,7 +634,7 @@ code,
   position: absolute;
   top: calc(100% + 10px);
   left: 12px;
-  width: min(360px, calc(100vw - 40px));
+  width: min(420px, calc(100vw - 40px));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
@@ -554,7 +666,7 @@ code,
 }
 .host-metrics-panel dl > div {
   display: grid;
-  grid-template-columns: 60px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   padding: 8px 0;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -604,6 +716,32 @@ code,
 @media (max-width: 1000px) {
   .host-metrics {
     gap: 8px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .host-metrics {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+  .host-metrics-values {
+    gap: 8px;
+    padding-left: 8px;
+  }
+  .host-metric {
+    min-width: 62px;
+  }
+  .host-metric[data-metric="diskIo"] {
+    min-width: 160px;
+  }
+  .host-metric[data-metric="disk"] {
+    min-width: 60px;
+  }
+  .host-metric[data-metric="uptime"] {
+    min-width: 54px;
+  }
+  .host-metric-trend {
+    width: 26px;
   }
 }
 

@@ -14,6 +14,8 @@ const sample: HeaderMetrics = {
   diskTotalKib: null,
   diskFreeKib: null,
   diskLabel: null,
+  diskReadBytesPerSecond: null,
+  diskWriteBytesPerSecond: null,
   uptimeSeconds: 900,
 };
 async function tick(ms = 0) {
@@ -22,6 +24,20 @@ async function tick(ms = 0) {
   });
 }
 describe("header sampling lifecycle", () => {
+  it("keeps at most twenty real readings and clears trends on host changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ target }) => useHeaderMetrics(target, ["cpu", "diskIo"], 2),
+      { initialProps: { target: "host-a" } },
+    );
+    await tick();
+    expect(result.current.history).toHaveLength(1);
+    await tick(48000);
+    expect(result.current.history).toHaveLength(20);
+    rerender({ target: "host-b" });
+    expect(result.current.history).toHaveLength(0);
+    await tick();
+    expect(result.current.history).toHaveLength(1);
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(sample.sampledAt));
@@ -84,6 +100,7 @@ describe("header sampling lifecycle", () => {
     const { result } = renderHook(() => useHeaderMetrics("local", ["cpu"], 5));
     await tick();
     expect(result.current.stale).toBe(true);
+    expect(result.current.history).toHaveLength(0);
     await tick(5000);
     expect(result.current.stale).toBe(false);
   });
@@ -117,6 +134,7 @@ describe("header sampling lifecycle", () => {
     await tick(20000);
     expect(mock.sampleHeaderMetrics).toHaveBeenCalledTimes(1);
     expect(result.current.stale).toBe(true);
+    expect(result.current.history).toHaveLength(0);
     act(() => {
       Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
       document.dispatchEvent(new Event("visibilitychange"));
@@ -136,5 +154,6 @@ describe("header sampling lifecycle", () => {
     await tick(5000);
     expect(result.current.error).toBeNull();
     expect(result.current.stale).toBe(false);
+    expect(result.current.history).toHaveLength(1);
   });
 });

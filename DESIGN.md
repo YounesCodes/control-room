@@ -292,7 +292,14 @@ per-user Windows installation and settings save both succeed.
 Header metrics are opt-in and follow the active Workspace in normal mode.
 Focus Mode hides the header and stops its resource reads.
 Use compact labeled values with neutral styling, readable numbers, and a visible
-reading state. Use one compact status button to open reading details, separated from
+reading state. Keep each label above its value, reserve space for changing numbers,
+and use small neutral trend lines for CPU, RAM, GPU, and disk transfers. Trends hold
+at most twenty measured samples in memory, reset on host changes and monitoring
+pauses, and never invent points for missing readings. Percentage trends use a fixed
+0–100 range; disk transfer trends use their recent peak. Animate value changes and
+the storage meter briefly. A refresh cue runs only while a reading is in progress;
+stale and paused charts rest. Respect reduced motion throughout.
+Use one compact status button to open reading details, separated from
 the numeric readings. Keep the active host name in its tooltip, accessible label,
 and details rather than repeating it in the header. The metric labels, values,
 and surrounding space drag the native window. Keep the status button and reading
@@ -302,6 +309,12 @@ Settings and native window controls reachable at narrow widths;
 scroll the metric row when needed. Host details must open with a keyboard or click
 and include capacity, the last reading time, and refresh errors. Pause header reads
 in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
+Label filesystem fullness as Storage and read/write throughput as Disk I/O.
+Show I/O in binary bytes per second, with separate Read and Write values in the
+details. Storage covers the system drive locally, fixed drives on Windows SSH
+hosts, and the root filesystem on Linux. I/O covers whole disk devices and must
+not double-count partitions or stacked volumes. Missing counters are unavailable,
+including after a counter reset or a device-set change during sampling.
 
 Present the fact the host returned, not a stronger conclusion. A missing value
 must look missing, not like zero. Keep unavailable, unsupported, skipped, and
