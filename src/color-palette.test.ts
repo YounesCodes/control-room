@@ -8,7 +8,35 @@ const settingsModelSource = readFileSync(
   new URL("../src-tauri/src/models.rs", import.meta.url),
   "utf8",
 );
-const semanticUiColors = ["#42d17a", "#d6a84a", "#ef5b6b"];
+/** Status colors, plus the OS and shell brand hues that identity marks reveal
+ *  on hover or selection: the distribution logos' official colors (Alpine,
+ *  CentOS, and AlmaLinux lightened to read on the dark surfaces), Windows
+ *  blue, and the PowerShell-family blue standing in for local terminal
+ *  marks. */
+const semanticUiColors = [
+  "#42d17a",
+  "#d6a84a",
+  "#ef5b6b",
+  "#0078d4",
+  "#5391fe",
+  "#d70a53",
+  "#e95420",
+  "#51a2da",
+  "#1793d1",
+  "#73ba25",
+  "#6293ac",
+  "#86be43",
+  "#557c94",
+  "#ee0000",
+  "#8887b4",
+  "#10b981",
+  "#7ea4bf",
+  "#5277c3",
+  "#35bf5c",
+  "#5aa48f",
+  "#f80000",
+  "#ff9900",
+];
 
 function hexChannels(value: string) {
   const digits = value.slice(1);
@@ -47,7 +75,7 @@ function paletteValue(name: string) {
 }
 
 describe("monochrome application palette", () => {
-  it("allows only semantic green, amber, and red outside neutral UI colors", () => {
+  it("allows only status colors and identity brand hues outside neutral UI colors", () => {
     const nonNeutralColors: string[] = [];
 
     for (const match of stylesSource.matchAll(/#[0-9a-f]{3}(?:[0-9a-f]{3})?\b/gi)) {

@@ -223,7 +223,7 @@ describe("application hierarchy", () => {
 
   it("keeps a local Workspace terminal-only and off every remote code path", () => {
     // The launcher lists detected shells beside Add connection, and a local
-    // Workspace's switcher offers only its terminal and Scratchpad views —
+    // Workspace's switcher offers only its terminal view,
     // never a host view, because there is no host to inspect.
     expect(appSource).toContain("api.listLocalShells()");
     expect(appSource).toContain("Local terminal");
@@ -231,7 +231,7 @@ describe("application hierarchy", () => {
       /capabilities=\{\s*activeWorkspace && \(\s*<div className="workspace-navigation"/,
     );
     expect(appSource).toMatch(
-      /isLocalWorkspace\(activeWorkspace\)\s*\?\s*navigation\.filter\(\(item\) => \["terminal", "scratchpad"\]\.includes\(item\.id\)\)/,
+      /isLocalWorkspace\(activeWorkspace\)\s*\?\s*navigation\.filter\(\(item\) => item\.id === "terminal"\)/,
     );
     expect(appSource).toContain(
       "{activeRemoteWorkspace && activeConnection && activeSavedConnection && (",
@@ -253,12 +253,13 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("api.startSession(");
     expect(terminalSource.match(/new Terminal\(/g)).toHaveLength(1);
     expect(terminalSource.match(/new ResizeObserver\(/g)).toHaveLength(1);
-    // Enhanced History needs a Saved Connection, so the shell integration
-    // handler is registered only for a remote session.
-    expect(terminalSource).toMatch(
-      /connectionIdRef\.current\s*\?\s*terminal\.parser\.registerOscHandler/,
-    );
-    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(1);
+    // Both shell kinds report processing, but only a Saved Connection can
+    // reach command-history capture. TerminalPane's behavioral tests also
+    // send real markers to the local handler and assert no history is saved.
+    expect(terminalSource).toContain("if (!connectionIdRef.current) return true;");
+    expect(terminalSource).toContain("registerOscHandler(133");
+    expect(terminalSource).toContain("registerOscHandler(633");
+    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(2);
   });
 
   it("detects a newly connected host without requiring an Overview visit", () => {
@@ -337,8 +338,9 @@ describe("application hierarchy", () => {
 
   it("keeps terminal actions visible in focus mode", () => {
     expect(appSource).toContain("terminalFocusMode");
-    expect(appSource).toContain('aria-label="Exit terminal focus"');
-    expect(appSource).toContain('aria-label="Focus terminal"');
+    expect(appSource).toContain(
+      'aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}',
+    );
     expect(stylesSource).toMatch(
       /\.terminal-focus-mode \.app-bar,[\s\S]*\.terminal-focus-mode \.sidebar\s*\{[^}]*display: none;/,
     );
@@ -346,7 +348,7 @@ describe("application hierarchy", () => {
   });
 
   it("keeps groups inside focus mode and outlines the active group and pane", () => {
-    expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(2);
+    expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(1);
     expect(appSource).toContain('aria-label="Split terminal"');
     expect(appSource).toContain('aria-label="New terminal"');
     expect(appSource).toContain("session-pane-tabs");

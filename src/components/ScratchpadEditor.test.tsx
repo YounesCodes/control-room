@@ -17,7 +17,20 @@ vi.mock("../lib/api", () => ({
 
 import { scratchpadDraftKey } from "../lib/scratchpad-draft";
 import type { SavedConnection, ScratchpadNote, ScratchpadNoteInput } from "../types";
-import { ScratchpadPane } from "./ScratchpadPane";
+import { TerminalScratchpad } from "./TerminalScratchpad";
+
+function NotePopup({ connection }: { connection: SavedConnection }) {
+  return (
+    <TerminalScratchpad
+      terminalScope="connection"
+      ownerId={connection.id}
+      ownerLabel={connection.displayName}
+      canPaste={false}
+      onPaste={() => undefined}
+      onClose={() => undefined}
+    />
+  );
+}
 
 const connection: SavedConnection = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -43,7 +56,7 @@ function savedNote(input: ScratchpadNoteInput): ScratchpadNote {
   };
 }
 
-describe("ScratchpadPane", () => {
+describe("Scratchpad note editing", () => {
   it("waits for an in-flight save before deleting and never recreates the note", async () => {
     let finish!: (note: ScratchpadNote) => void;
     api.saveScratchpadNote.mockImplementationOnce(
@@ -52,7 +65,7 @@ describe("ScratchpadPane", () => {
           finish = resolve;
         }),
     );
-    render(<ScratchpadPane connection={connection} />);
+    render(<NotePopup connection={connection} />);
     const editor = await screen.findByLabelText("Connection note");
     fireEvent.change(editor, { target: { value: "first version" } });
     await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalledTimes(1), { timeout: 2000 });
@@ -86,7 +99,7 @@ describe("ScratchpadPane", () => {
         }),
       );
       api.deleteScratchpadNote.mockRejectedValueOnce(new Error("database locked"));
-      render(<ScratchpadPane connection={connection} />);
+      render(<NotePopup connection={connection} />);
       const editor = await screen.findByLabelText("Connection note");
       fireEvent.change(editor, { target: { value: "keep newer text" } });
       if (saveState === "saved") {
@@ -118,7 +131,7 @@ describe("ScratchpadPane", () => {
   afterEach(cleanup);
 
   it("autosaves plain text without rendering pasted HTML", async () => {
-    render(<ScratchpadPane connection={connection} />);
+    render(<NotePopup connection={connection} />);
     const editor = await screen.findByLabelText("Connection note");
     const text = '<img src=x onerror="alert(1)">\n<script>alert(2)</script>';
     fireEvent.change(editor, { target: { value: text } });
@@ -139,7 +152,7 @@ describe("ScratchpadPane", () => {
   it("retains the latest fallback draft when SQLite autosave fails and retries it", async () => {
     const user = userEvent.setup();
     api.saveScratchpadNote.mockRejectedValueOnce(new Error("disk full"));
-    render(<ScratchpadPane connection={connection} />);
+    render(<NotePopup connection={connection} />);
     const editor = await screen.findByLabelText("Connection note");
     fireEvent.change(editor, { target: { value: "Do not lose this" } });
 
@@ -157,7 +170,7 @@ describe("ScratchpadPane", () => {
     const user = userEvent.setup();
     window.localStorage.setItem(scratchpadDraftKey("connection", connection.id), "Recovered draft");
     api.scratchpadNote.mockRejectedValueOnce(new Error("database busy"));
-    render(<ScratchpadPane connection={connection} />);
+    render(<NotePopup connection={connection} />);
 
     expect(await screen.findByLabelText("Connection note")).toHaveProperty(
       "value",
@@ -181,7 +194,7 @@ describe("ScratchpadPane", () => {
         text: "Original text",
       }),
     );
-    render(<ScratchpadPane connection={connection} />);
+    render(<NotePopup connection={connection} />);
     const editor = await screen.findByLabelText("Connection note");
 
     fireEvent.change(editor, { target: { value: "Original tex" } });
@@ -211,12 +224,16 @@ describe("ScratchpadPane", () => {
             })
           : null,
     );
-    render(<ScratchpadPane connection={connection} />);
+    render(<NotePopup connection={connection} />);
     await screen.findByLabelText("Connection note");
     await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
 
     expect(await screen.findByLabelText("Global note")).toHaveProperty("value", "Shared reminder");
-    expect(screen.getByText("Shared by every Saved Connection and Workspace")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "Global note for all connections" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(api.scratchpadNote).toHaveBeenLastCalledWith("global", "global", null);
     await user.click(screen.getByRole("button", { name: "Delete note" }));
     await user.click(screen.getAllByRole("button", { name: "Delete note" }).at(-1)!);

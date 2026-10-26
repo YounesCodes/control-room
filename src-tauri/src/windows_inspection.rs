@@ -81,8 +81,18 @@ pub fn metrics(
         "metrics",
         &format!("$wanted=@({names});"),
     )?)?;
+    Ok(parse_metrics(&value))
+}
+fn parse_metrics(value: &serde_json::Value) -> HeaderMetrics {
     let number = |key: &str| value.get(key).and_then(serde_json::Value::as_u64);
-    Ok(HeaderMetrics {
+    let rate = |key: &str| {
+        value
+            .get(key)
+            .and_then(serde_json::Value::as_f64)
+            .filter(|v| v.is_finite() && *v >= 0.0)
+    };
+    let io = rate("diskReadBytesPerSecond").zip(rate("diskWriteBytesPerSecond"));
+    HeaderMetrics {
         sampled_at: Utc::now().to_rfc3339(),
         cpu_percent: value
             .get("cpuPercent")
@@ -100,8 +110,10 @@ pub fn metrics(
             .get("diskLabel")
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned),
+        disk_read_bytes_per_second: io.map(|v| v.0),
+        disk_write_bytes_per_second: io.map(|v| v.1),
         uptime_seconds: number("uptimeSeconds"),
-    })
+    }
 }
 pub fn containers(connection: &SavedConnection) -> Result<Vec<DockerContainer>, String> {
     let values: Vec<serde_json::Value> = parse(&read(connection, "docker-list", "")?)?;
@@ -137,6 +149,28 @@ pub fn docker_log_command(container: &str, lines: u16, follow: bool) -> Result<S
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn disk_io_reports_rates_independently_of_capacity_and_rejects_partial_pairs() {
+        let sample = parse_metrics(
+            &serde_json::json!({"diskReadBytesPerSecond":1048576.5,"diskWriteBytesPerSecond":0}),
+        );
+        assert_eq!(sample.disk_read_bytes_per_second, Some(1048576.5));
+        assert_eq!(sample.disk_write_bytes_per_second, Some(0.0));
+        assert_eq!(sample.disk_total_kib, None);
+        for fields in [
+            serde_json::json!({}),
+            serde_json::json!({"diskReadBytesPerSecond":1}),
+            serde_json::json!({"diskReadBytesPerSecond":-1,"diskWriteBytesPerSecond":0}),
+            serde_json::json!({"diskReadBytesPerSecond":"N/A","diskWriteBytesPerSecond":0}),
+        ] {
+            let sample = parse_metrics(&fields);
+            assert_eq!(sample.disk_read_bytes_per_second, None);
+            assert_eq!(sample.disk_write_bytes_per_second, None);
+        }
+        let script = script("metrics", "$wanted=@('diskIo');");
+        assert!(script.contains("Win32_PerfFormattedData_PerfDisk_PhysicalDisk"));
+        assert!(script.contains("-OperationTimeoutSec 2"));
+    }
     fn fixture() -> SavedConnection {
         SavedConnection {
             id: "windows-inspection".into(),

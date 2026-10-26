@@ -1,13 +1,77 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Circle, CircleAlert, CircleDashed, Clock3, ChevronDown, Pause, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
+import { usePopoverExit } from "../hooks/use-popover-exit";
 import {
   HEADER_METRIC_LABELS,
   formatReadingTime,
   headerMetricDetail,
   headerMetricValue,
+  headerMetricNumber,
+  formatByteRate,
+  metricTrend,
 } from "../lib/header-metrics";
-import type { HeaderMetric } from "../types";
+import type { HeaderMetric, HeaderMetrics } from "../types";
+
+function MetricTrace({ metric, history }: { metric: HeaderMetric; history: HeaderMetrics[] }) {
+  const path = metricTrend(metric, history);
+  if (!path) return null;
+  return (
+    <svg className="host-metric-trend" viewBox="0 0 34 16" aria-hidden="true" focusable="false">
+      <path d={path} style={{ d: `path("${path}")` }} />
+    </svg>
+  );
+}
+
+function MetricCell({
+  metric,
+  sample,
+  history,
+  failed,
+}: {
+  metric: HeaderMetric;
+  sample: HeaderMetrics | null;
+  history: HeaderMetrics[];
+  failed: boolean;
+}) {
+  const value = sample ? headerMetricValue(metric, sample) : failed ? "Unavailable" : "Reading";
+  const available = sample && headerMetricNumber(metric, sample) !== null;
+  const compact = value === "Unavailable" ? "—" : value === "Reading" ? "…" : value;
+  return (
+    <span
+      className="host-metric"
+      role="group"
+      aria-label={`${HEADER_METRIC_LABELS[metric]}: ${value}`}
+      data-metric={metric}
+      data-available={value !== "Unavailable" && value !== "Reading"}
+      data-tauri-drag-region
+      title={`${HEADER_METRIC_LABELS[metric]}: ${value}. ${headerMetricDetail(metric, sample)}`}
+    >
+      <span className="host-metric-label" aria-hidden="true" data-tauri-drag-region>
+        {HEADER_METRIC_LABELS[metric]}
+      </span>
+      <strong className="host-metric-reading" aria-hidden="true" data-tauri-drag-region>
+        <span className="host-metric-value" key={value} aria-hidden="true" data-tauri-drag-region>
+          {metric === "diskIo" && available ? (
+            <>
+              <span className="host-metric-direction" data-tauri-drag-region>
+                R
+              </span>{" "}
+              {formatByteRate(sample!.diskReadBytesPerSecond)}{" "}
+              <span className="host-metric-direction" data-tauri-drag-region>
+                W
+              </span>{" "}
+              {formatByteRate(sample!.diskWriteBytesPerSecond)}
+            </>
+          ) : (
+            compact
+          )}
+        </span>
+        <MetricTrace metric={metric} history={history} />
+      </strong>
+    </span>
+  );
+}
 
 export function HostMetrics({
   target,
@@ -24,6 +88,7 @@ export function HostMetrics({
 }) {
   const reading = useHeaderMetrics(target, metrics, seconds);
   const [open, setOpen] = useState(false);
+  const { present, closing } = usePopoverExit(open);
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const close = useRef<HTMLButtonElement>(null);
@@ -89,7 +154,13 @@ export function HostMetrics({
     };
   }, [open]);
   return (
-    <div className="host-metrics" ref={container} data-tauri-drag-region>
+    <div
+      className="host-metrics"
+      ref={container}
+      data-state={status.toLowerCase()}
+      data-sampling={reading.sampling || undefined}
+      data-tauri-drag-region
+    >
       <button
         type="button"
         className="host-metrics-trigger"
@@ -122,20 +193,25 @@ export function HostMetrics({
         }
       >
         {metrics.map((metric) => (
-          <span className="host-metric" key={metric} data-tauri-drag-region>
-            <span data-tauri-drag-region>{HEADER_METRIC_LABELS[metric]}</span>
-            <strong data-tauri-drag-region>
-              {reading.sample
-                ? headerMetricValue(metric, reading.sample)
-                : reading.error
-                  ? "Unavailable"
-                  : "..."}
-            </strong>
-          </span>
+          <MetricCell
+            key={metric}
+            metric={metric}
+            sample={reading.sample}
+            history={reading.history}
+            failed={!!reading.error}
+          />
         ))}
       </div>
-      {open && (
-        <section className="host-metrics-panel" id={panelId} aria-label={`Readings for ${name}`}>
+      {present && (
+        <section
+          className="host-metrics-panel"
+          id={panelId}
+          aria-label={closing ? undefined : `Readings for ${name}`}
+          aria-hidden={closing || undefined}
+          inert={closing || undefined}
+          data-closing={closing || undefined}
+          data-app-popover=""
+        >
           <header>
             <h3>{name}</h3>
             <button
@@ -162,7 +238,10 @@ export function HostMetrics({
               <div key={metric}>
                 <dt>{HEADER_METRIC_LABELS[metric]}</dt>
                 <dd>
-                  <strong>{headerMetricValue(metric, reading.sample)}</strong>
+                  <div className="host-metric-detail-value">
+                    <strong>{headerMetricValue(metric, reading.sample)}</strong>
+                    <MetricTrace metric={metric} history={reading.history} />
+                  </div>
                   <small>{headerMetricDetail(metric, reading.sample)}</small>
                 </dd>
               </div>

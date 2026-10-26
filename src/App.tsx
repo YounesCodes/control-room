@@ -10,13 +10,22 @@ import {
   restorePanelSizes,
   type PanelSizes,
 } from "./lib/panel-layout";
-import { useCallback, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   RotateCcw,
   Boxes,
   Camera,
   ChevronDown,
-  ChevronRight,
   Clipboard,
   Columns2,
   Copy,
@@ -47,7 +56,7 @@ import {
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HostMetrics } from "./components/HostMetrics";
-import { DEFAULT_HEADER_METRICS } from "./lib/header-metrics";
+import { displayedHeaderMetrics } from "./lib/header-metrics";
 import { UpdateIndicator } from "./components/UpdateIndicator";
 import { TerminalTargetMenu } from "./components/TerminalTargetMenu";
 import type { TerminalPaneHandle } from "./components/TerminalPane";
@@ -66,7 +75,9 @@ import { WindowControls } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
 import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
+import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
+import { hostProcessing } from "./lib/host-processing";
 import { organizeConnections } from "./lib/connection-organization";
 import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
@@ -77,6 +88,7 @@ import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib
 import {
   createTerminalLayout,
   getTerminalLayoutIds,
+  getTerminalPanePixels,
   getResponsiveTerminalGeometry,
   resizeTerminalLayout,
   splitTerminalLayout,
@@ -116,7 +128,6 @@ import { LogsPane } from "./pages/LogsPane";
 import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
-import { ScratchpadPane } from "./pages/ScratchpadPane";
 import { SettingsPane } from "./pages/SettingsPane";
 import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
@@ -174,7 +185,6 @@ const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "baselines", label: "Baselines", icon: Camera },
   { id: "history", label: "History", icon: History },
-  { id: "scratchpad", label: "Scratchpad", icon: StickyNote },
 ];
 
 const TerminalPane = lazy(() =>
@@ -183,6 +193,36 @@ const TerminalPane = lazy(() =>
 const WindowsServicesPane = lazy(() =>
   import("./pages/WindowsServicesPane").then((module) => ({ default: module.WindowsServicesPane })),
 );
+
+/// Fixed geometry for a popover anchored to its trigger: a consistent 6px gap
+/// below the trigger (flipping above when the window lacks the room), clamped
+/// to 8px window-edge gutters, and a max height that keeps long lists
+/// scrolling inside the popup instead of off the window.
+interface AnchoredPopover {
+  top?: number;
+  bottom?: number;
+  right: number;
+  maxHeight: number;
+}
+
+const POPOVER_GAP = 6;
+const POPOVER_GUTTER = 8;
+
+function anchoredPopoverAt(rect: DOMRect, width: number, preferredHeight: number): AnchoredPopover {
+  const below = window.innerHeight - rect.bottom - POPOVER_GAP - POPOVER_GUTTER;
+  const above = rect.top - POPOVER_GAP - POPOVER_GUTTER;
+  const useAbove = below < preferredHeight && above > below;
+  return {
+    right: Math.max(
+      POPOVER_GUTTER,
+      Math.min(window.innerWidth - rect.right, window.innerWidth - width - POPOVER_GUTTER),
+    ),
+    ...(useAbove
+      ? { bottom: window.innerHeight - rect.top + POPOVER_GAP }
+      : { top: rect.bottom + POPOVER_GAP }),
+    maxHeight: Math.max(0, Math.min(preferredHeight, useAbove ? above : below)),
+  };
+}
 
 export function App() {
   const [remoteShellRequest, setRemoteShellRequest] = useState<{
@@ -196,6 +236,8 @@ export function App() {
   const [administratorTerminalStatus, setAdministratorTerminalStatus] =
     useState<AdministratorTerminalStatus>("unsupportedWindows");
   const [localShellMenuOpen, setLocalShellMenuOpen] = useState(false);
+  const { present: localShellMenuPresent, closing: localShellMenuClosing } =
+    usePopoverExit(localShellMenuOpen);
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -249,7 +291,15 @@ export function App() {
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
+  const localShellButtonRef = useRef<HTMLButtonElement>(null);
+  const splitMenuButtonRef = useRef<HTMLButtonElement>(null);
   const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
+  // The closing transitions keep fading popovers mounted for a beat without
+  // delaying focus return or dismissal itself.
+  const { present: newTerminalMenuPresent, closing: newTerminalMenuClosing } =
+    usePopoverExit(newTerminalMenuOpen);
+  const { present: splitMenuPresent, closing: splitMenuClosing } = usePopoverExit(splitMenuOpen);
+  const { present: scratchpadPresent, closing: scratchpadClosing } = usePopoverExit(scratchpadOpen);
   const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
   const closingWorkspaceIdsRef = useRef(new Set<string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
@@ -257,13 +307,14 @@ export function App() {
     width: Number.POSITIVE_INFINITY,
     height: Number.POSITIVE_INFINITY,
   });
-  // Position the menu below its fixed button so it stays inside the window.
-  const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<{
-    top: number;
-    right: number;
-  } | null>(null);
+  // Anchored geometry for the terminal popovers, measured when they open.
+  const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<AnchoredPopover | null>(null);
+  const [splitMenuAt, setSplitMenuAt] = useState<AnchoredPopover | null>(null);
+  const [scratchpadAt, setScratchpadAt] = useState<AnchoredPopover | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
+  const [terminalProcessing, setTerminalProcessing] = useState<Record<string, boolean>>({});
+  const hostOperations = useSyncExternalStore(hostProcessing.subscribe, hostProcessing.getSnapshot);
   const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
   const [terminalHasSelection, setTerminalHasSelection] = useState<Record<string, boolean>>({});
   const terminalHandlesRef = useRef(new Map<string, TerminalPaneHandle>());
@@ -438,23 +489,14 @@ export function App() {
     !!activeRemoteWorkspace &&
     (!!activeRemoteWorkspace.remoteShell ||
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "windows");
-  // A local Workspace stays out of the remote inspection navigation, but its
-  // Scratchpad note gets a full page of its own, exactly like a host's.
+  // Local workspaces offer Terminal only; notes live in the terminal toolbar.
   const offeredNavigation =
     activeWorkspace && isLocalWorkspace(activeWorkspace)
-      ? navigation.filter((item) => ["terminal", "scratchpad"].includes(item.id))
+      ? navigation.filter((item) => item.id === "terminal")
       : windowsWorkspace
         ? navigation
             .filter((item) =>
-              [
-                "overview",
-                "terminal",
-                "services",
-                "ports",
-                "docker",
-                "logs",
-                "scratchpad",
-              ].includes(item.id),
+              ["overview", "terminal", "services", "ports", "docker", "logs"].includes(item.id),
             )
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
         : navigation;
@@ -656,7 +698,10 @@ export function App() {
     }
 
     function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") setLocalShellMenuOpen(false);
+      if (event.key === "Escape") {
+        setLocalShellMenuOpen(false);
+        localShellButtonRef.current?.focus();
+      }
     }
 
     document.addEventListener("pointerdown", dismissMenu);
@@ -667,6 +712,13 @@ export function App() {
     };
   }, [localShellMenuOpen]);
 
+  useLayoutEffect(() => {
+    if (!localShellMenuOpen) return;
+    localShellButtonRef.current?.parentElement
+      ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
+      ?.focus();
+  }, [localShellMenuOpen]);
+
   useEffect(() => {
     if (!newTerminalMenuOpen) return;
     function pointerDown(event: MouseEvent) {
@@ -674,8 +726,19 @@ export function App() {
       if (target instanceof Element && target.closest("[data-new-terminal-menu]")) return;
       setNewTerminalMenuOpen(false);
     }
+    // The anchor geometry was measured at open time; resizing invalidates it,
+    // so the menu dismisses instead of floating away from its control, and
+    // the keyboard comes back to the trigger with it.
+    function dismissOnResize() {
+      setNewTerminalMenuOpen(false);
+      newTerminalButtonRef.current?.focus();
+    }
     document.addEventListener("mousedown", pointerDown);
-    return () => document.removeEventListener("mousedown", pointerDown);
+    window.addEventListener("resize", dismissOnResize);
+    return () => {
+      document.removeEventListener("mousedown", pointerDown);
+      window.removeEventListener("resize", dismissOnResize);
+    };
   }, [newTerminalMenuOpen]);
 
   // The Scratchpad popover belongs to the terminal view; leaving it (Settings,
@@ -683,6 +746,31 @@ export function App() {
   useEffect(() => {
     if (settingsOpen || activeWorkspace?.view !== "terminal") setScratchpadOpen(false);
   }, [settingsOpen, activeWorkspace?.view]);
+
+  useLayoutEffect(() => {
+    if (!scratchpadOpen || settingsOpen || activeWorkspace?.view !== "terminal") return;
+    const position = () => {
+      const rect = scratchpadButtonRef.current?.getBoundingClientRect();
+      if (rect)
+        setScratchpadAt(anchoredPopoverAt(rect, Math.min(320, window.innerWidth - 40), 380));
+    };
+    position();
+    window.addEventListener("resize", position);
+    return () => window.removeEventListener("resize", position);
+  }, [
+    scratchpadOpen,
+    settingsOpen,
+    activeWorkspace?.view,
+    activeWorkspace?.id,
+    terminalFocusMode,
+    shellSize.width,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!splitMenuOpen || !terminalFocusMode) return;
+    const rect = splitMenuButtonRef.current?.getBoundingClientRect();
+    if (rect) setSplitMenuAt(anchoredPopoverAt(rect, 264, 480));
+  }, [splitMenuOpen, terminalFocusMode]);
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -694,14 +782,24 @@ export function App() {
     }
 
     function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") setSplitMenuOpen(false);
+      if (event.key === "Escape") {
+        setSplitMenuOpen(false);
+        splitMenuButtonRef.current?.focus();
+      }
+    }
+
+    function dismissOnResize() {
+      setSplitMenuOpen(false);
+      splitMenuButtonRef.current?.focus();
     }
 
     document.addEventListener("pointerdown", dismissMenu);
     document.addEventListener("keydown", dismissMenuWithKeyboard);
+    window.addEventListener("resize", dismissOnResize);
     return () => {
       document.removeEventListener("pointerdown", dismissMenu);
       document.removeEventListener("keydown", dismissMenuWithKeyboard);
+      window.removeEventListener("resize", dismissOnResize);
     };
   }, [splitMenuOpen]);
 
@@ -724,6 +822,33 @@ export function App() {
     }
     return map;
   }, [workspaces]);
+
+  const processingConnections = new Set(hostOperations);
+  for (const workspace of workspaces) {
+    if (
+      isRemoteWorkspace(workspace) &&
+      (terminalProcessing[workspace.id] || workspace.state === "connecting")
+    ) {
+      processingConnections.add(workspace.connectionId);
+    }
+  }
+
+  function workspaceProcessing(workspace: Workspace) {
+    return (
+      workspace.state === "connecting" ||
+      !!terminalProcessing[workspace.id] ||
+      (isRemoteWorkspace(workspace) && hostOperations.has(workspace.connectionId))
+    );
+  }
+
+  function workspaceStatus(workspace: Workspace) {
+    return `${terminalStateLabel(workspace)}${workspaceProcessing(workspace) && workspace.state !== "connecting" ? ", processing" : ""}`;
+  }
+
+  function connectionStatus(connectionId: string) {
+    const state = connectionSessionStates[connectionId];
+    return `${state ? `Terminal ${state}` : "No open terminal"}${processingConnections.has(connectionId) ? ", processing" : ""}`;
+  }
 
   function updateWorkspace(id: string, patch: WorkspacePatch) {
     setWorkspaces((current) =>
@@ -779,6 +904,16 @@ export function App() {
     setSplitMenuOpen(false);
     setNewTerminalMenuOpen(false);
     setTerminalFocusMode(false);
+  }
+
+  function openScratchpad() {
+    if (!activeWorkspace) return;
+    closeSettings(() => {
+      updateWorkspace(activeWorkspace.id, { view: "terminal" });
+      setNewTerminalMenuOpen(false);
+      setSplitMenuOpen(false);
+      setScratchpadOpen(true);
+    });
   }
 
   function selectTerminalGroup(group: TerminalGroup) {
@@ -1034,10 +1169,11 @@ export function App() {
     setActiveWorkspaceId(workspace.id);
   }
 
-  /// Opens the chooser under its own control, measured at the moment it opens.
-  /// Right-aligned to the button, then clamped so a control sitting near the
-  /// left edge cannot push the menu off screen.
-  const NEW_TERMINAL_MENU_WIDTH = 260;
+  /// Opens the chooser under its own control, measured at the moment it opens:
+  /// a consistent gap below the button, flipped above it when the window has
+  /// no room, and clamped so neither edge pushes the menu off screen.
+  const NEW_TERMINAL_MENU_WIDTH = 248;
+  const NEW_TERMINAL_MENU_HEIGHT = 420;
   function openNewTerminalMenu() {
     if (newTerminalMenuOpen) {
       setNewTerminalMenuOpen(false);
@@ -1045,15 +1181,22 @@ export function App() {
     }
     const rect = newTerminalButtonRef.current?.getBoundingClientRect();
     if (rect) {
-      setNewTerminalMenuAt({
-        top: rect.bottom + 1,
-        right: Math.max(
-          8,
-          Math.min(window.innerWidth - rect.right, window.innerWidth - NEW_TERMINAL_MENU_WIDTH - 8),
-        ),
-      });
+      setNewTerminalMenuAt(
+        anchoredPopoverAt(rect, NEW_TERMINAL_MENU_WIDTH, NEW_TERMINAL_MENU_HEIGHT),
+      );
     }
     setNewTerminalMenuOpen(true);
+  }
+
+  /// Split's chooser anchors to its own button with the same geometry.
+  function openSplitMenu() {
+    if (splitMenuOpen) {
+      setSplitMenuOpen(false);
+      return;
+    }
+    const rect = splitMenuButtonRef.current?.getBoundingClientRect();
+    if (rect) setSplitMenuAt(anchoredPopoverAt(rect, 264, 480));
+    setSplitMenuOpen(true);
   }
 
   /// Split's targets. It keeps its own order and its own extra group: a split
@@ -1074,7 +1217,9 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        icon: (
+          <SquareTerminal size={16} strokeWidth={1.8} className="local-shell-mark identity-mark" />
+        ),
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -1130,7 +1275,9 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <SquareTerminal size={16} strokeWidth={1.8} />,
+        icon: (
+          <SquareTerminal size={16} strokeWidth={1.8} className="local-shell-mark identity-mark" />
+        ),
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -1434,7 +1581,7 @@ export function App() {
       workspace.shell.elevated ? (
         <Shield size={17} strokeWidth={1.8} className="local-shell-mark local-shell-admin-mark" />
       ) : (
-        <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark" />
+        <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark identity-mark" />
       )
     ) : (
       <HostOsIcon
@@ -1473,17 +1620,10 @@ export function App() {
             <strong>{connection.displayName}</strong>
             <small>{connectionTarget(connection)}</small>
           </span>
-          <span
-            className="host-session-status"
-            title={
-              connectionSessionStates[connection.id]
-                ? `Terminal ${connectionSessionStates[connection.id]}`
-                : "No open terminal"
-            }
-          >
+          <span className="host-session-status" title={connectionStatus(connection.id)}>
             {connectionSessionStates[connection.id] && (
               <span
-                className={`presence presence-${connectionSessionStates[connection.id]}`}
+                className={`presence presence-${connectionSessionStates[connection.id]}${processingConnections.has(connection.id) ? " presence-busy" : ""}`}
                 aria-hidden="true"
               />
             )}
@@ -1504,9 +1644,7 @@ export function App() {
           )}
         </button>
         <span className="sr-only" id={`connection-session-${connection.id}`}>
-          {connectionSessionStates[connection.id]
-            ? `Terminal ${connectionSessionStates[connection.id]}`
-            : "No open terminal"}
+          {connectionStatus(connection.id)}
         </span>
         <button
           className="host-menu"
@@ -1536,7 +1674,12 @@ export function App() {
           <MoreHorizontal size={16} />
         </button>
         {hostMenuConnectionId === connection.id && (
-          <div className="host-context-menu" role="menu" style={hostMenuPosition ?? undefined}>
+          <div
+            className="host-context-menu"
+            role="menu"
+            style={hostMenuPosition ?? undefined}
+            data-app-popover=""
+          >
             <button
               type="button"
               role="menuitem"
@@ -1589,7 +1732,6 @@ export function App() {
         className={[
           "session-tab-wrap",
           workspace.id === activeWorkspaceId && !settingsOpen ? "active" : "",
-          grouped ? "in-layout" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -1606,11 +1748,13 @@ export function App() {
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
           <span className="session-tab-label">{duplicateLabel(workspace)}</span>
-          {(workspace.state !== "connected" || terminalFocusMode) && (
+          {(workspace.state !== "connected" ||
+            terminalFocusMode ||
+            workspaceProcessing(workspace)) && (
             <span
-              className={`presence presence-${workspace.state}`}
+              className={`presence presence-${workspace.state}${workspaceProcessing(workspace) ? " presence-busy" : ""}`}
               aria-hidden="true"
-              title={`Terminal ${terminalStateLabel(workspace)}`}
+              title={`Terminal ${workspaceStatus(workspace)}`}
             />
           )}
           {terminalActivity[workspace.id] && (
@@ -1626,7 +1770,7 @@ export function App() {
           )}
         </button>
         <span className="sr-only" id={`workspace-session-${workspace.id}`}>
-          Terminal {terminalStateLabel(workspace)}
+          Terminal {workspaceStatus(workspace)}
         </span>
         <button
           className="session-tab-rename"
@@ -1721,6 +1865,7 @@ export function App() {
     ];
   });
 
+  const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
   return (
     <div
       ref={shellSize.ref}
@@ -1742,7 +1887,7 @@ export function App() {
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
-          (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
+          headerMetrics.length > 0 && (
             <HostMetrics
               key={
                 isLocalWorkspace(activeWorkspace)
@@ -1755,7 +1900,7 @@ export function App() {
                   ? "Local machine"
                   : activeWorkspace.connectionSnapshot.displayName
               }
-              metrics={settingsContract.current.hostMetrics ?? DEFAULT_HEADER_METRICS}
+              metrics={headerMetrics}
               seconds={settingsContract.current.hostMetricsIntervalSeconds ?? 5}
               onSettings={() => setSettingsOpen(true)}
             />
@@ -1780,10 +1925,24 @@ export function App() {
               <Settings size={18} />
             </button>
           )}
-          <span className="window-controls-divider" aria-hidden="true" />
-          <WindowControls />
         </div>
       </header>
+
+      <div className="app-window-actions" role="group" aria-label="Window actions">
+        {!settingsOpen && activeWorkspace?.view === "terminal" && (
+          <button
+            className="app-bar-button app-focus-toggle"
+            type="button"
+            onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
+            aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+            aria-pressed={terminalFocusMode}
+            title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+          >
+            {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        )}
+        <WindowControls />
+      </div>
 
       <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
@@ -1833,7 +1992,7 @@ export function App() {
                       onClick={() => toggleConnectionGroup(section.id, !section.collapsed)}
                       aria-expanded={!collapsed}
                     >
-                      {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                      <ChevronDown size={13} />
                       <span>{section.name}</span>
                       <small>{section.connections.length}</small>
                     </button>
@@ -1876,6 +2035,7 @@ export function App() {
           {!!offeredShells.length && (
             <div className="local-shell-launcher" data-local-shell-menu>
               <button
+                ref={localShellButtonRef}
                 className="sidebar-secondary"
                 type="button"
                 onClick={toggleLocalShellMenu}
@@ -1883,10 +2043,38 @@ export function App() {
                 aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
                 title="Open a shell on this Windows machine"
               >
-                <SquareTerminal size={16} /> Local terminal
+                <SquareTerminal size={16} className="local-shell-mark identity-mark" /> Local
+                terminal
               </button>
-              {localShellMenuOpen && (
-                <div className="local-shell-menu" role="menu" aria-label="Local terminal">
+              {localShellMenuPresent && (
+                <div
+                  className="local-shell-menu"
+                  role="menu"
+                  aria-label="Local terminal"
+                  aria-hidden={localShellMenuClosing || undefined}
+                  inert={localShellMenuClosing || undefined}
+                  data-closing={localShellMenuClosing || undefined}
+                  data-app-popover=""
+                  onKeyDown={(event) => {
+                    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                    const items = [
+                      ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                        '[role="menuitem"]:not(:disabled)',
+                      ),
+                    ];
+                    if (!items.length) return;
+                    event.preventDefault();
+                    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? items.length - 1
+                          : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
+                            items.length;
+                    items[next].focus();
+                  }}
+                >
                   {standardLocalShells.length > 0 && (
                     <div className="local-shell-menu-group">
                       <strong>Local terminals</strong>
@@ -1897,7 +2085,11 @@ export function App() {
                           key={shell.id}
                           onClick={() => openLocalShell(shell)}
                         >
-                          <SquareTerminal size={14} strokeWidth={1.8} />
+                          <SquareTerminal
+                            size={14}
+                            strokeWidth={1.8}
+                            className="local-shell-mark identity-mark"
+                          />
                           <span>{shell.label}</span>
                         </button>
                       ))}
@@ -2008,7 +2200,10 @@ export function App() {
                             >
                               <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
                               <span>{group.name}</span> <small>{members.length}</small>
-                              <span className={`presence presence-${state}`} aria-hidden="true" />
+                              <span
+                                className={`presence presence-${state}${members.some(workspaceProcessing) ? " presence-busy" : ""}`}
+                                aria-hidden="true"
+                              />
                               {activity && (
                                 <span
                                   className={`terminal-activity terminal-activity-${activity}`}
@@ -2023,7 +2218,7 @@ export function App() {
                             {members
                               .map(
                                 (member) =>
-                                  `${duplicateLabel(member)}: ${terminalStateLabel(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
+                                  `${duplicateLabel(member)}: ${workspaceStatus(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
                               )
                               .join("; ")}
                           </span>
@@ -2047,12 +2242,13 @@ export function App() {
               >
                 <Plus size={16} /> <ChevronDown size={12} />
               </button>
-              {newTerminalMenuOpen && (
+              {newTerminalMenuPresent && (
                 <TerminalTargetMenu
                   label="New terminal"
                   className="new-terminal-menu"
                   groups={newTerminalGroups}
                   style={newTerminalMenuAt ?? undefined}
+                  closing={newTerminalMenuClosing}
                   onClose={() => {
                     setNewTerminalMenuOpen(false);
                     newTerminalButtonRef.current?.focus();
@@ -2127,8 +2323,9 @@ export function App() {
                     <StickyNote size={15} />
                   </button>
                 </div>
-                {scratchpadOpen && activeWorkspace?.view === "terminal" && (
+                {scratchpadPresent && activeWorkspace?.view === "terminal" && (
                   <TerminalScratchpad
+                    style={scratchpadAt ?? undefined}
                     terminalScope={isLocalWorkspace(activeWorkspace) ? "local" : "connection"}
                     ownerId={
                       isLocalWorkspace(activeWorkspace)
@@ -2142,6 +2339,7 @@ export function App() {
                     }
                     canPaste={Boolean(activeWorkspace.sessionId) && !activeTerminalEnded}
                     onPaste={pasteNoteIntoTerminal}
+                    closing={scratchpadClosing}
                     onClose={() => {
                       setScratchpadOpen(false);
                       scratchpadButtonRef.current?.focus();
@@ -2172,9 +2370,10 @@ export function App() {
                 {terminalFocusMode && (
                   <>
                     <button
+                      ref={splitMenuButtonRef}
                       className="session-strip-button"
                       type="button"
-                      onClick={() => setSplitMenuOpen((current) => !current)}
+                      onClick={openSplitMenu}
                       disabled={
                         !connections.length &&
                         !existingSplitCandidates.length &&
@@ -2191,12 +2390,17 @@ export function App() {
                     >
                       <Columns2 size={15} />
                     </button>
-                    {splitMenuOpen && (
+                    {splitMenuPresent && (
                       <TerminalTargetMenu
                         label="Split terminal"
                         className="terminal-split-menu"
                         groups={splitTargetGroups}
-                        onClose={() => setSplitMenuOpen(false)}
+                        style={splitMenuAt ?? undefined}
+                        closing={splitMenuClosing}
+                        onClose={() => {
+                          setSplitMenuOpen(false);
+                          splitMenuButtonRef.current?.focus();
+                        }}
                       >
                         <div className="terminal-split-directions" aria-label="Split direction">
                           <button
@@ -2227,31 +2431,6 @@ export function App() {
                       </TerminalTargetMenu>
                     )}
                   </>
-                )}
-                {terminalFocusMode ? (
-                  <>
-                    <button
-                      className="session-strip-button"
-                      type="button"
-                      onClick={exitTerminalFocus}
-                      aria-label="Exit terminal focus"
-                      title="Exit terminal focus"
-                    >
-                      <Minimize2 size={15} />
-                    </button>
-                    <span className="window-controls-divider" aria-hidden="true" />
-                    <WindowControls />
-                  </>
-                ) : (
-                  <button
-                    className="session-strip-button"
-                    type="button"
-                    onClick={enterTerminalFocus}
-                    aria-label="Focus terminal"
-                    title="Focus terminal"
-                  >
-                    <Maximize2 size={15} />
-                  </button>
                 )}
               </div>
             )}
@@ -2354,6 +2533,8 @@ export function App() {
                     activeWorkspace.view === "terminal" &&
                     visibleTerminalIds.includes(workspace.id);
                   const paneRect = terminalPaneRects[workspace.id];
+                  const panePixels =
+                    paneRect && getTerminalPanePixels(paneRect, terminalLayoutViewport);
                   return (
                     <div
                       className={[
@@ -2367,12 +2548,12 @@ export function App() {
                       aria-hidden={!terminalVisible || undefined}
                       style={
                         terminalSplitMode && terminalVisible && paneRect
-                          ? {
+                          ? (panePixels ?? {
                               left: `${paneRect.left}%`,
                               top: `${paneRect.top}%`,
                               width: `${paneRect.width}%`,
                               height: `${paneRect.height}%`,
-                            }
+                            })
                           : undefined
                       }
                     >
@@ -2424,6 +2605,15 @@ export function App() {
                                 ? kind
                                 : current[workspace.id],
                           }))
+                        }
+                        onProcessing={(busy) =>
+                          setTerminalProcessing((current) => {
+                            if (!!current[workspace.id] === busy) return current;
+                            const next = { ...current };
+                            if (busy) next[workspace.id] = true;
+                            else delete next[workspace.id];
+                            return next;
+                          })
                         }
                         findRequest={terminalFindRequests[workspace.id] ?? 0}
                       />
@@ -2618,22 +2808,8 @@ export function App() {
                       canPaste={Boolean(activeRemoteWorkspace.sessionId)}
                     />
                   )}
-                  {activeRemoteWorkspace.view === "scratchpad" && (
-                    <ScratchpadPane key={activeRemoteWorkspace.id} connection={activeConnection} />
-                  )}
                 </ConnectionSection>
               )}
-              {activeWorkspace &&
-                isLocalWorkspace(activeWorkspace) &&
-                activeWorkspace.view === "scratchpad" && (
-                  <ScratchpadPane
-                    key={activeWorkspace.id}
-                    terminal={{
-                      id: activeWorkspace.id,
-                      label: activeWorkspace.label ?? activeWorkspace.shell.label,
-                    }}
-                  />
-                )}
             </div>
           </section>
         )}
@@ -2786,7 +2962,7 @@ export function App() {
           activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
           canSplitTerminal={canSplitTerminal}
-          // A local Workspace offers only Terminal and Scratchpad; remote
+          // A local Workspace offers only Terminal; remote
           // Workspaces offer the inspection views their platform supports.
           views={activeWorkspace ? offeredNavigation : []}
           hostCapabilities={hostCapabilities}
@@ -2821,6 +2997,7 @@ export function App() {
             enterTerminalFocus();
             setSplitMenuOpen(true);
           }}
+          onOpenScratchpad={openScratchpad}
           onRenameWorkspace={() => activeWorkspace && renameWorkspace(activeWorkspace)}
           onManageConnections={() => setConnectionGroupsOpen(true)}
           onAddConnection={() => setDialogConnection("new")}

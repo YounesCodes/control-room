@@ -6,7 +6,9 @@ import { App } from "../App";
 import { TooltipLayer } from "./TooltipLayer";
 import "../styles.css";
 const savedLayout = vi.hoisted(() => ({ save: vi.fn(async () => {}) }));
-vi.mock("./WindowControls", () => ({ WindowControls: () => null }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ close: vi.fn(), minimize: vi.fn(), toggleMaximize: vi.fn() }),
+}));
 vi.mock("./TerminalPane", () => ({
   TerminalPane: () => (
     <div
@@ -119,14 +121,32 @@ describe("Local Terminal Mode in the real App", () => {
       await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
       await split("vertically");
       await split("horizontally");
-      const controls = [
-        ...container!.querySelectorAll<HTMLButtonElement>(
-          ".session-pane-tabs .session-tab-rename, .session-pane-tabs .session-tab-close",
-        ),
+      // Pane tabs reveal Rename and Close exactly like every other tab: hidden
+      // at rest, slid in by the hover (or keyboard focus) that also drags the
+      // trailing session dot aside.
+      const paneTabs = [
+        ...container!.querySelectorAll<HTMLElement>(".session-pane-tabs .session-tab-wrap"),
       ];
+      const controls = paneTabs.flatMap((tab) => [
+        ...tab.querySelectorAll<HTMLButtonElement>(".session-tab-rename, .session-tab-close"),
+      ]);
+      expect(paneTabs.length).toBeGreaterThanOrEqual(3);
       expect(controls).toHaveLength(6);
       for (const control of controls) {
-        expect(getComputedStyle(control).opacity).toBe("1");
+        expect(getComputedStyle(control).opacity).toBe("0");
+      }
+      await userEvent.hover(paneTabs[0]);
+      const revealed = [
+        ...paneTabs[0].querySelectorAll<HTMLButtonElement>(
+          ".session-tab-rename, .session-tab-close",
+        ),
+      ];
+      await vi.waitFor(() => {
+        for (const control of revealed) {
+          expect(Number(getComputedStyle(control).opacity)).toBeGreaterThan(0.9);
+        }
+      });
+      for (const control of revealed) {
         const rect = control.getBoundingClientRect();
         expect(
           document
@@ -140,6 +160,11 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         page.getByRole("tooltip").element().getBoundingClientRect().left,
       ).toBeGreaterThanOrEqual(8);
+      // A pane tab's tools exist for the pointer only once the tab is hovered
+      // or focused, so drive the pointer there like a user would first.
+      const paneTabByLabel = (label: string) =>
+        paneTabs.find((tab) => tab.querySelector(".session-tab-label")?.textContent === label)!;
+      await userEvent.hover(paneTabByLabel("Command Prompt 2"));
       await page
         .getByRole("button", { name: "Rename Command Prompt 2 Workspace", exact: true })
         .click();
@@ -151,6 +176,7 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
       ).toBe("Command Prompt 3");
+      await userEvent.hover(paneTabByLabel("Background logs"));
       await page.getByRole("button", { name: "Close Background logs Workspace" }).click();
       await expect
         .element(page.getByRole("button", { name: "Open Command Prompt group 2 terminals" }))
@@ -159,6 +185,7 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         container!.querySelector(".session-tab-wrap.active .session-tab-label")?.textContent,
       ).toBe("Command Prompt 2");
+      await userEvent.hover(paneTabByLabel("Command Prompt 2"));
       await page.getByRole("button", { name: "Close Command Prompt 2 Workspace" }).click();
       expect(container!.querySelector(".session-pane-tabs")).toBeNull();
       await expect
@@ -283,7 +310,19 @@ describe("Local Terminal Mode in the real App", () => {
         .click();
       await page.getByRole("button", { name: "Ungroup", exact: true }).click();
       expect(container!.querySelector(".session-pane-tabs")).toBeNull();
-      expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+      const allTerminals = strip.querySelector<HTMLButtonElement>('[aria-label="All terminals"]');
+      if (allTerminals) {
+        await userEvent.click(allTerminals);
+        expect(
+          page
+            .getByRole("menu", { name: "All terminals" })
+            .element()
+            .querySelectorAll('[role="menuitem"]'),
+        ).toHaveLength(4);
+        await userEvent.keyboard("{Escape}");
+      } else {
+        expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+      }
     },
   );
   it.each([800, 960, 1600])(
@@ -303,7 +342,11 @@ describe("Local Terminal Mode in the real App", () => {
       expect(drag, "Focus Mode needs a direct target to move the native window").not.toBeNull();
       const bounds = drag!.getBoundingClientRect();
       const strip = container!.querySelector(".session-tabs")!.getBoundingClientRect();
-      expect(bounds.width).toBeCloseTo(strip.width, 0);
+      const windowActions = container!
+        .querySelector(".app-window-actions")!
+        .getBoundingClientRect();
+      expect(bounds.right).toBe(windowActions.left);
+      expect(bounds.left).toBe(strip.left);
       expect(bounds.height).toBe(6);
       expect(bounds.top).toBe(strip.top);
       for (const fraction of [0.01, 0.5, 0.99]) {
@@ -314,6 +357,13 @@ describe("Local Terminal Mode in the real App", () => {
         expect(hit).toBe(drag);
         expect(hit).toHaveAttribute("data-tauri-drag-region");
       }
+      const focusToggle = page.getByRole("button", { name: "Exit terminal focus" }).element();
+      const toggleBounds = focusToggle.getBoundingClientRect();
+      expect(
+        document
+          .elementFromPoint(toggleBounds.left + toggleBounds.width / 2, bounds.top + 3)
+          ?.closest("button"),
+      ).toBe(focusToggle);
       const newTerminal = container!
         .querySelector(".session-new-terminal")!
         .getBoundingClientRect();
@@ -383,7 +433,8 @@ describe("Local Terminal Mode in the real App", () => {
     const stripAfter = container!.querySelector(".session-tabs")!.getBoundingClientRect();
     expect(stripAfter.top).toBe(stripBefore.top);
     expect(stripAfter.height).toBe(stripBefore.height);
-    const popover = dialog.element().getBoundingClientRect();
+    const popoverElement = dialog.element();
+    const popover = popoverElement.getBoundingClientRect();
     expect(popover.top).toBeGreaterThanOrEqual(stripAfter.bottom);
     // A gutter keeps the popover's border readable instead of merging with
     // the window's.
@@ -393,8 +444,14 @@ describe("Local Terminal Mode in the real App", () => {
     await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("button", { name: "Scratchpad" })).toHaveFocus();
-    // Escape unmounts the popover rather than merely hiding it.
-    expect(container!.querySelector(".scratchpad-popover")).toBeNull();
+    // Reduced motion can remove the popup before the input promise settles.
+    // Keep the original node so closing and inertness remain observable even
+    // after removal, including when CI takes an extra event-loop turn.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(popoverElement).toHaveAttribute("data-closing");
+    expect(popoverElement).toHaveAttribute("inert");
+    expect(popoverElement).toHaveAttribute("aria-hidden", "true");
+    await vi.waitFor(() => expect(container!.querySelector(".scratchpad-popover")).toBeNull());
   });
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
     await page.viewport(1280, 800);

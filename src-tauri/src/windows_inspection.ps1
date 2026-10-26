@@ -62,7 +62,7 @@ switch ($operation) {
         @{ backend = 'windows'; available = $true; active = ($enabled.Count -gt 0); defaultIncoming = $policies; rules = @(); collectedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json -Depth 4 -Compress
     }
     'metrics' {
-        $result = @{ sampledAt = [DateTime]::UtcNow.ToString('o'); cpuPercent = $null; memoryTotalKib = $null; memoryAvailableKib = $null; gpuPercent = $null; diskTotalKib = $null; diskFreeKib = $null; diskLabel = $null; uptimeSeconds = $null }
+        $result = @{ sampledAt = [DateTime]::UtcNow.ToString('o'); cpuPercent = $null; memoryTotalKib = $null; memoryAvailableKib = $null; gpuPercent = $null; diskTotalKib = $null; diskFreeKib = $null; diskLabel = $null; diskReadBytesPerSecond = $null; diskWriteBytesPerSecond = $null; uptimeSeconds = $null }
         if ('ram' -in $wanted -or 'uptime' -in $wanted) {
             $os = Get-CimInstance Win32_OperatingSystem
             if ('ram' -in $wanted) { $result.memoryTotalKib = [long]$os.TotalVisibleMemorySize; $result.memoryAvailableKib = [long]$os.FreePhysicalMemory }
@@ -76,6 +76,15 @@ switch ($operation) {
         if ('disk' -in $wanted) {
             $disks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Where-Object { $_.Size -gt 0 })
             if ($disks.Count) { $result.diskTotalKib = [long](($disks | Measure-Object Size -Sum).Sum / 1024); $result.diskFreeKib = [long](($disks | Measure-Object FreeSpace -Sum).Sum / 1024); $result.diskLabel = 'Fixed drives' }
+        }
+        if ('diskIo' -in $wanted) {
+            try {
+                $io = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -OperationTimeoutSec 2 -ErrorAction Stop
+                if ($null -ne $io.DiskReadBytesPersec -and $null -ne $io.DiskWriteBytesPersec) {
+                    $result.diskReadBytesPerSecond = [double]$io.DiskReadBytesPersec
+                    $result.diskWriteBytesPerSecond = [double]$io.DiskWriteBytesPersec
+                }
+            } catch { $result.diskReadBytesPerSecond = $null; $result.diskWriteBytesPerSecond = $null }
         }
         if ('gpu' -in $wanted) {
             try {

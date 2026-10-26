@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { ClipboardCopy, Globe2, SquareTerminal, TerminalSquare } from "lucide-react";
-import { ScratchpadEditor } from "../pages/ScratchpadPane";
+import { ScratchpadEditor } from "./ScratchpadEditor";
 import type { ScratchpadScope } from "../types";
 
 /**
@@ -10,8 +10,8 @@ import type { ScratchpadScope } from "../types";
  * terminal" without leaving the terminal view, in normal mode and Focus Mode
  * alike. The note follows the active terminal: a local terminal workspace
  * owns a note of its own, a remote terminal uses its connection's note, and
- * the global note stays one switch away. Editing shares the page Scratchpad's
- * autosave pipeline, so drafts and recovery behave identically.
+ * the global note stays one switch away. The shared editor owns autosave and
+ * recovery drafts.
  */
 export function TerminalScratchpad({
   terminalScope,
@@ -20,6 +20,8 @@ export function TerminalScratchpad({
   canPaste,
   onPaste,
   onClose,
+  closing,
+  style,
 }: {
   /** What the active terminal is: a local workspace or a Saved Connection. */
   terminalScope: Extract<ScratchpadScope, "local" | "connection">;
@@ -32,8 +34,12 @@ export function TerminalScratchpad({
   /** Receives the note text; the caller owns writing it to the terminal. */
   onPaste: (text: string) => void;
   onClose: () => void;
+  /** True while the popover plays its closing transition before unmounting. */
+  closing?: boolean;
+  style?: CSSProperties;
 }) {
-  const [scope, setScope] = useState<ScratchpadScope>(terminalScope);
+  const [selection, setSelection] = useState<"terminal" | "global">("terminal");
+  const scope = selection === "global" ? "global" : terminalScope;
   const [text, setText] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -44,6 +50,7 @@ export function TerminalScratchpad({
       ? `Terminal note for ${ownerLabel}`
       : `Connection note for ${ownerLabel}`;
   const scopedOwnerId = scope === "global" ? "global" : ownerId;
+  useLayoutEffect(() => setText(""), [scope, scopedOwnerId]);
 
   useEffect(() => {
     // Clicks outside the popover close it, except on its own trigger button,
@@ -52,14 +59,27 @@ export function TerminalScratchpad({
       const target = event.target instanceof Node ? event.target : null;
       if (rootRef.current?.contains(target)) return;
       if (target instanceof Element && target.closest("[data-scratchpad-trigger]")) return;
+      if (target instanceof Element && target.closest(".modal-backdrop")) return;
       onCloseRef.current();
     };
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
 
+  useEffect(() => {
+    // The editor owns the initial focus through autoFocus; this repeats it
+    // when a quick reopen cancels the closing transition, since the popover
+    // element stayed mounted and autoFocus never runs a second time.
+    if (closing) return;
+    rootRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+  }, [closing]);
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
+    if (
+      event.key === "Escape" &&
+      event.target instanceof Element &&
+      event.target.closest('[role="dialog"]') === event.currentTarget
+    ) {
       event.preventDefault();
       onCloseRef.current();
     }
@@ -74,8 +94,13 @@ export function TerminalScratchpad({
     <div
       ref={rootRef}
       className="scratchpad-popover"
+      style={style}
       role="dialog"
-      aria-label="Scratchpad"
+      aria-label={closing ? undefined : "Scratchpad"}
+      aria-hidden={closing || undefined}
+      inert={closing || undefined}
+      data-closing={closing || undefined}
+      data-app-popover=""
       onKeyDown={onKeyDown}
     >
       <div className="scratchpad-popover-scope" role="group" aria-label="Scratchpad scope">
@@ -84,7 +109,7 @@ export function TerminalScratchpad({
           aria-pressed={scope === terminalScope}
           aria-label={terminalAriaLabel}
           title={ownerLabel}
-          onClick={() => setScope(terminalScope)}
+          onClick={() => setSelection("terminal")}
         >
           {terminalScope === "local" ? (
             <SquareTerminal size={14} aria-hidden="true" />
@@ -97,7 +122,7 @@ export function TerminalScratchpad({
           type="button"
           aria-pressed={scope === "global"}
           aria-label="Global note for all connections"
-          onClick={() => setScope("global")}
+          onClick={() => setSelection("global")}
         >
           <Globe2 size={14} aria-hidden="true" />
           <span>Global</span>
@@ -105,7 +130,6 @@ export function TerminalScratchpad({
       </div>
       <ScratchpadEditor
         key={`${scope}:${scopedOwnerId}`}
-        variant="compact"
         scope={scope}
         ownerId={scopedOwnerId}
         connectionId={scope === "connection" ? ownerId : null}

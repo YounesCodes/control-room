@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { beginHostOperation } from "./host-processing";
 import type {
   AppSettings,
   FontCatalog,
@@ -78,7 +79,7 @@ function writeTerminalInput(sessionId: string, bytes: Uint8Array): Promise<void>
   return write;
 }
 
-function invokeRemoteInspection<T>(
+function invokeRemoteRead<T>(
   command: string,
   args: Record<string, unknown>,
   timeoutMessage = REMOTE_INSPECTION_TIMEOUT_MESSAGE,
@@ -97,6 +98,25 @@ function invokeRemoteInspection<T>(
       },
     );
   });
+}
+
+function invokeRemoteInspection<T>(
+  command: string,
+  args: Record<string, unknown>,
+  timeoutMessage = REMOTE_INSPECTION_TIMEOUT_MESSAGE,
+  timeoutMs = REMOTE_INSPECTION_TIMEOUT_MS,
+): Promise<T> {
+  const finish = beginHostOperation(args.connectionId);
+  return invokeRemoteRead<T>(command, args, timeoutMessage, timeoutMs).finally(finish);
+}
+
+function invokeHostOperation<T>(
+  command: string,
+  args: Record<string, unknown>,
+  connectionId: unknown,
+) {
+  const finish = beginHostOperation(connectionId);
+  return invoke<T>(command, args).finally(finish);
 }
 
 export const api = {
@@ -180,7 +200,7 @@ export const api = {
       REMOTE_DISCOVERY_TIMEOUT_MS,
     ),
   sampleHeaderMetrics: (connectionId: string | null, metrics: HeaderMetric[]) =>
-    invokeRemoteInspection<HeaderMetrics>(
+    invokeRemoteRead<HeaderMetrics>(
       "sample_header_metrics",
       { connectionId, metrics },
       `Host metrics did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`,
@@ -227,14 +247,18 @@ export const api = {
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
   ) =>
-    invoke<{ streamId: string }>("start_journal_stream", {
+    invokeHostOperation<{ streamId: string }>(
+      "start_journal_stream",
+      {
+        connectionId,
+        service,
+        lines,
+        follow,
+        sudoPassword,
+        output,
+      },
       connectionId,
-      service,
-      lines,
-      follow,
-      sudoPassword,
-      output,
-    }),
+    ),
   startDockerLogStream: (
     connectionId: string,
     container: string,
@@ -243,17 +267,25 @@ export const api = {
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
   ) =>
-    invoke<{ streamId: string }>("start_docker_log_stream", {
+    invokeHostOperation<{ streamId: string }>(
+      "start_docker_log_stream",
+      {
+        connectionId,
+        container,
+        lines,
+        follow,
+        sudoPassword,
+        output,
+      },
       connectionId,
-      container,
-      lines,
-      follow,
-      sudoPassword,
-      output,
-    }),
+    ),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
   captureHostBaseline: (request: BaselineCaptureRequest, progress: Channel<BaselineProgress>) =>
-    invoke<HostBaselineSummary>("capture_host_baseline", { request, progress }),
+    invokeHostOperation<HostBaselineSummary>(
+      "capture_host_baseline",
+      { request, progress },
+      request.connectionId,
+    ),
   cancelHostBaseline: (captureId: string) => invoke<void>("cancel_host_baseline", { captureId }),
   listHostBaselines: (connectionId: string) =>
     invoke<HostBaselineSummary[]>("list_host_baselines", { connectionId }),
@@ -264,7 +296,11 @@ export const api = {
     invoke<HostBaselineSummary>("set_host_baseline_pinned", { id, pinned }),
   deleteHostBaseline: (id: string) => invoke<void>("delete_host_baseline", { id }),
   traceHostBaselineEntry: (connectionId: string, kind: BaselineSectionKind, identity: string) =>
-    invoke<BaselineTrace>("trace_host_baseline_entry", { connectionId, kind, identity }),
+    invokeHostOperation<BaselineTrace>(
+      "trace_host_baseline_entry",
+      { connectionId, kind, identity },
+      connectionId,
+    ),
   exportTextFile: (path: string, contents: string) =>
     invoke<void>("export_text_file", { path, contents }),
   compareHostBaselines: (baseId: string, targetId: string) =>
@@ -273,12 +309,17 @@ export const api = {
     baseId: string,
     captureId: string,
     progress: Channel<BaselineProgress>,
+    connectionId?: string,
   ) =>
-    invoke<BaselineComparison>("compare_host_baseline_with_live", {
-      baseId,
-      captureId,
-      progress,
-    }),
+    invokeHostOperation<BaselineComparison>(
+      "compare_host_baseline_with_live",
+      {
+        baseId,
+        captureId,
+        progress,
+      },
+      connectionId,
+    ),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),

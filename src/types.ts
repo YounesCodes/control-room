@@ -418,7 +418,8 @@ export interface HistoryInput {
   shell: string;
 }
 
-export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "uptime";
+// "disk" remains readable in older settings and is filtered out before display or sampling.
+export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "diskIo" | "uptime";
 
 export interface HeaderMetrics {
   sampledAt: string;
@@ -429,6 +430,8 @@ export interface HeaderMetrics {
   diskTotalKib: number | null;
   diskFreeKib: number | null;
   diskLabel: string | null;
+  diskReadBytesPerSecond: number | null;
+  diskWriteBytesPerSecond: number | null;
   uptimeSeconds: number | null;
 }
 
@@ -537,8 +540,7 @@ export type WorkspaceView =
   | "boot"
   | "logs"
   | "baselines"
-  | "history"
-  | "scratchpad";
+  | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -614,7 +616,8 @@ interface PersistedWorkspace {
   connectionId: string | null;
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
-  view: WorkspaceView;
+  /** Older app versions persisted the standalone Scratchpad page. */
+  view: WorkspaceView | "scratchpad";
   historyPaused: boolean;
 }
 

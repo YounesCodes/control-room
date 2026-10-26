@@ -575,12 +575,11 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "Git Bash");
 
-    // A local shell offers only its terminal and Scratchpad views. None of
+    // A local shell offers only its terminal view. None of
     // the Remote Host inspection views are offered.
     const features = within(await screen.findByRole("navigation", { name: "Workspace features" }));
     expect(features.getAllByRole("button").map((button) => button.textContent?.trim())).toEqual([
       "Terminal",
-      "Scratchpad",
     ]);
     for (const view of [
       "Overview",
@@ -610,11 +609,11 @@ describe("Local Terminal", () => {
     await openLocalShell(user, "PowerShell 7");
 
     // The capped list makes room for the view switcher, which a local
-    // Workspace now also carries for its Terminal and Scratchpad views.
+    // Workspace also carries for its Terminal view.
     await waitFor(() =>
       expect(container.querySelector("aside.sidebar")?.className).toContain("workspace-open"),
     );
-    expect(container.querySelector(".feature-nav")?.textContent).toContain("Scratchpad");
+    expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Scratchpad");
   });
 
   it("never runs host capability discovery for a local shell", async () => {
@@ -1166,7 +1165,7 @@ describe("Local Terminal", () => {
       expect(state.workspaces[0].connectionId).toBeNull();
     });
   });
-  it("gives a local Workspace its own Scratchpad page bound to that tab", async () => {
+  it("opens a local terminal note through the toolbar without a sidebar page", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -1175,24 +1174,24 @@ describe("Local Terminal", () => {
     const workspaceId = terminal.dataset.testid!.slice("terminal-".length);
 
     await user.click(
-      within(screen.getByRole("navigation", { name: "Workspace features" })).getByRole("button", {
+      within(screen.getByRole("group", { name: "Terminal actions" })).getByRole("button", {
         name: "Scratchpad",
       }),
     );
     const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
-    await user.type(editor, "full-page note");
+    await user.type(editor, "terminal note");
     await waitFor(() =>
       expect(api.saveScratchpadNote).toHaveBeenCalledWith(
         expect.objectContaining({
           scope: "local",
           ownerId: workspaceId,
           connectionId: null,
-          text: "full-page note",
+          text: "terminal note",
         }),
       ),
     );
 
-    // The same note the terminal popover edits, on one page per tab.
+    // The popup keeps the global note separate from the terminal note.
     await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
     expect(await screen.findByLabelText("Global note")).toBeTruthy();
     await user.click(

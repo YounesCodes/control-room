@@ -4,6 +4,7 @@ description: Choose host metrics, terminal appearance, local shells, logs, and u
 ---
 
 import settingsScreenshot from "../../../assets/screenshots/settings.png";
+import metricsScreenshot from "../../../assets/screenshots/live-metrics.png";
 
 Open **Settings** from the top bar. Select **Save settings** to apply changes. Catalog fonts have their own **Install and use** action.
 
@@ -50,11 +51,25 @@ remain available during the current app session.
 
 ## Host metrics
 
-Enable **Show host metrics in header** to see CPU, RAM, GPU, disk usage, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and a **Host metrics refresh interval** of 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip.
+Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and a **Host metrics refresh interval** of 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
 
-Click the reading status, such as **Live**, beside the metrics for capacity, the last reading time, **Refresh**, and **Customize in Settings**. Disk usage covers the Windows system drive for local tabs, all fixed drives for Windows SSH hosts, and `/` for Linux SSH hosts. GPU shows the busiest reported engine or device. Windows needs GPU performance counters; Linux uses NVIDIA's `nvidia-smi` with `timeout`, or AMD's `gpu_busy_percent` when available. Other drivers may show **Unavailable**. WSL terminals on Windows connections show Windows readings.
+**Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**.
 
-Monitoring pauses while Settings is open, Focus Mode is active, or the window is hidden. A failed refresh keeps the last values and marks them **Stale**. Readings use no sudo and are not saved as history.
+Click the reading status, such as **Live**, beside the metrics for the last reading time, **Refresh**, and **Customize in Settings**. The CPU, RAM, and GPU charts show up to twenty recent readings on a 0–100% scale and reset when you change hosts or monitoring pauses. These short trends stay in memory and are not saved. Disk I/O shows separate read and write speeds without a graph.
+
+<figure class="docs-screenshot">
+  <a href={metricsScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={metricsScreenshot.src}
+      alt="Live header readings with small trend lines, Disk I/O read and write speeds, and an open reading details panel."
+    />
+  </a>
+  <figcaption>Read and write activity is separate from space used. Example data shown.</figcaption>
+</figure>
+
+GPU shows the busiest reported engine or device. Windows needs GPU performance counters; Linux uses NVIDIA's `nvidia-smi` with `timeout`, or AMD's `gpu_busy_percent` when available. Other drivers may show **Unavailable**. Missing readings appear as a dash in the header and are explained in the details. WSL terminals on Windows connections show Windows readings.
+
+Monitoring pauses while Settings is open, Focus Mode is active, or the window is hidden. A failed refresh keeps the last values and marks them **Stale**. Animations respect reduced motion. Readings use no sudo and are not saved as history.
 
 ## Local terminal
 

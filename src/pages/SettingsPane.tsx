@@ -2,7 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { api, errorMessage } from "../lib/api";
-import { DEFAULT_HEADER_METRICS, HEADER_METRIC_LABELS } from "../lib/header-metrics";
+import {
+  DEFAULT_HEADER_METRICS,
+  HEADER_METRIC_LABELS,
+  displayedHeaderMetrics,
+} from "../lib/header-metrics";
 import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
@@ -291,12 +295,8 @@ export function SettingsPane({
                 </select>
               </label>
             </fieldset>
-            <small>
-              Disk reads the Windows system drive or the SSH host's root filesystem. GPU
-              availability depends on its driver. Monitoring pauses while Settings is open or the
-              window is hidden.
-            </small>
-            {draft.hostMetricsEnabled && draft.hostMetrics?.length === 0 && (
+            <small>Monitoring pauses while Settings is open or the window is hidden.</small>
+            {draft.hostMetricsEnabled && displayedHeaderMetrics(draft.hostMetrics).length === 0 && (
               <small>Select a metric to display the header.</small>
             )}
           </fieldset>

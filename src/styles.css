@@ -68,6 +68,30 @@
   --warning: #d6a84a;
   --failure: #ef5b6b;
 
+  /* Identity marks: OS and shell brand hues, revealed on hover or selection
+     as identification — never at rest and never a status signal. Alpine,
+     CentOS, and AlmaLinux use their official hue lightened just enough to
+     read on the app's dark surfaces. */
+  --os-ubuntu: #e95420;
+  --os-debian: #d70a53;
+  --os-windows: #0078d4;
+  --os-fedora: #51a2da;
+  --os-arch: #1793d1;
+  --os-opensuse: #73ba25;
+  --os-alpine: #6293ac;
+  --os-mint: #86be43;
+  --os-kali: #557c94;
+  --os-rhel: #ee0000;
+  --os-centos: #8887b4;
+  --os-rocky: #10b981;
+  --os-alma: #7ea4bf;
+  --os-nixos: #5277c3;
+  --os-manjaro: #35bf5c;
+  --os-suse: #5aa48f;
+  --os-oracle: #f80000;
+  --os-amazon: #ff9900;
+  --shell-accent: #5391fe;
+
   /* Surface elevation ramp — lighter reads as higher. */
   --surface-base: #090909;
   --surface-sunken: #050505;
@@ -104,6 +128,7 @@
   /* Motion. */
   --motion-fast: 110ms;
   --motion-med: 160ms;
+  --motion-slow: 240ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -182,7 +207,8 @@ button {
     background-color var(--motion-fast) var(--ease),
     color var(--motion-fast) var(--ease),
     border-color var(--motion-fast) var(--ease),
-    opacity var(--motion-fast) var(--ease);
+    opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease);
 }
 
 button:not(:disabled) {
@@ -322,8 +348,11 @@ code,
    ========================================================================== */
 
 .app-shell {
+  position: relative;
   display: grid;
   --connection-rail-width: 244px;
+  --window-control-width: 46px;
+  --window-actions-width: calc(40px + 3 * var(--window-control-width));
   grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
   grid-template-rows: 42px minmax(0, 1fr);
   height: 100%;
@@ -344,6 +373,42 @@ code,
   justify-content: flex-end;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--topbar-bg);
+  padding-right: var(--window-actions-width);
+}
+
+/* One window-anchored control group serves both titlebar and Focus Mode. */
+.app-window-actions {
+  position: absolute;
+  z-index: 35;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: var(--window-actions-width);
+  height: 42px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--topbar-bg);
+}
+
+.app-window-actions > .window-controls {
+  grid-column: 2;
+}
+
+.app-window-actions .app-focus-toggle {
+  width: 40px;
+  height: 100%;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.app-focus-toggle[aria-pressed="true"] {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+.app-window-actions .app-focus-toggle:active:not(:disabled) {
+  background: var(--fill-active);
+  transform: none;
 }
 
 .app-bar-actions {
@@ -380,11 +445,11 @@ code,
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 .host-metrics-trigger {
@@ -392,9 +457,11 @@ code,
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  min-height: 28px;
-  padding: 5px 8px;
-  border: 1px solid var(--border-subtle);
+  min-width: 78px;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
@@ -403,29 +470,127 @@ code,
   border-color: var(--border);
   background: var(--fill-hover);
 }
+.host-metrics-trigger > svg {
+  transition: transform var(--motion-med) var(--ease);
+}
 .host-metrics-trigger[aria-expanded="true"] > svg {
   transform: rotate(180deg);
 }
 .host-metrics-values {
   border-left: 1px solid var(--border-subtle);
   display: flex;
-  gap: 16px;
+  flex: 1;
+  gap: 14px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
-  padding: 6px 0 6px 12px;
+  padding: 2px 0 2px 14px;
+  align-items: center;
 }
 .host-metric {
   display: flex;
-  gap: 6px;
-  align-items: baseline;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 82px;
+  padding-right: 14px;
+  border-right: 1px solid var(--border-subtle);
   white-space: nowrap;
+}
+.host-metric:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+.host-metric-label {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 12px;
+  letter-spacing: 0.04em;
 }
 .host-metric strong {
   color: var(--text-strong);
-  font-weight: 500;
+  font-weight: 550;
+  font-size: 11.5px;
+  line-height: 16px;
   font-variant-numeric: tabular-nums;
   min-width: 3ch;
+}
+.host-metric-reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.host-metric-value {
+  min-width: 4ch;
+  animation: metric-value-in var(--motion-med) var(--ease);
+}
+.host-metric-direction {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+}
+.host-metric-direction:not(:first-child) {
+  margin-left: 5px;
+}
+.host-metric[data-metric="diskIo"] {
+  min-width: 166px;
+}
+.host-metric[data-metric="uptime"] {
+  min-width: 56px;
+}
+.host-metric[data-available="false"] .host-metric-value {
+  color: var(--text-faint);
+}
+.host-metric-trend {
+  width: 34px;
+  height: 16px;
+  flex: none;
+  color: var(--text-muted);
+  opacity: 0.65;
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity var(--motion-med) var(--ease);
+}
+.host-metric-trend path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: d var(--motion-med) var(--ease);
+}
+.host-metrics:not([data-state="live"]) .host-metric-trend {
+  opacity: 0.25;
+}
+.host-metrics[data-state="live"][data-sampling] .host-metrics-status svg {
+  animation: metric-reading 1s var(--ease) infinite;
+}
+.host-metric-detail-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.host-metric-detail-value .host-metric-trend {
+  width: 68px;
+  height: 22px;
+}
+@keyframes metric-value-in {
+  from {
+    opacity: 0.5;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes metric-reading {
+  50% {
+    opacity: 0.4;
+  }
 }
 .host-metrics-status {
   display: inline-flex;
@@ -454,7 +619,7 @@ code,
   position: absolute;
   top: calc(100% + 10px);
   left: 12px;
-  width: min(360px, calc(100vw - 40px));
+  width: min(420px, calc(100vw - 40px));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
@@ -462,6 +627,7 @@ code,
   color: var(--text-strong);
   max-height: calc(100vh - 100px);
   overflow-y: auto;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 .host-metrics-panel header,
 .host-metrics-panel footer {
@@ -485,7 +651,7 @@ code,
 }
 .host-metrics-panel dl > div {
   display: grid;
-  grid-template-columns: 60px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   padding: 8px 0;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -535,6 +701,23 @@ code,
 @media (max-width: 1000px) {
   .host-metrics {
     gap: 8px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .host-metrics {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+  .host-metrics-values {
+    gap: 12px;
+    padding-left: 12px;
+  }
+  .host-metric[data-metric="uptime"] {
+    min-width: 54px;
+  }
+  .host-metric-trend {
+    width: 26px;
   }
 }
 
@@ -589,6 +772,9 @@ code,
 
 .update-indicator-dot[data-state="ready"] {
   background: var(--success);
+  /* Three soft halos announce the download, then the dot rests; the label
+     beside it stays the persistent signal. */
+  animation: ready-ping 2.2s var(--ease) 0.3s 3;
 }
 
 .update-panel {
@@ -616,6 +802,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 14px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .update-panel-header,
@@ -739,13 +926,6 @@ code,
   font-size: 11px;
 }
 
-.window-controls-divider {
-  width: 1px;
-  height: 22px;
-  margin-left: 4px;
-  background: #303030;
-}
-
 .window-controls {
   display: flex;
   height: 100%;
@@ -754,7 +934,7 @@ code,
 
 .window-control-button {
   display: grid;
-  width: 46px;
+  width: var(--window-control-width, 46px);
   height: 100%;
   place-items: center;
   background: transparent;
@@ -921,6 +1101,16 @@ code,
   padding: 3px 8px;
   color: var(--text-faint);
   text-align: left;
+}
+
+/* One chevron rotates between collapsed and expanded instead of swapping
+   glyphs, so the state change reads as a movement of the same control. */
+.connection-group-heading > svg {
+  transition: transform var(--motion-med) var(--ease);
+}
+
+.connection-group-heading[aria-expanded="false"] > svg {
+  transform: rotate(-90deg);
 }
 
 .connection-group-heading:hover,
@@ -1107,6 +1297,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .host-context-menu button {
@@ -1203,23 +1394,42 @@ code,
   padding: 10px 14px 12px;
 }
 
+/* The rail's persistent action sits quiet: a raised charcoal surface that
+   reads as clickable without competing with the host list the way a filled
+   accent button did. Filled accent stays reserved for the one main decision
+   inside dialogs. */
 .sidebar-primary {
   display: flex;
   width: 100%;
   min-height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--fill-control);
   padding: 0 11px;
-  background: var(--accent);
-  color: var(--on-accent);
+  color: var(--text);
   font-size: 12.5px;
   font-weight: 650;
 }
 
+.sidebar-primary svg {
+  transition:
+    color var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease);
+}
+
 .sidebar-primary:hover {
-  background: var(--accent-hover);
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+  color: var(--text-strong);
+}
+
+.sidebar-primary:hover svg,
+.sidebar-primary:focus-visible svg {
+  color: var(--text-strong);
+  transform: translateX(1px);
 }
 
 /* The Local Terminal launcher sits above Add connection: a secondary action,
@@ -1259,6 +1469,9 @@ code,
   display: flex;
   width: max-content;
   min-width: 100%;
+  max-width: calc(100vw - 28px);
+  max-height: min(420px, calc(100vh - 100px));
+  overflow-y: auto;
   flex-direction: column;
   gap: 2px;
   border: 1px solid var(--border-strong);
@@ -1266,6 +1479,7 @@ code,
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .local-shell-menu-group {
@@ -1280,31 +1494,38 @@ code,
 }
 
 .local-shell-menu-group > strong {
-  padding: 4px 9px 5px;
+  padding: 4px 8px 3px;
   color: var(--text-faint);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .local-shell-menu button {
   display: flex;
-  min-height: 30px;
+  min-height: 28px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-muted);
   font-size: 11.5px;
   text-align: left;
   white-space: nowrap;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
 .local-shell-menu button:hover {
   background: var(--fill-active);
   color: var(--text-strong);
+}
+
+.local-shell-menu button:active {
+  background: var(--fill-selected);
 }
 
 .administrator-terminal-icon,
@@ -1334,6 +1555,7 @@ code,
 .local-shell-mark {
   flex: none;
   color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease);
 }
 
 /* ==========================================================================
@@ -1497,26 +1719,34 @@ code,
   overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .session-tab-overflow-menu > button {
   display: flex;
   align-items: center;
   width: 100%;
+  min-height: 30px;
   gap: 8px;
-  padding: 8px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   text-align: left;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .session-tab-overflow-menu > button:hover,
+.session-tab-overflow-menu > button:focus,
 .session-tab-overflow-menu > button:focus-visible {
-  background: var(--fill-hover);
+  background: var(--fill-active);
+}
+
+.session-tab-overflow-menu > button:active {
+  background: var(--fill-selected);
 }
 
 .session-tab-menu-check {
@@ -1532,6 +1762,7 @@ code,
   flex: none;
   place-items: center;
   color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease);
 }
 
 .local-shell-icon svg {
@@ -1639,12 +1870,14 @@ code,
      highlight fills the full header height; the overlay drag strip above the
      top pixels stays the drag target. */
   padding-top: 0;
+  min-height: 42px;
+  padding-right: var(--window-actions-width);
 }
 
 .session-window-drag-region {
   position: absolute;
   z-index: 1;
-  inset: 0 0 auto;
+  inset: 0 var(--window-actions-width) auto 0;
   height: 6px;
   cursor: grab;
 }
@@ -1680,7 +1913,8 @@ code,
   font-size: 11.5px;
   transition:
     background-color var(--motion-fast) var(--ease),
-    color var(--motion-fast) var(--ease);
+    color var(--motion-fast) var(--ease),
+    border-bottom-color var(--motion-fast) var(--ease);
 }
 
 .session-tab-wrap:hover {
@@ -1695,23 +1929,18 @@ code,
   align-items: center;
   gap: 8px;
   background: transparent;
-  padding: 0 4px 0 12px;
+  /* The trailing 8px keeps the session and activity cues off the tab border;
+     hovering still opens the Rename/Close action space from here. */
+  padding: 0 8px 0 12px;
   color: inherit;
+  /* Hovering reserves room for Rename and Close; animating the padding drags
+     the trailing session dot and label across instead of letting them jump. */
+  transition: padding var(--motion-med) var(--ease);
 }
 
 .session-tab-wrap:hover .session-tab-main,
 .session-tab-wrap:focus-within .session-tab-main {
   padding-right: 56px;
-}
-
-.session-tab-wrap.in-layout .session-tab-main {
-  padding-right: 56px;
-}
-
-.session-tab-wrap.in-layout .session-tab-rename,
-.session-tab-wrap.in-layout .session-tab-close {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .session-group-action {
@@ -1739,6 +1968,8 @@ code,
   white-space: nowrap;
 }
 
+/* The cue pops in when output or a bell arrives on an inactive terminal, so
+   the eye is drawn to the new mark instead of it silently appearing. */
 .terminal-activity {
   width: 7px;
   height: 7px;
@@ -1746,10 +1977,14 @@ code,
   border-radius: 50%;
   background: var(--text-muted);
   box-shadow: 0 0 0 2px var(--surface-chrome);
+  animation: cue-in var(--motion-fast) var(--ease);
 }
 
 .terminal-activity-bell {
   background: var(--warning);
+  animation:
+    cue-in var(--motion-fast) var(--ease),
+    bell-ping 0.7s var(--ease) 0.05s 1;
 }
 
 .host-os-icon {
@@ -1759,6 +1994,7 @@ code,
   flex: none;
   place-items: center;
   color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease);
 }
 
 .host-os-icon svg {
@@ -1769,7 +2005,22 @@ code,
 
 .host-os-debian path,
 .host-os-ubuntu path,
-.host-os-windows path {
+.host-os-windows path,
+.host-os-fedora path,
+.host-os-arch path,
+.host-os-opensuse path,
+.host-os-alpine path,
+.host-os-mint path,
+.host-os-kali path,
+.host-os-rhel path,
+.host-os-centos path,
+.host-os-rocky path,
+.host-os-alma path,
+.host-os-nixos path,
+.host-os-manjaro path,
+.host-os-suse path,
+.host-os-oracle path,
+.host-os-amazon path {
   fill: currentColor;
 }
 
@@ -1811,29 +2062,39 @@ code,
 }
 
 .presence {
+  --presence-color: var(--text-faint);
   display: inline-block;
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--presence-color);
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .presence-connected {
-  background: var(--success);
+  --presence-color: var(--success);
 }
 
 .presence-connecting {
-  background: var(--warning);
+  --presence-color: var(--warning);
 }
 
 .presence-error {
-  background: var(--failure);
-  border-radius: 1px;
+  --presence-color: var(--failure);
 }
 
 .presence-disconnected {
-  background: #6a6a6a;
+  --presence-color: #6a6a6a;
+}
+
+.presence.presence-busy,
+.presence.presence-connecting {
+  box-sizing: border-box;
+  background: transparent;
+  border: 1.5px solid var(--presence-color);
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
 }
 
 .session-tab-close,
@@ -1850,8 +2111,12 @@ code,
   color: #767673;
   opacity: 0;
   pointer-events: none;
+  /* Hidden controls rest a step to the right, so revealing them reads as the
+     tools sliding into the space the label just vacated. */
+  transform: translateX(6px);
   transition:
     opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease),
     background-color var(--motion-fast) var(--ease),
     color var(--motion-fast) var(--ease);
 }
@@ -1868,6 +2133,7 @@ code,
 .session-tab-rename:focus-visible {
   opacity: 1;
   pointer-events: auto;
+  transform: translateX(0);
 }
 
 .session-tab-close:hover,
@@ -1954,52 +2220,44 @@ code,
   color: var(--text-strong);
 }
 
-.session-tab-actions .window-controls-divider {
-  height: 22px;
-  align-self: center;
-  margin-left: 2px;
-}
-
-.session-tab-actions .window-control-button {
-  width: 44px;
-}
-
 .terminal-target-menu {
   position: absolute;
   z-index: 30;
   top: calc(100% + 1px);
   right: 0;
   display: flex;
-  width: 284px;
+  width: 248px;
   max-height: 420px;
   flex-direction: column;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 8px;
+  padding: 5px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .terminal-split-directions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 5px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 6px;
-  padding-bottom: 8px;
+  margin-bottom: 4px;
+  padding-bottom: 7px;
 }
 
 .terminal-split-directions button {
   display: flex;
   min-width: 0;
-  min-height: 48px;
+  min-height: 42px;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: #111;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-muted);
   text-align: left;
 }
@@ -2029,30 +2287,57 @@ code,
 }
 
 .terminal-target-menu strong {
-  padding: 6px 9px 7px;
+  padding: 5px 8px 3px;
   color: var(--text-faint);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .terminal-target-menu .terminal-target-group > button {
   display: flex;
-  min-height: 34px;
+  min-height: 28px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-muted);
   font-size: 11.5px;
   text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
-.terminal-target-menu .terminal-target-group > button:hover {
+.terminal-target-menu .terminal-target-group > button:hover,
+.terminal-target-menu .terminal-target-group > button[data-active="true"] {
   background: var(--fill-active);
   color: var(--text-strong);
+}
+
+/* After the keyboard moves the selection, the pointer may still rest on
+   another row; until it moves again, that stale hover must not compete with
+   the arrow-key selection, exactly like a native menu. */
+.terminal-target-menu[data-keyboard-nav]
+  .terminal-target-group
+  > button:hover:not([data-active="true"]) {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.terminal-target-menu[data-keyboard-nav]
+  .terminal-target-group
+  > button:hover:not([data-active="true"])
+  .identity-mark {
+  color: var(--text-muted);
+}
+
+/* Dense menu rows deepen their fill on press instead of moving: the row the
+   user is about to click must not shift under the pointer. */
+.terminal-target-menu .terminal-target-group > button:active {
+  background: var(--fill-selected);
 }
 
 .terminal-target-menu .terminal-target-group > button span:last-child {
@@ -2071,7 +2356,9 @@ code,
 }
 
 /* New terminal hangs off the tab strip, so it opens below and to the left of
-   its own control rather than the right edge of the strip. */
+   its own control rather than the right edge of the strip. Inline style owns
+   the anchored top-or-bottom position; the autos here only keep the base
+   menu's absolute offsets from leaking into the fixed placement. */
 /* Contributes no box of its own: the button inside must stay a full-height
    flex cell, or its hover shrinks to the size of the text. */
 .session-new-terminal-anchor {
@@ -2082,7 +2369,16 @@ code,
   position: fixed;
   top: auto;
   right: auto;
-  width: 260px;
+  bottom: auto;
+  width: 248px;
+}
+
+.terminal-split-menu {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 264px;
 }
 
 /* ==========================================================================
@@ -2096,6 +2392,7 @@ code,
   flex: none;
   border-radius: 50%;
   background: var(--text-faint);
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .status-connected {
@@ -2105,6 +2402,7 @@ code,
 .status-connecting {
   border: 2px solid var(--warning);
   background: transparent;
+  animation: state-pulse 1.4s var(--ease) infinite;
 }
 
 .status-error {
@@ -2725,6 +3023,7 @@ code,
   box-shadow: var(--shadow-popover);
   padding: 5px;
   color: var(--text-muted);
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .terminal-search input {
@@ -2803,92 +3102,8 @@ code,
 .overview-page,
 .history-page,
 .logs-page,
-.scratchpad-page,
 .boot-page {
   padding: 26px 30px;
-}
-
-.scratchpad-page {
-  display: flex;
-  flex-direction: column;
-}
-
-.scratchpad-heading {
-  width: 100%;
-  align-items: center;
-}
-
-.scratchpad-scope-switch {
-  display: grid;
-  width: min(410px, 48%);
-  flex: none;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-sunken);
-  padding: 4px;
-}
-
-.scratchpad-scope-switch button {
-  display: flex;
-  min-width: 0;
-  min-height: 52px;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 7px 11px;
-  background: var(--surface-raised);
-  color: var(--text);
-  text-align: left;
-}
-
-.scratchpad-scope-switch button svg {
-  flex: none;
-  color: var(--text-faint);
-}
-
-.scratchpad-scope-switch button:hover {
-  background: var(--fill-hover);
-  color: var(--text);
-}
-
-.scratchpad-scope-switch button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--fill-selected);
-  color: var(--text-strong);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
-}
-
-.scratchpad-scope-switch button[aria-pressed="true"] svg {
-  color: var(--accent);
-}
-
-.scratchpad-scope-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.scratchpad-scope-copy strong {
-  font-size: 11.5px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.scratchpad-scope-copy span {
-  overflow: hidden;
-  color: var(--text-faint);
-  font-size: 10px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.scratchpad-scope-switch button[aria-pressed="true"] .scratchpad-scope-copy span {
-  color: var(--text-muted);
 }
 
 .scratchpad-editor {
@@ -2900,27 +3115,6 @@ code,
   border-top: 1px solid var(--border);
 }
 
-.scratchpad-meta {
-  display: flex;
-  min-height: 58px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.scratchpad-meta > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.scratchpad-meta strong {
-  color: var(--text);
-  font-size: 12.5px;
-}
-
-.scratchpad-meta span,
 .scratchpad-save-state {
   color: var(--text-faint);
   font-size: 11px;
@@ -2947,75 +3141,91 @@ code,
   white-space: pre-wrap;
 }
 
-.scratchpad-footer {
+.scratchpad-editor-tools,
+.scratchpad-edit-actions {
   display: flex;
   align-items: center;
+  gap: 3px;
+}
+
+.scratchpad-editor-tools {
   justify-content: space-between;
-  gap: 18px;
-  padding-top: 12px;
+  gap: 8px;
 }
 
-.scratchpad-footer p {
-  max-width: 560px;
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.scratchpad-footer .row-actions {
-  display: flex;
-  flex: none;
-  gap: 7px;
+.scratchpad-edit-actions .icon-button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: var(--radius-sm);
 }
 
 /* The terminal action strip's Scratchpad popover. Anchored like the split
    menu so opening it overlays the workspace instead of reflowing the strip. */
 .scratchpad-popover {
-  position: absolute;
+  position: fixed;
   z-index: 30;
-  top: calc(100% + 3px);
+  top: auto;
   /* A gutter from the window edge keeps the popover's own border readable
      instead of merging with the window's. */
-  right: 6px;
+  right: auto;
+  bottom: auto;
   display: flex;
-  width: min(356px, calc(100vw - 40px));
+  width: min(320px, calc(100vw - 40px));
+  max-height: calc(100vh - 76px);
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 8px;
+  padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
+/* Terminal/Global read as one segmented control: a single quiet well with
+   two segments, where the active note scope raises its fill instead of
+   drawing its own bordered button. */
 .scratchpad-popover-scope {
   display: flex;
-  gap: 6px;
-  padding-bottom: 8px;
+  flex: none;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #0a0a0a;
+  margin-bottom: 6px;
+  padding: 2px;
 }
 
 .scratchpad-popover-scope button {
   display: inline-flex;
   flex: 1;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: #111;
-  padding: 6px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  padding: 4px 8px;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
 .scratchpad-popover-scope button:hover {
-  background: var(--fill-hover);
   color: var(--text-strong);
 }
 
+.scratchpad-popover-scope button:active {
+  background: var(--fill-hover);
+}
+
 .scratchpad-popover-scope button[aria-pressed="true"] {
-  border-color: var(--accent);
   background: var(--fill-active);
   color: var(--text-strong);
 }
@@ -3027,24 +3237,32 @@ code,
 
 .scratchpad-editor-compact .scratchpad-save-state {
   display: block;
-  padding: 2px 2px 6px;
+  padding: 1px 2px 5px;
 }
 
 .scratchpad-editor-compact textarea {
-  min-height: 150px;
-  max-height: 260px;
+  min-height: 116px;
+  max-height: 220px;
   flex: none;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: #0a0a0a;
-  padding: 10px;
+  padding: 8px;
 }
 
 .scratchpad-popover-actions {
   display: flex;
+  flex: none;
   justify-content: flex-end;
-  gap: 7px;
-  padding-top: 8px;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.scratchpad-popover-actions .secondary-button {
+  min-height: 27px;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 11px;
 }
 
 .overview-content {
@@ -4088,6 +4306,7 @@ dd {
   padding: 30px;
   color: var(--text-muted);
   text-align: center;
+  animation: overlay-in var(--motion-slow) var(--ease);
 }
 
 .panel-state svg {
@@ -5017,7 +5236,7 @@ dd {
   border-radius: var(--radius-lg);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-modal);
-  animation: popover-in var(--motion-med) var(--ease);
+  animation: dialog-in var(--motion-med) var(--ease);
 }
 
 .modal-header {
@@ -5501,6 +5720,14 @@ kbd {
   padding: 8px 10px;
   color: var(--text-muted);
   text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.command-item:hover {
+  background: var(--fill-hover);
+  color: var(--text);
 }
 
 .command-item svg,
@@ -5596,6 +5823,243 @@ kbd {
   }
 }
 
+/* The shared exit for anchored popovers: the mirror of popover-in, retreating
+   toward the trigger that opened it. While it plays the popover ignores the
+   pointer, so a fading menu can never catch a click meant for what is under
+   it; unmount follows the animation length (POPOVER_EXIT_MS). */
+@keyframes popover-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+[data-closing] {
+  pointer-events: none;
+  animation: popover-out var(--motion-fast) var(--ease) forwards;
+}
+
+/* Centered dialogs rise in place like native Windows sheets instead of
+   dropping from above like anchored menus. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A cue that mounts (new terminal output) pops into place rather than
+   silently appearing. */
+@keyframes cue-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* An in-progress state (connecting) breathes until it resolves. */
+@keyframes state-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* One-shot halos: the bell asks for attention once, and the downloaded-update
+   dot announces readiness three times before resting. */
+@keyframes bell-ping {
+  from {
+    box-shadow:
+      0 0 0 2px var(--surface-chrome),
+      0 0 0 0 color-mix(in srgb, var(--warning) 45%, transparent);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px var(--surface-chrome),
+      0 0 0 6px transparent;
+  }
+}
+
+@keyframes ready-ping {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* ==========================================================================
+   Press feedback
+   Compact controls dip under the pointer; dense rows, tabs, and list items
+   deepen their fill instead, so high-frequency targets never wobble. Native
+   window controls stay exempt: they mimic the operating system, not the app.
+   ========================================================================== */
+
+.icon-button:active:not(:disabled),
+.toolbar-button:active:not(:disabled),
+.app-bar-button:active:not(:disabled),
+.host-menu:active:not(:disabled),
+.session-strip-button:active:not(:disabled),
+.session-tab-scroll-button:active:not(:disabled),
+.session-new-terminal:active:not(:disabled),
+.session-tab-close:active:not(:disabled),
+.session-tab-rename:active:not(:disabled),
+.update-indicator-button:active:not(:disabled),
+.host-metrics-trigger:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+/* The host menu button carries its own centering transform. */
+.host-menu:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.93);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled),
+.panel-state button:active:not(:disabled),
+.sidebar-primary:active:not(:disabled),
+.sidebar-secondary:active:not(:disabled),
+.host-metrics-status:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* The launcher animates its icon and fill while keeping its hit area fixed. */
+.sidebar-primary:active:not(:disabled) {
+  transform: none;
+  background: var(--fill-selected);
+}
+
+.host-row:not(.active):active,
+.feature-nav button:not(.active):active,
+.session-tab-wrap:not(.active):active,
+.session-tab-group:not(.active):active,
+.connection-group-heading:active {
+  background: var(--fill-active);
+}
+
+/* ==========================================================================
+   Identity marks
+   OS and shell marks stay neutral at rest and reveal their brand color where
+   the user is headed: the hovered, keyboard-focused, or selected tab, pane
+   tab, menu row, or host row, across workspace tabs, terminal menus, the
+   overflow menus, and the local-shell launcher. Each brand-bearing mark
+   carries its hue in a shared --identity variable, so one reveal rule covers
+   every surface and a new distro only adds a variable. Generic marks and the
+   administrator shield have no brand to reveal and stay neutral. The color
+   identifies; it never signals health.
+   ========================================================================== */
+
+.host-os-ubuntu {
+  --identity: var(--os-ubuntu);
+}
+
+.host-os-debian {
+  --identity: var(--os-debian);
+}
+
+.host-os-windows {
+  --identity: var(--os-windows);
+}
+
+.host-os-fedora {
+  --identity: var(--os-fedora);
+}
+
+.host-os-arch {
+  --identity: var(--os-arch);
+}
+
+.host-os-opensuse {
+  --identity: var(--os-opensuse);
+}
+
+.host-os-alpine {
+  --identity: var(--os-alpine);
+}
+
+.host-os-mint {
+  --identity: var(--os-mint);
+}
+
+.host-os-kali {
+  --identity: var(--os-kali);
+}
+
+.host-os-rhel {
+  --identity: var(--os-rhel);
+}
+
+.host-os-centos {
+  --identity: var(--os-centos);
+}
+
+.host-os-rocky {
+  --identity: var(--os-rocky);
+}
+
+.host-os-alma {
+  --identity: var(--os-alma);
+}
+
+.host-os-nixos {
+  --identity: var(--os-nixos);
+}
+
+.host-os-manjaro {
+  --identity: var(--os-manjaro);
+}
+.host-os-suse {
+  --identity: var(--os-suse);
+}
+.host-os-oracle {
+  --identity: var(--os-oracle);
+}
+.host-os-amazon {
+  --identity: var(--os-amazon);
+}
+
+/* Plain local-terminal marks share one soft blue; the administrator shield
+   never carries .identity-mark and so never reveals a hue. */
+.local-shell-mark.identity-mark,
+.local-shell-icon.identity-mark {
+  --identity: var(--shell-accent);
+}
+
+.session-tab-wrap:hover .identity-mark,
+.session-tab-wrap:focus-within .identity-mark,
+.session-tab-wrap.active .identity-mark,
+.host-row:hover .identity-mark,
+.host-row:focus-within .identity-mark,
+.host-row.active .identity-mark,
+.host-row.menu-open .identity-mark,
+.terminal-target-group button:hover .identity-mark,
+.terminal-target-group button:focus-visible .identity-mark,
+.terminal-target-group button[data-active="true"] .identity-mark,
+.session-tab-overflow-menu > button:hover .identity-mark,
+.session-tab-overflow-menu > button:focus .identity-mark,
+.session-tab-overflow-menu > button:focus-visible .identity-mark,
+.session-tab-overflow-menu > button[aria-current="page"] .identity-mark,
+.local-shell-launcher button:hover .identity-mark,
+.local-shell-launcher button:focus-visible .identity-mark,
+.local-shell-launcher button[aria-expanded="true"] .identity-mark,
+.local-shell-menu button:hover .identity-mark,
+.local-shell-menu button:focus-visible .identity-mark {
+  color: var(--identity);
+}
+
 /* ==========================================================================
    Responsive / density
    ========================================================================== */
@@ -5681,8 +6145,10 @@ kbd {
   *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }
 
@@ -5712,10 +6178,18 @@ kbd {
   color: var(--text-muted);
   font-size: 12.5px;
   cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease),
+    border-bottom-color var(--motion-fast) var(--ease);
 }
 
 .ports-tab:hover {
   color: var(--text);
+}
+
+.ports-tab:not(.active):active {
+  background: var(--fill-hover);
 }
 
 .ports-tab.active {
@@ -6069,6 +6543,7 @@ kbd {
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .font-suggestions li:hover {
@@ -6083,6 +6558,7 @@ kbd {
   min-height: 36px;
   padding: 7px 9px;
   cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 
 .font-suggestions li[aria-selected="true"] {
@@ -6185,6 +6661,7 @@ kbd {
   left: calc(50% - 1px);
   width: 2px;
   pointer-events: none;
+  transition: background-color var(--motion-fast) var(--ease);
 }
 .resize-divider:hover::after {
   background: var(--text-muted);
@@ -6274,10 +6751,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   right: 6px;
 }
 
-.connection-section-content > .scratchpad-page {
-  right: 0;
-}
-
 .content-divider {
   right: 0;
 }
@@ -6361,7 +6834,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .overview-page,
   .history-page,
   .logs-page,
-  .scratchpad-page,
   .boot-page {
     padding: 20px;
   }
@@ -6469,9 +6941,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .boot-heading-actions,
   .toolbar-actions,
   .history-tools,
-  .history-tools-actions,
-  .scratchpad-meta,
-  .scratchpad-footer {
+  .history-tools-actions {
     flex-wrap: wrap;
   }
   .boot-heading-actions label {
@@ -6484,7 +6954,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     padding-inline: 0;
     border-right: 0;
   }
-  .scratchpad-scope-switch,
   .history-tools .search-field {
     width: 100%;
   }

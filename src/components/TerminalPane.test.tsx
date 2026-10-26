@@ -16,11 +16,16 @@ const api = vi.hoisted(() => ({
 const channels = vi.hoisted(
   () => [] as Array<{ onmessage: ((message: ArrayBuffer) => void) | null }>,
 );
+const nativeEvents = vi.hoisted(
+  () => new Map<string, Set<(event: { payload: unknown }) => void>>(),
+);
 
 /// Records what the pane asked of xterm, so the test can see which handlers a
 /// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
+  osc: new Map<number, (data: string) => boolean>(),
+  prompt: "$ ",
   writes: [] as string[],
   pastes: [] as string[],
   searchNext: vi.fn(),
@@ -32,13 +37,21 @@ const xterm = vi.hoisted(() => ({
   mouseTrackingMode: "none",
   // The handler xterm calls for typed input, so a test can type.
   onData: null as ((data: string) => void) | null,
+  parseWrite: null as (() => void) | null,
+  deferWrites: false,
+  pendingWrites: [] as Array<() => void>,
   selectionChange: null as (() => void) | null,
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
     this.onData = null;
+    this.parseWrite = null;
+    this.deferWrites = false;
+    this.pendingWrites = [];
     this.selectionChange = null;
     this.customKeyHandler = null;
     this.oscHandlers = 0;
+    this.osc.clear();
+    this.prompt = "$ ";
     this.writes = [];
     this.pastes = [];
     this.searchNext.mockReset();
@@ -65,7 +78,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(() => Promise.resolve(() => undefined)),
+  listen: vi.fn(async (name: string, handler: (event: { payload: unknown }) => void) => {
+    const listeners = nativeEvents.get(name) ?? new Set();
+    listeners.add(handler);
+    nativeEvents.set(name, listeners);
+    return () => listeners.delete(handler);
+  }),
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -102,8 +120,9 @@ vi.mock("@xterm/xterm", () => ({
       this.options = options;
     }
     parser = {
-      registerOscHandler: () => {
+      registerOscHandler: (id: number, handler: (data: string) => boolean) => {
         xterm.oscHandlers += 1;
+        xterm.osc.set(id, handler);
         return { dispose: () => undefined };
       },
     };
@@ -136,8 +155,24 @@ vi.mock("@xterm/xterm", () => ({
       return xterm.selection;
     }
     reset() {}
-    write(data: unknown) {
+    get buffer() {
+      return {
+        active: {
+          cursorX: xterm.prompt.length,
+          cursorY: 0,
+          baseY: 0,
+          getLine: () => ({ translateToString: () => xterm.prompt }),
+        },
+      };
+    }
+    write(data: unknown, done?: () => void) {
       if (typeof data === "string") xterm.writes.push(data);
+      const parse = () => {
+        if (typeof data !== "string" || data.length > 0) xterm.parseWrite?.();
+        done?.();
+      };
+      if (xterm.deferWrites) xterm.pendingWrites.push(parse);
+      else parse();
     }
     paste(data: string) {
       xterm.pastes.push(data);
@@ -202,6 +237,7 @@ function renderPane(
   options: {
     ref?: Ref<TerminalPaneHandle>;
     onSelectionChange?: (hasSelection: boolean) => void;
+    onProcessing?: (busy: boolean) => void;
     findRequest?: number;
   } = {},
 ) {
@@ -230,6 +266,7 @@ describe("TerminalPane sessions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    nativeEvents.clear();
     xterm.reset();
     clipboard.readText.mockResolvedValue("");
     clipboard.writeText.mockResolvedValue(undefined);
@@ -241,6 +278,8 @@ describe("TerminalPane sessions", () => {
     api.startSession.mockResolvedValue({ sessionId: "ssh-session" });
     api.startLocalSession.mockResolvedValue({ sessionId: "local-session" });
     api.closeSession.mockResolvedValue(undefined);
+    api.writeSession.mockResolvedValue(undefined);
+    api.acknowledgeSessionOutput.mockResolvedValue(undefined);
   });
 
   it("starts a local Workspace through the local session API", async () => {
@@ -294,16 +333,92 @@ describe("TerminalPane sessions", () => {
     renderPane(createLocalWorkspace(shell));
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    // Enhanced History is remote and Bash-only, so a local session installs no
-    // shell integration handler to record from.
-    expect(xterm.oscHandlers).toBe(0);
+    // Local shells report command activity without recording command history.
+    expect(xterm.oscHandlers).toBe(2);
+    xterm.osc.get(633)?.("ControlRoom;start;0;L3RtcA==;cHdk");
+    xterm.osc.get(633)?.("ControlRoom;finish;1;0;L3RtcA==");
     expect(api.addHistory).not.toHaveBeenCalled();
 
     cleanup();
     xterm.reset();
     renderPane(createRemoteWorkspace(connection));
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
-    expect(xterm.oscHandlers).toBe(1);
+    expect(xterm.oscHandlers).toBe(2);
+  });
+
+  it("reports command processing until the rendered prompt returns and clears on unmount", async () => {
+    const onProcessing = vi.fn();
+    renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onProcessing });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    await act(async () => {
+      xterm.onData?.("sleep 60\r");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    xterm.prompt = "working";
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("working").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    xterm.prompt = "$ ";
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("$ ").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+    act(() => {
+      xterm.osc.get(133)?.("C");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    cleanup();
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+  });
+
+  it("ignores command markers arriving after a session has disconnected", async () => {
+    const onProcessing = vi.fn();
+    renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onProcessing });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    act(() => xterm.osc.get(133)?.("C"));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    act(() =>
+      nativeEvents.get("session-state-changed")?.forEach((listener) =>
+        listener({
+          payload: { sessionId: "local-session", state: "disconnected", reason: null },
+        }),
+      ),
+    );
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+    xterm.parseWrite = () => xterm.osc.get(133)?.("C");
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("\x1b]133;C\x07").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+  });
+
+  it("drains old buffered markers before starting a replacement session", async () => {
+    const onProcessing = vi.fn();
+    const workspace = { ...createLocalWorkspace(shell), state: "connected" as const };
+    const pane = (reconnectToken: number) => (
+      <TerminalPane
+        workspace={{ ...workspace, reconnectToken }}
+        settings={settings}
+        visible
+        active
+        onActivate={() => undefined}
+        onSession={() => undefined}
+        onState={() => undefined}
+        onProcessing={onProcessing}
+      />
+    );
+    const view = render(pane(0));
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(1));
+    await act(async () => undefined);
+    xterm.deferWrites = true;
+    xterm.parseWrite = () => xterm.osc.get(133)?.("C");
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("old command marker").buffer));
+    view.rerender(pane(1));
+    await act(async () => undefined);
+    act(() => xterm.pendingWrites.shift()?.());
+    expect(onProcessing).not.toHaveBeenLastCalledWith(true);
+    await act(async () => {
+      while (xterm.pendingWrites.length) xterm.pendingWrites.shift()?.();
+    });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(2));
+    xterm.deferWrites = false;
+    act(() => channels.at(-1)?.onmessage?.(new TextEncoder().encode("new command marker").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
   });
 
   it("does not start a restored Workspace of either kind", async () => {

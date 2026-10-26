@@ -8,6 +8,7 @@ import {
   restartApp,
   runtime,
   terminalCommand,
+  terminalContains,
 } from "./helpers";
 import type {
   BootDiagnostics,
@@ -41,6 +42,45 @@ async function connect() {
 }
 
 describe("read-only Ubuntu SSH journeys with independent native processes", () => {
+  it("shows live disk read/write rates without storage capacity in the native header", async () => {
+    await connect();
+    await $("aria/Open Settings").click();
+    await $("aria/Show host metrics in header").waitForExist();
+    await $("aria/Show host metrics in header").click();
+    await $("button=Save settings").click();
+    await $("aria/Close Settings").click();
+    const io = $('.host-metrics-values [data-metric="diskIo"]');
+    const storage = $('.host-metrics-values [data-metric="disk"]');
+    await browser.waitUntil(async () => (await io.getAttribute("data-available")) === "true", {
+      timeout: 30000,
+    });
+    await expect(io).toHaveAttribute("aria-label", expect.stringContaining("Read "));
+    await expect(io).toHaveAttribute("aria-label", expect.stringContaining("/s"));
+    await expect(storage).not.toExist();
+    await expect($(".host-row.active .presence-busy")).not.toExist();
+  });
+  it("keeps the host and tab processing rings active during a silent command", async () => {
+    await connect();
+    await terminalCommand("printf 'PROCESSING_READY\\n'", "PROCESSING_READY");
+    await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
+    await $(".terminal-workspace-pane.active .xterm-screen").click();
+    await browser.keys("sleep 3; printf 'PROCESSING_DONE\\n'");
+    await browser.keys("Enter");
+    await expect($(".host-row.active .presence-busy")).toExist();
+    await expect($(".session-tab-wrap.active .presence-busy")).toExist();
+    await terminalContains("PROCESSING_DONE");
+    await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
+    await expect($(".host-row.active .presence-connected")).toExist();
+    // Recalling the same silent command edits the prompt through an escape
+    // sequence before Enter. It must return idle with History capture off.
+    await $(".terminal-workspace-pane.active .xterm-screen").click();
+    await browser.keys("ArrowUp");
+    await browser.keys("Enter");
+    await expect($(".host-row.active .presence-busy")).toExist();
+    await browser.waitUntil(async () => !(await $(".host-row.active .presence-busy").isExisting()));
+    await expect($(".host-row.active .presence-connected")).toExist();
+  });
+
   it("validates configured access and reads terminal output", async () => {
     await connect();
     await connectionMenu("Live fixture");

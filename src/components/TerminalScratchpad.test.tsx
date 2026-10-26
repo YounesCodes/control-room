@@ -40,6 +40,45 @@ function mount(overrides: Partial<Parameters<typeof TerminalScratchpad>[0]> = {}
 }
 
 describe("Terminal Scratchpad popover", () => {
+  it("follows local and remote pane owners without mixing note scopes or resetting Global", async () => {
+    api.scratchpadNote.mockImplementation(async (scope: string, ownerId: string) =>
+      savedNote({
+        scope: scope as ScratchpadNoteInput["scope"],
+        ownerId,
+        connectionId: scope === "connection" ? ownerId : null,
+        text: `${scope}:${ownerId}`,
+      }),
+    );
+    const props = {
+      ownerLabel: "Selected pane",
+      canPaste: true,
+      onPaste: vi.fn(),
+      onClose: vi.fn(),
+    };
+    const view = render(
+      <TerminalScratchpad {...props} terminalScope="local" ownerId={workspaceId} />,
+    );
+    expect(await screen.findByLabelText("Terminal note")).toHaveProperty(
+      "value",
+      `local:${workspaceId}`,
+    );
+    view.rerender(
+      <TerminalScratchpad {...props} terminalScope="connection" ownerId={connectionId} />,
+    );
+    expect(await screen.findByLabelText("Connection note")).toHaveProperty(
+      "value",
+      `connection:${connectionId}`,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Global note for all connections" }));
+    expect(await screen.findByLabelText("Global note")).toHaveProperty("value", "global:global");
+    view.rerender(<TerminalScratchpad {...props} terminalScope="local" ownerId={workspaceId} />);
+    expect(screen.getByLabelText("Global note")).toHaveProperty("value", "global:global");
+    fireEvent.click(screen.getByRole("button", { name: "Terminal note for Selected pane" }));
+    expect(await screen.findByLabelText("Terminal note")).toHaveProperty(
+      "value",
+      `local:${workspaceId}`,
+    );
+  });
   afterEach(cleanup);
 
   beforeEach(() => {
@@ -151,7 +190,7 @@ describe("Terminal Scratchpad popover", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("keeps the page Scratchpad's keyboard undo in the compact editor", async () => {
+  it("keeps keyboard undo in the compact editor", async () => {
     await mount();
     const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
     // One edit, not one keystroke, so a single Ctrl+Z returns to the empty note.

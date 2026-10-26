@@ -27,6 +27,7 @@ export function restoreWorkspaceState(
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
   const shellsById = new Map(localShells.map((shell) => [shell.id, shell]));
   const workspaces = state.workspaces.flatMap<Workspace>((saved) => {
+    const view = saved.view === "scratchpad" ? "terminal" : saved.view;
     const reconnecting = {
       id: saved.id,
       label: saved.label,
@@ -39,13 +40,12 @@ export function restoreWorkspaceState(
       // a deleted Saved Connection is.
       const shell = shellsById.get(saved.localShellId);
       if (!shell) return [];
-      // A local Workspace keeps only its terminal and Scratchpad views,
-      // whatever else an older payload named.
+      // Local workspaces and legacy Scratchpad pages return to their terminal.
       return [
         {
           ...createLocalWorkspace(shell),
           ...reconnecting,
-          view: saved.view === "scratchpad" ? saved.view : "terminal",
+          view: "terminal",
         },
       ];
     }
@@ -57,11 +57,9 @@ export function restoreWorkspaceState(
         ...reconnecting,
         view:
           saved.remoteShell &&
-          !["overview", "terminal", "services", "ports", "docker", "logs", "scratchpad"].includes(
-            saved.view,
-          )
+          !["overview", "terminal", "services", "ports", "docker", "logs"].includes(view)
             ? "terminal"
-            : saved.view,
+            : view,
         historyPaused: saved.historyPaused,
       },
     ];

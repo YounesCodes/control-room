@@ -49,6 +49,11 @@ fn remote_command(metrics: &[HeaderMetric]) -> String {
     if metrics.contains(&HeaderMetric::Disk) {
         command.push_str(r#"df -Pk / 2>/dev/null | awk 'NR==2 {printf "disk_total=%s\ndisk_free=%s\n",$2,$4}'; "#);
     }
+    if metrics.contains(&HeaderMetric::DiskIo) {
+        // Whole leaf devices only: partitions and stacked dm/md devices must
+        // not count the same transfer twice. No iostat installation is needed.
+        command.push_str(r#"header_io_snapshot() { phase=$1; if test -r /proc/uptime; then awk -v p="$phase" '{printf "io_time_%s=%s\n",p,$1}' /proc/uptime; fi; for d in /sys/block/*; do case "${d##*/}" in loop*|ram*|zram*|fd*|sr*) continue;; esac; test -r "$d/stat" || continue; set -- "$d"/slaves/*; test -e "$1" && continue; awk -v p="$phase" -v name="${d##*/}" 'NF>=7 {printf "io_disk_%s=%s %s %s\n",p,name,$3,$7}' "$d/stat"; done; }; header_io_snapshot 1; sleep 1; header_io_snapshot 2; "#);
+    }
     if metrics.contains(&HeaderMetric::Uptime) {
         command.push_str(
             r#"if test -r /proc/uptime; then awk '{printf "uptime=%d\n",$1}' /proc/uptime; fi; "#,
@@ -123,7 +128,72 @@ fn parse_remote(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
     }
     let capacity = (result.disk_total_kib, result.disk_free_kib);
     set_disk_capacity(&mut result, capacity.0, capacity.1, "/");
+    if metrics.contains(&HeaderMetric::DiskIo)
+        && let Some((read, write)) = disk_io_rates(text)
+    {
+        result.disk_read_bytes_per_second = Some(read);
+        result.disk_write_bytes_per_second = Some(write);
+    }
     result
+}
+
+/// Linux sectors are always 512 bytes, independent of a disk's sector size.
+/// Subtract integer counters before converting to rates, and reject resets,
+/// missing devices, or hot-plug changes rather than presenting a false zero.
+fn disk_io_rates(text: &str) -> Option<(f64, f64)> {
+    use std::collections::BTreeMap;
+    let mut times = [None, None];
+    let mut disks = [BTreeMap::new(), BTreeMap::new()];
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        match key.trim() {
+            "io_time_1" | "io_time_2" => {
+                let phase = usize::from(key.trim().ends_with('2'));
+                times[phase] = Some(
+                    value
+                        .parse::<f64>()
+                        .ok()
+                        .filter(|v| v.is_finite() && *v >= 0.0)?,
+                );
+            }
+            "io_disk_1" | "io_disk_2" => {
+                let phase = usize::from(key.trim().ends_with('2'));
+                let fields = value.split_whitespace().collect::<Vec<_>>();
+                if fields.len() != 3 {
+                    return None;
+                }
+                let counts = (
+                    fields[1].parse::<u64>().ok()?,
+                    fields[2].parse::<u64>().ok()?,
+                );
+                if disks[phase].insert(fields[0], counts).is_some() {
+                    return None;
+                }
+            }
+            _ => (),
+        }
+    }
+    let elapsed = times[1]? - times[0]?;
+    if !elapsed.is_finite()
+        || elapsed <= 0.0
+        || disks[0].is_empty()
+        || disks[0].keys().ne(disks[1].keys())
+    {
+        return None;
+    }
+    let (mut read, mut write) = (0_u64, 0_u64);
+    for (name, before) in &disks[0] {
+        let after = disks[1].get(name)?;
+        read = read.checked_add(after.0.checked_sub(before.0)?)?;
+        write = write.checked_add(after.1.checked_sub(before.1)?)?;
+    }
+    Some((
+        read as f64 * 512.0 / elapsed,
+        write as f64 * 512.0 / elapsed,
+    ))
 }
 
 fn set_disk_capacity(
@@ -232,6 +302,12 @@ pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> 
     }
     if metrics.contains(&HeaderMetric::Gpu) {
         sample.gpu_percent = local_gpu();
+    }
+    if metrics.contains(&HeaderMetric::DiskIo)
+        && let Some((read, write)) = local_disk_io()
+    {
+        sample.disk_read_bytes_per_second = Some(read);
+        sample.disk_write_bytes_per_second = Some(write);
     }
     sample.sampled_at = Utc::now().to_rfc3339();
     Ok(sample)
@@ -353,6 +429,76 @@ fn local_gpu() -> Option<f64> {
     busiest_engine(readings)
 }
 
+#[cfg(windows)]
+fn local_disk_io() -> Option<(f64, f64)> {
+    use windows_sys::Win32::System::Performance::*;
+    // pdh.h flags omitted from windows-sys 0.61's projection. Keep byte
+    // rates unscaled and uncapped, as specified by the Windows SDK.
+    const PDH_FMT_NOSCALE: u32 = 0x00001000;
+    const PDH_FMT_NOCAP100: u32 = 0x00008000;
+    struct Query(PDH_HQUERY);
+    impl Drop for Query {
+        fn drop(&mut self) {
+            // This wrapper owns the successful PdhOpenQueryW handle.
+            unsafe {
+                PdhCloseQuery(self.0);
+            }
+        }
+    }
+    let mut handle = std::ptr::null_mut();
+    // Null datasource selects live, system-wide performance counters.
+    if unsafe { PdhOpenQueryW(std::ptr::null(), 0, &mut handle) } != 0 {
+        return None;
+    }
+    let query = Query(handle);
+    let mut counters = [std::ptr::null_mut(); 2];
+    for (index, name) in [
+        r"\PhysicalDisk(_Total)\Disk Read Bytes/sec",
+        r"\PhysicalDisk(_Total)\Disk Write Bytes/sec",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let path = name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+        // English names work on localized Windows installations too.
+        if unsafe { PdhAddEnglishCounterW(query.0, path.as_ptr(), 0, &mut counters[index]) } != 0 {
+            return None;
+        }
+    }
+    // Rate counters need two snapshots at least a second apart.
+    if unsafe { PdhCollectQueryData(query.0) } != 0 {
+        return None;
+    }
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    if unsafe { PdhCollectQueryData(query.0) } != 0 {
+        return None;
+    }
+    let mut rates = [0.0; 2];
+    for (index, counter) in counters.iter().enumerate() {
+        let mut value = PDH_FMT_COUNTERVALUE::default();
+        // Byte rates are neither scaled nor capped at 100, unlike percentages.
+        if unsafe {
+            PdhGetFormattedCounterValue(
+                *counter,
+                PDH_FMT_DOUBLE | PDH_FMT_NOCAP100 | PDH_FMT_NOSCALE,
+                std::ptr::null_mut(),
+                &mut value,
+            )
+        } != 0
+            || ![PDH_CSTATUS_VALID_DATA, PDH_CSTATUS_NEW_DATA].contains(&value.CStatus)
+        {
+            return None;
+        }
+        // PDH_FMT_DOUBLE selects this initialized union member.
+        let rate = unsafe { value.Anonymous.doubleValue };
+        if !rate.is_finite() || rate < 0.0 {
+            return None;
+        }
+        rates[index] = rate;
+    }
+    Some((rates[0], rates[1]))
+}
+
 #[cfg(not(windows))]
 pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
     Err("Local host metrics require Windows".into())
@@ -361,6 +507,53 @@ pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn disk_io_uses_elapsed_host_time_and_whole_device_sector_deltas() {
+        let text = "io_time_1=100\nio_disk_1=sda 100 200\nio_disk_1=nvme0n1 1000 500\nio_time_2=102\nio_disk_2=nvme0n1 1010 540\nio_disk_2=sda 110 220";
+        assert_eq!(disk_io_rates(text), Some((5120.0, 15360.0)));
+        let sample = parse_remote(text, &[HeaderMetric::DiskIo]);
+        assert_eq!(sample.disk_read_bytes_per_second, Some(5120.0));
+        assert_eq!(sample.disk_write_bytes_per_second, Some(15360.0));
+        assert_eq!(sample.disk_total_kib, None);
+        assert_eq!(
+            parse_remote(text, &[HeaderMetric::Disk]).disk_read_bytes_per_second,
+            None
+        );
+        assert_eq!(
+            disk_io_rates("io_time_1=1\nio_disk_1=sda 0 0\nio_time_2=2\nio_disk_2=sda 0 0"),
+            Some((0.0, 0.0))
+        );
+    }
+    #[test]
+    fn disk_io_rejects_missing_snapshots_resets_and_changed_device_sets() {
+        let before = "io_time_1=100\nio_disk_1=sda 100 200\n";
+        for after in [
+            "",
+            "io_time_2=100\nio_disk_2=sda 110 210",
+            "io_time_2=99\nio_disk_2=sda 110 210",
+            "io_time_2=NaN\nio_disk_2=sda 110 210",
+            "io_time_2=101\nio_disk_2=sda 99 210",
+            "io_time_2=101\nio_disk_2=sdb 110 210",
+            "io_time_2=101\nio_disk_2=sda 110 210\nio_disk_2=sdb 1 1",
+            "io_time_2=101\nio_disk_2=sda N/A 210",
+            "io_time_2=101\nio_disk_2=sda 110 210\nio_disk_2=sda 110 210",
+        ] {
+            assert_eq!(disk_io_rates(&format!("{before}{after}")), None, "{after}");
+        }
+        assert_eq!(disk_io_rates("io_time_1=1\nio_time_2=2"), None);
+    }
+    #[test]
+    fn io_selection_reads_leaf_disks_without_capacity_queries_or_tools() {
+        let command = remote_command(&[HeaderMetric::DiskIo]);
+        assert!(command.contains("/sys/block/*"));
+        assert!(command.contains("/slaves/*"));
+        assert!(command.contains("loop*|ram*|zram*"));
+        assert!(command.contains("header_io_snapshot 1; sleep 1; header_io_snapshot 2"));
+        for absent in ["df -Pk", "nvidia-smi", "iostat", "sudo"] {
+            assert!(!command.contains(absent));
+        }
+        assert!(!remote_command(&[HeaderMetric::Disk]).contains("io_snapshot"));
+    }
     #[test]
     fn pending_host_read_does_not_block_other_targets_and_releases_on_drop() {
         let state = HeaderMetricsState::default();
@@ -484,6 +677,7 @@ mod tests {
             HeaderMetric::Cpu,
             HeaderMetric::Ram,
             HeaderMetric::Disk,
+            HeaderMetric::DiskIo,
             HeaderMetric::Uptime,
         ])
         .unwrap();
@@ -498,6 +692,16 @@ mod tests {
         );
         assert!(sample.uptime_seconds.is_some());
         assert_eq!(sample.gpu_percent, None);
+        eprintln!(
+            "Windows disk I/O bytes/s: read={:?}, write={:?}",
+            sample.disk_read_bytes_per_second, sample.disk_write_bytes_per_second
+        );
+        assert!(
+            sample
+                .disk_read_bytes_per_second
+                .zip(sample.disk_write_bytes_per_second)
+                .is_none_or(|(r, w)| r.is_finite() && w.is_finite() && r >= 0.0 && w >= 0.0)
+        );
         let gpu = collect_local(&[HeaderMetric::Gpu]).unwrap();
         eprintln!("Windows GPU counter reading: {:?}", gpu.gpu_percent);
         assert!(

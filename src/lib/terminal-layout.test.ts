@@ -3,6 +3,7 @@ import {
   createTerminalLayout,
   getTerminalLayoutIds,
   getTerminalPaneRects,
+  getTerminalPanePixels,
   getResponsiveTerminalPaneRects,
   getResponsiveTerminalGeometry,
   resizeTerminalLayout,
@@ -13,6 +14,32 @@ import {
 } from "./terminal-layout";
 
 describe("terminal pane tree", () => {
+  it("rounds shared split edges without gaps at odd viewport sizes", () => {
+    const layout = splitTerminalLayout(
+      splitTerminalLayout(createTerminalLayout("a"), "a", "b", "vertical"),
+      "b",
+      "c",
+      "horizontal",
+    );
+    const viewport = { width: 959, height: 563 };
+    const rects = getResponsiveTerminalPaneRects(layout, viewport);
+    const a = getTerminalPanePixels(rects.a, viewport)!;
+    const b = getTerminalPanePixels(rects.b, viewport)!;
+    const c = getTerminalPanePixels(rects.c, viewport)!;
+    expect(a).toEqual({ left: 0, top: 0, width: 480, height: 563 });
+    expect(b).toEqual({ left: 480, top: 0, width: 479, height: 282 });
+    expect(c).toEqual({ left: 480, top: 282, width: 479, height: 281 });
+    expect(a.left + a.width).toBe(b.left);
+    expect(b.top + b.height).toBe(c.top);
+    expect(c.top + c.height).toBe(viewport.height);
+  });
+
+  it("keeps percentage layout available until the viewport is measurable", () => {
+    const rectangle = { left: 0, top: 0, width: 100, height: 100 };
+    expect(getTerminalPanePixels(rectangle, { width: Infinity, height: Infinity })).toBeNull();
+    expect(getTerminalPanePixels(rectangle, { width: 0, height: 700 })).toBeNull();
+  });
+
   it("resizes each split independently without changing terminal membership", () => {
     const pair = splitTerminalLayout(createTerminalLayout("local"), "local", "ssh", "vertical");
     const nested = splitTerminalLayout(pair, "ssh", "logs", "horizontal");

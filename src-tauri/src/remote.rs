@@ -4138,6 +4138,7 @@ esac
                 crate::models::HeaderMetric::Ram,
                 crate::models::HeaderMetric::Gpu,
                 crate::models::HeaderMetric::Disk,
+                crate::models::HeaderMetric::DiskIo,
                 crate::models::HeaderMetric::Uptime,
             ],
         )
@@ -4151,6 +4152,16 @@ esac
         assert!(header.disk_total_kib.is_some_and(|value| value > 0));
         assert!(header.disk_free_kib.unwrap() <= header.disk_total_kib.unwrap());
         assert_eq!(header.disk_label.as_deref(), Some("/"));
+        assert!(
+            header
+                .disk_read_bytes_per_second
+                .is_some_and(|v| v.is_finite() && v >= 0.0)
+        );
+        assert!(
+            header
+                .disk_write_bytes_per_second
+                .is_some_and(|v| v.is_finite() && v >= 0.0)
+        );
         assert!(header.uptime_seconds.is_some());
         assert!(
             header

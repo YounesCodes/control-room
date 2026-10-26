@@ -202,7 +202,12 @@ export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPan
         setLiveProgress((current) => [...current, event]);
     };
     try {
-      const result = await api.compareHostBaselineWithLive(selected.id, readId, channel);
+      const result = await api.compareHostBaselineWithLive(
+        selected.id,
+        readId,
+        channel,
+        connection.id,
+      );
       if (request === comparisonRequestRef.current) setComparison(result);
     } catch (caught) {
       if (request === comparisonRequestRef.current) setActionError(errorMessage(caught));

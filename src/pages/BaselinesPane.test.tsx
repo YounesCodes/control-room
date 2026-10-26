@@ -378,6 +378,7 @@ describe("baselines pane", () => {
         "later",
         expect.any(String),
         expect.anything(),
+        connection.id,
       ),
     );
     expect(await screen.findByText(/after upgrade → Live state:/)).toBeTruthy();

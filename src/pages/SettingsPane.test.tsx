@@ -105,6 +105,7 @@ describe("Settings actions", () => {
   it("enables and customizes host metrics while keeping the default draft clean", async () => {
     renderPane();
     expect(saveButton().disabled).toBe(true);
+    expect(screen.queryByRole("checkbox", { name: "Storage" })).toBeNull();
     const enabled = screen.getByRole("checkbox", { name: "Show host metrics in header" });
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
@@ -116,7 +117,7 @@ describe("Settings actions", () => {
     expect(api.saveSettings).toHaveBeenCalledWith({
       ...settings,
       hostMetricsEnabled: true,
-      hostMetrics: ["cpu", "ram", "disk", "uptime"],
+      hostMetrics: ["cpu", "ram", "diskIo", "uptime"],
       hostMetricsIntervalSeconds: 10,
     });
   });
