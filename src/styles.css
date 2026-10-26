@@ -1414,7 +1414,8 @@ code,
   font-weight: 650;
 }
 
-.sidebar-primary svg {
+.sidebar-primary svg,
+.sidebar-secondary svg {
   transition:
     color var(--motion-fast) var(--ease),
     transform var(--motion-fast) var(--ease);
@@ -1429,6 +1430,12 @@ code,
 .sidebar-primary:hover svg,
 .sidebar-primary:focus-visible svg {
   color: var(--text-strong);
+}
+
+.sidebar-primary:hover svg,
+.sidebar-primary:focus-visible svg,
+.sidebar-secondary:hover svg,
+.sidebar-secondary:focus-visible svg {
   transform: translateX(1px);
 }
 
