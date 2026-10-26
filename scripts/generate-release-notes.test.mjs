@@ -1,102 +1,57 @@
-import { describe, expect, it } from "vitest";
-import {
-  buildDirectChangeNotes,
-  combineReleaseNotes,
-  hasDescribedChanges,
-} from "./generate-release-notes.mjs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
 
-describe("release note generation", () => {
-  it("describes direct changes and omits the release housekeeping commit", () => {
-    expect(
-      buildDirectChangeNotes([
-        {
-          sha: "2de5547",
-          subject: "feat: add administrator terminals and fix narrow layouts",
-          pullRequests: [],
-        },
-        {
-          sha: "19b8672",
-          subject: "chore: release v0.7.4",
-          pullRequests: [],
-        },
-      ]),
-    ).toBe("* Add administrator terminals and fix narrow layouts");
+const script = fileURLToPath(new URL("./generate-release-notes.mjs", import.meta.url));
+let directory;
+
+function run(args = [], tag = "v1.2.3") {
+  return execFileSync(process.execPath, [script, ...args], {
+    cwd: directory,
+    env: { ...process.env, GITHUB_REF_NAME: tag, GITHUB_OUTPUT: join(directory, "output") },
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+}
+
+function setup(notes) {
+  directory = mkdtempSync(join(tmpdir(), "control-room-release-"));
+  mkdirSync(join(directory, "release-notes"));
+  if (notes !== undefined) writeFileSync(join(directory, "release-notes", "v1.2.3.txt"), notes);
+}
+
+afterEach(() => {
+  if (directory) rmSync(directory, { recursive: true, force: true });
+});
+
+describe("release notes workflow", () => {
+  it("writes the authored notes to the release body and accepts the same updater notes", () => {
+    const notes = "- Find terminals faster.\n- Fixed a connection issue.";
+    setup(`${notes.replace(/\n/g, "\r\n")}\r\n`);
+    run();
+    expect(readFileSync(join(directory, "output"), "utf8")).toContain(`\n${notes}\n`);
+    writeFileSync(join(directory, "latest.json"), JSON.stringify({ notes }));
+    expect(() => run(["--validate-feed", "latest.json"])).not.toThrow();
   });
 
-  it("leaves commits with associated pull requests to GitHub generated notes", () => {
-    expect(
-      buildDirectChangeNotes([
-        {
-          sha: "05e9b9c",
-          subject: "fix: clarify live log and resource state (#69)",
-          pullRequests: [69],
-        },
-      ]),
-    ).toBe("");
+  it("stops when notes are missing, empty, or for a different version", () => {
+    setup();
+    expect(() => run()).toThrow(/Missing release-notes\/v1\.2\.3\.txt/);
+    writeFileSync(join(directory, "release-notes", "v1.2.3.txt"), "  \n");
+    expect(() => run()).toThrow(/is empty/);
+    writeFileSync(join(directory, "release-notes", "v1.2.3.txt"), "- Fixed a connection issue.");
+    expect(() => run([], "v1.2.4")).toThrow(/Missing release-notes\/v1\.2\.4\.txt/);
+    expect(() => run([], "../other")).toThrow(/must be a release tag/);
   });
 
-  it("makes one list without generated headings, credits, or a non-clickable changelog", () => {
-    const generated =
-      "## What's Changed\n* Fix a crash by @someone in https://github.com/example/app/pull/12\n\n**Full Changelog**: https://example.com";
-    expect(
-      combineReleaseNotes(generated, [
-        { sha: "abc1234", subject: "feat: add a terminal", pullRequests: [] },
-      ]),
-    ).toBe("* Fix a crash (#12)\n* Add a terminal");
-  });
-
-  it("does not repeat a direct change already described by a pull request", () => {
-    const generated =
-      "## What's Changed\n* Group terminal splits in focus mode by @someone in https://github.com/example/app/pull/81";
-    expect(
-      combineReleaseNotes(generated, [
-        { sha: "one", subject: "fix: group split tabs and update rustls", pullRequests: [] },
-        { sha: "two", subject: "fix: simplify focused terminal split headers", pullRequests: [] },
-      ]),
-    ).toBe(
-      "* Group terminal splits in focus mode (#81)\n* Simplify focused terminal split headers",
-    );
-  });
-
-  it("hides dependency noise, but describes a maintenance-only release", () => {
-    const generated =
-      "## What's Changed\n* Bump uuid from 1.26.0 to 1.26.1 by @dependabot in https://github.com/example/app/pull/77\n\n## New Contributors\n* @someone made their first contribution in https://github.com/example/app/pull/77\n\n**Full Changelog**: https://example.com";
-    expect(combineReleaseNotes(generated, [])).toBe("* Dependency maintenance");
-    expect(
-      combineReleaseNotes(generated, [
-        { sha: "three", subject: "fix: restore terminal search", pullRequests: [] },
-      ]),
-    ).toBe("* Restore terminal search");
-    expect(
-      combineReleaseNotes("", [
-        { sha: "four", subject: "chore(deps): bump rustls", pullRequests: [] },
-      ]),
-    ).toBe("* Dependency maintenance");
-  });
-
-  it("deduplicates repeated PR titles but keeps distinct actions on the same feature", () => {
-    expect(
-      combineReleaseNotes(
-        "## What's Changed\n* Add terminal search by @one in https://github.com/example/app/pull/90\n* Add terminal search by @two in https://github.com/example/app/pull/91\n* Fix terminal search by @two in https://github.com/example/app/pull/92",
-        [],
-      ),
-    ).toBe("* Add terminal search (#90)\n* Fix terminal search (#92)");
-  });
-
-  it("rejects a changelog-only body", () => {
-    expect(
-      hasDescribedChanges(
-        "**Full Changelog**: https://github.com/YounesCodes/control-room/compare/v0.7.3...v0.7.4",
-      ),
-    ).toBe(false);
-  });
-
-  it("accepts generated bullets and hand-written prose", () => {
-    expect(
-      hasDescribedChanges(
-        "## What's Changed\n* Fix updater notes (#74)\n\n**Full Changelog**: https://example.com",
-      ),
-    ).toBe(true);
-    expect(hasDescribedChanges("This release fixes updater notes.")).toBe(true);
+  it("rejects updater notes that do not match the authored release notes", () => {
+    setup("- Fixed a connection issue.");
+    writeFileSync(join(directory, "latest.json"), JSON.stringify({ notes: "Old release notes" }));
+    expect(() => run(["--validate-feed", "latest.json"])).toThrow(/do not match/);
+    writeFileSync(join(directory, "latest.json"), JSON.stringify({ notes: ["Not a string"] }));
+    expect(() => run(["--validate-feed", "latest.json"])).toThrow(/do not match/);
   });
 });

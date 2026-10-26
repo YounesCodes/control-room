@@ -28,11 +28,9 @@ jobs:
           tool: cargo-audit
           fallback: none
 
-      - name: Prepare complete release notes
+      - name: Prepare user-facing release notes
         id: release-notes
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: node scripts/generate-release-notes.mjs
 
       # Before the long build, not after it. A release that reaches the end and
@@ -105,8 +103,7 @@ jobs:
           releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: false
           prerelease: false
-          # The preparation step turns PR notes and direct commits into one
-          # deduplicated list, without generated headings or changelog text.
+          # Use the notes written for this version, not generated PR titles.
           generateReleaseNotes: false
           # Only NSIS is built, so this is the bundle the updater feed must name.
           updaterJsonPreferNsis: true
@@ -131,10 +128,8 @@ jobs:
           "$checksum  $($publishedInstaller[0].name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
           gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
 
-      # tauri-action composes latest.json from its own inputs, so notes GitHub
-      # generates while creating the release never reach the feed. The feed's
-      # notes field is the text the app shows under "What's new", so without
-      # this every update announces itself with nothing to say.
+      # Keep the updater feed in sync with the published release body. These
+      # are the notes the app shows before and after an update.
       - name: Put the release notes into the updater feed
         shell: pwsh
         env:
@@ -159,6 +154,7 @@ jobs:
             [System.Text.UTF8Encoding]::new($false)
           )
           node scripts/generate-release-notes.mjs --validate-feed latest.json
+          if ($LASTEXITCODE -ne 0) { throw "Updater feed notes do not match the authored release notes" }
           gh release upload $env:GITHUB_REF_NAME latest.json --clobber
           Write-Host "Updater feed carries $($body.Length) characters of notes"
 
