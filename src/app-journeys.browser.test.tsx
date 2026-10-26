@@ -279,6 +279,30 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("moves the local terminal icon like Add connection on hover and keyboard focus", async () => {
+    await mount();
+    const launcher = page.getByRole("button", { name: "Local terminal", exact: true });
+    const add = page.getByRole("button", { name: "Add connection", exact: true });
+    const launcherIcon = launcher.element().querySelector("svg")!;
+    const addIcon = add.element().querySelector("svg")!;
+    const transform = (icon: Element) => getComputedStyle(icon).transform;
+
+    expect(transform(launcherIcon)).toBe("none");
+    await userEvent.hover(add.element());
+    await expect.poll(() => transform(addIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
+    const addHoverTransform = transform(addIcon);
+    await userEvent.hover(launcher.element());
+    await expect.poll(() => transform(launcherIcon)).toBe(addHoverTransform);
+    await userEvent.unhover(launcher.element());
+    await expect.poll(() => transform(launcherIcon)).toBe("none");
+
+    await userEvent.keyboard("{Tab}");
+    (launcher.element() as HTMLButtonElement).focus();
+    expect(launcher.element().matches(":focus-visible")).toBe(true);
+    await expect.poll(() => transform(launcherIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
+    expect(parseFloat(getComputedStyle(launcherIcon).transitionDuration)).toBeLessThan(0.001);
+  });
+
   it("colors local terminal identities on hover, focus, and selection in both layouts", async () => {
     await page.viewport(960, 640);
     overrides.set("list_local_shells", () => ({
