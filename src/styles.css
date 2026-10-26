@@ -529,9 +529,6 @@ code,
 .host-metric[data-metric="diskIo"] {
   min-width: 180px;
 }
-.host-metric[data-metric="disk"] {
-  min-width: 64px;
-}
 .host-metric[data-metric="uptime"] {
   min-width: 56px;
 }
@@ -556,25 +553,6 @@ code,
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
   transition: d var(--motion-med) var(--ease);
-}
-.host-metric-meter {
-  display: block;
-  width: 26px;
-  height: 3px;
-  flex: none;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--fill-hover);
-  pointer-events: none;
-}
-.host-metric-meter::after {
-  content: "";
-  display: block;
-  height: 100%;
-  background: var(--text-muted);
-  transform: scaleX(var(--metric-level));
-  transform-origin: left;
-  transition: transform var(--motion-med) var(--ease);
 }
 .host-metrics:not([data-state="live"]) .host-metric-trend {
   opacity: 0.25;
@@ -733,9 +711,6 @@ code,
   }
   .host-metric[data-metric="diskIo"] {
     min-width: 160px;
-  }
-  .host-metric[data-metric="disk"] {
-    min-width: 60px;
   }
   .host-metric[data-metric="uptime"] {
     min-width: 54px;

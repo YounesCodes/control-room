@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Circle, CircleAlert, CircleDashed, Clock3, ChevronDown, Pause, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
 import { usePopoverExit } from "../hooks/use-popover-exit";
@@ -67,15 +67,7 @@ function MetricCell({
             compact
           )}
         </span>
-        {metric === "disk" && available ? (
-          <span
-            className="host-metric-meter"
-            aria-hidden="true"
-            style={{ "--metric-level": headerMetricNumber(metric, sample)! / 100 } as CSSProperties}
-          />
-        ) : (
-          <MetricTrace metric={metric} history={history} />
-        )}
+        <MetricTrace metric={metric} history={history} />
       </strong>
     </span>
   );

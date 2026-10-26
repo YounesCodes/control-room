@@ -916,7 +916,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .at(-1)!;
     expect(call[1]).toEqual({
       connectionId: null,
-      metrics: ["cpu", "ram", "diskIo", "disk", "uptime"],
+      metrics: ["cpu", "ram", "diskIo", "uptime"],
     });
     await page.getByRole("button", { name: "Open Settings" }).click();
     expect(element.querySelector(".host-metrics")).toBeNull();
@@ -924,6 +924,36 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Save settings" }).click();
     await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     expect(element.querySelector(".host-metrics")).toBeNull();
+  });
+  it("ignores saved Storage selections in the header, sampler, and Settings", async () => {
+    currentSettings = {
+      ...currentSettings,
+      hostMetricsEnabled: true,
+      hostMetrics: ["cpu", "disk", "diskIo"],
+    };
+    await mount();
+    await expect
+      .poll(() => element.querySelector<HTMLElement>(".host-metrics")?.dataset.state)
+      .toBe("live");
+    expect(element.querySelector('[data-metric="disk"]')).toBeNull();
+    expect(element.querySelector('.host-metrics-values [data-metric="diskIo"]')).not.toBeNull();
+    const samples = native.invoke.mock.calls.filter(([name]) => name === "sample_header_metrics");
+    expect(samples.length).toBeGreaterThan(0);
+    expect(samples.every(([, args]) => !args.metrics.includes("disk"))).toBe(true);
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    expect(element.querySelector(".host-metrics-settings")!.textContent).not.toContain("Storage");
+    await expect.element(page.getByRole("button", { name: "Save settings" })).toBeDisabled();
+    await expect
+      .element(page.getByRole("checkbox", { name: "Disk I/O", exact: true }))
+      .toBeChecked();
+  });
+  it("hides the header without sampling when only retired Storage was selected", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true, hostMetrics: ["disk"] };
+    await mount();
+    expect(element.querySelector(".host-metrics")).toBeNull();
+    expect(native.invoke.mock.calls.some(([name]) => name === "sample_header_metrics")).toBe(false);
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await expect.element(page.getByText("Select a metric to display the header.")).toBeVisible();
   });
   it("starts local readings while the previous SSH target is still pending and ignores its late reply", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
@@ -1124,7 +1154,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.poll(() => tab.querySelector(".presence")).toBeNull();
   });
 
-  it("animates real header readings while keeping I/O distinct from capacity and resetting trends for each host", async () => {
+  it("animates real header readings without storage capacity and resets trends for each host", async () => {
     currentSettings = {
       ...currentSettings,
       hostMetricsEnabled: true,
@@ -1157,9 +1187,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         (cell) => cell.getBoundingClientRect().left,
       );
     const before = positions();
-    const storage = strip.querySelector<HTMLElement>('[data-metric="disk"]')!;
     const io = strip.querySelector<HTMLElement>('[data-metric="diskIo"]')!;
-    expect(storage.textContent).toContain("Storage75%");
+    expect(strip.querySelector('[data-metric="disk"]')).toBeNull();
     expect(io.textContent).toContain("0 B/s");
     expect(io).toHaveAccessibleName("Disk I/O: Read 0 B/s · Write 0 B/s");
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
@@ -1171,7 +1200,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const path = io.querySelector("path")!;
     expect(path.getAttribute("d")).toContain("L");
     expect(positions()).toEqual(before);
-    expect(storage.querySelector(".host-metric-meter")!.getAttribute("style")).toContain("0.75");
     await page.screenshot({ path: "../test-results/live-metrics-panel.png" });
     await userEvent.keyboard("{Escape}");
     await expect.poll(() => strip.querySelector(".host-metrics-panel")).toBeNull();

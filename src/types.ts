@@ -418,6 +418,7 @@ export interface HistoryInput {
   shell: string;
 }
 
+// "disk" remains readable in older settings and is filtered out before display or sampling.
 export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "diskIo" | "uptime";
 
 export interface HeaderMetrics {

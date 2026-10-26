@@ -1,14 +1,11 @@
 import type { HeaderMetric, HeaderMetrics } from "../types";
 import { formatKib, memoryUsage } from "./host-resources";
 
-export const DEFAULT_HEADER_METRICS: HeaderMetric[] = [
-  "cpu",
-  "ram",
-  "gpu",
-  "diskIo",
-  "disk",
-  "uptime",
-];
+export const DEFAULT_HEADER_METRICS: HeaderMetric[] = ["cpu", "ram", "gpu", "diskIo", "uptime"];
+/** Older settings can still contain the retired filesystem-capacity metric. */
+export function displayedHeaderMetrics(metrics: HeaderMetric[] = DEFAULT_HEADER_METRICS) {
+  return metrics.filter((metric) => metric !== "disk");
+}
 export const HEADER_METRIC_LABELS: Record<HeaderMetric, string> = {
   cpu: "CPU",
   ram: "RAM",

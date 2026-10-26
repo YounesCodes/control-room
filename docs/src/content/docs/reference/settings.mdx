@@ -51,17 +51,17 @@ remain available during the current app session.
 
 ## Host metrics
 
-Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, Storage, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and a **Host metrics refresh interval** of 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections stay unchanged; select **Disk I/O** to add it.
+Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and a **Host metrics refresh interval** of 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
 
-**Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**. **Storage** shows the percentage of space used, with a small capacity bar. It covers the Windows system drive for local tabs, all fixed drives for Windows SSH hosts, and `/` for Linux SSH hosts. A disk can be nearly full while doing no I/O, or transfer data quickly while having plenty of free space.
+**Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**.
 
-Click the reading status, such as **Live**, beside the metrics for capacity, the last reading time, **Refresh**, and **Customize in Settings**. The small charts show up to twenty recent readings and reset when you change hosts or monitoring pauses. CPU, RAM, and GPU charts use a 0–100% scale. Disk I/O uses the recent peak transfer rate. These short trends stay in memory and are not saved.
+Click the reading status, such as **Live**, beside the metrics for the last reading time, **Refresh**, and **Customize in Settings**. The small charts show up to twenty recent readings and reset when you change hosts or monitoring pauses. CPU, RAM, and GPU charts use a 0–100% scale. Disk I/O uses the recent peak transfer rate. These short trends stay in memory and are not saved.
 
 <figure class="docs-screenshot">
   <a href={metricsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={metricsScreenshot.src}
-      alt="Live header readings with small trend lines, separate Disk I/O speeds and Storage percentage, and an open reading details panel."
+      alt="Live header readings with small trend lines, Disk I/O read and write speeds, and an open reading details panel."
     />
   </a>
   <figcaption>Read and write activity is separate from space used. Example data shown.</figcaption>

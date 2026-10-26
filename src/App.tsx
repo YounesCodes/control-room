@@ -56,7 +56,7 @@ import {
 import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HostMetrics } from "./components/HostMetrics";
-import { DEFAULT_HEADER_METRICS } from "./lib/header-metrics";
+import { displayedHeaderMetrics } from "./lib/header-metrics";
 import { UpdateIndicator } from "./components/UpdateIndicator";
 import { TerminalTargetMenu } from "./components/TerminalTargetMenu";
 import type { TerminalPaneHandle } from "./components/TerminalPane";
@@ -1865,6 +1865,7 @@ export function App() {
     ];
   });
 
+  const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
   return (
     <div
       ref={shellSize.ref}
@@ -1886,7 +1887,7 @@ export function App() {
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
-          (settingsContract.current.hostMetrics?.length ?? DEFAULT_HEADER_METRICS.length) > 0 && (
+          headerMetrics.length > 0 && (
             <HostMetrics
               key={
                 isLocalWorkspace(activeWorkspace)
@@ -1899,7 +1900,7 @@ export function App() {
                   ? "Local machine"
                   : activeWorkspace.connectionSnapshot.displayName
               }
-              metrics={settingsContract.current.hostMetrics ?? DEFAULT_HEADER_METRICS}
+              metrics={headerMetrics}
               seconds={settingsContract.current.hostMetricsIntervalSeconds ?? 5}
               onSettings={() => setSettingsOpen(true)}
             />

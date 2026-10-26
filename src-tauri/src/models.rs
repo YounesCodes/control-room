@@ -601,6 +601,7 @@ pub enum HeaderMetric {
     Cpu,
     Ram,
     Gpu,
+    // Retained for compatibility with saved selections from older builds.
     Disk,
     #[serde(rename = "diskIo")]
     DiskIo,
@@ -642,7 +643,6 @@ impl Default for AppSettings {
                 HeaderMetric::Ram,
                 HeaderMetric::Gpu,
                 HeaderMetric::DiskIo,
-                HeaderMetric::Disk,
                 HeaderMetric::Uptime,
             ],
             host_metrics_interval_seconds: 5,

@@ -62,6 +62,20 @@ describe("Settings drafts", () => {
 });
 
 describe("header metric preferences", () => {
+  it("ignores retired storage selections when checking for unsaved edits", () => {
+    expect(
+      settingsHaveChanges(
+        { ...settings, hostMetrics: ["cpu", "disk", "diskIo"] },
+        { ...settings, hostMetrics: ["cpu", "diskIo"] },
+      ),
+    ).toBe(false);
+    expect(
+      settingsHaveChanges(
+        { ...settings, hostMetrics: ["disk"] },
+        { ...settings, hostMetrics: ["diskIo"] },
+      ),
+    ).toBe(true);
+  });
   it("treats missing preferences as defaults and compares metric selections by value", () => {
     expect(
       settingsHaveChanges(settings, {

@@ -8,6 +8,7 @@ import {
   formatByteRate,
   headerMetricNumber,
   metricTrend,
+  displayedHeaderMetrics,
 } from "./header-metrics";
 import type { HeaderMetrics } from "../types";
 const sample: HeaderMetrics = {
@@ -24,6 +25,12 @@ const sample: HeaderMetrics = {
   uptimeSeconds: 90000,
 };
 describe("header metric values", () => {
+  it("excludes retired storage selections without changing other choices", () => {
+    expect(displayedHeaderMetrics()).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
+    expect(displayedHeaderMetrics(["diskIo", "disk", "cpu"])).toEqual(["diskIo", "cpu"]);
+    expect(displayedHeaderMetrics(["disk"])).toEqual([]);
+    expect(displayedHeaderMetrics([])).toEqual([]);
+  });
   it("separates read/write transfer rates from storage fullness", () => {
     expect(headerMetricValue("diskIo", sample)).toBe("Read 1.0 MiB/s · Write 512 KiB/s");
     expect(headerMetricValue("disk", sample)).toBe("50%");

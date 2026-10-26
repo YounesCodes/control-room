@@ -2035,7 +2035,7 @@ mod tests {
         assert_eq!(loaded.host_metrics, settings.host_metrics);
         assert_eq!(loaded.host_metrics_interval_seconds, 10);
         settings.host_metrics = AppSettings::default().host_metrics;
-        assert_eq!(settings.host_metrics.len(), 6);
+        assert_eq!(settings.host_metrics.len(), 5);
         database.save_settings(&settings).unwrap();
         assert_eq!(
             database.get_settings().unwrap().host_metrics,
@@ -2047,8 +2047,20 @@ mod tests {
         database.save_settings(&settings).unwrap();
         assert_eq!(
             database.get_settings().unwrap().host_metrics.len(),
-            5,
+            4,
             "existing selections stay unchanged"
+        );
+        // A retired Storage choice must not make the rest of an older
+        // settings record unreadable. The UI filters it before sampling.
+        settings.host_metrics = vec![
+            crate::models::HeaderMetric::Cpu,
+            crate::models::HeaderMetric::Disk,
+            crate::models::HeaderMetric::DiskIo,
+        ];
+        database.save_settings(&settings).unwrap();
+        assert_eq!(
+            database.get_settings().unwrap().host_metrics,
+            settings.host_metrics
         );
         settings.host_metrics_interval_seconds = 1;
         assert!(database.save_settings(&settings).is_err());
@@ -2074,7 +2086,7 @@ mod tests {
         assert_eq!(loaded.default_log_tail, 500);
         assert!(!loaded.host_metrics_enabled);
         assert_eq!(loaded.host_metrics_interval_seconds, 5);
-        assert_eq!(loaded.host_metrics.len(), 6);
+        assert_eq!(loaded.host_metrics.len(), 5);
         assert!(loaded.global_sudo_enabled);
         assert!(
             loaded.automatic_update_checks,
