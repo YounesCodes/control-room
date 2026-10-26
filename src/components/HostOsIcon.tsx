@@ -135,6 +135,7 @@ export function HostOsIcon({
       className={[
         "host-os-icon",
         `host-os-${kind}`,
+        version ? "host-os-versioned" : "",
         // Only marks with a brand of their own join the identity reveal; the
         // generic server glyph stays neutral everywhere.
         kind !== "unknown" ? "identity-mark" : "",

@@ -5,6 +5,7 @@ import axe from "axe-core";
 import * as fixtures from "./test/app-fixtures";
 import type { AppSettings, HostBaseline, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
+import "@fontsource-variable/inter/opsz.css";
 import "./styles.css";
 
 const native = vi.hoisted(() => ({
@@ -434,6 +435,72 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(element.querySelector(".terminal-target-menu")).toBeNull());
     await expect.element(trigger).toHaveFocus();
   });
+
+  it.each([5, 45])(
+    "keeps chooser rows inside the menu with %s saved connections",
+    async (count) => {
+      const menuCapabilities = ({ connectionId }: { connectionId: string }) =>
+        connectionId === "host-1" || connectionId === "host-2"
+          ? {
+              ...fixtures.capabilities(connectionId),
+              osId: "windows",
+              osName: `Microsoft Windows ${connectionId === "host-1" ? "10" : "11"} Pro`,
+            }
+          : fixtures.capabilities(connectionId);
+      overrides.set("get_cached_capabilities", menuCapabilities);
+      overrides.set("refresh_capabilities", menuCapabilities);
+      overrides.set("list_connections", () => [
+        fixtures.connection(),
+        ...Array.from({ length: count - 1 }, (_, index) => ({
+          ...fixtures.connection(`host-${index + 1}`),
+          displayName:
+            index === 0
+              ? "A very long connection name that should truncate within its own row"
+              : `Fixture ${index + 1}`,
+        })),
+      ]);
+      overrides.set("list_local_shells", () => ({
+        profiles: [
+          {
+            id: "command-prompt",
+            label: "Command Prompt",
+            kind: "command-prompt",
+            elevated: false,
+          },
+          { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
+        ],
+        administratorStatus: "disabled",
+      }));
+      await mount();
+      await navigate("Terminal");
+      await document.fonts.load('500 12px "Inter Variable"');
+      await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      const menu = page.getByRole("dialog", { name: "New terminal" });
+      await expect.element(menu).toBeVisible();
+      const node = menu.element();
+      const badges = node.querySelectorAll<HTMLElement>(".host-os-version");
+      expect(badges).toHaveLength(2);
+      for (const badge of badges) {
+        const mark = badge.closest(".host-os-icon")!.getBoundingClientRect();
+        const row = badge.closest("button")!.getBoundingClientRect();
+        const box = badge.getBoundingClientRect();
+        expect(box.right).toBeLessThanOrEqual(mark.right + 9);
+        expect(box.top).toBeGreaterThanOrEqual(row.top);
+        expect(box.bottom).toBeLessThanOrEqual(row.bottom);
+      }
+      expect(node.scrollWidth).toBeLessThanOrEqual(node.clientWidth);
+      if (count === 5) expect(node.scrollHeight).toBeLessThanOrEqual(node.clientHeight);
+      else expect(node.scrollHeight).toBeGreaterThan(node.clientHeight);
+      await userEvent.keyboard("{End}");
+      const last = menu.getByRole("button", { name: "Local terminals: Git Bash" });
+      await expect.element(last).toHaveFocus();
+      expect(last.element().getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        node.getBoundingClientRect().bottom - 5,
+      );
+      await page.screenshot({ path: `../test-results/terminal-chooser-${count}.png` });
+    },
+  );
 
   it("anchors Scratchpad to its own button in both modes and follows a resized window", async () => {
     await page.viewport(960, 640);
