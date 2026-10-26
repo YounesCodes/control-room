@@ -269,6 +269,15 @@ export function firewallForSocket(
   if (firewall.backend === "windows") {
     return { state: "unknown", label: "Windows Firewall: profile policies only" };
   }
+  if (firewall.backend === "macos") {
+    return {
+      state: "unknown",
+      label:
+        firewall.active === false
+          ? "Application Firewall inactive"
+          : "macOS Application Firewall: application rules only",
+    };
+  }
   if (firewall.active === false) return { state: "inactive", label: "Firewall inactive" };
   if (firewall.active !== true) return { state: "unknown", label: "Firewall status unknown" };
 

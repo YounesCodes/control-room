@@ -9,6 +9,7 @@ function groupLabel(group: ConnectionSummary): string {
 }
 
 export function PortsConnections({
+  macosHost = false,
   connections,
   loading,
   error,
@@ -17,6 +18,7 @@ export function PortsConnections({
   onOpenSystemd,
   onViewLogs,
 }: {
+  macosHost?: boolean;
   connections: EstablishedConnections | null;
   loading: boolean;
   error: string | null;
@@ -124,7 +126,7 @@ export function PortsConnections({
                 <dd>{selected.processId ?? "Unavailable"}</dd>
               </div>
               <div>
-                <dt>Systemd unit</dt>
+                <dt>{macosHost ? "Launchd service" : "Systemd unit"}</dt>
                 <dd>{selected.systemdUnit ?? "Not established"}</dd>
               </div>
             </dl>
@@ -149,14 +151,14 @@ export function PortsConnections({
                   type="button"
                   onClick={() => onOpenSystemd(selected.systemdUnit!)}
                 >
-                  <Server size={15} /> Open unit
+                  <Server size={15} /> {macosHost ? "Open service" : "Open unit"}
                 </button>
                 <button
                   className="secondary-button"
                   type="button"
                   onClick={() => onViewLogs({ type: "systemd", id: selected.systemdUnit! })}
                 >
-                  <FileClock size={15} /> View journal
+                  <FileClock size={15} /> {macosHost ? "View logs" : "View journal"}
                 </button>
               </div>
             )}

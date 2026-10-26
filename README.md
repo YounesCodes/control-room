@@ -1,10 +1,10 @@
 # Control Room
 
-> A Windows and macOS SSH client with read-only Linux and Windows host inspection.
+> A Windows and macOS SSH client with read-only Linux, Windows, and macOS host inspection.
 
 [![Latest release](https://img.shields.io/github/v/release/YounesCodes/control-room?display_name=tag)](https://github.com/YounesCodes/control-room/releases/latest) [![CI](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YounesCodes/control-room/actions/workflows/ci.yml)
 
-Control Room gives you one place to work with Linux and Windows machines over SSH. Save each host once and open it as a Workspace. Inspect services, ports, containers, and logs where supported. Windows 10 and 11 hosts offer installed shells, supported Windows Terminal profiles, and WSL distributions before connecting, with Windows services, ports, resource readings, and Docker inspection when available.
+Control Room gives you one place to work with Linux, Windows, and macOS machines over SSH. Save each host once and open it as a Workspace. Inspect services, ports, containers, and logs where supported. Mac hosts offer zsh, Bash, and installed fish shells, launchd services, native ports and connections, unified logs, boot records, baselines, and optional Bash/zsh command history. Docker uses the account's selected context. Windows 10 and 11 hosts offer installed shells, supported Windows Terminal profiles, and WSL distributions before connecting, with Windows services, ports, resource readings, and Docker inspection when available.
 
 - A real terminal with tabs and splits. It runs through your system OpenSSH client and native terminal processes, so your existing keys, `~/.ssh/config`, and ssh-agent keep working.
 - Saved connections with groups and tags, and several Workspaces per host.

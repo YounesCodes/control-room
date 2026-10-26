@@ -190,6 +190,7 @@ export function DockerContainerInspector({
   onRetryWithSudo,
   onViewLogs,
   windowsHost = false,
+  macosHost = false,
 }: {
   summary: DockerContainer;
   cache?: CachedValue<DockerContainerDetails>;
@@ -197,9 +198,11 @@ export function DockerContainerInspector({
   onRetryWithSudo: () => void;
   onViewLogs: () => void;
   windowsHost?: boolean;
+  macosHost?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
-  const permissionError = !windowsHost && cache?.error?.toLowerCase().includes("permission denied");
+  const permissionError =
+    !windowsHost && !macosHost && cache?.error?.toLowerCase().includes("permission denied");
   const collectedAt = cache?.fetchedAt
     ? new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;

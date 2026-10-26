@@ -285,6 +285,13 @@ code,
   font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
 }
 
+.firewall-rules {
+  max-height: 240px;
+  max-width: 100%;
+  overflow: auto;
+  font-size: 12px;
+}
+
 .log-output-shell {
   position: relative;
   height: calc(100% - 122px);

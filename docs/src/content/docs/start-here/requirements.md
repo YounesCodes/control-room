@@ -7,7 +7,7 @@ Control Room runs on Windows 11 x64 and uses the Windows OpenSSH Client. Local t
 
 The macOS preview runs on Intel and Apple Silicon Macs with macOS 12 or newer. It uses the included OpenSSH client and installed zsh, Bash, or fish shells. See [Install and update](/control-room/start-here/installation/#macos-preview).
 
-For an SSH terminal, you need a Linux host or a Windows 10 or 11 host with OpenSSH Server that accepts your SSH login. Windows shell detection requires noninteractive key or agent authentication. See [Connections](/control-room/connections/) to choose installed Windows shells, Windows Terminal profiles, or WSL distributions.
+For an SSH terminal, you need a Linux, macOS, or Windows 10 or 11 host with OpenSSH Server that accepts your SSH login. Windows shell detection requires noninteractive key or agent authentication. See [Connections](/control-room/connections/) to choose installed Windows shells, Windows Terminal profiles, or WSL distributions.
 
 Linux inspection views need their own tools: systemd for services and boot information, journald for service logs, `ss` for ports, and Docker for containers and their logs. Bash is needed only for optional command history. A host can support some views even when others are unavailable.
 
@@ -16,6 +16,10 @@ The terminal can use normal OpenSSH password prompts. Inspection reads run separ
 Windows inspection uses Windows PowerShell and the built-in networking and CIM commands for services, ports, TCP peers, and resource readings. Docker requires a Windows `docker.exe` on PATH or in Docker Desktop's standard installation directory, plus daemon access for the SSH account. Control Room does not start Docker or inspect Docker installed only inside WSL.
 
 Docker inspection also needs an account that can read the Docker daemon. On Linux, if access requires sudo, you can allow a read-only retry.
+
+macOS inspection uses included tools: `launchctl`, `log`, `netstat`, `lsof`, `sysctl`, `vm_stat`, and `df`. No Linux compatibility layer is required. CPU, memory, disk, and uptime metrics are available; GPU usage remains unavailable. Enhanced History supports the included Bash 3.2 and zsh. Fish can open terminals without command-history capture.
+
+On a Mac, Docker Desktop or a Docker CLI with a working context provides container inspection and logs. Control Room keeps the SSH account's selected context, shows its endpoint, and does not apply sudo to Docker reads. A context pointing to another host describes that daemon's containers, not the Mac's native sockets.
 
 ## Structured remote inspection
 
@@ -36,10 +40,12 @@ RHEL and SLES use the same inspection commands as Rocky or AlmaLinux and openSUS
 
 The distribution image checks cover `/etc/os-release`, host facts, uptime, and the account shell. Containers do not prove systemd, journald, boot diagnostics, firewall D-Bus access, or SSH behavior. Those need a booted VM or physical host.
 
-The portable views require ordinary POSIX shell tools. Systemd, Boot, and journald Logs require systemd and journald. Ports requires `ss` from iproute2. Enhanced History requires Bash. Docker inspection requires an accessible Docker daemon.
+On Linux, the portable views require ordinary POSIX shell tools. Systemd, Boot, and journald Logs require systemd and journald. Ports requires `ss` from iproute2. Enhanced History requires Bash. Docker inspection requires an accessible Docker daemon.
 
 ## Firewall inspection
 
 Ports reads UFW or firewalld when either front-end is installed. UFW rules include its incoming default policy. The firewalld read reports active zones and explicit numeric port rules. Service-name rules, rich rules, direct rules, nftables-only configurations, and iptables-only configurations remain unavailable, so Control Room does not turn a missing numeric rule into a claim that a port is blocked.
 
 On Windows, Ports reports firewall profile enablement and default inbound policies. It does not evaluate individual Windows firewall rules or decide whether a listener is reachable.
+
+On macOS, Ports reads Application Firewall state and application rules, plus Packet Filter state and rules when permitted. Packet Filter normally requires sudo. These are separate controls; an inactive Application Firewall does not establish that a port is reachable.

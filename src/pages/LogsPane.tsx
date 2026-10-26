@@ -25,6 +25,7 @@ const MAX_EARLY_STREAM_EVENTS = 16;
 export function LogsPane({
   connection,
   windowsHost = false,
+  macosHost = false,
   settings,
   logTailOptions,
   servicesCache,
@@ -36,6 +37,7 @@ export function LogsPane({
 }: {
   connection: SavedConnection;
   windowsHost?: boolean;
+  macosHost?: boolean;
   settings: AppSettings;
   logTailOptions: number[];
   servicesCache: CachedList<SystemdUnit>;
@@ -48,7 +50,7 @@ export function LogsPane({
   const [sourceType, setSourceType] = useState<LogSourceType>(
     windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
   );
-  const [sourceId, setSourceId] = useState(selectedSource?.id ?? "");
+  const [sourceId, setSourceId] = useState(selectedSource?.id ?? (macosHost ? "all" : ""));
   const [tail, setTail] = useState(settings.defaultLogTail);
   const [follow, setFollow] = useState(true);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("stopped");
@@ -186,6 +188,7 @@ export function LogsPane({
 
   useEffect(() => {
     const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
+    if (macosHost && sourceType === "systemd" && sourceId === "all") return;
     const next = reconcileSelection(items, sourceId) ?? "";
     if (next === sourceId) return;
     setSourceId(next);
@@ -312,7 +315,11 @@ export function LogsPane({
       startingRef.current = false;
       setError(message);
       setStreamStatus("stopped");
-      if (!windowsHost && message.toLowerCase().includes("permission denied"))
+      if (
+        !windowsHost &&
+        !(macosHost && sourceType === "docker") &&
+        message.toLowerCase().includes("permission denied")
+      )
         setSudoPurpose("stream");
     }
   }
@@ -332,7 +339,7 @@ export function LogsPane({
     if (!(await stop())) return;
     setSourceType(next);
     const items = next === "systemd" ? servicesCache.items : containersCache.items;
-    const nextId = items[0]?.id ?? "";
+    const nextId = macosHost && next === "systemd" ? "all" : (items[0]?.id ?? "");
     setSourceId(nextId);
     onSourceChange(nextId ? { type: next, id: nextId } : null);
     void loadSources(next);
@@ -385,13 +392,17 @@ export function LogsPane({
   }
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
-  const sourceOptions = sourceCache.items;
+  const sourceOptions =
+    macosHost && sourceType === "systemd"
+      ? [{ id: "all", name: "All unified logs" }, ...sourceCache.items]
+      : sourceCache.items;
   const controlsLocked = streamStatus !== "stopped";
-  if (sourceCache.loading && !sourceCache.items.length)
+  if (sourceCache.loading && !sourceCache.items.length && !(macosHost && sourceType === "systemd"))
     return <LoadingState label="Finding available log sources…" />;
-  if (sourceCache.error && !sourceCache.items.length) {
+  if (sourceCache.error && !sourceCache.items.length && !(macosHost && sourceType === "systemd")) {
     const dockerPermissionError =
       !windowsHost &&
+      !macosHost &&
       sourceType === "docker" &&
       sourceCache.error.toLowerCase().includes("permission denied");
     return (
@@ -475,12 +486,14 @@ export function LogsPane({
             onChange={(event) => void changeType(event.target.value as LogSourceType)}
             disabled={controlsLocked}
           >
-            {!windowsHost && <option value="systemd">systemd</option>}
+            {!windowsHost && (
+              <option value="systemd">{macosHost ? "Unified log" : "systemd"}</option>
+            )}
             <option value="docker">Docker</option>
           </select>
         </label>
         <label className="source-select">
-          <span>{sourceType === "systemd" ? "Unit" : "Container"}</span>
+          <span>{sourceType === "systemd" ? (macosHost ? "Service" : "Unit") : "Container"}</span>
           <select
             value={sourceId}
             onChange={(event) => {
@@ -540,15 +553,17 @@ export function LogsPane({
       {error && (
         <div className="inline-error" role="alert">
           <span>{error}</span>
-          {!windowsHost && error.toLowerCase().includes("permission denied") && (
-            <button
-              className="inline-action"
-              type="button"
-              onClick={() => setSudoPurpose("stream")}
-            >
-              Retry with sudo
-            </button>
-          )}
+          {!windowsHost &&
+            !(macosHost && sourceType === "docker") &&
+            error.toLowerCase().includes("permission denied") && (
+              <button
+                className="inline-action"
+                type="button"
+                onClick={() => setSudoPurpose("stream")}
+              >
+                Retry with sudo
+              </button>
+            )}
         </div>
       )}
       {displayedLogs ? (

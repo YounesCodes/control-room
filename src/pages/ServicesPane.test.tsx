@@ -56,6 +56,28 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 describe("ServicesPane failed units view", () => {
   afterEach(cleanup);
 
+  it("uses launchd daemon and agent filters and routes service logs", async () => {
+    const onViewLogs = vi.fn();
+    render(
+      <ServicesPane
+        macosHost
+        connection={connection}
+        cache={cache([
+          unit("system/com.example.daemon", "daemon", "active", "running (PID 42)"),
+          unit("gui/501/com.example.agent", "agent", "inactive", "waiting"),
+        ])}
+        onCacheChange={vi.fn()}
+        onViewLogs={onViewLogs}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Services" })).toBeTruthy();
+    await userEvent.selectOptions(screen.getByLabelText("Service type"), "agent");
+    await userEvent.click(screen.getByRole("button", { name: /gui\/501\/com.example.agent/ }));
+    expect(screen.queryByText("Unit-file state")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "View logs" }));
+    expect(onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "gui/501/com.example.agent" });
+  });
+
   it("shows counts, filters across types, and opens the selected unit journal", async () => {
     const user = userEvent.setup();
     const onViewLogs = vi.fn();

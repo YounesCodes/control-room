@@ -25,10 +25,16 @@ const tauriCapabilities: TauriCapabilities = {
 export const config: WebdriverIO.Config = {
   runner: "local",
   specs:
+    process.env.CONTROL_ROOM_LIVE_MACOS_DESKTOP === "1"
+      ? ["./e2e/live-macos-host.spec.ts"]
+      : process.env.CONTROL_ROOM_LIVE_DESKTOP === "1"
+        ? ["./e2e/live-ssh.spec.ts"]
+        : ["./e2e/**/*.spec.ts"],
+  exclude:
+    process.env.CONTROL_ROOM_LIVE_MACOS_DESKTOP === "1" ||
     process.env.CONTROL_ROOM_LIVE_DESKTOP === "1"
-      ? ["./e2e/live-ssh.spec.ts"]
-      : ["./e2e/**/*.spec.ts"],
-  exclude: process.env.CONTROL_ROOM_LIVE_DESKTOP === "1" ? [] : ["./e2e/live-ssh.spec.ts"],
+      ? []
+      : ["./e2e/live-ssh.spec.ts", "./e2e/live-macos-host.spec.ts"],
   maxInstances: 1,
   outputDir: resolve("test-results/desktop/driver"),
   services: [

@@ -355,3 +355,5 @@ here. `src/color-palette.test.ts` and `src/ui-hierarchy.test.ts` protect selecte
 palette, contrast, and structural rules. If a design decision changes, update
 the relevant guardrail and explain the reason in the change. Run `npm run check`
 to validate the frontend and Rust gates.
+
+Remote Mac workspaces use the same inspection navigation as Linux. Name launchd jobs Services and distinguish their daemon and agent domains. Show unified logs and macOS reboot evidence without Linux boot timing cards. Application Firewall rules and Packet Filter evidence remain separate; neither implies that a port is reachable. When Docker uses another host through a context, show that context and do not associate its published ports with the Mac's own sockets.

@@ -9,6 +9,6 @@ description: Quick answers about SSH, local shells, and saved data.
 
 **Can I use a local shell?** Yes. Installed PowerShell, Command Prompt, and Git Bash shells can open in tabs and splits.
 
-**Does it change the Linux host?** The inspection views only read. Commands you type in the terminal have their normal effects. Optional Enhanced History changes the remote account's Bash startup files when you enable or remove it.
+**Does it change the SSH host?** The inspection views only read. Commands you type in the terminal have their normal effects. Optional Enhanced History changes the remote account's shell startup files when you enable or remove it.
 
 **Does it save terminal output or logs?** No. It keeps fetched output in memory while you view it. See [Security and storage](/control-room/reference/security/) for what is saved.

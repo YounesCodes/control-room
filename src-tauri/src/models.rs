@@ -74,6 +74,8 @@ pub struct HostCapabilities {
     pub default_shell: Option<String>,
     pub systemd_available: bool,
     pub journald_available: bool,
+    pub launchd_available: bool,
+    pub unified_log_available: bool,
     pub docker_available: bool,
     pub docker_accessible: bool,
     /// True when the daemon answered under sudo after refusing the connecting
@@ -85,6 +87,9 @@ pub struct HostCapabilities {
     /// separate choice the user makes per connection or in Settings.
     pub passwordless_sudo: bool,
     pub docker_version: Option<String>,
+    pub docker_context: Option<String>,
+    pub docker_endpoint: Option<String>,
+    pub docker_remote: bool,
     pub running_service_count: Option<u32>,
     pub running_container_count: Option<u32>,
     pub total_container_count: Option<u32>,
@@ -260,7 +265,18 @@ pub struct FirewallStatus {
     pub active: Option<bool>,
     pub default_incoming: Option<String>,
     pub rules: Vec<FirewallRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packet_filter: Option<PacketFilterStatus>,
     pub collected_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PacketFilterStatus {
+    pub active: Option<bool>,
+    pub rules: Vec<String>,
+    pub error: Option<String>,
+    pub permission_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -20,7 +20,7 @@ A baseline is a snapshot you choose to save for one SSH host. Capture one before
 Choose what to capture:
 
 - host identity and capabilities
-- systemd units
+- services, using systemd on Linux or launchd on macOS
 - Docker containers
 - listening ports
 - filesystems
@@ -35,7 +35,7 @@ The app reads one part at a time. If you stop, completed parts stay saved and th
 | Not readable | The read failed or the account did not have permission.   |
 | Not captured | You did not select this part, or stopped before it ran.   |
 
-Comparison shows what was added, removed, or changed. It matches services by unit ID, containers by ID, listeners by address and protocol, and filesystems by mount point. A live comparison is read and discarded; it does not save a new baseline. The app shows when host identity or section versions do not match, and does not guess why something changed.
+Comparison shows what was added, removed, or changed. It matches services by unit ID or launchd domain and label, containers by ID, listeners by address and protocol, and filesystems by mount point. A live comparison is read and discarded; it does not save a new baseline. The app shows when host identity or section versions do not match, and does not guess why something changed.
 
 Open a saved baseline to expand its parts. Use the history icon beside an entry to see its values across saved captures. Comparisons hide service sub-states and container states by default; turn off **Hide values that move on their own** to include them.
 

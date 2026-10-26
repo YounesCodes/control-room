@@ -2109,6 +2109,89 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
+  it("opens a Mac shell and exposes native inspection without Linux boot controls", async () => {
+    const capabilities = {
+      ...fixtures.capabilities(),
+      osId: "macos",
+      osName: "macOS",
+      osVersion: "26.7.1",
+      defaultShell: "/bin/zsh",
+      systemdAvailable: false,
+      journaldAvailable: false,
+      launchdAvailable: true,
+      unifiedLogAvailable: true,
+      dockerContext: "lab",
+      dockerEndpoint: "ssh://docker.example.invalid",
+      dockerRemote: true,
+    };
+    overrides.set("get_cached_capabilities", () => capabilities);
+    overrides.set("discover_remote_shells", () => ({
+      platform: "macos",
+      shells: [{ id: "macos:zsh", label: "zsh" }],
+      capabilities,
+    }));
+    overrides.set("list_services", () => [
+      {
+        ...fixtures.service,
+        id: "system/com.example.agent",
+        unitType: "daemon",
+        subState: "running (PID 42)",
+      },
+    ]);
+    root.render(<App />);
+    await page
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.element(page.getByRole("group", { name: "Mac shells" })).toBeVisible();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.find(([command]) => command === "start_session")?.[1]
+            .remoteShellId,
+      )
+      .toBe("macos:zsh");
+    await navigate("Services");
+    await expect
+      .element(page.getByRole("heading", { name: "Services", exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByRole("combobox", { name: "Service type" })).toBeVisible();
+    expect(
+      (await axe.run(element.querySelector<HTMLElement>(".services-page")!)).violations,
+    ).toEqual([]);
+    await page.screenshot({ path: "../test-results/macos-host-services.png" });
+    await navigate("Ports");
+    await page.getByRole("tab", { name: "Table", exact: true }).click();
+    await expect.element(page.getByRole("button", { name: /443.*fixture/ })).toBeVisible();
+    expect(element.querySelector(".ports-page")?.textContent).not.toContain(
+      fixtures.container.name,
+    );
+    await page
+      .getByPlaceholder("Search ports, services, processes, or containers")
+      .fill(fixtures.container.name);
+    await expect
+      .element(page.getByRole("heading", { name: "No matching listeners" }))
+      .toBeVisible();
+    await navigate("Boot");
+    await expect
+      .element(page.getByRole("heading", { name: "Launchd service exits" }))
+      .toBeVisible();
+    expect(element.textContent).not.toContain("Slow units");
+    await navigate("Logs");
+    await expect
+      .element(page.getByRole("combobox", { name: "Service", exact: true }))
+      .toHaveValue("all");
+    await navigate("Docker");
+    await expect
+      .element(page.getByText("lab · ssh://docker.example.invalid", { exact: true }))
+      .toBeVisible();
+    await navigate("Baselines");
+    await expect
+      .element(page.getByRole("heading", { name: "Baselines", exact: true }))
+      .toBeVisible();
+  });
+
   it("offers Windows Docker as its own capability even when detection finds no CLI", async () => {
     const capabilities = {
       ...fixtures.capabilities(),

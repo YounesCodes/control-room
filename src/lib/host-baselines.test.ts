@@ -88,7 +88,7 @@ function comparison(
 
 describe("baseline labels", () => {
   it("names sections and statuses in plain words", () => {
-    expect(sectionLabel("systemdUnits")).toBe("Systemd units");
+    expect(sectionLabel("systemdUnits")).toBe("Services");
     expect(sectionLabel("filesystems")).toBe("Filesystems");
     expect(statusLabel("unsupported")).toBe("Not present");
     expect(statusLabel("unavailable")).toBe("Not readable");
@@ -222,7 +222,7 @@ describe("comparison export", () => {
       comparison([diff("systemdUnits", true, { added: 1, changed: 1, unchanged: 2 })]),
     );
 
-    expect(markdown).toContain("## Systemd units");
+    expect(markdown).toContain("## Services");
     expect(markdown).toContain("- Added `systemdUnits-0`");
     expect(markdown).toContain("activeState: `active` → `failed`");
   });

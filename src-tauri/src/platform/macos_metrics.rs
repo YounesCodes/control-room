@@ -1,13 +1,7 @@
 //! Bounded, read-only samples from the tools included with macOS.
 use super::{HeaderMetric, HeaderMetrics, empty_sample, percent, set_disk_capacity};
 
-#[cfg(target_os = "macos")]
-pub(super) fn collect(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
-    use std::{io::Read, process::Stdio, time::Duration};
-    use wait_timeout::ChildExt;
-    if metrics.is_empty() {
-        return Ok(empty_sample());
-    }
+pub(crate) fn script(metrics: &[HeaderMetric]) -> String {
     let mut script = String::from("LC_ALL=C; export LC_ALL; ");
     if metrics.contains(&HeaderMetric::Cpu) {
         script.push_str("/usr/bin/top -l 2 -s 1 -n 0 | /usr/bin/awk '/CPU usage:/ {idle=$7} END {print \"cpu_idle=\" idle}'; ");
@@ -22,6 +16,17 @@ pub(super) fn collect(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String>
     if metrics.contains(&HeaderMetric::Uptime) {
         script.push_str("printf 'now='; /bin/date +%s; /usr/sbin/sysctl -n kern.boottime | /usr/bin/awk '{gsub(/,/,\"\",$4); print \"boot=\" $4}'; ");
     }
+    script
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn collect(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
+    use std::{io::Read, process::Stdio, time::Duration};
+    use wait_timeout::ChildExt;
+    if metrics.is_empty() {
+        return Ok(empty_sample());
+    }
+    let script = script(metrics);
     // The script contains only fixed commands. Neither paths nor frontend
     // strings become shell source, and each sample has a five-second budget.
     let mut child = crate::platform::background_command("/bin/sh")
@@ -50,7 +55,7 @@ pub(super) fn collect(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String>
     Ok(parse(&output, metrics))
 }
 
-fn parse(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
+pub(crate) fn parse(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
     let mut sample = empty_sample();
     let (mut page_size, mut total, mut free, mut inactive, mut speculative) =
         (None, None, None, None, None);

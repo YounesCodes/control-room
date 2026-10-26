@@ -199,13 +199,13 @@ export function PortsPane({
     () =>
       filterAndSortSockets(
         cache.items,
-        containersCache.items,
+        capabilities?.dockerRemote ? [] : containersCache.items,
         search,
         protocol,
         "port-asc",
         exposure,
       ),
-    [cache.items, containersCache.items, search, protocol, exposure],
+    [cache.items, containersCache.items, search, protocol, exposure, capabilities?.dockerRemote],
   );
 
   const collectedAt = cache.fetchedAt
@@ -289,6 +289,16 @@ export function PortsPane({
             )}
         </p>
       )}
+      {firewall?.packetFilter?.error && (tab === "overview" || tab === "table") && (
+        <p className="inline-warning firewall-warning">
+          <ShieldAlert size={14} /> Packet Filter: {firewall.packetFilter.error}
+          {firewall.packetFilter.permissionRequired && (
+            <button type="button" className="link-button" onClick={() => setFirewallSudo(true)}>
+              Retry with sudo
+            </button>
+          )}
+        </p>
+      )}
       {ownerGap && (tab === "overview" || tab === "table") && (
         <p className="inline-warning firewall-warning">
           <ShieldAlert size={14} />
@@ -301,6 +311,11 @@ export function PortsPane({
         </p>
       )}
 
+      {tab === "docker" && capabilities?.dockerRemote && (
+        <p className="inline-warning">
+          Docker context {capabilities.dockerContext}: {capabilities.dockerEndpoint}
+        </p>
+      )}
       <div className="port-list-controls">
         <label className="search-field">
           <Search size={15} />
@@ -339,7 +354,7 @@ export function PortsPane({
         {tab === "overview" && (
           <PortsOverview
             sockets={filteredSockets}
-            containers={containersCache.items}
+            containers={capabilities?.dockerRemote ? [] : containersCache.items}
             firewall={firewall}
             capabilities={capabilities}
             hostLabel={hostLabel}
@@ -350,6 +365,7 @@ export function PortsPane({
         )}
         {tab === "connections" && (
           <PortsConnections
+            macosHost={capabilities?.osId === "macos"}
             connections={connections}
             loading={connectionsLoading}
             error={connectionsError}
@@ -372,7 +388,7 @@ export function PortsPane({
         {tab === "table" && (
           <PortsTable
             sockets={cache.items}
-            containers={containersCache.items}
+            containers={capabilities?.dockerRemote ? [] : containersCache.items}
             firewall={firewall}
             search={search}
             protocol={protocol}

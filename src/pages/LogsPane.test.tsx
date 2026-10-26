@@ -126,6 +126,33 @@ describe("LogsPane reading position", () => {
     vi.clearAllMocks();
   });
 
+  it("can read all unified logs even when launchd inventory is unavailable", async () => {
+    render(
+      <LogsPane
+        macosHost
+        connection={connection}
+        settings={settings}
+        logTailOptions={[200]}
+        servicesCache={{
+          items: [],
+          fetchedAt: Date.now(),
+          loading: false,
+          error: "No service domains",
+        }}
+        containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+        selectedSource={{ type: "systemd", id: "all" }}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("option", { name: "Unified log" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "All unified logs" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(api.startJournalStream).toHaveBeenCalled());
+    expect(api.startJournalStream.mock.calls[0].slice(0, 2)).toEqual([connection.id, "all"]);
+  });
+
   it("offers only Docker logs on Windows and keeps access failures free of sudo prompts", async () => {
     api.startDockerLogStream.mockRejectedValueOnce(new Error("Permission denied by Docker"));
     render(

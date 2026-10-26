@@ -6,6 +6,7 @@ mod fonts;
 mod header_metrics;
 mod history;
 mod local_shell;
+mod macos_remote;
 mod models;
 mod platform;
 mod remote;

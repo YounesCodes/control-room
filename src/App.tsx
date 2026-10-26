@@ -488,8 +488,13 @@ export function App() {
   const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
   const windowsWorkspace =
     !!activeRemoteWorkspace &&
-    (!!activeRemoteWorkspace.remoteShell ||
+    ((!!activeRemoteWorkspace.remoteShell &&
+      !activeRemoteWorkspace.remoteShell.id.startsWith("macos:")) ||
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "windows");
+  const macosWorkspace =
+    !!activeRemoteWorkspace &&
+    (activeRemoteWorkspace.remoteShell?.id.startsWith("macos:") ||
+      hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "macos");
   // Local workspaces offer Terminal only; notes live in the terminal toolbar.
   const offeredNavigation =
     activeWorkspace && isLocalWorkspace(activeWorkspace)
@@ -500,7 +505,11 @@ export function App() {
               ["overview", "terminal", "services", "ports", "docker", "logs"].includes(item.id),
             )
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
-        : navigation;
+        : macosWorkspace
+          ? navigation.map((item) =>
+              item.id === "services" ? { ...item, label: "Services" } : item,
+            )
+          : navigation;
   const activeSavedConnection = activeRemoteWorkspace
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
@@ -1118,7 +1127,8 @@ export function App() {
       }
       if (
         hostCapabilities[connection.id]?.osId &&
-        hostCapabilities[connection.id]?.osId !== "windows"
+        hostCapabilities[connection.id]?.osId !== "windows" &&
+        hostCapabilities[connection.id]?.osId !== "macos"
       ) {
         const workspace = createRemoteWorkspace(connection);
         if (split) splitWithNewWorkspace(workspace);
@@ -2710,6 +2720,7 @@ export function App() {
                       </Suspense>
                     ) : (
                       <ServicesPane
+                        macosHost={!!macosWorkspace}
                         key={activeRemoteWorkspace.id}
                         connection={activeConnection}
                         cache={activeRemoteWorkspace.servicesCache}
@@ -2749,6 +2760,9 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "docker" && (
                     <DockerPane
+                      macosHost={!!macosWorkspace}
+                      dockerContext={hostCapabilities[activeConnection.id]?.dockerContext}
+                      dockerEndpoint={hostCapabilities[activeConnection.id]?.dockerEndpoint}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       windowsHost={windowsWorkspace}
@@ -2766,6 +2780,7 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "boot" && (
                     <BootDiagnosticsPane
+                      macosHost={!!macosWorkspace}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       snapshot={activeRemoteWorkspace.bootDiagnostics}
@@ -2777,6 +2792,7 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "logs" && (
                     <LogsPane
+                      macosHost={!!macosWorkspace}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       windowsHost={windowsWorkspace}
@@ -2808,6 +2824,7 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "history" && (
                     <HistoryPane
+                      macosHost={!!macosWorkspace}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       paused={activeRemoteWorkspace.historyPaused}

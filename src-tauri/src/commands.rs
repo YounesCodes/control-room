@@ -214,6 +214,15 @@ pub fn start_session(
         None
     };
     let remote_command = match remote_shell_id {
+        Some(id) if id.starts_with("macos:") => {
+            if !crate::macos_remote::is_host(&connection)? {
+                return Err("macOS shells require a detected macOS host".into());
+            }
+            Some(crate::macos_remote::shell_command(
+                &id,
+                connection.history_enabled,
+            )?)
+        }
         Some(id) => Some(windows_ssh::selected_command(&connection, &id)?),
         None if windows => Some(windows_ssh::default_command(&connection)?),
         None => None,

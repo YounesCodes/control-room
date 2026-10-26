@@ -78,6 +78,7 @@ export function OverviewPane({
   }
   if (!capabilities) return null;
   const windows = capabilities.osId === "windows";
+  const macos = capabilities.osId === "macos";
 
   const systemRows: [string, string][] = [
     ["Hostname", capabilities.hostname ?? "Unavailable"],
@@ -88,6 +89,12 @@ export function OverviewPane({
     ["Kernel", capabilities.kernel ?? "Unavailable"],
     ["Architecture", capabilities.architecture ?? "Unavailable"],
     ["Default shell", capabilities.defaultShell ?? "Unavailable"],
+    ...(capabilities.dockerContext
+      ? ([
+          ["Docker context", capabilities.dockerContext],
+          ["Docker endpoint", capabilities.dockerEndpoint ?? "Unavailable"],
+        ] as [string, string][])
+      : []),
   ];
 
   const dockerReachable = capabilities.dockerAccessible || capabilities.dockerAccessibleWithSudo;
@@ -96,7 +103,7 @@ export function OverviewPane({
       ? `Version ${capabilities.dockerVersion ?? "unknown"}`
       : capabilities.dockerAccessibleWithSudo
         ? `Version ${capabilities.dockerVersion ?? "unknown"} — reachable with sudo`
-        : windows
+        : windows || macos
           ? "Installed, daemon unavailable"
           : "Installed — sudo required"
     : "Not detected";
@@ -108,14 +115,20 @@ export function OverviewPane({
 
   const capabilityRows: { label: string; value: string; tone: CapabilityTone }[] = [
     {
-      label: "systemd",
-      value: capabilities.systemdAvailable ? "Available" : "Not detected",
-      tone: capabilities.systemdAvailable ? "ok" : "off",
+      label: macos ? "launchd" : "systemd",
+      value: (macos ? capabilities.launchdAvailable : capabilities.systemdAvailable)
+        ? "Available"
+        : "Not detected",
+      tone: (macos ? capabilities.launchdAvailable : capabilities.systemdAvailable) ? "ok" : "off",
     },
     {
-      label: "journald",
-      value: capabilities.journaldAvailable ? "Available" : "Not detected",
-      tone: capabilities.journaldAvailable ? "ok" : "off",
+      label: macos ? "Unified log" : "journald",
+      value: (macos ? capabilities.unifiedLogAvailable : capabilities.journaldAvailable)
+        ? "Available"
+        : "Not detected",
+      tone: (macos ? capabilities.unifiedLogAvailable : capabilities.journaldAvailable)
+        ? "ok"
+        : "off",
     },
     {
       label: "sudo",

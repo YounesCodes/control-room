@@ -5,7 +5,7 @@ description: Save SSH hosts and choose how to connect.
 
 import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
 
-A connection saves the SSH address and username for a Linux or Windows host. Select it in the sidebar to open a terminal.
+A connection saves the SSH address and username for a Linux, Windows, or macOS host. Select it in the sidebar to open a terminal.
 
 Select **Add connection** in the sidebar. To change one, open its menu and choose **Edit connection**.
 
@@ -20,7 +20,7 @@ Enter a display name, SSH destination, and username. A port (1–65535) and iden
 
 **Test structured access** checks whether the inspection views can connect without an SSH password prompt. It does not save the connection. The terminal can still use an interactive password login if that test fails.
 
-Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A Windows shell selected for the previous target is cleared.
+Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A remote shell selected for the previous target is cleared.
 
 ## Windows 10 and 11 hosts
 
@@ -33,6 +33,14 @@ Installed Windows Terminal profiles that launch a supported shell also appear in
 Reconnect and restored tabs reuse their chosen shell. **New terminal** lets you choose another shell on the same host. If a selected shell was removed, open a new terminal and choose an available one.
 
 Windows hosts offer Overview, Terminal, Services, Ports, Docker, and container Logs. Scratchpad opens from the terminal toolbar. Docker has its own sidebar entry, as on Linux hosts. Docker and Logs require the Windows Docker CLI and daemon access for the SSH account; their views report when either is unavailable. Optional header metrics show Windows resource readings. Inspection always reads Windows itself, including when the terminal runs WSL. WSL uses the distribution's default user and shell. Linux Boot, Baselines, and Enhanced History are unavailable on these connections.
+
+## macOS hosts
+
+Enable **Remote Login** in macOS System Settings and allow your SSH account. Save the Mac like any other SSH host. Shell discovery and inspection require an accepted host key and key or agent authentication that works without a prompt.
+
+Choose zsh, Bash, or an installed fish shell, then select **Connect**. Reconnect and restored tabs retain the selected shell. Mac hosts offer Overview, Terminal, Services, Ports, Docker, Boot, Logs, Baselines, History, and Scratchpad. Inspection reads macOS even when another shell is selected.
+
+The SSH account can inspect its own launchd agent domains and the system service inventory. Reading other processes, protected logs, or Packet Filter rules may need sudo. Docker requires an installed CLI and an accessible daemon in the account's selected Docker context.
 
 ## Organize and remove hosts
 

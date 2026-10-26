@@ -75,6 +75,9 @@ pub fn collect_remote(
     if metrics.is_empty() {
         return Ok(empty_sample());
     }
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::metrics(connection, metrics);
+    }
     let text =
         RemoteCommandExecutor::execute(connection, "header_metrics", &remote_command(metrics))?
             .success_text()?;
@@ -499,9 +502,8 @@ fn local_disk_io() -> Option<(f64, f64)> {
     Some((rates[0], rates[1]))
 }
 
-#[cfg(any(target_os = "macos", test))]
 #[path = "platform/macos_metrics.rs"]
-mod macos;
+pub(crate) mod macos;
 
 #[cfg(target_os = "macos")]
 pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {

@@ -39,11 +39,13 @@ function SectionError<T>({
 }
 
 export function BootDiagnosticsPane({
+  macosHost = false,
   connection,
   snapshot,
   onSnapshotChange,
   onViewLogs,
 }: {
+  macosHost?: boolean;
   connection: SavedConnection;
   snapshot: BootDiagnostics | null;
   onSnapshotChange: (snapshot: BootDiagnostics) => void;
@@ -132,7 +134,9 @@ export function BootDiagnosticsPane({
       <header className="page-heading boot-heading">
         <div>
           <h2>Boot Diagnostics</h2>
-          <p>How long this boot took, which units failed, and what the journal warned about.</p>
+          {!macosHost && (
+            <p>How long this boot took, which units failed, and what the journal warned about.</p>
+          )}
           {snapshot && (
             <small>Investigation collected {collectedLabel(snapshot.collectedAt)}</small>
           )}
@@ -152,7 +156,7 @@ export function BootDiagnosticsPane({
                 </option>
               ))}
             </select>
-            <small>journald reports up to 10 boots.</small>
+            {!macosHost && <small>journald reports up to 10 boots.</small>}
           </label>
           <button
             className="secondary-button"
@@ -178,22 +182,32 @@ export function BootDiagnosticsPane({
               evidence behind them, and none of it answers "how did this boot
               go?" without being read end to end. */}
           <div className="overview-stats boot-summary">
+            {!macosHost && (
+              <div className="overview-stat">
+                <span className="overview-stat-label">Boot time</span>
+                <strong className="overview-stat-value">{bootTime ?? "Unavailable"}</strong>
+                <span className="overview-stat-hint">{bootTimeHint}</span>
+              </div>
+            )}
             <div className="overview-stat">
-              <span className="overview-stat-label">Boot time</span>
-              <strong className="overview-stat-value">{bootTime ?? "Unavailable"}</strong>
-              <span className="overview-stat-hint">{bootTimeHint}</span>
-            </div>
-            <div className="overview-stat">
-              <span className="overview-stat-label">Units failed</span>
+              <span className="overview-stat-label">
+                {macosHost ? "Service exits" : "Units failed"}
+              </span>
               <strong className="overview-stat-value">
                 {snapshot.failedUnits.error ? "Unavailable" : failedUnits.length}
               </strong>
               <span className="overview-stat-hint">
-                {snapshot.failedUnits.error ? "not readable" : "system scope, not a health result"}
+                {snapshot.failedUnits.error
+                  ? "not readable"
+                  : macosHost
+                    ? "current launchd exit states"
+                    : "system scope, not a health result"}
               </span>
             </div>
             <div className="overview-stat">
-              <span className="overview-stat-label">Journal warnings</span>
+              <span className="overview-stat-label">
+                {macosHost ? "Errors and faults" : "Journal warnings"}
+              </span>
               <strong className="overview-stat-value">
                 {snapshot.journal.error ? "Unavailable" : journalLines.length}
               </strong>
@@ -206,63 +220,72 @@ export function BootDiagnosticsPane({
           </div>
 
           <div className="boot-sections">
-            <section className="boot-section">
-              <SectionHeading title="Boot timing" collectedAt={snapshot.timing.collectedAt} />
-              {snapshot.timing.error ? (
-                <SectionError section={snapshot.timing} action={sudoRetry(snapshot.timing)} />
-              ) : snapshot.timing.data ? (
-                <>
-                  <dl className="boot-timing-list">
-                    <div>
-                      <dt>Kernel</dt>
-                      <dd>{snapshot.timing.data.kernel ?? "Unavailable"}</dd>
-                    </div>
-                    <div>
-                      <dt>Userspace</dt>
-                      <dd>{snapshot.timing.data.userspace ?? "Unavailable"}</dd>
-                    </div>
-                  </dl>
-                  <p className="boot-original">{snapshot.timing.data.original}</p>
-                </>
-              ) : (
-                <p className="boot-empty">No timing was returned for this boot.</p>
-              )}
-            </section>
-
-            <section className="boot-section boot-section-slow">
-              <SectionHeading title="Slow units" collectedAt={snapshot.slowUnits.collectedAt} />
-              {snapshot.slowUnits.error ? (
-                <SectionError section={snapshot.slowUnits} action={sudoRetry(snapshot.slowUnits)} />
-              ) : (
-                <>
-                  <p className="boot-observation">
-                    Longest activation times observed; duration alone does not establish cause.
-                  </p>
-                  <div className="boot-unit-list">
-                    {slowUnits.map((unit) => {
-                      const millis = durationToMillis(unit.duration);
-                      const share =
-                        millis !== null && slowest > 0 ? (millis / slowest) * 100 : null;
-                      return (
-                        <div key={unit.unit}>
-                          <span title={unit.unit}>{unit.unit}</span>
-                          <strong>{unit.duration}</strong>
-                          <span className="boot-unit-track" aria-hidden="true">
-                            {share !== null && (
-                              <span className="boot-unit-bar" style={{ width: `${share}%` }} />
-                            )}
-                          </span>
+            {!macosHost && (
+              <>
+                <section className="boot-section">
+                  <SectionHeading title="Boot timing" collectedAt={snapshot.timing.collectedAt} />
+                  {snapshot.timing.error ? (
+                    <SectionError section={snapshot.timing} action={sudoRetry(snapshot.timing)} />
+                  ) : snapshot.timing.data ? (
+                    <>
+                      <dl className="boot-timing-list">
+                        <div>
+                          <dt>Kernel</dt>
+                          <dd>{snapshot.timing.data.kernel ?? "Unavailable"}</dd>
                         </div>
-                      );
-                    })}
-                    {!slowUnits.length && <p>No slow-unit rows returned.</p>}
-                  </div>
-                </>
-              )}
-            </section>
+                        <div>
+                          <dt>Userspace</dt>
+                          <dd>{snapshot.timing.data.userspace ?? "Unavailable"}</dd>
+                        </div>
+                      </dl>
+                      <p className="boot-original">{snapshot.timing.data.original}</p>
+                    </>
+                  ) : (
+                    <p className="boot-empty">No timing was returned for this boot.</p>
+                  )}
+                </section>
 
+                <section className="boot-section boot-section-slow">
+                  <SectionHeading title="Slow units" collectedAt={snapshot.slowUnits.collectedAt} />
+                  {snapshot.slowUnits.error ? (
+                    <SectionError
+                      section={snapshot.slowUnits}
+                      action={sudoRetry(snapshot.slowUnits)}
+                    />
+                  ) : (
+                    <>
+                      <p className="boot-observation">
+                        Longest activation times observed; duration alone does not establish cause.
+                      </p>
+                      <div className="boot-unit-list">
+                        {slowUnits.map((unit) => {
+                          const millis = durationToMillis(unit.duration);
+                          const share =
+                            millis !== null && slowest > 0 ? (millis / slowest) * 100 : null;
+                          return (
+                            <div key={unit.unit}>
+                              <span title={unit.unit}>{unit.unit}</span>
+                              <strong>{unit.duration}</strong>
+                              <span className="boot-unit-track" aria-hidden="true">
+                                {share !== null && (
+                                  <span className="boot-unit-bar" style={{ width: `${share}%` }} />
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {!slowUnits.length && <p>No slow-unit rows returned.</p>}
+                      </div>
+                    </>
+                  )}
+                </section>
+              </>
+            )}
             <section className="boot-section boot-section-wide">
-              <SectionHeading title="Failed units" collectedAt={snapshot.failedUnits.collectedAt} />
+              <SectionHeading
+                title={macosHost ? "Launchd service exits" : "Failed units"}
+                collectedAt={snapshot.failedUnits.collectedAt}
+              />
               {snapshot.failedUnits.error ? (
                 <SectionError
                   section={snapshot.failedUnits}
@@ -286,7 +309,7 @@ export function BootDiagnosticsPane({
                             type="button"
                             onClick={() => onViewLogs({ type: "systemd", id: unit.id })}
                           >
-                            <FileClock size={14} /> View journal
+                            <FileClock size={14} /> {macosHost ? "View logs" : "View journal"}
                           </button>
                         )}
                       </div>
@@ -302,15 +325,16 @@ export function BootDiagnosticsPane({
                 </>
               ) : (
                 <p className="boot-empty">
-                  No failed units were returned for the current system scope. This is not a complete
-                  health result.
+                  {macosHost
+                    ? "No nonzero service exit states were returned by launchd."
+                    : "No failed units were returned for the current system scope. This is not a complete health result."}
                 </p>
               )}
             </section>
 
             <section className="boot-section boot-section-wide">
               <SectionHeading
-                title="Warning and error sample"
+                title={macosHost ? "Error and fault sample" : "Warning and error sample"}
                 collectedAt={snapshot.journal.collectedAt}
               />
               {snapshot.journal.error ? (
@@ -318,8 +342,9 @@ export function BootDiagnosticsPane({
               ) : (
                 <>
                   <p className="boot-observation">
-                    Up to {JOURNAL_CAP} warning-through-alert journal entries; no full boot log is
-                    loaded.
+                    {macosHost
+                      ? `Up to ${JOURNAL_CAP} error and fault entries from the unified log.`
+                      : `Up to ${JOURNAL_CAP} warning-through-alert journal entries; no full boot log is loaded.`}
                   </p>
                   {journalLines.length ? (
                     <ol className="boot-journal-sample">

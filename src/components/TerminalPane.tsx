@@ -312,7 +312,7 @@ export function TerminalPane({
       processingRef.current?.shellMarker(data);
       return false;
     });
-    // All shells can report command activity. Only remote, opted-in Bash
+    // All shells can report command activity. Only remote, opted-in Bash or zsh
     // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) {
@@ -356,7 +356,7 @@ export function TerminalPane({
                 startedAt: pending.startedAt,
                 finishedAt: event.finishedAt,
                 exitCode: event.exitCode,
-                shell: "bash",
+                shell: remote?.remoteShell?.id === "macos:zsh" ? "zsh" : "bash",
               })
               .catch((error) => setLocalError(`History capture failed: ${errorMessage(error)}`));
           }

@@ -52,11 +52,16 @@ export interface HostCapabilities {
   defaultShell: string | null;
   systemdAvailable: boolean;
   journaldAvailable: boolean;
+  launchdAvailable?: boolean;
+  unifiedLogAvailable?: boolean;
   dockerAvailable: boolean;
   dockerAccessible: boolean;
   dockerAccessibleWithSudo: boolean;
   passwordlessSudo: boolean;
   dockerVersion: string | null;
+  dockerContext?: string | null;
+  dockerEndpoint?: string | null;
+  dockerRemote?: boolean;
   runningServiceCount: number | null;
   runningContainerCount: number | null;
   totalContainerCount: number | null;
@@ -69,7 +74,7 @@ export interface RemoteShellProfile {
 }
 
 export interface RemoteShellCatalog {
-  platform: "linux" | "windows";
+  platform: "linux" | "windows" | "macos";
   shells: RemoteShellProfile[];
   windowsTerminalAvailable: boolean;
   wslError: string | null;
@@ -148,11 +153,17 @@ export interface FirewallRule {
 }
 
 export interface FirewallStatus {
-  backend?: "ufw" | "firewalld" | "windows" | null;
+  backend?: "ufw" | "firewalld" | "windows" | "macos" | null;
   available: boolean;
   active: boolean | null;
   defaultIncoming: string | null;
   rules: FirewallRule[];
+  packetFilter?: {
+    active: boolean | null;
+    rules: string[];
+    error: string | null;
+    permissionRequired: boolean;
+  } | null;
   collectedAt: string;
 }
 
