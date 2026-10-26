@@ -88,13 +88,11 @@ export function headerMetricNumber(
   return number != null && Number.isFinite(number) && number >= 0 && number <= 100 ? number : null;
 }
 
-/** Only measured points are drawn. Percent charts use a fixed 0–100 scale;
- * transfer rates use the recent peak, with a 1 MiB/s minimum scale. */
+/** Only measured CPU, RAM, and GPU points are drawn, on a fixed 0–100 scale. */
 export function metricTrend(metric: HeaderMetric, samples: HeaderMetrics[]): string | null {
+  if (metric !== "cpu" && metric !== "ram" && metric !== "gpu") return null;
   const values = samples.slice(-20).map((sample) => headerMetricNumber(metric, sample));
   if (!values.some((value) => value !== null)) return null;
-  const max =
-    metric === "diskIo" ? Math.max(1048576, ...values.filter((v): v is number => v !== null)) : 100;
   let drawing = false;
   return values
     .map((value, index) => {
@@ -103,7 +101,7 @@ export function metricTrend(metric: HeaderMetric, samples: HeaderMetrics[]): str
         return "";
       }
       const x = 1 + ((20 - values.length + index) * 32) / 19;
-      const y = 13 - Math.min(1, value / max) * 11;
+      const y = 13 - Math.min(1, value / 100) * 11;
       const point = `${drawing ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
       drawing = true;
       return point;

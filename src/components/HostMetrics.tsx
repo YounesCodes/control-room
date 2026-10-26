@@ -15,7 +15,7 @@ import type { HeaderMetric, HeaderMetrics } from "../types";
 
 function MetricTrace({ metric, history }: { metric: HeaderMetric; history: HeaderMetrics[] }) {
   const path = metricTrend(metric, history);
-  if (!path || metric === "uptime" || metric === "disk") return null;
+  if (!path) return null;
   return (
     <svg className="host-metric-trend" viewBox="0 0 34 16" aria-hidden="true" focusable="false">
       <path d={path} style={{ d: `path("${path}")` }} />

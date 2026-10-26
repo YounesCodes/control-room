@@ -1197,7 +1197,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect.poll(() => sequence).toBe(index + 2);
       await expect.poll(() => strip.hasAttribute("data-sampling")).toBe(false);
     }
-    const path = io.querySelector("path")!;
+    expect(io.querySelector("svg")).toBeNull();
+    expect(strip.querySelectorAll(".host-metrics-panel .host-metric-trend")).toHaveLength(3);
+    const ioDetail = [...strip.querySelectorAll(".host-metrics-panel dl > div")].find(
+      (row) => row.querySelector("dt")?.textContent === "Disk I/O",
+    )!;
+    expect(ioDetail.querySelector("svg")).toBeNull();
+    const cpu = strip.querySelector<HTMLElement>('[data-metric="cpu"]')!;
+    const path = cpu.querySelector("path")!;
     expect(path.getAttribute("d")).toContain("L");
     expect(positions()).toEqual(before);
     await page.screenshot({ path: "../test-results/live-metrics-panel.png" });
@@ -1219,7 +1226,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect.poll(() => strip.dataset.state).toBe("stale");
     expect(positions()).toEqual(before);
-    expect(io.querySelector("path")!.getAttribute("d")).toBe(lastPath);
+    expect(cpu.querySelector("path")!.getAttribute("d")).toBe(lastPath);
     expect(io.textContent).toContain("MiB/s");
     failures.delete("sample_header_metrics");
     await userEvent.keyboard("{Escape}");

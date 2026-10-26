@@ -527,7 +527,7 @@ code,
   margin-left: 5px;
 }
 .host-metric[data-metric="diskIo"] {
-  min-width: 180px;
+  min-width: 150px;
 }
 .host-metric[data-metric="uptime"] {
   min-width: 56px;
@@ -708,9 +708,6 @@ code,
   }
   .host-metric {
     min-width: 62px;
-  }
-  .host-metric[data-metric="diskIo"] {
-    min-width: 160px;
   }
   .host-metric[data-metric="uptime"] {
     min-width: 54px;

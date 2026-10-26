@@ -72,7 +72,7 @@ describe("header metric values", () => {
         Array.from({ length: 30 }, () => sample),
       )!.split(" "),
     ).toHaveLength(20);
-    expect(metricTrend("diskIo", [sample])).toBe("M33.00,2.00");
+    expect(metricTrend("diskIo", [sample])).toBeNull();
     expect(metricTrend("uptime", [sample])).toBeNull();
   });
   it("keeps zero usage distinct from unsupported or malformed readings", () => {
