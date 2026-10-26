@@ -26,6 +26,16 @@ use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
 use tauri::Manager;
 
+#[cfg(any(not(feature = "desktop-e2e"), test))]
+fn database_path(app_data_directory: &std::path::Path, development: bool) -> std::path::PathBuf {
+    let directory = if development {
+        app_data_directory.join("development")
+    } else {
+        app_data_directory.to_path_buf()
+    };
+    directory.join("control-room.db")
+}
+
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -51,7 +61,7 @@ pub fn run() {
             #[cfg(feature = "desktop-e2e")]
             let database_path = data_directory.join("control-room.db");
             #[cfg(not(feature = "desktop-e2e"))]
-            let database_path = app.path().app_data_dir()?.join("control-room.db");
+            let database_path = database_path(&app.path().app_data_dir()?, cfg!(debug_assertions));
             #[cfg(feature = "desktop-e2e")]
             let fresh = !database_path.exists();
             let database = Database::open(&database_path).map_err(std::io::Error::other)?;
@@ -171,4 +181,40 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("failed to run Control Room");
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn development_startup_preserves_the_installed_database() {
+        let directory = tempfile::tempdir().unwrap();
+        let installed_path = database_path(directory.path(), false);
+        // An incompatible database makes accidental reuse fail at the real startup seam.
+        let installed = rusqlite::Connection::open(&installed_path).unwrap();
+        installed
+            .execute_batch("PRAGMA user_version = 999;")
+            .unwrap();
+        drop(installed);
+        let before = std::fs::read(&installed_path).unwrap();
+
+        let development_path = database_path(directory.path(), true);
+        let development = Database::open(&development_path)
+            .expect("development startup must not open the installed database");
+        assert!(development.list_connections().unwrap().is_empty());
+        drop(development);
+
+        assert_ne!(development_path, installed_path);
+        assert_eq!(std::fs::read(installed_path).unwrap(), before);
+    }
+
+    #[test]
+    fn installed_startup_keeps_the_existing_database_location() {
+        let directory = tempfile::tempdir().unwrap();
+        assert_eq!(
+            database_path(directory.path(), false),
+            directory.path().join("control-room.db")
+        );
+    }
 }
