@@ -433,7 +433,8 @@ describe("Local Terminal Mode in the real App", () => {
     const stripAfter = container!.querySelector(".session-tabs")!.getBoundingClientRect();
     expect(stripAfter.top).toBe(stripBefore.top);
     expect(stripAfter.height).toBe(stripBefore.height);
-    const popover = dialog.element().getBoundingClientRect();
+    const popoverElement = dialog.element();
+    const popover = popoverElement.getBoundingClientRect();
     expect(popover.top).toBeGreaterThanOrEqual(stripAfter.bottom);
     // A gutter keeps the popover's border readable instead of merging with
     // the window's.
@@ -443,11 +444,13 @@ describe("Local Terminal Mode in the real App", () => {
     await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("button", { name: "Scratchpad" })).toHaveFocus();
-    // Escape unmounts the popover after its shared closing transition, not
-    // merely hiding it.
-    expect(container!.querySelector(".scratchpad-popover")?.hasAttribute("data-closing")).toBe(
-      true,
-    );
+    // Reduced motion can remove the popup before the input promise settles.
+    // Keep the original node so closing and inertness remain observable even
+    // after removal, including when CI takes an extra event-loop turn.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(popoverElement).toHaveAttribute("data-closing");
+    expect(popoverElement).toHaveAttribute("inert");
+    expect(popoverElement).toHaveAttribute("aria-hidden", "true");
     await vi.waitFor(() => expect(container!.querySelector(".scratchpad-popover")).toBeNull());
   });
   it("resizes every nested split, saves its sizes, and retains them across Focus Mode", async () => {
