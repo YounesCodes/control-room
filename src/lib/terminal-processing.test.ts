@@ -4,6 +4,51 @@ import { TerminalProcessing } from "./terminal-processing";
 const bytes = (value: string) => new TextEncoder().encode(value);
 
 describe("terminal command processing", () => {
+  it.each(["", " ", "    ", "\t"])("stays idle when submitting blank input %j", (input) => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes(input), "dev@host:~$ ");
+    tracker.input(bytes("\r"), `dev@host:~$ ${input}`);
+    tracker.output("dev@host:~$ ");
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("stays idle after an edited command is erased, then tracks the next command", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("sleep 60"), "$ ");
+    tracker.input(bytes("\x15"), "$ sleep 60");
+    tracker.input(bytes("\r"), "$ ");
+    tracker.output("$ ");
+    expect(changed).not.toHaveBeenCalled();
+    tracker.input(bytes("sleep 60\r"), "$ ");
+    tracker.output("$ ");
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it.each(["echo", "é", "😀"])("stays idle after backspacing all of %j", (input) => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes(input), "$ ");
+    tracker.input(bytes("\x7f".repeat(Array.from(input).length)), `$ ${input}`);
+    tracker.input(bytes("\r"), "$ ");
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("waits for the command-start marker instead of predicting activity on Enter", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.shellMarker("A");
+    tracker.input(bytes(" \r"), "$ ");
+    tracker.shellMarker("A");
+    expect(changed).not.toHaveBeenCalled();
+    tracker.input(bytes("sleep 60\r"), "$ ");
+    expect(changed).not.toHaveBeenCalled();
+    tracker.shellMarker("C");
+    tracker.shellMarker("D;0");
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
   it("returns idle after submitting a command recalled with shell history", () => {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);

@@ -634,6 +634,36 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
+  it("keeps terminal and host indicators idle when Enter submits only spaces", async () => {
+    await mount();
+    await navigate("Terminal");
+    await expect.element(page.getByText("fixture$", { exact: true })).toBeVisible();
+    await expect.poll(() => element.querySelector(".presence-busy")).toBeNull();
+    await userEvent.click(
+      element.querySelector<HTMLElement>(".terminal-workspace-pane.active .xterm-screen")!,
+    );
+    await userEvent.keyboard("   {Enter}");
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.some(
+          ([command, args]) => command === "write_session" && args.data.includes(13),
+        ),
+      ).toBe(true),
+    );
+    // Allow the UI to paint before the shell returns a prompt. A transient
+    // busy state cannot be hidden by an immediately completed fixture command.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    expect(element.querySelector(".presence-busy")).toBeNull();
+    const started = native.invoke.mock.calls.find(([command]) => command === "start_session")![1];
+    started.output.onmessage(new TextEncoder().encode("\r\nfixture$ ").buffer);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    expect(element.querySelector(".presence-busy")).toBeNull();
+  });
+
   it("spins during commands and host reads, including grouped panes, and keeps errors circular", async () => {
     await mount();
     await navigate("Terminal");

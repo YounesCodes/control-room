@@ -238,8 +238,9 @@ Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
 Command activity uses shell markers where available, otherwise the return of
-the rendered prompt, including commands recalled from shell history. It never
-treats a pause in output as command completion. Background header polling uses
+the rendered prompt, including commands recalled from shell history. Blank or
+whitespace-only submissions and command editing stay idle. A pause in output
+never counts as command completion. Background header polling uses
 the header's own reading state and does not make idle terminals look busy.
 Retired session callbacks must not change a replacement session's activity.
 
