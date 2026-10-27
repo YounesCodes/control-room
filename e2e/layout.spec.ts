@@ -1,39 +1,48 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { addConnection, feature, ipc, openOfflineConnection, restartApp } from "./helpers";
+import {
+  addConnection,
+  feature,
+  ipc,
+  openOfflineConnection,
+  openScratchpad,
+  restartApp,
+} from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
 describe("Resizable panels in the native app", () => {
-  it("fills Scratchpad when the native window is maximized and restored", async () => {
+  it("keeps Scratchpad within the native window when maximized and restored", async () => {
     await addConnection("Scratchpad host");
     await openOfflineConnection("Scratchpad host");
-    await feature("Scratchpad");
+    await openScratchpad();
     await $(".scratchpad-editor textarea").waitForDisplayed();
-    const fillsWorkspace = () =>
+    const fitsWindow = () =>
       browser.execute(() => {
-        const section = document.querySelector<HTMLElement>(".connection-section")!;
-        const content = document.querySelector<HTMLElement>(".connection-section-content")!;
-        const pad = document.querySelector<HTMLElement>(".scratchpad-page")!;
-        const editor = document.querySelector<HTMLElement>(".scratchpad-editor")!;
-        const style = getComputedStyle(pad);
-        const available =
-          pad.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const pad = document.querySelector<HTMLElement>(".scratchpad-popover")!;
+        const bounds = pad.getBoundingClientRect();
+        const editor = pad.querySelector("textarea")!.getBoundingClientRect();
         return (
-          Math.abs(section.clientWidth - content.clientWidth) <= 1 &&
-          Math.abs(editor.clientWidth - available) <= 1
+          bounds.left >= 0 &&
+          bounds.top >= 0 &&
+          bounds.right <= innerWidth &&
+          bounds.bottom <= innerHeight &&
+          editor.width > 200 &&
+          editor.height > 80
         );
       });
-    await browser.waitUntil(fillsWorkspace);
+    await browser.waitUntil(fitsWindow);
     await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () =>
       ipc<boolean>("plugin:window|is_maximized", { label: "main" }),
     );
-    await browser.waitUntil(fillsWorkspace);
+    await openScratchpad();
+    await browser.waitUntil(fitsWindow);
     await $("aria/Maximize or restore window").click();
     await browser.waitUntil(
       async () => !(await ipc<boolean>("plugin:window|is_maximized", { label: "main" })),
     );
-    await browser.waitUntil(fillsWorkspace);
+    await openScratchpad();
+    await browser.waitUntil(fitsWindow);
   });
   it("drags and saves the Connections width through SQLite and resets it", async () => {
     const divider = $("aria/Resize Connections panel");
