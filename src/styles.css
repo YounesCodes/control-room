@@ -92,6 +92,7 @@
   --os-amazon: #ff9900;
   --shell-accent: #5391fe;
   --shell-git: #f05032;
+  --identity-size: 18px;
 
   /* Surface elevation ramp — lighter reads as higher. */
   --surface-base: #090909;
@@ -1765,20 +1766,22 @@ code,
 }
 
 .session-tab-menu-icon,
-.local-shell-icon {
+.local-shell-icon,
+.host-os-icon {
   display: inline-grid;
-  width: 18px;
-  height: 18px;
+  width: var(--identity-size);
+  height: var(--identity-size);
   flex: none;
   place-items: center;
   color: var(--text-muted);
   transition: color var(--motion-fast) var(--ease);
 }
 
-.local-shell-icon svg {
+.local-shell-icon > svg,
+.host-os-icon > svg {
   display: block;
-  width: 17px;
-  height: 17px;
+  width: calc(var(--identity-size) - 2px);
+  height: calc(var(--identity-size) - 2px);
 }
 
 .local-shell-icon {
@@ -1787,7 +1790,6 @@ code,
 
 .local-shell-icon.local-shell-mark {
   --identity: var(--text-muted);
-  color: var(--identity);
 }
 
 .local-shell-icon.local-shell-icon-git-bash {
@@ -2023,22 +2025,6 @@ code,
   animation:
     cue-in var(--motion-fast) var(--ease),
     bell-ping 0.7s var(--ease) 0.05s 1;
-}
-
-.host-os-icon {
-  display: inline-grid;
-  width: 13px;
-  height: 13px;
-  flex: none;
-  place-items: center;
-  color: var(--text-muted);
-  transition: color var(--motion-fast) var(--ease);
-}
-
-.host-os-icon svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .host-os-debian path,
@@ -2371,7 +2357,7 @@ code,
 .terminal-target-menu[data-keyboard-nav]
   .terminal-target-group
   > button:hover:not([data-active="true"])
-  .identity-mark:not(.local-shell-icon) {
+  .identity-mark {
   color: var(--text-muted);
 }
 
@@ -5340,8 +5326,7 @@ dd {
   justify-content: space-between;
 }
 .remote-shell-host .host-os-icon {
-  width: 23px;
-  height: 23px;
+  --identity-size: 24px;
 }
 .remote-shell-host > div {
   display: grid;
@@ -6004,14 +5989,13 @@ kbd {
 
 /* ==========================================================================
    Identity marks
-   OS marks stay neutral at rest and reveal their brand color where
+   OS and shell marks stay neutral at rest and reveal their brand color where
    the user is headed: the hovered, keyboard-focused, or selected tab, pane
    tab, menu row, or host row, across workspace tabs, terminal menus, the
    overflow menus, and the local-shell launcher. Each brand-bearing mark
    carries its hue in a shared --identity variable, so one reveal rule covers
-   every surface and a new distro only adds a variable. Generic marks and the
-   generic launcher have no brand to reveal. Local shell logos retain their
-   original colors at rest and during interaction. Identity color never signals health.
+   every surface and a new distro only adds a variable. Generic OS marks stay
+   neutral. Identity color never signals health.
    ========================================================================== */
 
 .host-os-ubuntu {
@@ -6107,9 +6091,9 @@ kbd {
 .local-shell-launcher button[aria-expanded="true"] .identity-mark,
 .local-shell-menu button:hover .identity-mark,
 .local-shell-menu button:focus-visible .identity-mark,
-.command-item:hover .local-shell-icon,
-.command-item:focus-visible .local-shell-icon,
-.command-item.active .local-shell-icon,
+.command-item:hover .identity-mark,
+.command-item:focus-visible .identity-mark,
+.command-item.active .identity-mark,
 .local-shell-toggle-group label:hover .identity-mark,
 .local-shell-toggle-group label:focus-within .identity-mark,
 .local-shell-default:hover .identity-mark,

@@ -303,7 +303,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(parseFloat(getComputedStyle(launcherIcon).transitionDuration)).toBeLessThan(0.001);
   });
 
-  it("retains local shell logo colors at rest, on hover, focus, and selection in both layouts", async () => {
+  it("reveals each shell logo color on hover, focus, and selection in both layouts", async () => {
     await page.viewport(960, 640);
     overrides.set("list_local_shells", () => ({
       profiles: [
@@ -417,6 +417,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
     const palette = page.getByRole("dialog", { name: "Command palette" });
     await expect.element(palette).toBeVisible();
+    await expect
+      .poll(
+        () =>
+          getComputedStyle(palette.element().querySelector(".command-item.active .host-os-icon")!)
+            .color,
+      )
+      .toBe("rgb(233, 84, 32)");
     expect(
       palette.element().querySelector('[id^="ws-"] .local-shell-icon-git-bash'),
     ).not.toBeNull();
@@ -862,9 +869,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(
         choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} svg`),
       ).not.toBeNull();
-      expect(getComputedStyle(choice.element().querySelector(".local-shell-icon svg")!).color).toBe(
-        shellColors[shellIndex],
-      );
+      const logo = choice.element().querySelector(".local-shell-icon svg")!;
+      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      await userEvent.hover(choice.element());
+      await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
       await choice.click();
       expect(
         element.querySelector(
@@ -882,9 +890,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(
         terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
       ).not.toBeNull();
-      expect(
-        getComputedStyle(terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!).color,
-      ).toBe(shellColors[shellKinds.indexOf(kind)]);
+      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!;
+      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      await userEvent.hover(logo.closest("button")!);
+      await expect
+        .poll(() => getComputedStyle(logo).color)
+        .toBe(shellColors[shellKinds.indexOf(kind)]);
     }
     expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
     expect(

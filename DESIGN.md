@@ -18,16 +18,18 @@ guardrails, not every choice described below.
   cards.
 - **Monochrome with intent.** The application chrome stays neutral. Built-in
   color signals success, warning, or failure. User-selected tag colors identify
-  connections; they do not imply health. OS marks may reveal their
+  connections; they do not imply health. OS and shell marks may reveal their
   brand color on a hovered or selected tab or host row to identify the target;
   the color is identity, never health, and it never shows at rest. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
-  Local shell logos keep their original colors at rest and during interaction:
+  Local shell logos reveal their own colors on hover, keyboard focus, or selection:
   Git orange, PowerShell blue, and a neutral Command Prompt mark. The generic
   local-terminal launcher uses soft blue on hover, keyboard focus, or selection.
   Use each local shell's own mark in workspace tabs, launch and split menus,
   overflow lists, the command palette, and Settings. Administrator shells keep
   their shell mark with a small shield badge.
+  OS and shell logos share one footprint and artwork scale, preserving each
+  logo's proportions. Larger dialog-heading marks use the same sizing rule.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
