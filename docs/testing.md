@@ -2,15 +2,16 @@
 
 Control Room uses Rust and Vitest component tests for contracts and failure paths. Chromium journeys mount the real app with typed fixtures at the Tauri boundary and exercise navigation, keyboard input, layout, and accessibility. Native desktop tests cross React, real IPC, Rust, SQLite, and Windows processes. Ignored SSH tests and the local Ubuntu journeys provide read-only proof against a configured host.
 
-| Layer                       | Command                      | Runs in pull request CI      |
-| --------------------------- | ---------------------------- | ---------------------------- |
-| Frontend and tooling        | `npm test`                   | Yes                          |
-| Chromium components and axe | `npm run test:browser`       | Yes                          |
-| Rust unit tests             | `npm run check:rust`         | Yes, with fmt and Clippy     |
-| Frontend coverage           | `npm run test:coverage`      | Manual coverage workflow     |
-| Rust coverage               | `npm run test:rust-coverage` | Manual coverage workflow     |
-| Windows desktop E2E         | `npm run test:desktop`       | Manual desktop workflow      |
-| Debian SSH fixture          | `npm run test:live-ssh`      | Manual live fixture workflow |
+| Layer                       | Command                           | Runs in pull request CI           |
+| --------------------------- | --------------------------------- | --------------------------------- |
+| Frontend and tooling        | `npm test`                        | Yes                               |
+| Chromium components and axe | `npm run test:browser`            | Yes                               |
+| Rust unit tests             | `npm run check:rust`              | Yes, with fmt and Clippy          |
+| Frontend coverage           | `npm run test:coverage`           | Manual coverage workflow          |
+| Rust coverage               | `npm run test:rust-coverage`      | Manual coverage workflow          |
+| Windows desktop E2E         | `npm run test:desktop`            | Yes, on a hosted Windows runner   |
+| Debian SSH fixture          | `npm run test:live-ssh`           | Manual live fixture workflow      |
+| Hosted Ubuntu SSH fixture   | `bash scripts/test-hosted-ssh.sh` | Yes, on a disposable Linux runner |
 
 Start with `npm ci`. The normal Windows CI still runs Prettier, ESLint, TypeScript and Vite builds, `cargo audit`, and the NSIS installer build. `src/ui-hierarchy.test.ts` keeps architecture and permission contracts; browser and desktop tests check user behavior. Neither normal test command needs an SSH host.
 
@@ -47,7 +48,7 @@ npm run test:desktop:build
 npm run test:desktop
 ```
 
-The manual `Desktop E2E` workflow accepts an optional `spec` path for a single suite. Leave it empty to run all desktop tests. It reports the runner's elevation and installed WebView2/driver versions before testing.
+PR and main CI run the desktop suite on a hosted Windows runner. The `Desktop E2E` workflow can also be started manually with an optional `spec` path for a single suite. Leave it empty to run all desktop tests. It reports the runner's elevation and installed WebView2/driver versions before testing.
 
 This suite uses an external `tauri-driver` on Windows. WebdriverIO's helper plugin, permissions, and read-only `e2e_runtime_status` command load only with the debug `desktop-e2e` feature. The release build refuses that feature. The service installs a matching driver if needed; once provisioned, the deterministic tests need no external network. Offline connections use loopback port 1 and updater checks are disabled in each new test database. The debug test app passes the driver's debugging port and profile directly to WebView2, so session creation also works on elevated Windows runners.
 
@@ -60,6 +61,8 @@ Run one feature suite with `npm run test:desktop -- --spec e2e/connections.spec.
 The live tests stay `#[ignore]` in ordinary `cargo test`. They require Windows for ConPTY and an explicitly configured Debian host with systemd, journald, Bash, and Docker. Set `CONTROL_ROOM_TEST_HOST` and `CONTROL_ROOM_TEST_USER`; set `CONTROL_ROOM_TEST_PORT` if it is not 22. Configure a key and pinned host key through the Windows OpenSSH client before running `npm run test:live-ssh`. To use an isolated OpenSSH config, set `CONTROL_ROOM_TEST_SSH_CONFIG` to its path; the preflight and Rust fixture tests pass it to SSH with `-F`. The command checks noninteractive SSH first, then runs only the three named ignored tests. The history test creates and removes its own remote temporary home.
 
 The manual `Live SSH fixture` GitHub workflow reads host, user, optional port, a base64-encoded private key (`CONTROL_ROOM_TEST_KEY_B64`), and pinned OpenSSH `known_hosts` content (`CONTROL_ROOM_TEST_KNOWN_HOSTS`) from repository secrets. It fails before testing if required secrets are missing. The key, host key, and config live under the runner's temporary directory for that run; the workflow never replaces the runner's own SSH files. Pick `windows-latest` only if that runner can reach your fixture; select `self-hosted` for a private host. No fixture address, key, or host fingerprint belongs in the repository.
+
+PR and main CI also start a temporary SSH server on the hosted Ubuntu runner's loopback interface with fresh keys. The history and structured-read tests connect to that runner, without using the local lab or repository secrets. This Linux-to-Linux check does not replace Windows OpenSSH, ConPTY, or the Ubuntu desktop journey in the local lab.
 
 ## Local Ubuntu VM gate
 
@@ -100,4 +103,4 @@ Browser fixtures prove user interactions against controlled results; they do not
 | Baselines                 | `BaselinesPane.test.tsx`, real App capture/rename/retry/pin/delete/live comparison; `BaselineComparisonView.test.tsx`: Markdown/JSON success, cancel, failure, volatile filtering; trace tests | Local persistence in the live desktop journey                                                                                      | Live capture/restart/stored/live comparison; Rust capture/cancel/diff/retention tests                 |
 | Updates and accessibility | Real App manual check/download retry/progress; updater fixtures; release-note safety, palette/keyboard, dialog focus, axe, reduced motion, minimum-size layout                                 | Settings and native window journey                                                                                                 | Updater endpoint, signature, installer and restart safeguards; E2E feature rejected in release builds |
 
-Coverage reports support this matrix; there is no arbitrary percentage target. Normal PR checks remain automatic for unit and Chromium tests. Full desktop and SSH workflows remain explicit.
+Coverage reports support this matrix; there is no arbitrary percentage target. PR checks run unit, Chromium, desktop, and hosted SSH tests. Local Ubuntu and Windows SSH journeys remain explicit.

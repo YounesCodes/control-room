@@ -1,6 +1,7 @@
 name: Desktop E2E
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       spec:
