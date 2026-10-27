@@ -2028,8 +2028,8 @@ export function App() {
                 aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
                 title="Open a shell on this Windows machine"
               >
-                <SquareTerminal size={16} className="local-shell-mark identity-mark" /> Local
-                terminal
+                <SquareTerminal size={16} className="local-shell-mark identity-mark" />
+                <span className="sidebar-action-label">Local terminal</span>
               </button>
               {localShellMenuPresent && (
                 <div
@@ -2109,7 +2109,8 @@ export function App() {
             type="button"
             onClick={() => setDialogConnection("new")}
           >
-            <Plus size={16} /> Add connection
+            <Plus size={16} />
+            <span className="sidebar-action-label">Add connection</span>
           </button>
         </div>
         <ResizeDivider

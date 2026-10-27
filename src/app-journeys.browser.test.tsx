@@ -280,31 +280,53 @@ afterEach(() => {
 
 describe("complete app journeys with typed IPC fixtures", () => {
   it.each([
-    [960, 640],
-    [1280, 900],
-  ])("aligns the sidebar action icons and labels at %sx%s", async (width, height) => {
-    await page.viewport(width, height);
-    await mount();
-    const buttons = [
-      page.getByRole("button", { name: "Local terminal", exact: true }).element(),
-      page.getByRole("button", { name: "Add connection", exact: true }).element(),
-    ];
-    const positions = buttons.map((button) => {
-      const icon = button.querySelector("svg")!.getBoundingClientRect();
-      const text = [...button.childNodes].find(
-        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
-      )!;
-      const range = document.createRange();
-      range.selectNodeContents(text);
-      return {
-        iconCenter: icon.left + icon.width / 2,
-        labelLeft: range.getBoundingClientRect().left,
-      };
-    });
-    await page.screenshot({ path: `../test-results/sidebar-action-alignment-${width}.png` });
-    expect(Math.abs(positions[0].iconCenter - positions[1].iconCenter)).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(positions[0].labelLeft - positions[1].labelLeft)).toBeLessThanOrEqual(0.5);
-  });
+    [960, 640, 200],
+    [1280, 900, 244],
+    [1280, 640, 400],
+  ])(
+    "centers and aligns the sidebar action icons and labels at %sx%s",
+    async (width, height, railWidth) => {
+      await page.viewport(width, height);
+      persisted.panelSizes = { connections: railWidth };
+      await mount();
+      const buttons = [
+        page.getByRole("button", { name: "Local terminal", exact: true }).element(),
+        page.getByRole("button", { name: "Add connection", exact: true }).element(),
+      ];
+      const positions = buttons.map((button) => {
+        const icon = button.querySelector("svg")!.getBoundingClientRect();
+        const text = button.querySelector(".sidebar-action-label")!;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        return {
+          iconLeft: icon.left,
+          iconCenter: icon.left + icon.width / 2,
+          labelLeft: range.getBoundingClientRect().left,
+          labelRight: range.getBoundingClientRect().right,
+          buttonCenter:
+            button.getBoundingClientRect().left + button.getBoundingClientRect().width / 2,
+        };
+      });
+      await page.screenshot({ path: `../test-results/sidebar-action-alignment-${width}.png` });
+      const stacked =
+        Math.abs(
+          buttons[0].getBoundingClientRect().left - buttons[1].getBoundingClientRect().left,
+        ) < 0.5;
+      if (stacked) {
+        expect(Math.abs(positions[0].iconCenter - positions[1].iconCenter)).toBeLessThanOrEqual(
+          0.5,
+        );
+        expect(Math.abs(positions[0].labelLeft - positions[1].labelLeft)).toBeLessThanOrEqual(0.5);
+      }
+      for (const position of positions) {
+        const right = stacked
+          ? Math.max(...positions.map((position) => position.labelRight))
+          : position.labelRight;
+        const contentCenter = (position.iconLeft + right) / 2;
+        expect(Math.abs(contentCenter - position.buttonCenter)).toBeLessThanOrEqual(0.5);
+      }
+    },
+  );
 
   it("moves the local terminal icon like Add connection on hover and keyboard focus", async () => {
     await mount();
