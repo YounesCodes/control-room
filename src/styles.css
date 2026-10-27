@@ -1054,6 +1054,7 @@ code,
    Its leading space stays fixed while the sidebar resizes or collapses. */
 .app-shell[data-platform="macos"] {
   --mac-window-controls-space: 104px;
+  --window-actions-width: 40px;
 }
 
 .app-shell[data-platform="macos"] .app-bar {

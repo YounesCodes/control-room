@@ -94,7 +94,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
-    fit() { xterm.fit(); }
+    fit() {
+      xterm.fit();
+    }
   },
 }));
 
@@ -343,7 +345,9 @@ describe("TerminalPane sessions", () => {
       renderPane(
         kind === "local" ? createLocalWorkspace(shell) : createRemoteWorkspace(connection),
       );
-      await vi.waitFor(() => expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled());
+      await vi.waitFor(() =>
+        expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled(),
+      );
       act(() => xterm.resize!(80, 24));
       expect(api.resizeSession).toHaveBeenCalledWith(
         `${kind === "local" ? "local" : "ssh"}-session`,
@@ -384,14 +388,23 @@ describe("TerminalPane sessions", () => {
     xterm.initialCols = 107;
     xterm.fit.mockImplementation(() => xterm.resize?.(106, 30));
     renderPane(createLocalWorkspace(shell));
-    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledWith("powershell-7", 106, 30, expect.anything()));
+    await vi.waitFor(() =>
+      expect(api.startLocalSession).toHaveBeenCalledWith(
+        "powershell-7",
+        106,
+        30,
+        expect.anything(),
+      ),
+    );
     expect(api.startLocalSession).toHaveBeenCalledTimes(1);
   });
 
   it("does not start a shell when the pane closes while its first grid is settling", async () => {
     renderPane(createLocalWorkspace(shell));
     cleanup();
-    await act(async () => { await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())); });
+    await act(async () => {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
     expect(api.startLocalSession).not.toHaveBeenCalled();
   });
 
@@ -471,6 +484,7 @@ describe("TerminalPane sessions", () => {
     const workspace = { ...createLocalWorkspace(shell), state: "connected" as const };
     const pane = (reconnectToken: number) => (
       <TerminalPane
+        platform="windows"
         workspace={{ ...workspace, reconnectToken }}
         settings={settings}
         visible

@@ -766,6 +766,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(workspace.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
         expect(getComputedStyle(header.querySelectorAll("span")[1]).display).not.toBe("none");
         expect(element.querySelector(".window-controls")).toBeNull();
+        expect(
+          element.querySelector<HTMLElement>(".app-window-actions")!.getBoundingClientRect().width,
+        ).toBe(40);
         const divider = page.getByRole("separator", { name: "Resize Connections panel" });
         await userEvent.click(divider);
         await userEvent.keyboard("{End}");
@@ -783,6 +786,17 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await expect.poll(() => bar.clientWidth).toBe(958);
       }
       await navigate("Terminal");
+      if (platform === "windows") {
+        const group = element.querySelector<HTMLElement>(".app-window-actions")!;
+        const controls = group.querySelector<HTMLElement>(".window-controls")!;
+        expect(controls.getBoundingClientRect().top).toBe(group.getBoundingClientRect().top);
+        expect(controls.getBoundingClientRect().bottom).toBeGreaterThanOrEqual(
+          group.getBoundingClientRect().bottom - 1,
+        );
+        expect(controls.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          group.getBoundingClientRect().bottom,
+        );
+      }
       await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
       const tabs = element.querySelector<HTMLElement>(".session-tabs")!;
       await expect.poll(() => tabs.getBoundingClientRect().top).toBe(1);
@@ -831,6 +845,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .getByRole("button", { name: new RegExp(shellLabels[Math.min(index, 3)]) })
         .click();
     }
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.filter(
+            ([command]) => command === "start_session" || command === "start_local_session",
+          ).length,
+      )
+      .toBe(8);
     const sessions = native.invoke.mock.calls.filter(
       ([command]) => command === "start_session" || command === "start_local_session",
     ).length;
@@ -859,6 +881,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
+      await expect
+        .poll(
+          () =>
+            native.invoke.mock.calls.filter(
+              ([command]) => command === "start_session" || command === "start_local_session",
+            ).length,
+        )
+        .toBe(sessions + index + 1);
       if (index === 0) {
         const local = native.invoke.mock.calls
           .filter(([command]) => command === "start_local_session")
