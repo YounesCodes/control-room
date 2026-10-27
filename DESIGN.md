@@ -95,6 +95,9 @@ complete tab, including in focus mode. Keep overflow menus within the window
 and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.
+Saved Connection cards use the same sliding action space: the status indicator
+rests at the right edge and moves left when hover, keyboard focus, or an open
+connection menu reveals the three-dot button.
 
 Connection and inspection panes have draggable, keyboard-operable dividers.
 Keep saved widths within limits that leave the neighboring pane usable. Reflow
@@ -133,7 +136,12 @@ other cue so color is never the only signal.
 Connection tags are user metadata and may use user-selected colors. Keep their
 text readable against the app surfaces and never use tag color to imply
 connection state. Terminal ANSI colors are user-editable in Settings and belong
-to the terminal output palette, not the app chrome.
+to the terminal output palette, not the app chrome. Saved colors apply to every
+open local and SSH terminal, including hidden tabs and terminals using search.
+Each configurable ANSI color also controls its bright variant so shells use the
+same selected colors.
+Defaults use classic CGA bright colors for prompts and ANSI output, with slightly lighter gray
+text on black.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview
 and any readability warning when the picker closes, and let the user save a
@@ -152,6 +160,8 @@ display sizes, and Cascadia Mono, with system monospace
 fallbacks, for terminal and technical values. Align numeric columns and use
 tabular figures where values are compared. Keep supporting text readable at the
 app's compact density; do not shrink informational labels to make a layout fit.
+
+Terminal text uses regular weight, including ANSI bold prompts and directory names.
 
 Prefer clear hierarchy over extra labels: a section title, a useful value, and a
 short explanation are better than repeated captions. Let technical identifiers
@@ -238,8 +248,9 @@ Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
 Command activity uses shell markers where available, otherwise the return of
-the rendered prompt, including commands recalled from shell history. It never
-treats a pause in output as command completion. Background header polling uses
+the rendered prompt, including commands recalled from shell history. Blank or
+whitespace-only submissions and command editing stay idle. A pause in output
+never counts as command completion. Background header polling uses
 the header's own reading state and does not make idle terminals look busy.
 Retired session callbacks must not change a replacement session's activity.
 

@@ -90,10 +90,13 @@ describe("monochrome application palette", () => {
   });
 
   it("preserves ANSI colors for remote terminal content", () => {
-    expect(settingsModelSource).toContain('terminal_red: "#ff6f7d"');
-    expect(settingsModelSource).toContain('terminal_green: "#52cf91"');
-    expect(settingsModelSource).toContain('terminal_yellow: "#e8c56c"');
-    expect(settingsModelSource).toContain('terminal_blue: "#55aef2"');
+    expect(settingsModelSource).toContain('terminal_foreground: "#dddddd"');
+    expect(settingsModelSource).toContain('terminal_red: "#ff5555"');
+    expect(settingsModelSource).toContain('terminal_green: "#55ff55"');
+    expect(settingsModelSource).toContain('terminal_yellow: "#ffff55"');
+    expect(settingsModelSource).toContain('terminal_blue: "#5555ff"');
+    expect(settingsModelSource).toContain('terminal_magenta: "#ff55ff"');
+    expect(settingsModelSource).toContain('terminal_cyan: "#55ffff"');
   });
 
   it("keeps the main text hierarchy above WCAG AA contrast", () => {

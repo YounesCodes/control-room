@@ -4,6 +4,7 @@ export class TerminalProcessing {
   private busy = false;
   private prompt: string | null = null;
   private editing = false;
+  private inputLine = "";
   private escape = "";
   private pasted = false;
   private marked = false;
@@ -13,6 +14,7 @@ export class TerminalProcessing {
   reset() {
     this.prompt = null;
     this.editing = false;
+    this.inputLine = "";
     this.escape = "";
     this.pasted = false;
     this.marked = false;
@@ -20,15 +22,17 @@ export class TerminalProcessing {
   }
 
   input(bytes: Uint8Array, prompt: string | null) {
-    for (const byte of bytes) {
+    for (const character of new TextDecoder().decode(bytes)) {
+      const byte = character.codePointAt(0)!;
       // History, completion, and cursor keys can edit the line before any
       // printable input arrives. Keep the original prompt before that edit.
       if (!this.busy && !this.editing && !this.pasted && byte !== 3 && prompt?.trim()) {
         this.prompt = prompt;
         this.editing = true;
+        this.inputLine = "";
       }
       if (this.escape) {
-        this.escape += String.fromCharCode(byte);
+        this.escape += character;
         if (this.escape === "\x1b[200~") this.pasted = true;
         if (this.escape === "\x1b[201~") this.pasted = false;
         if (
@@ -45,9 +49,35 @@ export class TerminalProcessing {
         continue;
       }
       if (!this.pasted && (byte === 13 || byte === 10)) {
-        if (this.marked || this.prompt?.trim()) this.setBusy(true);
+        // A newline can submit an empty line. Only infer a command when the
+        // input or the rendered shell-edited line contains something to run.
+        // Marked shells report actual execution through C/start instead.
+        const renderedInput =
+          prompt !== null && this.prompt !== null
+            ? prompt.startsWith(this.prompt)
+              ? prompt.slice(this.prompt.length)
+              : prompt.trimEnd() === this.prompt.trimEnd()
+                ? ""
+                : prompt
+            : "";
+        if (
+          !this.marked &&
+          this.prompt?.trim() &&
+          (this.inputLine.trim() || renderedInput.trim())
+        ) {
+          this.setBusy(true);
+        }
+        this.inputLine = "";
+        if (!this.busy) this.editing = false;
       } else if (byte === 3 && !this.busy) {
         this.editing = false;
+        this.inputLine = "";
+      } else if (byte === 21) {
+        this.inputLine = "";
+      } else if (byte === 8 || byte === 127) {
+        this.inputLine = this.inputLine.replace(/.$/u, "");
+      } else if (byte >= 32) {
+        this.inputLine += character;
       }
     }
   }
@@ -56,6 +86,7 @@ export class TerminalProcessing {
     if (this.marked || !this.busy || prompt === null || this.prompt === null) return;
     if (samePrompt(this.prompt, prompt)) {
       this.editing = false;
+      this.inputLine = "";
       this.setBusy(false);
     }
   }
@@ -66,13 +97,19 @@ export class TerminalProcessing {
     const marker = data.split(";", 1)[0];
     if (marker !== "A" && marker !== "C" && marker !== "D") return;
     this.marked = true;
-    if (marker !== "C") this.editing = false;
+    if (marker !== "C") {
+      this.editing = false;
+      this.inputLine = "";
+    }
     this.setBusy(marker === "C");
   }
 
   command(busy: boolean) {
     this.marked = true;
-    if (!busy) this.editing = false;
+    if (!busy) {
+      this.editing = false;
+      this.inputLine = "";
+    }
     this.setBusy(busy);
   }
 

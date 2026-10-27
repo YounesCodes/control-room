@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 import TauriService from "@wdio/tauri-service";
 import AsyncScriptService, { installAsyncScriptCommand } from "./e2e/async-script-service";
 import { recordDrivers, stopOwnedDrivers } from "./e2e/driver-processes";
+import { sanitize } from "./scripts/sanitize-e2e-results.mjs";
 
 if (process.platform !== "win32") {
   throw new Error("Control Room desktop E2E tests require Windows.");
@@ -68,31 +69,41 @@ export const config: WebdriverIO.Config = {
     );
   },
   onComplete: async () => {
-    await stopOwnedDrivers(dataDirectory);
-    const pidFile = join(dataDirectory, "app-pids.txt");
-    const pids = existsSync(pidFile)
-      ? readFileSync(pidFile, "utf8").trim().split(/\s+/).map(Number)
-      : [];
-    for (const pid of pids) {
-      const deadline = Date.now() + 20_000;
-      while (true) {
-        try {
-          process.kill(pid, 0);
-        } catch {
-          break;
+    try {
+      await stopOwnedDrivers(dataDirectory);
+      const pidFile = join(dataDirectory, "app-pids.txt");
+      const pids = existsSync(pidFile)
+        ? readFileSync(pidFile, "utf8").trim().split(/\s+/).map(Number)
+        : [];
+      for (const pid of pids) {
+        const deadline = Date.now() + 20_000;
+        while (true) {
+          try {
+            process.kill(pid, 0);
+          } catch {
+            break;
+          }
+          if (Date.now() > deadline)
+            throw new Error(
+              `E2E application ${pid} is still running; preserving its temporary directory`,
+            );
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        if (Date.now() > deadline)
-          throw new Error(
-            `E2E application ${pid} is still running; preserving its temporary directory`,
-          );
-        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-    }
-    if (
-      resolve(dataDirectory).startsWith(resolve(tmpdir()) + sep) &&
-      dataDirectory.split(sep).at(-1)?.startsWith("control-room-e2e-")
-    ) {
-      rmSync(dataDirectory, { recursive: true, force: true });
+      if (
+        resolve(dataDirectory).startsWith(resolve(tmpdir()) + sep) &&
+        dataDirectory.split(sep).at(-1)?.startsWith("control-room-e2e-")
+      ) {
+        rmSync(dataDirectory, { recursive: true, force: true });
+      }
+    } catch (error) {
+      const message = sanitize(
+        error instanceof Error ? (error.stack ?? error.message) : String(error),
+      );
+      mkdirSync("test-results/desktop", { recursive: true });
+      writeFileSync("test-results/desktop/cleanup-error.txt", message);
+      process.stderr.write(`Desktop cleanup failed: ${message}\n`);
+      throw error;
     }
   },
 };

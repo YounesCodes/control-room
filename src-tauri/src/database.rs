@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 10;
+const LATEST_SCHEMA_VERSION: i64 = 15;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -1642,6 +1642,187 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 11 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch("CREATE TABLE IF NOT EXISTS application_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);")
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+        {
+            // Preserve the entire palette if any of its colors was customized.
+            let old = [
+                ("terminalForeground", "#f2f2ee"),
+                ("terminalRed", "#ff6f7d"),
+                ("terminalGreen", "#52cf91"),
+                ("terminalYellow", "#e8c56c"),
+                ("terminalBlue", "#55aef2"),
+                ("terminalMagenta", "#c793ff"),
+                ("terminalCyan", "#65d4d1"),
+            ];
+            if old
+                .iter()
+                .all(|(key, color)| value.get(*key).and_then(|v| v.as_str()) == Some(*color))
+            {
+                value["terminalGreen"] = "#16c60c".into();
+                value["terminalBlue"] = "#3b78ff".into();
+                value["terminalMagenta"] = "#b4009e".into();
+                transaction
+                    .execute(
+                        "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                        [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 11;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 12 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+        {
+            let old = [
+                ("terminalForeground", "#f2f2ee"),
+                ("terminalRed", "#ff6f7d"),
+                ("terminalGreen", "#16c60c"),
+                ("terminalYellow", "#e8c56c"),
+                ("terminalBlue", "#3b78ff"),
+                ("terminalMagenta", "#b4009e"),
+                ("terminalCyan", "#65d4d1"),
+            ];
+            if old
+                .iter()
+                .all(|(key, color)| value.get(*key).and_then(|v| v.as_str()) == Some(*color))
+            {
+                let defaults = serde_json::to_value(AppSettings::default())
+                    .map_err(|error| error.to_string())?;
+                for (key, _) in old {
+                    value[key] = defaults[key].clone();
+                }
+                transaction
+                    .execute(
+                        "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                        [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 12;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 13 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+            && value.get("terminalForeground").and_then(|v| v.as_str()) == Some("#aaaaaa")
+        {
+            value["terminalForeground"] = "#bbbbbb".into();
+            transaction
+                .execute(
+                    "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                    [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 13;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 14 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+            && value.get("terminalForeground").and_then(|v| v.as_str()) == Some("#bbbbbb")
+        {
+            value["terminalForeground"] = "#cccccc".into();
+            transaction
+                .execute(
+                    "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                    [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 14;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
+    if version < 15 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+            && value.get("terminalForeground").and_then(|v| v.as_str()) == Some("#cccccc")
+        {
+            value["terminalForeground"] = "#dddddd".into();
+            transaction
+                .execute(
+                    "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                    [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 15;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -2949,6 +3130,136 @@ mod tests {
     }
 
     #[test]
+    fn terminal_palette_migration_preserves_custom_colors_and_runs_only_once() {
+        for custom in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("control-room.db");
+            let database = Database::open(&path).unwrap();
+            let mut settings = AppSettings {
+                terminal_foreground: "#f2f2ee".into(),
+                terminal_red: "#ff6f7d".into(),
+                terminal_green: "#52cf91".into(),
+                terminal_yellow: "#e8c56c".into(),
+                terminal_blue: "#55aef2".into(),
+                terminal_magenta: "#c793ff".into(),
+                terminal_cyan: "#65d4d1".into(),
+                ..AppSettings::default()
+            };
+            if custom {
+                settings.terminal_red = "#123456".into();
+            }
+            database.save_settings(&settings).unwrap();
+            database
+                .connection
+                .lock()
+                .execute_batch("PRAGMA user_version = 10")
+                .unwrap();
+            drop(database);
+
+            let database = Database::open(&path).unwrap();
+            let migrated = database.get_settings().unwrap();
+            assert_eq!(
+                migrated.terminal_green,
+                if custom { "#52cf91" } else { "#55ff55" }
+            );
+            assert_eq!(
+                migrated.terminal_blue,
+                if custom { "#55aef2" } else { "#5555ff" }
+            );
+            assert_eq!(
+                migrated.terminal_magenta,
+                if custom { "#c793ff" } else { "#ff55ff" }
+            );
+            database.save_settings(&settings).unwrap();
+            drop(database);
+            assert_eq!(
+                Database::open(&path)
+                    .unwrap()
+                    .get_settings()
+                    .unwrap()
+                    .terminal_green,
+                "#52cf91"
+            );
+        }
+    }
+
+    #[test]
+    fn terminal_palette_migration_upgrades_campbell_preview_without_changing_custom_settings() {
+        for custom in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("control-room.db");
+            let database = Database::open(&path).unwrap();
+            let settings = AppSettings {
+                terminal_foreground: "#f2f2ee".into(),
+                terminal_red: "#ff6f7d".into(),
+                terminal_green: "#16c60c".into(),
+                terminal_yellow: "#e8c56c".into(),
+                terminal_blue: "#3b78ff".into(),
+                terminal_magenta: "#b4009e".into(),
+                terminal_cyan: if custom { "#123456" } else { "#65d4d1" }.into(),
+                terminal_font_size: 19,
+                ..AppSettings::default()
+            };
+            database.save_settings(&settings).unwrap();
+            database
+                .connection
+                .lock()
+                .execute_batch("PRAGMA user_version = 11")
+                .unwrap();
+            drop(database);
+            let database = Database::open(&path).unwrap();
+            let migrated = database.get_settings().unwrap();
+            let expected = if custom {
+                settings
+            } else {
+                AppSettings {
+                    terminal_font_size: 19,
+                    ..AppSettings::default()
+                }
+            };
+            assert_eq!(
+                serde_json::to_value(&migrated).unwrap(),
+                serde_json::to_value(&expected).unwrap()
+            );
+            drop(database);
+            assert_eq!(
+                serde_json::to_value(Database::open(&path).unwrap().get_settings().unwrap())
+                    .unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn terminal_palette_brightness_migration_preserves_custom_foreground_and_other_colors() {
+        for foreground in ["#aaaaaa", "#bbbbbb", "#cccccc", "#123456"] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("control-room.db");
+            let database = Database::open(&path).unwrap();
+            let mut settings = AppSettings {
+                terminal_foreground: foreground.into(),
+                terminal_green: "#abcdef".into(),
+                ..AppSettings::default()
+            };
+            database.save_settings(&settings).unwrap();
+            database
+                .connection
+                .lock()
+                .execute_batch("PRAGMA user_version = 12")
+                .unwrap();
+            drop(database);
+            if foreground != "#123456" {
+                settings.terminal_foreground = "#dddddd".into();
+            }
+            assert_eq!(
+                serde_json::to_value(Database::open(&path).unwrap().get_settings().unwrap())
+                    .unwrap(),
+                serde_json::to_value(settings).unwrap()
+            );
+        }
+    }
+
+    #[test]
     fn settings_saved_by_v0_7_0_still_load_after_a_field_was_removed() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -3539,7 +3850,7 @@ mod tests {
                 "migration step {released} disappeared"
             );
         }
-        assert_eq!(LATEST_SCHEMA_VERSION, 10);
+        assert_eq!(LATEST_SCHEMA_VERSION, 15);
     }
 
     /// A Saved Connection owns everything collected about that host. Deleting

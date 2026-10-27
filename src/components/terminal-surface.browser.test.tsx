@@ -2,9 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { createRef } from "react";
+import { Terminal } from "@xterm/xterm";
 import type { TerminalPaneHandle } from "./TerminalPane";
 import { TerminalPane } from "./TerminalPane";
-import { createLocalWorkspace } from "../lib/workspace-target";
+import { createLocalWorkspace, createRemoteWorkspace } from "../lib/workspace-target";
+import { connection } from "../test/app-fixtures";
 import type { AppSettings } from "../types";
 import "@xterm/xterm/css/xterm.css";
 import "../styles.css";
@@ -30,6 +32,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("../lib/api", () => ({
   api: {
+    startSession: vi.fn(() => Promise.resolve({ sessionId: "browser-ssh" })),
     startLocalSession: vi.fn(
       (_id: string, _cols: number, _rows: number, output: NonNullable<typeof session.output>) => {
         session.output = output;
@@ -213,4 +216,89 @@ it("keeps the terminal edge empty until search has matches", async () => {
   await vi.waitFor(() => expect(paintedPixels(ruler)).toBeGreaterThan(0));
   await page.getByRole("button", { name: "Close terminal search" }).click();
   await vi.waitFor(() => expect(paintedPixels(ruler)).toBe(0));
+});
+
+it("keeps every terminal on the saved palette through search and tab changes", async () => {
+  const terminals: Terminal[] = [];
+  const open = Terminal.prototype.open;
+  vi.spyOn(Terminal.prototype, "open").mockImplementation(function (this: Terminal, parent) {
+    terminals.push(this);
+    open.call(this, parent);
+  });
+  container = document.createElement("div");
+  Object.assign(container.style, { position: "relative", width: "800px", height: "400px" });
+  document.body.append(container);
+  root = createRoot(container);
+  const workspaces = [
+    createRemoteWorkspace(connection()),
+    createLocalWorkspace({ id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false }),
+    createLocalWorkspace({
+      id: "cmd",
+      label: "Command Prompt",
+      kind: "command-prompt",
+      elevated: false,
+    }),
+    createLocalWorkspace({
+      id: "pwsh",
+      label: "PowerShell",
+      kind: "powershell-7",
+      elevated: false,
+    }),
+  ];
+  const render = (palette: AppSettings, selected = 0, findRequest = 0) =>
+    root!.render(
+      <>
+        {workspaces.map((workspace, index) => (
+          <TerminalPane
+            key={workspace.id}
+            workspace={workspace}
+            settings={palette}
+            visible={index === selected}
+            active={index === selected}
+            findRequest={index === selected ? findRequest : 0}
+            onActivate={() => undefined}
+            onSession={() => undefined}
+            onState={() => undefined}
+          />
+        ))}
+      </>,
+    );
+  const expectPalette = (palette: AppSettings) => {
+    for (const terminal of terminals)
+      expect(terminal.options.theme).toMatchObject({
+        foreground: palette.terminalForeground,
+        green: palette.terminalGreen,
+        blue: palette.terminalBlue,
+      });
+  };
+  render(settings);
+  await vi.waitFor(() => expect(terminals).toHaveLength(4));
+  const saved = {
+    ...settings,
+    terminalForeground: "#eeeeee",
+    terminalGreen: "#22aa44",
+    terminalBlue: "#8866cc",
+  };
+  render(saved);
+  await vi.waitFor(() => expectPalette(saved));
+  render(saved, 0, 1);
+  await page.getByRole("textbox", { name: "Find in terminal output" }).fill("needle");
+  await vi.waitFor(() =>
+    expect(terminals[0].options.theme?.selectionBackground).toBe("transparent"),
+  );
+  expectPalette(saved);
+  const updated = { ...saved, terminalGreen: "#55cc77" };
+  render(updated, 0, 1);
+  await vi.waitFor(() => expectPalette(updated));
+  expect(terminals[0].options.theme?.selectionBackground).toBe("transparent");
+  await page.getByRole("button", { name: "Close terminal search" }).click();
+  await vi.waitFor(() => expect(terminals[0].options.theme?.selectionBackground).toBe("#393939"));
+  expectPalette(updated);
+  render(updated, 1, 1);
+  await page.getByRole("textbox", { name: "Find in terminal output" }).fill("needle");
+  await vi.waitFor(() =>
+    expect(terminals[1].options.theme?.selectionBackground).toBe("transparent"),
+  );
+  expectPalette(updated);
+  expect(terminals).toHaveLength(4);
 });

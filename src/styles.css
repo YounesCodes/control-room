@@ -1186,9 +1186,16 @@ code,
   gap: 5px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 6px 36px 6px 11px;
+  padding: 6px 11px;
   color: var(--text);
   text-align: left;
+  transition: padding var(--motion-med) var(--ease);
+}
+
+.host-row:hover .host-main,
+.host-row:focus-within .host-main,
+.host-row.menu-open .host-main {
+  padding-right: 36px;
 }
 
 .host-row-details {

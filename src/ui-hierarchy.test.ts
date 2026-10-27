@@ -178,9 +178,8 @@ describe("application hierarchy", () => {
     expect(logsSource).toContain('loadSources("docker", true, password)');
   });
 
-  it("renders bold terminal text as weight so category colors match what the user picks", () => {
-    // Bold `01;34` directories / `01;32` prompts must use the chosen base color,
-    // not xterm's lightened bright palette, or the Settings color preview lies.
+  it("renders ANSI bold terminal text at regular weight with the configured colors", () => {
+    expect(terminalSource).toContain('fontWeightBold: "normal"');
     expect(terminalSource).toContain("drawBoldTextInBrightColors: false");
   });
 
