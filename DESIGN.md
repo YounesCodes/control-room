@@ -133,7 +133,10 @@ other cue so color is never the only signal.
 Connection tags are user metadata and may use user-selected colors. Keep their
 text readable against the app surfaces and never use tag color to imply
 connection state. Terminal ANSI colors are user-editable in Settings and belong
-to the terminal output palette, not the app chrome.
+to the terminal output palette, not the app chrome. Saved colors apply to every
+open local and SSH terminal, including hidden tabs and terminals using search.
+Each configurable ANSI color also controls its bright variant so shells use the
+same selected colors.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview
 and any readability warning when the picker closes, and let the user save a

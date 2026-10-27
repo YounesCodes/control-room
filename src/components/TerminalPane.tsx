@@ -66,7 +66,6 @@ export function TerminalPane({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wasActiveRef = useRef(false);
-  const terminalThemeRef = useRef<ReturnType<typeof buildTerminalTheme> | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -162,7 +161,6 @@ export function TerminalPane({
     let resizeTimer: number | undefined;
     let bellTimer: number | undefined;
     const theme = buildTerminalTheme(settings);
-    terminalThemeRef.current = theme;
     const terminal = new Terminal({
       // SearchAddon uses xterm's decoration API to highlight every match and
       // report the active result count. xterm guards that API behind this flag.
@@ -398,7 +396,6 @@ export function TerminalPane({
       search.dispose();
       terminal.dispose();
       terminalRef.current = null;
-      terminalThemeRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
     };
@@ -406,15 +403,15 @@ export function TerminalPane({
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    const theme = terminalThemeRef.current;
-    if (!terminal || !theme) return;
+    if (!terminal) return;
+    const theme = buildTerminalTheme(settings);
 
     // SearchAddon selects the active match internally. Make that selection
     // transparent while searching so it does not recolor ANSI output; the
     // match's outline and overview-ruler marker carry the search state instead.
     terminal.options.theme =
       searchOpen && searchTerm ? { ...theme, selectionBackground: "transparent" } : theme;
-  }, [searchOpen, searchTerm]);
+  }, [settings, searchOpen, searchTerm]);
 
   // What this terminal is attached to: a Saved Connection or a local shell.
   const targetId = workspace.kind === "local" ? workspace.shell.id : workspace.connectionId;
@@ -581,7 +578,6 @@ export function TerminalPane({
     terminal.options.fontFamily = settings.terminalFontFamily;
     terminal.options.fontSize = settings.terminalFontSize;
     terminal.options.scrollback = settings.terminalScrollback;
-    terminal.options.theme = buildTerminalTheme(settings);
     if (visible) fitRef.current?.fit();
     // Focus on the transition to active only, and never take focus from an
     // app-owned popover or dialog: React re-runs this effect when a Suspense

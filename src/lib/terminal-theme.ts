@@ -14,15 +14,6 @@ type TerminalColorSettings = Pick<
 
 export const TERMINAL_BACKGROUND = "#000000";
 
-function brighten(hex: string) {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)!
-    .map((channel) => Number.parseInt(channel, 16));
-  const bright = channels.map((channel) => Math.round(channel + (255 - channel) * 0.2));
-  return `#${bright.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-
 export function buildTerminalTheme(colors: TerminalColorSettings): ITheme {
   return {
     background: TERMINAL_BACKGROUND,
@@ -40,12 +31,12 @@ export function buildTerminalTheme(colors: TerminalColorSettings): ITheme {
     cyan: colors.terminalCyan,
     white: colors.terminalForeground,
     brightBlack: "#70706d",
-    brightRed: brighten(colors.terminalRed),
-    brightGreen: brighten(colors.terminalGreen),
-    brightYellow: brighten(colors.terminalYellow),
-    brightBlue: brighten(colors.terminalBlue),
-    brightMagenta: brighten(colors.terminalMagenta),
-    brightCyan: brighten(colors.terminalCyan),
-    brightWhite: "#ffffff",
+    brightRed: colors.terminalRed,
+    brightGreen: colors.terminalGreen,
+    brightYellow: colors.terminalYellow,
+    brightBlue: colors.terminalBlue,
+    brightMagenta: colors.terminalMagenta,
+    brightCyan: colors.terminalCyan,
+    brightWhite: colors.terminalForeground,
   };
 }

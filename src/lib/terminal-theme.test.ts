@@ -17,6 +17,12 @@ describe("buildTerminalTheme", () => {
     expect(theme.cursor).toBe("#eeeeee");
     expect(theme.green).toBe("#11aa55");
     expect(theme.blue).toBe("#3366cc");
-    expect(theme.brightBlue).toBe("#5c85d6");
+    expect(theme.brightRed).toBe(theme.red);
+    expect(theme.brightGreen).toBe(theme.green);
+    expect(theme.brightYellow).toBe(theme.yellow);
+    expect(theme.brightBlue).toBe(theme.blue);
+    expect(theme.brightMagenta).toBe(theme.magenta);
+    expect(theme.brightCyan).toBe(theme.cyan);
+    expect(theme.brightWhite).toBe(theme.foreground);
   });
 });
