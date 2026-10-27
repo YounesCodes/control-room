@@ -170,10 +170,9 @@ export function TerminalPane({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
-      // Bold text (prompts, directory listings, error lines) is rendered with
-      // weight, not a brighter hue, so a bold `01;34` directory shows the exact
-      // "ANSI 4" color the user picked instead of a lightened
-      // variant. This keeps the terminal matching the Settings color preview.
+      // Keep shell prompts and directory names at regular weight, including
+      // ANSI bold sequences, while retaining the configured ANSI colors.
+      fontWeightBold: "normal",
       drawBoldTextInBrightColors: false,
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,

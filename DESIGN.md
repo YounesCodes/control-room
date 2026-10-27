@@ -153,6 +153,8 @@ fallbacks, for terminal and technical values. Align numeric columns and use
 tabular figures where values are compared. Keep supporting text readable at the
 app's compact density; do not shrink informational labels to make a layout fit.
 
+Terminal text uses regular weight, including ANSI bold prompts and directory names.
+
 Prefer clear hierarchy over extra labels: a section title, a useful value, and a
 short explanation are better than repeated captions. Let technical identifiers
 wrap or truncate deliberately so they do not force a pane wider.
