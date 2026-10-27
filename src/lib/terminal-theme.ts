@@ -22,7 +22,7 @@ export function buildTerminalTheme(colors: TerminalColorSettings): ITheme {
     selectionBackground: "#393939",
     // xterm otherwise draws a white line along the empty search-marker rail.
     overviewRulerBorder: "#00000000",
-    black: "#151515",
+    black: "#000000",
     red: colors.terminalRed,
     green: colors.terminalGreen,
     yellow: colors.terminalYellow,
@@ -30,7 +30,7 @@ export function buildTerminalTheme(colors: TerminalColorSettings): ITheme {
     magenta: colors.terminalMagenta,
     cyan: colors.terminalCyan,
     white: colors.terminalForeground,
-    brightBlack: "#70706d",
+    brightBlack: "#555555",
     brightRed: colors.terminalRed,
     brightGreen: colors.terminalGreen,
     brightYellow: colors.terminalYellow,
