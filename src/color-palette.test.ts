@@ -11,14 +11,15 @@ const settingsModelSource = readFileSync(
 /** Status colors, plus the OS and shell brand hues that identity marks reveal
  *  on hover or selection: the distribution logos' official colors (Alpine,
  *  CentOS, and AlmaLinux lightened to read on the dark surfaces), Windows
- *  blue, and the PowerShell-family blue standing in for local terminal
- *  marks. */
+ *  blue, PowerShell-family blue, and Git orange. Local shell marks retain
+ *  their brand colors at rest. */
 const semanticUiColors = [
   "#42d17a",
   "#d6a84a",
   "#ef5b6b",
   "#0078d4",
   "#5391fe",
+  "#f05032",
   "#d70a53",
   "#e95420",
   "#51a2da",

@@ -102,6 +102,37 @@ describe("Settings actions", () => {
     api.installCatalogFont.mockResolvedValue("JetBrains Mono");
   });
 
+  it("identifies local shells and administrator profiles with their shell marks", () => {
+    renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+    expect(
+      screen
+        .getByLabelText("Offer Git Bash")
+        .closest("label")
+        ?.querySelector(".local-shell-icon-git-bash"),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByLabelText("Offer PowerShell 7")
+        .closest("label")
+        ?.querySelector(".local-shell-icon-powershell-7"),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByLabelText("Offer PowerShell 7, run as administrator")
+        .closest("label")
+        ?.querySelector(".local-shell-icon-powershell-7 .local-shell-elevation"),
+    ).not.toBeNull();
+  });
+
+  it("updates the default shell mark when the selected profile changes", async () => {
+    const user = userEvent.setup();
+    renderPane({ localShells: [powershell, gitBash] });
+    const select = screen.getByRole("combobox", { name: "Default local terminal" });
+    expect(select.parentElement?.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
+    await user.selectOptions(select, "git-bash");
+    expect(select.parentElement?.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
+  });
+
   it("enables and customizes host metrics while keeping the default draft clean", async () => {
     renderPane();
     expect(saveButton().disabled).toBe(true);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
+import { LocalShellIcon } from "../components/LocalShellIcon";
 import { api, errorMessage } from "../lib/api";
 import {
   DEFAULT_HEADER_METRICS,
@@ -163,10 +164,18 @@ export function SettingsPane({
             shell.elevated ? `Offer ${shell.label}, run as administrator` : `Offer ${shell.label}`
           }
         />
+        <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />
         {shell.label}
       </label>
     );
   }
+
+  const enabledStandardProfiles = offeredLocalShells(localShells, hiddenIds).filter(
+    (shell) => !shell.elevated,
+  );
+  const defaultProfile = draft.defaultLocalShellId
+    ? enabledStandardProfiles.find((shell) => shell.id === draft.defaultLocalShellId)
+    : enabledStandardProfiles[0];
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -450,29 +459,30 @@ export function SettingsPane({
             </div>
             <label>
               <span>Default local terminal</span>
-              <select
-                value={draft.defaultLocalShellId ?? ""}
-                onChange={(event) =>
-                  setDraft({ ...draft, defaultLocalShellId: event.target.value || null })
-                }
-              >
-                <option value="">First enabled terminal</option>
-                {draft.defaultLocalShellId &&
-                  !offeredLocalShells(localShells, hiddenIds)
-                    .filter((shell) => !shell.elevated)
-                    .some((shell) => shell.id === draft.defaultLocalShellId) && (
-                    <option value={draft.defaultLocalShellId} disabled>
-                      Saved terminal unavailable or disabled
-                    </option>
-                  )}
-                {offeredLocalShells(localShells, hiddenIds)
-                  .filter((shell) => !shell.elevated)
-                  .map((shell) => (
+              <div className="local-shell-default">
+                {defaultProfile && <LocalShellIcon kind={defaultProfile.kind} />}
+                <select
+                  value={draft.defaultLocalShellId ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, defaultLocalShellId: event.target.value || null })
+                  }
+                >
+                  <option value="">First enabled terminal</option>
+                  {draft.defaultLocalShellId &&
+                    !enabledStandardProfiles.some(
+                      (shell) => shell.id === draft.defaultLocalShellId,
+                    ) && (
+                      <option value={draft.defaultLocalShellId} disabled>
+                        Saved terminal unavailable or disabled
+                      </option>
+                    )}
+                  {enabledStandardProfiles.map((shell) => (
                     <option key={shell.id} value={shell.id}>
                       {shell.label}
                     </option>
                   ))}
-              </select>
+                </select>
+              </div>
             </label>
             {localShells.length === 0 ? (
               <small>No local shells are installed on this machine.</small>

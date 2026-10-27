@@ -329,6 +329,50 @@ describe("Local Terminal", () => {
     expect(screen.getByRole("button", { name: "Add connection" })).toBeTruthy();
   });
 
+  it("keeps shell identity across launchers, tabs, split targets, and panes", async () => {
+    const user = userEvent.setup();
+    api.listLocalShells.mockResolvedValue({
+      profiles: [powershell, gitBash, administratorPowerShell],
+      administratorStatus: "available",
+    });
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    const gitChoice = screen.getByRole("menuitem", { name: "Git Bash" });
+    expect(gitChoice.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
+    const adminChoice = screen.getByRole("menuitem", {
+      name: "PowerShell 7, run as administrator",
+    });
+    expect(
+      adminChoice.querySelector(".local-shell-icon-powershell-7 .local-shell-elevation"),
+    ).not.toBeNull();
+    await user.click(gitChoice);
+    expect(
+      screen.getByRole("button", { name: "Git Bash" }).querySelector(".local-shell-icon-git-bash"),
+    ).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "New terminal" }));
+    const newShell = screen.getByRole("button", { name: "Local terminals: PowerShell 7" });
+    expect(newShell.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
+    await user.click(newShell);
+    await user.click(screen.getByLabelText("Focus terminal"));
+    await user.click(screen.getByRole("button", { name: "Split terminal" }));
+    const existing = screen.getByRole("button", { name: "Existing terminals: Git Bash" });
+    expect(existing.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "New local terminal: Git Bash" })
+        .querySelector(".local-shell-icon-git-bash"),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "Run as administrator: PowerShell 7" })
+        .querySelector(".local-shell-elevation"),
+    ).not.toBeNull();
+    await user.click(existing);
+    const panes = screen.getByRole("navigation", { name: /Terminals in .* group/ });
+    expect(panes.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
+    expect(panes.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
+  });
+
   it("launches Git Bash directly without an administrator warning", async () => {
     const user = userEvent.setup();
     api.listLocalShells.mockResolvedValue({ profiles: [gitBash], administratorStatus: "disabled" });

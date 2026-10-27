@@ -91,6 +91,7 @@
   --os-oracle: #f80000;
   --os-amazon: #ff9900;
   --shell-accent: #5391fe;
+  --shell-git: #f05032;
 
   /* Surface elevation ramp — lighter reads as higher. */
   --surface-base: #090909;
@@ -1542,11 +1543,6 @@ code,
   background: var(--fill-selected);
 }
 
-.administrator-terminal-icon,
-.local-shell-admin-mark {
-  color: var(--warning);
-}
-
 .local-shell-administrator-note {
   display: grid;
   width: 208px;
@@ -1783,6 +1779,34 @@ code,
   display: block;
   width: 17px;
   height: 17px;
+}
+
+.local-shell-icon {
+  position: relative;
+}
+
+.local-shell-icon.local-shell-mark {
+  --identity: var(--text-muted);
+  color: var(--identity);
+}
+
+.local-shell-icon.local-shell-icon-git-bash {
+  --identity: var(--shell-git);
+}
+
+.local-shell-icon.local-shell-icon-powershell-7,
+.local-shell-icon.local-shell-icon-windows-powershell {
+  --identity: var(--shell-accent);
+}
+
+.local-shell-icon .local-shell-elevation {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  fill: var(--surface-chrome);
+  color: var(--warning);
 }
 
 .session-tab-menu-name {
@@ -2347,7 +2371,7 @@ code,
 .terminal-target-menu[data-keyboard-nav]
   .terminal-target-group
   > button:hover:not([data-active="true"])
-  .identity-mark {
+  .identity-mark:not(.local-shell-icon) {
   color: var(--text-muted);
 }
 
@@ -4921,6 +4945,17 @@ dd {
   gap: 1px;
 }
 
+.local-shell-default {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.local-shell-default select {
+  min-width: 0;
+  flex: 1;
+}
+
 .local-shell-toggle-heading {
   display: flex;
   align-items: center;
@@ -5747,7 +5782,7 @@ kbd {
   color: var(--text);
 }
 
-.command-item svg,
+.command-item > svg,
 .command-item .host-os-icon {
   flex: none;
   color: var(--text-faint);
@@ -5787,7 +5822,7 @@ kbd {
   color: var(--text-strong);
 }
 
-.command-item.active svg,
+.command-item.active > svg,
 .command-item.active .host-os-icon {
   color: var(--text-muted);
 }
@@ -5969,14 +6004,14 @@ kbd {
 
 /* ==========================================================================
    Identity marks
-   OS and shell marks stay neutral at rest and reveal their brand color where
+   OS marks stay neutral at rest and reveal their brand color where
    the user is headed: the hovered, keyboard-focused, or selected tab, pane
    tab, menu row, or host row, across workspace tabs, terminal menus, the
    overflow menus, and the local-shell launcher. Each brand-bearing mark
    carries its hue in a shared --identity variable, so one reveal rule covers
    every surface and a new distro only adds a variable. Generic marks and the
-   administrator shield have no brand to reveal and stay neutral. The color
-   identifies; it never signals health.
+   generic launcher have no brand to reveal. Local shell logos retain their
+   original colors at rest and during interaction. Identity color never signals health.
    ========================================================================== */
 
 .host-os-ubuntu {
@@ -6048,10 +6083,8 @@ kbd {
   --identity: var(--os-amazon);
 }
 
-/* Plain local-terminal marks share one soft blue; the administrator shield
-   never carries .identity-mark and so never reveals a hue. */
-.local-shell-mark.identity-mark,
-.local-shell-icon.identity-mark {
+/* The generic launcher uses soft blue; shell logos keep their own colors. */
+.local-shell-mark.identity-mark:not(.local-shell-icon) {
   --identity: var(--shell-accent);
 }
 
@@ -6073,7 +6106,14 @@ kbd {
 .local-shell-launcher button:focus-visible .identity-mark,
 .local-shell-launcher button[aria-expanded="true"] .identity-mark,
 .local-shell-menu button:hover .identity-mark,
-.local-shell-menu button:focus-visible .identity-mark {
+.local-shell-menu button:focus-visible .identity-mark,
+.command-item:hover .local-shell-icon,
+.command-item:focus-visible .local-shell-icon,
+.command-item.active .local-shell-icon,
+.local-shell-toggle-group label:hover .identity-mark,
+.local-shell-toggle-group label:focus-within .identity-mark,
+.local-shell-default:hover .identity-mark,
+.local-shell-default:focus-within .identity-mark {
   color: var(--identity);
 }
 
