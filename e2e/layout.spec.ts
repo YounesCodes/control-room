@@ -99,6 +99,8 @@ describe("Resizable panels in the native app", () => {
     const saved = async () =>
       (await browser.tauri.execute(({ core }) => core.invoke("get_workspace_state"))) as {
         panelSizes: Record<string, number>;
+        workspaces: PersistedWorkspaceState["workspaces"];
+        activeWorkspaceId: string | null;
       };
     await browser.waitUntil(async () => {
       const state = await saved();
@@ -110,6 +112,15 @@ describe("Resizable panels in the native app", () => {
     await openOfflineConnection("Layout host B");
     await openBaselines();
     await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
+    await browser.waitUntil(async () => {
+      const state = await saved();
+      return (
+        state.workspaces.length === 2 &&
+        state.workspaces.some(
+          (workspace) => workspace.id === state.activeWorkspaceId && workspace.view === "baselines",
+        )
+      );
+    });
     await restartApp();
     content = $("aria/Resize Baselines content");
     split = $("aria/Resize Baselines panes");

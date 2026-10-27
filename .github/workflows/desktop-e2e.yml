@@ -54,7 +54,7 @@ jobs:
         env:
           DESKTOP_SPEC: ${{ inputs.spec }}
         run: |
-          $arguments = @('run', 'test:desktop', '--', '--logLevel', 'info')
+          $arguments = @('run', 'test:desktop', '--')
           if ($env:DESKTOP_SPEC) { $arguments += @('--spec', $env:DESKTOP_SPEC) }
           npm @arguments
       - name: Sanitize failure diagnostics
