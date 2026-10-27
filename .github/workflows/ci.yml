@@ -31,9 +31,13 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: l
         run: |
+          # The Azure mirror can remain responsive while downloading too slowly
+          # for APT to fail over. Keep the runner's official Ubuntu HTTPS mirrors.
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          grep -q '^https://archive.ubuntu.com/ubuntu/' /etc/apt/apt-mirrors.txt
           sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update
-          sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server imagemagick
-          convert 'src-tauri/icons/icon.ico[0]' PNG32:src-tauri/icons/icon.png
+          sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server
+          node scripts/extract-png-icon.mjs src-tauri/icons/icon.ico src-tauri/icons/icon.png
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.9.3
         with:
