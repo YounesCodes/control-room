@@ -24,7 +24,7 @@ guardrails, not every choice described below.
   colors belong to host output and remain separate from the application palette.
   Local shell logos reveal their own colors on hover, keyboard focus, or selection:
   Git orange, PowerShell blue, and a neutral Command Prompt mark. The generic
-  local-terminal launcher uses soft blue on hover, keyboard focus, or selection.
+  local-terminal launcher stays white at rest, on hover, keyboard focus, or selection.
   Use each local shell's own mark in workspace tabs, launch and split menus,
   overflow lists, the command palette, and Settings. Administrator shells keep
   their shell mark with a small shield badge.

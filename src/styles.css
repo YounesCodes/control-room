@@ -6067,9 +6067,10 @@ kbd {
   --identity: var(--os-amazon);
 }
 
-/* The generic launcher uses soft blue; shell logos keep their own colors. */
+/* The generic launcher stays white; blue identifies PowerShell. */
 .local-shell-mark.identity-mark:not(.local-shell-icon) {
-  --identity: var(--shell-accent);
+  --identity: var(--text-strong);
+  color: var(--text-strong);
 }
 
 .session-tab-wrap:hover .identity-mark,

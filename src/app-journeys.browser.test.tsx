@@ -286,19 +286,23 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const launcherIcon = launcher.element().querySelector("svg")!;
     const addIcon = add.element().querySelector("svg")!;
     const transform = (icon: Element) => getComputedStyle(icon).transform;
+    const color = () => getComputedStyle(launcherIcon).color;
 
     expect(transform(launcherIcon)).toBe("none");
+    expect(color()).toBe("rgb(255, 255, 255)");
     await userEvent.hover(add.element());
     await expect.poll(() => transform(addIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
     const addHoverTransform = transform(addIcon);
     await userEvent.hover(launcher.element());
     await expect.poll(() => transform(launcherIcon)).toBe(addHoverTransform);
+    expect(color()).toBe("rgb(255, 255, 255)");
     await userEvent.unhover(launcher.element());
     await expect.poll(() => transform(launcherIcon)).toBe("none");
 
     await userEvent.keyboard("{Tab}");
     (launcher.element() as HTMLButtonElement).focus();
     expect(launcher.element().matches(":focus-visible")).toBe(true);
+    expect(color()).toBe("rgb(255, 255, 255)");
     await expect.poll(() => transform(launcherIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
     expect(parseFloat(getComputedStyle(launcherIcon).transitionDuration)).toBeLessThan(0.001);
   });
@@ -313,18 +317,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
       administratorStatus: "disabled",
     }));
     await mount();
-    const blue = "rgb(83, 145, 254)";
+    const white = "rgb(255, 255, 255)";
     const neutral = "rgb(173, 173, 170)";
     const orange = "rgb(240, 80, 50)";
     const color = (mark: Element) => getComputedStyle(mark).color;
     const launcher = page.getByRole("button", { name: "Local terminal", exact: true });
     const launcherMark = launcher.element().querySelector(".local-shell-mark")!;
-    await expect.poll(() => color(launcherMark)).toBe(neutral);
+    await expect.poll(() => color(launcherMark)).toBe(white);
     await userEvent.hover(launcher.element());
-    await expect.poll(() => color(launcherMark)).toBe(blue);
+    await expect.poll(() => color(launcherMark)).toBe(white);
     await launcher.click();
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
-    await expect.poll(() => color(launcherMark)).toBe(blue);
+    await expect.poll(() => color(launcherMark)).toBe(white);
     const choice = page.getByRole("menuitem", { name: "Command Prompt", exact: true });
     await userEvent.hover(choice.element());
     await expect
