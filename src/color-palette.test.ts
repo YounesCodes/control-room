@@ -90,7 +90,7 @@ describe("monochrome application palette", () => {
   });
 
   it("preserves ANSI colors for remote terminal content", () => {
-    expect(settingsModelSource).toContain('terminal_foreground: "#bbbbbb"');
+    expect(settingsModelSource).toContain('terminal_foreground: "#cccccc"');
     expect(settingsModelSource).toContain('terminal_red: "#ff5555"');
     expect(settingsModelSource).toContain('terminal_green: "#55ff55"');
     expect(settingsModelSource).toContain('terminal_yellow: "#ffff55"');
