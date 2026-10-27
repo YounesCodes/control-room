@@ -1215,6 +1215,39 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
   }
 
+  it("slides sidebar status left to reveal connection actions on hover and focus", async () => {
+    await mount();
+    const host = element.querySelector<HTMLElement>(".host-row.active")!;
+    const main = host.querySelector<HTMLButtonElement>(".host-main")!;
+    const status = host.querySelector<HTMLElement>(".host-session-status")!;
+    const menu = host.querySelector<HTMLButtonElement>(".host-menu")!;
+    const away = page.getByRole("button", { name: "Focus terminal", exact: true });
+    away.element().focus();
+    await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
+    const rightGap = () =>
+      host.getBoundingClientRect().right - status.getBoundingClientRect().right;
+    await expect.poll(rightGap).toBeCloseTo(11, 0);
+    expect(getComputedStyle(menu).opacity).toBe("0");
+    const width = host.getBoundingClientRect().width;
+    expect(getComputedStyle(main).transitionProperty).toBe("padding");
+    await userEvent.hover(host);
+    await expect.poll(rightGap).toBeCloseTo(36, 0);
+    expect(status.getBoundingClientRect().right).toBeLessThan(menu.getBoundingClientRect().left);
+    expect(getComputedStyle(menu).opacity).toBe("1");
+    expect(host.getBoundingClientRect().width).toBe(width);
+    await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
+    await expect.poll(rightGap).toBeCloseTo(11, 0);
+    main.focus();
+    await expect.poll(rightGap).toBeCloseTo(36, 0);
+    await userEvent.click(menu);
+    await expect.element(page.getByRole("menu")).toBeVisible();
+    main.blur();
+    menu.blur();
+    await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
+    await expect.poll(rightGap).toBeCloseTo(36, 0);
+    await userEvent.keyboard("{Escape}");
+  });
+
   it("keeps normal connection state in the sidebar and restores tab indicators in Focus Mode", async () => {
     await mount();
     const host = element.querySelector<HTMLElement>(".host-row.active")!;

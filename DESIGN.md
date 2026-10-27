@@ -95,6 +95,9 @@ complete tab, including in focus mode. Keep overflow menus within the window
 and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.
+Saved Connection cards use the same sliding action space: the status indicator
+rests at the right edge and moves left when hover, keyboard focus, or an open
+connection menu reveals the three-dot button.
 
 Connection and inspection panes have draggable, keyboard-operable dividers.
 Keep saved widths within limits that leave the neighboring pane usable. Reflow
