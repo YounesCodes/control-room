@@ -56,4 +56,10 @@ describe("development hooks", () => {
     expect(readFileSync(hook, "utf8")).toContain("echo custom");
     expect(existsSync(join(root, ".git", "hooks", "pre-commit"))).toBe(false);
   });
+  it("refuses a custom hooks directory", () => {
+    const root = repository();
+    execFileSync("git", ["config", "core.hooksPath", ".custom-hooks"], { cwd: root });
+    expect(() => run(installer, root)).toThrow();
+    expect(existsSync(join(root, ".git", "hooks", "pre-commit"))).toBe(false);
+  });
 });

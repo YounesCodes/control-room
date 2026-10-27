@@ -53,8 +53,15 @@ sudo /usr/sbin/sshd -f "$fixture_dir/sshd_config" -E "$fixture_dir/sshd.log"
 sshd_pid="$(cat "$fixture_dir/sshd.pid")"
 ssh -F "$CONTROL_ROOM_TEST_SSH_CONFIG" -p "$CONTROL_ROOM_TEST_PORT" "$CONTROL_ROOM_TEST_USER@$CONTROL_ROOM_TEST_HOST" true
 
-for test in \
+tests=(
   history::tests::live_history_install_is_reversible_in_an_isolated_home \
-  remote::tests::live_fixture_supports_structured_features; do
+  remote::tests::live_fixture_supports_structured_features
+)
+listed="$(cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --ignored --list)"
+for test in "${tests[@]}"; do
+  if ! grep -Fxq "$test: test" <<< "$listed"; then
+    printf 'Required SSH fixture test is missing: %s\n' "$test" >&2
+    exit 1
+  fi
   cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test" -- --ignored --exact
 done

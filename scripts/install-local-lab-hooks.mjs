@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const customHooks = spawnSync("git", ["config", "--local", "--get", "core.hooksPath"], {
+const customHooks = spawnSync("git", ["config", "--get", "core.hooksPath"], {
   encoding: "utf8",
 });
 if (customHooks.status === 0) {
