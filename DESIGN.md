@@ -30,6 +30,8 @@ guardrails, not every choice described below.
   their shell mark with a small shield badge.
   OS and shell logos share one footprint and artwork scale, preserving each
   logo's proportions. Larger dialog-heading marks use the same sizing rule.
+  Use the solid PowerShell mark with its cut-out prompt so it remains legible
+  at small sizes.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
@@ -204,6 +206,8 @@ confirmed destructive work, and labelled icon buttons for compact controls.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.
+Align the Local terminal and Add connection actions to the same leading icon
+and text positions.
 
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting

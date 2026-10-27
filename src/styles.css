@@ -1412,7 +1412,7 @@ code,
   width: 100%;
   min-height: 36px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1460,8 +1460,8 @@ code,
   width: 100%;
   min-height: 36px;
   align-items: center;
-  justify-content: center;
-  gap: 9px;
+  justify-content: flex-start;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;

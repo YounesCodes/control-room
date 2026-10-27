@@ -279,6 +279,33 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it.each([
+    [960, 640],
+    [1280, 900],
+  ])("aligns the sidebar action icons and labels at %sx%s", async (width, height) => {
+    await page.viewport(width, height);
+    await mount();
+    const buttons = [
+      page.getByRole("button", { name: "Local terminal", exact: true }).element(),
+      page.getByRole("button", { name: "Add connection", exact: true }).element(),
+    ];
+    const positions = buttons.map((button) => {
+      const icon = button.querySelector("svg")!.getBoundingClientRect();
+      const text = [...button.childNodes].find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+      )!;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      return {
+        iconCenter: icon.left + icon.width / 2,
+        labelLeft: range.getBoundingClientRect().left,
+      };
+    });
+    await page.screenshot({ path: `../test-results/sidebar-action-alignment-${width}.png` });
+    expect(Math.abs(positions[0].iconCenter - positions[1].iconCenter)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(positions[0].labelLeft - positions[1].labelLeft)).toBeLessThanOrEqual(0.5);
+  });
+
   it("moves the local terminal icon like Add connection on hover and keyboard focus", async () => {
     await mount();
     const launcher = page.getByRole("button", { name: "Local terminal", exact: true });

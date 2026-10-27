@@ -12,6 +12,44 @@ afterEach(() => {
   container?.remove();
 });
 
+it("keeps PowerShell marks solid and legible at their actual 16-pixel display size", async () => {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(
+    <>
+      <LocalShellIcon kind="powershell-7" />
+      <LocalShellIcon kind="windows-powershell" />
+    </>,
+  );
+  await expect.poll(() => container.querySelectorAll("svg").length).toBe(2);
+  for (const svg of container.querySelectorAll("svg")) {
+    const copy = svg.cloneNode(true) as SVGSVGElement;
+    copy.setAttribute("width", "16");
+    copy.setAttribute("height", "16");
+    copy.style.color = getComputedStyle(svg).color;
+    const image = new Image();
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("PowerShell SVG could not be rendered"));
+    });
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(copy))}`;
+    await loaded;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 16;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(image, 0, 0, 16, 16);
+    const pixels = context.getImageData(0, 0, 16, 16).data;
+    let opaquePixels = 0;
+    for (let alpha = 3; alpha < pixels.length; alpha += 4) {
+      if (pixels[alpha] > 128) opaquePixels++;
+    }
+    // At this size a hairline frame breaks into faint partial pixels. The
+    // filled mark must retain a substantial solid silhouette around its prompt.
+    expect(opaquePixels).toBeGreaterThan(85);
+  }
+});
+
 it("uses the same logo scale for every OS and local shell, including larger dialog marks", async () => {
   await page.viewport(1040, 800);
   container = document.createElement("div");
