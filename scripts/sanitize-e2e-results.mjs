@@ -52,12 +52,15 @@ export function sanitizeDirectory(directory, output) {
       else if (entry.isFile() && /\.(?:txt|log|json|jsonl|html)$/i.test(entry.name)) {
         if (statSync(file).size > 1024 * 1024) throw new Error("Diagnostic exceeds 1 MiB");
         const bytes = readFileSync(file);
-        if (bytes.includes(0) && entry.name === "wdio.log") {
-          // Shared launcher log writers can truncate each other's file and leave NUL padding.
-          // Omit its contents; per-spec logs still go through strict decoding and redaction.
+        if (
+          bytes.includes(0) &&
+          (entry.name === "wdio.log" || /\.spec-\d+-\d+\.log$/.test(entry.name))
+        ) {
+          // Launcher and restarted worker log writers can leave NUL padding.
+          // Omit corrupt contents entirely; other diagnostics still require redaction.
           writeFileSync(
             join(output, entry.name),
-            "Corrupt shared launcher log omitted. See per-spec logs.\n",
+            "Corrupt test runner log omitted. See other diagnostics.\n",
           );
           continue;
         }
