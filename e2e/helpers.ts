@@ -1,8 +1,9 @@
 import { $, browser, expect } from "@wdio/globals";
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
 import type { AppSettings, SavedConnection } from "../src/types";
+import { recordApplication } from "./app-processes";
 
 export interface RuntimeStatus {
   appPid: number;
@@ -35,19 +36,17 @@ export const runtime = () => ipc<RuntimeStatus>("e2e_runtime_status");
 
 export async function restartApp(preserve = true) {
   const previous = await runtime();
-  appendFileSync(
-    join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "app-pids.txt"),
-    `${previous.appPid}\n`,
+  const application = resolve(
+    process.env.CARGO_TARGET_DIR ?? "src-tauri/target",
+    "debug/control-room.exe",
   );
+  recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid, application);
   if (!preserve || !directory)
     directory = mkdtempSync(join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "case-"));
   await browser.reloadSession({
     ...browser.requestedCapabilities,
     "tauri:options": {
-      application: resolve(
-        process.env.CARGO_TARGET_DIR ?? "src-tauri/target",
-        "debug/control-room.exe",
-      ),
+      application,
       args: [`--e2e-data-dir=${directory}`],
     },
   } as unknown as WebdriverIO.Capabilities);
@@ -67,10 +66,7 @@ export async function restartApp(preserve = true) {
   if (await $("[role=dialog]").isExisting()) await $("[role=dialog]").$("button=Cancel").click();
   const current = await runtime();
   expect(current.appPid).not.toBe(previous.appPid);
-  appendFileSync(
-    join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "app-pids.txt"),
-    `${current.appPid}\n`,
-  );
+  recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid, application);
 }
 
 export async function cleanRuntime() {
