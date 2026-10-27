@@ -55,7 +55,7 @@ describe("Settings and native window", () => {
       $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
     ).toBeDisplayed();
     expect((await savedSettings()).hostMetricsEnabled).toBe(true);
-    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "disk", "uptime"]);
+    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "diskIo", "uptime"]);
     await $("aria/Open Settings").click();
     await $(
       "//label[input[@type='checkbox']][contains(.,'Show host metrics in header')]/input",
