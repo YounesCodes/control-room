@@ -91,9 +91,10 @@ describe("monochrome application palette", () => {
 
   it("preserves ANSI colors for remote terminal content", () => {
     expect(settingsModelSource).toContain('terminal_red: "#ff6f7d"');
-    expect(settingsModelSource).toContain('terminal_green: "#52cf91"');
+    expect(settingsModelSource).toContain('terminal_green: "#16c60c"');
     expect(settingsModelSource).toContain('terminal_yellow: "#e8c56c"');
-    expect(settingsModelSource).toContain('terminal_blue: "#55aef2"');
+    expect(settingsModelSource).toContain('terminal_blue: "#3b78ff"');
+    expect(settingsModelSource).toContain('terminal_magenta: "#b4009e"');
   });
 
   it("keeps the main text hierarchy above WCAG AA contrast", () => {

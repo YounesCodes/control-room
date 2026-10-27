@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 10;
+const LATEST_SCHEMA_VERSION: i64 = 11;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -1642,6 +1642,55 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 11 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch("CREATE TABLE IF NOT EXISTS application_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);")
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+        {
+            // Preserve the entire palette if any of its colors was customized.
+            let old = [
+                ("terminalForeground", "#f2f2ee"),
+                ("terminalRed", "#ff6f7d"),
+                ("terminalGreen", "#52cf91"),
+                ("terminalYellow", "#e8c56c"),
+                ("terminalBlue", "#55aef2"),
+                ("terminalMagenta", "#c793ff"),
+                ("terminalCyan", "#65d4d1"),
+            ];
+            if old
+                .iter()
+                .all(|(key, color)| value.get(*key).and_then(|v| v.as_str()) == Some(*color))
+            {
+                let defaults = AppSettings::default();
+                value["terminalGreen"] = defaults.terminal_green.into();
+                value["terminalBlue"] = defaults.terminal_blue.into();
+                value["terminalMagenta"] = defaults.terminal_magenta.into();
+                transaction
+                    .execute(
+                        "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                        [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 11;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -2949,6 +2998,56 @@ mod tests {
     }
 
     #[test]
+    fn terminal_palette_migration_preserves_custom_colors_and_runs_only_once() {
+        for custom in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("control-room.db");
+            let database = Database::open(&path).unwrap();
+            let mut settings = AppSettings {
+                terminal_green: "#52cf91".into(),
+                terminal_blue: "#55aef2".into(),
+                terminal_magenta: "#c793ff".into(),
+                ..AppSettings::default()
+            };
+            if custom {
+                settings.terminal_red = "#123456".into();
+            }
+            database.save_settings(&settings).unwrap();
+            database
+                .connection
+                .lock()
+                .execute_batch("PRAGMA user_version = 10")
+                .unwrap();
+            drop(database);
+
+            let database = Database::open(&path).unwrap();
+            let migrated = database.get_settings().unwrap();
+            assert_eq!(
+                migrated.terminal_green,
+                if custom { "#52cf91" } else { "#16c60c" }
+            );
+            assert_eq!(
+                migrated.terminal_blue,
+                if custom { "#55aef2" } else { "#3b78ff" }
+            );
+            assert_eq!(
+                migrated.terminal_magenta,
+                if custom { "#c793ff" } else { "#b4009e" }
+            );
+            database.save_settings(&settings).unwrap();
+            drop(database);
+            assert_eq!(
+                Database::open(&path)
+                    .unwrap()
+                    .get_settings()
+                    .unwrap()
+                    .terminal_green,
+                "#52cf91"
+            );
+        }
+    }
+
+    #[test]
     fn settings_saved_by_v0_7_0_still_load_after_a_field_was_removed() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -3539,7 +3638,7 @@ mod tests {
                 "migration step {released} disappeared"
             );
         }
-        assert_eq!(LATEST_SCHEMA_VERSION, 10);
+        assert_eq!(LATEST_SCHEMA_VERSION, 11);
     }
 
     /// A Saved Connection owns everything collected about that host. Deleting
