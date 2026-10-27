@@ -5,6 +5,10 @@ set -euo pipefail
 fixture_dir="$(mktemp -d)"
 sshd_pid=""
 cleanup() {
+  status=$?
+  if [[ "$status" -ne 0 && -f "$fixture_dir/sshd.log" ]]; then
+    sudo cat "$fixture_dir/sshd.log"
+  fi
   if [[ -n "$sshd_pid" ]]; then sudo kill "$sshd_pid" 2>/dev/null || true; fi
   rm -rf "$fixture_dir"
 }
@@ -39,7 +43,7 @@ PidFile $fixture_dir/sshd.pid
 AuthorizedKeysFile $fixture_dir/authorized_keys
 PasswordAuthentication no
 KbdInteractiveAuthentication no
-UsePAM no
+UsePAM yes
 AllowUsers $CONTROL_ROOM_TEST_USER
 StrictModes no
 Subsystem sftp internal-sftp
