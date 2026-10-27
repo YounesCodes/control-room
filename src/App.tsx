@@ -46,7 +46,6 @@ import {
   Search,
   Server,
   Settings,
-  Shield,
   ShieldAlert,
   SquareTerminal,
   StickyNote,
@@ -1217,9 +1216,7 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: (
-          <SquareTerminal size={16} strokeWidth={1.8} className="local-shell-mark identity-mark" />
-        ),
+        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -1228,7 +1225,7 @@ export function App() {
       options: administratorLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <Shield size={16} strokeWidth={1.8} className="administrator-terminal-icon" />,
+        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -1275,9 +1272,7 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: (
-          <SquareTerminal size={16} strokeWidth={1.8} className="local-shell-mark identity-mark" />
-        ),
+        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -1289,7 +1284,7 @@ export function App() {
       options: administratorLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <Shield size={16} strokeWidth={1.8} className="administrator-terminal-icon" />,
+        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -1573,16 +1568,10 @@ export function App() {
       .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
   }
 
-  /// The identity mark for a Workspace: the host OS mark for a Remote Host, a
-  /// terminal mark for a local shell, since there is no operating system to
-  /// report about the machine the app is already running on.
+  /// Keep shell and host identity consistent across tabs, menus, and split panes.
   function workspaceMark(workspace: Workspace) {
     return isLocalWorkspace(workspace) ? (
-      workspace.shell.elevated ? (
-        <Shield size={17} strokeWidth={1.8} className="local-shell-mark local-shell-admin-mark" />
-      ) : (
-        <SquareTerminal size={17} strokeWidth={1.8} className="local-shell-mark identity-mark" />
-      )
+      <LocalShellIcon kind={workspace.shell.kind} elevated={workspace.shell.elevated} />
     ) : (
       <HostOsIcon
         osId={hostCapabilities[workspace.connectionId]?.osId}
@@ -1853,11 +1842,7 @@ export function App() {
       {
         id: workspace.id,
         label: duplicateLabel(workspace),
-        icon: isLocalWorkspace(workspace) ? (
-          <LocalShellIcon kind={workspace.shell.kind} />
-        ) : (
-          workspaceMark(workspace)
-        ),
+        icon: workspaceMark(workspace),
         detail: terminalStateLabel(workspace),
         active: workspace.id === activeWorkspaceId && !settingsOpen,
         onSelect: () => selectWorkspaceTab(workspace),
@@ -2043,8 +2028,8 @@ export function App() {
                 aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
                 title="Open a shell on this Windows machine"
               >
-                <SquareTerminal size={16} className="local-shell-mark identity-mark" /> Local
-                terminal
+                <SquareTerminal size={16} className="local-shell-mark identity-mark" />
+                <span className="sidebar-action-label">Local terminal</span>
               </button>
               {localShellMenuPresent && (
                 <div
@@ -2085,11 +2070,7 @@ export function App() {
                           key={shell.id}
                           onClick={() => openLocalShell(shell)}
                         >
-                          <SquareTerminal
-                            size={14}
-                            strokeWidth={1.8}
-                            className="local-shell-mark identity-mark"
-                          />
+                          <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />
                           <span>{shell.label}</span>
                         </button>
                       ))}
@@ -2107,11 +2088,7 @@ export function App() {
                             onClick={() => openLocalShell(shell)}
                             aria-label={`${shell.label}, run as administrator`}
                           >
-                            <Shield
-                              size={14}
-                              strokeWidth={1.8}
-                              className="administrator-terminal-icon"
-                            />
+                            <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />
                             <span>{shell.label}</span>
                           </button>
                         ))
@@ -2132,7 +2109,8 @@ export function App() {
             type="button"
             onClick={() => setDialogConnection("new")}
           >
-            <Plus size={16} /> Add connection
+            <Plus size={16} />
+            <span className="sidebar-action-label">Add connection</span>
           </button>
         </div>
         <ResizeDivider
@@ -2453,11 +2431,7 @@ export function App() {
                       {
                         id,
                         label: duplicateLabel(workspace),
-                        icon: isLocalWorkspace(workspace) ? (
-                          <LocalShellIcon kind={workspace.shell.kind} />
-                        ) : (
-                          workspaceMark(workspace)
-                        ),
+                        icon: workspaceMark(workspace),
                         detail: terminalStateLabel(workspace),
                         active: id === activeWorkspaceId,
                         onSelect: () => selectWorkspaceTab(workspace),

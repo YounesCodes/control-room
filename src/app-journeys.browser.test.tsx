@@ -279,6 +279,55 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it.each([
+    [960, 640, 200],
+    [1280, 900, 244],
+    [1280, 640, 400],
+  ])(
+    "centers and aligns the sidebar action icons and labels at %sx%s",
+    async (width, height, railWidth) => {
+      await page.viewport(width, height);
+      persisted.panelSizes = { connections: railWidth };
+      await mount();
+      const buttons = [
+        page.getByRole("button", { name: "Local terminal", exact: true }).element(),
+        page.getByRole("button", { name: "Add connection", exact: true }).element(),
+      ];
+      const positions = buttons.map((button) => {
+        const icon = button.querySelector("svg")!.getBoundingClientRect();
+        const text = button.querySelector(".sidebar-action-label")!;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        return {
+          iconLeft: icon.left,
+          iconCenter: icon.left + icon.width / 2,
+          labelLeft: range.getBoundingClientRect().left,
+          labelRight: range.getBoundingClientRect().right,
+          buttonCenter:
+            button.getBoundingClientRect().left + button.getBoundingClientRect().width / 2,
+        };
+      });
+      await page.screenshot({ path: `../test-results/sidebar-action-alignment-${width}.png` });
+      const stacked =
+        Math.abs(
+          buttons[0].getBoundingClientRect().left - buttons[1].getBoundingClientRect().left,
+        ) < 0.5;
+      if (stacked) {
+        expect(Math.abs(positions[0].iconCenter - positions[1].iconCenter)).toBeLessThanOrEqual(
+          0.5,
+        );
+        expect(Math.abs(positions[0].labelLeft - positions[1].labelLeft)).toBeLessThanOrEqual(0.5);
+      }
+      for (const position of positions) {
+        const right = stacked
+          ? Math.max(...positions.map((position) => position.labelRight))
+          : position.labelRight;
+        const contentCenter = (position.iconLeft + right) / 2;
+        expect(Math.abs(contentCenter - position.buttonCenter)).toBeLessThanOrEqual(0.5);
+      }
+    },
+  );
+
   it("moves the local terminal icon like Add connection on hover and keyboard focus", async () => {
     await mount();
     const launcher = page.getByRole("button", { name: "Local terminal", exact: true });
@@ -286,24 +335,29 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const launcherIcon = launcher.element().querySelector("svg")!;
     const addIcon = add.element().querySelector("svg")!;
     const transform = (icon: Element) => getComputedStyle(icon).transform;
+    const color = () => getComputedStyle(launcherIcon).color;
 
     expect(transform(launcherIcon)).toBe("none");
+    expect(color()).toBe("rgb(173, 173, 170)");
     await userEvent.hover(add.element());
     await expect.poll(() => transform(addIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
     const addHoverTransform = transform(addIcon);
     await userEvent.hover(launcher.element());
     await expect.poll(() => transform(launcherIcon)).toBe(addHoverTransform);
+    expect(color()).toBe("rgb(255, 255, 255)");
     await userEvent.unhover(launcher.element());
     await expect.poll(() => transform(launcherIcon)).toBe("none");
+    await expect.poll(color).toBe("rgb(173, 173, 170)");
 
     await userEvent.keyboard("{Tab}");
     (launcher.element() as HTMLButtonElement).focus();
     expect(launcher.element().matches(":focus-visible")).toBe(true);
+    await expect.poll(color).toBe("rgb(255, 255, 255)");
     await expect.poll(() => transform(launcherIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
     expect(parseFloat(getComputedStyle(launcherIcon).transitionDuration)).toBeLessThan(0.001);
   });
 
-  it("colors local terminal identities on hover, focus, and selection in both layouts", async () => {
+  it("reveals each shell logo color on hover, focus, and selection in both layouts", async () => {
     await page.viewport(960, 640);
     overrides.set("list_local_shells", () => ({
       profiles: [
@@ -313,39 +367,42 @@ describe("complete app journeys with typed IPC fixtures", () => {
       administratorStatus: "disabled",
     }));
     await mount();
-    const blue = "rgb(83, 145, 254)";
+    const white = "rgb(255, 255, 255)";
     const neutral = "rgb(173, 173, 170)";
+    const orange = "rgb(240, 80, 50)";
     const color = (mark: Element) => getComputedStyle(mark).color;
     const launcher = page.getByRole("button", { name: "Local terminal", exact: true });
     const launcherMark = launcher.element().querySelector(".local-shell-mark")!;
     await expect.poll(() => color(launcherMark)).toBe(neutral);
     await userEvent.hover(launcher.element());
-    await expect.poll(() => color(launcherMark)).toBe(blue);
+    await expect.poll(() => color(launcherMark)).toBe(white);
     await launcher.click();
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
-    await expect.poll(() => color(launcherMark)).toBe(blue);
+    await expect.poll(() => color(launcherMark)).toBe(white);
     const choice = page.getByRole("menuitem", { name: "Command Prompt", exact: true });
     await userEvent.hover(choice.element());
-    await expect.poll(() => color(choice.element().querySelector(".local-shell-mark")!)).toBe(blue);
+    await expect
+      .poll(() => color(choice.element().querySelector(".local-shell-mark")!))
+      .toBe(white);
     await choice.click();
     const local = page.getByRole("button", { name: "Command Prompt", exact: true });
     const tab = local.element().closest(".session-tab-wrap")!;
     const mark = tab.querySelector(".local-shell-mark")!;
-    await expect.poll(() => color(mark)).toBe(blue);
+    await expect.poll(() => color(mark)).toBe(white);
     const host = page
       .getByRole("navigation", { name: "Saved connections" })
       .getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha/ });
     await host.click();
     await expect.poll(() => color(mark)).toBe(neutral);
     await userEvent.hover(local.element());
-    await expect.poll(() => color(mark)).toBe(blue);
+    await expect.poll(() => color(mark)).toBe(white);
     await userEvent.hover(host.element());
     await expect.poll(() => color(mark)).toBe(neutral);
     (local.element() as HTMLButtonElement).focus();
-    await expect.poll(() => color(mark)).toBe(blue);
+    await expect.poll(() => color(mark)).toBe(white);
     await userEvent.keyboard("{Enter}");
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await expect.poll(() => color(mark)).toBe(blue);
+    await expect.poll(() => color(mark)).toBe(white);
     await page.getByRole("button", { name: "Split terminal", exact: true }).click();
     const splitChoice = page.getByRole("button", {
       name: "New local terminal: Git Bash",
@@ -354,7 +411,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.hover(splitChoice.element());
     await expect
       .poll(() => color(splitChoice.element().querySelector(".local-shell-mark")!))
-      .toBe(blue);
+      .toBe(orange);
     await splitChoice.click();
     const pane = page
       .getByRole("navigation", { name: /Terminals in .* group/ })
@@ -363,12 +420,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
     await expect.poll(() => color(paneMark)).toBe(neutral);
     await userEvent.hover(pane.element());
-    await expect.poll(() => color(paneMark)).toBe(blue);
+    await expect.poll(() => color(paneMark)).toBe(white);
     await pane.click();
-    await expect.poll(() => color(paneMark)).toBe(blue);
+    await expect.poll(() => color(paneMark)).toBe(white);
     await page.screenshot({ path: "../test-results/local-terminal-identity-focus.png" });
     await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
-    await expect.poll(() => color(local.element().querySelector(".local-shell-mark")!)).toBe(blue);
+    await expect.poll(() => color(local.element().querySelector(".local-shell-mark")!)).toBe(white);
     await page.screenshot({ path: "../test-results/local-terminal-identity-normal.png" });
     for (let index = 0; index < 5; index++) {
       await page.getByRole("button", { name: "New terminal", exact: true }).click();
@@ -381,10 +438,76 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const menu = page.getByRole("menu", { name: "All terminals" }).element();
     await expect
       .poll(() => color(menu.querySelector('[aria-current="page"] .local-shell-icon')!))
-      .toBe(blue);
+      .toBe(white);
     const git = page.getByRole("menuitem", { name: /^Git Bash/ });
     await userEvent.hover(git.element());
-    await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(blue);
+    await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(orange);
+  });
+
+  it("shows shell identities and elevation in the command palette and Settings", async () => {
+    await page.viewport(1200, 800);
+    overrides.set("list_local_shells", () => ({
+      profiles: [
+        { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
+        { id: "powershell-7", label: "PowerShell 7", kind: "powershell-7", elevated: false },
+        {
+          id: "windows-powershell",
+          label: "Windows PowerShell",
+          kind: "windows-powershell",
+          elevated: false,
+        },
+        { id: "command-prompt", label: "Command Prompt", kind: "command-prompt", elevated: false },
+        { id: "admin", label: "PowerShell 7", kind: "powershell-7", elevated: true },
+      ],
+      administratorStatus: "available",
+    }));
+    await mount();
+    for (const label of ["Git Bash", "PowerShell 7"]) {
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      await page.getByRole("button", { name: `Local terminals: ${label}`, exact: true }).click();
+    }
+    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    await expect.element(palette).toBeVisible();
+    await expect
+      .poll(
+        () =>
+          getComputedStyle(palette.element().querySelector(".command-item.active .host-os-icon")!)
+            .color,
+      )
+      .toBe("rgb(233, 84, 32)");
+    expect(
+      palette.element().querySelector('[id^="ws-"] .local-shell-icon-git-bash'),
+    ).not.toBeNull();
+    for (const kind of ["git-bash", "powershell-7", "windows-powershell", "command-prompt"]) {
+      expect(
+        palette.element().querySelector(`#shell-${kind} .local-shell-icon-${kind} svg`),
+      ).not.toBeNull();
+    }
+    await page.getByRole("combobox", { name: "Search commands" }).fill("administrator");
+    const admin = palette.element().querySelector("#shell-admin")!;
+    const logo = admin.querySelector(".local-shell-icon > svg")!;
+    const badge = admin.querySelector(".local-shell-elevation")!;
+    await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(83, 145, 254)");
+    expect(getComputedStyle(badge).color).toBe("rgb(214, 168, 74)");
+    expect(badge.getBoundingClientRect().width).toBe(10);
+    await page.getByRole("combobox", { name: "Search commands" }).fill("");
+    await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
+    await userEvent.keyboard("{Escape}");
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    const checkbox = page.getByRole("checkbox", {
+      name: "Offer PowerShell 7, run as administrator",
+    });
+    await checkbox.element().scrollIntoView({ block: "center" });
+    const row = checkbox.element().closest("label")!;
+    expect(
+      row.querySelector(".local-shell-icon-powershell-7 .local-shell-elevation"),
+    ).not.toBeNull();
+    await userEvent.hover(row);
+    await expect
+      .poll(() => getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color)
+      .toBe("rgb(83, 145, 254)");
+    await page.screenshot({ path: "../test-results/local-shell-icons-settings.png" });
   });
 
   it("anchors the New terminal menu to its trigger and reveals each row's identity", async () => {
@@ -397,7 +520,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     overrides.set("refresh_capabilities", perConnection);
     await mount();
     const neutral = "rgb(173, 173, 170)";
-    const blue = "rgb(83, 145, 254)";
     const color = (mark: Element) => getComputedStyle(mark).color;
     const trigger = page.getByRole("button", { name: "New terminal", exact: true });
     await trigger.click();
@@ -441,7 +563,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     // when a lazy pane settles underneath and would otherwise refocus.
     expect(menu.element().contains(document.activeElement)).toBe(true);
     await userEvent.keyboard("{ArrowDown}{ArrowDown}");
-    await expect.poll(() => color(localMark)).toBe(blue);
+    await expect.poll(() => color(localMark)).toBe("rgb(255, 255, 255)");
     await expect.poll(() => color(alphaMark)).toBe(neutral);
     await userEvent.keyboard("{ArrowUp}");
     await expect.poll(() => color(localMark)).toBe(neutral);
@@ -773,6 +895,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       "command-prompt",
     ] as const;
     const shellLabels = ["Git Bash", "Windows PowerShell", "PowerShell 7", "Command Prompt"];
+    const shellColors = [
+      "rgb(240, 80, 50)",
+      "rgb(83, 145, 254)",
+      "rgb(83, 145, 254)",
+      "rgb(255, 255, 255)",
+    ];
     overrides.set("list_local_shells", () => ({
       profiles: shellKinds.map((kind, index) => ({
         id: kind,
@@ -786,10 +914,23 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Terminal");
     for (let index = 0; index < 7; index++) {
       await page.getByRole("button", { name: "New terminal", exact: true }).click();
-      await page
+      const shellIndex = Math.min(index, 3);
+      const choice = page
         .getByRole("dialog", { name: "New terminal" })
-        .getByRole("button", { name: new RegExp(shellLabels[Math.min(index, 3)]) })
-        .click();
+        .getByRole("button", { name: new RegExp(shellLabels[shellIndex]) });
+      expect(
+        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} svg`),
+      ).not.toBeNull();
+      const logo = choice.element().querySelector(".local-shell-icon svg")!;
+      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      await userEvent.hover(choice.element());
+      await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
+      await choice.click();
+      expect(
+        element.querySelector(
+          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} svg`,
+        ),
+      ).not.toBeNull();
     }
     const sessions = native.invoke.mock.calls.filter(
       ([command]) => command === "start_session" || command === "start_local_session",
@@ -801,6 +942,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(
         terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
       ).not.toBeNull();
+      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!;
+      expect(getComputedStyle(logo).color).toBe(
+        logo.closest("button")!.getAttribute("aria-current") === "page"
+          ? shellColors[shellKinds.indexOf(kind)]
+          : "rgb(173, 173, 170)",
+      );
+      await userEvent.hover(logo.closest("button")!);
+      await expect
+        .poll(() => getComputedStyle(logo).color)
+        .toBe(shellColors[shellKinds.indexOf(kind)]);
     }
     expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
     expect(

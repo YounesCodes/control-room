@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 import TauriService from "@wdio/tauri-service";
 import AsyncScriptService, { installAsyncScriptCommand } from "./e2e/async-script-service";
 import { recordDrivers, stopOwnedDrivers } from "./e2e/driver-processes";
+import { waitForRecordedApplications } from "./e2e/app-processes";
 import { sanitize } from "./scripts/sanitize-e2e-results.mjs";
 
 if (process.platform !== "win32") {
@@ -71,25 +72,7 @@ export const config: WebdriverIO.Config = {
   onComplete: async () => {
     try {
       await stopOwnedDrivers(dataDirectory);
-      const pidFile = join(dataDirectory, "app-pids.txt");
-      const pids = existsSync(pidFile)
-        ? readFileSync(pidFile, "utf8").trim().split(/\s+/).map(Number)
-        : [];
-      for (const pid of pids) {
-        const deadline = Date.now() + 20_000;
-        while (true) {
-          try {
-            process.kill(pid, 0);
-          } catch {
-            break;
-          }
-          if (Date.now() > deadline)
-            throw new Error(
-              `E2E application ${pid} is still running; preserving its temporary directory`,
-            );
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-      }
+      await waitForRecordedApplications(dataDirectory);
       if (
         resolve(dataDirectory).startsWith(resolve(tmpdir()) + sep) &&
         dataDirectory.split(sep).at(-1)?.startsWith("control-room-e2e-")

@@ -22,8 +22,16 @@ guardrails, not every choice described below.
   brand color on a hovered or selected tab or host row to identify the target;
   the color is identity, never health, and it never shows at rest. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
-  Plain local-terminal marks use the shared soft blue on hover, keyboard focus,
-  or selection, including launchers, menus, and Focus Mode pane tabs.
+  Local shell logos reveal their own colors on hover, keyboard focus, or selection:
+  Git orange and PowerShell blue. Command Prompt and the generic local-terminal
+  launcher use muted gray at rest and white on hover, keyboard focus, or selection.
+  Use each local shell's own mark in workspace tabs, launch and split menus,
+  overflow lists, the command palette, and Settings. Administrator shells keep
+  their shell mark with a small shield badge.
+  OS and shell logos share one footprint and artwork scale, preserving each
+  logo's proportions. Larger dialog-heading marks use the same sizing rule.
+  Use the solid PowerShell mark with its cut-out prompt so it remains legible
+  at small sizes.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
@@ -198,6 +206,8 @@ confirmed destructive work, and labelled icon buttons for compact controls.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.
+Center the Local terminal and Add connection contents as one shared block,
+with matching icon and text columns sized to the wider label.
 
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting

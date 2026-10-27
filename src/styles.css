@@ -91,6 +91,8 @@
   --os-oracle: #f80000;
   --os-amazon: #ff9900;
   --shell-accent: #5391fe;
+  --shell-git: #f05032;
+  --identity-size: 18px;
 
   /* Surface elevation ramp — lighter reads as higher. */
   --surface-base: #090909;
@@ -1396,6 +1398,9 @@ code,
 }
 
 .sidebar-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px max-content minmax(0, 1fr);
+  gap: 8px;
   flex: none;
   border-top: 1px solid var(--border-subtle);
   padding: 10px 14px 12px;
@@ -1406,11 +1411,12 @@ code,
    accent button did. Filled accent stays reserved for the one main decision
    inside dialogs. */
 .sidebar-primary {
-  display: flex;
+  display: grid;
+  grid-column: span 4;
+  grid-template-columns: subgrid;
   width: 100%;
   min-height: 36px;
   align-items: center;
-  justify-content: center;
   gap: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1419,6 +1425,19 @@ code,
   color: var(--text);
   font-size: 12.5px;
   font-weight: 650;
+}
+
+/* Shared tracks center the widest label and keep both rows' icons aligned. */
+.sidebar-primary > svg,
+.sidebar-secondary > svg {
+  grid-column: 2;
+  justify-self: center;
+}
+
+.sidebar-action-label {
+  grid-column: 3;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .sidebar-primary svg,
@@ -1449,17 +1468,20 @@ code,
 /* The Local Terminal launcher sits above Add connection: a secondary action,
    since most work in Control Room is remote. */
 .local-shell-launcher {
+  display: grid;
+  grid-column: span 4;
+  grid-template-columns: subgrid;
   position: relative;
-  margin-bottom: 8px;
 }
 
 .sidebar-secondary {
-  display: flex;
+  display: grid;
+  grid-column: span 4;
+  grid-template-columns: subgrid;
   width: 100%;
   min-height: 36px;
   align-items: center;
-  justify-content: center;
-  gap: 9px;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -1540,11 +1562,6 @@ code,
 
 .local-shell-menu button:active {
   background: var(--fill-selected);
-}
-
-.administrator-terminal-icon,
-.local-shell-admin-mark {
-  color: var(--warning);
 }
 
 .local-shell-administrator-note {
@@ -1769,20 +1786,49 @@ code,
 }
 
 .session-tab-menu-icon,
-.local-shell-icon {
+.local-shell-icon,
+.host-os-icon {
   display: inline-grid;
-  width: 18px;
-  height: 18px;
+  width: var(--identity-size);
+  height: var(--identity-size);
   flex: none;
   place-items: center;
   color: var(--text-muted);
   transition: color var(--motion-fast) var(--ease);
 }
 
-.local-shell-icon svg {
+.local-shell-icon > svg,
+.host-os-icon > svg {
   display: block;
-  width: 17px;
-  height: 17px;
+  width: calc(var(--identity-size) - 2px);
+  height: calc(var(--identity-size) - 2px);
+}
+
+.local-shell-icon {
+  position: relative;
+}
+
+.local-shell-icon.local-shell-mark {
+  --identity: var(--text-strong);
+}
+
+.local-shell-icon.local-shell-icon-git-bash {
+  --identity: var(--shell-git);
+}
+
+.local-shell-icon.local-shell-icon-powershell-7,
+.local-shell-icon.local-shell-icon-windows-powershell {
+  --identity: var(--shell-accent);
+}
+
+.local-shell-icon .local-shell-elevation {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  fill: var(--surface-chrome);
+  color: var(--warning);
 }
 
 .session-tab-menu-name {
@@ -1999,22 +2045,6 @@ code,
   animation:
     cue-in var(--motion-fast) var(--ease),
     bell-ping 0.7s var(--ease) 0.05s 1;
-}
-
-.host-os-icon {
-  display: inline-grid;
-  width: 13px;
-  height: 13px;
-  flex: none;
-  place-items: center;
-  color: var(--text-muted);
-  transition: color var(--motion-fast) var(--ease);
-}
-
-.host-os-icon svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .host-os-debian path,
@@ -4921,6 +4951,17 @@ dd {
   gap: 1px;
 }
 
+.local-shell-default {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.local-shell-default select {
+  min-width: 0;
+  flex: 1;
+}
+
 .local-shell-toggle-heading {
   display: flex;
   align-items: center;
@@ -5305,8 +5346,7 @@ dd {
   justify-content: space-between;
 }
 .remote-shell-host .host-os-icon {
-  width: 23px;
-  height: 23px;
+  --identity-size: 24px;
 }
 .remote-shell-host > div {
   display: grid;
@@ -5747,7 +5787,7 @@ kbd {
   color: var(--text);
 }
 
-.command-item svg,
+.command-item > svg,
 .command-item .host-os-icon {
   flex: none;
   color: var(--text-faint);
@@ -5787,7 +5827,7 @@ kbd {
   color: var(--text-strong);
 }
 
-.command-item.active svg,
+.command-item.active > svg,
 .command-item.active .host-os-icon {
   color: var(--text-muted);
 }
@@ -5974,9 +6014,8 @@ kbd {
    tab, menu row, or host row, across workspace tabs, terminal menus, the
    overflow menus, and the local-shell launcher. Each brand-bearing mark
    carries its hue in a shared --identity variable, so one reveal rule covers
-   every surface and a new distro only adds a variable. Generic marks and the
-   administrator shield have no brand to reveal and stay neutral. The color
-   identifies; it never signals health.
+   every surface and a new distro only adds a variable. Generic OS marks stay
+   neutral. Identity color never signals health.
    ========================================================================== */
 
 .host-os-ubuntu {
@@ -6048,11 +6087,9 @@ kbd {
   --identity: var(--os-amazon);
 }
 
-/* Plain local-terminal marks share one soft blue; the administrator shield
-   never carries .identity-mark and so never reveals a hue. */
-.local-shell-mark.identity-mark,
-.local-shell-icon.identity-mark {
-  --identity: var(--shell-accent);
+/* Generic terminal marks brighten from gray to white; blue identifies PowerShell. */
+.local-shell-mark.identity-mark:not(.local-shell-icon) {
+  --identity: var(--text-strong);
 }
 
 .session-tab-wrap:hover .identity-mark,
@@ -6073,7 +6110,14 @@ kbd {
 .local-shell-launcher button:focus-visible .identity-mark,
 .local-shell-launcher button[aria-expanded="true"] .identity-mark,
 .local-shell-menu button:hover .identity-mark,
-.local-shell-menu button:focus-visible .identity-mark {
+.local-shell-menu button:focus-visible .identity-mark,
+.command-item:hover .identity-mark,
+.command-item:focus-visible .identity-mark,
+.command-item.active .identity-mark,
+.local-shell-toggle-group label:hover .identity-mark,
+.local-shell-toggle-group label:focus-within .identity-mark,
+.local-shell-default:hover .identity-mark,
+.local-shell-default:focus-within .identity-mark {
   color: var(--identity);
 }
 
@@ -6091,13 +6135,8 @@ kbd {
   }
 
   .sidebar-footer {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr) 16px max-content minmax(0, 1fr));
     gap: 7px;
-  }
-
-  .sidebar-footer .local-shell-launcher {
-    margin-bottom: 0;
   }
 
   .sidebar-footer .sidebar-secondary,
@@ -6950,7 +6989,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 @container (max-width: 300px) {
   .sidebar-footer {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 16px max-content minmax(0, 1fr);
   }
 }
 
