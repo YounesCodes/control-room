@@ -140,7 +140,7 @@ to the terminal output palette, not the app chrome. Saved colors apply to every
 open local and SSH terminal, including hidden tabs and terminals using search.
 Each configurable ANSI color also controls its bright variant so shells use the
 same selected colors.
-Defaults use classic CGA bright colors for prompts and ANSI output, with gray
+Defaults use classic CGA bright colors for prompts and ANSI output, with slightly lighter gray
 text on black.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview

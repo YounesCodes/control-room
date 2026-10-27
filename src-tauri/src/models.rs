@@ -649,7 +649,7 @@ impl Default for AppSettings {
             terminal_font_family: "Cascadia Mono, Consolas, monospace".into(),
             terminal_font_size: 14,
             terminal_scrollback: 10_000,
-            terminal_foreground: "#aaaaaa".into(),
+            terminal_foreground: "#bbbbbb".into(),
             terminal_red: "#ff5555".into(),
             terminal_green: "#55ff55".into(),
             terminal_yellow: "#ffff55".into(),
