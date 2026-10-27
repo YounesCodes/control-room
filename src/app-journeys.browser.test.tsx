@@ -1270,6 +1270,28 @@ describe("complete app journeys with typed IPC fixtures", () => {
     strip.style.maxWidth = "";
     await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
   });
+  it("keeps the overflowing metrics scrollbar outside the window drag region", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    await mount();
+    const strip = element.querySelector<HTMLElement>(".host-metrics")!;
+    const row = strip.querySelector<HTMLElement>(".host-metrics-values")!;
+    await expect.poll(() => row.scrollWidth > row.clientWidth).toBe(false);
+    expect(row).toHaveAttribute("data-tauri-drag-region");
+
+    strip.style.maxWidth = "340px";
+    await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
+    // Native scrollbar presses target the scroll container itself. Tauri must
+    // leave that target to the webview instead of starting a window drag.
+    expect(row).not.toHaveAttribute("data-tauri-drag-region");
+    expect(row.querySelector(".host-metric-label")).toHaveAttribute("data-tauri-drag-region");
+    row.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect.poll(() => row.scrollLeft).toBeGreaterThan(0);
+
+    strip.style.maxWidth = "";
+    await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
+    expect(row).toHaveAttribute("data-tauri-drag-region");
+  });
   it("offers window drag targets across metric text and spacing while keeping details clickable", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
     await mount();

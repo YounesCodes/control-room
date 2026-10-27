@@ -184,7 +184,7 @@ export function HostMetrics({
       </button>
       <div
         className="host-metrics-values"
-        data-tauri-drag-region
+        data-tauri-drag-region={overflow ? undefined : true}
         ref={values}
         tabIndex={overflow ? 0 : undefined}
         role="group"
