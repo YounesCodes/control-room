@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 14;
+const LATEST_SCHEMA_VERSION: i64 = 15;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -1794,6 +1794,35 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    if version < 15 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let payload: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM application_settings WHERE key = 'settings'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if let Some(mut value) =
+            payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
+            && value.get("terminalForeground").and_then(|v| v.as_str()) == Some("#cccccc")
+        {
+            value["terminalForeground"] = "#dddddd".into();
+            transaction
+                .execute(
+                    "UPDATE application_settings SET value = ?1 WHERE key = 'settings'",
+                    [serde_json::to_string(&value).map_err(|error| error.to_string())?],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction
+            .execute_batch("PRAGMA user_version = 15;")
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -3203,7 +3232,7 @@ mod tests {
 
     #[test]
     fn terminal_palette_brightness_migration_preserves_custom_foreground_and_other_colors() {
-        for foreground in ["#aaaaaa", "#bbbbbb", "#123456"] {
+        for foreground in ["#aaaaaa", "#bbbbbb", "#cccccc", "#123456"] {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("control-room.db");
             let database = Database::open(&path).unwrap();
@@ -3220,7 +3249,7 @@ mod tests {
                 .unwrap();
             drop(database);
             if foreground != "#123456" {
-                settings.terminal_foreground = "#cccccc".into();
+                settings.terminal_foreground = "#dddddd".into();
             }
             assert_eq!(
                 serde_json::to_value(Database::open(&path).unwrap().get_settings().unwrap())
@@ -3821,7 +3850,7 @@ mod tests {
                 "migration step {released} disappeared"
             );
         }
-        assert_eq!(LATEST_SCHEMA_VERSION, 14);
+        assert_eq!(LATEST_SCHEMA_VERSION, 15);
     }
 
     /// A Saved Connection owns everything collected about that host. Deleting
