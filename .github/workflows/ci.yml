@@ -28,7 +28,8 @@ jobs:
       - name: Install Linux build and SSH dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server imagemagick
+          convert 'src-tauri/icons/icon.ico[0]' src-tauri/icons/icon.png
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.9.3
         with:
