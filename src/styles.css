@@ -1809,7 +1809,7 @@ code,
 }
 
 .local-shell-icon.local-shell-mark {
-  --identity: var(--text-muted);
+  --identity: var(--text-strong);
 }
 
 .local-shell-icon.local-shell-icon-git-bash {
@@ -6087,10 +6087,9 @@ kbd {
   --identity: var(--os-amazon);
 }
 
-/* The generic launcher stays white; blue identifies PowerShell. */
+/* Generic terminal marks brighten from gray to white; blue identifies PowerShell. */
 .local-shell-mark.identity-mark:not(.local-shell-icon) {
   --identity: var(--text-strong);
-  color: var(--text-strong);
 }
 
 .session-tab-wrap:hover .identity-mark,

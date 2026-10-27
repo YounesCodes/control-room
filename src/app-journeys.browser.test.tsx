@@ -338,7 +338,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const color = () => getComputedStyle(launcherIcon).color;
 
     expect(transform(launcherIcon)).toBe("none");
-    expect(color()).toBe("rgb(255, 255, 255)");
+    expect(color()).toBe("rgb(173, 173, 170)");
     await userEvent.hover(add.element());
     await expect.poll(() => transform(addIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
     const addHoverTransform = transform(addIcon);
@@ -347,11 +347,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(color()).toBe("rgb(255, 255, 255)");
     await userEvent.unhover(launcher.element());
     await expect.poll(() => transform(launcherIcon)).toBe("none");
+    await expect.poll(color).toBe("rgb(173, 173, 170)");
 
     await userEvent.keyboard("{Tab}");
     (launcher.element() as HTMLButtonElement).focus();
     expect(launcher.element().matches(":focus-visible")).toBe(true);
-    expect(color()).toBe("rgb(255, 255, 255)");
+    await expect.poll(color).toBe("rgb(255, 255, 255)");
     await expect.poll(() => transform(launcherIcon)).toBe("matrix(1, 0, 0, 1, 1, 0)");
     expect(parseFloat(getComputedStyle(launcherIcon).transitionDuration)).toBeLessThan(0.001);
   });
@@ -372,7 +373,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const color = (mark: Element) => getComputedStyle(mark).color;
     const launcher = page.getByRole("button", { name: "Local terminal", exact: true });
     const launcherMark = launcher.element().querySelector(".local-shell-mark")!;
-    await expect.poll(() => color(launcherMark)).toBe(white);
+    await expect.poll(() => color(launcherMark)).toBe(neutral);
     await userEvent.hover(launcher.element());
     await expect.poll(() => color(launcherMark)).toBe(white);
     await launcher.click();
@@ -382,26 +383,26 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.hover(choice.element());
     await expect
       .poll(() => color(choice.element().querySelector(".local-shell-mark")!))
-      .toBe(neutral);
+      .toBe(white);
     await choice.click();
     const local = page.getByRole("button", { name: "Command Prompt", exact: true });
     const tab = local.element().closest(".session-tab-wrap")!;
     const mark = tab.querySelector(".local-shell-mark")!;
-    await expect.poll(() => color(mark)).toBe(neutral);
+    await expect.poll(() => color(mark)).toBe(white);
     const host = page
       .getByRole("navigation", { name: "Saved connections" })
       .getByRole("button", { name: /^(Ubuntu host )?Fixture Alpha/ });
     await host.click();
     await expect.poll(() => color(mark)).toBe(neutral);
     await userEvent.hover(local.element());
-    await expect.poll(() => color(mark)).toBe(neutral);
+    await expect.poll(() => color(mark)).toBe(white);
     await userEvent.hover(host.element());
     await expect.poll(() => color(mark)).toBe(neutral);
     (local.element() as HTMLButtonElement).focus();
-    await expect.poll(() => color(mark)).toBe(neutral);
+    await expect.poll(() => color(mark)).toBe(white);
     await userEvent.keyboard("{Enter}");
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await expect.poll(() => color(mark)).toBe(neutral);
+    await expect.poll(() => color(mark)).toBe(white);
     await page.getByRole("button", { name: "Split terminal", exact: true }).click();
     const splitChoice = page.getByRole("button", {
       name: "New local terminal: Git Bash",
@@ -419,14 +420,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
     await expect.poll(() => color(paneMark)).toBe(neutral);
     await userEvent.hover(pane.element());
-    await expect.poll(() => color(paneMark)).toBe(neutral);
+    await expect.poll(() => color(paneMark)).toBe(white);
     await pane.click();
-    await expect.poll(() => color(paneMark)).toBe(neutral);
+    await expect.poll(() => color(paneMark)).toBe(white);
     await page.screenshot({ path: "../test-results/local-terminal-identity-focus.png" });
     await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
-    await expect
-      .poll(() => color(local.element().querySelector(".local-shell-mark")!))
-      .toBe(neutral);
+    await expect.poll(() => color(local.element().querySelector(".local-shell-mark")!)).toBe(white);
     await page.screenshot({ path: "../test-results/local-terminal-identity-normal.png" });
     for (let index = 0; index < 5; index++) {
       await page.getByRole("button", { name: "New terminal", exact: true }).click();
@@ -439,7 +438,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const menu = page.getByRole("menu", { name: "All terminals" }).element();
     await expect
       .poll(() => color(menu.querySelector('[aria-current="page"] .local-shell-icon')!))
-      .toBe(neutral);
+      .toBe(white);
     const git = page.getByRole("menuitem", { name: /^Git Bash/ });
     await userEvent.hover(git.element());
     await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(orange);
@@ -564,7 +563,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     // when a lazy pane settles underneath and would otherwise refocus.
     expect(menu.element().contains(document.activeElement)).toBe(true);
     await userEvent.keyboard("{ArrowDown}{ArrowDown}");
-    await expect.poll(() => color(localMark)).toBe(neutral);
+    await expect.poll(() => color(localMark)).toBe("rgb(255, 255, 255)");
     await expect.poll(() => color(alphaMark)).toBe(neutral);
     await userEvent.keyboard("{ArrowUp}");
     await expect.poll(() => color(localMark)).toBe(neutral);
@@ -900,7 +899,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       "rgb(240, 80, 50)",
       "rgb(83, 145, 254)",
       "rgb(83, 145, 254)",
-      "rgb(173, 173, 170)",
+      "rgb(255, 255, 255)",
     ];
     overrides.set("list_local_shells", () => ({
       profiles: shellKinds.map((kind, index) => ({
@@ -944,7 +943,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
         terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
       ).not.toBeNull();
       const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!;
-      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      expect(getComputedStyle(logo).color).toBe(
+        logo.closest("button")!.getAttribute("aria-current") === "page"
+          ? shellColors[shellKinds.indexOf(kind)]
+          : "rgb(173, 173, 170)",
+      );
       await userEvent.hover(logo.closest("button")!);
       await expect
         .poll(() => getComputedStyle(logo).color)
