@@ -75,7 +75,10 @@ describe("ConPTY and Workspace lifecycle", () => {
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
     const sessions = (await runtime()).sessionIds;
-    await $("[aria-label='Rename Logs pane Workspace']").click();
+    const renameLogs = $("[aria-label='Rename Logs pane Workspace']");
+    await renameLogs.$("..").moveTo();
+    await renameLogs.waitForClickable();
+    await renameLogs.click();
     await $("[role=dialog] input").setValue("Renamed logs");
     await $("button=Rename").click();
     await expect($("[aria-label='Close Renamed logs Workspace']")).toExist();
@@ -85,10 +88,15 @@ describe("ConPTY and Workspace lifecycle", () => {
     await $("[aria-label^='Ungroup ']").click();
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
-    await $("[aria-label='Close Renamed logs Workspace']").click();
+    const closeLogs = $("[aria-label='Close Renamed logs Workspace']");
+    await closeLogs.$("..").moveTo();
+    await closeLogs.waitForClickable();
+    await closeLogs.click();
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
-    await $("[aria-label='Close Renamed logs Workspace']").click();
+    await closeLogs.$("..").moveTo();
+    await closeLogs.waitForClickable();
+    await closeLogs.click();
     await $("button=Stop & close").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await expect($(".session-tab-group-main small")).toHaveText("2");

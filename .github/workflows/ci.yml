@@ -1,21 +1,9 @@
 name: CI
 
-# Skip CI for changes that can't affect the build or tests (docs and repo
-# metadata). A push/PR that also touches anything else still runs.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
-      - ".gitignore"
-      - ".gitattributes"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
-      - ".gitignore"
-      - ".gitattributes"
 
 permissions:
   contents: read
@@ -28,6 +16,32 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  desktop:
+    uses: ./.github/workflows/desktop-e2e.yml
+
+  hosted-ssh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build and SSH dependencies
+        timeout-minutes: 5
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: l
+        run: |
+          sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update
+          sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server imagemagick
+          convert 'src-tauri/icons/icon.ico[0]' PNG32:src-tauri/icons/icon.png
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - name: Run live SSH tests against this disposable runner
+        run: bash scripts/test-hosted-ssh.sh
+
   frontend:
     runs-on: windows-latest
     timeout-minutes: 15

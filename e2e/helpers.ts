@@ -207,3 +207,10 @@ export async function savedSettings() {
 export async function feature(label: string) {
   await $("nav[aria-label='Workspace features']").$(`button=${label}`).click();
 }
+
+export async function openScratchpad() {
+  await feature("Terminal");
+  const trigger = $("[data-scratchpad-trigger]");
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+  await $(".scratchpad-popover textarea").waitForDisplayed();
+}

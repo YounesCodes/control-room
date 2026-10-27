@@ -7,6 +7,7 @@ import {
   ipc,
   openLocal,
   openOfflineConnection,
+  openScratchpad,
   restartApp,
   runtime,
   terminalCommand,
@@ -23,20 +24,22 @@ describe("Local data in remote Workspaces", () => {
     const first = await addConnection("First offline host");
     await addConnection("Second offline host");
     await openOfflineConnection("First offline host");
-    await feature("Scratchpad");
+    await openScratchpad();
     await note("First connection note");
     await $("aria/Global note for all connections").click();
     await $("textarea[aria-label='Global note']").setValue("Shared global note");
     await expect($(".scratchpad-save-state")).toHaveText("Saved locally");
     await openOfflineConnection("Second offline host");
-    await feature("Scratchpad");
+    await openScratchpad();
+    await $("aria/Connection note for Second offline host").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("");
     await note("Second connection note");
     await $("aria/Global note for all connections").click();
     await expect($("textarea[aria-label='Global note']")).toHaveValue("Shared global note");
     await restartApp();
     await openOfflineConnection("First offline host");
-    await feature("Scratchpad");
+    await openScratchpad();
+    await $("aria/Connection note for First offline host").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("First connection note");
     expect(
       (
@@ -52,17 +55,17 @@ describe("Local data in remote Workspaces", () => {
   it("undoes clear, cancels note deletion and deletes only the selected connection's data", async () => {
     await addConnection("Note owner");
     await openOfflineConnection("Note owner");
-    await feature("Scratchpad");
+    await openScratchpad();
     await note("Keep this note");
-    await $("button=Clear text").click();
+    await $("aria/Clear text").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("");
-    await $("button=Undo").click();
+    await $("aria/Undo").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("Keep this note");
-    await $("button=Delete note").click();
+    await $(".scratchpad-popover").$("aria/Delete note").click();
     await $("button=Cancel").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("Keep this note");
-    await $("button=Delete note").click();
-    await $("[role=dialog]").$("button=Delete note").click();
+    await $(".scratchpad-popover").$("aria/Delete note").click();
+    await $(".modal-backdrop [role=dialog]").$("button=Delete note").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("");
   });
 
