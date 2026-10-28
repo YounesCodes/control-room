@@ -279,6 +279,30 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("gives local terminals the full connection list and restores remote navigation", async () => {
+    await mount();
+    const divider = page.getByRole("separator", { name: "Resize Hosts and Capabilities" });
+    await expect.element(divider).toBeVisible();
+    const hosts = page.getByRole("navigation", { name: "Saved connections" });
+    const remoteHeight = hosts.element().getBoundingClientRect().height;
+
+    await page.getByRole("button", { name: "Local terminal", exact: true }).click();
+    await expect
+      .element(page.getByRole("navigation", { name: "Workspace features" }))
+      .not.toBeInTheDocument();
+    await expect.element(divider).not.toBeInTheDocument();
+    expect(hosts.element().getBoundingClientRect().height).toBeGreaterThan(remoteHeight);
+
+    await hosts
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.element(divider).toBeVisible();
+    await expect
+      .element(page.getByRole("navigation", { name: "Workspace features" }))
+      .toBeVisible();
+  });
+
   it.each([
     [960, 640, 200],
     [1280, 900, 244],

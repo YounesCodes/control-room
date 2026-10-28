@@ -1929,7 +1929,7 @@ export function App() {
         <WindowControls />
       </div>
 
-      <aside className={activeWorkspace ? "sidebar workspace-open" : "sidebar"}>
+      <aside className={activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}>
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
@@ -1993,19 +1993,19 @@ export function App() {
             </nav>
           }
           capabilities={
-            activeWorkspace && (
+            activeRemoteWorkspace && (
               <div className="workspace-navigation">
                 <nav className="feature-nav" aria-label="Workspace features">
                   {offeredNavigation.map(({ id, label, icon: Icon }) => (
                     <button
-                      className={activeWorkspace.view === id && !settingsOpen ? "active" : ""}
+                      className={activeRemoteWorkspace.view === id && !settingsOpen ? "active" : ""}
                       type="button"
                       key={id}
                       aria-current={
-                        activeWorkspace.view === id && !settingsOpen ? "page" : undefined
+                        activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
                       }
                       onClick={() =>
-                        closeSettings(() => updateWorkspace(activeWorkspace.id, { view: id }))
+                        closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
                       }
                     >
                       <Icon size={17} strokeWidth={1.8} /> {label}
