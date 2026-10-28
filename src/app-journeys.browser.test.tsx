@@ -668,9 +668,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await userEvent.keyboard("{End}");
       const last = menu.getByRole("button", { name: "Local terminals: Git Bash" });
       await expect.element(last).toHaveFocus();
-      expect(last.element().getBoundingClientRect().bottom).toBeLessThanOrEqual(
-        node.getBoundingClientRect().bottom - 5,
-      );
+      await expect
+        .poll(
+          () => last.element().getBoundingClientRect().bottom - node.getBoundingClientRect().bottom,
+        )
+        .toBeLessThanOrEqual(-5);
       await page.screenshot({ path: `../test-results/terminal-chooser-${count}.png` });
     },
   );

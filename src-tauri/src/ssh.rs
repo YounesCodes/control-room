@@ -15,6 +15,13 @@ pub fn background_command<S: AsRef<OsStr>>(program: S) -> Command {
 }
 
 pub fn detect_ssh_path() -> Option<PathBuf> {
+    // Hosted transport tests run without a supported desktop client. Their
+    // explicitly selected OpenSSH binary must not depend on native discovery.
+    #[cfg(test)]
+    if let Some(path) = env::var_os("CONTROL_ROOM_TEST_SSH_PATH") {
+        let path = PathBuf::from(path);
+        return path.is_file().then_some(path);
+    }
     platform::detect_ssh_path()
 }
 
@@ -131,6 +138,55 @@ fn validate_remote_identifier<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_fixture_ssh_does_not_depend_on_client_platform_discovery() {
+        const CHILD: &str = "CONTROL_ROOM_SSH_DISCOVERY_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let path =
+                std::path::PathBuf::from(std::env::var_os("CONTROL_ROOM_TEST_SSH_PATH").unwrap());
+            let expected = if std::env::var_os("CONTROL_ROOM_SSH_DISCOVERY_TEST_MISSING").is_some()
+            {
+                None
+            } else {
+                Some(path)
+            };
+            assert_eq!(super::detect_ssh_path(), expected);
+            return;
+        }
+        // Isolate environment overrides from other tests running in parallel.
+        let fixture = tempfile::tempdir().unwrap();
+        let program = fixture.path().join("fixture-openssh");
+        std::fs::write(&program, b"fixture").unwrap();
+        for missing in [false, true] {
+            let path = if missing {
+                fixture.path().join("missing-openssh")
+            } else {
+                program.clone()
+            };
+            let mut command = super::background_command(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--exact",
+                    "ssh::tests::explicit_fixture_ssh_does_not_depend_on_client_platform_discovery",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("CONTROL_ROOM_TEST_SSH_PATH", path)
+                .env_remove("CONTROL_ROOM_SSH_DISCOVERY_TEST_MISSING");
+            if missing {
+                command.env("CONTROL_ROOM_SSH_DISCOVERY_TEST_MISSING", "1");
+            }
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}
+{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+    }
 
     #[test]
     fn noninteractive_processes_use_the_background_command_factory() {

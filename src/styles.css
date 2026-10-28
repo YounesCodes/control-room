@@ -209,7 +209,6 @@ button {
     background-color var(--motion-fast) var(--ease),
     color var(--motion-fast) var(--ease),
     border-color var(--motion-fast) var(--ease),
-    opacity var(--motion-fast) var(--ease),
     transform var(--motion-fast) var(--ease);
 }
 
