@@ -391,6 +391,27 @@ describe("TerminalPane sessions", () => {
     );
   });
 
+  it("starts a settled shell even when the webview stops delivering animation frames", async () => {
+    const frames = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    try {
+      renderPane(createLocalWorkspace(shell));
+      await vi.waitFor(
+        () =>
+          expect(api.startLocalSession).toHaveBeenCalledWith(
+            "powershell-7",
+            100,
+            30,
+            expect.anything(),
+          ),
+        { timeout: 500 },
+      );
+      expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
+      frames.mockRestore();
+    }
+  });
+
   it("settles the first rendered grid before starting a shell with width-dependent prompt output", async () => {
     xterm.initialCols = 107;
     xterm.fit.mockImplementation(() => xterm.resize?.(106, 30));

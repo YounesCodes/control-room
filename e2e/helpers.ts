@@ -151,10 +151,15 @@ export async function captureFailure(title: string) {
       "\n\n" +
       document.body.outerHTML.slice(0, 256_000),
   );
+  const documentState = await browser.execute(() => ({
+    visibility: document.visibilityState,
+    focused: document.hasFocus(),
+    fonts: document.fonts?.status,
+  }));
   writeFileSync(
     join(folder, "state.txt"),
     sanitize(
-      `${title}\n${dom}\n${JSON.stringify(await runtime().catch(() => ({ unavailable: true })))}`,
+      `${title}\n${JSON.stringify(documentState)}\n${dom}\n${JSON.stringify(await runtime().catch(() => ({ unavailable: true })))}`,
     ),
   );
 }
@@ -192,7 +197,7 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   } else {
     await $(`.host-main*=${name}`).click();
   }
-  const dialog = $("[role=dialog]");
+  const dialog = $(".modal-backdrop [role=dialog]");
   if (await dialog.isExisting()) {
     await expect(dialog.$("h2")).toHaveText(`Connect to ${name}`);
     const fallback = dialog.$("button=Open default SSH shell");

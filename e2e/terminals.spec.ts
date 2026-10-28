@@ -17,6 +17,18 @@ import {
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
+async function revealTabAction(action: WebdriverIO.Element) {
+  if (isMac) {
+    // The embedded driver does not update CSS hover through native pointer
+    // movement. Keyboard focus reveals an inactive tab's controls without
+    // selecting its terminal.
+    await browser.execute((node: HTMLElement) => node.focus(), action);
+  } else {
+    await action.$("..").moveTo();
+    await action.waitForClickable();
+  }
+}
+
 async function renameActive(name: string) {
   // Focus keeps tab actions revealed if native hover changes during reflow.
   await $(".session-tab-wrap.active .session-tab-main").click();
@@ -82,8 +94,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
     const sessions = (await runtime()).sessionIds;
     const renameLogs = $("[aria-label='Rename Logs pane Workspace']");
-    await renameLogs.$("..").moveTo();
-    await renameLogs.waitForClickable();
+    await revealTabAction(await renameLogs);
     await renameLogs.click();
     await $("[role=dialog] input").setValue("Renamed logs");
     await $("button=Rename").click();
@@ -95,13 +106,11 @@ describe("Native PTY and Workspace lifecycle", () => {
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
     const closeLogs = $("[aria-label='Close Renamed logs Workspace']");
-    await closeLogs.$("..").moveTo();
-    await closeLogs.waitForClickable();
+    await revealTabAction(await closeLogs);
     await closeLogs.click();
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
-    await closeLogs.$("..").moveTo();
-    await closeLogs.waitForClickable();
+    await revealTabAction(await closeLogs);
     await closeLogs.click();
     await $("button=Stop & close").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);

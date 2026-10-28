@@ -104,7 +104,20 @@ it.each(["div", "textarea", "metrics"])(
     await hidden(section);
     await userEvent.hover(section);
     await expect.poll(alpha).toBeGreaterThan(0);
+    const fade = section
+      .getAnimations()
+      .find(
+        (animation) =>
+          animation instanceof CSSTransition &&
+          animation.transitionProperty === "--scrollbar-thumb",
+      );
+    expect(fade).toBeDefined();
+    // Inspect a known midpoint of the real hover transition. Sampling its
+    // first pixel makes reversal checks depend on runner and pointer latency.
+    fade!.pause();
+    fade!.currentTime = 5_000;
     const revealing = alpha();
+    expect(revealing).toBeGreaterThan(0);
     expect(revealing).toBeLessThan(1);
 
     await userEvent.unhover(section);

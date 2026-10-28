@@ -526,7 +526,18 @@ export function TerminalPane({
       let measuredCols: number | undefined;
       let measuredRows: number | undefined;
       while (!disposed && generation === sessionGenerationRef.current) {
-        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        // WebKit can suspend animation frames after a native window move or
+        // while occluded. Still measure a stable grid before launching the PTY.
+        await new Promise<void>((resolve) => {
+          const timeout = window.setTimeout(() => {
+            window.cancelAnimationFrame(frame);
+            resolve();
+          }, 100);
+          const frame = window.requestAnimationFrame(() => {
+            window.clearTimeout(timeout);
+            resolve();
+          });
+        });
         if (disposed || generation !== sessionGenerationRef.current) return null;
         fitRef.current?.fit();
         if (terminal.cols === measuredCols && terminal.rows === measuredRows) break;
