@@ -14,6 +14,7 @@ import {
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
+import { readTerminalView } from "../lib/terminal-screen";
 import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
 
@@ -128,13 +129,10 @@ export function TerminalPane({
   sendInputRef.current = (bytes) => {
     const sessionId = sessionIdRef.current;
     if (sessionId) {
-      const terminal = terminalRef.current;
-      const buffer = terminal?.buffer?.active;
-      const prompt =
-        buffer
-          ?.getLine(buffer.baseY + buffer.cursorY)
-          ?.translateToString(false, 0, buffer.cursorX) ?? null;
-      if (workspace.state === "connected") processingRef.current?.input(bytes, prompt);
+      const view = readTerminalView(terminalRef.current);
+      if (workspace.state === "connected") {
+        processingRef.current?.input(bytes, view.line, view.alternate);
+      }
       void api.writeSession(sessionId, bytes).catch((error) => {
         if (sessionIdRef.current !== sessionId) return;
         processingRef.current?.reset();
@@ -472,6 +470,9 @@ export function TerminalPane({
     };
 
     const output = new Channel<ArrayBuffer>();
+    // Whether the last render ended on an alternate screen, so leaving one is
+    // seen even though a program's exit and the shell's prompt arrive apart.
+    let wasAlternate = false;
     output.onmessage = (message) => {
       if (disposed || generation !== sessionGenerationRef.current) return;
       if (!sessionIdRef.current && !acceptingInputRef.current) return;
@@ -480,12 +481,12 @@ export function TerminalPane({
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         if (!sessionIdRef.current && !acceptingInputRef.current) return;
-        const buffer = terminal.buffer?.active;
-        const prompt =
-          buffer
-            ?.getLine(buffer.baseY + buffer.cursorY)
-            ?.translateToString(false, 0, buffer.cursorX) ?? null;
-        processingRef.current?.output(prompt);
+        const view = readTerminalView(terminal);
+        // Leaving an alternate screen hands the main screen back, which is
+        // the one moment a full-screen program's command is known to be over.
+        if (wasAlternate && !view.alternate) processingRef.current?.screen();
+        wasAlternate = view.alternate;
+        processingRef.current?.output(view.line, view.alternate);
         acknowledge(bytes.byteLength);
       });
     };
