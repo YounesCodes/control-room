@@ -179,6 +179,9 @@ vi.mock("@xterm/xterm", () => ({
       return xterm.selection;
     }
     reset() {}
+    resize(cols: number, rows: number) {
+      xterm.resize?.(cols, rows);
+    }
     get buffer() {
       return {
         active: {
@@ -409,6 +412,57 @@ describe("TerminalPane sessions", () => {
     } finally {
       cleanup();
       frames.mockRestore();
+    }
+  });
+
+  it("waits for the terminal font without waiting for unrelated page fonts", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(document, "fonts");
+    let finishFont!: () => void;
+    const load = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFont = resolve;
+        }),
+    );
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load, ready: new Promise(() => undefined) },
+    });
+    try {
+      renderPane(createLocalWorkspace(shell));
+      await vi.waitFor(() => expect(load).toHaveBeenCalledWith("14px Consolas", "MW"));
+      expect(api.startLocalSession).not.toHaveBeenCalled();
+      await act(async () => finishFont());
+      await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(1));
+    } finally {
+      cleanup();
+      if (descriptor) Object.defineProperty(document, "fonts", descriptor);
+      else Reflect.deleteProperty(document, "fonts");
+    }
+  });
+
+  it("starts with the smallest measured grid when font metrics keep alternating", async () => {
+    let fits = 0;
+    xterm.initialCols = 107;
+    xterm.fit.mockImplementation(() => {
+      if (xterm.resize) {
+        fits++;
+        xterm.resize(fits % 2 ? 106 : 107, fits % 2 ? 29 : 30);
+      }
+    });
+    try {
+      renderPane(createLocalWorkspace(shell));
+      await vi.waitFor(() =>
+        expect(api.startLocalSession).toHaveBeenCalledWith(
+          "powershell-7",
+          106,
+          29,
+          expect.anything(),
+        ),
+      );
+      expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
     }
   });
 

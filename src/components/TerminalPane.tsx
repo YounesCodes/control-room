@@ -518,14 +518,31 @@ export function TerminalPane({
     // before the new shell can produce width-dependent output.
     let initialCols = terminal.cols;
     let initialRows = terminal.rows;
+    const startupContainer = containerRef.current;
+    const startupPhase = (phase: string) =>
+      startupContainer?.setAttribute("data-terminal-startup-phase", phase);
     const started = (async () => {
+      startupPhase("draining");
       await new Promise<void>((resolve) => terminal.write("", resolve));
       if (disposed || generation !== sessionGenerationRef.current) return null;
       terminal.reset();
-      await document.fonts?.ready;
+      startupPhase("font");
+      // Only the terminal's font can affect its grid. Waiting for every page
+      // font also waits for unrelated interface layout and font loads.
+      await document.fonts
+        ?.load(`${settings.terminalFontSize}px ${settings.terminalFontFamily}`, "MW")
+        .catch(() => undefined);
       let measuredCols: number | undefined;
       let measuredRows: number | undefined;
-      while (!disposed && generation === sessionGenerationRef.current) {
+      let smallestCols = Number.POSITIVE_INFINITY;
+      let smallestRows = Number.POSITIVE_INFINITY;
+      let settled = false;
+      for (
+        let pass = 0;
+        pass < 8 && !disposed && generation === sessionGenerationRef.current;
+        pass++
+      ) {
+        startupPhase("layout");
         // WebKit can suspend animation frames after a native window move or
         // while occluded. Still measure a stable grid before launching the PTY.
         await new Promise<void>((resolve) => {
@@ -540,11 +557,26 @@ export function TerminalPane({
         });
         if (disposed || generation !== sessionGenerationRef.current) return null;
         fitRef.current?.fit();
-        if (terminal.cols === measuredCols && terminal.rows === measuredRows) break;
+        smallestCols = Math.min(smallestCols, terminal.cols);
+        smallestRows = Math.min(smallestRows, terminal.rows);
+        startupContainer?.setAttribute(
+          "data-terminal-startup-grid",
+          `${terminal.cols}x${terminal.rows}`,
+        );
+        startupContainer?.setAttribute("data-terminal-fit-pass", String(pass + 1));
+        if (terminal.cols === measuredCols && terminal.rows === measuredRows) {
+          settled = true;
+          break;
+        }
         measuredCols = terminal.cols;
         measuredRows = terminal.rows;
       }
       if (disposed || generation !== sessionGenerationRef.current) return null;
+      // Fractional font metrics can alternate by one cell between layouts.
+      // A grid that fits every measured size avoids both a startup deadlock
+      // and a PTY wider than the terminal when the first prompt arrives.
+      if (!settled) terminal.resize(smallestCols, smallestRows);
+      startupPhase("native");
       initialCols = terminal.cols;
       initialRows = terminal.rows;
       return workspace.kind === "local"
@@ -566,6 +598,7 @@ export function TerminalPane({
           await api.closeSession(sessionId).catch(() => undefined);
           return;
         }
+        startupPhase("started");
         ownedSessionId = sessionId;
         sessionIdRef.current = sessionId;
         // A fit while the start request was pending had no session to resize.
@@ -602,6 +635,7 @@ export function TerminalPane({
       })
       .catch((error) => {
         if (disposed || generation !== sessionGenerationRef.current) return;
+        startupPhase("error");
         acceptingInputRef.current = false;
         pendingInputRef.current.clear();
         const message = errorMessage(error);
