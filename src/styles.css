@@ -247,7 +247,8 @@ textarea {
   padding: 9px 11px;
   transition:
     border-color var(--motion-fast) var(--ease),
-    box-shadow var(--motion-fast) var(--ease);
+    box-shadow var(--motion-fast) var(--ease),
+    --scrollbar-thumb var(--motion-fast) var(--ease);
 }
 
 select {
@@ -319,8 +320,19 @@ code,
   box-shadow: var(--shadow-popover);
 }
 
+/* Chromium cannot transition ::-webkit-scrollbar pseudo-elements, so the thumb
+   inherits this property while the hovered section transitions it. The
+   explicit transparent keeps unhovered descendants from chasing the animation
+   through inheritance. */
+@property --scrollbar-thumb {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
 * {
   --scrollbar-thumb: transparent;
+  transition: --scrollbar-thumb var(--motion-fast) var(--ease);
 }
 
 *:hover {
@@ -341,11 +353,11 @@ code,
   border-radius: 8px;
   background: var(--scrollbar-thumb);
   background-clip: padding-box;
-  transition: background-color var(--motion-fast) var(--ease);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6a6a6a;
+  /* Keep the section's animated alpha when highlighting the thumb itself. */
+  background: rgb(from var(--scrollbar-thumb) 106 106 106 / alpha);
   background-clip: padding-box;
 }
 
@@ -353,7 +365,13 @@ code,
   background: transparent;
 }
 
-/* xterm owns a DOM scrollbar rather than a native browser scrollbar. */
+/* xterm owns a DOM scrollbar rather than a native browser scrollbar. It only
+   fades on its own auto-hide path, so the hover reveal needs a transition of
+   its own to come in animated. */
+.xterm .xterm-scrollable-element > .scrollbar {
+  transition: opacity var(--motion-fast) var(--ease);
+}
+
 .xterm:not(:hover) .xterm-scrollable-element > .scrollbar {
   opacity: 0;
   pointer-events: none;
