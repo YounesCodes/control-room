@@ -6801,7 +6801,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 .sidebar-sections > .sidebar-sections-divider {
   left: 0;
-  right: 0;
+  right: 11px;
   bottom: auto;
   width: auto;
   height: 24px;
@@ -6819,7 +6819,13 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .connections-divider {
+  /* Keep the drag target outside the sidebar's native scrollbar gutter. */
   right: -12px;
+  width: 12px;
+}
+
+.connections-divider::after {
+  left: 0;
 }
 
 .connection-section {
@@ -6842,6 +6848,8 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 .content-divider {
   right: 0;
+  /* Feature pages leave this gutter outside their scrolling area. */
+  width: 6px;
 }
 
 .content-divider::after {
@@ -6868,8 +6876,13 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .resizable-split > .split-divider {
-  transform: translateX(-50%);
+  /* Use the detail pane's inset instead of covering the list's scrollbar. */
+  width: 12px;
   right: auto;
+}
+
+.split-divider::after {
+  left: 0;
 }
 
 .resizable-split.stacked {
