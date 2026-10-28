@@ -1,75 +1,40 @@
+#[cfg(test)]
+use std::env;
 use std::{
-    env,
     ffi::OsStr,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    time::Duration,
+    process::Command,
 };
 
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-#[cfg(windows)]
-use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
-
 use regex::Regex;
-use wait_timeout::ChildExt;
 
-use crate::models::SavedConnection;
+use crate::{models::SavedConnection, platform};
 
 pub fn background_command<S: AsRef<OsStr>>(program: S) -> Command {
-    let mut command = Command::new(program);
-    #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
-    command
+    platform::background_command(program)
 }
 
 pub fn detect_ssh_path() -> Option<PathBuf> {
-    let system = PathBuf::from(r"C:\Windows\System32\OpenSSH\ssh.exe");
-    if system.is_file() {
-        return Some(system);
+    // Hosted transport tests run without a supported desktop client. Their
+    // explicitly selected OpenSSH binary must not depend on native discovery.
+    #[cfg(test)]
+    if let Some(path) = env::var_os("CONTROL_ROOM_TEST_SSH_PATH") {
+        let path = PathBuf::from(path);
+        return path.is_file().then_some(path);
     }
-    env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths)
-            .map(|path| path.join("ssh.exe"))
-            .find(|path| path.is_file())
-    })
+    platform::detect_ssh_path()
 }
 
 pub fn ssh_agent_available(ssh_path: Option<&Path>) -> bool {
-    let Some(ssh_path) = ssh_path else {
-        return false;
-    };
-    let ssh_add = ssh_path.with_file_name("ssh-add.exe");
-    if !ssh_add.is_file() {
-        return false;
-    }
-    let Ok(mut child) = background_command(ssh_add)
-        .arg("-l")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return false;
-    };
-    match child.wait_timeout(Duration::from_secs(2)) {
-        Ok(Some(status)) => status.success(),
-        Ok(None) | Err(_) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            false
-        }
-    }
+    platform::probe_ssh_agent(ssh_path)
 }
 
 pub fn ssh_config_path() -> String {
-    env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .unwrap_or_default()
-        .join(".ssh")
-        .join("config")
-        .to_string_lossy()
-        .to_string()
+    platform::ssh_config_path().to_string_lossy().to_string()
+}
+
+pub fn ssh_not_found_message() -> String {
+    platform::ssh_not_found_message()
 }
 
 pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec<String> {
@@ -175,6 +140,55 @@ mod tests {
     use super::*;
 
     #[test]
+    fn explicit_fixture_ssh_does_not_depend_on_client_platform_discovery() {
+        const CHILD: &str = "CONTROL_ROOM_SSH_DISCOVERY_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let path =
+                std::path::PathBuf::from(std::env::var_os("CONTROL_ROOM_TEST_SSH_PATH").unwrap());
+            let expected = if std::env::var_os("CONTROL_ROOM_SSH_DISCOVERY_TEST_MISSING").is_some()
+            {
+                None
+            } else {
+                Some(path)
+            };
+            assert_eq!(super::detect_ssh_path(), expected);
+            return;
+        }
+        // Isolate environment overrides from other tests running in parallel.
+        let fixture = tempfile::tempdir().unwrap();
+        let program = fixture.path().join("fixture-openssh");
+        std::fs::write(&program, b"fixture").unwrap();
+        for missing in [false, true] {
+            let path = if missing {
+                fixture.path().join("missing-openssh")
+            } else {
+                program.clone()
+            };
+            let mut command = super::background_command(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--exact",
+                    "ssh::tests::explicit_fixture_ssh_does_not_depend_on_client_platform_discovery",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("CONTROL_ROOM_TEST_SSH_PATH", path)
+                .env_remove("CONTROL_ROOM_SSH_DISCOVERY_TEST_MISSING");
+            if missing {
+                command.env("CONTROL_ROOM_SSH_DISCOVERY_TEST_MISSING", "1");
+            }
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}
+{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+    }
+
+    #[test]
     fn noninteractive_processes_use_the_background_command_factory() {
         let remote = include_str!("remote.rs");
         let commands = include_str!("commands.rs");
@@ -182,7 +196,7 @@ mod tests {
         assert!(!remote.contains("Command::new("));
         assert!(!commands.contains("Command::new("));
         assert!(remote.matches("background_command(").count() >= 2);
-        assert!(ssh.contains("background_command(ssh_add)"));
+        assert!(ssh.contains("platform::background_command(program)"));
     }
 
     #[test]

@@ -15,6 +15,7 @@ use crate::{
         ScratchpadNote, ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted,
         SystemdUnit,
     },
+    platform,
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
@@ -27,10 +28,11 @@ pub fn get_environment_info() -> EnvironmentInfo {
     let ssh_path = detect_ssh_path();
     let agent_available = ssh_agent_available(ssh_path.as_deref());
     EnvironmentInfo {
+        platform: platform::client_id().into(),
         ssh_path: ssh_path.map(|path| path.to_string_lossy().to_string()),
         ssh_config_path: ssh_config_path(),
         ssh_agent_available: agent_available,
-        platform_supported: cfg!(all(windows, target_arch = "x86_64")),
+        platform_supported: platform::is_supported(),
     }
 }
 
@@ -212,6 +214,15 @@ pub fn start_session(
         None
     };
     let remote_command = match remote_shell_id {
+        Some(id) if id.starts_with("macos:") => {
+            if !crate::macos_remote::is_host(&connection)? {
+                return Err("macOS shells require a detected macOS host".into());
+            }
+            Some(crate::macos_remote::shell_command(
+                &id,
+                connection.history_enabled,
+            )?)
+        }
         Some(id) => Some(windows_ssh::selected_command(&connection, &id)?),
         None if windows => Some(windows_ssh::default_command(&connection)?),
         None => None,
@@ -911,9 +922,24 @@ pub fn uninstall_history_integration(
 
 #[cfg(test)]
 mod tests {
-    use super::{elevation_for, export_text_file, validated_test_connection};
+    use super::{elevation_for, export_text_file, get_environment_info, validated_test_connection};
     use crate::database::Database;
     use crate::models::SavedConnectionInput;
+
+    #[test]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    fn environment_reports_the_compiled_client_platform() {
+        let environment = get_environment_info();
+        assert_eq!(
+            environment.platform,
+            if cfg!(target_os = "windows") {
+                "windows"
+            } else {
+                "macos"
+            }
+        );
+        assert!(environment.platform_supported);
+    }
     use crate::remote::Elevation;
 
     fn connection_input(sudo_enabled: bool) -> SavedConnectionInput {

@@ -105,6 +105,25 @@ describe("BootDiagnosticsPane", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows Mac reboot evidence without presenting systemd timing or journal controls", async () => {
+    const onViewLogs = vi.fn();
+    render(
+      <BootDiagnosticsPane
+        macosHost
+        connection={connection}
+        snapshot={snapshot()}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={onViewLogs}
+      />,
+    );
+    expect(screen.queryByText("Boot timing")).toBeNull();
+    expect(screen.queryByText("Slow units")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Launchd service exits" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Error and fault sample" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "View logs" }));
+    expect(onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "backup.service" });
+  });
+
   it("collects current boot facts and routes a failed unit to its journal", async () => {
     const user = userEvent.setup();
     const onSnapshotChange = vi.fn();

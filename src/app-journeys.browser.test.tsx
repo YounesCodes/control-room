@@ -71,6 +71,7 @@ async function respond(command: string, args: any = {}) {
   switch (command) {
     case "get_environment_info":
       return {
+        platform: "windows",
         sshPath: "fixture-ssh",
         sshConfigPath: "fixture-config",
         sshAgentAvailable: false,
@@ -667,9 +668,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await userEvent.keyboard("{End}");
       const last = menu.getByRole("button", { name: "Local terminals: Git Bash" });
       await expect.element(last).toHaveFocus();
-      expect(last.element().getBoundingClientRect().bottom).toBeLessThanOrEqual(
-        node.getBoundingClientRect().bottom - 5,
-      );
+      await expect
+        .poll(
+          () => last.element().getBoundingClientRect().bottom - node.getBoundingClientRect().bottom,
+        )
+        .toBeLessThanOrEqual(-5);
       await page.screenshot({ path: `../test-results/terminal-chooser-${count}.png` });
     },
   );
@@ -909,6 +912,89 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(element.querySelector(".host-row.active .presence-busy")).toBeNull(),
     );
   });
+  for (const platform of ["macos", "windows"] as const) {
+    it(`keeps ${platform} window controls in the existing row across workspace, Focus Mode, and Settings`, async () => {
+      await page.viewport(960, 640);
+      overrides.set("get_environment_info", () => ({
+        platform,
+        sshPath: "fixture-ssh",
+        sshConfigPath: "fixture-config",
+        sshAgentAvailable: false,
+        platformSupported: true,
+      }));
+      persisted.panelSizes = { connections: 200 };
+      await mount();
+      await navigate("Overview");
+      const shell = element.querySelector<HTMLElement>(".app-shell")!;
+      await expect.poll(() => shell.dataset.platform).toBe(platform);
+      const header = element.querySelector<HTMLElement>(".sidebar-top-heading")!;
+      const label = header.querySelector<HTMLElement>("span")!;
+      expect(header.getBoundingClientRect().top).toBe(1);
+      expect(header.getBoundingClientRect().height).toBe(platform === "macos" ? 41 : 42);
+      expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+      if (platform === "macos") {
+        const bar = element.querySelector<HTMLElement>(".app-bar")!;
+        const sidebar = element.querySelector<HTMLElement>(".sidebar")!;
+        const workspace = element.querySelector<HTMLElement>(".workspace-shell")!;
+        expect(bar.getBoundingClientRect().left).toBe(1);
+        expect(bar.getBoundingClientRect().width).toBe(shell.clientWidth);
+        expect(header.closest(".app-bar")).toBe(bar);
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
+        expect(sidebar.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
+        expect(workspace.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
+        expect(getComputedStyle(header.querySelectorAll("span")[1]).display).not.toBe("none");
+        expect(element.querySelector(".window-controls")).toBeNull();
+        expect(
+          element.querySelector<HTMLElement>(".app-window-actions")!.getBoundingClientRect().width,
+        ).toBe(40);
+        const divider = page.getByRole("separator", { name: "Resize Connections panel" });
+        await userEvent.click(divider);
+        await userEvent.keyboard("{End}");
+        await expect.poll(() => sidebar.clientWidth).toBe(479);
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
+        expect(bar.getBoundingClientRect().left).toBe(1);
+        await expect.element(divider).toHaveFocus();
+        await userEvent.keyboard("{Home}");
+        await expect.poll(() => sidebar.clientWidth).toBe(199);
+        await page.viewport(1440, 900);
+        await expect.poll(() => bar.clientWidth).toBe(1438);
+        await page.getByRole("button", { name: "Reset layout", exact: true }).click();
+        await expect.poll(() => sidebar.clientWidth).toBe(243);
+        await page.viewport(960, 640);
+        await expect.poll(() => bar.clientWidth).toBe(958);
+      }
+      await navigate("Terminal");
+      if (platform === "windows") {
+        const group = element.querySelector<HTMLElement>(".app-window-actions")!;
+        const controls = group.querySelector<HTMLElement>(".window-controls")!;
+        expect(controls.getBoundingClientRect().top).toBe(group.getBoundingClientRect().top);
+        expect(controls.getBoundingClientRect().bottom).toBeGreaterThanOrEqual(
+          group.getBoundingClientRect().bottom - 1,
+        );
+        expect(controls.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          group.getBoundingClientRect().bottom,
+        );
+      }
+      await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      const tabs = element.querySelector<HTMLElement>(".session-tabs")!;
+      await expect.poll(() => tabs.getBoundingClientRect().top).toBe(1);
+      await expect
+        .poll(() => getComputedStyle(tabs).paddingLeft)
+        .toBe(platform === "macos" ? "104px" : "0px");
+      expect(element.querySelector<HTMLElement>(".app-bar")!.getBoundingClientRect().height).toBe(
+        0,
+      );
+      await page.screenshot({ path: `../test-results/${platform}-integrated-focus-controls.png` });
+      await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+      await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+      const bar = element.querySelector<HTMLElement>(".app-bar")!;
+      await expect.poll(() => bar.getBoundingClientRect().top).toBe(1);
+      expect(bar.getBoundingClientRect().height).toBe(42);
+      await expect
+        .poll(() => getComputedStyle(bar).paddingLeft)
+        .toBe(platform === "macos" ? "104px" : "0px");
+    });
+  }
 
   it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
     await page.viewport(960, 640);
@@ -956,6 +1042,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         ),
       ).not.toBeNull();
     }
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.filter(
+            ([command]) => command === "start_session" || command === "start_local_session",
+          ).length,
+      )
+      .toBe(8);
     const sessions = native.invoke.mock.calls.filter(
       ([command]) => command === "start_session" || command === "start_local_session",
     ).length;
@@ -994,6 +1088,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
+      await expect
+        .poll(
+          () =>
+            native.invoke.mock.calls.filter(
+              ([command]) => command === "start_session" || command === "start_local_session",
+            ).length,
+        )
+        .toBe(sessions + index + 1);
       if (index === 0) {
         const local = native.invoke.mock.calls
           .filter(([command]) => command === "start_local_session")
@@ -1008,7 +1110,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await userEvent.keyboard("{Escape}");
       }
     }
-    await page.getByRole("button", { name: "Scroll terminals right" }).first().click();
+    // The active group can already occupy the last page. The picker must work
+    // without assuming that scrolling farther right is possible.
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
     const groupItem = page
       .getByRole("menu", { name: "All terminals" })
@@ -1056,7 +1159,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ),
     ).toHaveLength(sessions + 5);
     expect(native.invoke.mock.calls.some(([command]) => command === "close_session")).toBe(false);
-  });
+  }, 40_000);
 
   it("keeps grouped session state and activity visible and routes input to the selected pane", async () => {
     await mount();
@@ -2064,8 +2167,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const rows = panel.querySelectorAll<HTMLElement>(".dense-row, .docker-branch");
       rows[0].focus();
       await userEvent.keyboard("{End}");
+      // WebKit may leave trailing padding below the keyboard scroll endpoint.
+      // The last record, rather than empty padding, must be fully reachable.
       await vi.waitFor(() =>
-        expect(panel.scrollTop + panel.clientHeight).toBeGreaterThanOrEqual(panel.scrollHeight - 1),
+        expect(rows[rows.length - 1].getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          panel.getBoundingClientRect().bottom + 1,
+        ),
       );
       const last = rows[rows.length - 1].getBoundingClientRect();
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
@@ -2147,7 +2254,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
       expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
       textarea.focus();
-      await userEvent.keyboard("{Control>}{End}{/Control}");
+      await userEvent.keyboard(
+        navigator.platform.startsWith("Mac")
+          ? "{Meta>}{ArrowDown}{/Meta}"
+          : "{Control>}{End}{/Control}",
+      );
       expect(textarea.scrollTop).toBeGreaterThan(0);
       await navigate("Logs");
       await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -2289,6 +2400,89 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page.screenshot({ path: `../test-results/linux-service-list-${width}.png` });
     },
   );
+
+  it("opens a Mac shell and exposes native inspection without Linux boot controls", async () => {
+    const capabilities = {
+      ...fixtures.capabilities(),
+      osId: "macos",
+      osName: "macOS",
+      osVersion: "26.7.1",
+      defaultShell: "/bin/zsh",
+      systemdAvailable: false,
+      journaldAvailable: false,
+      launchdAvailable: true,
+      unifiedLogAvailable: true,
+      dockerContext: "lab",
+      dockerEndpoint: "ssh://docker.example.invalid",
+      dockerRemote: true,
+    };
+    overrides.set("get_cached_capabilities", () => capabilities);
+    overrides.set("discover_remote_shells", () => ({
+      platform: "macos",
+      shells: [{ id: "macos:zsh", label: "zsh" }],
+      capabilities,
+    }));
+    overrides.set("list_services", () => [
+      {
+        ...fixtures.service,
+        id: "system/com.example.agent",
+        unitType: "daemon",
+        subState: "running (PID 42)",
+      },
+    ]);
+    root.render(<App />);
+    await page
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.element(page.getByRole("group", { name: "Mac shells" })).toBeVisible();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.find(([command]) => command === "start_session")?.[1]
+            .remoteShellId,
+      )
+      .toBe("macos:zsh");
+    await navigate("Services");
+    await expect
+      .element(page.getByRole("heading", { name: "Services", exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByRole("combobox", { name: "Service type" })).toBeVisible();
+    expect(
+      (await axe.run(element.querySelector<HTMLElement>(".services-page")!)).violations,
+    ).toEqual([]);
+    await page.screenshot({ path: "../test-results/macos-host-services.png" });
+    await navigate("Ports");
+    await page.getByRole("tab", { name: "Table", exact: true }).click();
+    await expect.element(page.getByRole("button", { name: /443.*fixture/ })).toBeVisible();
+    expect(element.querySelector(".ports-page")?.textContent).not.toContain(
+      fixtures.container.name,
+    );
+    await page
+      .getByPlaceholder("Search ports, services, processes, or containers")
+      .fill(fixtures.container.name);
+    await expect
+      .element(page.getByRole("heading", { name: "No matching listeners" }))
+      .toBeVisible();
+    await navigate("Boot");
+    await expect
+      .element(page.getByRole("heading", { name: "Launchd service exits" }))
+      .toBeVisible();
+    expect(element.textContent).not.toContain("Slow units");
+    await navigate("Logs");
+    await expect
+      .element(page.getByRole("combobox", { name: "Service", exact: true }))
+      .toHaveValue("all");
+    await navigate("Docker");
+    await expect
+      .element(page.getByText("lab · ssh://docker.example.invalid", { exact: true }))
+      .toBeVisible();
+    await navigate("Baselines");
+    await expect
+      .element(page.getByRole("heading", { name: "Baselines", exact: true }))
+      .toBeVisible();
+  });
 
   it("offers Windows Docker as its own capability even when detection finds no CLI", async () => {
     const capabilities = {

@@ -30,6 +30,7 @@ function drivers(): DriverProcess[] {
 }
 
 export function recordDrivers(directory: string, runnerPid: number) {
+  if (process.platform !== "win32") return;
   const snapshot = drivers();
   const roots = snapshot.filter(
     (driver) =>
@@ -49,6 +50,7 @@ export function recordDrivers(directory: string, runnerPid: number) {
 }
 
 export async function stopOwnedDrivers(directory: string) {
+  if (process.platform !== "win32") return;
   const file = join(directory, "driver-pids.jsonl");
   if (!existsSync(file)) return;
   const owned: DriverProcess[] = readFileSync(file, "utf8")

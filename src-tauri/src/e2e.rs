@@ -1,5 +1,7 @@
 //! Read-only diagnostics and isolated startup for debug desktop tests.
-use std::{ffi::OsStr, path::PathBuf};
+#[cfg(any(windows, test))]
+use std::ffi::OsStr;
+use std::path::PathBuf;
 
 use serde::Serialize;
 use tauri::State;
@@ -50,6 +52,86 @@ pub fn e2e_runtime_status(
     }
 }
 
+#[cfg(target_os = "macos")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowButtonBounds {
+    name: &'static str,
+    left: f64,
+    center_y: f64,
+    width: f64,
+    height: f64,
+    frame_y: f64,
+    parent_flipped: bool,
+    parent_height: f64,
+    parent_bounds_height: f64,
+    content_height: f64,
+}
+
+/// Measure the real AppKit controls in the same logical coordinates as the
+/// overlay webview. DOM-only layout checks cannot detect native-button drift.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn e2e_window_buttons(window: tauri::Window) -> Result<Vec<WindowButtonBounds>, String> {
+    use objc2_app_kit::{NSWindow, NSWindowButton};
+
+    let _main_thread = objc2::MainThreadMarker::new().ok_or("AppKit requires the main thread")?;
+    let pointer = window.ns_window().map_err(|error| error.to_string())?;
+    // SAFETY: Tauri owns this live NSWindow; this synchronous command is on the
+    // main thread, and the reference does not outlive the command's Window.
+    let native = unsafe { &*pointer.cast::<NSWindow>() };
+    let content = native.contentView().ok_or("Missing native content view")?;
+    let content_bounds = content.bounds();
+    [
+        ("close", NSWindowButton::CloseButton),
+        ("minimize", NSWindowButton::MiniaturizeButton),
+        ("fullscreen", NSWindowButton::ZoomButton),
+    ]
+    .into_iter()
+    .map(|(name, kind)| {
+        let button = native
+            .standardWindowButton(kind)
+            .ok_or("Missing native button")?;
+        if button
+            .window()
+            .is_none_or(|owner| !std::ptr::eq(&*owner, native))
+        {
+            return Err("Native buttons are transitioning between windows".into());
+        }
+        let bounds = button.convertRect_toView(button.bounds(), Some(&content));
+        // SAFETY: The live native window retains its button view hierarchy;
+        // inspection is confined to the main thread.
+        let parent = unsafe { button.superview() }.ok_or("Missing native button parent")?;
+        let middle = bounds.origin.y + bounds.size.height / 2.0;
+        Ok(WindowButtonBounds {
+            name,
+            left: bounds.origin.x - content_bounds.origin.x,
+            center_y: if content.isFlipped() {
+                middle - content_bounds.origin.y
+            } else {
+                content_bounds.origin.y + content_bounds.size.height - middle
+            },
+            width: bounds.size.width,
+            height: bounds.size.height,
+            frame_y: button.frame().origin.y,
+            parent_flipped: parent.isFlipped(),
+            parent_height: parent.frame().size.height,
+            parent_bounds_height: parent.bounds().size.height,
+            content_height: content_bounds.size.height,
+        })
+    })
+    .collect()
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn e2e_window_chrome_lifecycle(
+    window: tauri::Window,
+) -> Result<crate::platform::macos_window::LifecycleProbe, String> {
+    crate::platform::macos_window::lifecycle_probe(&window)
+}
+
+#[cfg(any(windows, test))]
 pub fn automation_browser_args(arguments: &str) -> Option<String> {
     let port = arguments
         .split_ascii_whitespace()
@@ -62,6 +144,7 @@ pub fn automation_browser_args(arguments: &str) -> Option<String> {
     ))
 }
 
+#[cfg(any(windows, test))]
 pub fn webview_data_directory(folder: Option<&OsStr>, fallback: PathBuf) -> PathBuf {
     folder
         .map(PathBuf::from)

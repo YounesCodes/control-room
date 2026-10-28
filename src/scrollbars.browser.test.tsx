@@ -17,7 +17,8 @@ afterEach(() => {
 });
 
 const color = (section: HTMLElement) =>
-  section.classList.contains("host-metrics-values")
+  section.classList.contains("host-metrics-values") &&
+  CSS.supports("scrollbar-color", "red transparent")
     ? getComputedStyle(section).scrollbarColor
     : getComputedStyle(section, "::-webkit-scrollbar-thumb").backgroundColor;
 // Relative colors may serialize as color(srgb ...) rather than rgba(...).
@@ -60,7 +61,7 @@ it("reveals only the hovered scroll section without changing its layout or scrol
     return section;
   });
   const widths = sections.map((section) => section.clientWidth);
-  expect(getComputedStyle(sections[0]).transitionDuration).toBe("1e-05s");
+  expect(parseFloat(getComputedStyle(sections[0]).transitionDuration)).toBeCloseTo(0.00001, 8);
 
   await userEvent.unhover(sections[0]);
   for (const section of sections) {
@@ -103,7 +104,20 @@ it.each(["div", "textarea", "metrics"])(
     await hidden(section);
     await userEvent.hover(section);
     await expect.poll(alpha).toBeGreaterThan(0);
+    const fade = section
+      .getAnimations()
+      .find(
+        (animation) =>
+          animation instanceof CSSTransition &&
+          animation.transitionProperty === "--scrollbar-thumb",
+      );
+    expect(fade).toBeDefined();
+    // Inspect a known midpoint of the real hover transition. Sampling its
+    // first pixel makes reversal checks depend on runner and pointer latency.
+    fade!.pause();
+    fade!.currentTime = 5_000;
     const revealing = alpha();
+    expect(revealing).toBeGreaterThan(0);
     expect(revealing).toBeLessThan(1);
 
     await userEvent.unhover(section);
@@ -123,7 +137,7 @@ it("hides the terminal scrollbar after leaving a terminal with scrollback", asyn
   const screen = fixture.querySelector<HTMLElement>(".xterm-screen")!;
   const scrollbar = fixture.querySelector<HTMLElement>(".scrollbar.vertical")!;
   const opacity = () => getComputedStyle(scrollbar).opacity;
-  expect(getComputedStyle(scrollbar).transitionDuration).toBe("1e-05s");
+  expect(parseFloat(getComputedStyle(scrollbar).transitionDuration)).toBeCloseTo(0.00001, 8);
   await userEvent.hover(screen);
   await expect.poll(opacity).toBe("1");
   await userEvent.unhover(screen);

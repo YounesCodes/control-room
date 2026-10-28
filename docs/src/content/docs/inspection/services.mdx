@@ -1,6 +1,6 @@
 ---
 title: Systemd
-description: Find services and other systemd units on a Linux host.
+description: Inspect Linux systemd units, Windows services, or macOS launchd jobs.
 ---
 
 import servicesScreenshot from "../../../assets/screenshots/services.png";
@@ -20,3 +20,5 @@ Systemd lists the host's system services, timers, mounts, and sockets. Failed un
 Use search or filter by state and type to find a unit. The view reads system units with `systemctl`; it does not include user units or change service state. If the read fails, the view shows the error and a **Retry** button.
 
 On Windows hosts, the navigation shows **Services**. Search or filter the service inventory by state, then select a service to see its name, status, startup mode, and process ID. **Refresh** reads it again. This view does not start or stop services or open Windows event logs.
+
+On macOS hosts, **Services** lists loaded launchd daemons in the system domain and agents in the SSH account's user and graphical domains when accessible. Filter by daemon or agent, search by service target, and select **View logs**. Running jobs show their PID. Jobs waiting for a trigger are inactive; a nonzero last exit state appears as failed. This is the loaded inventory, not every installed plist, and the view does not start or stop jobs.

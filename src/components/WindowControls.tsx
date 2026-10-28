@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, X } from "lucide-react";
+import type { EnvironmentInfo } from "../types";
 
 type WindowActions = Pick<
   ReturnType<typeof getCurrentWindow>,
@@ -7,10 +8,14 @@ type WindowActions = Pick<
 >;
 
 interface WindowControlsProps {
+  platform: EnvironmentInfo["platform"];
   windowActions?: WindowActions;
 }
 
-export function WindowControls({ windowActions }: WindowControlsProps) {
+export function WindowControls({ platform, windowActions }: WindowControlsProps) {
+  // macOS overlays native traffic lights on the app's existing top row. Windows
+  // keeps the existing custom controls because its window remains undecorated.
+  if (platform !== "windows") return null;
   const appWindow = windowActions ?? getCurrentWindow();
 
   return (

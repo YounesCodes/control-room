@@ -48,6 +48,10 @@ describe("Windows service layout", () => {
     expect(pane.getBoundingClientRect().height).toBeLessThanOrEqual(560);
     expect(pane.scrollHeight).toBeGreaterThan(pane.clientHeight);
     await userEvent.click(page.getByRole("button", { name: /Example service 000/ }));
+    page
+      .getByRole("button", { name: /Example service 000/ })
+      .element()
+      .focus();
     await userEvent.keyboard("{End}");
     await vi.waitFor(() =>
       expect(pane.scrollTop + pane.clientHeight).toBeGreaterThanOrEqual(pane.scrollHeight - 1),

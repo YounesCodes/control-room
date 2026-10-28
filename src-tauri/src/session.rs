@@ -17,7 +17,7 @@ use crate::{
     database::Database,
     local_shell::{self, ResolvedLocalShell},
     models::{LocalSessionStarted, SavedConnection, SessionStarted, SessionStateEvent},
-    ssh::{connection_arguments, detect_ssh_path},
+    ssh::{connection_arguments, detect_ssh_path, ssh_not_found_message},
 };
 
 struct ManagedSession {
@@ -206,10 +206,7 @@ impl SessionManager {
         rows: u16,
         output: Channel<Response>,
     ) -> Result<SessionStarted, String> {
-        let ssh_path = detect_ssh_path().ok_or_else(|| {
-            "Windows OpenSSH client was not found. Install the OpenSSH Client optional feature."
-                .to_string()
-        })?;
+        let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
         let mut command = CommandBuilder::new(ssh_path);
         command.env("TERM", TERMINAL_TYPE);
         command.args(connection_arguments(connection, true));
@@ -232,7 +229,7 @@ impl SessionManager {
         })
     }
 
-    /// Starts a local Windows shell through the same pty lifecycle as an SSH
+    /// Starts a local shell through the same pty lifecycle as an SSH
     /// session. The profile was validated and resolved by `local_shell`, so
     /// nothing here picks an executable or an argument.
     pub fn start_local(
@@ -1407,6 +1404,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn conpty_runs_a_console_process() {
         let pair = native_pty_system().openpty(PtySize::default()).unwrap();
         let mut command = CommandBuilder::new("cmd.exe");
@@ -1590,6 +1588,69 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_login_shell_accepts_input_resizes_and_stops() {
+        let shell = crate::local_shell::resolve_installed("zsh").unwrap();
+        assert_eq!(shell.program(), std::path::Path::new("/bin/zsh"));
+        let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+        let mut child = pair
+            .slave
+            .spawn_command(crate::local_shell::command_for(&shell))
+            .unwrap();
+        drop(pair.slave);
+        pair.master
+            .resize(PtySize {
+                rows: 31,
+                cols: 91,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let mut writer = pair.master.take_writer().unwrap();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut output = Vec::new();
+            let mut buffer = [0; 4096];
+            while let Ok(count) = reader.read(&mut buffer) {
+                if count == 0 {
+                    break;
+                }
+                output.extend_from_slice(&buffer[..count]);
+                if output
+                    .windows(b"MAC_PTY_READY".len())
+                    .any(|s| s == b"MAC_PTY_READY")
+                {
+                    let _ = sender.send(output.clone());
+                }
+            }
+        });
+        writer
+            .write_all(b"stty size; printf 'MAC_PTY_%s\\n' READY\n")
+            .unwrap();
+        writer.flush().unwrap();
+        let mut killer = child.clone_killer();
+        let output = receiver
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|e| {
+                let _ = killer.kill();
+                panic!("macOS PTY did not answer typed input: {e}");
+            });
+        assert!(String::from_utf8_lossy(&output).contains("31 91"));
+        assert!(map_pty_kill_result(killer.kill()).is_ok());
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(child.wait());
+        });
+        assert!(
+            receiver
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .is_ok()
+        );
+    }
+
+    #[test]
     #[cfg(windows)]
     fn a_resolved_local_shell_runs_and_stops_under_conpty() {
         // The command processor is the one shell present on every supported
@@ -1681,7 +1742,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires an explicitly configured Linux SSH fixture"]
-    fn conpty_hosts_windows_ssh_against_live_fixture() {
+    fn native_pty_hosts_ssh_against_live_fixture() {
         let ssh_path = crate::ssh::detect_ssh_path().unwrap();
         let host = std::env::var("CONTROL_ROOM_TEST_HOST").unwrap();
         let user = std::env::var("CONTROL_ROOM_TEST_USER").unwrap();
@@ -1741,7 +1802,7 @@ mod tests {
             if Instant::now() >= deadline {
                 let _ = killer.kill();
                 panic!(
-                    "ConPTY SSH fixture timed out: {}",
+                    "Native PTY SSH fixture timed out: {}",
                     String::from_utf8_lossy(&output)
                 );
             }

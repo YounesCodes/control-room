@@ -413,10 +413,10 @@ describe("baselines pane", () => {
     api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
     api.getHostBaseline.mockResolvedValue(detail);
     renderPane("later");
-    await screen.findAllByText("Systemd units");
+    await screen.findAllByText("Services");
 
     expect(detail_panel().queryByText("ssh.service")).toBeNull();
-    await userEvent.click(detail_panel().getByRole("button", { name: /Systemd units/ }));
+    await userEvent.click(detail_panel().getByRole("button", { name: /Services/ }));
 
     expect(detail_panel().getByText("ssh.service")).toBeTruthy();
     expect(detail_panel().getByText("nginx.service")).toBeTruthy();
@@ -450,8 +450,8 @@ describe("baselines pane", () => {
       ],
     });
     renderPane("later");
-    await screen.findAllByText("Systemd units");
-    await userEvent.click(detail_panel().getByRole("button", { name: /Systemd units/ }));
+    await screen.findAllByText("Services");
+    await userEvent.click(detail_panel().getByRole("button", { name: /Services/ }));
 
     await userEvent.click(detail_panel().getByRole("button", { name: "History of ssh.service" }));
 

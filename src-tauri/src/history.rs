@@ -31,6 +31,12 @@ __control_room_emit() {
   printf '\033]633;ControlRoom;%s\007' "$1"
 }
 
+__control_room_millis() {
+  local stamp
+  stamp="$(date +%s%3N)"
+  case "$stamp" in *[!0-9]*|'') printf '%s000' "$(date +%s)";; *) printf '%s' "$stamp";; esac
+}
+
 __control_room_preexec() {
   local command cwd started
   command="$(fc -ln -1 2>/dev/null)" || command="$BASH_COMMAND"
@@ -38,7 +44,7 @@ __control_room_preexec() {
   command="${command# }"
   [[ -n ${command//[[:space:]]/} ]] || return
   cwd="$PWD"
-  started="$(date +%s%3N)"
+  started="$(__control_room_millis)"
   __control_room_emit "start;$started;$(__control_room_b64 "$cwd");$(__control_room_b64 "$command")"
   __control_room_command_active=1
   __control_room_ready=0
@@ -49,7 +55,7 @@ __control_room_precmd() {
   local finished cwd
   __control_room_in_prompt=1
   if [[ ${__control_room_command_active:-0} == 1 ]]; then
-    finished="$(date +%s%3N)"
+    finished="$(__control_room_millis)"
     cwd="$PWD"
     __control_room_emit "finish;$finished;$exit_code;$(__control_room_b64 "$cwd")"
     __control_room_command_active=0
@@ -85,7 +91,10 @@ __control_room_ready=0
 __control_room_in_prompt=0
 __control_room_command_active=0
 trap '__control_room_debug' DEBUG
-if declare -p PROMPT_COMMAND 2>/dev/null | grep -q '^declare -a'; then
+if (( BASH_VERSINFO[0] < 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] < 1) )); then
+  __control_room_previous_prompt_command="${PROMPT_COMMAND-}"
+  PROMPT_COMMAND="__control_room_precmd; ${__control_room_previous_prompt_command:+$__control_room_previous_prompt_command; }__control_room_prompt_complete"
+elif declare -p PROMPT_COMMAND 2>/dev/null | grep -q '^declare -a'; then
   PROMPT_COMMAND=(__control_room_precmd "${PROMPT_COMMAND[@]}" __control_room_prompt_complete)
 else
   __control_room_previous_prompt_command="${PROMPT_COMMAND-}"
@@ -156,23 +165,59 @@ if test "$file" -eq 0 && test "$start" -eq 0 && test "$end" -eq 0; then exit 1; 
 exit 2
 "##;
 
+fn zsh_variant(script: &str) -> String {
+    let script = script
+        .replace(".bashrc", ".zshrc")
+        .replace("shell-integration.bash", "shell-integration.zsh");
+    if let Some((before, body)) = script.split_once("<<'CONTROL_ROOM_INTEGRATION'\n")
+        && let Some((_, after)) = body.split_once("\nCONTROL_ROOM_INTEGRATION\n")
+    {
+        return format!(
+            "{before}<<'CONTROL_ROOM_INTEGRATION'\n{}\nCONTROL_ROOM_INTEGRATION\n{after}",
+            include_str!("history_zsh.zsh")
+        );
+    }
+    script
+}
+
+fn integration_script(script: &str, macos: bool) -> String {
+    if !macos {
+        return script.into();
+    }
+    let zsh_status = zsh_variant(STATUS_SCRIPT);
+    if script == STATUS_SCRIPT {
+        return format!(
+            "bash_status=0; ( {STATUS_SCRIPT} ) || bash_status=$?; zsh_status=0; ( {zsh_status} ) || zsh_status=$?; if test $bash_status -eq 0 && test $zsh_status -eq 0; then exit 0; fi; if test $bash_status -eq 1 && test $zsh_status -eq 1; then exit 1; fi; exit 2"
+        );
+    }
+    // Validate both startup files before changing either one. Each installer
+    // retains the existing marker-bounded, atomic file replacement.
+    format!(
+        "status=0; ( {STATUS_SCRIPT} ) || status=$?; test $status -ne 2 || exit 2; status=0; ( {zsh_status} ) || status=$?; test $status -ne 2 || exit 2; ( {script} ) || exit $?; ( {} )",
+        zsh_variant(script)
+    )
+}
+
 pub fn integration_status(connection: &SavedConnection) -> Result<bool, String> {
-    let output = RemoteCommandExecutor::execute(connection, "history_status", STATUS_SCRIPT)?;
+    let script = integration_script(STATUS_SCRIPT, crate::macos_remote::is_host(connection)?);
+    let output = RemoteCommandExecutor::execute(connection, "history_status", &script)?;
     match output.exit_code {
         0 => Ok(true),
         1 => Ok(false),
         _ => Err(
-            "Enhanced History integration is incomplete or has duplicate .bashrc markers".into(),
+            "Enhanced History integration is incomplete or has duplicate shell startup markers"
+                .into(),
         ),
     }
 }
 
 pub fn install_integration(connection: &SavedConnection) -> Result<(), String> {
+    let script = integration_script(INSTALL_SCRIPT, crate::macos_remote::is_host(connection)?);
     let output = RemoteCommandExecutor::execute_with_input(
         connection,
         "history_install",
         "bash -s",
-        INSTALL_SCRIPT.as_bytes(),
+        script.as_bytes(),
     )?;
     if output.exit_code == 0 {
         Ok(())
@@ -185,11 +230,12 @@ pub fn install_integration(connection: &SavedConnection) -> Result<(), String> {
 }
 
 pub fn uninstall_integration(connection: &SavedConnection) -> Result<(), String> {
+    let script = integration_script(UNINSTALL_SCRIPT, crate::macos_remote::is_host(connection)?);
     let output = RemoteCommandExecutor::execute_with_input(
         connection,
         "history_uninstall",
         "bash -s",
-        UNINSTALL_SCRIPT.as_bytes(),
+        script.as_bytes(),
     )?;
     if output.exit_code == 0 {
         Ok(())
@@ -204,6 +250,72 @@ pub fn uninstall_integration(connection: &SavedConnection) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires CONTROL_ROOM_TEST_MAC_HOST and pinned noninteractive SSH access"]
+    fn live_macos_bash32_and_zsh_history_is_opt_in_and_reversible() {
+        let c: SavedConnection = serde_json::from_value(serde_json::json!({
+            "id":"live-macos-history", "displayName":"Mac fixture",
+            "destination":std::env::var("CONTROL_ROOM_TEST_MAC_HOST").expect("Mac fixture required"),
+            "username":null,"port":null,"identityFile":null,"historyEnabled":false,"sudoEnabled":false,
+            "groupId":null,"tags":[],"createdAt":"","updatedAt":"","lastConnectedAt":null
+        })).unwrap();
+        let install = integration_script(INSTALL_SCRIPT, true);
+        let uninstall = integration_script(UNINSTALL_SCRIPT, true);
+        let script = format!(
+            r##"set -eu
+root=$(mktemp -d /tmp/control-room-history.XXXXXX)
+trap 'rm -rf "$root"' EXIT
+export HOME="$root" ZDOTDIR="$root" TERM=xterm-256color
+printf 'export EDITOR=vim\n' > "$HOME/.bashrc"
+printf 'export EDITOR=vim\nprecmd() {{ print EXISTING_PROMPT_HOOK; }}\npreexec() {{ :; }}\n' > "$HOME/.zshrc"
+cp "$HOME/.zshrc" "$root/zshrc.before"
+( {install} )
+( {install} )
+test "$(grep -Fc '# >>> Control Room shell integration >>>' "$HOME/.bashrc")" -eq 1
+test "$(grep -Fc '# >>> Control Room shell integration >>>' "$HOME/.zshrc")" -eq 1
+printf 'printf DISABLED_HISTORY\nexit\n' | /bin/zsh -i > "$root/disabled" 2>&1
+! grep -q '633;ControlRoom;start;' "$root/disabled"
+export CONTROL_ROOM_SHELL_INTEGRATION=1
+printf 'printf MAC_BASH_HISTORY_OK\nfalse\nprintf DONE\nexit\n' | /bin/bash --noprofile -i > "$root/bash" 2>&1
+printf 'printf MAC_ZSH_HISTORY_OK\nfalse\nprintf DONE\nexit\n' | /bin/zsh -i > "$root/zsh" 2>&1
+cat "$root/bash" "$root/zsh"
+( {uninstall} )
+test "$(cat "$HOME/.bashrc")" = 'export EDITOR=vim'
+test "$(grep -v '^$' "$HOME/.zshrc")" = "$(cat "$root/zshrc.before")"
+test ! -e "$HOME/.local/share/control-room/shell-integration.bash"
+test ! -e "$HOME/.local/share/control-room/shell-integration.zsh"
+"##
+        );
+        let o = RemoteCommandExecutor::execute_with_input(
+            &c,
+            "macos_history_fixture",
+            "/bin/bash -s",
+            script.as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(o.exit_code, 0, "{}", String::from_utf8_lossy(&o.stderr));
+        let transcript = String::from_utf8_lossy(&o.stdout);
+        assert!(
+            transcript.contains("MAC_BASH_HISTORY_OK") && transcript.contains("MAC_ZSH_HISTORY_OK")
+        );
+        let starts = transcript
+            .split("\u{1b}]633;ControlRoom;start;")
+            .skip(1)
+            .collect::<Vec<_>>();
+        assert!(starts.len() >= 6, "{transcript}");
+        for start in starts {
+            let millis = start.split(';').next().unwrap();
+            assert!(
+                millis.len() == 13 && millis.bytes().all(|b| b.is_ascii_digit()),
+                "{millis}"
+            );
+        }
+        assert!(
+            transcript.matches(";1;").count() >= 2,
+            "both shells must capture false's status"
+        );
+    }
 
     fn live_connection() -> SavedConnection {
         SavedConnection {
@@ -246,22 +358,23 @@ mod tests {
     fn run_under_bash(script: &str) -> std::process::Output {
         use std::io::Write;
 
-        let bash = crate::local_shell::resolve_installed("git-bash")
-            .expect("Git Bash is required to exercise the shell integration scripts");
+        let bash =
+            crate::local_shell::resolve_installed(if cfg!(windows) { "git-bash" } else { "bash" })
+                .expect("Bash is required to exercise the shell integration scripts");
         let mut child = crate::ssh::background_command(bash.program())
             .args(["--noprofile", "--norc", "-s"])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
-            .expect("Git Bash could not be started");
+            .expect("Bash could not be started");
         child
             .stdin
             .take()
             .expect("stdin")
             .write_all(script.as_bytes())
             .expect("the script could not be written");
-        child.wait_with_output().expect("Git Bash did not finish")
+        child.wait_with_output().expect("Bash did not finish")
     }
 
     /// Reads the `key=value` lines the wrapper prints, so a scenario reports
@@ -287,7 +400,7 @@ mod tests {
     /// The source-text guard beside this says the markers exist. It cannot say
     /// what running the script does to a file that already has content in it.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn installing_history_twice_leaves_one_reversible_block() {
         let script = format!(
             r##"set -eu
@@ -379,7 +492,7 @@ rm -rf "$root"
     /// somebody's shell configuration with it, so both scripts refuse and say
     /// so, and leave the file exactly as they found it.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn damaged_markers_stop_both_scripts_before_they_edit_anything() {
         for (name, bashrc) in [
             (
@@ -452,7 +565,7 @@ rm -rf "$root"
     /// no-op, or opting in on one host would follow the user into every shell
     /// on that machine.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn the_integration_stays_inert_in_a_shell_control_room_did_not_start() {
         let script = format!(
             r##"set -eu

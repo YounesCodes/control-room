@@ -11,6 +11,12 @@ Control Room runs on Windows 11 x64. You need the Windows OpenSSH Client for SSH
 
 The installer runs for your Windows user and does not need administrator access. The release is unsigned, so Windows may show an unrecognized-publisher warning.
 
+## macOS preview
+
+The macOS port supports Intel and Apple Silicon. Before the first public Mac release, use the matching test bundle from the [macOS workflow](https://github.com/YounesCodes/control-room/actions/workflows/macos.yml), or build from the port branch with Node.js 22.22.2 or newer, Rust stable, and Xcode Command Line Tools. Run `npm ci`, then `npm run tauri build`. Open `src-tauri/target/release/bundle/macos/Control Room.app`.
+
+Test bundles use ad-hoc signing and are not notarized. Public Mac releases remain disabled until Apple Developer signing and notarization are configured. macOS includes the OpenSSH client.
+
 ## Updates
 
 Control Room checks GitHub Releases while the app is open. When an update is available, use **Update available** in the title bar to see the version and changes. The download starts when you ask for it. Control Room verifies the update's signature before installation.

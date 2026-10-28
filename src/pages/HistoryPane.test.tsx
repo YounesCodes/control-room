@@ -114,7 +114,7 @@ describe("HistoryPane", () => {
     );
 
     expect(await screen.findByText("docker ps")).toBeTruthy();
-    expect(screen.getByText(/could not check the remote Bash integration/i)).toBeTruthy();
+    expect(screen.getByText(/could not check the remote shell integration/i)).toBeTruthy();
 
     await user.type(screen.getByPlaceholderText("Search commands"), "dock");
     await waitFor(() => {

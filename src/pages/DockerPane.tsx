@@ -24,6 +24,9 @@ import type {
 export function DockerPane({
   connection,
   windowsHost = false,
+  macosHost = false,
+  dockerContext,
+  dockerEndpoint,
   cache,
   detailsCache,
   onCacheChange,
@@ -33,6 +36,9 @@ export function DockerPane({
 }: {
   connection: SavedConnection;
   windowsHost?: boolean;
+  macosHost?: boolean;
+  dockerContext?: string | null;
+  dockerEndpoint?: string | null;
   cache: CachedList<DockerContainer>;
   detailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   onCacheChange: (cache: CachedList<DockerContainer>) => void;
@@ -137,7 +143,8 @@ export function DockerPane({
     : filtered.length;
   const selected = cache.items.find((container) => container.id === selectedId) ?? null;
   const selectedVisible = filtered.some((container) => container.id === selectedId);
-  const permissionError = !windowsHost && cache.error?.toLowerCase().includes("permission denied");
+  const permissionError =
+    !windowsHost && !macosHost && cache.error?.toLowerCase().includes("permission denied");
 
   function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -211,6 +218,12 @@ export function DockerPane({
         <header className="page-heading compact-heading">
           <div>
             <h2>Containers</h2>
+            {dockerContext && (
+              <p className="technical">
+                {dockerContext}
+                {dockerEndpoint ? ` · ${dockerEndpoint}` : ""}
+              </p>
+            )}
             <p>
               {cache.items.filter((container) => container.state === "running").length} running ·{" "}
               {cache.items.length} total
@@ -292,6 +305,7 @@ export function DockerPane({
             key={selected.id}
             summary={selected}
             windowsHost={windowsHost}
+            macosHost={macosHost}
             cache={detailsCache[selected.id]}
             onRefresh={() => loadDetails(selected.id, null, true)}
             onRetryWithSudo={() => setSudoPurpose("details")}

@@ -22,6 +22,10 @@ const CATALOG: &str = "https://api.fontsource.org/v1/fonts?category=monospace&ty
 const MAX_DOWNLOAD: usize = 8 * 1024 * 1024;
 const MAX_PREVIEW_CACHE: usize = 16 * 1024 * 1024;
 
+#[cfg(target_os = "macos")]
+#[path = "platform/macos_fonts.rs"]
+mod macos;
+
 #[derive(Clone, Default)]
 pub struct FontState {
     catalog: Arc<Mutex<Vec<CatalogFont>>>,
@@ -183,9 +187,7 @@ fn ttf_urls(css: &str) -> Result<Vec<String>, String> {
         .map(|c| c[1].to_string())
         .collect();
     if urls.is_empty() {
-        return Err(
-            "The font service did not provide a Windows TrueType font. Retry later.".into(),
-        );
+        return Err("The font service did not provide a TrueType font. Retry later.".into());
     }
     Ok(urls)
 }
@@ -331,8 +333,15 @@ fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     use std::io::Write;
     let staging = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
     let result = (|| {
-        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&staging)
-            .map_err(|e| format!("Cannot write to your Windows font folder. Check folder permissions and retry. {e}"))?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staging)
+            .map_err(|e| {
+                format!(
+                    "Cannot write to your user font folder. Check folder permissions and retry. {e}"
+                )
+            })?;
         file.write_all(bytes)
             .and_then(|_| file.sync_all())
             .map_err(|e| format!("Cannot write the font file. Check disk space and retry. {e}"))?;
@@ -343,12 +352,12 @@ fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
                 if std::fs::read(path).map_err(|e| format!("Cannot read existing font: {e}"))?
                     != bytes
                 {
-                    return Err("A different version of this font already exists in your Windows font folder. Remove it through Windows Settings before retrying.".into());
+                    return Err("A different version of this font already exists in your user font folder. Remove it through your system font manager before retrying.".into());
                 }
                 Ok(false)
             }
             Err(e) => Err(format!(
-                "Cannot publish the font file in your Windows font folder. Check folder permissions and retry. {e}"
+                "Cannot publish the font file in your user font folder. Check folder permissions and retry. {e}"
             )),
         }
     })();
@@ -364,7 +373,7 @@ fn install_files(
     mut progress: impl FnMut(u64, u64),
 ) -> Result<(), String> {
     std::fs::create_dir_all(directory).map_err(|e| {
-        format!("Cannot create your Windows font folder. Check folder permissions and retry. {e}")
+        format!("Cannot create your user font folder. Check folder permissions and retry. {e}")
     })?;
     let mut installed: Vec<InstalledFile> = Vec::new();
     let result = (|| {
@@ -498,7 +507,7 @@ mod windows {
             };
             if status != 0 {
                 return Err(format!(
-                    "Cannot register the font for your Windows account. Check account policy and retry. Windows error {status}."
+                    "Cannot register the font for your account. Check account policy and retry. Windows error {status}."
                 ));
             }
             if unsafe { AddFontResourceExW(path.as_ptr(), 0, ptr::null()) } == 0 {
@@ -566,11 +575,23 @@ fn install_font(
         .installation
         .try_lock()
         .ok_or("A font installation is already running. Wait until it finishes.")?;
+    #[cfg(windows)]
     let directory = app
         .path()
         .local_data_dir()
         .map_err(|e| e.to_string())?
         .join("Microsoft/Windows/Fonts");
+    #[cfg(target_os = "macos")]
+    let directory = app
+        .path()
+        .home_dir()
+        .map_err(|e| e.to_string())?
+        .join("Library/Fonts");
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        let _ = app;
+        return Err("Font installation requires Windows or macOS.".into());
+    }
     let _ = progress.send(FontProgress {
         stage: "installing",
         completed: 0,
@@ -595,12 +616,24 @@ fn install_font(
         let mut cache = state.previews.lock();
         cache_preview(&mut cache, id, files[0].1.clone());
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        let _ = directory;
-        return Err("Font installation requires Windows.".into());
+        install_files(
+            &directory,
+            &font,
+            &files,
+            &macos::UserFonts,
+            |completed, total| {
+                let _ = progress.send(FontProgress {
+                    stage: "installing",
+                    completed,
+                    total: Some(total),
+                });
+            },
+        )?;
+        cache_preview(&mut state.previews.lock(), id, files[0].1.clone());
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         let _ = progress.send(FontProgress {
             stage: "ready",
@@ -614,6 +647,49 @@ fn install_font(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_registers_a_user_font_and_keeps_existing_files_on_failure() {
+        let bytes = std::fs::read("/System/Library/Fonts/Supplemental/Andale Mono.ttf").unwrap();
+        let mut font = font();
+        font.family = "Andale Mono".into();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory
+            .path()
+            .join(format!("ControlRoom-{}-400.ttf", font.id));
+        install_files(
+            directory.path(),
+            &font,
+            &[(400, bytes.clone())],
+            &macos::UserFonts,
+            |_, _| {},
+        )
+        .unwrap();
+        // A retry never overwrites a user font or unregisters an existing resource.
+        install_files(
+            directory.path(),
+            &font,
+            &[(400, bytes.clone())],
+            &macos::UserFonts,
+            |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        macos::UserFonts.unregister(&path, "");
+        std::fs::write(&path, b"existing user font").unwrap();
+        assert!(
+            install_files(
+                directory.path(),
+                &font,
+                &[(400, bytes)],
+                &macos::UserFonts,
+                |_, _| {}
+            )
+            .unwrap_err()
+            .contains("different version")
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"existing user font");
+    }
     #[test]
     fn font_worker_builds_and_drops_http_clients_outside_the_async_runtime() {
         tauri::async_runtime::block_on(async {

@@ -14,12 +14,14 @@ export function ServicesPane({
   onCacheChange,
   onViewLogs,
   focusId = null,
+  macosHost = false,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
   onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
   focusId?: string | null;
+  macosHost?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     () => focusId ?? reconcileSelection(cache.items, null),
@@ -87,7 +89,10 @@ export function ServicesPane({
     setTypeFilter("all");
   }
 
-  if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
+  if (cache.loading && !cache.items.length)
+    return (
+      <LoadingState label={macosHost ? "Reading launchd services…" : "Reading systemd units…"} />
+    );
   if (cache.error && !cache.items.length) {
     return (
       <ErrorState
@@ -102,20 +107,22 @@ export function ServicesPane({
       <div className="list-panel">
         <header className="page-heading compact-heading">
           <div>
-            <h2>Systemd</h2>
+            <h2>{macosHost ? "Services" : "Systemd"}</h2>
             <p>
               {counts.active} active ·{" "}
               <span className={counts.failed ? "failed-count" : ""}>{counts.failed} failed</span>
             </p>
-            <small className="unit-scope-note">
-              Current system scope only, not a complete host health check
-            </small>
+            {!macosHost && (
+              <small className="unit-scope-note">
+                Current system scope only, not a complete host health check
+              </small>
+            )}
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={() => load(true)}
-            aria-label="Refresh systemd units"
+            aria-label={macosHost ? "Refresh launchd services" : "Refresh systemd units"}
             disabled={cache.loading}
           >
             <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
@@ -130,11 +137,11 @@ export function ServicesPane({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search units"
+              placeholder={macosHost ? "Search services" : "Search units"}
             />
           </label>
           <select
-            aria-label="Unit state"
+            aria-label={macosHost ? "Service state" : "Unit state"}
             value={stateFilter}
             onChange={(event) => setStateFilter(event.target.value as SystemdStateFilter)}
           >
@@ -144,18 +151,32 @@ export function ServicesPane({
             <option value="inactive">Inactive</option>
           </select>
           <select
-            aria-label="Unit type"
+            aria-label={macosHost ? "Service type" : "Unit type"}
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value)}
           >
             <option value="all">All types</option>
-            <option value="service">Services</option>
-            <option value="timer">Timers</option>
-            <option value="mount">Mounts</option>
-            <option value="socket">Sockets</option>
+            {macosHost ? (
+              <>
+                <option value="daemon">Daemons</option>
+                <option value="agent">Agents</option>
+              </>
+            ) : (
+              <>
+                <option value="service">Services</option>
+                <option value="timer">Timers</option>
+                <option value="mount">Mounts</option>
+                <option value="socket">Sockets</option>
+              </>
+            )}
           </select>
         </div>
-        <div className="dense-list" role="region" aria-label="Systemd units" tabIndex={0}>
+        <div
+          className="dense-list"
+          role="region"
+          aria-label={macosHost ? "Launchd services" : "Systemd units"}
+          tabIndex={0}
+        >
           {filtered.map((unit) => (
             <button
               className={unit.id === selectedId ? "dense-row selected-row" : "dense-row"}
@@ -175,23 +196,39 @@ export function ServicesPane({
             </button>
           ))}
           {!filtered.length && (
-            <EmptyState title={cache.items.length ? "No matching units" : "No units found"} />
+            <EmptyState
+              title={
+                cache.items.length
+                  ? macosHost
+                    ? "No matching services"
+                    : "No matching units"
+                  : macosHost
+                    ? "No services found"
+                    : "No units found"
+              }
+            />
           )}
         </div>
       </div>
       <aside className="detail-panel">
         {!cache.items.length ? (
-          <EmptyState title="No units found" />
+          <EmptyState title={macosHost ? "No services found" : "No units found"} />
         ) : !filtered.length ? (
-          <EmptyState title="No matching units">
+          <EmptyState title={macosHost ? "No matching services" : "No matching units"}>
             <button className="secondary-button" type="button" onClick={clearFilters}>
               Clear filters
             </button>
           </EmptyState>
         ) : selected && !selectedVisible ? (
-          <EmptyState title="Selected unit is outside this filter">
+          <EmptyState
+            title={
+              macosHost
+                ? "Selected service is outside this filter"
+                : "Selected unit is outside this filter"
+            }
+          >
             <button className="secondary-button" type="button" onClick={clearFilters}>
-              Show selected unit
+              {macosHost ? "Show selected service" : "Show selected unit"}
             </button>
           </EmptyState>
         ) : selected ? (
@@ -202,7 +239,7 @@ export function ServicesPane({
             </header>
             <dl className="detail-list">
               <div>
-                <dt>Unit type</dt>
+                <dt>{macosHost ? "Service type" : "Unit type"}</dt>
                 <dd>{selected.unitType}</dd>
               </div>
               <div>
@@ -215,23 +252,25 @@ export function ServicesPane({
                 <dt>Load state</dt>
                 <dd>{selected.loadState}</dd>
               </div>
-              <div>
-                <dt>Unit-file state</dt>
-                <dd>{selected.unitFileState ?? "Unknown"}</dd>
-              </div>
+              {!macosHost && (
+                <div>
+                  <dt>Unit-file state</dt>
+                  <dd>{selected.unitFileState ?? "Unknown"}</dd>
+                </div>
+              )}
             </dl>
             <button
               className="secondary-button"
               type="button"
               onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
             >
-              <FileClock size={15} /> View journal
+              <FileClock size={15} /> {macosHost ? "View logs" : "View journal"}
             </button>
           </>
         ) : filtersActive ? (
-          <EmptyState title="Select a matching unit" />
+          <EmptyState title={macosHost ? "Select a matching service" : "Select a matching unit"} />
         ) : (
-          <EmptyState title="Select a unit" />
+          <EmptyState title={macosHost ? "Select a service" : "Select a unit"} />
         )}
       </aside>
     </ResizableSplit>

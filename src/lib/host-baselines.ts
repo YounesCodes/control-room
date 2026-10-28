@@ -9,7 +9,7 @@ import type {
 
 const SECTION_LABELS: Record<BaselineSectionKind, string> = {
   host: "Host facts",
-  systemdUnits: "Systemd units",
+  systemdUnits: "Services",
   containers: "Containers",
   listeners: "Ports",
   filesystems: "Filesystems",
@@ -21,7 +21,7 @@ const SECTION_LABELS: Record<BaselineSectionKind, string> = {
 // the exported Markdown keep the full ones.
 const SECTION_SHORT_LABELS: Record<BaselineSectionKind, string> = {
   host: "Host",
-  systemdUnits: "Systemd",
+  systemdUnits: "Services",
   containers: "Containers",
   listeners: "Ports",
   filesystems: "Filesystems",

@@ -42,6 +42,8 @@ guardrails, not every choice described below.
   patterns. Add a new pattern when the work needs one, then document its intent
   and test its important behavior.
 
+On macOS, overlay the native traffic-light controls on one continuous app bar, without a separate system titlebar or visible application name. Keep the Connections heading in that bar, independent of the sidebar width, and begin the sidebar and workspace below it. Reserve one consistent leading area for the traffic lights in normal mode, Settings, and the Focus Mode tab strip. Center the native buttons on the same horizontal line as the header actions. Keep space between the native buttons and app content, and start the sidebar divider below the bar. Use Command for application shortcuts, leaving Control combinations available to terminal programs. Windows retains its custom window controls. Local Mac tabs offer installed zsh, Bash, and fish profiles; administrator profiles remain a Windows feature. Dialogs cycle every focusable control with Tab, including buttons on macOS. Mouse activation gives buttons a keyboard return target, and overflowing header metrics handle arrow-key scrolling explicitly.
+
 ## Layout and hierarchy
 
 The app has a compact titlebar, a left connection rail, a Workspace tab strip,
@@ -390,3 +392,5 @@ here. `src/color-palette.test.ts` and `src/ui-hierarchy.test.ts` protect selecte
 palette, contrast, and structural rules. If a design decision changes, update
 the relevant guardrail and explain the reason in the change. Run `npm run check`
 to validate the frontend and Rust gates.
+
+Remote Mac workspaces use the same inspection navigation as Linux. Name launchd jobs Services and distinguish their daemon and agent domains. Show unified logs and macOS reboot evidence without Linux boot timing cards. Application Firewall rules and Packet Filter evidence remain separate; neither implies that a port is reachable. When Docker uses another host through a context, show that context and do not associate its published ports with the Mac's own sockets.

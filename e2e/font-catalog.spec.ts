@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { isMac } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { existsSync, readFileSync } from "node:fs";
@@ -7,11 +9,14 @@ import { join } from "node:path";
 // Explicit local check only. Normal desktop tests need no public font service.
 const liveFonts = process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : describe.skip;
 
-liveFonts("public font catalog in WebView2", () => {
+liveFonts("public font catalog in the native WebView", () => {
   it("renders a downloaded preview without installing or changing the current font", async () => {
     const localData = process.env.LOCALAPPDATA;
-    if (!localData) throw new Error("LOCALAPPDATA is required to inspect user-installed fonts.");
-    const folder = join(localData, "Microsoft", "Windows", "Fonts");
+    if (!isMac && !localData)
+      throw new Error("LOCALAPPDATA is required to inspect user-installed fonts.");
+    const folder = isMac
+      ? join(homedir(), "Library", "Fonts")
+      : join(localData!, "Microsoft", "Windows", "Fonts");
     const paths = [400, 700].map((weight) =>
       join(folder, `ControlRoom-jetbrains-mono-${weight}.ttf`),
     );
@@ -24,7 +29,8 @@ liveFonts("public font catalog in WebView2", () => {
     const current = $("[role=combobox][aria-controls=font-suggestions]");
     const original = await current.getValue();
     await current.click();
-    await browser.keys("JetBrains Mono");
+    if (isMac) await current.setValue("JetBrains Mono");
+    else await browser.keys("JetBrains Mono");
     await expect(current).toHaveValue("JetBrains Mono");
     try {
       await $("#font-option-jetbrains-mono").waitForDisplayed({ timeout: 30_000 });
@@ -57,6 +63,6 @@ liveFonts("public font catalog in WebView2", () => {
     await expect(current).toHaveValue(original);
     await expect($("#font-suggestions")).not.toBeDisplayed();
     expect(snapshot()).toEqual(before);
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
   });
 });

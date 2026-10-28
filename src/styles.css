@@ -209,7 +209,6 @@ button {
     background-color var(--motion-fast) var(--ease),
     color var(--motion-fast) var(--ease),
     border-color var(--motion-fast) var(--ease),
-    opacity var(--motion-fast) var(--ease),
     transform var(--motion-fast) var(--ease);
 }
 
@@ -285,7 +284,14 @@ textarea::placeholder {
 code,
 .technical,
 .log-output {
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
+}
+
+.firewall-rules {
+  max-height: 240px;
+  max-width: 100%;
+  overflow: auto;
+  font-size: 12px;
 }
 
 .log-output-shell {
@@ -1076,6 +1082,38 @@ code,
 
 .sidebar-top-heading > * {
   pointer-events: none;
+}
+
+/* One continuous Mac toolbar owns the native controls and Connections heading.
+   Its leading space stays fixed while the sidebar resizes or collapses. */
+.app-shell[data-platform="macos"] {
+  --mac-window-controls-space: 104px;
+  --window-actions-width: 40px;
+}
+
+.app-shell[data-platform="macos"] .app-bar {
+  grid-column: 1 / -1;
+  padding-left: var(--mac-window-controls-space);
+}
+
+.app-shell[data-platform="macos"] .sidebar {
+  grid-row: 2 / -1;
+}
+
+.app-shell[data-platform="macos"] .app-bar .sidebar-top-heading {
+  align-self: stretch;
+  min-height: 0;
+  gap: 8px;
+  padding: 0 16px 0 0;
+}
+
+.app-shell[data-platform="macos"] .sidebar-top-heading .layout-reset {
+  margin-left: 0;
+}
+
+.app-shell[data-platform="macos"].terminal-focus-mode .session-tabs {
+  padding-left: var(--mac-window-controls-space);
+  min-height: 42px;
 }
 
 .sidebar-search {
@@ -3214,7 +3252,7 @@ code,
   flex: 1;
   resize: none;
   padding: 16px;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 12.5px;
   line-height: 1.65;
   tab-size: 2;
@@ -3753,7 +3791,7 @@ dd {
 .boot-failed-list strong {
   min-width: 0;
   overflow: hidden;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3805,7 +3843,7 @@ dd {
   background: var(--surface-sunken);
   padding: 6px 0;
   color: var(--text-muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 11px;
   line-height: 1.55;
   list-style: none;
@@ -4162,7 +4200,7 @@ dd {
 
 .row-main strong {
   overflow: hidden;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 11.5px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -4200,7 +4238,7 @@ dd {
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4335,7 +4373,7 @@ dd {
 }
 
 .inspector-record strong {
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 11px;
   font-weight: 600;
 }
@@ -4864,7 +4902,7 @@ dd {
   border-radius: var(--radius-sm);
   background: #000;
   padding: 12px 14px;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 12.5px;
   line-height: 1.7;
   white-space: pre;
@@ -5700,7 +5738,7 @@ dd {
   border-radius: 8px;
   background: var(--surface-sunken);
   color: var(--text-muted);
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 11.5px;
   line-height: 1.55;
   text-align: left;
@@ -5719,7 +5757,7 @@ kbd {
   border-radius: var(--radius-sm);
   background: #131313;
   color: var(--text-muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
   font-size: 11px;
   line-height: 1.4;
 }

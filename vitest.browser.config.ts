@@ -17,7 +17,9 @@ export default defineConfig({
         // Exercise native scrollbar clicks and drags in headless Chromium too.
         launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] },
       }),
-      instances: [{ browser: "chromium" }],
+      instances: [
+        { browser: process.env.CONTROL_ROOM_TEST_BROWSER === "webkit" ? "webkit" : "chromium" },
+      ],
       headless: true,
     },
   },

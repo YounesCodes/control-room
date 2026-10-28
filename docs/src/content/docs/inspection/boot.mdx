@@ -28,3 +28,5 @@ For the current boot, it can show:
 Boot timing, slow units, and failed-unit status are available for the current boot only. Choosing an older boot shows its journal sample and marks those other parts unavailable. Use **View journal** beside a failed unit to open its logs, or **Refresh** to read again.
 
 The view labels missing or permission-limited information instead of treating it as an empty result. A slow unit is a clue, not proof of the cause. This information stays in memory and is not saved.
+
+On macOS, Boot shows the current boot UUID and time, recent reboot records, current launchd jobs with nonzero exit states, and up to 30 error or fault entries from the unified log. Older reboot records have minute precision and select that recorded time range. Historical launchd exit states and systemd-style boot timing are unavailable. macOS log retention determines how much of an older boot can be read.

@@ -22,3 +22,5 @@ In **Logs**, choose a systemd unit or Docker container, choose the last 50, 100,
 Systemd logs come from `journalctl`; container logs come from `docker logs`. Closing the view stops the stream. Fetched logs stay in memory and are not saved. For a different journal query, use the terminal.
 
 On Windows hosts, Logs offers Docker containers only. It reads both standard output and error output through the Windows Docker CLI. Windows service event logs are not included.
+
+On macOS, choose **Unified log** and **All unified logs**, or select a launchd service. Service reads use configured standard output and error files when available. Otherwise they read unified-log entries for the running PID and launchd messages naming that service. Unified-log history covers up to the last hour before following new entries. Protected output may require sudo. The Mac's retention and privacy settings determine which entries are available.

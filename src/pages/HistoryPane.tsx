@@ -17,6 +17,7 @@ import { api, errorMessage } from "../lib/api";
 import type { HistoryEntry, SavedConnection } from "../types";
 
 export function HistoryPane({
+  macosHost = false,
   connection,
   paused,
   globalEnabled,
@@ -25,6 +26,7 @@ export function HistoryPane({
   onPaste,
   canPaste,
 }: {
+  macosHost?: boolean;
   connection: SavedConnection;
   paused: boolean;
   globalEnabled: boolean;
@@ -126,8 +128,7 @@ export function HistoryPane({
   function removeIntegration() {
     setConfirmState({
       title: "Remove integration",
-      message:
-        "Remove the Control Room Bash integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.",
+      message: `Remove the Control Room ${macosHost ? "Bash and zsh" : "Bash"} integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.`,
       confirmLabel: "Remove integration",
       onConfirm: () => void performRemoveIntegration(),
     });
@@ -244,18 +245,25 @@ export function HistoryPane({
       </header>
       {integrationError && (
         <p className="inline-warning">
-          Saved commands are available, but Control Room could not check the remote Bash
+          Saved commands are available, but Control Room could not check the remote shell
           integration: {integrationError}
         </p>
       )}
       {integrationInstalled === false && (
         <section className="history-opt-in">
-          <h3>Enable exact Bash command history</h3>
+          <h3>Enable exact {macosHost ? "Bash and zsh" : "Bash"} command history</h3>
           <p>
-            Control Room will install one script under <code>~/.local/share/control-room/</code> and
-            one marked source block in <code>~/.bashrc</code>. It records commands, directories,
-            times, and exit codes from integrated Control Room sessions. Command lines may contain
-            secrets.
+            Control Room will install {macosHost ? "scripts" : "one script"} under{" "}
+            <code>~/.local/share/control-room/</code> and marked source blocks in{" "}
+            <code>~/.bashrc</code>
+            {macosHost ? (
+              <>
+                {" "}
+                and <code>~/.zshrc</code>
+              </>
+            ) : null}
+            . It records commands, directories, times, and exit codes from integrated Control Room
+            sessions. Command lines may contain secrets.
           </p>
           <p className="history-opt-in-note">
             <Info size={15} aria-hidden="true" />
@@ -304,7 +312,7 @@ export function HistoryPane({
               onClick={removeIntegration}
               disabled={working}
             >
-              Remove from remote Bash
+              Remove from remote {macosHost ? "shells" : "Bash"}
             </button>
           </div>
         )}

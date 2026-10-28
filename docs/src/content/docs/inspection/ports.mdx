@@ -1,6 +1,6 @@
 ---
 title: Ports
-description: See what is listening on a Linux or Windows host.
+description: See what is listening on a Linux, Windows, or macOS host.
 ---
 
 import portsScreenshot from "../../../assets/screenshots/ports.png";
@@ -28,3 +28,5 @@ The firewall snapshot reads UFW or firewalld. UFW includes its incoming default 
 On Windows, the view reads TCP and UDP listeners, their available process names and IDs, and established TCP peers. Firewall details show profile enablement and default inbound policies only. Per-port Windows firewall rules and Windows service ownership links are unavailable.
 
 If a Linux firewall read is denied, choose **Retry with sudo** to repeat that read with a password sent once. The app does not save the password or change firewall rules.
+
+On macOS, native socket reads use `netstat`, with `lsof` for visible process owners. Launchd ownership appears only when one loaded job matches the PID. Use **Resolve owners with sudo** to retry protected process reads. Application Firewall state and app rules appear separately from Packet Filter rules, which may require **Retry with sudo**. Neither view calculates Internet reachability. Docker contexts pointing to another machine keep their published ports separate from the Mac's listeners.

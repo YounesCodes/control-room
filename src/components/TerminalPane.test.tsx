@@ -23,6 +23,8 @@ const nativeEvents = vi.hoisted(
 /// Records what the pane asked of xterm, so the test can see which handlers a
 /// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
+  initialCols: 100,
+  fit: vi.fn(),
   oscHandlers: 0,
   osc: new Map<number, (data: string) => boolean>(),
   prompt: "$ ",
@@ -43,13 +45,17 @@ const xterm = vi.hoisted(() => ({
   parseWrite: null as (() => void) | null,
   deferWrites: false,
   pendingWrites: [] as Array<() => void>,
+  resize: null as ((cols: number, rows: number) => void) | null,
   selectionChange: null as (() => void) | null,
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
+    this.initialCols = 100;
+    this.fit.mockReset();
     this.onData = null;
     this.parseWrite = null;
     this.deferWrites = false;
     this.pendingWrites = [];
+    this.resize = null;
     this.selectionChange = null;
     this.customKeyHandler = null;
     this.oscHandlers = 0;
@@ -92,7 +98,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
-    fit() {}
+    fit() {
+      xterm.fit();
+    }
   },
 }));
 
@@ -116,7 +124,7 @@ vi.mock("@xterm/addon-search", () => ({
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
-    cols = 100;
+    cols = xterm.initialCols;
     rows = 30;
     options: Record<string, unknown> = {};
     constructor(options: Record<string, unknown>) {
@@ -139,6 +147,18 @@ vi.mock("@xterm/xterm", () => ({
     onBinary() {
       return { dispose: () => undefined };
     }
+    onResize(handler: (size: { cols: number; rows: number }) => void) {
+      xterm.resize = (cols, rows) => {
+        this.cols = cols;
+        this.rows = rows;
+        handler({ cols, rows });
+      };
+      return {
+        dispose: () => {
+          xterm.resize = null;
+        },
+      };
+    }
     onSelectionChange(handler: () => void) {
       xterm.selectionChange = handler;
       return { dispose: () => undefined };
@@ -159,6 +179,9 @@ vi.mock("@xterm/xterm", () => ({
       return xterm.selection;
     }
     reset() {}
+    resize(cols: number, rows: number) {
+      xterm.resize?.(cols, rows);
+    }
     get buffer() {
       return {
         active: {
@@ -246,10 +269,12 @@ function renderPane(
     onSelectionChange?: (hasSelection: boolean) => void;
     onProcessing?: (busy: boolean) => void;
     findRequest?: number;
+    platform?: "windows" | "macos";
   } = {},
 ) {
   render(
     <TerminalPane
+      platform="windows"
       workspace={workspace}
       settings={settings}
       visible
@@ -287,6 +312,7 @@ describe("TerminalPane sessions", () => {
     api.closeSession.mockResolvedValue(undefined);
     api.writeSession.mockResolvedValue(undefined);
     api.acknowledgeSessionOutput.mockResolvedValue(undefined);
+    api.resizeSession.mockResolvedValue(undefined);
   });
 
   it("starts a local Workspace through the local session API", async () => {
@@ -321,6 +347,147 @@ describe("TerminalPane sessions", () => {
     // The connected marker comes from the remote shell, not from the start call.
     expect(onState).toHaveBeenCalledWith("connecting", null);
     expect(onState).not.toHaveBeenCalledWith("connected", null);
+  });
+
+  it.each(["local", "remote"])(
+    "resizes a running %s PTY when xterm's grid changes",
+    async (kind) => {
+      renderPane(
+        kind === "local" ? createLocalWorkspace(shell) : createRemoteWorkspace(connection),
+      );
+      await vi.waitFor(() =>
+        expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled(),
+      );
+      act(() => xterm.resize!(80, 24));
+      expect(api.resizeSession).toHaveBeenCalledWith(
+        `${kind === "local" ? "local" : "ssh"}-session`,
+        80,
+        24,
+      );
+      cleanup();
+      expect(xterm.resize).toBeNull();
+    },
+  );
+
+  it("synchronizes a grid change during startup before releasing queued input", async () => {
+    let finishStart!: (value: { sessionId: string }) => void;
+    api.startLocalSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishStart = resolve;
+      }),
+    );
+    renderPane(createLocalWorkspace(shell));
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    act(() => {
+      xterm.resize!(80, 24);
+      xterm.onData!("queued input");
+    });
+    expect(api.resizeSession).not.toHaveBeenCalled();
+    await act(async () => finishStart({ sessionId: "local-session" }));
+    expect(api.resizeSession).toHaveBeenCalledWith("local-session", 80, 24);
+    expect(api.writeSession).toHaveBeenCalledWith(
+      "local-session",
+      new TextEncoder().encode("queued input"),
+    );
+    expect(api.resizeSession.mock.invocationCallOrder[0]).toBeLessThan(
+      api.writeSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("starts a settled shell even when the webview stops delivering animation frames", async () => {
+    const frames = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    try {
+      renderPane(createLocalWorkspace(shell));
+      await vi.waitFor(
+        () =>
+          expect(api.startLocalSession).toHaveBeenCalledWith(
+            "powershell-7",
+            100,
+            30,
+            expect.anything(),
+          ),
+        { timeout: 500 },
+      );
+      expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
+      frames.mockRestore();
+    }
+  });
+
+  it("waits for the terminal font without waiting for unrelated page fonts", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(document, "fonts");
+    let finishFont!: () => void;
+    const load = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFont = resolve;
+        }),
+    );
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load, ready: new Promise(() => undefined) },
+    });
+    try {
+      renderPane(createLocalWorkspace(shell));
+      await vi.waitFor(() => expect(load).toHaveBeenCalledWith("14px Consolas", "MW"));
+      expect(api.startLocalSession).not.toHaveBeenCalled();
+      await act(async () => finishFont());
+      await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(1));
+    } finally {
+      cleanup();
+      if (descriptor) Object.defineProperty(document, "fonts", descriptor);
+      else Reflect.deleteProperty(document, "fonts");
+    }
+  });
+
+  it("starts with the smallest measured grid when font metrics keep alternating", async () => {
+    let fits = 0;
+    xterm.initialCols = 107;
+    xterm.fit.mockImplementation(() => {
+      if (xterm.resize) {
+        fits++;
+        xterm.resize(fits % 2 ? 106 : 107, fits % 2 ? 29 : 30);
+      }
+    });
+    try {
+      renderPane(createLocalWorkspace(shell));
+      await vi.waitFor(() =>
+        expect(api.startLocalSession).toHaveBeenCalledWith(
+          "powershell-7",
+          106,
+          29,
+          expect.anything(),
+        ),
+      );
+      expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("settles the first rendered grid before starting a shell with width-dependent prompt output", async () => {
+    xterm.initialCols = 107;
+    xterm.fit.mockImplementation(() => xterm.resize?.(106, 30));
+    renderPane(createLocalWorkspace(shell));
+    await vi.waitFor(() =>
+      expect(api.startLocalSession).toHaveBeenCalledWith(
+        "powershell-7",
+        106,
+        30,
+        expect.anything(),
+      ),
+    );
+    expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start a shell when the pane closes while its first grid is settling", async () => {
+    renderPane(createLocalWorkspace(shell));
+    cleanup();
+    await act(async () => {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+    expect(api.startLocalSession).not.toHaveBeenCalled();
   });
 
   it("passes the selected WSL distribution on remote startup", async () => {
@@ -436,6 +603,7 @@ describe("TerminalPane sessions", () => {
     const workspace = { ...createLocalWorkspace(shell), state: "connected" as const };
     const pane = (reconnectToken: number) => (
       <TerminalPane
+        platform="windows"
         workspace={{ ...workspace, reconnectToken }}
         settings={settings}
         visible
@@ -665,6 +833,7 @@ describe("TerminalPane sessions", () => {
     xterm.onData?.("b");
     expect(api.writeSession).not.toHaveBeenCalled();
 
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
     startSession({ sessionId: "session-1" });
     // The queue has started going out and none of its writes have come back.
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
@@ -776,6 +945,35 @@ describe("TerminalPane sessions", () => {
     expect(writtenText()).toEqual(["echo once"]);
   });
 
+  it("uses Command shortcuts on macOS while leaving Control input to the shell", async () => {
+    api.startSession.mockResolvedValue({ sessionId: "session-mac" });
+    renderPane(createRemoteWorkspace(connection), vi.fn(), { platform: "macos" });
+    await vi.waitFor(() => expect(xterm.customKeyHandler).toBeTruthy());
+    for (const key of ["t", "w", "r", "p", "f"]) {
+      expect(
+        xterm.customKeyHandler?.(
+          new KeyboardEvent("keydown", { key, metaKey: true, shiftKey: true }),
+        ),
+      ).toBe(false);
+      expect(
+        xterm.customKeyHandler?.(
+          new KeyboardEvent("keydown", { key, ctrlKey: true, shiftKey: true }),
+        ),
+      ).toBe(true);
+    }
+    xterm.selection = "Mac selection";
+    expect(
+      xterm.customKeyHandler?.(
+        new KeyboardEvent("keydown", { key: "c", metaKey: true, shiftKey: true }),
+      ),
+    ).toBe(false);
+    expect(clipboard.writeText).toHaveBeenCalledWith("Mac selection");
+    expect(
+      xterm.customKeyHandler?.(new KeyboardEvent("keydown", { key: "v", metaKey: true })),
+    ).toBe(true);
+    expect(clipboard.readText).not.toHaveBeenCalled();
+  });
+
   it("keeps the original connection failure when input is attempted", () => {
     renderPane({
       ...createRemoteWorkspace(connection),
@@ -868,6 +1066,7 @@ describe("TerminalPane sessions", () => {
     const onActivity = vi.fn();
     render(
       <TerminalPane
+        platform="windows"
         workspace={createLocalWorkspace(shell)}
         settings={settings}
         visible={false}

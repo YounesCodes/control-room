@@ -6,7 +6,9 @@ mod fonts;
 mod header_metrics;
 mod history;
 mod local_shell;
+mod macos_remote;
 mod models;
+mod platform;
 mod remote;
 mod session;
 mod ssh;
@@ -42,6 +44,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(feature = "desktop-e2e")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
+    #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     builder
         .manage(header_metrics::HeaderMetricsState::default())
         .manage(SessionManager::default())
@@ -72,7 +76,7 @@ pub fn run() {
                 database.save_settings(&settings)?;
             }
             app.manage(database);
-            #[cfg(feature = "desktop-e2e")]
+            #[cfg(all(feature = "desktop-e2e", windows))]
             {
                 // Elevated WebView2 ignores environment overrides. Pass the driver's
                 // port and profile through the API in this debug-only test build.
@@ -91,11 +95,19 @@ pub fn run() {
                 }
                 window.build()?;
             }
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                platform::macos_window::watch(&window.as_ref().window());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            e2e::e2e_window_buttons,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            e2e::e2e_window_chrome_lifecycle,
             commands::get_environment_info,
             documentation::open_documentation,
             fonts::list_catalog_fonts,
@@ -179,8 +191,38 @@ pub fn run() {
                 window.state::<StreamManager>().stop_all();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run Control Room");
+        .build(tauri::generate_context!())
+        .expect("failed to build Control Room")
+        .run(|app, event| {
+            // Native macOS Quit and window destruction can take different
+            // paths. Both must stop owned terminals and log streams.
+            if matches!(&event, tauri::RunEvent::Exit) {
+                app.state::<SessionManager>().close_all();
+                app.state::<StreamManager>().stop_all();
+            }
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows: false,
+                ..
+            } = event
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                } else if let Some(config) = app.config().app.windows.first()
+                    && let Err(error) = tauri::WebviewWindowBuilder::from_config(app, config)
+                        .and_then(|builder| builder.build())
+                {
+                    eprintln!("Could not reopen Control Room: {error}");
+                }
+                if let Some(window) = app.get_webview_window("main") {
+                    platform::macos_window::watch(&window.as_ref().window());
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]

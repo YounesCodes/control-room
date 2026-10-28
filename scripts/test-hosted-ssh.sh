@@ -18,9 +18,8 @@ ssh-keygen -q -t ed25519 -N '' -f "$fixture_dir/host_key"
 ssh-keygen -q -t ed25519 -N '' -f "$fixture_dir/client_key"
 cp "$fixture_dir/client_key.pub" "$fixture_dir/authorized_keys"
 chmod 600 "$fixture_dir/authorized_keys"
-mkdir -p "$fixture_dir/bin"
-ln -s "$(command -v ssh)" "$fixture_dir/bin/ssh.exe"
-export PATH="$fixture_dir/bin:$PATH"
+export CONTROL_ROOM_TEST_SSH_PATH="$(command -v ssh)"
+test -x "$CONTROL_ROOM_TEST_SSH_PATH"
 export CONTROL_ROOM_TEST_HOST=127.0.0.1
 export CONTROL_ROOM_TEST_USER="$(id -un)"
 export CONTROL_ROOM_TEST_PORT=22345

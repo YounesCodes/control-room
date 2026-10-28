@@ -24,6 +24,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("remote shell selection", () => {
+  it("offers installed Mac shells and waits for an explicit choice", async () => {
+    const macShells = [
+      { id: "macos:zsh", label: "zsh" },
+      { id: "macos:bash", label: "Bash" },
+    ];
+    discoverRemoteShells.mockResolvedValue({ platform: "macos", shells: macShells });
+    const onSelect = vi.fn();
+    render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={onSelect} />);
+    await screen.findByRole("group", { name: "Mac shells" });
+    expect(onSelect).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("radio", { name: "Bash" }));
+    await userEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(onSelect).toHaveBeenCalledWith(macShells[1]);
+    expect(screen.queryByRole("group", { name: "Windows shells" })).toBeNull();
+  });
   it("waits for a deliberate choice and sends the selected WSL profile", async () => {
     const onSelect = vi.fn();
     render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={onSelect} />);

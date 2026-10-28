@@ -29,8 +29,8 @@ use crate::{
         SavedConnection, SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
-        background_command, connection_arguments, detect_ssh_path, validate_container_id,
-        validate_systemd_unit_id,
+        background_command, connection_arguments, detect_ssh_path, ssh_not_found_message,
+        validate_container_id, validate_systemd_unit_id,
     },
 };
 
@@ -331,6 +331,7 @@ fn distribution_family(os_id: Option<&str>, os_like: Option<&str>) -> Option<Str
             "suse" | "opensuse" | "opensuse-leap" | "sles" | "sled" => "suse",
             "arch" | "manjaro" => "arch",
             "alpine" => "alpine",
+            "macos" => "macos",
             _ => continue,
         };
         return Some(family.into());
@@ -373,6 +374,9 @@ fn parse_kib(values: &HashMap<String, String>, key: &str) -> Option<u64> {
 }
 
 pub fn collect_host_resources(connection: &SavedConnection) -> Result<HostResources, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::resources(connection);
+    }
     let text = RemoteCommandExecutor::execute(connection, "host_resources", resource_command())?
         .success_text()?;
     Ok(parse_host_resources(&text))
@@ -405,7 +409,12 @@ pub(crate) fn parse_host_resources(text: &str) -> HostResources {
 
 pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabilities, String> {
     let command = capability_command();
-    let linux = RemoteCommandExecutor::execute(connection, "discover_capabilities", command)
+    let command = format!(
+        "if test \"$(uname -s 2>/dev/null)\" = Darwin; then {}; else {}; fi",
+        crate::macos_remote::capabilities_command(),
+        command
+    );
+    let linux = RemoteCommandExecutor::execute(connection, "discover_capabilities", &command)
         .and_then(CommandOutput::success_text);
     let text = match linux {
         Ok(text)
@@ -422,6 +431,10 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
         },
     };
     let values = parse_key_values(&text);
+    crate::macos_remote::remember(
+        connection,
+        values.get("os_id").is_some_and(|v| v == "macos"),
+    );
     Ok(HostCapabilities {
         connection_id: connection.id.clone(),
         hostname: values.get("hostname").cloned(),
@@ -438,6 +451,8 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
         default_shell: values.get("default_shell").cloned(),
         systemd_available: is_true(&values, "systemd_available"),
         journald_available: is_true(&values, "journald_available"),
+        launchd_available: is_true(&values, "launchd_available"),
+        unified_log_available: is_true(&values, "unified_log_available"),
         docker_available: is_true(&values, "docker_available"),
         docker_accessible: is_true(&values, "docker_accessible"),
         docker_accessible_with_sudo: is_true(&values, "docker_accessible_with_sudo"),
@@ -446,6 +461,15 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
             .get("docker_version")
             .filter(|value| !value.is_empty())
             .cloned(),
+        docker_context: values
+            .get("docker_context")
+            .filter(|s| !s.is_empty())
+            .cloned(),
+        docker_endpoint: values
+            .get("docker_endpoint")
+            .filter(|s| !s.is_empty())
+            .cloned(),
+        docker_remote: is_true(&values, "docker_remote"),
         running_service_count: parse_count(&values, "running_service_count"),
         running_container_count: parse_count(&values, "running_container_count"),
         total_container_count: parse_count(&values, "total_container_count"),
@@ -454,6 +478,9 @@ pub fn discover_capabilities(connection: &SavedConnection) -> Result<HostCapabil
 }
 
 pub fn list_services(connection: &SavedConnection) -> Result<Vec<SystemdUnit>, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::services(connection);
+    }
     let command = systemd_unit_list_command();
     let text =
         RemoteCommandExecutor::execute(connection, "list_services", command)?.success_text()?;
@@ -465,6 +492,15 @@ pub fn list_containers(
     elevation: Elevation,
 ) -> Result<Vec<DockerContainer>, String> {
     let command = docker_container_list_command();
+    let macos_command;
+    let mac = crate::macos_remote::is_host(connection)?;
+    let command = if mac {
+        macos_command = crate::macos_remote::command(command);
+        &macos_command
+    } else {
+        command
+    };
+    let elevation = if mac { Elevation::None } else { elevation };
     let output = RemoteCommandExecutor::execute_elevated(
         connection,
         "list_containers",
@@ -482,6 +518,9 @@ pub fn list_ports(
     connection: &SavedConnection,
     elevation: Elevation,
 ) -> Result<Vec<ListeningSocket>, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::ports(connection, &elevation);
+    }
     let command = port_list_command();
     let output =
         RemoteCommandExecutor::execute_elevated(connection, "list_ports", command, &elevation)?;
@@ -521,6 +560,9 @@ const PSEUDO_FILESYSTEM_TYPES: [&str; 22] = [
 /// Collects the stable evidence that says which Remote Host this is. The
 /// machine id is hashed on the host, so only a truncated fingerprint is read.
 pub fn collect_host_identity(connection: &SavedConnection) -> Result<HostIdentity, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::identity(connection);
+    }
     let command = r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; if test -r /etc/machine-id && command -v sha256sum >/dev/null 2>&1; then printf 'machine_fingerprint=%s\n' "$(tr -d '\n' < /etc/machine-id | sha256sum | cut -c1-16)"; fi"#;
     let text =
         RemoteCommandExecutor::execute(connection, "baseline_identity", command)?.success_text()?;
@@ -542,6 +584,9 @@ pub fn collect_host_identity(connection: &SavedConnection) -> Result<HostIdentit
 }
 
 pub fn list_filesystems(connection: &SavedConnection) -> Result<Vec<Filesystem>, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::filesystems(connection);
+    }
     let command = format!(
         r#"LC_ALL=C; if command -v df >/dev/null 2>&1; then df -P -T 2>/dev/null; else printf '{NO_DF_MARKER}\n'; fi"#
     );
@@ -614,6 +659,13 @@ pub fn inspect_container(
 ) -> Result<DockerContainerDetails, String> {
     let container_id = validate_stable_container_id(container_id)?;
     let command = docker_container_inspect_command(container_id);
+    let mac = crate::macos_remote::is_host(connection)?;
+    let command = if mac {
+        crate::macos_remote::command(&command)
+    } else {
+        command
+    };
+    let elevation = if mac { Elevation::None } else { elevation };
     let output = RemoteCommandExecutor::execute_elevated(
         connection,
         "inspect_container",
@@ -642,6 +694,9 @@ pub fn collect_boot_diagnostics(
     boot_id: Option<&str>,
     elevation: Elevation,
 ) -> Result<BootDiagnostics, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::boot(connection, boot_id, &elevation);
+    }
     if let Some(boot_id) = boot_id {
         validate_boot_id(boot_id)?;
     }
@@ -935,8 +990,7 @@ fn run_ssh(
     remote_command: &str,
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
-    let ssh_path =
-        detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
+    let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
     let mut command = background_command(ssh_path);
@@ -1416,6 +1470,9 @@ pub fn list_firewall(
     connection: &SavedConnection,
     elevation: Elevation,
 ) -> Result<FirewallStatus, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::firewall(connection, &elevation);
+    }
     let command = firewall_status_command();
     let output =
         RemoteCommandExecutor::execute_elevated(connection, "list_firewall", command, &elevation)?;
@@ -1471,6 +1528,7 @@ fn parse_firewall_status(text: &str) -> FirewallStatus {
             active: None,
             default_incoming: None,
             rules: Vec::new(),
+            packet_filter: None,
             collected_at,
         };
     }
@@ -1529,6 +1587,7 @@ fn parse_firewall_status(text: &str) -> FirewallStatus {
         active,
         default_incoming,
         rules,
+        packet_filter: None,
         collected_at,
     }
 }
@@ -1585,6 +1644,7 @@ fn parse_firewalld_status(text: &str, collected_at: String) -> FirewallStatus {
         // single global incoming default would be false precision.
         default_incoming: None,
         rules,
+        packet_filter: None,
         collected_at,
     }
 }
@@ -1638,6 +1698,9 @@ pub fn list_connections(
     connection: &SavedConnection,
     elevation: Elevation,
 ) -> Result<EstablishedConnections, String> {
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::connections(connection, &elevation);
+    }
     let text = RemoteCommandExecutor::execute_elevated(
         connection,
         "list_connections",
@@ -2167,8 +2230,12 @@ impl StreamManager {
             elevation,
             output,
         } = options;
-        let service = validate_systemd_unit_id(service)?;
         validate_tail(lines)?;
+        if crate::macos_remote::is_host(connection)? {
+            let command = crate::macos_remote::log_command(service, lines, follow)?;
+            return self.start(app, connection, command, elevation, output);
+        }
+        let service = validate_systemd_unit_id(service)?;
         let command = journal_command(service, lines, follow);
         self.start(app, connection, command, elevation, output)
     }
@@ -2189,6 +2256,13 @@ impl StreamManager {
         let container = validate_container_id(container)?;
         validate_tail(lines)?;
         let command = docker_log_command(container, lines, follow);
+        let mac = crate::macos_remote::is_host(connection)?;
+        let command = if mac {
+            crate::macos_remote::command(&command)
+        } else {
+            command
+        };
+        let elevation = if mac { Elevation::None } else { elevation };
         self.start(app, connection, command, elevation, output)
     }
 
@@ -2216,8 +2290,7 @@ impl StreamManager {
         elevation: Elevation,
         output: Channel<Response>,
     ) -> Result<StreamStarted, String> {
-        let ssh_path =
-            detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
+        let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
         let mut arguments = connection_arguments(connection, false);
         arguments.push(elevated_command(&command, &elevation));
         let mut child = background_command(ssh_path)
