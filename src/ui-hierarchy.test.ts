@@ -258,7 +258,8 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("if (!connectionIdRef.current) return true;");
     expect(terminalSource).toContain("registerOscHandler(133");
     expect(terminalSource).toContain("registerOscHandler(633");
-    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(2);
+    expect(terminalSource).toContain("registerOscHandler(9");
+    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(3);
   });
 
   it("detects a newly connected host without requiring an Overview visit", () => {
