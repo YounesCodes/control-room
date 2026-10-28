@@ -202,7 +202,7 @@ export function HostMetrics({
             row.scrollLeft = next;
           }
         }}
-        data-tauri-drag-region
+        data-tauri-drag-region={overflow ? undefined : true}
         ref={values}
         tabIndex={overflow ? 0 : undefined}
         role="group"

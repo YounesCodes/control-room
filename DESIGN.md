@@ -22,8 +22,16 @@ guardrails, not every choice described below.
   brand color on a hovered or selected tab or host row to identify the target;
   the color is identity, never health, and it never shows at rest. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
-  Plain local-terminal marks use the shared soft blue on hover, keyboard focus,
-  or selection, including launchers, menus, and Focus Mode pane tabs.
+  Local shell logos reveal their own colors on hover, keyboard focus, or selection:
+  Git orange and PowerShell blue. Command Prompt and the generic local-terminal
+  launcher use muted gray at rest and white on hover, keyboard focus, or selection.
+  Use each local shell's own mark in workspace tabs, launch and split menus,
+  overflow lists, the command palette, and Settings. Administrator shells keep
+  their shell mark with a small shield badge.
+  OS and shell logos share one footprint and artwork scale, preserving each
+  logo's proportions. Larger dialog-heading marks use the same sizing rule.
+  Use the solid PowerShell mark with its cut-out prompt so it remains legible
+  at small sizes.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
@@ -45,7 +53,8 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Local Workspaces are terminal-only, so do not show remote
-inspection navigation for them; their navigation carries only Terminal.
+inspection navigation for them. Hide the capability navigation and its divider
+for local Workspaces so the connection list uses the available sidebar height.
 Scratchpad stays in the terminal toolbar for every Workspace kind.
 Optional header metrics may read system usage
 for a local tab without adding inspection pages. Keep connection and Workspace identity visible
@@ -97,6 +106,9 @@ complete tab, including in focus mode. Keep overflow menus within the window
 and support arrow keys, Home, End, Enter, and Escape.
 Let tab names use the space reserved for Rename and Close until the tab is
 hovered or focused. Revealing those controls must not resize neighboring tabs.
+Saved Connection cards use the same sliding action space: the status indicator
+rests at the right edge and moves left when hover, keyboard focus, or an open
+connection menu reveals the three-dot button.
 
 Connection and inspection panes have draggable, keyboard-operable dividers.
 Keep saved widths within limits that leave the neighboring pane usable. Reflow
@@ -104,8 +116,13 @@ content at the pane's width, and stack list/detail views when two columns no
 longer fit. A smaller window may temporarily constrain a saved width; widening
 it should restore that preference. Provide individual divider resets and a
 visible Reset layout action for all panel sizes. Use a thin hover line within
-a larger drag target. The host list and capability navigation share a horizontal
+a larger drag target that stays clear of neighboring scrollbar gutters.
+The host list and capability navigation share a horizontal
 divider and scroll independently as their available heights shrink.
+Scrollbar thumbs appear only while their own scrollable section is hovered,
+including terminal panes, fading in and out rather than snapping. Keep
+scrollbar space reserved so revealing a thumb does not shift content or change
+the available scrolling area.
 
 Content should stay usable at the supported minimum window size. Keep primary
 navigation reachable. In dialogs, keep the title and actions available while a
@@ -135,7 +152,12 @@ other cue so color is never the only signal.
 Connection tags are user metadata and may use user-selected colors. Keep their
 text readable against the app surfaces and never use tag color to imply
 connection state. Terminal ANSI colors are user-editable in Settings and belong
-to the terminal output palette, not the app chrome.
+to the terminal output palette, not the app chrome. Saved colors apply to every
+open local and SSH terminal, including hidden tabs and terminals using search.
+Each configurable ANSI color also controls its bright variant so shells use the
+same selected colors.
+Defaults use classic CGA bright colors for prompts and ANSI output, with slightly lighter gray
+text on black.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview
 and any readability warning when the picker closes, and let the user save a
@@ -154,6 +176,8 @@ display sizes, and Cascadia Mono, with system monospace
 fallbacks, for terminal and technical values. Align numeric columns and use
 tabular figures where values are compared. Keep supporting text readable at the
 app's compact density; do not shrink informational labels to make a layout fit.
+
+Terminal text uses regular weight, including ANSI bold prompts and directory names.
 
 Prefer clear hierarchy over extra labels: a section title, a useful value, and a
 short explanation are better than repeated captions. Let technical identifiers
@@ -190,6 +214,8 @@ confirmed destructive work, and labelled icon buttons for compact controls.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.
+Center the Local terminal and Add connection contents as one shared block,
+with matching icon and text columns sized to the wider label.
 
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting
@@ -240,10 +266,21 @@ Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
 Command activity uses shell markers where available, otherwise the return of
-the rendered prompt, including commands recalled from shell history. It never
-treats a pause in output as command completion. Background header polling uses
+the rendered prompt, including commands recalled from shell history. Blank or
+whitespace-only submissions and command editing stay idle. A pause in output
+never counts as command completion. Background header polling uses
 the header's own reading state and does not make idle terminals look busy.
 Retired session callbacks must not change a replacement session's activity.
+
+Coding agents spin while working and rest at their composer or when paused.
+OSC 9;4 progress reports take priority over screen redraws, on both the main
+and alternate screens. Running and indeterminate progress spin; cleared,
+failed, and paused progress rest. For recognized agent launch commands without
+progress reports, the current screen's cancel or interrupt status reports work.
+Typing, idle redraws, and approval prompts do not report work. Incomplete
+redraws preserve activity until a work or idle status replaces them. Unknown programs
+can report activity through OSC 9;4 without command-name detection. A pause in
+output never ends work. Ordinary full-screen editors and pagers stay idle.
 
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for

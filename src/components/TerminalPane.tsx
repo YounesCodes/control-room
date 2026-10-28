@@ -14,6 +14,7 @@ import {
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
+import { readTerminalView } from "../lib/terminal-screen";
 import { isRemoteWorkspace } from "../lib/workspace-target";
 import type {
   AppSettings,
@@ -76,7 +77,6 @@ export function TerminalPane({
   const wasActiveRef = useRef(false);
   const platformRef = useRef(platform);
   platformRef.current = platform;
-  const terminalThemeRef = useRef<ReturnType<typeof buildTerminalTheme> | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -139,13 +139,10 @@ export function TerminalPane({
   sendInputRef.current = (bytes) => {
     const sessionId = sessionIdRef.current;
     if (sessionId) {
-      const terminal = terminalRef.current;
-      const buffer = terminal?.buffer?.active;
-      const prompt =
-        buffer
-          ?.getLine(buffer.baseY + buffer.cursorY)
-          ?.translateToString(false, 0, buffer.cursorX) ?? null;
-      if (workspace.state === "connected") processingRef.current?.input(bytes, prompt);
+      const view = readTerminalView(terminalRef.current);
+      if (workspace.state === "connected") {
+        processingRef.current?.input(bytes, view.line, view.alternate);
+      }
       void api.writeSession(sessionId, bytes).catch((error) => {
         if (sessionIdRef.current !== sessionId) return;
         processingRef.current?.reset();
@@ -172,7 +169,6 @@ export function TerminalPane({
     let resizeTimer: number | undefined;
     let bellTimer: number | undefined;
     const theme = buildTerminalTheme(settings);
-    terminalThemeRef.current = theme;
     const terminal = new Terminal({
       // SearchAddon uses xterm's decoration API to highlight every match and
       // report the active result count. xterm guards that API behind this flag.
@@ -180,10 +176,9 @@ export function TerminalPane({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
-      // Bold text (prompts, directory listings, error lines) is rendered with
-      // weight, not a brighter hue, so a bold `01;34` directory shows the exact
-      // "ANSI 4" color the user picked instead of a lightened
-      // variant. This keeps the terminal matching the Settings color preview.
+      // Keep shell prompts and directory names at regular weight, including
+      // ANSI bold sequences, while retaining the configured ANSI colors.
+      fontWeightBold: "normal",
       drawBoldTextInBrightColors: false,
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,
@@ -312,6 +307,10 @@ export function TerminalPane({
       processingRef.current?.shellMarker(data);
       return false;
     });
+    const progressDisposable = terminal.parser.registerOscHandler(9, (data) => {
+      if (!sessionIdRef.current) return false;
+      return processingRef.current?.progress(data) ?? false;
+    });
     // All shells can report command activity. Only remote, opted-in Bash or zsh
     // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
@@ -417,12 +416,12 @@ export function TerminalPane({
       bellDisposable.dispose();
       searchDisposable.dispose();
       promptDisposable.dispose();
+      progressDisposable.dispose();
       oscDisposable.dispose();
       processingRef.current?.reset();
       search.dispose();
       terminal.dispose();
       terminalRef.current = null;
-      terminalThemeRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
     };
@@ -430,15 +429,15 @@ export function TerminalPane({
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    const theme = terminalThemeRef.current;
-    if (!terminal || !theme) return;
+    if (!terminal) return;
+    const theme = buildTerminalTheme(settings);
 
     // SearchAddon selects the active match internally. Make that selection
     // transparent while searching so it does not recolor ANSI output; the
     // match's outline and overview-ruler marker carry the search state instead.
     terminal.options.theme =
       searchOpen && searchTerm ? { ...theme, selectionBackground: "transparent" } : theme;
-  }, [searchOpen, searchTerm]);
+  }, [settings, searchOpen, searchTerm]);
 
   // What this terminal is attached to: a Saved Connection or a local shell.
   const targetId = workspace.kind === "local" ? workspace.shell.id : workspace.connectionId;
@@ -507,12 +506,8 @@ export function TerminalPane({
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         if (!sessionIdRef.current && !acceptingInputRef.current) return;
-        const buffer = terminal.buffer?.active;
-        const prompt =
-          buffer
-            ?.getLine(buffer.baseY + buffer.cursorY)
-            ?.translateToString(false, 0, buffer.cursorX) ?? null;
-        processingRef.current?.output(prompt);
+        const view = readTerminalView(terminal, true);
+        processingRef.current?.output(view.line, view.alternate, view.status);
         acknowledge(bytes.byteLength);
       });
     };
@@ -626,7 +621,6 @@ export function TerminalPane({
     terminal.options.fontFamily = settings.terminalFontFamily;
     terminal.options.fontSize = settings.terminalFontSize;
     terminal.options.scrollback = settings.terminalScrollback;
-    terminal.options.theme = buildTerminalTheme(settings);
     if (visible) fitRef.current?.fit();
     // Focus on the transition to active only, and never take focus from an
     // app-owned popover or dialog: React re-runs this effect when a Suspense

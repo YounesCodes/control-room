@@ -36,7 +36,11 @@ describe("motion guardrails", () => {
     // xterm measures and paints on its own schedule; a transition on the
     // container would smear every resize and refit.
     expect(rule(".terminal-container")).not.toMatch(/\b(animation|transition):/);
+    const scrollbar = ".xterm .xterm-scrollable-element > .scrollbar";
+    // Only the scrollbar may fade. Keep terminal content and layout still.
+    expect(rule(scrollbar).trim()).toBe("transition: opacity var(--motion-fast) var(--ease);");
     for (const [, selector, block] of stylesSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (selector.replace(/\/\*[\s\S]*?\*\//g, "").trim() === scrollbar) continue;
       if (selector.includes(".xterm")) {
         expect(block, `${selector.trim()} animates the terminal`).not.toMatch(
           /\b(animation|transition):/,

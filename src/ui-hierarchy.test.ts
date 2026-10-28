@@ -178,9 +178,8 @@ describe("application hierarchy", () => {
     expect(logsSource).toContain('loadSources("docker", true, password)');
   });
 
-  it("renders bold terminal text as weight so category colors match what the user picks", () => {
-    // Bold `01;34` directories / `01;32` prompts must use the chosen base color,
-    // not xterm's lightened bright palette, or the Settings color preview lies.
+  it("renders ANSI bold terminal text at regular weight with the configured colors", () => {
+    expect(terminalSource).toContain('fontWeightBold: "normal"');
     expect(terminalSource).toContain("drawBoldTextInBrightColors: false");
   });
 
@@ -223,12 +222,11 @@ describe("application hierarchy", () => {
 
   it("keeps a local Workspace terminal-only and off every remote code path", () => {
     // The launcher lists detected shells beside Add connection, and a local
-    // Workspace's switcher offers only its terminal view,
-    // never a host view, because there is no host to inspect.
+    // Workspace has no capability navigation because there is no host to inspect.
     expect(appSource).toContain("api.listLocalShells()");
     expect(appSource).toContain("Local terminal");
     expect(appSource).toMatch(
-      /capabilities=\{\s*activeWorkspace && \(\s*<div className="workspace-navigation"/,
+      /capabilities=\{\s*activeRemoteWorkspace && \(\s*<div className="workspace-navigation"/,
     );
     expect(appSource).toMatch(
       /isLocalWorkspace\(activeWorkspace\)\s*\?\s*navigation\.filter\(\(item\) => item\.id === "terminal"\)/,
@@ -259,7 +257,8 @@ describe("application hierarchy", () => {
     expect(terminalSource).toContain("if (!connectionIdRef.current) return true;");
     expect(terminalSource).toContain("registerOscHandler(133");
     expect(terminalSource).toContain("registerOscHandler(633");
-    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(2);
+    expect(terminalSource).toContain("registerOscHandler(9");
+    expect(terminalSource.match(/registerOscHandler/g)).toHaveLength(3);
   });
 
   it("detects a newly connected host without requiring an Overview visit", () => {

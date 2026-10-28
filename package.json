@@ -1,7 +1,7 @@
 {
   "name": "control-room",
   "private": true,
-  "version": "0.8.9",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,6 +19,8 @@
     "test:local-lab": "node scripts/test-local-lab.mjs",
     "test:local-gate": "node scripts/test-local-gate.mjs",
     "install:local-lab-hooks": "node scripts/install-local-lab-hooks.mjs",
+    "install:dev-hooks": "node scripts/install-local-lab-hooks.mjs",
+    "check:staged": "node scripts/check-staged.mjs",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

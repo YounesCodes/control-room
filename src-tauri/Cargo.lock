@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "control-room"
-version = "0.8.9"
+version = "0.9.0"
 dependencies = [
  "block2",
  "chrono",

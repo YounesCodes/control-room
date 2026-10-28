@@ -1,6 +1,7 @@
 name: Desktop E2E
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       spec:
@@ -28,7 +29,7 @@ jobs:
           cache-bin: false
       - run: npm ci
       - name: Check debug automation settings
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e e2e::tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e --lib e2e::tests
       - run: npm run test:desktop:build
       - name: Check desktop driver environment
         shell: pwsh
@@ -53,7 +54,7 @@ jobs:
         env:
           DESKTOP_SPEC: ${{ inputs.spec }}
         run: |
-          $arguments = @('run', 'test:desktop', '--', '--logLevel', 'info')
+          $arguments = @('run', 'test:desktop', '--')
           if ($env:DESKTOP_SPEC) { $arguments += @('--spec', $env:DESKTOP_SPEC) }
           npm @arguments
       - name: Sanitize failure diagnostics

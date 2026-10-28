@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import {
-  Columns2,
-  FolderCog,
-  Pencil,
-  Plus,
-  Search,
-  Settings,
-  SquareTerminal,
-  StickyNote,
-} from "lucide-react";
+import { Columns2, FolderCog, Pencil, Plus, Search, Settings, StickyNote } from "lucide-react";
 import { connectionTarget } from "../lib/format";
 import { HostOsIcon } from "./HostOsIcon";
+import { LocalShellIcon } from "./LocalShellIcon";
 import type {
   HostCapabilities,
   LocalShellProfile,
@@ -29,6 +21,7 @@ interface CommandItem {
   osId?: string | null;
   osName?: string | null;
   icon?: IconType;
+  shell?: LocalShellProfile;
   shortcut?: string;
   keywords?: string;
   run: () => void;
@@ -113,8 +106,7 @@ export function CommandPalette({
 
     for (const workspace of workspaces) {
       if (workspace.id === activeWorkspaceId) continue;
-      // A local shell has no SSH target and no host OS to mark, so it carries
-      // its shell name and a terminal icon instead.
+      // Keep the shell identity even when a local workspace has been renamed.
       result.push(
         workspace.kind === "local"
           ? {
@@ -122,7 +114,7 @@ export function CommandPalette({
               group: "Open terminals",
               label: labelForWorkspace(workspace),
               sublabel: "Local shell",
-              icon: SquareTerminal,
+              shell: workspace.shell,
               keywords: workspace.shell.label,
               run: run(() => onSelectWorkspace(workspace)),
             }
@@ -171,7 +163,7 @@ export function CommandPalette({
         group: "New local terminal",
         label: shell.label,
         sublabel: shell.elevated ? "Run as administrator" : "Local shell",
-        icon: SquareTerminal,
+        shell,
         run: run(() => onOpenLocalShell(shell)),
       });
     }
@@ -409,7 +401,9 @@ export function CommandPalette({
                   onClick={item.run}
                   onMouseMove={() => setActiveIndex(index)}
                 >
-                  {item.osId !== undefined ? (
+                  {item.shell ? (
+                    <LocalShellIcon kind={item.shell.kind} elevated={item.shell.elevated} />
+                  ) : item.osId !== undefined ? (
                     <HostOsIcon osId={item.osId} osName={item.osName} />
                   ) : Icon ? (
                     <Icon size={16} strokeWidth={1.8} />

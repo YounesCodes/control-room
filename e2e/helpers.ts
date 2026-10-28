@@ -1,11 +1,12 @@
 import { $, browser, expect } from "@wdio/globals";
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { application, isMac, localShellLabel } from "./platform";
 import { recordMacApplication } from "./macos-processes";
 import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
 import type { AppSettings, SavedConnection } from "../src/types";
+import { recordApplication } from "./app-processes";
 
 export interface RuntimeStatus {
   appPid: number;
@@ -53,11 +54,8 @@ export const runtime = () => ipc<RuntimeStatus>("e2e_runtime_status");
 
 export async function restartApp(preserve = true) {
   const previous = await runtime();
-  recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid);
-  appendFileSync(
-    join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "app-pids.txt"),
-    `${previous.appPid}\n`,
-  );
+  if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid);
+  else recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid, application);
   if (!preserve || !directory)
     directory = mkdtempSync(join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "case-"));
   if (isMac) {
@@ -119,12 +117,9 @@ export async function restartApp(preserve = true) {
   // First launch offers connection creation automatically. Tests set up their own data.
   if (await $("[role=dialog]").isExisting()) await $("[role=dialog]").$("button=Cancel").click();
   const current = await runtime();
-  recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid);
+  if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid);
+  else recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid, application);
   expect(current.appPid).not.toBe(previous.appPid);
-  appendFileSync(
-    join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "app-pids.txt"),
-    `${current.appPid}\n`,
-  );
 }
 
 export async function cleanRuntime() {
@@ -212,10 +207,13 @@ export async function openLocal() {
   const launcher = $("button=Local terminal");
   if (await launcher.isDisplayed()) {
     await launcher.click();
+    await $(".local-shell-menu-group:not(.local-shell-administrator-group)")
+      .$(`button=${localShellLabel}`)
+      .click();
   } else {
     await $("aria/New terminal").click();
+    await $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`).click();
   }
-  await $(".local-shell-menu, .new-terminal-menu").$(`button*=${localShellLabel}`).click();
   await expect($(".terminal-workspace-pane.active .xterm-screen")).toBeDisplayed();
   await browser.waitUntil(async () => (await runtime()).sessionIds.length > 0);
 }
@@ -339,4 +337,11 @@ export async function feature(label: string) {
 export async function activateFocusedButton() {
   if (isMac) await browser.execute(() => (document.activeElement as HTMLButtonElement).click());
   else await browser.keys("Enter");
+}
+
+export async function openScratchpad() {
+  await feature("Terminal");
+  const trigger = $("[data-scratchpad-trigger]");
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+  await $(".scratchpad-popover textarea").waitForDisplayed();
 }

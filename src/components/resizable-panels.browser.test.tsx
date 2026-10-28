@@ -280,6 +280,73 @@ function assertNoHorizontalOverflow(selector: string) {
 }
 
 describe("resizable connection panels in Chromium", () => {
+  it("keeps the content scrollbar clear of the content resize handle", async () => {
+    await page.viewport(960, 640);
+    mount();
+    await expect
+      .element(page.getByRole("heading", { name: "Overview", exact: true }))
+      .toBeVisible();
+    const section = document.querySelector<HTMLElement>(".overview-page")!;
+    await vi.waitFor(() => expect(section.scrollHeight).toBeGreaterThan(section.clientHeight));
+    const bounds = section.getBoundingClientRect();
+    expect(document.elementFromPoint(bounds.right - 5, bounds.top + 50)).toBe(section);
+    await userEvent.dragAndDrop(section, section, {
+      sourcePosition: { x: bounds.width - 5, y: 20 },
+      targetPosition: { x: bounds.width - 5, y: bounds.height - 25 },
+    });
+    await vi.waitFor(() => expect(section.scrollTop).toBeGreaterThan(0));
+  });
+
+  it("keeps both split-pane scrollbars clear of resize handles", async () => {
+    await page.viewport(1280, 900);
+    mount();
+    await page.getByRole("button", { name: "Open docker" }).click();
+    await expect
+      .element(page.getByRole("separator", { name: "Resize Docker panes" }))
+      .toBeVisible();
+    for (const selector of [".list-panel", ".detail-panel"]) {
+      const section = document.querySelector<HTMLElement>(selector)!;
+      const filler = document.createElement("div");
+      filler.style.cssText = "min-height:1600px;flex:none";
+      section.append(filler);
+      const bounds = section.getBoundingClientRect();
+      expect(section.scrollHeight).toBeGreaterThan(section.clientHeight);
+      expect(document.elementFromPoint(bounds.right - 6, bounds.top + 50)).toBe(section);
+      await userEvent.dragAndDrop(section, section, {
+        sourcePosition: { x: bounds.width - 6, y: 20 },
+        targetPosition: { x: bounds.width - 6, y: bounds.height - 25 },
+      });
+      await vi.waitFor(() => expect(section.scrollTop).toBeGreaterThan(0));
+    }
+  });
+
+  it.each([".host-list", ".workspace-navigation"])(
+    "keeps the %s scrollbar clickable and draggable beside resize handles",
+    async (selector) => {
+      await page.viewport(960, 640);
+      mount();
+      await expect
+        .element(page.getByRole("separator", { name: "Resize Connections panel" }))
+        .toBeVisible();
+      const section = document.querySelector<HTMLElement>(selector)!;
+      await vi.waitFor(() => expect(section.scrollHeight).toBeGreaterThan(section.clientHeight));
+      const bounds = section.getBoundingClientRect();
+      for (const y of [bounds.top + 5, bounds.top + bounds.height / 2, bounds.bottom - 5]) {
+        expect(document.elementFromPoint(bounds.right - 5, y)).toBe(section);
+      }
+      const sidebarWidth = document.querySelector(".sidebar")!.getBoundingClientRect().width;
+      const sectionHeight = section.clientHeight;
+      await userEvent.hover(section);
+      await userEvent.dragAndDrop(section, section, {
+        sourcePosition: { x: bounds.width - 5, y: 20 },
+        targetPosition: { x: bounds.width - 5, y: bounds.height - 25 },
+      });
+      await vi.waitFor(() => expect(section.scrollTop).toBeGreaterThan(0));
+      expect(document.querySelector(".sidebar")!.getBoundingClientRect().width).toBe(sidebarWidth);
+      expect(section.clientHeight).toBe(sectionHeight);
+    },
+  );
+
   it("drags the Connections divider and supports limits, keyboard access, and reset", async () => {
     await page.viewport(960, 640);
     mount();
@@ -318,7 +385,7 @@ describe("resizable connection panels in Chromium", () => {
     expect(result.violations.map(({ id }) => id)).toEqual([]);
   });
 
-  it("uses a thin centered hover line inside the larger drag target", async () => {
+  it("keeps a thin hover line at the sidebar edge with its drag target outside the scrollbars", async () => {
     await page.viewport(960, 640);
     mount();
     const divider = page.getByRole("separator", { name: "Resize Connections panel" });
@@ -328,8 +395,8 @@ describe("resizable connection panels in Chromium", () => {
     await vi.waitFor(() => expect(highlight.backgroundColor).toBe("rgb(173, 173, 170)"));
     const handle = divider.element().getBoundingClientRect();
     const edge = document.querySelector(".sidebar")!.getBoundingClientRect().right;
-    expect(Math.abs((handle.left + handle.right) / 2 - edge)).toBeLessThanOrEqual(1);
-    expect(handle.width).toBe(24);
+    expect(Math.abs(handle.left - edge)).toBeLessThanOrEqual(1);
+    expect(handle.width).toBe(12);
     await divider.click();
     expect(getComputedStyle(divider.element()).outlineStyle).toBe("none");
     expect(getComputedStyle(divider.element(), "::after").width).toBe("2px");
@@ -453,13 +520,13 @@ describe("resizable connection panels in Chromium", () => {
     await vi.waitFor(() => {
       const handle = split.element().getBoundingClientRect();
       const edge = document.querySelector(".list-panel")!.getBoundingClientRect().right;
-      expect(Math.abs((handle.left + handle.right) / 2 - edge)).toBeLessThanOrEqual(1);
+      expect(Math.abs(handle.left - edge)).toBeLessThanOrEqual(1);
     });
     const initial = Number(split.element().getAttribute("aria-valuenow"));
     const handle = split.element().getBoundingClientRect();
     const listEdge = document.querySelector(".list-panel")!.getBoundingClientRect().right;
-    expect(Math.abs((handle.left + handle.right) / 2 - listEdge)).toBeLessThanOrEqual(1);
-    expect(handle.width).toBeGreaterThanOrEqual(24);
+    expect(Math.abs(handle.left - listEdge)).toBeLessThanOrEqual(1);
+    expect(handle.width).toBe(12);
     expect(document.elementFromPoint((handle.left + handle.right) / 2, handle.top + 60)).toBe(
       split.element(),
     );

@@ -9,30 +9,31 @@ import {
   restartApp,
   focusElement,
   pressBoundaryKey,
+  openScratchpad,
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
 describe("Resizable panels in the native app", () => {
-  it(`fills Scratchpad when the native window is ${isMac ? "full screen" : "maximized"} and restored`, async () => {
+  it(`keeps Scratchpad within the native window when the native window is ${isMac ? "full screen" : "maximized"} and restored`, async () => {
     await addConnection("Scratchpad host");
     await openOfflineConnection("Scratchpad host");
-    await feature("Scratchpad");
+    await openScratchpad();
     await $(".scratchpad-editor textarea").waitForDisplayed();
-    const fillsWorkspace = () =>
+    const fitsWindow = () =>
       browser.execute(() => {
-        const section = document.querySelector<HTMLElement>(".connection-section")!;
-        const content = document.querySelector<HTMLElement>(".connection-section-content")!;
-        const pad = document.querySelector<HTMLElement>(".scratchpad-page")!;
-        const editor = document.querySelector<HTMLElement>(".scratchpad-editor")!;
-        const style = getComputedStyle(pad);
-        const available =
-          pad.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const pad = document.querySelector<HTMLElement>(".scratchpad-popover")!;
+        const bounds = pad.getBoundingClientRect();
+        const editor = pad.querySelector("textarea")!.getBoundingClientRect();
         return (
-          Math.abs(section.clientWidth - content.clientWidth) <= 1 &&
-          Math.abs(editor.clientWidth - available) <= 1
+          bounds.left >= 0 &&
+          bounds.top >= 0 &&
+          bounds.right <= innerWidth &&
+          bounds.bottom <= innerHeight &&
+          editor.width > 200 &&
+          editor.height > 80
         );
       });
-    await browser.waitUntil(fillsWorkspace);
+    await browser.waitUntil(fitsWindow);
     const originalWindow = await browser.getWindowRect();
     const expanded = () =>
       ipc<boolean>(isMac ? "plugin:window|is_fullscreen" : "plugin:window|is_maximized", {
@@ -43,7 +44,8 @@ describe("Resizable panels in the native app", () => {
     if (isMac) await browser.fullscreenWindow();
     else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(expanded);
-    await browser.waitUntil(fillsWorkspace);
+    await openScratchpad();
+    await browser.waitUntil(fitsWindow);
     if (isMac)
       await browser.setWindowRect(
         originalWindow.x,
@@ -53,7 +55,8 @@ describe("Resizable panels in the native app", () => {
       );
     else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => !(await expanded()));
-    await browser.waitUntil(fillsWorkspace);
+    await openScratchpad();
+    await browser.waitUntil(fitsWindow);
   });
   it("resizes and saves the Connections width through SQLite and resets it", async () => {
     const divider = $("aria/Resize Connections panel");
@@ -113,6 +116,8 @@ describe("Resizable panels in the native app", () => {
     const saved = async () =>
       (await browser.tauri.execute(({ core }) => core.invoke("get_workspace_state"))) as {
         panelSizes: Record<string, number>;
+        workspaces: PersistedWorkspaceState["workspaces"];
+        activeWorkspaceId: string | null;
       };
     await browser.waitUntil(async () => {
       const state = await saved();
@@ -124,16 +129,13 @@ describe("Resizable panels in the native app", () => {
     await openOfflineConnection("Layout host B");
     await openBaselines();
     await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
-    // View changes use the same debounced save as tab state. Wait for that
-    // write before terminating the process to test restoration deterministically.
     await browser.waitUntil(async () => {
-      const state = await ipc<{
-        activeWorkspaceId: string;
-        workspaces: { id: string; view: string }[];
-      }>("get_workspace_state");
+      const state = await saved();
       return (
-        state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.view ===
-        "baselines"
+        state.workspaces.length === 2 &&
+        state.workspaces.some(
+          (workspace) => workspace.id === state.activeWorkspaceId && workspace.view === "baselines",
+        )
       );
     });
     await restartApp();

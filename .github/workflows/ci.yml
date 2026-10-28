@@ -1,21 +1,9 @@
 name: CI
 
-# Skip CI for changes that can't affect the build or tests (docs and repo
-# metadata). A push/PR that also touches anything else still runs.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
-      - ".gitignore"
-      - ".gitattributes"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
-      - ".gitignore"
-      - ".gitattributes"
 
 permissions:
   contents: read
@@ -28,6 +16,36 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  desktop:
+    uses: ./.github/workflows/desktop-e2e.yml
+
+  hosted-ssh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build and SSH dependencies
+        timeout-minutes: 15
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: l
+        run: |
+          # The Azure mirror can remain responsive while downloading too slowly
+          # for APT to fail over. Keep the runner's official Ubuntu HTTPS mirrors.
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          grep -q '^https://archive.ubuntu.com/ubuntu/' /etc/apt/apt-mirrors.txt
+          sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update
+          sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server
+          node scripts/extract-png-icon.mjs src-tauri/icons/icon.ico src-tauri/icons/icon.png
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - name: Run live SSH tests against this disposable runner
+        run: bash scripts/test-hosted-ssh.sh
+
   frontend:
     runs-on: windows-latest
     timeout-minutes: 15

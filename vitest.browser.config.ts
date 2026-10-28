@@ -12,7 +12,11 @@ export default defineConfig({
     testTimeout: 20_000,
     browser: {
       enabled: true,
-      provider: playwright({ contextOptions: { reducedMotion: "reduce" } }),
+      provider: playwright({
+        contextOptions: { reducedMotion: "reduce" },
+        // Exercise native scrollbar clicks and drags in headless Chromium too.
+        launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] },
+      }),
       instances: [
         { browser: process.env.CONTROL_ROOM_TEST_BROWSER === "webkit" ? "webkit" : "chromium" },
       ],

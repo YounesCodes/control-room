@@ -57,7 +57,7 @@ describe("Settings and native window", () => {
       $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
     ).toBeDisplayed();
     expect((await savedSettings()).hostMetricsEnabled).toBe(true);
-    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "disk", "uptime"]);
+    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "diskIo", "uptime"]);
     await $("aria/Open Settings").click();
     await $(
       "//label[input[@type='checkbox']][contains(.,'Show host metrics in header')]/input",
@@ -67,53 +67,72 @@ describe("Settings and native window", () => {
     await expect($(".host-metrics")).not.toExist();
   });
 
-  it("dispatches permitted native dragging from metric text and spacing", async () => {
+  it("dispatches native metric dragging while leaving the overflowing scrollbar interactive", async () => {
     await ipc("save_settings", {
       settings: { ...(await savedSettings()), hostMetricsEnabled: true },
     });
     await restartApp();
     await openLocal();
     await $(".host-metrics-values").waitForDisplayed();
-    for (const selector of [
-      ".host-metrics",
-      ".host-metrics-values",
-      ".host-metric",
-      ".host-metric > span",
-      ".host-metric > strong",
-      ".host-metrics-status",
-    ]) {
-      // Observe the real native request. WebDriver cannot move the OS pointer.
-      const calls = await browser.execute(async (target) => {
-        const internals = (
-          window as unknown as {
-            __TAURI_INTERNALS__: {
-              convertFileSrc: (command: string, protocol: string) => string;
-            };
+    await browser.setWindowSize(1600, 900);
+    for (const overflowing of [false, true, false]) {
+      await browser.execute((narrow) => {
+        document.querySelector<HTMLElement>(".host-metrics")!.style.maxWidth = narrow
+          ? "340px"
+          : "";
+      }, overflowing);
+      await browser.waitUntil(() =>
+        browser.execute((narrow) => {
+          const row = document.querySelector<HTMLElement>(".host-metrics-values")!;
+          return (
+            row.scrollWidth > row.clientWidth === narrow && row.hasAttribute("tabindex") === narrow
+          );
+        }, overflowing),
+      );
+      for (const selector of [
+        ".host-metrics",
+        ".host-metrics-values",
+        ".host-metric",
+        ".host-metric > span",
+        ".host-metric > strong",
+        ".host-metrics-status",
+      ]) {
+        // Observe the real native request. WebDriver cannot move the OS pointer.
+        const calls = await browser.execute(async (target) => {
+          const internals = (
+            window as unknown as {
+              __TAURI_INTERNALS__: {
+                convertFileSrc: (command: string, protocol: string) => string;
+              };
+            }
+          ).__TAURI_INTERNALS__;
+          const dragUrl = internals.convertFileSrc("plugin:window|start_dragging", "ipc");
+          const original = window.fetch;
+          const requests: Promise<string>[] = [];
+          window.fetch = (input, options) => {
+            const request = original(input, options);
+            if (String(input) === dragUrl)
+              requests.push(
+                request.then(async (response) =>
+                  response.headers.get("Tauri-Response") === "ok" ? "ok" : response.clone().text(),
+                ),
+              );
+            return request;
+          };
+          try {
+            document
+              .querySelector(target)!
+              .dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }));
+            return await Promise.all(requests);
+          } finally {
+            window.fetch = original;
           }
-        ).__TAURI_INTERNALS__;
-        const dragUrl = internals.convertFileSrc("plugin:window|start_dragging", "ipc");
-        const original = window.fetch;
-        const requests: Promise<string>[] = [];
-        window.fetch = (input, options) => {
-          const request = original(input, options);
-          if (String(input) === dragUrl)
-            requests.push(
-              request.then(async (response) =>
-                response.headers.get("Tauri-Response") === "ok" ? "ok" : response.clone().text(),
-              ),
-            );
-          return request;
-        };
-        try {
-          document
-            .querySelector(target)!
-            .dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }));
-          return await Promise.all(requests);
-        } finally {
-          window.fetch = original;
-        }
-      }, selector);
-      expect(calls).toEqual(selector === ".host-metrics-status" ? [] : ["ok"]);
+        }, selector);
+        const interactive =
+          selector === ".host-metrics-status" ||
+          (overflowing && selector === ".host-metrics-values");
+        expect(calls).toEqual(interactive ? [] : ["ok"]);
+      }
     }
     await $(".host-metrics-trigger").click();
     await expect($(".host-metrics-panel")).toBeDisplayed();

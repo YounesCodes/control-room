@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
@@ -17,6 +18,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Verify the tagged commit passed main CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-release-ci.mjs
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -127,6 +132,7 @@ jobs:
           $checksum = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$checksum  $($publishedInstaller[0].name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
           gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not upload the checksum" }
 
       # Keep the updater feed in sync with the published release body. These
       # are the notes the app shows before and after an update.
@@ -142,6 +148,7 @@ jobs:
           $body = (gh release view $env:GITHUB_REF_NAME --json body | ConvertFrom-Json).body
           if (-not $body) { throw "The release has no body to use as update notes" }
           gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir . --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not download the updater feed" }
           $feed = Get-Content -LiteralPath latest.json -Raw | ConvertFrom-Json
           $feed.notes = $body
           # Written as bytes rather than through Set-Content: a byte order mark
@@ -156,6 +163,7 @@ jobs:
           node scripts/generate-release-notes.mjs --validate-feed latest.json
           if ($LASTEXITCODE -ne 0) { throw "Updater feed notes do not match the authored release notes" }
           gh release upload $env:GITHUB_REF_NAME latest.json --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not upload the updater feed" }
           Write-Host "Updater feed carries $($body.Length) characters of notes"
 
       # A release that looks successful but cannot be consumed by the updater is
@@ -173,6 +181,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "The installer signature or its signed version was rejected" }
 
           $assets = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw "Could not read release assets" }
           Write-Host "Published assets:`n$assets"
 
           $required = @(
@@ -188,9 +197,10 @@ jobs:
 
           # The feed must name this tag's version, or installed copies would be
           # offered something other than what was just built.
-          $latest = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[] | select(.name == "latest.json") | .url'
           $expected = $env:GITHUB_REF_NAME.TrimStart("v")
-          $feed = (gh api $latest --header "Accept: application/octet-stream" | ConvertFrom-Json)
+          gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir verified-feed --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not verify the uploaded updater feed" }
+          $feed = (Get-Content -LiteralPath verified-feed/latest.json -Raw | ConvertFrom-Json)
           if ($feed.version -ne $expected) {
             throw "latest.json announces $($feed.version) but this tag is $expected"
           }
