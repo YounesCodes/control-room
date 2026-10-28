@@ -4,7 +4,9 @@ use super::{HeaderMetric, HeaderMetrics, empty_sample, percent, set_disk_capacit
 pub(crate) fn script(metrics: &[HeaderMetric]) -> String {
     let mut script = String::from("LC_ALL=C; export LC_ALL; ");
     if metrics.contains(&HeaderMetric::Cpu) {
-        script.push_str("/usr/bin/top -l 2 -s 1 -n 0 | /usr/bin/awk '/CPU usage:/ {idle=$7} END {print \"cpu_idle=\" idle}'; ");
+        // CPU totals do not need top's costly framework and per-process memory
+        // inspection. Keep the two samples one second apart for a real delta.
+        script.push_str("/usr/bin/top -F -R -l 2 -s 1 -n 0 | /usr/bin/awk '/CPU usage:/ {idle=$7} END {print \"cpu_idle=\" idle}'; ");
     }
     if metrics.contains(&HeaderMetric::Ram) {
         script
@@ -120,6 +122,23 @@ pub(crate) fn parse(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
 mod tests {
     use super::*;
     const SAMPLE: &str = "cpu_idle=72.5%\nmemory_total=8589934592\nMach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: 10000.\nPages inactive: 20000.\nPages speculative: 1000.\ndisk_total=100000\ndisk_free=60000\nnow=1720000300\nboot=1720000000\n";
+    #[test]
+    fn cpu_sampling_skips_expensive_process_memory_inspection() {
+        let script = script(&[HeaderMetric::Cpu]);
+        let top = script.split("/usr/bin/top ").nth(1).unwrap();
+        let arguments: Vec<_> = top.split('|').next().unwrap().split_whitespace().collect();
+        assert!(
+            arguments.contains(&"-F"),
+            "framework sampling is unnecessary for CPU usage"
+        );
+        assert!(
+            arguments.contains(&"-R"),
+            "process memory maps are unnecessary for CPU usage"
+        );
+        assert!(arguments.windows(2).any(|pair| pair == ["-l", "2"]));
+        assert!(arguments.windows(2).any(|pair| pair == ["-s", "1"]));
+        assert!(arguments.windows(2).any(|pair| pair == ["-n", "0"]));
+    }
     #[test]
     fn parses_intel_and_apple_silicon_page_sizes_and_requested_readings() {
         let metrics = [
