@@ -14,6 +14,7 @@ import {
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
+import { readTerminalView } from "../lib/terminal-screen";
 import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
 
@@ -128,13 +129,10 @@ export function TerminalPane({
   sendInputRef.current = (bytes) => {
     const sessionId = sessionIdRef.current;
     if (sessionId) {
-      const terminal = terminalRef.current;
-      const buffer = terminal?.buffer?.active;
-      const prompt =
-        buffer
-          ?.getLine(buffer.baseY + buffer.cursorY)
-          ?.translateToString(false, 0, buffer.cursorX) ?? null;
-      if (workspace.state === "connected") processingRef.current?.input(bytes, prompt);
+      const view = readTerminalView(terminalRef.current);
+      if (workspace.state === "connected") {
+        processingRef.current?.input(bytes, view.line, view.alternate);
+      }
       void api.writeSession(sessionId, bytes).catch((error) => {
         if (sessionIdRef.current !== sessionId) return;
         processingRef.current?.reset();
@@ -281,6 +279,10 @@ export function TerminalPane({
       processingRef.current?.shellMarker(data);
       return false;
     });
+    const progressDisposable = terminal.parser.registerOscHandler(9, (data) => {
+      if (!sessionIdRef.current) return false;
+      return processingRef.current?.progress(data) ?? false;
+    });
     // All shells can report command activity. Only remote, opted-in Bash
     // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
@@ -391,6 +393,7 @@ export function TerminalPane({
       bellDisposable.dispose();
       searchDisposable.dispose();
       promptDisposable.dispose();
+      progressDisposable.dispose();
       oscDisposable.dispose();
       processingRef.current?.reset();
       search.dispose();
@@ -480,12 +483,8 @@ export function TerminalPane({
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         if (!sessionIdRef.current && !acceptingInputRef.current) return;
-        const buffer = terminal.buffer?.active;
-        const prompt =
-          buffer
-            ?.getLine(buffer.baseY + buffer.cursorY)
-            ?.translateToString(false, 0, buffer.cursorX) ?? null;
-        processingRef.current?.output(prompt);
+        const view = readTerminalView(terminal, true);
+        processingRef.current?.output(view.line, view.alternate, view.status);
         acknowledge(bytes.byteLength);
       });
     };

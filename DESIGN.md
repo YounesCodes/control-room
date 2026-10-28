@@ -269,6 +269,16 @@ never counts as command completion. Background header polling uses
 the header's own reading state and does not make idle terminals look busy.
 Retired session callbacks must not change a replacement session's activity.
 
+Coding agents spin while working and rest at their composer or when paused.
+OSC 9;4 progress reports take priority over screen redraws, on both the main
+and alternate screens. Running and indeterminate progress spin; cleared,
+failed, and paused progress rest. For recognized agent launch commands without
+progress reports, the current screen's cancel or interrupt status reports work.
+Typing, idle redraws, and approval prompts do not report work. Incomplete
+redraws preserve activity until a work or idle status replaces them. Unknown programs
+can report activity through OSC 9;4 without command-name detection. A pause in
+output never ends work. Ordinary full-screen editors and pagers stay idle.
+
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for
 local and remote sessions. Open terminal search as a compact overlay so it does

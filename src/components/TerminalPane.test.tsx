@@ -26,6 +26,9 @@ const xterm = vi.hoisted(() => ({
   oscHandlers: 0,
   osc: new Map<number, (data: string) => boolean>(),
   prompt: "$ ",
+  // Whether the program in the pty draws on an alternate screen, such as a
+  // coding agent's own composer rather than the shell's prompt.
+  alternate: false,
   writes: [] as string[],
   pastes: [] as string[],
   searchNext: vi.fn(),
@@ -52,6 +55,7 @@ const xterm = vi.hoisted(() => ({
     this.oscHandlers = 0;
     this.osc.clear();
     this.prompt = "$ ";
+    this.alternate = false;
     this.writes = [];
     this.pastes = [];
     this.searchNext.mockReset();
@@ -158,10 +162,13 @@ vi.mock("@xterm/xterm", () => ({
     get buffer() {
       return {
         active: {
-          cursorX: xterm.prompt.length,
+          // A full-screen program owns an alternate buffer with no scrollback
+          // prompt, which is what keeps a coding agent's composer idle.
+          type: xterm.alternate ? "alternate" : "normal",
+          cursorX: xterm.alternate ? 0 : xterm.prompt.length,
           cursorY: 0,
           baseY: 0,
-          getLine: () => ({ translateToString: () => xterm.prompt }),
+          getLine: () => (xterm.alternate ? undefined : { translateToString: () => xterm.prompt }),
         },
       };
     }
@@ -334,7 +341,7 @@ describe("TerminalPane sessions", () => {
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
     // Local shells report command activity without recording command history.
-    expect(xterm.oscHandlers).toBe(2);
+    expect(xterm.oscHandlers).toBe(3);
     xterm.osc.get(633)?.("ControlRoom;start;0;L3RtcA==;cHdk");
     xterm.osc.get(633)?.("ControlRoom;finish;1;0;L3RtcA==");
     expect(api.addHistory).not.toHaveBeenCalled();
@@ -343,7 +350,7 @@ describe("TerminalPane sessions", () => {
     xterm.reset();
     renderPane(createRemoteWorkspace(connection));
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
-    expect(xterm.oscHandlers).toBe(2);
+    expect(xterm.oscHandlers).toBe(3);
   });
 
   it("reports command processing until the rendered prompt returns and clears on unmount", async () => {
@@ -354,7 +361,9 @@ describe("TerminalPane sessions", () => {
       xterm.onData?.("sleep 60\r");
     });
     expect(onProcessing).toHaveBeenLastCalledWith(true);
-    xterm.prompt = "working";
+    // A command that prints nothing is indistinguishable from a program on the
+    // main screen, so the shell's prompt returning still reports completion.
+    xterm.prompt = "";
     act(() => channels[0].onmessage?.(new TextEncoder().encode("working").buffer));
     expect(onProcessing).toHaveBeenLastCalledWith(true);
     xterm.prompt = "$ ";
@@ -368,6 +377,38 @@ describe("TerminalPane sessions", () => {
     expect(onProcessing).toHaveBeenLastCalledWith(false);
   });
 
+  it("stays idle while a coding agent waits on its own screen", async () => {
+    const onProcessing = vi.fn();
+    renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onProcessing });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    await act(async () => {
+      xterm.onData?.("agent\r");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    // The agent takes the alternate screen, so its first frame ends the wait.
+    xterm.alternate = true;
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("Welcome").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+    // Typing into the agent and every spinner tick it redraws stay idle.
+    for (let frame = 0; frame < 5; frame++) {
+      await act(async () => {
+        xterm.onData?.("build the app");
+      });
+      act(() => channels[0].onmessage?.(new TextEncoder().encode("frame").buffer));
+      expect(onProcessing).toHaveBeenLastCalledWith(false);
+    }
+    // The agent reports actual work independently of the outer shell.
+    act(() => {
+      xterm.osc.get(9)?.("4;3");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("frame").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
+    act(() => {
+      xterm.osc.get(9)?.("4;0");
+    });
+    expect(onProcessing).toHaveBeenLastCalledWith(false);
+  });
   it("ignores command markers arriving after a session has disconnected", async () => {
     const onProcessing = vi.fn();
     renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onProcessing });
@@ -382,7 +423,10 @@ describe("TerminalPane sessions", () => {
       ),
     );
     expect(onProcessing).toHaveBeenLastCalledWith(false);
-    xterm.parseWrite = () => xterm.osc.get(133)?.("C");
+    xterm.parseWrite = () => {
+      xterm.osc.get(133)?.("C");
+      xterm.osc.get(9)?.("4;3");
+    };
     act(() => channels[0].onmessage?.(new TextEncoder().encode("\x1b]133;C\x07").buffer));
     expect(onProcessing).toHaveBeenLastCalledWith(false);
   });

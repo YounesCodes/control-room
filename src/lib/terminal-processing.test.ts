@@ -3,13 +3,19 @@ import { TerminalProcessing } from "./terminal-processing";
 
 const bytes = (value: string) => new TextEncoder().encode(value);
 
+const prompt = "dev@host:~$ ";
+/** The line the shell leaves the cursor on while its transcript is above. */
+const busyLine = "";
+/** The prompt the shell draws again under the command's transcript. */
+const returnedLine = prompt;
+
 describe("terminal command processing", () => {
   it.each(["", " ", "    ", "\t"])("stays idle when submitting blank input %j", (input) => {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);
-    tracker.input(bytes(input), "dev@host:~$ ");
-    tracker.input(bytes("\r"), `dev@host:~$ ${input}`);
-    tracker.output("dev@host:~$ ");
+    tracker.input(bytes(input), prompt);
+    tracker.input(bytes("\r"), `${prompt}${input}`);
+    tracker.output(prompt);
     expect(changed).not.toHaveBeenCalled();
   });
 
@@ -55,10 +61,11 @@ describe("terminal command processing", () => {
     tracker.output("$ ");
     tracker.input(bytes("\x1b[A"), "$ ");
     tracker.input(bytes("\r"), "$ echo hello");
-    tracker.output("hello");
+    tracker.output(busyLine);
     tracker.output("$ ");
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });
+
   it("does not invent command activity before a shell prompt is available", () => {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);
@@ -67,20 +74,20 @@ describe("terminal command processing", () => {
     tracker.shellMarker("C");
     expect(changed).toHaveBeenCalledWith(true);
   });
-  it("stays busy through a silent command and clears only when its prompt returns", () => {
+
+  it("stays busy while the shell is not back at its prompt", () => {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);
-    tracker.input(bytes("sleep 60"), "dev@host:~$ ");
+    tracker.input(bytes("sleep 60"), prompt);
     expect(changed).not.toHaveBeenCalled();
-    tracker.input(bytes("\r"), "dev@host:~$ sleep 60");
+    tracker.input(bytes("\r"), prompt);
     expect(changed.mock.calls).toEqual([[true]]);
-    tracker.output("");
-    tracker.output("still working");
+    tracker.output(busyLine);
+    tracker.output(busyLine);
     expect(changed.mock.calls).toEqual([[true]]);
-    tracker.output("dev@host:~$ ");
+    tracker.output(returnedLine);
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });
-
   it.each([
     ["dev@host:~$ ", "dev@host:/tmp$ "],
     ["PS C:\\Users\\dev> ", "PS D:\\work> "],
@@ -124,10 +131,10 @@ describe("terminal command processing", () => {
   it("does not stop a command on Ctrl+C until the shell actually returns", () => {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);
-    tracker.input(bytes("sleep 60\r"), "$ ");
+    tracker.input(bytes("sleep 60\r"), prompt);
     tracker.input(bytes("\x03"), "");
     expect(changed.mock.calls).toEqual([[true]]);
-    tracker.output("$ ");
+    tracker.output(returnedLine);
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });
 
@@ -139,5 +146,242 @@ describe("terminal command processing", () => {
     tracker.input(bytes("pwd\r"), "$ ");
     tracker.output("$ ");
     expect(changed.mock.calls).toEqual([[true], [false], [true], [false]]);
+  });
+});
+
+describe("terminal processing with an interactive program", () => {
+  it.each(["agy.bat", "codex", "pi", "opencode", "claude", "gemini", "npx codex"])(
+    "tracks %s working and idle on the main screen without shell markers",
+    (command) => {
+      const changed = vi.fn();
+      const tracker = new TerminalProcessing(changed);
+      tracker.input(bytes(`${command}\r`), prompt);
+      tracker.output("❯ ", false, ["❯ "]);
+      expect(changed).toHaveBeenLastCalledWith(false);
+      tracker.input(bytes("build the app\r"), "❯ ");
+      expect(changed).toHaveBeenLastCalledWith(false);
+      tracker.output("❯ ", false, ["• Working (2s • esc to interrupt)", "❯ "]);
+      expect(changed).toHaveBeenLastCalledWith(true);
+      tracker.output("❯ ", false, ["• Working (60s • esc to interrupt)", "❯ "]);
+      expect(changed).toHaveBeenLastCalledWith(true);
+      tracker.output("❯ ", false, ["Done", "❯ ", "? for shortcuts"]);
+      expect(changed).toHaveBeenLastCalledWith(false);
+      tracker.output(prompt);
+      tracker.input(bytes("sleep 60\r"), prompt);
+      expect(changed).toHaveBeenLastCalledWith(true);
+    },
+  );
+
+  it("tracks alternate-screen agent work without requiring progress integration", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.shellMarker("A");
+    tracker.input(bytes("opencode\r"), prompt);
+    tracker.shellMarker("C");
+    tracker.output("", true, ["esc interrupt"]);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.output("", true, ["Ask anything", "Enter to submit"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("stays idle at approval prompts and does not treat help as work", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agy.bat\r"), prompt);
+    tracker.output("", true, ["Working (esc to cancel)"]);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.output("", true, ["Do you want to allow this command?", "esc to cancel"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+    tracker.output("", true, ["Enter to submit, Esc to cancel"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("keeps work active while AntiGravity erases and repaints its status footer", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agy.bat\r"), prompt);
+    tracker.output("> ", false, ["> ", "? for shortcuts"]);
+    tracker.output("> ", false, ["> ", "esc to cancel"]);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    for (let frame = 0; frame < 5; frame++) {
+      tracker.output("> ", false, ["streaming reply", "────────", "> ", "────────"]);
+      expect(changed).toHaveBeenLastCalledWith(true);
+      tracker.output("> ", false, ["streaming reply", "> ", "esc to cancel"]);
+    }
+    expect(changed.mock.calls).toEqual([[true], [false], [true]]);
+    tracker.output("> ", false, ["finished reply", "> ", "? for shortcuts"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not mistake Pi's startup help for active work", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("pi\r"), prompt);
+    tracker.output("", false, ["esc interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not classify ordinary shell arguments as an agent launch", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("echo codex\r"), prompt);
+    tracker.output("");
+    expect(changed.mock.calls).toEqual([[true]]);
+  });
+
+  it.each(["4;0", "4;2", "4;4;50"])("stops for progress state %s", (state) => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.progress("4;1;20");
+    tracker.output("", true);
+    tracker.progress(state);
+    tracker.output("", true);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it.each(["notification", "4;5", "4;3;101", "4;1;NaN", "4;3;0;extra"])(
+    "ignores unrelated or invalid OSC 9 payload %s",
+    (data) => {
+      const changed = vi.fn();
+      const tracker = new TerminalProcessing(changed);
+      expect(tracker.progress(data)).toBe(false);
+      expect(changed).not.toHaveBeenCalled();
+    },
+  );
+
+  it("resets agent progress on reconnect and returning shell markers", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.progress("4;3");
+    tracker.reset();
+    tracker.input(bytes("sleep 60\r"), prompt);
+    tracker.output("");
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.progress("4;3");
+    tracker.shellMarker("A");
+    tracker.shellMarker("C");
+    tracker.output("");
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.shellMarker("D;0");
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not let a startup progress-clear marker disable ordinary shell commands", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.progress("4;0");
+    tracker.input(bytes("sleep 60\r"), prompt);
+    tracker.output("");
+    expect(changed).toHaveBeenLastCalledWith(true);
+  });
+
+  it("keeps agent progress active across alternate-screen redraws and clears on completion", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agy.bat\r"), prompt);
+    tracker.progress("4;3");
+    tracker.output("", true);
+    tracker.output("", true);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.progress("4;0");
+    tracker.output("", true);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("clears main-screen agent activity without waiting for the outer shell prompt", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.shellMarker("C");
+    tracker.progress("4;3");
+    tracker.progress("4;0");
+    tracker.output("❯ ");
+    tracker.input(bytes("hello\r"), "❯ ");
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  /** Starts an agent from the prompt and lets it take the alternate screen,
+   *  the way a coding agent draws its own composer. */
+  function launchAgent() {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agent\r"), prompt);
+    tracker.output("Welcome", true);
+    return { changed, tracker };
+  }
+
+  it("stops spinning as soon as the agent takes the screen", () => {
+    const { changed } = launchAgent();
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("stays idle while an idle agent redraws its composer", () => {
+    const { changed, tracker } = launchAgent();
+    for (let frame = 0; frame < 20; frame++) {
+      tracker.input(bytes("x"), "> ", true);
+      tracker.output("> build the app", true);
+    }
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("only spins when the agent reports its own work through a marker", () => {
+    const { changed, tracker } = launchAgent();
+    tracker.input(bytes("build the app\r"), "> ", true);
+    tracker.output("> ", true);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+    tracker.shellMarker("C");
+    expect(changed.mock.calls).toEqual([[true], [false], [true]]);
+    tracker.shellMarker("D;0");
+    expect(changed.mock.calls).toEqual([[true], [false], [true], [false]]);
+  });
+
+  it("returns idle once the agent exits and the shell prompt comes back", () => {
+    const { changed, tracker } = launchAgent();
+    tracker.output(prompt);
+    tracker.output(prompt);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+    tracker.input(bytes("ls\r"), prompt);
+    expect(changed.mock.calls).toEqual([[true], [false], [true]]);
+    tracker.output(busyLine);
+    tracker.output(prompt);
+    expect(changed.mock.calls).toEqual([[true], [false], [true], [false]]);
+  });
+
+  it("never spins for an agent whose screen hides the prompt", () => {
+    // An agent that clears the prompt leaves nothing for the shell to return
+    // to, so waiting on a prompt would spin forever.
+    const { changed, tracker } = launchAgent();
+    for (let frame = 0; frame < 5; frame++) tracker.output("composer", true);
+    tracker.output(prompt);
+    tracker.output(prompt);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("does not read typing into an agent as a shell command", () => {
+    const { changed, tracker } = launchAgent();
+    tracker.input(bytes("build the app\r"), "> ", true);
+    tracker.output("> ", true);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("stops when the program takes the screen", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agent\r"), prompt);
+    tracker.output("> ", true);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+    tracker.output("> ", true);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("keeps an ordinary full-screen program silent until it exits", () => {
+    // Vim and less were already silent while running; they stay silent.
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("vim\r"), prompt);
+    tracker.output("~", true);
+    tracker.output("~", true);
+    tracker.output(prompt);
+    tracker.output(prompt);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
   });
 });
