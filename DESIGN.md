@@ -51,7 +51,8 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Local Workspaces are terminal-only, so do not show remote
-inspection navigation for them; their navigation carries only Terminal.
+inspection navigation for them. Hide the capability navigation and its divider
+for local Workspaces so the connection list uses the available sidebar height.
 Scratchpad stays in the terminal toolbar for every Workspace kind.
 Optional header metrics may read system usage
 for a local tab without adding inspection pages. Keep connection and Workspace identity visible

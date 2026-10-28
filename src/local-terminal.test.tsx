@@ -619,12 +619,8 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "Git Bash");
 
-    // A local shell offers only its terminal view. None of
-    // the Remote Host inspection views are offered.
-    const features = within(await screen.findByRole("navigation", { name: "Workspace features" }));
-    expect(features.getAllByRole("button").map((button) => button.textContent?.trim())).toEqual([
-      "Terminal",
-    ]);
+    expect(screen.queryByRole("navigation", { name: "Workspace features" })).toBeNull();
+    expect(screen.getByTestId(/^terminal-/)).toBeTruthy();
     for (const view of [
       "Overview",
       "Systemd",
@@ -652,12 +648,10 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "PowerShell 7");
 
-    // The capped list makes room for the view switcher, which a local
-    // Workspace also carries for its Terminal view.
-    await waitFor(() =>
-      expect(container.querySelector("aside.sidebar")?.className).toContain("workspace-open"),
-    );
-    expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Scratchpad");
+    expect(container.querySelector("aside.sidebar")?.className).not.toContain("workspace-open");
+    expect(container.querySelector(".workspace-navigation")).toBeNull();
+    expect(container.querySelector(".sidebar-sections.with-capabilities")).toBeNull();
+    expect(screen.queryByRole("separator", { name: "Resize Hosts and Capabilities" })).toBeNull();
   });
 
   it("never runs host capability discovery for a local shell", async () => {
@@ -1238,11 +1232,8 @@ describe("Local Terminal", () => {
     // The popup keeps the global note separate from the terminal note.
     await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
     expect(await screen.findByLabelText("Global note")).toBeTruthy();
-    await user.click(
-      within(screen.getByRole("navigation", { name: "Workspace features" })).getByRole("button", {
-        name: "Terminal",
-      }),
-    );
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("navigation", { name: "Workspace features" })).toBeNull();
     await expect(await screen.findByTestId(/^terminal-/)).toBeTruthy();
   });
 
