@@ -82,6 +82,76 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("tracks agent progress through real xterm parsing on both screens", async () => {
+  container = document.createElement("div");
+  Object.assign(container.style, { width: "900px", height: "500px" });
+  document.body.append(container);
+  root = createRoot(container);
+  const onProcessing = vi.fn();
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createLocalWorkspace({
+          id: "test-shell",
+          label: "Test shell",
+          kind: "command-prompt",
+          elevated: false,
+        }),
+        state: "connected",
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onProcessing={onProcessing}
+    />,
+  );
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  const output = async (text: string) => {
+    const acknowledgements = session.acknowledgeSessionOutput.mock.calls.length;
+    session.output!.onmessage!(new TextEncoder().encode(text).buffer);
+    await vi.waitFor(() =>
+      expect(session.acknowledgeSessionOutput.mock.calls.length).toBeGreaterThan(acknowledgements),
+    );
+  };
+  // An unknown agent can report progress without command-name detection.
+  // Split a sequence across IPC messages to exercise xterm's parser buffering.
+  await output("\x1b]9;4;");
+  await output("3\x07\x1b[?1049hWorking");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  await output("\r\x1b[2KStill working");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  // A buffer switch alone must not erase a program's explicit progress.
+  await output("\x1b[?1049l");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  await output("\x1b]9;4;4;50\x1b\\Waiting for approval");
+  expect(onProcessing).toHaveBeenLastCalledWith(false);
+  await output("\x1b]9;4;1;60\x07");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  await output("\x1b]9;4;0\x07❯ ");
+  expect(onProcessing).toHaveBeenLastCalledWith(false);
+  await output("\r\x1b[2K❯ idle redraw");
+  expect(onProcessing).toHaveBeenLastCalledWith(false);
+
+  // AntiGravity's main-screen UI erases its footer before repainting it.
+  // Exercise the fallback through keyboard input and the real xterm buffer.
+  await output("\x1b]133;A\x07\x1b[2J\x1b[H$ ");
+  container.querySelector<HTMLTextAreaElement>("textarea")!.focus();
+  await userEvent.keyboard("agy.bat{Enter}");
+  await output("\r\nWelcome\r\n> \r\n? for shortcuts");
+  expect(onProcessing).toHaveBeenLastCalledWith(false);
+  await output("\x1b[2J\x1b[HWorking\r\n> \r\nesc to cancel");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  await output("\x1b[2J\x1b[HStreaming reply\r\n> ");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  await output("\r\nesc to cancel");
+  expect(onProcessing).toHaveBeenLastCalledWith(true);
+  await output("\x1b[2J\x1b[HDone\r\n> \r\n? for shortcuts");
+  expect(onProcessing).toHaveBeenLastCalledWith(false);
+});
+
 it("refits terminal columns and rows and resizes the same session when its pane changes", async () => {
   await page.viewport(1280, 800);
   container = document.createElement("div");

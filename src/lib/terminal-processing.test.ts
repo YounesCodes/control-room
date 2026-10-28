@@ -150,6 +150,155 @@ describe("terminal command processing", () => {
 });
 
 describe("terminal processing with an interactive program", () => {
+  it.each(["agy.bat", "codex", "pi", "opencode", "claude", "gemini", "npx codex"])(
+    "tracks %s working and idle on the main screen without shell markers",
+    (command) => {
+      const changed = vi.fn();
+      const tracker = new TerminalProcessing(changed);
+      tracker.input(bytes(`${command}\r`), prompt);
+      tracker.output("❯ ", false, ["❯ "]);
+      expect(changed).toHaveBeenLastCalledWith(false);
+      tracker.input(bytes("build the app\r"), "❯ ");
+      expect(changed).toHaveBeenLastCalledWith(false);
+      tracker.output("❯ ", false, ["• Working (2s • esc to interrupt)", "❯ "]);
+      expect(changed).toHaveBeenLastCalledWith(true);
+      tracker.output("❯ ", false, ["• Working (60s • esc to interrupt)", "❯ "]);
+      expect(changed).toHaveBeenLastCalledWith(true);
+      tracker.output("❯ ", false, ["Done", "❯ ", "? for shortcuts"]);
+      expect(changed).toHaveBeenLastCalledWith(false);
+      tracker.output(prompt);
+      tracker.input(bytes("sleep 60\r"), prompt);
+      expect(changed).toHaveBeenLastCalledWith(true);
+    },
+  );
+
+  it("tracks alternate-screen agent work without requiring progress integration", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.shellMarker("A");
+    tracker.input(bytes("opencode\r"), prompt);
+    tracker.shellMarker("C");
+    tracker.output("", true, ["esc interrupt"]);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.output("", true, ["Ask anything", "Enter to submit"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("stays idle at approval prompts and does not treat help as work", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agy.bat\r"), prompt);
+    tracker.output("", true, ["Working (esc to cancel)"]);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.output("", true, ["Do you want to allow this command?", "esc to cancel"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+    tracker.output("", true, ["Enter to submit, Esc to cancel"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("keeps work active while AntiGravity erases and repaints its status footer", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agy.bat\r"), prompt);
+    tracker.output("> ", false, ["> ", "? for shortcuts"]);
+    tracker.output("> ", false, ["> ", "esc to cancel"]);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    for (let frame = 0; frame < 5; frame++) {
+      tracker.output("> ", false, ["streaming reply", "────────", "> ", "────────"]);
+      expect(changed).toHaveBeenLastCalledWith(true);
+      tracker.output("> ", false, ["streaming reply", "> ", "esc to cancel"]);
+    }
+    expect(changed.mock.calls).toEqual([[true], [false], [true]]);
+    tracker.output("> ", false, ["finished reply", "> ", "? for shortcuts"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not mistake Pi's startup help for active work", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("pi\r"), prompt);
+    tracker.output("", false, ["esc interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash"]);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not classify ordinary shell arguments as an agent launch", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("echo codex\r"), prompt);
+    tracker.output("");
+    expect(changed.mock.calls).toEqual([[true]]);
+  });
+
+  it.each(["4;0", "4;2", "4;4;50"])("stops for progress state %s", (state) => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.progress("4;1;20");
+    tracker.output("", true);
+    tracker.progress(state);
+    tracker.output("", true);
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it.each(["notification", "4;5", "4;3;101", "4;1;NaN", "4;3;0;extra"])(
+    "ignores unrelated or invalid OSC 9 payload %s",
+    (data) => {
+      const changed = vi.fn();
+      const tracker = new TerminalProcessing(changed);
+      expect(tracker.progress(data)).toBe(false);
+      expect(changed).not.toHaveBeenCalled();
+    },
+  );
+
+  it("resets agent progress on reconnect and returning shell markers", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.progress("4;3");
+    tracker.reset();
+    tracker.input(bytes("sleep 60\r"), prompt);
+    tracker.output("");
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.progress("4;3");
+    tracker.shellMarker("A");
+    tracker.shellMarker("C");
+    tracker.output("");
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.shellMarker("D;0");
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not let a startup progress-clear marker disable ordinary shell commands", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.progress("4;0");
+    tracker.input(bytes("sleep 60\r"), prompt);
+    tracker.output("");
+    expect(changed).toHaveBeenLastCalledWith(true);
+  });
+
+  it("keeps agent progress active across alternate-screen redraws and clears on completion", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("agy.bat\r"), prompt);
+    tracker.progress("4;3");
+    tracker.output("", true);
+    tracker.output("", true);
+    expect(changed).toHaveBeenLastCalledWith(true);
+    tracker.progress("4;0");
+    tracker.output("", true);
+    expect(changed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("clears main-screen agent activity without waiting for the outer shell prompt", () => {
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.shellMarker("C");
+    tracker.progress("4;3");
+    tracker.progress("4;0");
+    tracker.output("❯ ");
+    tracker.input(bytes("hello\r"), "❯ ");
+    expect(changed.mock.calls).toEqual([[true], [false]]);
+  });
+
   /** Starts an agent from the prompt and lets it take the alternate screen,
    *  the way a coding agent draws its own composer. */
   function launchAgent() {
@@ -187,7 +336,7 @@ describe("terminal processing with an interactive program", () => {
 
   it("returns idle once the agent exits and the shell prompt comes back", () => {
     const { changed, tracker } = launchAgent();
-    tracker.screen();
+    tracker.output(prompt);
     tracker.output(prompt);
     expect(changed.mock.calls).toEqual([[true], [false]]);
     tracker.input(bytes("ls\r"), prompt);
@@ -202,7 +351,7 @@ describe("terminal processing with an interactive program", () => {
     // to, so waiting on a prompt would spin forever.
     const { changed, tracker } = launchAgent();
     for (let frame = 0; frame < 5; frame++) tracker.output("composer", true);
-    tracker.screen();
+    tracker.output(prompt);
     tracker.output(prompt);
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });
@@ -231,7 +380,7 @@ describe("terminal processing with an interactive program", () => {
     tracker.input(bytes("vim\r"), prompt);
     tracker.output("~", true);
     tracker.output("~", true);
-    tracker.screen();
+    tracker.output(prompt);
     tracker.output(prompt);
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });

@@ -269,15 +269,15 @@ never counts as command completion. Background header polling uses
 the header's own reading state and does not make idle terminals look busy.
 Retired session callbacks must not change a replacement session's activity.
 
-An interactive program that waits on the user is never command activity. The
-ring means a shell is doing work, so a coding agent idle at its composer must
-not spin. This follows the screen the program draws rather than a list of
-known agents: an alternate screen belongs to the program using it, and a main
-screen that keeps a prompt without the shell's own reset belongs to a program
-too. Its redraws, and typing into it, stay idle, and only a shell marker or
-the shell taking its prompt back reports that work. An ordinary shell keeps
-reporting through its prompt; a program that owns the alternate screen stays
-silent until the terminal leaves it.
+Coding agents spin while working and rest at their composer or when paused.
+OSC 9;4 progress reports take priority over screen redraws, on both the main
+and alternate screens. Running and indeterminate progress spin; cleared,
+failed, and paused progress rest. For recognized agent launch commands without
+progress reports, the current screen's cancel or interrupt status reports work.
+Typing, idle redraws, and approval prompts do not report work. Incomplete
+redraws preserve activity until a work or idle status replaces them. Unknown programs
+can report activity through OSC 9;4 without command-name detection. A pause in
+output never ends work. Ordinary full-screen editors and pagers stay idle.
 
 The terminal is the main working surface, not a dashboard card. Keep common
 session actions in the tab strip for the active pane and use the same pane for

@@ -341,7 +341,7 @@ describe("TerminalPane sessions", () => {
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
     // Local shells report command activity without recording command history.
-    expect(xterm.oscHandlers).toBe(2);
+    expect(xterm.oscHandlers).toBe(3);
     xterm.osc.get(633)?.("ControlRoom;start;0;L3RtcA==;cHdk");
     xterm.osc.get(633)?.("ControlRoom;finish;1;0;L3RtcA==");
     expect(api.addHistory).not.toHaveBeenCalled();
@@ -350,7 +350,7 @@ describe("TerminalPane sessions", () => {
     xterm.reset();
     renderPane(createRemoteWorkspace(connection));
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
-    expect(xterm.oscHandlers).toBe(2);
+    expect(xterm.oscHandlers).toBe(3);
   });
 
   it("reports command processing until the rendered prompt returns and clears on unmount", async () => {
@@ -397,13 +397,15 @@ describe("TerminalPane sessions", () => {
       act(() => channels[0].onmessage?.(new TextEncoder().encode("frame").buffer));
       expect(onProcessing).toHaveBeenLastCalledWith(false);
     }
-    // Only the shell's own marker resumes the ring while the agent runs.
+    // The agent reports actual work independently of the outer shell.
     act(() => {
-      xterm.osc.get(133)?.("C");
+      xterm.osc.get(9)?.("4;3");
     });
     expect(onProcessing).toHaveBeenLastCalledWith(true);
+    act(() => channels[0].onmessage?.(new TextEncoder().encode("frame").buffer));
+    expect(onProcessing).toHaveBeenLastCalledWith(true);
     act(() => {
-      xterm.osc.get(133)?.("D;0");
+      xterm.osc.get(9)?.("4;0");
     });
     expect(onProcessing).toHaveBeenLastCalledWith(false);
   });
@@ -421,7 +423,10 @@ describe("TerminalPane sessions", () => {
       ),
     );
     expect(onProcessing).toHaveBeenLastCalledWith(false);
-    xterm.parseWrite = () => xterm.osc.get(133)?.("C");
+    xterm.parseWrite = () => {
+      xterm.osc.get(133)?.("C");
+      xterm.osc.get(9)?.("4;3");
+    };
     act(() => channels[0].onmessage?.(new TextEncoder().encode("\x1b]133;C\x07").buffer));
     expect(onProcessing).toHaveBeenLastCalledWith(false);
   });

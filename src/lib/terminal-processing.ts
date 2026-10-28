@@ -1,23 +1,6 @@
-/** Runtime-only command activity. No input or output is saved.
- *
- * Shell markers are authoritative where a shell integration emits them. Every
- * other shell falls back to its rendered prompt, because nothing outside the
- * shell can tell an ordinary command apart from a program's own prompt.
- *
- * A program that waits on the user must never read as a command that is still
- * running: the ring is for a shell doing work, not for a coding agent sitting
- * idle at its composer. The terminal says when a program owns the screen,
- * which covers every such program rather than a list of known agents:
- *
- * An alternate screen belongs to the program drawing on it, such as Vim, less,
- * or an agent with its own frame. Whatever it redraws is not shell activity,
- * and it stays idle until the shell reports work through a marker or takes the
- * screen back. The main screen stays the shell's, where its prompt is what
- * reports completion after a command.
- *
- * A program that draws on the main screen cannot be told apart from a command
- * that prints nothing while it runs, so neither is guessed at: the shell's
- * prompt returning reports completion either way. */
+/** Runtime-only activity. Shell commands follow markers or their returning
+ * prompt. Interactive programs report progress through OSC 9;4, with a
+ * rendered-status fallback for coding agents. No input or output is saved. */
 export class TerminalProcessing {
   private busy = false;
   /** The last shell prompt rendered where input was typed. */
@@ -27,10 +10,11 @@ export class TerminalProcessing {
   private escape = "";
   private pasted = false;
   private marked = false;
-  /** An alternate screen is in use, so only the shell can resume the ring. */
-  private alternate = false;
   /** A program owns the screen, so its prompt is not the shell's. */
   private program = false;
+  private agent = false;
+  private agentBusy = false;
+  private progressBusy: boolean | null = null;
 
   constructor(private readonly changed: (busy: boolean) => void) {}
 
@@ -41,8 +25,10 @@ export class TerminalProcessing {
     this.escape = "";
     this.pasted = false;
     this.marked = false;
-    this.alternate = false;
     this.program = false;
+    this.agent = false;
+    this.agentBusy = false;
+    this.progressBusy = null;
     this.setBusy(false);
   }
 
@@ -88,9 +74,16 @@ export class TerminalProcessing {
                 ? ""
                 : prompt
             : "";
+        const launchingAgent =
+          !this.program && isAgentCommand(this.inputLine.trim() || renderedInput.trim());
+        if (launchingAgent) {
+          this.agent = true;
+          this.agentBusy = false;
+          this.program = true;
+        }
         if (
           !this.marked &&
-          !this.program &&
+          (!this.program || launchingAgent) &&
           !alternate &&
           this.prompt?.trim() &&
           (this.inputLine.trim() || renderedInput.trim())
@@ -114,8 +107,30 @@ export class TerminalProcessing {
 
   /** The rendered screen after output. `prompt` is the line the cursor rests
    *  on, or null when the cursor is not on a readable line. */
-  output(prompt: string | null, alternate = false) {
-    this.alternate = alternate;
+  output(prompt: string | null, alternate = false, status: readonly string[] = []) {
+    // A returning shell prompt also clears progress left behind by a killed
+    // program. Do not require a clean program exit to recover the indicator.
+    if (!alternate && samePrompt(this.prompt ?? "", prompt ?? "")) {
+      this.agent = false;
+      this.program = false;
+      this.progressBusy = null;
+      if (!this.marked) this.stop();
+      return;
+    }
+    if (this.progressBusy !== null) {
+      this.program = true;
+      this.setBusy(this.progressBusy);
+      return;
+    }
+    if (this.agent) {
+      this.program = true;
+      this.editing = false;
+      this.inputLine = "";
+      const activity = agentActivity(status);
+      if (activity !== null) this.agentBusy = activity;
+      this.setBusy(this.agentBusy);
+      return;
+    }
     if (alternate) {
       // The program owns this screen, so nothing it draws is shell activity.
       this.program = true;
@@ -123,24 +138,6 @@ export class TerminalProcessing {
       return;
     }
     this.program = false;
-    if (this.marked || !this.busy) return;
-    if (prompt === null) return;
-    // The shell draws its prompt again under the command's transcript, which
-    // leaves the transcript's last line above it rather than on the cursor.
-    if (samePrompt(this.prompt ?? prompt, prompt)) {
-      this.editing = false;
-      this.inputLine = "";
-      this.setBusy(false);
-    }
-  }
-
-  /** The terminal left an alternate screen, so the shell has its screen back.
-   *  A shell that returned to its prompt is between commands. */
-  screen() {
-    if (!this.alternate) return;
-    this.alternate = false;
-    this.program = false;
-    this.stop();
   }
 
   /** OSC 133 and VS Code's OSC 633 use A for prompt start, C for command
@@ -149,8 +146,10 @@ export class TerminalProcessing {
     const marker = data.split(";", 1)[0];
     if (marker !== "A" && marker !== "C" && marker !== "D") return;
     this.marked = true;
-    this.program = false;
     if (marker !== "C") {
+      this.program = false;
+      this.agent = false;
+      this.progressBusy = null;
       this.editing = false;
       this.inputLine = "";
     }
@@ -159,12 +158,33 @@ export class TerminalProcessing {
 
   command(busy: boolean) {
     this.marked = true;
-    this.program = false;
     if (!busy) {
+      this.program = false;
+      this.agent = false;
+      this.progressBusy = null;
       this.editing = false;
       this.inputLine = "";
     }
     this.setBusy(busy);
+  }
+
+  /** OSC 9 has other uses, including notifications. Consume only progress.
+   * Running and indeterminate spin; clear, failure and pause do not. */
+  progress(data: string): boolean {
+    const match = /^4;([0-4])(?:;(\d{1,3}))?$/.exec(data);
+    if (!match || (match[2] !== undefined && Number(match[2]) > 100)) return false;
+    // Shell startup can clear a terminal's progress before any program runs.
+    // That is not evidence that an interactive program owns the input.
+    if (match[1] === "0" && this.progressBusy === null && !this.program) {
+      this.setBusy(false);
+      return true;
+    }
+    this.progressBusy = match[1] === "1" || match[1] === "3";
+    this.program = true;
+    this.editing = false;
+    this.inputLine = "";
+    this.setBusy(this.progressBusy);
+    return true;
   }
 
   /** Waiting on the user is not work, so the ring stops with the command. */
@@ -179,6 +199,44 @@ export class TerminalProcessing {
     this.busy = busy;
     this.changed(busy);
   }
+}
+
+/** Only the executable at a command boundary identifies a coding agent.
+ * Arguments mentioning an agent, such as `echo codex`, must stay shell work.
+ * Unknown tools can use OSC 9;4 without being added here. */
+function isAgentCommand(command: string): boolean {
+  return /^(?:(?:&|call|exec|npx|bunx|uvx)\s+)?["']?(?:[^\s"']*[/\\])?(?:agy|antigravity|codex|claude|pi|opencode|gemini|aider|goose|qwen|amp|droid|kimi|copilot)(?:\.(?:bat|cmd|exe|ps1))?["']?(?:\s|$)/i.test(
+    command,
+  );
+}
+
+/** Read current UI status, never output frequency. These hints disappear on
+ * completion even when the agent keeps its composer open on the main screen. */
+function agentActivity(lines: readonly string[]): boolean | null {
+  if (
+    lines.some((line) =>
+      /\b(?:waiting for (?:your|user|approval|permission)|do you want to (?:allow|proceed)|allow (?:once|always))\b/i.test(
+        line,
+      ),
+    )
+  ) {
+    return false;
+  }
+  if (
+    lines.some(
+      (line) =>
+        /\besc(?:ape)?\s+(?:to\s+)?(?:interrupt|cancel|stop)\b/i.test(line) &&
+        !/\b(?:enter to|to submit|shortcuts|for help|clear\/exit|to clear|to exit|to cycle)\b/i.test(
+          line,
+        ),
+    )
+  )
+    return true;
+  if (lines.some((line) => /\?\s+for shortcuts\b|\benter to (?:send|submit)\b/i.test(line)))
+    return false;
+  // Agents can erase and repaint their footer in separate output messages.
+  // A missing status line is an incomplete frame, not command completion.
+  return null;
 }
 
 function samePrompt(previous: string, current: string): boolean {

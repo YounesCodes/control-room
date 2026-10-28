@@ -9,7 +9,7 @@ import terminalMenuScreenshot from "../../assets/screenshots/new-terminal-menu.p
 
 The SSH terminal uses Windows OpenSSH. Type commands as you would in any other SSH client. Local shells use the same terminal controls.
 
-The status circle becomes a rotating ring while connecting, running a command, or opening and refreshing host inspection views. It returns to a solid circle when the work finishes. Automatic header-metric readings use the header's own status and do not spin an idle terminal's circle. With reduced motion enabled, the ring stays still. Command completion follows the shell's markers or returning prompt; a custom prompt that changes its format may need shell integration to report completion reliably. A coding agent or other program that draws its own screen and waits for you is not a running command, so its circle stays solid while it waits.
+The status circle becomes a rotating ring while connecting, running a command, or opening and refreshing host inspection views. It returns to a solid circle when the work finishes. Automatic header-metric readings use the header's own status and do not spin an idle terminal's circle. With reduced motion enabled, the ring stays still. Command completion follows the shell's markers or returning prompt; a custom prompt that changes its format may need shell integration to report completion reliably. Coding agents use their terminal progress reports or recognized on-screen work indicators. The circle rests while they are idle or paused. Agents with custom launch commands or interfaces need OSC 9;4 progress reporting for reliable activity detection.
 
 <figure class="docs-screenshot">
   <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">

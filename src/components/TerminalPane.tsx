@@ -279,6 +279,10 @@ export function TerminalPane({
       processingRef.current?.shellMarker(data);
       return false;
     });
+    const progressDisposable = terminal.parser.registerOscHandler(9, (data) => {
+      if (!sessionIdRef.current) return false;
+      return processingRef.current?.progress(data) ?? false;
+    });
     // All shells can report command activity. Only remote, opted-in Bash
     // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
@@ -389,6 +393,7 @@ export function TerminalPane({
       bellDisposable.dispose();
       searchDisposable.dispose();
       promptDisposable.dispose();
+      progressDisposable.dispose();
       oscDisposable.dispose();
       processingRef.current?.reset();
       search.dispose();
@@ -470,9 +475,6 @@ export function TerminalPane({
     };
 
     const output = new Channel<ArrayBuffer>();
-    // Whether the last render ended on an alternate screen, so leaving one is
-    // seen even though a program's exit and the shell's prompt arrive apart.
-    let wasAlternate = false;
     output.onmessage = (message) => {
       if (disposed || generation !== sessionGenerationRef.current) return;
       if (!sessionIdRef.current && !acceptingInputRef.current) return;
@@ -481,12 +483,8 @@ export function TerminalPane({
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         if (!sessionIdRef.current && !acceptingInputRef.current) return;
-        const view = readTerminalView(terminal);
-        // Leaving an alternate screen hands the main screen back, which is
-        // the one moment a full-screen program's command is known to be over.
-        if (wasAlternate && !view.alternate) processingRef.current?.screen();
-        wasAlternate = view.alternate;
-        processingRef.current?.output(view.line, view.alternate);
+        const view = readTerminalView(terminal, true);
+        processingRef.current?.output(view.line, view.alternate, view.status);
         acknowledge(bytes.byteLength);
       });
     };
