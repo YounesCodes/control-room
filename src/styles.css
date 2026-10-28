@@ -319,6 +319,14 @@ code,
   box-shadow: var(--shadow-popover);
 }
 
+* {
+  --scrollbar-thumb: transparent;
+}
+
+*:hover {
+  --scrollbar-thumb: #4a4a4a;
+}
+
 ::-webkit-scrollbar {
   width: 11px;
   height: 11px;
@@ -331,7 +339,7 @@ code,
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 8px;
-  background: #4a4a4a;
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
   transition: background-color var(--motion-fast) var(--ease);
 }
@@ -343,6 +351,12 @@ code,
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* xterm owns a DOM scrollbar rather than a native browser scrollbar. */
+.xterm:not(:hover) .xterm-scrollable-element > .scrollbar {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ==========================================================================
@@ -486,6 +500,7 @@ code,
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   padding: 2px 0 2px 14px;
   align-items: center;
 }
