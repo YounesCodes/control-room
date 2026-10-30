@@ -2728,7 +2728,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await page.getByRole("button", { name: "Retry with sudo" }).click();
     await expect.element(page.getByRole("dialog", { name: "Sudo required" })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect
+      .element(page.getByRole("dialog", { name: "Sudo required" }))
+      .not.toBeInTheDocument();
+    await expect.element(page.getByRole("button", { name: "Retry with sudo" })).toBeVisible();
+    await page.getByRole("button", { name: "Retry with sudo" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect.element(page.getByRole("button", { name: "Retry with sudo" })).toBeVisible();
     expect(
       native.invoke.mock.calls.filter(
         ([command, args]) => command === "inspect_firewall" && args.sudoPassword,

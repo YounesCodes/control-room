@@ -199,7 +199,8 @@ export function PortsPane({
   }
 
   useEffect(() => {
-    if (!tools) return;
+    // The credential modal owns outside clicks and Escape until it closes.
+    if (!tools || firewallSudo || portsSudo) return;
     const panel = toolsRef.current?.querySelector<HTMLElement>(".ports-tools-panel");
     (panel?.querySelector<HTMLElement>("input, select") ?? panel)?.focus();
     const dismiss = (event: PointerEvent) => {
@@ -217,7 +218,7 @@ export function PortsPane({
       document.removeEventListener("pointerdown", dismiss);
       document.removeEventListener("keydown", escape);
     };
-  }, [tools]);
+  }, [tools, firewallSudo, portsSudo]);
 
   useEffect(() => {
     if (cache.error || firewallError || connectionsError || containersCache.error) setTools("info");
