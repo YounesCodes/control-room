@@ -44,7 +44,6 @@ import {
   Power,
   Plus,
   Rows2,
-  RefreshCw,
   Server,
   Settings,
   ShieldAlert,
@@ -2329,27 +2328,6 @@ export function App() {
                     }}
                   />
                 )}
-                {activeTerminalEnded && (
-                  <button
-                    className="session-strip-button"
-                    type="button"
-                    onClick={() =>
-                      updateWorkspace(activeWorkspace.id, {
-                        connectRequested: true,
-                        restored: false,
-                        reconnectToken: activeWorkspace.reconnectToken + 1,
-                      })
-                    }
-                    aria-label={
-                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
-                    }
-                    title={
-                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
-                    }
-                  >
-                    <RefreshCw size={15} />
-                  </button>
-                )}
                 {terminalFocusMode && (
                   <>
                     <button
@@ -2595,6 +2573,13 @@ export function App() {
                           })
                         }
                         findRequest={terminalFindRequests[workspace.id] ?? 0}
+                        onReconnect={() =>
+                          updateWorkspace(workspace.id, {
+                            connectRequested: true,
+                            restored: false,
+                            reconnectToken: workspace.reconnectToken + 1,
+                          })
+                        }
                       />
                     </div>
                   );
