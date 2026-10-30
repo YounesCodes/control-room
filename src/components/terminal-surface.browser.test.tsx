@@ -398,8 +398,29 @@ it("puts the reconnect action on the ended-session notice", async () => {
   );
   const action = page.getByRole("button", { name: "Reconnect", exact: true });
   await expect.element(action).toBeVisible();
-  await userEvent.click(action);
+  for (const width of [960, 360, 240]) {
+    await page.viewport(width, 640);
+    const notice = container!.querySelector<HTMLElement>(".terminal-notice")!;
+    const message = notice.querySelector<HTMLElement>(".terminal-notice-message")!;
+    const button = notice.querySelector<HTMLButtonElement>(".terminal-notice-action")!;
+    await vi.waitFor(() => {
+      const banner = notice.getBoundingClientRect();
+      const text = message.getBoundingClientRect();
+      const recovery = button.getBoundingClientRect();
+      expect(Math.abs(text.y + text.height / 2 - recovery.y - recovery.height / 2)).toBeLessThan(1);
+      expect(banner.right - recovery.right).toBeCloseTo(12, 0);
+      expect(text.right).toBeLessThanOrEqual(recovery.left - 12);
+      expect(message.scrollWidth).toBeLessThanOrEqual(message.clientWidth);
+      expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
+    });
+  }
+  action.element().focus();
+  await expect.element(action).toHaveFocus();
+  await userEvent.keyboard("{Enter}");
+  expect(getComputedStyle(action.element()).outlineStyle).toBe("solid");
   expect(onReconnect).toHaveBeenCalledTimes(1);
+  await userEvent.click(action);
+  expect(onReconnect).toHaveBeenCalledTimes(2);
 });
 
 it("labels the notice action Restart for an ended local shell", async () => {
