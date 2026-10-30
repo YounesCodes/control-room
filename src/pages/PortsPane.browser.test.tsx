@@ -547,6 +547,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   await page.getByText("Host firewall policy", { exact: true }).click();
   expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+  await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
 
 it("keeps sshd worker connections immediately below the related SSH listener", async () => {
