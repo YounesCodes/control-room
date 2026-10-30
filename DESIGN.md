@@ -212,8 +212,11 @@ confirmed destructive work, and labelled icon buttons for compact controls.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.
-Center the Local terminal and Add connection contents as one shared block,
-with matching icon and text columns sized to the wider label.
+Center the Add connection icon and label as one block.
+New terminal in the tab strip is the shared launcher for connections and local
+shells, including before the first tab opens. Keep administrator shells in their
+own group. When setup is needed, put instructions in a collapsed disclosure
+below the targets so ordinary launches stay compact.
 
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting

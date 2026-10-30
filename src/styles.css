@@ -1460,9 +1460,8 @@ code,
   font-weight: 650;
 }
 
-/* Shared tracks center the widest label and keep both rows' icons aligned. */
-.sidebar-primary > svg,
-.sidebar-secondary > svg {
+/* Center the action's icon and label as one block. */
+.sidebar-primary > svg {
   grid-column: 2;
   justify-self: center;
 }
@@ -1473,8 +1472,7 @@ code,
   white-space: nowrap;
 }
 
-.sidebar-primary svg,
-.sidebar-secondary svg {
+.sidebar-primary svg {
   transition:
     color var(--motion-fast) var(--ease),
     transform var(--motion-fast) var(--ease);
@@ -1492,127 +1490,8 @@ code,
 }
 
 .sidebar-primary:hover svg,
-.sidebar-primary:focus-visible svg,
-.sidebar-secondary:hover svg,
-.sidebar-secondary:focus-visible svg {
+.sidebar-primary:focus-visible svg {
   transform: translateX(1px);
-}
-
-/* The Local Terminal launcher sits above Add connection: a secondary action,
-   since most work in Control Room is remote. */
-.local-shell-launcher {
-  display: grid;
-  grid-column: span 4;
-  grid-template-columns: subgrid;
-  position: relative;
-}
-
-.sidebar-secondary {
-  display: grid;
-  grid-column: span 4;
-  grid-template-columns: subgrid;
-  width: 100%;
-  min-height: 36px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  padding: 0 11px;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 650;
-}
-
-.sidebar-secondary:hover {
-  border-color: var(--border-strong);
-  background: var(--fill-hover);
-  color: var(--text-strong);
-}
-
-.local-shell-menu {
-  position: absolute;
-  z-index: 30;
-  bottom: calc(100% + 6px);
-  left: 0;
-  display: flex;
-  width: max-content;
-  min-width: 100%;
-  max-width: calc(100vw - 28px);
-  max-height: min(420px, calc(100vh - 100px));
-  overflow-y: auto;
-  flex-direction: column;
-  gap: 2px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-overlay);
-  box-shadow: var(--shadow-popover);
-  padding: 6px;
-  animation: popover-in var(--motion-fast) var(--ease);
-}
-
-.local-shell-menu-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.local-shell-menu-group + .local-shell-menu-group {
-  border-top: 1px solid var(--border);
-  margin-top: 5px;
-  padding-top: 5px;
-}
-
-.local-shell-menu-group > strong {
-  padding: 4px 8px 3px;
-  color: var(--text-faint);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.local-shell-menu button {
-  display: flex;
-  min-height: 28px;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  padding: 0 8px;
-  color: var(--text-muted);
-  font-size: 11.5px;
-  text-align: left;
-  white-space: nowrap;
-  transition:
-    background-color var(--motion-fast) var(--ease),
-    color var(--motion-fast) var(--ease);
-}
-
-.local-shell-menu button:hover {
-  background: var(--fill-active);
-  color: var(--text-strong);
-}
-
-.local-shell-menu button:active {
-  background: var(--fill-selected);
-}
-
-.local-shell-administrator-note {
-  display: grid;
-  width: 208px;
-  grid-template-columns: 14px minmax(0, 1fr);
-  align-items: start;
-  gap: 9px;
-  margin: 0;
-  padding: 3px 9px 7px;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.local-shell-administrator-note svg {
-  margin-top: 1px;
-  color: var(--warning);
 }
 
 /* Local shell and host OS marks share a separate identity slot. */
@@ -2261,6 +2140,12 @@ code,
   flex: none;
 }
 
+.session-new-terminal-empty {
+  width: auto;
+  gap: 8px;
+  padding-inline: 12px;
+}
+
 .session-new-terminal:hover:not(:disabled) {
   background: var(--fill-hover);
   color: var(--text-strong);
@@ -2432,7 +2317,48 @@ code,
 }
 
 .terminal-target-group + .terminal-target-group {
-  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 5px;
+  padding-top: 5px;
+}
+
+.terminal-administrator-setup {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 5px;
+  padding-top: 5px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.terminal-administrator-setup summary {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.terminal-administrator-setup summary:hover {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+
+.terminal-administrator-setup summary svg:last-child {
+  margin-left: auto;
+}
+
+.terminal-administrator-setup[open] summary svg:last-child {
+  transform: rotate(180deg);
+}
+
+.terminal-administrator-setup p {
+  margin: 4px 8px 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 /* New terminal hangs off the tab strip, so it opens below and to the left of
@@ -6021,7 +5947,6 @@ kbd {
 .danger-button:active:not(:disabled),
 .panel-state button:active:not(:disabled),
 .sidebar-primary:active:not(:disabled),
-.sidebar-secondary:active:not(:disabled),
 .host-metrics-status:active:not(:disabled) {
   transform: scale(0.98);
 }
@@ -6139,11 +6064,6 @@ kbd {
 .session-tab-overflow-menu > button:focus .identity-mark,
 .session-tab-overflow-menu > button:focus-visible .identity-mark,
 .session-tab-overflow-menu > button[aria-current="page"] .identity-mark,
-.local-shell-launcher button:hover .identity-mark,
-.local-shell-launcher button:focus-visible .identity-mark,
-.local-shell-launcher button[aria-expanded="true"] .identity-mark,
-.local-shell-menu button:hover .identity-mark,
-.local-shell-menu button:focus-visible .identity-mark,
 .command-item:hover .identity-mark,
 .command-item:focus-visible .identity-mark,
 .command-item.active .identity-mark,
@@ -6168,11 +6088,10 @@ kbd {
   }
 
   .sidebar-footer {
-    grid-template-columns: repeat(2, minmax(0, 1fr) 16px max-content minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) 16px max-content minmax(0, 1fr);
     gap: 7px;
   }
 
-  .sidebar-footer .sidebar-secondary,
   .sidebar-footer .sidebar-primary {
     height: 34px;
     min-height: 34px;
