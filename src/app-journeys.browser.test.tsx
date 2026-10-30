@@ -2407,6 +2407,25 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toHaveValue(fixtures.container.id);
   });
 
+  it("keeps the Docker whale neutral at rest and reveals blue on hover or keyboard focus", async () => {
+    await mount();
+    await navigate("Docker");
+    const docker = page.getByRole("button", { name: "Docker", exact: true });
+    const ports = page.getByRole("button", { name: "Ports", exact: true });
+    const icon = docker.element().querySelector("svg")!;
+    const color = () => getComputedStyle(icon).color;
+    await userEvent.hover(ports.element());
+    await vi.waitFor(() => expect(color()).not.toBe("rgb(2, 136, 209)"));
+    const resting = color();
+    await userEvent.hover(docker.element());
+    await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
+    await userEvent.hover(ports.element());
+    await vi.waitFor(() => expect(color()).toBe(resting));
+    await userEvent.keyboard("{Tab}");
+    (docker.element() as HTMLElement).focus();
+    await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
+  });
+
   it("inspects listeners, Docker mappings, and remote connections on one full Ports canvas", async () => {
     await page.viewport(1440, 900);
     overrides.set("list_ports", () => [
@@ -2496,6 +2515,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
     expect(element.querySelectorAll(".arch-chip")).toHaveLength(7);
+    expect(element.querySelector(".owner-container .lucide-container")).toBeTruthy();
     // Every orthogonal segment must stay outside unrelated owner cards.
     const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
     for (const path of element.querySelectorAll(".arch-links path")) {

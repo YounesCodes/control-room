@@ -1,4 +1,4 @@
-import { FileClock, Server } from "lucide-react";
+import { Container, FileClock } from "lucide-react";
 import type { DockerPortLink } from "../../lib/port-inspector";
 import type { LogSourceSelection } from "../../types";
 
@@ -73,7 +73,7 @@ export function DockerPortDetail({
           type="button"
           onClick={() => onOpenContainer(selected.container.id)}
         >
-          <Server size={15} /> Open container
+          <Container size={15} /> Open container
         </button>
         <button
           className="secondary-button"

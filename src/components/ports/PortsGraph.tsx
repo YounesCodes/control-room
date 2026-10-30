@@ -13,7 +13,7 @@ import {
 import {
   ArrowRight,
   ArrowLeftRight,
-  Boxes,
+  Container,
   Cpu,
   HelpCircle,
   Scan,
@@ -49,7 +49,7 @@ import type {
 } from "../../types";
 
 function OwnerIcon({ kind }: { kind: OwnerKind }) {
-  if (kind === "container") return <Boxes size={14} />;
+  if (kind === "container") return <Container size={14} />;
   if (kind === "service") return <Server size={14} />;
   if (kind === "process") return <Cpu size={14} />;
   return <HelpCircle size={14} />;

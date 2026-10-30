@@ -75,6 +75,7 @@
   --os-ubuntu: #e95420;
   --os-debian: #d70a53;
   --os-windows: #0078d4;
+  --docker-blue: #0288d1;
   --os-fedora: #51a2da;
   --os-arch: #1793d1;
   --os-opensuse: #73ba25;
@@ -1428,6 +1429,15 @@ code,
 
 .feature-nav button.active svg {
   color: var(--accent);
+}
+
+.feature-nav button .docker-icon {
+  color: var(--text-faint);
+}
+
+.feature-nav button:hover .docker-icon,
+.feature-nav button:focus-visible .docker-icon {
+  color: var(--docker-blue);
 }
 
 .sidebar-footer {

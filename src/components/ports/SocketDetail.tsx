@@ -1,4 +1,4 @@
-import { Boxes, FileClock, Server } from "lucide-react";
+import { Container, FileClock, Server } from "lucide-react";
 import type { FirewallStatus, ListeningSocket, LogSourceSelection } from "../../types";
 import {
   exposureLabel,
@@ -142,7 +142,7 @@ export function SocketDetail({
               type="button"
               onClick={() => onOpenContainer(containerOwner.container.id)}
             >
-              <Boxes size={15} /> Open container
+              <Container size={15} /> Open container
             </button>
             <button
               className="secondary-button"

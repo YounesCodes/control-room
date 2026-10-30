@@ -1,3 +1,4 @@
+import { DockerIcon } from "./components/DockerIcon";
 import {
   ConnectionSection,
   ResizeDivider,
@@ -11,6 +12,7 @@ import {
   type PanelSizes,
 } from "./lib/panel-layout";
 import {
+  type ComponentType,
   useCallback,
   lazy,
   Suspense,
@@ -23,7 +25,6 @@ import {
 } from "react";
 import {
   RotateCcw,
-  Boxes,
   Camera,
   ChevronDown,
   Clipboard,
@@ -174,12 +175,16 @@ function administratorTerminalNote(status: AdministratorTerminalStatus): string 
   }
 }
 
-const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
+const navigation: {
+  id: WorkspaceView;
+  label: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+}[] = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
-  { id: "docker", label: "Docker", icon: Boxes },
+  { id: "docker", label: "Docker", icon: DockerIcon },
   { id: "boot", label: "Boot", icon: Power },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "baselines", label: "Baselines", icon: Camera },

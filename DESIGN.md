@@ -32,6 +32,9 @@ guardrails, not every choice described below.
   logo's proportions. Larger dialog-heading marks use the same sizing rule.
   Use the solid PowerShell mark with its cut-out prompt so it remains legible
   at small sizes.
+- Docker navigation uses the whale silhouette in neutral gray at rest, including
+  while selected. Reveal Docker blue on hover or keyboard focus. Individual
+  containers use the Lucide Container outline in graph nodes and container actions.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
