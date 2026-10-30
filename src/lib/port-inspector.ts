@@ -1,4 +1,4 @@
-import type { DockerContainer, FirewallStatus, ListeningSocket } from "../types";
+import type { ConnectionSummary, DockerContainer, FirewallStatus, ListeningSocket } from "../types";
 
 export type PortSort = "port-asc" | "port-desc" | "protocol" | "address" | "process";
 export type Exposure = "all-interfaces" | "local-only" | "specific";
@@ -352,4 +352,144 @@ export function filterAndSortSockets(
       );
     return left.port - right.port || left.id.localeCompare(right.id);
   });
+}
+
+export type PortGraphKind = "all" | "listeners" | "connections" | "docker";
+
+export type PortGraphItem =
+  | { id: string; kind: "listeners"; socket: ListeningSocket }
+  | { id: string; kind: "connections"; connection: ConnectionSummary }
+  | { id: string; kind: "docker"; binding: DockerPortLink };
+
+export interface PortGraphGroup {
+  key: string;
+  owner: SocketOwner;
+  items: PortGraphItem[];
+}
+
+/** Keep each read's evidence separate, including mappings with no reported listener. */
+export function buildPortGraph(
+  sockets: ListeningSocket[],
+  containers: DockerContainer[],
+  connections: ConnectionSummary[],
+  search: string,
+  protocol: string,
+  exposure: Exposure | "all",
+  kind: PortGraphKind,
+  sort: PortSort = "port-asc",
+): PortGraphGroup[] {
+  const groups = new Map<string, PortGraphGroup>();
+  const query = search.trim().toLowerCase();
+  const matches = (...values: (string | number | null)[]) =>
+    !query ||
+    values.some((value) =>
+      String(value ?? "")
+        .toLowerCase()
+        .includes(query),
+    );
+  const add = (key: string, owner: SocketOwner, item: PortGraphItem) => {
+    const existing = groups.get(key);
+    if (existing) existing.items.push(item);
+    else groups.set(key, { key, owner, items: [item] });
+  };
+  if (kind === "all" || kind === "listeners") {
+    for (const group of groupSocketsByOwner(
+      filterAndSortSockets(sockets, containers, search, protocol, sort, exposure),
+      containers,
+    )) {
+      for (const socket of group.sockets) {
+        add(group.key, group.owner, { id: `listener:${socket.id}`, kind: "listeners", socket });
+      }
+    }
+  }
+  if (kind === "all" || kind === "connections") {
+    for (const connection of connections) {
+      // The connection summary has no bind address, so it cannot satisfy an exposure filter.
+      if (exposure !== "all") continue;
+      if (protocol !== "all" && connection.protocol !== protocol) continue;
+      if (
+        !matches(
+          connection.localPort,
+          connection.protocol,
+          connection.processName,
+          connection.processId,
+          connection.systemdUnit,
+          ...connection.remotes.map((remote) => remote.address),
+        )
+      )
+        continue;
+      const owner: SocketOwner = connection.systemdUnit
+        ? { kind: "service", label: connection.systemdUnit }
+        : connection.processName
+          ? { kind: "process", label: connection.processName }
+          : { kind: "unknown", label: "Unknown process" };
+      add(owner.kind === "unknown" ? "unknown" : `${owner.kind}:${owner.label}`, owner, {
+        id: `connection:${connection.key}`,
+        kind: "connections",
+        connection,
+      });
+    }
+  }
+  if (kind === "all" || kind === "docker") {
+    for (const binding of dockerPortLinks(containers)) {
+      if (protocol !== "all" && binding.protocol !== protocol) continue;
+      if (exposure !== "all" && socketExposure(binding.hostAddress) !== exposure) continue;
+      if (
+        !matches(
+          binding.hostPort,
+          binding.containerPort,
+          binding.protocol,
+          binding.hostAddress,
+          binding.container.id,
+          binding.container.name,
+          binding.container.image,
+          binding.container.composeProject,
+          binding.container.composeService,
+        )
+      )
+        continue;
+      add(
+        `container:${binding.container.id}`,
+        { kind: "container", label: binding.container.name },
+        { id: `docker:${binding.key}`, kind: "docker", binding },
+      );
+    }
+  }
+  const fields = (item: PortGraphItem) =>
+    item.kind === "listeners"
+      ? {
+          port: item.socket.port,
+          protocol: item.socket.protocol,
+          address: item.socket.localAddress,
+          process: item.socket.processName ?? "",
+        }
+      : item.kind === "connections"
+        ? {
+            port: item.connection.localPort,
+            protocol: item.connection.protocol,
+            address: "",
+            process: item.connection.processName ?? "",
+          }
+        : {
+            port: item.binding.hostPort,
+            protocol: item.binding.protocol,
+            address: item.binding.hostAddress,
+            process: item.binding.container.name,
+          };
+  for (const group of groups.values()) {
+    group.items.sort((left, right) => {
+      const a = fields(left),
+        b = fields(right);
+      if (sort === "port-desc") return b.port - a.port || left.id.localeCompare(right.id);
+      if (sort === "protocol") return a.protocol.localeCompare(b.protocol) || a.port - b.port;
+      if (sort === "address") return a.address.localeCompare(b.address) || a.port - b.port;
+      if (sort === "process") return a.process.localeCompare(b.process) || a.port - b.port;
+      return a.port - b.port || left.id.localeCompare(right.id);
+    });
+  }
+  return [...groups.values()].sort(
+    (left, right) =>
+      OWNER_KIND_ORDER[left.owner.kind] - OWNER_KIND_ORDER[right.owner.kind] ||
+      left.owner.label.localeCompare(right.owner.label),
+  );
 }

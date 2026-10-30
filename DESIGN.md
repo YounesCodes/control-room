@@ -138,6 +138,17 @@ runs it. Restore legacy Scratchpad pages to Terminal without changing saved note
 Systemd service rows scroll within their own bounded
 area, leaving search, filters, and refresh available above the list.
 
+Ports uses the entire inspection area as a pan-and-zoom graph. Keep search,
+filters, snapshot status, and zoom controls over the canvas. Group listening
+sockets, established connections, and published Docker mappings by their known
+owners. Preserve each source as separate evidence, including mappings and
+outbound connections with no listening socket. Selecting a port or connection
+opens a closable, scrolling inspector over the graph. Keep every binding,
+firewall, ownership, endpoint, and Compose field available there, with the
+existing service, container, and log actions. Start large inventories at a
+readable scale; Fit to view may zoom out to show everything. Keyboard focus
+reveals offscreen nodes. Closing the inspector returns focus to its node.
+
 ## Visual language
 
 ### Color and surfaces

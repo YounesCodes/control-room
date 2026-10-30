@@ -2076,9 +2076,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await checkList();
     }
     await navigate("Ports");
-    for (const tab of ["Table", "Connections", "Docker"]) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
-      await checkList();
+    for (const kind of ["listeners", "connections", "docker"]) {
+      await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
+      await vi.waitFor(() => expect(element.querySelectorAll(".arch-chip").length).toBe(100));
+      const last = element.querySelectorAll<HTMLButtonElement>(".arch-chip")[99];
+      last.focus();
+      await vi.waitFor(() => {
+        const viewport = element.querySelector(".arch-viewport")!.getBoundingClientRect();
+        const node = last.getBoundingClientRect();
+        expect(node.top).toBeGreaterThanOrEqual(viewport.top);
+        expect(node.bottom).toBeLessThanOrEqual(viewport.bottom);
+      });
+      await userEvent.keyboard("{Enter}");
+      await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+      await page.getByRole("button", { name: "Close details" }).click();
     }
   });
 
@@ -2394,17 +2405,120 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toHaveValue(fixtures.container.id);
   });
 
+  it("inspects listeners, Docker mappings, and remote connections on one full Ports canvas", async () => {
+    await page.viewport(1440, 900);
+    overrides.set("list_ports", () => [
+      {
+        ...fixtures.socket,
+        id: "web",
+        port: 443,
+        systemdUnit: "nginx.service",
+        processName: "nginx",
+      },
+      { ...fixtures.socket, id: "ssh", port: 22, systemdUnit: "sshd.service", processName: "sshd" },
+      {
+        ...fixtures.socket,
+        id: "database",
+        port: 5432,
+        localAddress: "127.0.0.1",
+        systemdUnit: "postgresql.service",
+        processName: "postgres",
+      },
+      {
+        ...fixtures.socket,
+        id: "dns",
+        port: 53,
+        protocol: "udp",
+        localAddress: "127.0.0.53",
+        systemdUnit: "systemd-resolved.service",
+        processName: "systemd-resolve",
+      },
+      {
+        ...fixtures.socket,
+        id: "container",
+        port: 8080,
+        processName: "docker-proxy",
+        systemdUnit: null,
+      },
+    ]);
+    overrides.set("list_containers", () => [
+      {
+        ...fixtures.container,
+        name: "gateway-1",
+        image: "nginx:stable",
+        ports: "0.0.0.0:8080->80/tcp",
+        composeProject: "edge",
+        composeService: "gateway",
+      },
+    ]);
+    overrides.set("inspect_connections", () => ({
+      groups: [
+        {
+          key: "web-peers",
+          protocol: "tcp",
+          localPort: 443,
+          processName: "nginx",
+          processId: 742,
+          systemdUnit: "nginx.service",
+          established: 12,
+          remoteAddressCount: 3,
+          remotes: [
+            { address: "203.0.113.9", count: 8 },
+            { address: "198.51.100.12", count: 3 },
+            { address: "192.0.2.8", count: 1 },
+          ],
+        },
+      ],
+      totalEstablished: 12,
+      truncated: false,
+      collectedAt: new Date().toISOString(),
+    }));
+    overrides.set("inspect_firewall", () => ({
+      backend: "ufw",
+      available: true,
+      active: true,
+      defaultIncoming: "deny",
+      rules: [
+        {
+          to: "443/tcp",
+          port: 443,
+          protocol: "tcp",
+          action: "ALLOW",
+          from: "Anywhere",
+          ipv6: false,
+        },
+      ],
+      collectedAt: new Date().toISOString(),
+    }));
+    await mount();
+    await navigate("Ports");
+    await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
+    expect(element.querySelectorAll(".arch-chip")).toHaveLength(7);
+    const graph = element.querySelector(".ports-page")!;
+    expect((await axe.run(graph)).violations).toEqual([]);
+    await page.screenshot({ path: "../test-results/ports-graph-full.png" });
+    await page.getByRole("button", { name: /12 established/ }).click();
+    await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+    await expect.element(page.getByText("203.0.113.9", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "../test-results/ports-graph-inspector.png" });
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: /8080.*80/ }).click();
+    await expect.element(page.getByText("nginx:stable", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: /443 Listening/ }).click();
+    await expect.element(page.getByText("UFW: allowed", { exact: true })).toBeVisible();
+  });
+
   it("follows a known port owner to Systemd and reads connection and firewall uncertainty", async () => {
     await mount();
     await navigate("Ports");
-    await page.getByRole("tab", { name: "Table" }).click();
-    await page.getByRole("button", { name: /443/ }).click();
+    await page.getByRole("button", { name: /443 Listening/ }).click();
     await page.getByRole("button", { name: /Open unit/ }).click();
     await expect
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
       .toBeVisible();
     await navigate("Ports");
-    await page.getByRole("tab", { name: "Connections" }).click();
+    await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("connections");
     await expect.element(page.getByText(/No established/)).toBeVisible();
   });
 

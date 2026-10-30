@@ -38,6 +38,9 @@ vi.mock("../lib/api", () => ({
     ),
     inspectContainer: vi.fn(() => Promise.resolve(details)),
     inspectFirewall: vi.fn(() => Promise.resolve(null)),
+    inspectConnections: vi.fn(() =>
+      Promise.resolve({ groups: [], totalEstablished: 0, truncated: false, collectedAt: "" }),
+    ),
   },
   errorMessage: String,
 }));
@@ -609,6 +612,7 @@ describe("resizable connection panels in Chromium", () => {
         before,
       ),
     );
+    await page.getByRole("button", { name: "Fit to view" }).click();
     await vi.waitFor(() => {
       const canvas = document.querySelector(".arch-viewport")!.getBoundingClientRect();
       const graph = document.querySelector(".arch-content")!.getBoundingClientRect();
@@ -616,27 +620,34 @@ describe("resizable connection panels in Chromium", () => {
     });
   });
 
-  it("fits the Ports graph after pane resizing and keeps filters usable at the minimum window", async () => {
+  it("fills the Ports screen and opens a keyboard-accessible inspector at the minimum window", async () => {
     await page.viewport(960, 640);
     mount();
     await page.getByRole("button", { name: "Open ports" }).click();
-    const content = page.getByRole("separator", { name: "Resize Ports content" });
     await expect
-      .element(page.getByRole("separator", { name: "Resize Ports overview panes" }))
-      .toBeVisible();
-    await content.click();
-    await userEvent.keyboard("{Home}");
-    await expect
-      .element(page.getByRole("separator", { name: "Resize Ports overview panes" }))
+      .element(page.getByRole("separator", { name: "Resize Ports content" }))
       .not.toBeInTheDocument();
-    await vi.waitFor(() => {
-      const canvas = document.querySelector(".arch-viewport")!.getBoundingClientRect();
-      const graph = document.querySelector(".arch-content")!.getBoundingClientRect();
-      expect(graph.right).toBeLessThanOrEqual(canvas.right + 1);
-    });
-    assertNoHorizontalOverflow(".ports-page, .port-list-controls, .arch-detail");
-    await page.getByRole("tab", { name: "Table", exact: true }).click();
+    await page.getByRole("separator", { name: "Resize Connections panel" }).click();
+    await userEvent.keyboard("{End}");
+    expect(document.querySelector(".resizable-split")).toBeNull();
+    const workspace = document.querySelector(".ports-page")!.getBoundingClientRect();
+    const canvas = document.querySelector(".arch-viewport")!.getBoundingClientRect();
+    expect(canvas.width).toBe(workspace.width);
+    expect(canvas.height).toBe(workspace.height);
     await expect.element(page.getByRole("combobox", { name: "Sort ports" })).toBeVisible();
-    assertNoHorizontalOverflow(".list-panel, .detail-panel");
+    assertNoHorizontalOverflow(".ports-page, .port-list-controls");
+    await page.getByRole("button", { name: /443 Listening/ }).click();
+    await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+    const inspector = document.querySelector(".arch-detail")!.getBoundingClientRect();
+    expect(inspector.right).toBeLessThanOrEqual(workspace.right);
+    expect(inspector.bottom).toBeLessThanOrEqual(workspace.bottom);
+    assertNoHorizontalOverflow(".arch-detail");
+    expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+    await page.screenshot({ path: "../../test-results/ports-minimum-window.png" });
+    await userEvent.keyboard("{Escape}");
+    await expect
+      .element(page.getByRole("complementary", { name: "Port details" }))
+      .not.toBeInTheDocument();
+    expect(document.activeElement?.getAttribute("aria-pressed")).toBe("false");
   });
 });
