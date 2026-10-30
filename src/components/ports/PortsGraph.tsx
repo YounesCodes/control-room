@@ -132,7 +132,6 @@ export function PortsGraph({
   sort,
   emptyMessage,
   toolbar,
-  status,
   onOpenSystemd,
   onOpenContainer,
   onViewLogs,
@@ -150,7 +149,6 @@ export function PortsGraph({
   sort: PortSort;
   emptyMessage: string;
   toolbar: ReactNode;
-  status: ReactNode;
   onOpenSystemd: (unitId: string) => void;
   onOpenContainer: (containerId: string) => void;
   onViewLogs: (source: LogSourceSelection) => void;
@@ -202,8 +200,8 @@ export function PortsGraph({
     groupRefs.current.forEach((element, id) => {
       const x = element.offsetLeft;
       const y = element.offsetTop + 20;
-      const cx = hostX + (x - hostX) / 2;
-      next.push({ id, d: `M${hostX},${hostY} C${cx},${hostY} ${cx},${y} ${x},${y}` });
+      const lane = x - 24;
+      next.push({ id, d: `M${hostX},${hostY} H${lane} V${y} H${x}` });
     });
     setLinks(next);
   }, []);
@@ -293,7 +291,6 @@ export function PortsGraph({
       <div className="ports-canvas-controls" ref={controlsRef}>
         {toolbar}
       </div>
-      <div className="ports-canvas-status">{status}</div>
       <div className="graph-toolbar" role="toolbar" aria-label="Graph controls">
         <button
           type="button"

@@ -634,7 +634,9 @@ describe("resizable connection panels in Chromium", () => {
     const canvas = document.querySelector(".arch-viewport")!.getBoundingClientRect();
     expect(canvas.width).toBe(workspace.width);
     expect(canvas.height).toBe(workspace.height);
+    await page.getByRole("button", { name: "Filter ports", exact: true }).click();
     await expect.element(page.getByRole("combobox", { name: "Sort ports" })).toBeVisible();
+    await page.getByRole("button", { name: "Close port tools" }).click();
     assertNoHorizontalOverflow(".ports-page, .port-list-controls");
     await page.getByRole("button", { name: /443 Listening/ }).click();
     await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();

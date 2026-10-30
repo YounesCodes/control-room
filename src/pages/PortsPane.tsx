@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, Search, ShieldAlert } from "lucide-react";
+import { RefreshCw, Search, ShieldAlert, SlidersHorizontal, X, Info } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";
@@ -47,6 +47,9 @@ export function PortsPane({
 }) {
   const [kind, setKind] = useState<PortGraphKind>("all");
   const [sort, setSort] = useState<PortSort>("port-asc");
+  const [tools, setTools] = useState<"search" | "filters" | "info" | null>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useState("");
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
@@ -182,6 +185,36 @@ export function PortsPane({
     void loadConnections(true);
   }
 
+  useEffect(() => {
+    if (!tools) return;
+    const panel = toolsRef.current?.querySelector<HTMLElement>(".ports-tools-panel");
+    (panel?.querySelector<HTMLElement>("input, select") ?? panel)?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !toolsRef.current?.contains(event.target)) setTools(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTools(null);
+        toolsButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [tools]);
+
+  useEffect(() => {
+    if (cache.error || firewallError || connectionsError || containersCache.error) setTools("info");
+  }, [cache.error, firewallError, connectionsError, containersCache.error]);
+
+  function toggleTools(next: "search" | "filters" | "info", button: HTMLButtonElement) {
+    toolsButtonRef.current = button;
+    setTools((current) => (current === next ? null : next));
+  }
+
   const collectedAt = cache.fetchedAt
     ? new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
@@ -232,15 +265,57 @@ export function PortsPane({
         onOpenContainer={onOpenContainer}
         onViewLogs={onViewLogs}
         toolbar={
-          <div className="ports-controls">
+          <div className="ports-controls" ref={toolsRef}>
             <header className="ports-heading">
               <h2>Ports</h2>
-              <span
-                title={cache.fetchedAt ? new Date(cache.fetchedAt).toLocaleString() : undefined}
+              <button
+                type="button"
+                className="ports-snapshot-button"
+                title="Ports reading details"
+                aria-expanded={tools === "info"}
+                aria-controls="ports-tools"
+                onClick={(event) => toggleTools("info", event.currentTarget)}
               >
-                {cache.items.length} listener{cache.items.length === 1 ? "" : "s"}
-                {collectedAt ? ` · ${collectedAt}` : ""}
-              </span>
+                {cache.error ||
+                firewallError ||
+                connectionsError ||
+                containersCache.error ||
+                ownerGap ? (
+                  <ShieldAlert size={14} />
+                ) : (
+                  <Info size={14} />
+                )}
+                <span>
+                  {cache.items.length} listener{cache.items.length === 1 ? "" : "s"}
+                  {collectedAt ? " · " + collectedAt : ""}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Find ports"
+                title="Find ports"
+                aria-expanded={tools === "search"}
+                aria-pressed={!!search}
+                aria-controls="ports-tools"
+                onClick={(event) => toggleTools("search", event.currentTarget)}
+              >
+                <Search size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Filter ports"
+                title="Filter ports"
+                aria-expanded={tools === "filters"}
+                aria-pressed={
+                  kind !== "all" || protocol !== "all" || exposure !== "all" || sort !== "port-asc"
+                }
+                aria-controls="ports-tools"
+                onClick={(event) => toggleTools("filters", event.currentTarget)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
               <button
                 className="icon-button"
                 type="button"
@@ -254,160 +329,199 @@ export function PortsPane({
                 />
               </button>
             </header>
-            <div className="port-list-controls">
-              <label className="search-field">
-                <Search size={15} />
-                <input
-                  aria-label="Search ports"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search ports, owners, or endpoints"
-                />
-              </label>
-              <select
-                aria-label="Graph contents"
-                value={kind}
-                onChange={(event) => setKind(event.target.value as PortGraphKind)}
+            {tools && (
+              <div
+                id="ports-tools"
+                className="ports-tools-panel"
+                role="region"
+                tabIndex={-1}
+                aria-label={
+                  tools === "search"
+                    ? "Find ports"
+                    : tools === "filters"
+                      ? "Port filters"
+                      : "Ports reading details"
+                }
               >
-                <option value="all">All ports</option>
-                <option value="listeners">Listeners</option>
-                <option value="connections">Connections</option>
-                <option value="docker">Docker</option>
-              </select>
-              <select
-                aria-label="Protocol filter"
-                value={protocol}
-                onChange={(event) => setProtocol(event.target.value)}
-              >
-                <option value="all">TCP + UDP</option>
-                <option value="tcp">TCP</option>
-                <option value="udp">UDP</option>
-              </select>
-              <select
-                aria-label="Exposure filter"
-                value={exposure}
-                onChange={(event) => setExposure(event.target.value as Exposure | "all")}
-              >
-                <option value="all">Any exposure</option>
-                <option value="all-interfaces">All interfaces</option>
-                <option value="local-only">Local only</option>
-                <option value="specific">Specific address</option>
-              </select>
-              <select
-                aria-label="Sort ports"
-                value={sort}
-                onChange={(event) => setSort(event.target.value as PortSort)}
-              >
-                <option value="port-asc">Port ↑</option>
-                <option value="port-desc">Port ↓</option>
-                <option value="protocol">Protocol</option>
-                <option value="address">Address</option>
-                <option value="process">Process</option>
-              </select>
-            </div>
-          </div>
-        }
-        status={
-          <details
-            className="ports-reading-status"
-            open={
-              cache.error || firewallError || connectionsError || containersCache.error
-                ? true
-                : undefined
-            }
-          >
-            <summary>
-              <ShieldAlert size={14} />{" "}
-              {cache.error || firewallError || connectionsError || containersCache.error || ownerGap
-                ? "Snapshot warnings"
-                : "Snapshot details"}
-            </summary>
-            <div className="ports-reading-body">
-              <p>
-                Manual snapshot · {cache.items.length} listening sockets
-                {collectedAt ? ` · collected at ${collectedAt}` : ""}
-              </p>
-              {cache.loading && <p role="status">Reading listening ports…</p>}
-              {connections && (
-                <p>
-                  {connections.totalEstablished} established connections
-                  {connections.truncated ? " · list truncated at 4000 rows" : ""}
-                </p>
-              )}
-              {connectionsLoading && <p role="status">Reading established connections…</p>}
-              {containersCache.loading && <p role="status">Reading Docker containers…</p>}
-              {cache.error && (
-                <p className="inline-warning">
-                  {cache.items.length
-                    ? "Showing saved results. Refresh failed: "
-                    : "Listening ports unavailable: "}
-                  {cache.error}
-                  <button type="button" className="link-button" onClick={() => loadPorts(true)}>
-                    Retry ports
-                  </button>
-                </p>
-              )}
-              {connectionsError && (
-                <p className="inline-warning">
-                  {connections
-                    ? "Showing saved connections. Refresh failed: "
-                    : "Connections unavailable: "}
-                  {connectionsError}
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => loadConnections(true)}
-                  >
-                    Retry connections
-                  </button>
-                </p>
-              )}
-              {containersCache.error && (
-                <p className="inline-warning">
-                  {containersCache.items.length
-                    ? "Showing saved Docker mappings. Refresh failed: "
-                    : "Docker mappings unavailable: "}
-                  {containersCache.error}
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => loadContainers(true)}
-                  >
-                    Retry Docker
-                  </button>
-                </p>
-              )}
-              {firewallError && (
-                <p className="inline-warning">
-                  Firewall status unavailable: {firewallError}
-                  {capabilities?.osId !== "windows" &&
-                    firewallError.toLowerCase().includes("permission denied") && (
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() => setFirewallSudo(true)}
-                      >
-                        Retry with sudo
-                      </button>
-                    )}
-                </p>
-              )}
-              {ownerGap && (
-                <p className="inline-warning">
-                  {ownerGap.message}
-                  {ownerGap.offerSudo && (
+                <button
+                  type="button"
+                  className="icon-button ports-tools-close"
+                  aria-label="Close port tools"
+                  onClick={() => {
+                    setTools(null);
+                    toolsButtonRef.current?.focus();
+                  }}
+                >
+                  <X size={14} />
+                </button>
+                {tools === "info" && (
+                  <>
+                    <div className="ports-reading-body">
+                      <p>
+                        Manual snapshot · {cache.items.length} listening sockets
+                        {collectedAt ? ` · collected at ${collectedAt}` : ""}
+                      </p>
+                      {cache.loading && <p role="status">Reading listening ports…</p>}
+                      {connections && (
+                        <p>
+                          {connections.totalEstablished} established connections
+                          {connections.truncated ? " · list truncated at 4000 rows" : ""}
+                        </p>
+                      )}
+                      {connectionsLoading && <p role="status">Reading established connections…</p>}
+                      {containersCache.loading && <p role="status">Reading Docker containers…</p>}
+                      {cache.error && (
+                        <p className="inline-warning">
+                          {cache.items.length
+                            ? "Showing saved results. Refresh failed: "
+                            : "Listening ports unavailable: "}
+                          {cache.error}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => loadPorts(true)}
+                          >
+                            Retry ports
+                          </button>
+                        </p>
+                      )}
+                      {connectionsError && (
+                        <p className="inline-warning">
+                          {connections
+                            ? "Showing saved connections. Refresh failed: "
+                            : "Connections unavailable: "}
+                          {connectionsError}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => loadConnections(true)}
+                          >
+                            Retry connections
+                          </button>
+                        </p>
+                      )}
+                      {containersCache.error && (
+                        <p className="inline-warning">
+                          {containersCache.items.length
+                            ? "Showing saved Docker mappings. Refresh failed: "
+                            : "Docker mappings unavailable: "}
+                          {containersCache.error}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => loadContainers(true)}
+                          >
+                            Retry Docker
+                          </button>
+                        </p>
+                      )}
+                      {firewallError && (
+                        <p className="inline-warning">
+                          Firewall status unavailable: {firewallError}
+                          {capabilities?.osId !== "windows" &&
+                            firewallError.toLowerCase().includes("permission denied") && (
+                              <button
+                                type="button"
+                                className="link-button"
+                                onClick={() => setFirewallSudo(true)}
+                              >
+                                Retry with sudo
+                              </button>
+                            )}
+                        </p>
+                      )}
+                      {ownerGap && (
+                        <p className="inline-warning">
+                          {ownerGap.message}
+                          {ownerGap.offerSudo && (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() => setPortsSudo(true)}
+                            >
+                              Resolve owners with sudo
+                            </button>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+                {tools === "search" && (
+                  <>
+                    <label className="search-field">
+                      <Search size={15} />
+                      <input
+                        aria-label="Search ports"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Search ports, owners, or endpoints"
+                      />
+                    </label>
+                    <button type="button" className="link-button" onClick={() => setSearch("")}>
+                      Clear search
+                    </button>
+                  </>
+                )}
+                {tools === "filters" && (
+                  <div className="port-list-controls">
+                    <select
+                      aria-label="Graph contents"
+                      value={kind}
+                      onChange={(event) => setKind(event.target.value as PortGraphKind)}
+                    >
+                      <option value="all">All ports</option>
+                      <option value="listeners">Listeners</option>
+                      <option value="connections">Connections</option>
+                      <option value="docker">Docker</option>
+                    </select>
+                    <select
+                      aria-label="Protocol filter"
+                      value={protocol}
+                      onChange={(event) => setProtocol(event.target.value)}
+                    >
+                      <option value="all">TCP + UDP</option>
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                    </select>
+                    <select
+                      aria-label="Exposure filter"
+                      value={exposure}
+                      onChange={(event) => setExposure(event.target.value as Exposure | "all")}
+                    >
+                      <option value="all">Any exposure</option>
+                      <option value="all-interfaces">All interfaces</option>
+                      <option value="local-only">Local only</option>
+                      <option value="specific">Specific address</option>
+                    </select>
+                    <select
+                      aria-label="Sort ports"
+                      value={sort}
+                      onChange={(event) => setSort(event.target.value as PortSort)}
+                    >
+                      <option value="port-asc">Port ↑</option>
+                      <option value="port-desc">Port ↓</option>
+                      <option value="protocol">Protocol</option>
+                      <option value="address">Address</option>
+                      <option value="process">Process</option>
+                    </select>
                     <button
                       type="button"
                       className="link-button"
-                      onClick={() => setPortsSudo(true)}
+                      onClick={() => {
+                        setKind("all");
+                        setProtocol("all");
+                        setExposure("all");
+                        setSort("port-asc");
+                      }}
                     >
-                      Resolve owners with sudo
+                      Reset filters
                     </button>
-                  )}
-                </p>
-              )}
-            </div>
-          </details>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         }
       />
 

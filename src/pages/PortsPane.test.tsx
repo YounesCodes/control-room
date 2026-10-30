@@ -140,6 +140,35 @@ function renderPane(
 describe("PortsPane", () => {
   afterEach(cleanup);
 
+  it("keeps canvas tools collapsed and preserves active filters when dismissed", async () => {
+    const user = userEvent.setup();
+    renderPane();
+    expect(screen.queryByRole("textbox", { name: "Search ports" })).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    const find = screen.getByRole("button", { name: "Find ports" });
+    await user.click(find);
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Search ports" }));
+    await user.type(screen.getByRole("textbox", { name: "Search ports" }), "unmatched");
+    await user.keyboard("{Escape}");
+    expect(document.activeElement).toBe(find);
+    expect(find.getAttribute("aria-pressed")).toBe("true");
+    await user.click(find);
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Protocol filter" }), "udp");
+    await user.click(screen.getByRole("button", { name: "Close port tools" }));
+    expect(screen.getByRole("button", { name: "Filter ports" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
+    await user.click(screen.getByRole("button", { name: "Reset filters" }));
+    expect(screen.getByRole("button", { name: "Filter ports" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    await user.click(screen.getByTitle("Ports reading details"));
+    expect(screen.getByText(/Manual snapshot/)).toBeTruthy();
+  });
+
   it("keeps Windows ownership and firewall failures free of sudo prompts", async () => {
     vi.mocked(api.inspectFirewall).mockRejectedValueOnce("Permission denied by Windows");
     vi.mocked(api.listContainers).mockClear();
@@ -197,6 +226,7 @@ describe("PortsPane", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("complementary")).toBeNull();
     await user.click(screen.getByRole("button", { name: /443 Listening/ }));
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Protocol filter" }), "udp");
     expect(screen.queryByRole("complementary")).toBeNull();
     expect(screen.getByText("No ports match the current filters")).toBeTruthy();
@@ -205,6 +235,7 @@ describe("PortsPane", () => {
   it("shows Docker mappings and Compose details in the graph inspector", async () => {
     const user = userEvent.setup();
     const { onOpenContainer, onViewLogs } = renderPane();
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Graph contents" }), "docker");
     await user.click(screen.getByRole("button", { name: /443.*8443/ }));
     const inspector = screen.getByRole("complementary");
@@ -262,6 +293,7 @@ describe("PortsPane", () => {
     expect(within(inspector).getByText("742")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Open unit" }));
     expect(onOpenSystemd).toHaveBeenCalledWith("nginx.service");
+    await user.click(screen.getByRole("button", { name: "Find ports" }));
     await user.type(screen.getByRole("textbox", { name: "Search ports" }), "203.0.113.9");
     expect(screen.getByRole("button", { name: /12 established/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /443 Listening/ })).toBeNull();

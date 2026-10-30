@@ -2077,7 +2077,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
     await navigate("Ports");
     for (const kind of ["listeners", "connections", "docker"]) {
+      await page.getByRole("button", { name: "Filter ports", exact: true }).click();
       await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
+      await page.getByRole("button", { name: "Close port tools" }).click();
       await vi.waitFor(() => expect(element.querySelectorAll(".arch-chip").length).toBe(100));
       const last = element.querySelectorAll<HTMLButtonElement>(".arch-chip")[99];
       last.focus();
@@ -2494,6 +2496,38 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
     expect(element.querySelectorAll(".arch-chip")).toHaveLength(7);
+    // Every orthogonal segment must stay outside unrelated owner cards.
+    const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
+    for (const path of element.querySelectorAll(".arch-links path")) {
+      const [sx, sy, lane, ty, tx] = path
+        .getAttribute("d")!
+        .match(/-?[0-9.]+/g)!
+        .map(Number);
+      const segments = [
+        [sx, sy, lane, sy],
+        [lane, sy, lane, ty],
+        [lane, ty, tx, ty],
+      ];
+      for (const card of cards) {
+        const left = card.offsetLeft,
+          right = left + card.offsetWidth;
+        const top = card.offsetTop,
+          bottom = top + card.offsetHeight;
+        for (const [x1, y1, x2, y2] of segments) {
+          const intersects =
+            Math.max(x1, x2) > left + 0.5 &&
+            Math.min(x1, x2) < right - 0.5 &&
+            Math.max(y1, y2) > top + 0.5 &&
+            Math.min(y1, y2) < bottom - 0.5;
+          expect(intersects).toBe(false);
+        }
+      }
+    }
+    expect(
+      element.querySelector(".ports-canvas-controls")!.getBoundingClientRect().height,
+    ).toBeLessThan(50);
+    expect(element.querySelector(".ports-canvas-status")).toBeNull();
+
     const graph = element.querySelector(".ports-page")!;
     expect((await axe.run(graph)).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/ports-graph-full.png" });
@@ -2518,6 +2552,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
       .toBeVisible();
     await navigate("Ports");
+    await page.getByRole("button", { name: "Filter ports", exact: true }).click();
     await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("connections");
     await expect.element(page.getByText(/No established/)).toBeVisible();
   });
