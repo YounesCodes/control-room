@@ -160,8 +160,8 @@ it("keeps snapshot metadata on Ports hover with a gap below the whole toolbar", 
   const summary = screen.getByRole("heading", { name: "Ports" });
   const toolbar = document.querySelector(".ports-heading")!;
   expect(toolbar.textContent).not.toContain("listener");
-  expect(summary.title).toContain("1 listening sockets");
-  expect(summary.title).toContain("collected at");
+  expect(summary.title).toContain("1 listening port");
+  expect(summary.title).toContain("Last collected at");
   await page.getByRole("heading", { name: "Ports" }).hover();
   await waitFor(() => expect(screen.getByRole("tooltip")).toBeTruthy());
   const tooltip = screen.getByRole("tooltip").getBoundingClientRect();
@@ -173,12 +173,21 @@ it("keeps snapshot metadata on Ports hover with a gap below the whole toolbar", 
     ),
   );
   expect(tooltip.right).toBeLessThan(window.innerWidth - 7);
+  const text = screen.getByRole("tooltip");
+  expect(text.textContent?.split(String.fromCharCode(10))).toEqual([
+    expect.stringMatching(/^Last collected at /),
+    "1 listening port",
+    "12 active connections",
+  ]);
+  expect(text.getBoundingClientRect().height).toBeGreaterThanOrEqual(
+    parseFloat(getComputedStyle(text).lineHeight) * 3,
+  );
   await userEvent.keyboard("{Escape}");
   expect(screen.queryByRole("tooltip")).toBeNull();
   summary.blur();
   summary.focus();
   await waitFor(() =>
-    expect(screen.getByRole("tooltip").textContent).toContain("12 established connections"),
+    expect(screen.getByRole("tooltip").textContent).toContain("12 active connections"),
   );
 });
 

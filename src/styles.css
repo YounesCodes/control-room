@@ -159,6 +159,7 @@ h3 {
 }
 
 .app-tooltip {
+  white-space: pre-line;
   position: fixed;
   z-index: 1200;
   width: max-content;

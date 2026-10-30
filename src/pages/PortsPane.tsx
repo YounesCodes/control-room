@@ -241,15 +241,14 @@ export function PortsPane({
     ownerGap
   );
   const snapshotDescription = [
-    "Manual snapshot",
-    cache.items.length +
-      " listening sockets" +
-      (collectedAt ? " · collected at " + collectedAt : ""),
+    collectedAt ? "Last collected at " + collectedAt : null,
+    cache.items.length + " listening port" + (cache.items.length === 1 ? "" : "s"),
     connections
       ? connections.totalEstablished +
-        " established connections" +
-        (connections.truncated ? " · list truncated at 4000 rows" : "")
+        " active connection" +
+        (connections.totalEstablished === 1 ? "" : "s")
       : null,
+    connections?.truncated ? "Connection list limited to 4,000 rows" : null,
     cache.loading ? "Reading listening ports…" : null,
     connectionsLoading ? "Reading established connections…" : null,
     containersCache.loading ? "Reading Docker containers…" : null,

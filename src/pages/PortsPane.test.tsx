@@ -168,14 +168,14 @@ describe("PortsPane", () => {
       "false",
     );
     await user.click(screen.getByRole("button", { name: "Close port tools" }));
-    const summary = screen.getByTitle(/Manual snapshot/);
+    const summary = screen.getByTitle(/Last collected at/);
     await user.click(summary);
     expect(document.querySelector("#ports-tools")).toBeNull();
     expect(summary.tagName).toBe("H2");
     expect(summary.textContent?.trim()).toBe("Ports");
-    expect(summary.title).toContain("1 listening sockets");
-    expect(summary.title).toContain("collected at");
-    expect(summary.title).toContain("12 established connections");
+    expect(summary.title).toContain("1 listening port");
+    expect(summary.title).toContain("Last collected at");
+    expect(summary.title).toContain("12 active connections");
   });
 
   it("keeps Windows ownership and firewall failures free of sudo prompts", async () => {
