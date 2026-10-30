@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -156,7 +155,6 @@ export function PortsGraph({
   const [focusing, setFocusing] = useState(false);
   const [links, setLinks] = useState<{ id: string; d: string }[]>([]);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-  const [controlsHeight, setControlsHeight] = useState(90);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -189,7 +187,6 @@ export function PortsGraph({
   }, [selectedId, selected]);
 
   const measure = useCallback(() => {
-    setControlsHeight(controlsRef.current?.offsetHeight || 90);
     const content = contentRef.current;
     const host = hostRef.current;
     if (!content || !host) return;
@@ -339,10 +336,7 @@ export function PortsGraph({
   const osLabel = [capabilities?.osName, capabilities?.osVersion].filter(Boolean).join(" ");
 
   return (
-    <div
-      className={`arch-canvas${selected ? " inspecting" : ""}`}
-      style={{ "--ports-controls-height": `${controlsHeight}px` } as CSSProperties}
-    >
+    <div className={selected ? "arch-canvas inspecting" : "arch-canvas"}>
       <div className="ports-canvas-controls" ref={controlsRef}>
         {toolbar}
       </div>

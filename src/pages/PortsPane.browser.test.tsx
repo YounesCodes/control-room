@@ -239,3 +239,21 @@ it("lets manual zoom interrupt selection motion", async () => {
     parseFloat(getComputedStyle(document.querySelector(".arch-content")!).transitionDuration),
   ).toBeLessThan(0.42);
 });
+
+for (const height of [640, 900]) {
+  it("centers the inspector vertically with even canvas gutters at " + height + "px", async () => {
+    await page.viewport(1100, height);
+    renderPane();
+    await screen.findByRole("button", { name: /12 established/ });
+    await page.getByRole("button", { name: /443 Listening/ }).click();
+    const canvas = document.querySelector(".arch-canvas")!.getBoundingClientRect();
+    const inspector = screen.getByRole("complementary").getBoundingClientRect();
+    expect(inspector.top - canvas.top).toBeCloseTo(12, 0);
+    expect(canvas.bottom - inspector.bottom).toBeCloseTo(12, 0);
+    expect((inspector.top + inspector.bottom) / 2).toBeCloseTo((canvas.top + canvas.bottom) / 2, 0);
+    const controls = screen
+      .getByRole("toolbar", { name: "Graph controls" })
+      .getBoundingClientRect();
+    expect(controls.right).toBeLessThan(inspector.left);
+  });
+}

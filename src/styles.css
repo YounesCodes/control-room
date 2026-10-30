@@ -6442,9 +6442,9 @@ kbd {
 .arch-detail {
   position: absolute;
   z-index: 2;
-  top: calc(var(--ports-controls-height, 90px) + 24px);
+  top: 12px;
   right: 12px;
-  bottom: 54px;
+  bottom: 12px;
   width: min(360px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
@@ -6597,6 +6597,11 @@ kbd {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
+}
+
+.arch-canvas.inspecting .graph-toolbar {
+  left: 12px;
+  right: auto;
 }
 
 .graph-toolbar .icon-button {
