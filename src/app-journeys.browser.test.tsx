@@ -2573,6 +2573,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
       element.querySelector(".ports-canvas-controls")!.getBoundingClientRect().height,
     ).toBeLessThan(50);
     expect(element.querySelector(".ports-canvas-status")).toBeNull();
+    const summary = page.getByTitle(/Manual snapshot/);
+    expect(summary.element().getAttribute("title")).toContain("12 established connections");
+    await summary.click();
+    expect(element.querySelector("#ports-tools")).toBeNull();
 
     const graph = element.querySelector(".ports-page")!;
     expect((await axe.run(graph)).violations).toEqual([]);

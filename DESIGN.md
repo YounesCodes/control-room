@@ -142,7 +142,9 @@ Systemd service rows scroll within their own bounded
 area, leaving search, filters, and refresh available above the list.
 
 Ports uses the entire inspection area as a pan-and-zoom graph. Keep search,
-filters, and reading information in one compact toolbar, with search and filter
+filters, and reading information in one compact toolbar. Show snapshot metadata
+in the listener count's hover tooltip and accessible description, with no click
+card. Keep warning recovery actions separate. Use search and filter
 panels opening on demand. Keep zoom controls in the lower corner. Route owner
 branches orthogonally through reserved gutters, never through other cards.
 Use side connections where a column continues and enter its final card from

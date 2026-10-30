@@ -1,6 +1,6 @@
 import { Search } from "../components/MagnifierIcon";
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, X, Info } from "lucide-react";
+import { RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, X } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";
@@ -233,6 +233,34 @@ export function PortsPane({
         : null
       : ownerGapNotice(cache.items, portsElevated);
 
+  const hasWarnings = !!(
+    cache.error ||
+    firewallError ||
+    connectionsError ||
+    containersCache.error ||
+    ownerGap
+  );
+  const snapshotDescription = [
+    "Manual snapshot",
+    cache.items.length +
+      " listening sockets" +
+      (collectedAt ? " · collected at " + collectedAt : ""),
+    connections
+      ? connections.totalEstablished +
+        " established connections" +
+        (connections.truncated ? " · list truncated at 4000 rows" : "")
+      : null,
+    cache.loading ? "Reading listening ports…" : null,
+    connectionsLoading ? "Reading established connections…" : null,
+    containersCache.loading ? "Reading Docker containers…" : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  useEffect(() => {
+    if (!hasWarnings && tools === "info") setTools(null);
+  }, [hasWarnings, tools]);
+
   return (
     <section className="feature-page ports-page">
       <PortsGraph
@@ -271,28 +299,31 @@ export function PortsPane({
           <div className="ports-controls" ref={toolsRef}>
             <header className="ports-heading">
               <h2>Ports</h2>
-              <button
-                type="button"
-                className="ports-snapshot-button"
-                title="Ports reading details"
-                aria-expanded={tools === "info"}
-                aria-controls="ports-tools"
-                onClick={(event) => toggleTools("info", event.currentTarget)}
+              <span
+                className="ports-snapshot-summary"
+                tabIndex={0}
+                title={snapshotDescription}
+                aria-describedby="ports-snapshot-description"
               >
-                {cache.error ||
-                firewallError ||
-                connectionsError ||
-                containersCache.error ||
-                ownerGap ? (
+                {cache.items.length} listener{cache.items.length === 1 ? "" : "s"}
+                {collectedAt ? " · " + collectedAt : ""}
+              </span>
+              <span id="ports-snapshot-description" className="sr-only">
+                {snapshotDescription}
+              </span>
+              {hasWarnings && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Ports reading warnings"
+                  aria-label="Ports reading warnings"
+                  aria-expanded={tools === "info"}
+                  aria-controls="ports-tools"
+                  onClick={(event) => toggleTools("info", event.currentTarget)}
+                >
                   <ShieldAlert size={14} />
-                ) : (
-                  <Info size={14} />
-                )}
-                <span>
-                  {cache.items.length} listener{cache.items.length === 1 ? "" : "s"}
-                  {collectedAt ? " · " + collectedAt : ""}
-                </span>
-              </button>
+                </button>
+              )}
               <button
                 type="button"
                 className="icon-button"
@@ -341,7 +372,7 @@ export function PortsPane({
                     ? "Find ports"
                     : tools === "filters"
                       ? "Port filters"
-                      : "Ports reading details"
+                      : "Ports reading warnings"
                 }
               >
                 {tools !== "search" && (
@@ -360,19 +391,6 @@ export function PortsPane({
                 {tools === "info" && (
                   <>
                     <div className="ports-reading-body">
-                      <p>
-                        Manual snapshot · {cache.items.length} listening sockets
-                        {collectedAt ? ` · collected at ${collectedAt}` : ""}
-                      </p>
-                      {cache.loading && <p role="status">Reading listening ports…</p>}
-                      {connections && (
-                        <p>
-                          {connections.totalEstablished} established connections
-                          {connections.truncated ? " · list truncated at 4000 rows" : ""}
-                        </p>
-                      )}
-                      {connectionsLoading && <p role="status">Reading established connections…</p>}
-                      {containersCache.loading && <p role="status">Reading Docker containers…</p>}
                       {cache.error && (
                         <p className="inline-warning">
                           {cache.items.length

@@ -167,8 +167,12 @@ describe("PortsPane", () => {
     expect(screen.getByRole("button", { name: "Filter ports" }).getAttribute("aria-pressed")).toBe(
       "false",
     );
-    await user.click(screen.getByTitle("Ports reading details"));
-    expect(screen.getByText(/Manual snapshot/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close port tools" }));
+    const summary = screen.getByTitle(/Manual snapshot/);
+    await user.click(summary);
+    expect(document.querySelector("#ports-tools")).toBeNull();
+    expect(summary.tagName).toBe("SPAN");
+    expect(summary.title).toContain("12 established connections");
   });
 
   it("keeps Windows ownership and firewall failures free of sudo prompts", async () => {

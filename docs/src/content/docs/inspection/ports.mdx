@@ -21,7 +21,7 @@ The graph fills the Ports screen. Select a port or connection to inspect its bin
 
 Drag the canvas to pan. Use the wheel or zoom buttons to zoom, and **Fit to view** to show the whole graph. Open **Find ports** to search ports, owners, or endpoints. Open **Filter ports** to choose **Listeners**, **Connections**, or **Docker**, or narrow by protocol and exposure. Active search and filters keep their toolbar buttons highlighted. Exposure filters apply to known bind addresses, so they hide connection summaries that have no bind address.
 
-Select the listener count beside **Ports** for collection details, connection limits, warnings, and retries. Failed reads open these details automatically. Refresh failures keep existing results visible. Published Docker ports and established connections can appear even when no matching listener was reported.
+Hover over the listener count beside **Ports** for collection time and connection limits. Keyboard focus exposes the same summary to screen readers. **Ports reading warnings** contains warnings and retry actions. Failed reads open those warnings automatically. Refresh failures keep existing results visible. Published Docker ports and established connections can appear even when no matching listener was reported.
 
 Some accounts cannot read which process owns a socket. The listener still appears, with its owner marked unavailable. On Linux, **Resolve owners with sudo** can retry the read where allowed. Control Room links to a service or container only when it can match it reliably.
 
