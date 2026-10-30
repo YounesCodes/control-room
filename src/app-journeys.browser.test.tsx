@@ -2518,16 +2518,28 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(element.querySelector(".owner-container .lucide-container")).toBeTruthy();
     // Every orthogonal segment must stay outside unrelated owner cards.
     const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
-    for (const path of element.querySelectorAll(".arch-links path")) {
-      const [sx, sy, lane, ty, tx] = path
+    const paths = [...element.querySelectorAll(".arch-links path")];
+    expect(paths).toHaveLength(cards.length);
+    for (const [index, path] of paths.entries()) {
+      let x = 0,
+        y = 0;
+      const segments: number[][] = [];
+      for (const command of path
         .getAttribute("d")!
-        .match(/-?[0-9.]+/g)!
-        .map(Number);
-      const segments = [
-        [sx, sy, lane, sy],
-        [lane, sy, lane, ty],
-        [lane, ty, tx, ty],
-      ];
+        .matchAll(/([MHV])(-?[\d.]+)(?:,(-?[\d.]+))?/g)) {
+        const nextX = command[1] === "V" ? x : Number(command[2]);
+        const nextY =
+          command[1] === "M" ? Number(command[3]) : command[1] === "V" ? Number(command[2]) : y;
+        if (command[1] !== "M") segments.push([x, y, nextX, nextY]);
+        x = nextX;
+        y = nextY;
+      }
+      const target = cards[index];
+      const lastInColumn = !cards.some(
+        (card) => card.offsetLeft === target.offsetLeft && card.offsetTop > target.offsetTop,
+      );
+      expect(x).toBe(target.offsetLeft + (lastInColumn ? target.offsetWidth / 2 : 0));
+      expect(y).toBe(target.offsetTop + (lastInColumn ? 0 : 20));
       for (const card of cards) {
         const left = card.offsetLeft,
           right = left + card.offsetWidth;

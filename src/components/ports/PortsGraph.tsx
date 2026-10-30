@@ -197,11 +197,33 @@ export function PortsGraph({
     const hostX = host.offsetLeft + host.offsetWidth;
     const hostY = host.offsetTop + host.offsetHeight / 2;
     const next: { id: string; d: string }[] = [];
+    const lastRowByColumn = new Map<number, number>();
+    const countByColumn = new Map<number, number>();
+    for (const element of groupRefs.current.values()) {
+      countByColumn.set(element.offsetLeft, (countByColumn.get(element.offsetLeft) ?? 0) + 1);
+      lastRowByColumn.set(
+        element.offsetLeft,
+        Math.max(lastRowByColumn.get(element.offsetLeft) ?? 0, element.offsetTop),
+      );
+    }
     groupRefs.current.forEach((element, id) => {
       const x = element.offsetLeft;
-      const y = element.offsetTop + 20;
       const lane = x - 24;
-      next.push({ id, d: `M${hostX},${hostY} H${lane} V${y} H${x}` });
+      if (element.offsetTop === lastRowByColumn.get(x)) {
+        // End the trunk in the row gutter and enter its final card from above.
+        const top = element.offsetTop;
+        const center = x + element.offsetWidth / 2;
+        next.push({
+          id,
+          d:
+            countByColumn.get(x) === 1
+              ? `M${hostX},${hostY} H${center} V${top}`
+              : `M${hostX},${hostY} H${lane} V${top - 20} H${center} V${top}`,
+        });
+      } else {
+        const y = element.offsetTop + 20;
+        next.push({ id, d: `M${hostX},${hostY} H${lane} V${y} H${x}` });
+      }
     });
     setLinks(next);
   }, []);
