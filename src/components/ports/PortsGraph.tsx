@@ -291,6 +291,12 @@ export function PortsGraph({
     selectionTrigger.current?.focus({ preventScroll: true });
   }
 
+  function commitSelection(item: PortOverviewItem, element: HTMLButtonElement) {
+    selectionTrigger.current = element;
+    if (item.id === selectedId) closeDetail();
+    else setSelectedId(item.id);
+  }
+
   function backgroundPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || (event.target as Element).closest("button")) return;
     backgroundPress.current = {
@@ -465,14 +471,28 @@ export function PortsGraph({
                         }
                         aria-pressed={item.id === selectedId}
                         aria-controls={item.id === selectedId ? "port-inspector" : undefined}
-                        onFocus={(event) => revealNode(event.currentTarget)}
+                        onFocus={(event) => {
+                          // Pointer focus must not reveal: moving the canvas
+                          // between mousedown and mouseup makes the mouseup
+                          // miss the chip. Keyboard focus still reveals.
+                          if (event.currentTarget.matches(":focus-visible"))
+                            revealNode(event.currentTarget);
+                        }}
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) return;
+                          // Committing on press keeps selection working while
+                          // the camera glide moves the chip away from the
+                          // cursor before the mouseup lands. The default must
+                          // go too: mousedown would otherwise focus the chip
+                          // after the inspector and steal focus back.
+                          event.preventDefault();
+                          commitSelection(item, event.currentTarget);
+                        }}
                         onClick={(event) => {
-                          if (item.id === selectedId) {
-                            closeDetail();
-                          } else {
-                            selectionTrigger.current = event.currentTarget;
-                            setSelectedId(item.id);
-                          }
+                          // Pointer presses already committed above; only
+                          // keyboard activation (detail 0) still arrives here.
+                          if (event.detail !== 0) return;
+                          commitSelection(item, event.currentTarget);
                         }}
                       >
                         <GraphItem item={item} />

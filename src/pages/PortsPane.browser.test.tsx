@@ -138,7 +138,10 @@ function renderPane(
   return { onOpenSystemd, onOpenContainer, onViewLogs, ...result };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  document.getElementById("camera-motion-override")?.remove();
+});
 
 function camera() {
   return new DOMMatrix(getComputedStyle(document.querySelector(".arch-content")!).transform);
@@ -152,6 +155,85 @@ function expectNodeBesideInspector(node: Element) {
   expect(bounds.right).toBeLessThan(inspector.left - 12);
   expect(bounds.top).toBeGreaterThan(viewport.top + 70);
   expect(bounds.bottom).toBeLessThan(viewport.bottom - 54);
+}
+
+const manySockets: CachedList<ListeningSocket> = {
+  items: (
+    [
+      [443, "nginx"],
+      [5432, "postgres"],
+      [6379, "redis"],
+      [8080, "tomcat"],
+      [9090, "prometheus"],
+      [3000, "node"],
+    ] as const
+  ).map(([port, name]) => ({
+    ...sockets.items[0],
+    id: "tcp:0.0.0.0:" + port + ":0",
+    port,
+    processId: port,
+    processName: name,
+    systemdUnit: name + ".service",
+  })),
+  fetchedAt: Date.now(),
+  loading: false,
+  error: null,
+};
+
+// The suite pins prefers-reduced-motion, which collapses the camera glide to
+// 0.01ms. Mid-gesture timing only reproduces with the production 420ms glide.
+function enableRealMotion() {
+  const style = document.createElement("style");
+  style.id = "camera-motion-override";
+  style.textContent = ".arch-focusing { transition: transform 420ms ease !important; }";
+  document.head.append(style);
+}
+
+/** A person's press: pointerdown focuses the chip, the camera may move while
+ *  the button is held, and the mouseup lands on whatever sits under the same
+ *  cursor position afterwards. Dispatched by hand on purpose — Playwright
+ *  locator clicks retry until the canvas holds still, which hides the bug. */
+async function handClick(target: HTMLElement, pressAt?: { x: number; y: number }) {
+  const bounds = target.getBoundingClientRect();
+  const x = pressAt?.x ?? bounds.left + bounds.width / 2;
+  const y = pressAt?.y ?? bounds.top + bounds.height / 2;
+  const down: PointerEventInit = {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    buttons: 1,
+    clientX: x,
+    clientY: y,
+    pointerId: 1,
+    isPrimary: true,
+    pointerType: "mouse",
+  };
+  target.dispatchEvent(new PointerEvent("pointerdown", down));
+  target.dispatchEvent(new MouseEvent("mousedown", { ...down, detail: 1 }));
+  target.focus();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const upElement = document.elementFromPoint(x, y) ?? target;
+  const up = { ...down, buttons: 0 };
+  upElement.dispatchEvent(new PointerEvent("pointerup", up));
+  upElement.dispatchEvent(new MouseEvent("mouseup", { ...up, detail: 1 }));
+  let ancestor: Element | null = upElement;
+  while (ancestor && !ancestor.contains(target)) ancestor = ancestor.parentElement;
+  (ancestor ?? target).dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      detail: 1,
+      clientX: x,
+      clientY: y,
+    }),
+  );
+  return target;
+}
+
+async function inspectorHeading() {
+  const inspector = await screen.findByRole("complementary");
+  return inspector.querySelector("h2")?.textContent ?? "";
 }
 
 it("keeps snapshot metadata on Ports hover with a gap below the whole toolbar", async () => {
@@ -537,4 +619,84 @@ it("keeps sshd worker connections immediately below the related SSH listener", a
   expect(within(inspector).getByText("200")).toBeTruthy();
   expect(within(inspector).queryByRole("button", { name: "Open unit" })).toBeNull();
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+});
+
+it("commits the selection when pressing a chip beside the inspector panel", async () => {
+  await page.viewport(1100, 760);
+  renderPane(null, manySockets, { ...containers, items: [] });
+  await screen.findByRole("button", { name: /443.*Listening/ });
+  const current = page.getByRole("button", { name: /443.*Listening/ });
+  await current.click();
+  await waitFor(() => expectNodeBesideInspector(current.element()));
+
+  // Some card pokes out from under the panel, so its visible sliver is where
+  // a person presses. Reveal motion used to fire on the mousedown focus and
+  // jump the canvas away before the mouseup landed, losing the switch.
+  const panelLeft = screen.getByRole("complementary").getBoundingClientRect().left;
+  const pressed = [...document.querySelectorAll<HTMLButtonElement>(".arch-chip")].find((chip) => {
+    const bounds = chip.getBoundingClientRect();
+    return bounds.left < panelLeft - 4 && bounds.right > panelLeft;
+  });
+  expect(pressed, "a chip should straddle the inspector panel edge").toBeTruthy();
+  const port = pressed!.textContent!.match(/\d+/)![0];
+  const pressAt = {
+    x: panelLeft - 4,
+    y: pressed!.getBoundingClientRect().top + pressed!.getBoundingClientRect().height / 2,
+  };
+  await handClick(pressed!, pressAt);
+  expect(await inspectorHeading()).toBe(port + " / TCP");
+  await waitFor(() => expectNodeBesideInspector(pressed!));
+  expect(pressed!.getAttribute("aria-pressed")).toBe("true");
+});
+
+it("commits the selection when pressing another chip mid-glide", async () => {
+  await page.viewport(1100, 760);
+  renderPane(null, manySockets, { ...containers, items: [] });
+  await screen.findByRole("button", { name: /443.*Listening/ });
+  enableRealMotion();
+  const current = page.getByRole("button", { name: /443.*Listening/ });
+  await current.click();
+  await waitFor(() => expectNodeBesideInspector(current.element()));
+
+  // The second press lands while the camera is still gliding toward 9090.
+  await handClick(screen.getByRole("button", { name: /9090.*Listening/ }) as HTMLButtonElement);
+  const pressed = screen.getByRole("button", {
+    name: /3000.*Listening/,
+  }) as HTMLButtonElement;
+  await handClick(pressed);
+  await waitFor(() => expect(document.querySelector(".arch-focusing")).toBeNull());
+  expect(await inspectorHeading()).toBe("3000 / TCP");
+  await waitFor(() => expectNodeBesideInspector(pressed));
+  expect(pressed.getAttribute("aria-pressed")).toBe("true");
+});
+
+it("reveals chips for keyboard focus without selecting them", async () => {
+  await page.viewport(1100, 760);
+  renderPane(null, manySockets, { ...containers, items: [] });
+  await screen.findByRole("button", { name: /443.*Listening/ });
+  const current = page.getByRole("button", { name: /443.*Listening/ });
+  await current.click();
+  await waitFor(() => expectNodeBesideInspector(current.element()));
+  const viewport = screen.getByRole("region", { name: "Ports graph" }).getBoundingClientRect();
+
+  let focusedChips = 0;
+  for (let step = 0; step < 9; step += 1) {
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLElement) || !focused.classList.contains("arch-chip")) break;
+    focusedChips += 1;
+    // Keyboard focus must always land on a revealed chip; mouse focus must
+    // never move the camera, so this walk only passes with both halves.
+    await waitFor(() => {
+      const bounds = focused.getBoundingClientRect();
+      expect(bounds.left).toBeGreaterThanOrEqual(viewport.left + 20);
+      expect(bounds.right).toBeLessThan(
+        screen.getByRole("complementary").getBoundingClientRect().left,
+      );
+      expect(bounds.top).toBeGreaterThan(viewport.top + 50);
+      expect(bounds.bottom).toBeLessThan(viewport.bottom - 54);
+    });
+  }
+  expect(focusedChips).toBeGreaterThan(1);
+  expect(await inspectorHeading()).toBe("443 / TCP");
 });
