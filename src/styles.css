@@ -3072,11 +3072,36 @@ code,
 }
 
 .terminal-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   border-bottom: 1px solid var(--failure);
   background: var(--surface-raised);
   padding: 8px 14px;
   color: var(--failure);
   font-size: 11.5px;
+}
+
+.terminal-notice-message {
+  min-width: 0;
+}
+
+.terminal-notice-action {
+  flex: none;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.terminal-notice-action:hover {
+  border-color: #565656;
+  background: var(--fill-control-hover);
+  color: var(--text-strong);
 }
 
 .terminal-content {

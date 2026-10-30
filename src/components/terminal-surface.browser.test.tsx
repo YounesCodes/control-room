@@ -372,3 +372,88 @@ it("keeps every terminal on the saved palette through search and tab changes", a
   expectPalette(updated);
   expect(terminals).toHaveLength(4);
 });
+
+it("puts the reconnect action on the ended-session notice", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  const onReconnect = vi.fn();
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createRemoteWorkspace(connection()),
+        state: "error",
+        reason: "SSH connection was lost (exit code 255)",
+        connectRequested: false,
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onReconnect={onReconnect}
+    />,
+  );
+  const action = page.getByRole("button", { name: "Reconnect", exact: true });
+  await expect.element(action).toBeVisible();
+  await userEvent.click(action);
+  expect(onReconnect).toHaveBeenCalledTimes(1);
+});
+
+it("labels the notice action Restart for an ended local shell", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createLocalWorkspace({
+          id: "test-shell",
+          label: "Test shell",
+          kind: "git-bash",
+          elevated: false,
+        }),
+        state: "disconnected",
+        reason: "Test shell exited with code 0.",
+        connectRequested: false,
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onReconnect={() => undefined}
+    />,
+  );
+  await expect.element(page.getByRole("button", { name: "Restart", exact: true })).toBeVisible();
+});
+
+it("keeps the notice action off live sessions", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createRemoteWorkspace(connection()),
+        state: "connected",
+        connectRequested: false,
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onReconnect={() => undefined}
+    />,
+  );
+  const pane = container!;
+  await vi.waitFor(() => expect(pane.querySelector(".xterm")).not.toBeNull());
+  expect(pane.querySelector(".terminal-notice")).toBeNull();
+});
