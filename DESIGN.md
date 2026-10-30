@@ -158,8 +158,9 @@ owners. Preserve each source as separate evidence, including mappings and
 outbound connections with no listening socket. Selecting a port or connection
 smoothly zooms and centers it in the graph area beside the inspector, then
 slides a closable inspector in from the right. Give the inspector equal top and
-bottom canvas gutters, and move zoom controls to the lower-left while it is open
-to leave its footer clear. Direct pan and zoom interrupt
+bottom canvas gutters. Slide zoom controls to the lower-left when it opens,
+then back to the lower-right when it closes, keeping its footer clear.
+Reduced motion moves the controls immediately. Direct pan and zoom interrupt
 the camera transition. Reduced motion applies the framing immediately. Keep the
 inspector heading and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin

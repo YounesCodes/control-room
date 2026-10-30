@@ -251,9 +251,52 @@ for (const height of [640, 900]) {
     expect(inspector.top - canvas.top).toBeCloseTo(12, 0);
     expect(canvas.bottom - inspector.bottom).toBeCloseTo(12, 0);
     expect((inspector.top + inspector.bottom) / 2).toBeCloseTo((canvas.top + canvas.bottom) / 2, 0);
-    const controls = screen
-      .getByRole("toolbar", { name: "Graph controls" })
-      .getBoundingClientRect();
-    expect(controls.right).toBeLessThan(inspector.left);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("toolbar", { name: "Graph controls" }).getBoundingClientRect().right,
+      ).toBeLessThan(inspector.left),
+    );
   });
 }
+
+it("slides zoom controls left on selection and right on inspector close", async () => {
+  await page.viewport(1100, 760);
+  renderPane();
+  await screen.findByRole("button", { name: /12 established/ });
+  const controls = screen.getByRole("toolbar", { name: "Graph controls" });
+  const canvas = document.querySelector(".arch-canvas")!.getBoundingClientRect();
+  const initial = controls.getBoundingClientRect();
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  async function checkSlide(direction: "left" | "right") {
+    if (!reduced) {
+      const movement = controls
+        .getAnimations()
+        .find(
+          (animation) =>
+            animation instanceof CSSTransition && animation.transitionProperty === "left",
+        );
+      expect(movement).toBeTruthy();
+      const animations = controls.getAnimations();
+      for (const animation of animations) {
+        animation.pause();
+        animation.currentTime = 210;
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const midway = controls.getBoundingClientRect();
+      expect(midway.left).toBeGreaterThan(canvas.left + 12);
+      expect(midway.left).toBeLessThan(initial.left);
+      for (const animation of animations) animation.finish();
+    }
+    await waitFor(() => {
+      const bounds = controls.getBoundingClientRect();
+      if (direction === "left") expect(bounds.left - canvas.left).toBeCloseTo(12, 0);
+      else expect(canvas.right - bounds.right).toBeCloseTo(12, 0);
+    });
+  }
+
+  await page.getByRole("button", { name: /443 Listening/ }).click();
+  await checkSlide("left");
+  await page.getByRole("button", { name: "Close details" }).click();
+  await checkSlide("right");
+});

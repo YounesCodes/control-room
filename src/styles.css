@@ -6588,7 +6588,11 @@ kbd {
 .graph-toolbar {
   position: absolute;
   bottom: 12px;
-  right: 12px;
+  left: calc(100% - 12px);
+  transform: translateX(-100%);
+  transition:
+    left 420ms var(--ease),
+    transform 420ms var(--ease);
   z-index: 2;
   display: flex;
   align-items: center;
@@ -6601,7 +6605,7 @@ kbd {
 
 .arch-canvas.inspecting .graph-toolbar {
   left: 12px;
-  right: auto;
+  transform: translateX(0);
 }
 
 .graph-toolbar .icon-button {
@@ -7253,7 +7257,8 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arch-focusing {
+  .arch-focusing,
+  .graph-toolbar {
     transition: none;
   }
 
