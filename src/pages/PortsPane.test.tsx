@@ -147,6 +147,7 @@ describe("PortsPane", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
     const find = screen.getByRole("button", { name: "Find ports" });
     await user.click(find);
+    expect(screen.queryByRole("button", { name: "Close port tools" })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Search ports" }));
     await user.type(screen.getByRole("textbox", { name: "Search ports" }), "unmatched");
     await user.keyboard("{Escape}");
@@ -154,6 +155,7 @@ describe("PortsPane", () => {
     expect(find.getAttribute("aria-pressed")).toBe("true");
     await user.click(find);
     await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Search ports" }));
     await user.click(screen.getByRole("button", { name: "Filter ports" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Protocol filter" }), "udp");
     await user.click(screen.getByRole("button", { name: "Close port tools" }));

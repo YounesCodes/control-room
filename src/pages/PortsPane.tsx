@@ -344,17 +344,19 @@ export function PortsPane({
                       : "Ports reading details"
                 }
               >
-                <button
-                  type="button"
-                  className="icon-button ports-tools-close"
-                  aria-label="Close port tools"
-                  onClick={() => {
-                    setTools(null);
-                    toolsButtonRef.current?.focus();
-                  }}
-                >
-                  <X size={14} />
-                </button>
+                {tools !== "search" && (
+                  <button
+                    type="button"
+                    className="icon-button ports-tools-close"
+                    aria-label="Close port tools"
+                    onClick={() => {
+                      setTools(null);
+                      toolsButtonRef.current?.focus();
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
                 {tools === "info" && (
                   <>
                     <div className="ports-reading-body">

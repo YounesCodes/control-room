@@ -2580,6 +2580,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Find ports", exact: true }).click();
     await page.getByRole("textbox", { name: "Search ports" }).fill("443");
     const searchField = element.querySelector<HTMLElement>(".ports-search-field")!;
+    const searchPanel = element.querySelector<HTMLElement>("#ports-tools")!;
+    expect(searchPanel.querySelectorAll("button")).toHaveLength(1);
+    expect(searchPanel.getBoundingClientRect().width).toBe(
+      searchField.getBoundingClientRect().width,
+    );
+    expect(searchPanel.getBoundingClientRect().height).toBe(
+      searchField.getBoundingClientRect().height,
+    );
     expect(searchField.querySelector("button[aria-label='Clear search']")).toBeTruthy();
     expect(searchField.scrollWidth).toBeLessThanOrEqual(searchField.clientWidth + 1);
     expect((await axe.run(element.querySelector("#ports-tools")!)).violations).toEqual([]);

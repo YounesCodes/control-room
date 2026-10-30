@@ -6330,12 +6330,11 @@ kbd {
 }
 
 .ports-tools-panel:has(.ports-search-field) {
-  padding: 10px 42px 10px 10px;
-}
-
-.ports-tools-panel:has(.ports-search-field) > .ports-tools-close {
-  top: 14px;
-  right: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .ports-tools-panel .search-field {
@@ -6367,6 +6366,10 @@ kbd {
   flex: none;
   width: 26px;
   height: 26px;
+}
+
+.ports-search-field .icon-button:disabled {
+  visibility: hidden;
 }
 
 .ports-tools-footer {
