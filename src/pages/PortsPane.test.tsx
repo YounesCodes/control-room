@@ -207,12 +207,12 @@ describe("PortsPane", () => {
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByRole("separator")).toBeNull();
     expect(screen.getByText("Host")).toBeTruthy();
-    const listener = screen.getByRole("button", { name: /443 Listening/ });
+    const listener = screen.getByRole("button", { name: /443.*Listening/ });
     await user.click(listener);
     const inspector = screen.getByRole("complementary", { name: "Port details" });
     expect(within(inspector).getByText("IPV4")).toBeTruthy();
-    expect(within(inspector).getByText("742")).toBeTruthy();
-    expect(within(inspector).getByText("gateway-1")).toBeTruthy();
+    expect(within(inspector).getAllByText("742")[0]).toBeTruthy();
+    expect(within(inspector).getAllByText("gateway-1")[0]).toBeTruthy();
     expect(within(inspector).getByText("proxy")).toBeTruthy();
     expect(within(inspector).getByText("UFW: allowed")).toBeTruthy();
 
@@ -230,11 +230,11 @@ describe("PortsPane", () => {
   it("dismisses details with Escape and closes them when filters hide the selected item", async () => {
     const user = userEvent.setup();
     renderPane();
-    await user.click(screen.getByRole("button", { name: /443 Listening/ }));
+    await user.click(screen.getByRole("button", { name: /443.*Listening/ }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("complementary")));
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("complementary")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /443 Listening/ }));
+    await user.click(screen.getByRole("button", { name: /443.*Listening/ }));
     await user.click(screen.getByRole("button", { name: "Filter ports" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Protocol filter" }), "udp");
     expect(screen.queryByRole("complementary")).toBeNull();
@@ -251,7 +251,7 @@ describe("PortsPane", () => {
     expect(within(inspector).getByText("gateway:latest")).toBeTruthy();
     expect(within(inspector).getByText("proxy")).toBeTruthy();
     expect(within(inspector).getByText("gateway")).toBeTruthy();
-    expect(within(inspector).getByText("0.0.0.0:443/tcp")).toBeTruthy();
+    expect(within(inspector).getByText("0.0.0.0:443 → 8443/tcp")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Open container" }));
     expect(onOpenContainer).toHaveBeenCalledWith("container-id");
     await user.click(screen.getByRole("button", { name: "View logs" }));
@@ -299,13 +299,13 @@ describe("PortsPane", () => {
     expect(within(inspector).getByText("203.0.113.9")).toBeTruthy();
     expect(within(inspector).getByText("12")).toBeTruthy();
     expect(within(inspector).getByText("3")).toBeTruthy();
-    expect(within(inspector).getByText("742")).toBeTruthy();
+    expect(within(inspector).getAllByText("742")[0]).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Open unit" }));
     expect(onOpenSystemd).toHaveBeenCalledWith("nginx.service");
     await user.click(screen.getByRole("button", { name: "Find ports" }));
     await user.type(screen.getByRole("textbox", { name: "Search ports" }), "203.0.113.9");
     expect(screen.getByRole("button", { name: /12 established/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /443 Listening/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /443.*Listening/ })).toBeTruthy();
   });
 
   it("keeps saved connection evidence visible and reports a refresh failure", async () => {
@@ -325,6 +325,9 @@ describe("PortsPane", () => {
     renderPane(null, { ...sockets, items: [], error: "Listener permission denied" });
     expect(screen.getByRole("region", { name: "Ports graph" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /443.*8443/ })).toBeTruthy();
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Show established connections" }));
     await screen.findByRole("button", { name: /12 established/ });
     expect(
       screen.getByText(/Listening ports unavailable: Listener permission denied/),

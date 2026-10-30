@@ -6508,7 +6508,7 @@ kbd {
 }
 
 .port-inspector-body .detail-section-heading {
-  margin: 20px 0 8px;
+  margin: 14px 0 6px;
   font-size: 12px;
   letter-spacing: normal;
   text-transform: none;
@@ -6559,8 +6559,9 @@ kbd {
 
 .arch-detail > .detail-actions {
   flex: none;
+  gap: 6px;
   margin: 0;
-  padding: 12px 18px;
+  padding: 10px 12px;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -6634,7 +6635,7 @@ kbd {
   left: 0;
   display: flex;
   align-items: center;
-  gap: 80px;
+  gap: 40px;
   width: max-content;
   padding: 24px;
   transform-origin: 0 0;
@@ -6663,7 +6664,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px;
+  padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
@@ -6684,12 +6685,12 @@ kbd {
 .arch-column {
   display: grid;
   align-items: start;
-  gap: 40px 64px;
-  padding-top: 64px;
+  gap: 24px 40px;
+  padding-top: 40px;
 }
 
 .arch-group {
-  width: 280px;
+  width: 248px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6780,6 +6781,47 @@ kbd {
 
 .arch-chip-meta.faint {
   color: var(--text-faint);
+}
+
+.port-binding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.port-binding-list li {
+  display: grid;
+  gap: 3px;
+  padding: 7px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-wrap: anywhere;
+}
+.port-binding-list li > span:last-child {
+  color: var(--text-muted);
+}
+.port-disclosure {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+  font-size: 12px;
+}
+.port-disclosure > summary {
+  cursor: pointer;
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.port-disclosure[open] > summary {
+  margin-bottom: 8px;
+}
+.port-owner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.arch-chip[data-secondary] {
+  background: transparent;
+  border-style: dashed;
 }
 
 .font-catalog {

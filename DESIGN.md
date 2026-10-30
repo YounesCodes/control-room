@@ -155,8 +155,18 @@ the top, ending the branch at the card. End the horizontal bus at the top of
 the rightmost column's first card, even when that column has more cards below.
 Group listening
 sockets, established connections, and published Docker mappings by their known
-owners. Preserve each source as separate evidence, including mappings and
-outbound connections with no listening socket. Selecting a port or connection
+owners. Present matching Docker publications, listeners and their IPv4/IPv6
+bindings as one endpoint card while retaining every source record in the inspector.
+Match Docker by address, protocol and host port, and connection summaries by
+protocol, local port and explicit service or PID evidence. Keep ambiguous matches,
+different owners and unknown-owner sockets separate. Never merge solely by port.
+Default to listeners and published mappings; put connection-only endpoints behind
+Show established connections or the Established / outbound filter. Render those
+endpoints with a quieter dashed border and sort them after listening owners.
+Keep cards compact: port, protocol, binding scope, Docker target and peer count.
+Keep process, Compose and per-socket information in expandable inspector sections.
+Show reachability as Not tested. Host firewall policy is separate evidence and
+must never label a card as reachable or blocked. Selecting a port or connection
 smoothly zooms and centers it in the graph area beside the inspector, then
 slides a closable inspector in from the right. Give the inspector equal top and
 bottom canvas gutters. Slide zoom controls to the lower-left when it opens,

@@ -10,32 +10,18 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import {
-  ArrowRight,
-  ArrowLeftRight,
-  Container,
-  Cpu,
-  HelpCircle,
-  Scan,
-  Server,
-  X,
-} from "lucide-react";
+import { Container, Cpu, HelpCircle, Scan, Server, X } from "lucide-react";
 import { EmptyState } from "../PanelState";
-import { SocketDetail } from "./SocketDetail";
-import { ConnectionDetail } from "./ConnectionDetail";
-import { DockerPortDetail } from "./DockerPortDetail";
+import { PortOverviewDetail } from "./PortOverviewDetail";
 import {
-  buildPortGraph,
   exposureLabel,
-  firewallForSocket,
-  resolveSocketContainer,
   socketExposure,
   type Exposure,
   type OwnerKind,
-  type PortGraphItem,
   type PortGraphKind,
   type PortSort,
 } from "../../lib/port-inspector";
+import { buildPortOverview, type PortOverviewItem } from "../../lib/port-overview";
 import { usePanZoom } from "../../lib/use-pan-zoom";
 import type {
   DockerContainer,
@@ -53,64 +39,42 @@ function OwnerIcon({ kind }: { kind: OwnerKind }) {
   return <HelpCircle size={14} />;
 }
 
-function GraphItem({ item, firewall }: { item: PortGraphItem; firewall: FirewallStatus | null }) {
-  const protocol =
-    item.kind === "listeners"
-      ? item.socket.protocol
-      : item.kind === "connections"
-        ? item.connection.protocol
-        : item.binding.protocol;
-  const port =
-    item.kind === "listeners"
-      ? item.socket.port
-      : item.kind === "connections"
-        ? item.connection.localPort
-        : item.binding.hostPort;
+function GraphItem({ item }: { item: PortOverviewItem }) {
+  const scopes = [
+    ...new Set([
+      ...item.sockets.map((socket) => exposureLabel(socketExposure(socket.localAddress))),
+      ...item.bindings.map((binding) => exposureLabel(socketExposure(binding.hostAddress))),
+    ]),
+  ];
+  const families = [...new Set(item.sockets.map((socket) => socket.addressFamily.toUpperCase()))];
+  const established = item.connections.reduce(
+    (total, connection) => total + connection.established,
+    0,
+  );
   return (
     <>
       <span className="arch-chip-title">
-        <span className={`protocol-mark protocol-${protocol}`}>{protocol.toUpperCase()}</span>{" "}
-        <strong>{port}</strong>{" "}
+        <strong>{item.port}</strong>
+        <span className="protocol-mark">{item.protocol.toUpperCase()}</span>
         <span className="arch-chip-kind">
-          {item.kind === "listeners" ? (
-            "Listening"
-          ) : item.kind === "connections" ? (
-            <>
-              <ArrowLeftRight size={13} /> {item.connection.established} established
-            </>
-          ) : (
-            <>
-              <ArrowRight size={13} /> {item.binding.containerPort}
-            </>
-          )}
+          {item.sockets.length ? "Listening" : item.bindings.length ? "Published" : "Established"}
         </span>
-      </span>{" "}
-      {item.kind === "listeners" && (
-        <>
-          <span className="arch-chip-meta technical">{item.socket.localAddress}</span>{" "}
-          <span className="arch-chip-meta">
-            {exposureLabel(socketExposure(item.socket.localAddress))} ·{" "}
-            {firewallForSocket(firewall, item.socket).label}
-          </span>
-        </>
-      )}
-      {item.kind === "connections" && (
+      </span>
+      {!!scopes.length && (
         <span className="arch-chip-meta">
-          {item.connection.remoteAddressCount} remote addresses ·{" "}
-          {item.connection.remotes[0]?.address ?? "Endpoints unavailable"}
+          {scopes.join(" / ")}
+          {families.length ? " · " + families.join(" + ") : ""}
         </span>
       )}
-      {item.kind === "docker" && (
-        <>
-          <span className="arch-chip-meta technical">
-            {item.binding.hostAddress} → {item.binding.containerPort}/{protocol}
-          </span>{" "}
-          <span className="arch-chip-meta">
-            {[item.binding.container.composeProject, item.binding.container.composeService]
-              .filter(Boolean)
-              .join(" / ") || item.binding.container.image}
-          </span>
-        </>
+      {(item.bindings.length > 0 || established > 0) && (
+        <span className="arch-chip-meta">
+          {item.bindings.length > 0
+            ? "Docker → " +
+              [...new Set(item.bindings.map((binding) => binding.containerPort))].join(", ")
+            : ""}
+          {item.bindings.length > 0 && established > 0 ? " · " : ""}
+          {established > 0 ? established + " established" : ""}
+        </span>
       )}
     </>
   );
@@ -128,6 +92,7 @@ export function PortsGraph({
   exposure,
   kind,
   sort,
+  showConnections = false,
   emptyMessage,
   toolbar,
   onOpenSystemd,
@@ -145,6 +110,7 @@ export function PortsGraph({
   exposure: Exposure | "all";
   kind: PortGraphKind;
   sort: PortSort;
+  showConnections?: boolean;
   emptyMessage: string;
   toolbar: ReactNode;
   onOpenSystemd: (unitId: string) => void;
@@ -175,7 +141,7 @@ export function PortsGraph({
 
   const groups = useMemo(
     () =>
-      buildPortGraph(
+      buildPortOverview(
         sockets,
         containers,
         connections?.groups ?? [],
@@ -184,8 +150,9 @@ export function PortsGraph({
         exposure,
         kind,
         sort,
+        showConnections,
       ),
-    [sockets, containers, connections, search, protocol, exposure, kind, sort],
+    [sockets, containers, connections, search, protocol, exposure, kind, sort, showConnections],
   );
   const selected = groups.flatMap((group) => group.items).find((item) => item.id === selectedId);
 
@@ -219,7 +186,7 @@ export function PortsGraph({
     const rightmostColumn = Math.max(...lastRowByColumn.keys());
     groupRefs.current.forEach((element, id) => {
       const x = element.offsetLeft;
-      const lane = x - 24;
+      const lane = x - 16;
       if (x === rightmostColumn && element.offsetTop === firstRowByColumn.get(x)) {
         // The horizontal bus ends at the top of the rightmost branch's first card.
         const center = x + element.offsetWidth / 2;
@@ -233,7 +200,7 @@ export function PortsGraph({
           d:
             countByColumn.get(x) === 1
               ? `M${hostX},${hostY} H${center} V${top}`
-              : `M${hostX},${hostY} H${lane} V${top - 20} H${center} V${top}`,
+              : `M${hostX},${hostY} H${lane} V${top - 12} H${center} V${top}`,
         });
       } else {
         const y = element.offsetTop + 20;
@@ -468,7 +435,7 @@ export function PortsGraph({
             <div
               className="arch-column"
               style={{
-                gridTemplateColumns: `repeat(${Math.min(3, Math.ceil(Math.sqrt(groups.length)))}, 280px)`,
+                gridTemplateColumns: `repeat(${Math.min(4, Math.ceil(Math.sqrt(groups.length)))}, 248px)`,
               }}
             >
               {groups.map((group) => (
@@ -490,6 +457,9 @@ export function PortsGraph({
                         type="button"
                         key={item.id}
                         className={`arch-chip${item.id === selectedId ? " selected" : ""}`}
+                        data-secondary={
+                          (!item.sockets.length && !item.bindings.length) || undefined
+                        }
                         aria-pressed={item.id === selectedId}
                         aria-controls={item.id === selectedId ? "port-inspector" : undefined}
                         onFocus={(event) => revealNode(event.currentTarget)}
@@ -502,7 +472,7 @@ export function PortsGraph({
                           }
                         }}
                       >
-                        <GraphItem item={item} firewall={firewall} />
+                        <GraphItem item={item} />
                         <span className="sr-only"> · {group.owner.label}</span>
                       </button>
                     ))}
@@ -535,30 +505,13 @@ export function PortsGraph({
           >
             <X size={16} />
           </button>
-          {selected.kind === "listeners" && (
-            <SocketDetail
-              socket={selected.socket}
-              containerOwner={resolveSocketContainer(selected.socket, containers)}
-              firewall={firewall}
-              onOpenSystemd={onOpenSystemd}
-              onOpenContainer={onOpenContainer}
-              onViewLogs={onViewLogs}
-            />
-          )}
-          {selected.kind === "connections" && (
-            <ConnectionDetail
-              selected={selected.connection}
-              onOpenSystemd={onOpenSystemd}
-              onViewLogs={onViewLogs}
-            />
-          )}
-          {selected.kind === "docker" && (
-            <DockerPortDetail
-              selected={selected.binding}
-              onOpenContainer={onOpenContainer}
-              onViewLogs={onViewLogs}
-            />
-          )}
+          <PortOverviewDetail
+            item={selected}
+            firewall={firewall}
+            onOpenSystemd={onOpenSystemd}
+            onOpenContainer={onOpenContainer}
+            onViewLogs={onViewLogs}
+          />
         </aside>
       )}
     </div>

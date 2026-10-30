@@ -10,6 +10,8 @@ import type {
   ListeningSocket,
   SavedConnection,
 } from "../types";
+import { api } from "../lib/api";
+import axe from "axe-core";
 import { PortsPane } from "./PortsPane";
 
 vi.mock("../lib/api", () => ({
@@ -199,10 +201,10 @@ for (const width of [960, 1600]) {
       renderPane();
       await screen.findByRole("button", { name: /12 established/ });
       const before = camera();
-      await page.getByRole("button", { name: /443 Listening/ }).click();
+      await page.getByRole("button", { name: /443.*Listening/ }).click();
       await waitFor(() => {
         expect(camera().a).toBeGreaterThan(before.a);
-        expectNodeBesideInspector(screen.getByRole("button", { name: /443 Listening/ }));
+        expectNodeBesideInspector(screen.getByRole("button", { name: /443.*Listening/ }));
       });
       const inspector = screen.getByRole("complementary");
       expect(document.activeElement).toBe(inspector);
@@ -210,16 +212,13 @@ for (const width of [960, 1600]) {
       expect(getComputedStyle(inspector).animationName).toBe(
         reduced ? "none" : "port-inspector-in",
       );
-      // Keyboard focus reveals nodes obscured by the current inspector before activation.
-      screen.getByRole("button", { name: /12 established/ }).focus();
-      await userEvent.keyboard("{Enter}");
-      await waitFor(() =>
-        expectNodeBesideInspector(screen.getByRole("button", { name: /12 established/ })),
-      );
+      // Related connection evidence belongs to the selected listening endpoint.
+      expect(screen.getAllByRole("button", { name: /12 established/ })).toHaveLength(1);
+      await page.getByText("12 established · Remote endpoints", { exact: true }).click();
       expect(within(screen.getByRole("complementary")).getByText("203.0.113.9")).toBeTruthy();
       await userEvent.keyboard("{Escape}");
       expect(screen.queryByRole("complementary")).toBeNull();
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: /12 established/ }));
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: /443.*Listening/ }));
       await page.getByRole("button", { name: "Fit to view" }).click();
       expect(camera().a).toBeCloseTo(before.a);
     },
@@ -235,7 +234,7 @@ it("uses a compact filter header and visible labels without an empty footer", as
   const heading = within(panel).getByText("Filters").closest("header")!;
   expect(heading.contains(screen.getByRole("button", { name: "Reset filters" }))).toBe(true);
   expect(heading.contains(screen.getByRole("button", { name: "Close port tools" }))).toBe(true);
-  for (const label of ["Show", "Protocol", "Exposure", "Sort by"]) {
+  for (const label of ["Contents", "Protocol", "Binding scope", "Sort"]) {
     expect(
       within(panel)
         .getByText(label, { selector: "label > span" })
@@ -251,7 +250,7 @@ it("lets manual zoom interrupt selection motion", async () => {
   await page.viewport(1100, 760);
   renderPane();
   await screen.findByRole("button", { name: /12 established/ });
-  await page.getByRole("button", { name: /443 Listening/ }).click();
+  await page.getByRole("button", { name: /443.*Listening/ }).click();
   await page.getByRole("button", { name: "Zoom out" }).click();
   expect(document.querySelector(".arch-focusing")).toBeNull();
   expect(
@@ -264,7 +263,7 @@ for (const height of [640, 900]) {
     await page.viewport(1100, height);
     renderPane();
     await screen.findByRole("button", { name: /12 established/ });
-    await page.getByRole("button", { name: /443 Listening/ }).click();
+    await page.getByRole("button", { name: /443.*Listening/ }).click();
     const canvas = document.querySelector(".arch-canvas")!.getBoundingClientRect();
     const inspector = screen.getByRole("complementary").getBoundingClientRect();
     expect(inspector.top - canvas.top).toBeCloseTo(12, 0);
@@ -314,7 +313,7 @@ it("slides zoom controls left on selection and right on inspector close", async 
     });
   }
 
-  await page.getByRole("button", { name: /443 Listening/ }).click();
+  await page.getByRole("button", { name: /443.*Listening/ }).click();
   await checkSlide("left");
   await page.getByRole("button", { name: "Close details" }).click();
   await checkSlide("right");
@@ -326,7 +325,7 @@ for (const exit of ["close", "escape", "same port", "empty canvas"] as const) {
     renderPane();
     await screen.findByRole("button", { name: /12 established/ });
     const initial = camera();
-    const node = page.getByRole("button", { name: /443 Listening/ });
+    const node = page.getByRole("button", { name: /443.*Listening/ });
     await node.click();
     await waitFor(() => expectNodeBesideInspector(node.element()));
     if (exit === "close") await page.getByRole("button", { name: "Close details" }).click();
@@ -351,7 +350,7 @@ it("keeps the inspector open while dragging empty canvas space", async () => {
   await page.viewport(1100, 760);
   renderPane();
   await screen.findByRole("button", { name: /12 established/ });
-  const node = page.getByRole("button", { name: /443 Listening/ });
+  const node = page.getByRole("button", { name: /443.*Listening/ });
   await node.click();
   await waitFor(() => expectNodeBesideInspector(node.element()));
   const viewport = page.getByRole("region", { name: "Ports graph" });
@@ -362,4 +361,109 @@ it("keeps the inspector open while dragging empty canvas space", async () => {
   });
   expect(screen.getByRole("complementary")).toBeTruthy();
   await waitFor(() => expect(camera().e).not.toBeCloseTo(before.e));
+});
+
+it("consolidates dual-stack Docker listeners and makes secondary peers and scope filters explicit", async () => {
+  await page.viewport(1100, 760);
+  vi.mocked(api.inspectConnections).mockResolvedValueOnce({
+    groups: [
+      {
+        key: "web",
+        protocol: "tcp",
+        localPort: 443,
+        processName: "nginx",
+        processId: 742,
+        systemdUnit: "nginx.service",
+        established: 12,
+        remoteAddressCount: 1,
+        remotes: [{ address: "203.0.113.9", count: 12 }],
+      },
+      {
+        key: "outbound",
+        protocol: "tcp",
+        localPort: 49100,
+        processName: "agent",
+        processId: 900,
+        systemdUnit: "agent.service",
+        established: 1,
+        remoteAddressCount: 1,
+        remotes: [{ address: "203.0.113.10", count: 1 }],
+      },
+    ],
+    totalEstablished: 13,
+    truncated: false,
+    collectedAt: "",
+  });
+  const source = sockets.items[0];
+  renderPane(
+    null,
+    {
+      ...sockets,
+      items: [
+        source,
+        { ...source, id: "web-v6", localAddress: "::", addressFamily: "ipv6" },
+        {
+          ...source,
+          id: "ssh",
+          port: 22,
+          systemdUnit: "ssh.service",
+          processId: 100,
+          processName: "sshd",
+        },
+        {
+          ...source,
+          id: "redis",
+          port: 6379,
+          localAddress: "127.0.0.1",
+          systemdUnit: "redis.service",
+          processId: 200,
+          processName: "redis",
+        },
+      ],
+    },
+    {
+      ...containers,
+      items: [{ ...containers.items[0], ports: "0.0.0.0:443->8443/tcp, [::]:443->8443/tcp" }],
+    },
+  );
+  await screen.findByRole("button", { name: /12 established/ });
+  const chips = () => document.querySelectorAll(".arch-chip");
+  expect(chips()).toHaveLength(3);
+  expect(screen.queryByRole("button", { name: /49100/ })).toBeNull();
+  expect(document.querySelector(".arch-content")!.textContent).not.toContain("UFW");
+  await page.getByRole("button", { name: "Show established connections" }).click();
+  expect(chips()).toHaveLength(4);
+  expect(screen.getByRole("button", { name: /49100/ }).getAttribute("data-secondary")).toBe("true");
+  await page.getByRole("button", { name: "Filter ports" }).click();
+  await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("docker");
+  expect(chips()).toHaveLength(1);
+  await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("listeners");
+  expect(
+    screen
+      .getByRole("button", { name: "Show established connections" })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
+  await page.getByRole("combobox", { name: "Binding scope" }).selectOptions("local-only");
+  expect(chips()).toHaveLength(1);
+  expect(screen.getByRole("button", { name: /6379.*Listening/ })).toBeTruthy();
+  await page.getByRole("combobox", { name: "Binding scope" }).selectOptions("non-loopback");
+  expect(chips()).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: /6379/ })).toBeNull();
+  expect((await axe.run(screen.getByRole("region", { name: "Port filters" }))).violations).toEqual(
+    [],
+  );
+  await page.getByRole("button", { name: "Reset filters" }).click();
+  await page.getByRole("button", { name: "Close port tools" }).click();
+  await page.getByRole("button", { name: /443.*Listening/ }).click();
+  const inspector = screen.getByRole("complementary");
+  expect(within(inspector).getByText("2 sockets")).toBeTruthy();
+  expect(within(inspector).getByText("IPV4", { exact: true })).toBeTruthy();
+  expect(within(inspector).getByText("IPV6", { exact: true })).toBeTruthy();
+  expect(within(inspector).getByText("Not tested")).toBeTruthy();
+  const diagnostic = within(inspector).getByText("Socket diagnostics");
+  expect(diagnostic.closest("details")?.open).toBe(false);
+  await page.getByText("Host firewall policy", { exact: true }).click();
+  expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
+  expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+  await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });

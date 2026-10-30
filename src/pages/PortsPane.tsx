@@ -1,6 +1,13 @@
 import { Search } from "../components/MagnifierIcon";
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  RefreshCw,
+  RotateCcw,
+  ShieldAlert,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";
@@ -46,7 +53,8 @@ export function PortsPane({
   onOpenContainer: (containerId: string) => void;
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
-  const [kind, setKind] = useState<PortGraphKind>("all");
+  const [kind, setKind] = useState<PortGraphKind>("overview");
+  const [showConnections, setShowConnections] = useState(false);
   const [sort, setSort] = useState<PortSort>("port-asc");
   const [tools, setTools] = useState<"search" | "filters" | "info" | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -55,7 +63,9 @@ export function PortsPane({
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
   const filtersActive =
-    kind !== "all" || protocol !== "all" || exposure !== "all" || sort !== "port-asc";
+    kind !== "overview" || protocol !== "all" || exposure !== "all" || sort !== "port-asc";
+  const connectionsVisible =
+    kind === "all" || kind === "connections" || (kind === "overview" && showConnections);
   const [portsSudo, setPortsSudo] = useState(false);
   // Whether the read behind the current list actually ran as root. A permission
   // the account cannot use does not elevate anything, so this is not the same
@@ -274,6 +284,7 @@ export function PortsPane({
         exposure={exposure}
         kind={kind}
         sort={sort}
+        showConnections={showConnections}
         emptyMessage={
           kind === "connections" && connectionsLoading
             ? "Reading established connections…"
@@ -346,6 +357,19 @@ export function PortsPane({
                 <SlidersHorizontal size={16} />
               </button>
               <button
+                type="button"
+                className="icon-button"
+                aria-label="Show established connections"
+                title="Show established and outbound connections"
+                aria-pressed={connectionsVisible}
+                onClick={() => {
+                  setShowConnections(!connectionsVisible);
+                  setKind("overview");
+                }}
+              >
+                <ArrowLeftRight size={16} />
+              </button>
+              <button
                 className="icon-button"
                 type="button"
                 onClick={refresh}
@@ -383,7 +407,7 @@ export function PortsPane({
                         title="Reset filters"
                         disabled={!filtersActive}
                         onClick={() => {
-                          setKind("all");
+                          setKind("overview");
                           setProtocol("all");
                           setExposure("all");
                           setSort("port-asc");
@@ -513,16 +537,17 @@ export function PortsPane({
                   <>
                     <div className="port-list-controls">
                       <label>
-                        <span>Show</span>
+                        <span>Contents</span>
                         <select
                           aria-label="Graph contents"
                           value={kind}
                           onChange={(event) => setKind(event.target.value as PortGraphKind)}
                         >
-                          <option value="all">All ports</option>
+                          <option value="overview">Listening + published</option>
+                          <option value="all">All socket types</option>
                           <option value="listeners">Listeners</option>
-                          <option value="connections">Connections</option>
-                          <option value="docker">Docker</option>
+                          <option value="connections">Established / outbound</option>
+                          <option value="docker">Docker-published</option>
                         </select>
                       </label>
                       <label>
@@ -538,20 +563,21 @@ export function PortsPane({
                         </select>
                       </label>
                       <label>
-                        <span>Exposure</span>
+                        <span>Binding scope</span>
                         <select
-                          aria-label="Exposure filter"
+                          aria-label="Binding scope"
                           value={exposure}
                           onChange={(event) => setExposure(event.target.value as Exposure | "all")}
                         >
-                          <option value="all">Any exposure</option>
+                          <option value="all">Any binding scope</option>
                           <option value="all-interfaces">All interfaces</option>
-                          <option value="local-only">Local only</option>
+                          <option value="local-only">Loopback only</option>
+                          <option value="non-loopback">Non-loopback</option>
                           <option value="specific">Specific address</option>
                         </select>
                       </label>
                       <label>
-                        <span>Sort by</span>
+                        <span>Sort</span>
                         <select
                           aria-label="Sort ports"
                           value={sort}

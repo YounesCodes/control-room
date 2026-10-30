@@ -2550,7 +2550,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await navigate("Ports");
     await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
-    expect(element.querySelectorAll(".arch-chip")).toHaveLength(8);
+    expect(element.querySelectorAll(".arch-chip")).toHaveLength(6);
     expect(element.querySelector(".owner-container .lucide-container")).toBeTruthy();
     // Every orthogonal segment must stay outside unrelated owner cards.
     const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
@@ -2602,8 +2602,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
       element.querySelector(".ports-canvas-controls")!.getBoundingClientRect().height,
     ).toBeLessThan(50);
     expect(element.querySelector(".ports-canvas-status")).toBeNull();
-    const summary = page.getByTitle(/Manual snapshot/);
-    expect(summary.element().getAttribute("title")).toContain("12 established connections");
+    const summary = page.getByTitle(/Last collected at/);
+    expect(summary.element().getAttribute("title")).toContain("12 active connections");
     await summary.click();
     expect(element.querySelector("#ports-tools")).toBeNull();
 
@@ -2635,10 +2635,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Close port tools" }).click();
     await page.getByRole("button", { name: /12 established/ }).click();
     await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+    await page.getByText("12 established · Remote endpoints", { exact: true }).click();
     await expect.element(page.getByText("203.0.113.9", { exact: true })).toBeVisible();
     await page.screenshot({ path: "../test-results/ports-graph-inspector.png" });
     await page.getByRole("button", { name: "Close details" }).click();
     await page.getByRole("button", { name: /8080.*80/ }).click();
+    await page.getByText("Container & Compose", { exact: true }).click();
     await expect.element(page.getByText("nginx:stable", { exact: true })).toBeVisible();
     await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
     async function checkInspectorLayout() {
@@ -2663,7 +2665,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(960, 640);
     await checkInspectorLayout();
     await page.getByRole("button", { name: "Close details" }).click();
-    await page.getByRole("button", { name: /443 Listening/ }).click();
+    await page.getByRole("button", { name: /443.*Listening/ }).click();
+    await page.getByText("Host firewall policy", { exact: true }).click();
+    await page.getByText("Socket diagnostics", { exact: true }).click();
     await expect.element(page.getByText("UFW: allowed", { exact: true })).toBeVisible();
     await checkInspectorLayout();
     const body = element.querySelector<HTMLElement>(".port-inspector-body")!;
@@ -2677,7 +2681,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("follows a known port owner to Systemd and reads connection and firewall uncertainty", async () => {
     await mount();
     await navigate("Ports");
-    await page.getByRole("button", { name: /443 Listening/ }).click();
+    await page.getByRole("button", { name: /443.*Listening/ }).click();
     await page.getByRole("button", { name: /Open unit/ }).click();
     await expect
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
