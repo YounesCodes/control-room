@@ -170,7 +170,10 @@ firewall, ownership, endpoint, and Compose field available there, with the
 existing service, container, and log actions. Fit the entire graph on initial
 load, filtering, resize, and Fit to view, leaving space for controls and an open
 inspector. Keep the default and reset framing identical. Keyboard focus
-reveals offscreen nodes. Closing the inspector returns focus to its node.
+reveals offscreen nodes. Closing the inspector restores the default full-graph framing and returns focus
+to its node. The Close button, Escape, clicking the selected node again, and
+clicking empty canvas space all close it. Dragging the canvas pans without
+closing the inspector.
 
 ## Visual language
 

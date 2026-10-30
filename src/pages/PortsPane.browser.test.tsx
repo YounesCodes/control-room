@@ -310,3 +310,47 @@ it("slides zoom controls left on selection and right on inspector close", async 
   await page.getByRole("button", { name: "Close details" }).click();
   await checkSlide("right");
 });
+
+for (const exit of ["close", "escape", "same port", "empty canvas"] as const) {
+  it("restores default framing when exiting through " + exit, async () => {
+    await page.viewport(1100, 760);
+    renderPane();
+    await screen.findByRole("button", { name: /12 established/ });
+    const initial = camera();
+    const node = page.getByRole("button", { name: /443 Listening/ });
+    await node.click();
+    await waitFor(() => expectNodeBesideInspector(node.element()));
+    if (exit === "close") await page.getByRole("button", { name: "Close details" }).click();
+    else if (exit === "escape") await userEvent.keyboard("{Escape}");
+    else if (exit === "same port") await node.click();
+    else
+      await page
+        .getByRole("region", { name: "Ports graph" })
+        .click({ position: { x: 20, y: 120 } });
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(node.element().getAttribute("aria-pressed")).toBe("false");
+    await waitFor(() => {
+      const restored = camera();
+      expect(restored.a).toBeCloseTo(initial.a, 3);
+      expect(restored.e).toBeCloseTo(initial.e, 1);
+      expect(restored.f).toBeCloseTo(initial.f, 1);
+    });
+  });
+}
+
+it("keeps the inspector open while dragging empty canvas space", async () => {
+  await page.viewport(1100, 760);
+  renderPane();
+  await screen.findByRole("button", { name: /12 established/ });
+  const node = page.getByRole("button", { name: /443 Listening/ });
+  await node.click();
+  await waitFor(() => expectNodeBesideInspector(node.element()));
+  const viewport = page.getByRole("region", { name: "Ports graph" });
+  const before = camera();
+  await userEvent.dragAndDrop(viewport, viewport, {
+    sourcePosition: { x: 20, y: 120 },
+    targetPosition: { x: 100, y: 160 },
+  });
+  expect(screen.getByRole("complementary")).toBeTruthy();
+  await waitFor(() => expect(camera().e).not.toBeCloseTo(before.e));
+});

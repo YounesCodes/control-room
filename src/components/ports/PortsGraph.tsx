@@ -161,6 +161,14 @@ export function PortsGraph({
   const controlsRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
   const selectionTrigger = useRef<HTMLButtonElement | null>(null);
+  const wasInspecting = useRef(false);
+  const backgroundPress = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    moved: boolean;
+    empty: boolean;
+  } | null>(null);
   const groupRefs = useRef(new Map<string, HTMLDivElement>());
   const panZoom = usePanZoom(viewportRef);
   const { view, setView } = panZoom;
@@ -272,7 +280,16 @@ export function PortsGraph({
   }, [measure, fit, groups.length]);
 
   useLayoutEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      if (wasInspecting.current) {
+        wasInspecting.current = false;
+        setFocusing(true);
+        // The inspector has unmounted, so Fit uses the full canvas again.
+        fit();
+      }
+      return;
+    }
+    wasInspecting.current = true;
     const viewport = viewportRef.current;
     const content = contentRef.current;
     const node = selectionTrigger.current;
@@ -297,18 +314,44 @@ export function PortsGraph({
     setFocusing(true);
     setView({ scale, x: 24 + width / 2 - x * scale, y: top + height / 2 - y * scale });
     detailRef.current?.focus({ preventScroll: true });
-  }, [selectedId, setView]);
+  }, [selectedId, setView, fit]);
 
   function closeDetail() {
     setSelectedId(null);
-    setFocusing(false);
     selectionTrigger.current?.focus({ preventScroll: true });
   }
 
   function backgroundPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if ((event.target as HTMLElement).closest("button")) return;
+    if (event.button !== 0 || (event.target as Element).closest("button")) return;
+    backgroundPress.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      empty: !(event.target as Element).closest(".arch-group, .arch-root"),
+    };
     setFocusing(false);
     panZoom.onPointerDown(event);
+  }
+
+  function backgroundPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const press = backgroundPress.current;
+    if (
+      press?.pointerId === event.pointerId &&
+      Math.hypot(event.clientX - press.x, event.clientY - press.y) > 5
+    ) {
+      press.moved = true;
+    }
+    panZoom.onPointerMove(event);
+  }
+
+  function backgroundPointerUp(event: PointerEvent<HTMLDivElement>) {
+    const press = backgroundPress.current;
+    backgroundPress.current = null;
+    panZoom.onPointerUp(event);
+    if (press?.pointerId === event.pointerId && press.empty && !press.moved && selectedId) {
+      closeDetail();
+    }
   }
 
   function revealNode(element: HTMLButtonElement) {
@@ -386,9 +429,12 @@ export function PortsGraph({
           panZoom.onWheel(event);
         }}
         onPointerDown={backgroundPointerDown}
-        onPointerMove={panZoom.onPointerMove}
-        onPointerUp={panZoom.onPointerUp}
-        onPointerCancel={panZoom.onPointerUp}
+        onPointerMove={backgroundPointerMove}
+        onPointerUp={backgroundPointerUp}
+        onPointerCancel={(event) => {
+          backgroundPress.current = null;
+          panZoom.onPointerUp(event);
+        }}
       >
         {!groups.length ? (
           <EmptyState title={emptyMessage} />
@@ -448,8 +494,12 @@ export function PortsGraph({
                         aria-controls={item.id === selectedId ? "port-inspector" : undefined}
                         onFocus={(event) => revealNode(event.currentTarget)}
                         onClick={(event) => {
-                          selectionTrigger.current = event.currentTarget;
-                          setSelectedId(item.id);
+                          if (item.id === selectedId) {
+                            closeDetail();
+                          } else {
+                            selectionTrigger.current = event.currentTarget;
+                            setSelectedId(item.id);
+                          }
                         }}
                       >
                         <GraphItem item={item} firewall={firewall} />
