@@ -218,7 +218,9 @@ with matching icon and text columns sized to the wider label.
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting
 it as current. Give errors a recovery action when one exists, and preserve the
-specific cause when it helps the user recover.
+specific cause when it helps the user recover. Terminal failure banners use a
+full-height recovery action at the right edge, separated by a quiet divider.
+Center its icon and label together and let the message wrap independently.
 
 In split list/detail pages, keep the selection visible. If a filter hides the
 selected item, say that the selection is filtered and provide a direct way to
