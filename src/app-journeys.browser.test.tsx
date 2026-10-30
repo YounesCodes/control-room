@@ -2436,6 +2436,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
         systemdUnit: "nginx.service",
         processName: "nginx",
       },
+      {
+        ...fixtures.socket,
+        id: "monitor",
+        port: 9100,
+        systemdUnit: "monitor.service",
+        processName: "monitor",
+      },
       { ...fixtures.socket, id: "ssh", port: 22, systemdUnit: "sshd.service", processName: "sshd" },
       {
         ...fixtures.socket,
@@ -2514,10 +2521,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await navigate("Ports");
     await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
-    expect(element.querySelectorAll(".arch-chip")).toHaveLength(7);
+    expect(element.querySelectorAll(".arch-chip")).toHaveLength(8);
     expect(element.querySelector(".owner-container .lucide-container")).toBeTruthy();
     // Every orthogonal segment must stay outside unrelated owner cards.
     const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
+    const rightmost = Math.max(...cards.map((card) => card.offsetLeft));
+    const finalColumn = cards.filter((card) => card.offsetLeft === rightmost);
+    expect(finalColumn.length).toBeGreaterThan(1);
+    const firstOnFinalColumn = finalColumn.reduce((first, card) =>
+      card.offsetTop < first.offsetTop ? card : first,
+    );
     const paths = [...element.querySelectorAll(".arch-links path")];
     expect(paths).toHaveLength(cards.length);
     for (const [index, path] of paths.entries()) {
@@ -2538,8 +2551,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const lastInColumn = !cards.some(
         (card) => card.offsetLeft === target.offsetLeft && card.offsetTop > target.offsetTop,
       );
-      expect(x).toBe(target.offsetLeft + (lastInColumn ? target.offsetWidth / 2 : 0));
-      expect(y).toBe(target.offsetTop + (lastInColumn ? 0 : 20));
+      const entersTop = lastInColumn || target === firstOnFinalColumn;
+      expect(x).toBe(target.offsetLeft + (entersTop ? target.offsetWidth / 2 : 0));
+      expect(y).toBe(target.offsetTop + (entersTop ? 0 : 20));
       for (const card of cards) {
         const left = card.offsetLeft,
           right = left + card.offsetWidth;

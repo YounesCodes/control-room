@@ -146,7 +146,9 @@ filters, and reading information in one compact toolbar, with search and filter
 panels opening on demand. Keep zoom controls in the lower corner. Route owner
 branches orthogonally through reserved gutters, never through other cards.
 Use side connections where a column continues and enter its final card from
-the top, ending the branch at the card. Group listening
+the top, ending the branch at the card. End the horizontal bus at the top of
+the rightmost column's first card, even when that column has more cards below.
+Group listening
 sockets, established connections, and published Docker mappings by their known
 owners. Preserve each source as separate evidence, including mappings and
 outbound connections with no listening socket. Selecting a port or connection

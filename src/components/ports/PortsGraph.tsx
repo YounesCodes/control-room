@@ -198,18 +198,28 @@ export function PortsGraph({
     const hostY = host.offsetTop + host.offsetHeight / 2;
     const next: { id: string; d: string }[] = [];
     const lastRowByColumn = new Map<number, number>();
+    const firstRowByColumn = new Map<number, number>();
     const countByColumn = new Map<number, number>();
     for (const element of groupRefs.current.values()) {
+      firstRowByColumn.set(
+        element.offsetLeft,
+        Math.min(firstRowByColumn.get(element.offsetLeft) ?? Infinity, element.offsetTop),
+      );
       countByColumn.set(element.offsetLeft, (countByColumn.get(element.offsetLeft) ?? 0) + 1);
       lastRowByColumn.set(
         element.offsetLeft,
         Math.max(lastRowByColumn.get(element.offsetLeft) ?? 0, element.offsetTop),
       );
     }
+    const rightmostColumn = Math.max(...lastRowByColumn.keys());
     groupRefs.current.forEach((element, id) => {
       const x = element.offsetLeft;
       const lane = x - 24;
-      if (element.offsetTop === lastRowByColumn.get(x)) {
+      if (x === rightmostColumn && element.offsetTop === firstRowByColumn.get(x)) {
+        // The horizontal bus ends at the top of the rightmost branch's first card.
+        const center = x + element.offsetWidth / 2;
+        next.push({ id, d: `M${hostX},${hostY} H${center} V${element.offsetTop}` });
+      } else if (element.offsetTop === lastRowByColumn.get(x)) {
         // End the trunk in the row gutter and enter its final card from above.
         const top = element.offsetTop;
         const center = x + element.offsetWidth / 2;
