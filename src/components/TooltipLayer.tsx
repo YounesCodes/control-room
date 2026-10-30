@@ -86,12 +86,13 @@ export function TooltipLayer() {
           return;
         }
         const rect = target.getBoundingClientRect();
+        const boundary = target.closest("[data-tooltip-boundary]")?.getBoundingClientRect() ?? rect;
         setTooltip({
           text,
-          top: rect.bottom + 8,
+          top: boundary.bottom + 8,
           left: target.dataset.tooltipAlign === "start" ? rect.left : rect.left + rect.width / 2,
           alignStart: target.dataset.tooltipAlign === "start",
-          anchorTop: rect.top,
+          anchorTop: boundary.top,
         });
       };
       if (delayed) timerRef.current = window.setTimeout(reveal, TOOLTIP_DELAY_MS);

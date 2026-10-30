@@ -6287,12 +6287,6 @@ kbd {
 .ports-heading h2 {
   margin: 0 6px;
   font-size: 14px;
-}
-
-.ports-snapshot-summary {
-  padding: 5px 8px;
-  color: var(--text-muted);
-  font-size: 12px;
   cursor: help;
 }
 

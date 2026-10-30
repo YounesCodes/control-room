@@ -297,18 +297,15 @@ export function PortsPane({
         onViewLogs={onViewLogs}
         toolbar={
           <div className="ports-controls" ref={toolsRef}>
-            <header className="ports-heading">
-              <h2>Ports</h2>
-              <span
-                className="ports-snapshot-summary"
+            <header className="ports-heading" data-tooltip-boundary>
+              <h2
                 tabIndex={0}
                 title={snapshotDescription}
                 data-tooltip-align="start"
                 aria-describedby="ports-snapshot-description"
               >
-                {cache.items.length} listener{cache.items.length === 1 ? "" : "s"}
-                {collectedAt ? " · " + collectedAt : ""}
-              </span>
+                Ports
+              </h2>
               <span id="ports-snapshot-description" className="sr-only">
                 {snapshotDescription}
               </span>

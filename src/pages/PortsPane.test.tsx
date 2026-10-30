@@ -171,7 +171,10 @@ describe("PortsPane", () => {
     const summary = screen.getByTitle(/Manual snapshot/);
     await user.click(summary);
     expect(document.querySelector("#ports-tools")).toBeNull();
-    expect(summary.tagName).toBe("SPAN");
+    expect(summary.tagName).toBe("H2");
+    expect(summary.textContent?.trim()).toBe("Ports");
+    expect(summary.title).toContain("1 listening sockets");
+    expect(summary.title).toContain("collected at");
     expect(summary.title).toContain("12 established connections");
   });
 

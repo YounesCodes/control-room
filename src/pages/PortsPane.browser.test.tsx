@@ -152,24 +152,34 @@ function expectNodeBesideInspector(node: Element) {
   expect(bounds.bottom).toBeLessThan(viewport.bottom - 54);
 }
 
-it("anchors snapshot help to the count instead of the toolbar edge", async () => {
+it("keeps snapshot metadata on Ports hover with a gap below the whole toolbar", async () => {
   await page.viewport(1100, 760);
   renderPane();
   render(<TooltipLayer />);
   await screen.findByRole("button", { name: /12 established/ });
-  const summary = document.querySelector<HTMLElement>(".ports-snapshot-summary")!;
-  summary.focus();
+  const summary = screen.getByRole("heading", { name: "Ports" });
+  const toolbar = document.querySelector(".ports-heading")!;
+  expect(toolbar.textContent).not.toContain("listener");
+  expect(summary.title).toContain("1 listening sockets");
+  expect(summary.title).toContain("collected at");
+  await page.getByRole("heading", { name: "Ports" }).hover();
   await waitFor(() => expect(screen.getByRole("tooltip")).toBeTruthy());
   const tooltip = screen.getByRole("tooltip").getBoundingClientRect();
+  expect(tooltip.top).toBeGreaterThan(toolbar.getBoundingClientRect().bottom);
   expect(Math.abs(tooltip.left - summary.getBoundingClientRect().left)).toBeLessThan(2);
   await waitFor(() =>
     expect(screen.getByRole("tooltip").getBoundingClientRect().top).toBeGreaterThanOrEqual(
-      summary.getBoundingClientRect().bottom + 7,
+      toolbar.getBoundingClientRect().bottom + 7,
     ),
   );
   expect(tooltip.right).toBeLessThan(window.innerWidth - 7);
   await userEvent.keyboard("{Escape}");
   expect(screen.queryByRole("tooltip")).toBeNull();
+  summary.blur();
+  summary.focus();
+  await waitFor(() =>
+    expect(screen.getByRole("tooltip").textContent).toContain("12 established connections"),
+  );
 });
 
 for (const width of [960, 1600]) {
