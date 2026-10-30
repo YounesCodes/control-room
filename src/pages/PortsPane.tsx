@@ -1,13 +1,6 @@
+import { Search } from "../components/MagnifierIcon";
 import { useEffect, useRef, useState } from "react";
-import {
-  RefreshCw,
-  RotateCcw,
-  Search,
-  ShieldAlert,
-  SlidersHorizontal,
-  X,
-  Info,
-} from "lucide-react";
+import { RefreshCw, RotateCcw, ShieldAlert, SlidersHorizontal, X, Info } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";

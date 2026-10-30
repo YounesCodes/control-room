@@ -1,3 +1,4 @@
+import { Search } from "./components/MagnifierIcon";
 import { DockerIcon } from "./components/DockerIcon";
 import {
   ConnectionSection,
@@ -44,7 +45,6 @@ import {
   Plus,
   Rows2,
   RefreshCw,
-  Search,
   Server,
   Settings,
   ShieldAlert,

@@ -220,7 +220,9 @@ dismisses rather than floating away from its anchor after a resize. Live states 
 connecting, new terminal output, a bell, a downloaded update — use small
 one-purpose cues that rest once their point is made. Never animate the terminal
 surface itself. Respect `prefers-reduced-motion`. Use Lucide icons
-consistently, and pair icon-only actions with accessible names and tooltips
+consistently, except for the shared Phosphor Bold magnifiers used by every search
+and zoom control. Keep their filled silhouettes and use matching plus/minus
+variants for zoom. Pair icon-only actions with accessible names and tooltips
 where useful.
 
 ## Interaction patterns

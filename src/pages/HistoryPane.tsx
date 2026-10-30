@@ -1,3 +1,4 @@
+import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -7,7 +8,6 @@ import {
   Pause,
   Play,
   RefreshCw,
-  Search,
   TerminalSquare,
   Trash2,
 } from "lucide-react";

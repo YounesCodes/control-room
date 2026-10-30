@@ -1,3 +1,4 @@
+import { ZoomIn, ZoomOut } from "../MagnifierIcon";
 import { observeLayoutFallback } from "../ResizablePanels";
 import {
   useCallback,
@@ -19,8 +20,6 @@ import {
   Scan,
   Server,
   X,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import { EmptyState } from "../PanelState";
 import { SocketDetail } from "./SocketDetail";
