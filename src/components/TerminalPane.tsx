@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronUp, RotateCw, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import {
@@ -671,6 +671,7 @@ export function TerminalPane({
               an ended session is reconnectable where it died. */}
           {terminalEnded && onReconnect && (
             <button type="button" className="terminal-notice-action" onClick={onReconnect}>
+              <RotateCw size={13} aria-hidden="true" />
               {isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}
             </button>
           )}
