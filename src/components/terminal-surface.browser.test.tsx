@@ -408,8 +408,13 @@ it("puts the reconnect action on the ended-session notice", async () => {
       const text = message.getBoundingClientRect();
       const recovery = button.getBoundingClientRect();
       expect(Math.abs(text.y + text.height / 2 - recovery.y - recovery.height / 2)).toBeLessThan(1);
-      expect(banner.right - recovery.right).toBeCloseTo(12, 0);
-      expect(text.right).toBeLessThanOrEqual(recovery.left - 12);
+      expect(recovery.right).toBeCloseTo(banner.right, 0);
+      expect(recovery.top).toBeCloseTo(banner.top, 0);
+      expect(recovery.bottom).toBeCloseTo(banner.bottom - 1, 0);
+      expect(text.right).toBeCloseTo(recovery.left, 0);
+      const icon = button.querySelector("svg")!.getBoundingClientRect();
+      const label = button.querySelector("span")!.getBoundingClientRect();
+      expect(Math.abs(icon.y + icon.height / 2 - label.y - label.height / 2)).toBeLessThan(1);
       expect(message.scrollWidth).toBeLessThanOrEqual(message.clientWidth);
       expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
     });

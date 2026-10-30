@@ -672,7 +672,7 @@ export function TerminalPane({
           {terminalEnded && onReconnect && (
             <button type="button" className="terminal-notice-action" onClick={onReconnect}>
               <RotateCw size={13} aria-hidden="true" />
-              {isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}
+              <span>{isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}</span>
             </button>
           )}
         </div>
