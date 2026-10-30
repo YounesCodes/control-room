@@ -19,40 +19,54 @@ export function DockerPortDetail({
         </h2>
         <p>{selected.container.name}</p>
       </header>
-      <dl className="detail-list">
-        <div>
-          <dt>Host binding</dt>
-          <dd className="technical">
-            {selected.hostAddress}:{selected.hostPort}/{selected.protocol}
-          </dd>
-        </div>
-        <div>
-          <dt>Container port</dt>
-          <dd>
-            {selected.containerPort}/{selected.protocol}
-          </dd>
-        </div>
-        <div>
-          <dt>Container</dt>
-          <dd>{selected.container.name}</dd>
-        </div>
-        <div>
-          <dt>Image</dt>
-          <dd className="technical">{selected.container.image}</dd>
-        </div>
-        {selected.container.composeProject && (
+      <div
+        className="port-inspector-body"
+        tabIndex={0}
+        role="region"
+        aria-label="Docker mapping information"
+      >
+        <h3 className="detail-section-heading">Binding</h3>
+        <dl className="detail-list">
           <div>
-            <dt>Compose project</dt>
-            <dd>{selected.container.composeProject}</dd>
+            <dt>Host binding</dt>
+            <dd className="technical">
+              {selected.hostAddress}:{selected.hostPort}/{selected.protocol}
+            </dd>
           </div>
-        )}
-        {selected.container.composeService && (
           <div>
-            <dt>Compose service</dt>
-            <dd>{selected.container.composeService}</dd>
+            <dt>Container port</dt>
+            <dd>
+              {selected.containerPort}/{selected.protocol}
+            </dd>
           </div>
+        </dl>
+        <h3 className="detail-section-heading">Container</h3>
+        <dl className="detail-list">
+          <div className="inspector-wide-field">
+            <dt>Image</dt>
+            <dd className="technical">{selected.container.image}</dd>
+          </div>
+        </dl>
+        {(selected.container.composeProject || selected.container.composeService) && (
+          <>
+            <h3 className="detail-section-heading">Compose</h3>
+            <dl className="detail-list">
+              {selected.container.composeProject && (
+                <div>
+                  <dt>Project</dt>
+                  <dd>{selected.container.composeProject}</dd>
+                </div>
+              )}
+              {selected.container.composeService && (
+                <div>
+                  <dt>Service</dt>
+                  <dd>{selected.container.composeService}</dd>
+                </div>
+              )}
+            </dl>
+          </>
         )}
-      </dl>
+      </div>
       <div className="detail-actions">
         <button
           className="secondary-button"

@@ -2538,9 +2538,38 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Close details" }).click();
     await page.getByRole("button", { name: /8080.*80/ }).click();
     await expect.element(page.getByText("nginx:stable", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
+    async function checkInspectorLayout() {
+      const inspector = element.querySelector<HTMLElement>(".arch-detail")!;
+      const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
+      const header = inspector.querySelector("header")!;
+      const actions = inspector.querySelector(".detail-actions")!;
+      const beforeHeader = header.getBoundingClientRect().top;
+      const beforeActions = actions.getBoundingClientRect().bottom;
+      body.scrollTop = body.scrollHeight;
+      expect(header.getBoundingClientRect().top).toBe(beforeHeader);
+      expect(actions.getBoundingClientRect().bottom).toBe(beforeActions);
+      expect(getComputedStyle(inspector).overflowY).toBe("hidden");
+      expect(getComputedStyle(body, "::-webkit-scrollbar").width).toBe("8px");
+      expect(getComputedStyle(body, "::-webkit-scrollbar-button").display).toBe("none");
+      expect(body.scrollWidth).toBeLessThanOrEqual(body.clientWidth + 1);
+      expect(actions.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        inspector.getBoundingClientRect().bottom,
+      );
+      expect((await axe.run(inspector)).violations).toEqual([]);
+    }
+    await page.viewport(960, 640);
+    await checkInspectorLayout();
     await page.getByRole("button", { name: "Close details" }).click();
     await page.getByRole("button", { name: /443 Listening/ }).click();
     await expect.element(page.getByText("UFW: allowed", { exact: true })).toBeVisible();
+    await checkInspectorLayout();
+    const body = element.querySelector<HTMLElement>(".port-inspector-body")!;
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+    await page.screenshot({ path: "../test-results/ports-listener-inspector-small.png" });
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: /12 established/ }).click();
+    await checkInspectorLayout();
   });
 
   it("follows a known port owner to Systemd and reads connection and firewall uncertainty", async () => {

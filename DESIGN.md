@@ -145,7 +145,9 @@ branches orthogonally through reserved gutters, never through other cards. Group
 sockets, established connections, and published Docker mappings by their known
 owners. Preserve each source as separate evidence, including mappings and
 outbound connections with no listening socket. Selecting a port or connection
-opens a closable, scrolling inspector over the graph. Keep every binding,
+opens a closable inspector over the graph. Keep its heading and actions fixed,
+with grouped label/value rows in a separately scrolling body. Use a thin
+scrollbar that fades when the body is not hovered. Keep every binding,
 firewall, ownership, endpoint, and Compose field available there, with the
 existing service, container, and log actions. Start large inventories at a
 readable scale; Fit to view may zoom out to show everything. Keyboard focus
