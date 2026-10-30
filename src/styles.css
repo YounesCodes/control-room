@@ -6329,9 +6329,59 @@ kbd {
   right: 4px;
 }
 
+.ports-tools-panel:has(.ports-search-field) {
+  padding: 10px 42px 10px 10px;
+}
+
+.ports-tools-panel:has(.ports-search-field) > .ports-tools-close {
+  top: 14px;
+  right: 6px;
+}
+
 .ports-tools-panel .search-field {
   width: 100%;
   min-width: 0;
+}
+
+.ports-search-field {
+  padding: 0 6px 0 12px;
+  gap: 10px;
+  background: var(--surface-sunken);
+}
+
+.ports-search-field > svg {
+  flex: none;
+}
+
+.ports-search-field:focus-within {
+  border-color: var(--text-muted);
+  box-shadow: none;
+}
+
+.ports-search-field input {
+  padding-block: 10px;
+  font-size: 13px;
+}
+
+.ports-search-field .icon-button {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+
+.ports-tools-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ports-reset-button {
+  min-height: 30px;
+  padding: 5px 9px;
+  gap: 6px;
+  font-size: 12px;
 }
 
 .ports-tools-panel .port-list-controls {

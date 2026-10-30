@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, Search, ShieldAlert, SlidersHorizontal, X, Info } from "lucide-react";
+import {
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldAlert,
+  SlidersHorizontal,
+  X,
+  Info,
+} from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";
@@ -53,6 +61,8 @@ export function PortsPane({
   const [search, setSearch] = useState("");
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
+  const filtersActive =
+    kind !== "all" || protocol !== "all" || exposure !== "all" || sort !== "port-asc";
   const [portsSudo, setPortsSudo] = useState(false);
   // Whether the read behind the current list actually ran as root. A permission
   // the account cannot use does not elevate anything, so this is not the same
@@ -308,9 +318,7 @@ export function PortsPane({
                 aria-label="Filter ports"
                 title="Filter ports"
                 aria-expanded={tools === "filters"}
-                aria-pressed={
-                  kind !== "all" || protocol !== "all" || exposure !== "all" || sort !== "port-asc"
-                }
+                aria-pressed={filtersActive}
                 aria-controls="ports-tools"
                 onClick={(event) => toggleTools("filters", event.currentTarget)}
               >
@@ -448,76 +456,89 @@ export function PortsPane({
                   </>
                 )}
                 {tools === "search" && (
-                  <>
-                    <label className="search-field">
-                      <Search size={15} />
-                      <input
-                        aria-label="Search ports"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Search ports, owners, or endpoints"
-                      />
-                    </label>
-                    <button type="button" className="link-button" onClick={() => setSearch("")}>
-                      Clear search
-                    </button>
-                  </>
-                )}
-                {tools === "filters" && (
-                  <div className="port-list-controls">
-                    <select
-                      aria-label="Graph contents"
-                      value={kind}
-                      onChange={(event) => setKind(event.target.value as PortGraphKind)}
-                    >
-                      <option value="all">All ports</option>
-                      <option value="listeners">Listeners</option>
-                      <option value="connections">Connections</option>
-                      <option value="docker">Docker</option>
-                    </select>
-                    <select
-                      aria-label="Protocol filter"
-                      value={protocol}
-                      onChange={(event) => setProtocol(event.target.value)}
-                    >
-                      <option value="all">TCP + UDP</option>
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                    </select>
-                    <select
-                      aria-label="Exposure filter"
-                      value={exposure}
-                      onChange={(event) => setExposure(event.target.value as Exposure | "all")}
-                    >
-                      <option value="all">Any exposure</option>
-                      <option value="all-interfaces">All interfaces</option>
-                      <option value="local-only">Local only</option>
-                      <option value="specific">Specific address</option>
-                    </select>
-                    <select
-                      aria-label="Sort ports"
-                      value={sort}
-                      onChange={(event) => setSort(event.target.value as PortSort)}
-                    >
-                      <option value="port-asc">Port ↑</option>
-                      <option value="port-desc">Port ↓</option>
-                      <option value="protocol">Protocol</option>
-                      <option value="address">Address</option>
-                      <option value="process">Process</option>
-                    </select>
+                  <div className="search-field ports-search-field">
+                    <Search size={15} />
+                    <input
+                      aria-label="Search ports"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search ports or owners"
+                    />
                     <button
                       type="button"
-                      className="link-button"
+                      className="icon-button"
+                      aria-label="Clear search"
+                      title="Clear search"
+                      disabled={!search}
                       onClick={() => {
-                        setKind("all");
-                        setProtocol("all");
-                        setExposure("all");
-                        setSort("port-asc");
+                        setSearch("");
+                        toolsRef.current?.querySelector("input")?.focus();
                       }}
                     >
-                      Reset filters
+                      <X size={14} />
                     </button>
                   </div>
+                )}
+                {tools === "filters" && (
+                  <>
+                    <div className="port-list-controls">
+                      <select
+                        aria-label="Graph contents"
+                        value={kind}
+                        onChange={(event) => setKind(event.target.value as PortGraphKind)}
+                      >
+                        <option value="all">All ports</option>
+                        <option value="listeners">Listeners</option>
+                        <option value="connections">Connections</option>
+                        <option value="docker">Docker</option>
+                      </select>
+                      <select
+                        aria-label="Protocol filter"
+                        value={protocol}
+                        onChange={(event) => setProtocol(event.target.value)}
+                      >
+                        <option value="all">TCP + UDP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                      </select>
+                      <select
+                        aria-label="Exposure filter"
+                        value={exposure}
+                        onChange={(event) => setExposure(event.target.value as Exposure | "all")}
+                      >
+                        <option value="all">Any exposure</option>
+                        <option value="all-interfaces">All interfaces</option>
+                        <option value="local-only">Local only</option>
+                        <option value="specific">Specific address</option>
+                      </select>
+                      <select
+                        aria-label="Sort ports"
+                        value={sort}
+                        onChange={(event) => setSort(event.target.value as PortSort)}
+                      >
+                        <option value="port-asc">Port ↑</option>
+                        <option value="port-desc">Port ↓</option>
+                        <option value="protocol">Protocol</option>
+                        <option value="address">Address</option>
+                        <option value="process">Process</option>
+                      </select>
+                    </div>
+                    <footer className="ports-tools-footer">
+                      <button
+                        type="button"
+                        className="secondary-button ports-reset-button"
+                        disabled={!filtersActive}
+                        onClick={() => {
+                          setKind("all");
+                          setProtocol("all");
+                          setExposure("all");
+                          setSort("port-asc");
+                        }}
+                      >
+                        <RotateCcw size={14} /> Reset filters
+                      </button>
+                    </footer>
+                  </>
                 )}
               </div>
             )}
