@@ -467,3 +467,74 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
   await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
+
+it("keeps sshd worker connections immediately below the related SSH listener", async () => {
+  await page.viewport(1100, 760);
+  vi.mocked(api.inspectConnections).mockResolvedValueOnce({
+    groups: [
+      {
+        key: "ssh-worker",
+        protocol: "tcp",
+        localPort: 22,
+        processName: "sshd",
+        processId: 200,
+        systemdUnit: null,
+        established: 3,
+        remoteAddressCount: 1,
+        remotes: [{ address: "203.0.113.20", count: 3 }],
+      },
+    ],
+    totalEstablished: 3,
+    truncated: false,
+    collectedAt: "",
+  });
+  const source = sockets.items[0];
+  renderPane(
+    null,
+    {
+      ...sockets,
+      items: [
+        {
+          ...source,
+          id: "ssh",
+          port: 22,
+          processName: "sshd",
+          processId: 100,
+          systemdUnit: "ssh.service",
+        },
+        {
+          ...source,
+          id: "dns",
+          port: 53,
+          processName: "resolved",
+          processId: 300,
+          systemdUnit: "resolved.service",
+        },
+        {
+          ...source,
+          id: "web",
+          port: 80,
+          processName: "nginx",
+          processId: 400,
+          systemdUnit: "nginx.service",
+        },
+      ],
+    },
+    { ...containers, items: [] },
+  );
+  expect(screen.queryByRole("button", { name: /3 established/ })).toBeNull();
+  await page.getByRole("button", { name: "Show established connections" }).click();
+  const peer = await screen.findByRole("button", { name: /3 established/ });
+  const listener = screen.getByRole("button", { name: /22.*Listening/ });
+  expect(peer.closest(".arch-group")).toBe(listener.closest(".arch-group"));
+  expect(peer.textContent).toContain("Related process · sshd");
+  expect(peer.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    listener.getBoundingClientRect().bottom,
+  );
+  await page.getByRole("button", { name: /3 established/ }).click();
+  const inspector = screen.getByRole("complementary");
+  expect(within(inspector).getByText("Related to ssh.service")).toBeTruthy();
+  expect(within(inspector).getByText("200")).toBeTruthy();
+  expect(within(inspector).queryByRole("button", { name: "Open unit" })).toBeNull();
+  expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+});

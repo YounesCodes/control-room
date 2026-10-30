@@ -209,4 +209,75 @@ describe("consolidated port graph", () => {
     ).toEqual(peers.map((record) => record.key).sort());
     expect(entries.flatMap((entry) => entry.bindings)).toHaveLength(4);
   });
+  it("places SSH worker connections beside their unique listening service without inventing ownership", () => {
+    const ssh = {
+      ...socket,
+      id: "ssh",
+      port: 22,
+      processName: "sshd",
+      processId: 100,
+      systemdUnit: "ssh.service",
+    };
+    const worker = {
+      ...connection,
+      key: "worker",
+      localPort: 22,
+      processName: "sshd",
+      processId: 200,
+      systemdUnit: null,
+    };
+    const result = graph(
+      [
+        ssh,
+        {
+          ...socket,
+          id: "dns",
+          port: 53,
+          processName: "resolved",
+          systemdUnit: "resolved.service",
+        },
+      ],
+      [],
+      [worker],
+    );
+    const service = result.find((group) => group.owner.label === "ssh.service")!;
+    expect(service.items).toHaveLength(2);
+    expect(service.items[0].sockets).toEqual([ssh]);
+    expect(service.items[1].owner).toEqual({ kind: "process", label: "sshd" });
+    expect(service.items[1].connections).toEqual([worker]);
+    expect(service.items[1].connections[0].systemdUnit).toBeNull();
+  });
+  it("places outbound connections with a unique PID-related listener even on another port", () => {
+    const result = graph(
+      [socket],
+      [],
+      [{ ...connection, key: "outbound", localPort: 49100, systemdUnit: null }],
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].items.map((entry) => entry.port)).toEqual([443, 49100]);
+  });
+  it("keeps ambiguous names, unrelated processes, conflicting services and protocols separate", () => {
+    const ssh = {
+      ...socket,
+      id: "ssh",
+      port: 22,
+      processName: "sshd",
+      processId: 100,
+      systemdUnit: "ssh.service",
+    };
+    const second = { ...ssh, id: "second", processId: 101, systemdUnit: "other-ssh.service" };
+    const worker = {
+      ...connection,
+      key: "worker",
+      localPort: 22,
+      processName: "sshd",
+      processId: 200,
+      systemdUnit: null,
+    };
+    expect(graph([ssh, second], [], [worker])).toHaveLength(3);
+    expect(graph([ssh], [], [{ ...worker, processName: "other" }])).toHaveLength(2);
+    expect(graph([ssh], [], [{ ...worker, protocol: "udp" }])).toHaveLength(2);
+    expect(graph([ssh], [], [{ ...worker, localPort: 49100 }])).toHaveLength(2);
+    expect(graph([ssh], [], [{ ...worker, systemdUnit: "different.service" }])).toHaveLength(2);
+  });
 });

@@ -18,6 +18,8 @@ export interface PortOverviewItem {
   sockets: ListeningSocket[];
   bindings: DockerPortLink[];
   connections: ConnectionSummary[];
+  /** Presentation relationship only; does not establish service/container ownership. */
+  relatedTo?: string;
 }
 
 export function matchesPortScope(address: string, exposure: Exposure | "all") {
@@ -208,6 +210,51 @@ export function buildPortOverview(
     const group = groups.get(key);
     if (group) group.items.push(visible);
     else groups.set(key, { key, owner: entry.owner, items: [visible] });
+  }
+  // Keep worker/peer records close to a unique related listener without merging evidence.
+  const listeningGroups = [...groups.values()].filter((group) =>
+    group.items.some((item) => item.sockets.length),
+  );
+  for (const group of [...groups.values()]) {
+    group.items = group.items.filter((item) => {
+      if (
+        item.sockets.length ||
+        item.bindings.length ||
+        !item.connections.length ||
+        item.connections.some((connection) => connection.systemdUnit)
+      )
+        return true;
+      const byPid = listeningGroups.filter((parent) =>
+        item.connections.every(
+          (connection) =>
+            connection.processId !== null &&
+            parent.items.some((endpoint) =>
+              endpoint.sockets.some((socket) => socket.processId === connection.processId),
+            ),
+        ),
+      );
+      const candidates = byPid.length
+        ? byPid
+        : listeningGroups.filter((parent) =>
+            item.connections.every(
+              (connection) =>
+                connection.processName &&
+                parent.items.some(
+                  (endpoint) =>
+                    endpoint.port === connection.localPort &&
+                    endpoint.protocol === connection.protocol &&
+                    endpoint.sockets.some(
+                      (socket) => socket.processName === connection.processName,
+                    ),
+                ),
+            ),
+          );
+      if (candidates.length !== 1 || candidates[0] === group) return true;
+      const parent = candidates[0];
+      parent.items.push({ ...item, relatedTo: parent.owner.label });
+      return false;
+    });
+    if (!group.items.length) groups.delete(group.key);
   }
   for (const group of groups.values())
     group.items.sort((a, b) => {

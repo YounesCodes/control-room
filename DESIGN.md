@@ -162,7 +162,12 @@ protocol, local port and explicit service or PID evidence. Keep ambiguous matche
 different owners and unknown-owner sockets separate. Never merge solely by port.
 Default to listeners and published mappings; put connection-only endpoints behind
 Show established connections or the Established / outbound filter. Render those
-endpoints with a quieter dashed border and sort them after listening owners.
+endpoints with a quieter dashed border. Place peer-only records inside a unique
+related listening group when PID evidence matches, or when process name, protocol
+and local port match one group. Label these as related processes and preserve
+their own owner and source records; this layout relationship does not establish
+service ownership. Keep ambiguous matches and explicit conflicting units separate.
+Sort unrelated peer-only groups after listening owners.
 Keep cards compact: port, protocol, binding scope, Docker target and peer count.
 Keep process, Compose and per-socket information in expandable inspector sections.
 Show reachability as Not tested. Host firewall policy is separate evidence and

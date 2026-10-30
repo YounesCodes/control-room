@@ -35,6 +35,7 @@ export function PortOverviewDetail({
           {item.port} / {item.protocol.toUpperCase()}
         </h2>
         <p>{item.owner.label}</p>
+        {item.relatedTo && <p>Related to {item.relatedTo}</p>}
       </header>
       <div className="port-inspector-body" tabIndex={0} role="region" aria-label="Port information">
         <dl className="detail-list">

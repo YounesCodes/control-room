@@ -60,6 +60,9 @@ function GraphItem({ item }: { item: PortOverviewItem }) {
           {item.sockets.length ? "Listening" : item.bindings.length ? "Published" : "Established"}
         </span>
       </span>
+      {item.relatedTo && (
+        <span className="arch-chip-meta">Related process · {item.owner.label}</span>
+      )}
       {!!scopes.length && (
         <span className="arch-chip-meta">
           {scopes.join(" / ")}
