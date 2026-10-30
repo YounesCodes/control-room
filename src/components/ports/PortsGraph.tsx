@@ -153,6 +153,7 @@ export function PortsGraph({
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusing, setFocusing] = useState(false);
   const [links, setLinks] = useState<{ id: string; d: string }[]>([]);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [controlsHeight, setControlsHeight] = useState(90);
@@ -273,13 +274,43 @@ export function PortsGraph({
     return () => observer.disconnect();
   }, [measure, fit, groups.length]);
 
+  useLayoutEffect(() => {
+    if (!selectedId) return;
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    const node = selectionTrigger.current;
+    if (!viewport || !content || !node?.isConnected) return;
+
+    // Offset coordinates stay stable even when a previous camera move is in flight.
+    let x = node.offsetWidth / 2;
+    let y = node.offsetHeight / 2;
+    let ancestor: HTMLElement | null = node;
+    while (ancestor && ancestor !== content) {
+      x += ancestor.offsetLeft;
+      y += ancestor.offsetTop;
+      ancestor = ancestor.offsetParent as HTMLElement | null;
+    }
+    const top = (controlsRef.current?.offsetHeight ?? 90) + 32;
+    const width = Math.max(1, viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 60);
+    const height = Math.max(1, viewport.clientHeight - top - 64);
+    const scale = Math.max(
+      0.01,
+      Math.min(1.15, width / (node.offsetWidth + 48), height / (node.offsetHeight + 64)),
+    );
+    setFocusing(true);
+    setView({ scale, x: 24 + width / 2 - x * scale, y: top + height / 2 - y * scale });
+    detailRef.current?.focus({ preventScroll: true });
+  }, [selectedId, setView]);
+
   function closeDetail() {
     setSelectedId(null);
+    setFocusing(false);
     selectionTrigger.current?.focus({ preventScroll: true });
   }
 
   function backgroundPointerDown(event: PointerEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest("button")) return;
+    setFocusing(false);
     panZoom.onPointerDown(event);
   }
 
@@ -320,7 +351,10 @@ export function PortsGraph({
           type="button"
           className="icon-button"
           aria-label="Zoom out"
-          onClick={() => panZoom.zoomBy(1 / 1.2)}
+          onClick={() => {
+            setFocusing(false);
+            panZoom.zoomBy(1 / 1.2);
+          }}
         >
           <ZoomOut size={15} />
         </button>
@@ -329,11 +363,22 @@ export function PortsGraph({
           type="button"
           className="icon-button"
           aria-label="Zoom in"
-          onClick={() => panZoom.zoomBy(1.2)}
+          onClick={() => {
+            setFocusing(false);
+            panZoom.zoomBy(1.2);
+          }}
         >
           <ZoomIn size={15} />
         </button>
-        <button type="button" className="icon-button" aria-label="Fit to view" onClick={fit}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Fit to view"
+          onClick={() => {
+            setFocusing(false);
+            fit();
+          }}
+        >
           <Scan size={15} />
         </button>
       </div>
@@ -342,7 +387,10 @@ export function PortsGraph({
         role="region"
         ref={viewportRef}
         aria-label="Ports graph"
-        onWheel={panZoom.onWheel}
+        onWheel={(event) => {
+          setFocusing(false);
+          panZoom.onWheel(event);
+        }}
         onPointerDown={backgroundPointerDown}
         onPointerMove={panZoom.onPointerMove}
         onPointerUp={panZoom.onPointerUp}
@@ -352,7 +400,11 @@ export function PortsGraph({
           <EmptyState title={emptyMessage} />
         ) : (
           <div
-            className="arch-content"
+            className={focusing ? "arch-content arch-focusing" : "arch-content"}
+            onTransitionEnd={(event) => {
+              if (event.target === event.currentTarget && event.propertyName === "transform")
+                setFocusing(false);
+            }}
             ref={contentRef}
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
           >
@@ -404,11 +456,6 @@ export function PortsGraph({
                         onClick={(event) => {
                           selectionTrigger.current = event.currentTarget;
                           setSelectedId(item.id);
-                          requestAnimationFrame(() => {
-                            if (selectionTrigger.current?.isConnected)
-                              revealNode(selectionTrigger.current);
-                            detailRef.current?.focus({ preventScroll: true });
-                          });
                         }}
                       >
                         <GraphItem item={item} firewall={firewall} />

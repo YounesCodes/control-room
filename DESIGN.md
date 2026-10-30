@@ -143,9 +143,11 @@ area, leaving search, filters, and refresh available above the list.
 
 Ports uses the entire inspection area as a pan-and-zoom graph. Keep search,
 filters, and reading information in one compact toolbar. Show snapshot metadata
-in the listener count's hover tooltip and accessible description, with no click
-card. Keep warning recovery actions separate. Use search and filter
-panels opening on demand. Keep zoom controls in the lower corner. Route owner
+in the listener count's hover tooltip, aligned to the count's leading edge,
+and accessible description, with no click card. Keep warning recovery actions separate. Use search and filter
+panels opening on demand. Filter panels pair visible field labels with a compact
+heading containing Reset and Close, without a separate action footer. Keep zoom
+controls in the lower corner. Route owner
 branches orthogonally through reserved gutters, never through other cards.
 Use side connections where a column continues and enter its final card from
 the top, ending the branch at the card. End the horizontal bus at the top of
@@ -154,7 +156,10 @@ Group listening
 sockets, established connections, and published Docker mappings by their known
 owners. Preserve each source as separate evidence, including mappings and
 outbound connections with no listening socket. Selecting a port or connection
-opens a closable inspector over the graph. Keep its heading and actions fixed,
+smoothly zooms and centers it in the graph area beside the inspector, then
+slides a closable inspector in from the right. Direct pan and zoom interrupt
+the camera transition. Reduced motion applies the framing immediately. Keep the
+inspector heading and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin
 scrollbar that fades when the body is not hovered. Keep every binding,
 firewall, ownership, endpoint, and Compose field available there, with the

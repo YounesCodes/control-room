@@ -303,6 +303,7 @@ export function PortsPane({
                 className="ports-snapshot-summary"
                 tabIndex={0}
                 title={snapshotDescription}
+                data-tooltip-align="start"
                 aria-describedby="ports-snapshot-description"
               >
                 {cache.items.length} listener{cache.items.length === 1 ? "" : "s"}
@@ -376,17 +377,37 @@ export function PortsPane({
                 }
               >
                 {tools !== "search" && (
-                  <button
-                    type="button"
-                    className="icon-button ports-tools-close"
-                    aria-label="Close port tools"
-                    onClick={() => {
-                      setTools(null);
-                      toolsButtonRef.current?.focus();
-                    }}
-                  >
-                    <X size={14} />
-                  </button>
+                  <header className="ports-tools-heading">
+                    <strong>{tools === "filters" ? "Filters" : "Reading warnings"}</strong>
+                    {tools === "filters" && (
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Reset filters"
+                        title="Reset filters"
+                        disabled={!filtersActive}
+                        onClick={() => {
+                          setKind("all");
+                          setProtocol("all");
+                          setExposure("all");
+                          setSort("port-asc");
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Close port tools"
+                      onClick={() => {
+                        setTools(null);
+                        toolsButtonRef.current?.focus();
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </header>
                 )}
                 {tools === "info" && (
                   <>
@@ -495,62 +516,59 @@ export function PortsPane({
                 {tools === "filters" && (
                   <>
                     <div className="port-list-controls">
-                      <select
-                        aria-label="Graph contents"
-                        value={kind}
-                        onChange={(event) => setKind(event.target.value as PortGraphKind)}
-                      >
-                        <option value="all">All ports</option>
-                        <option value="listeners">Listeners</option>
-                        <option value="connections">Connections</option>
-                        <option value="docker">Docker</option>
-                      </select>
-                      <select
-                        aria-label="Protocol filter"
-                        value={protocol}
-                        onChange={(event) => setProtocol(event.target.value)}
-                      >
-                        <option value="all">TCP + UDP</option>
-                        <option value="tcp">TCP</option>
-                        <option value="udp">UDP</option>
-                      </select>
-                      <select
-                        aria-label="Exposure filter"
-                        value={exposure}
-                        onChange={(event) => setExposure(event.target.value as Exposure | "all")}
-                      >
-                        <option value="all">Any exposure</option>
-                        <option value="all-interfaces">All interfaces</option>
-                        <option value="local-only">Local only</option>
-                        <option value="specific">Specific address</option>
-                      </select>
-                      <select
-                        aria-label="Sort ports"
-                        value={sort}
-                        onChange={(event) => setSort(event.target.value as PortSort)}
-                      >
-                        <option value="port-asc">Port ↑</option>
-                        <option value="port-desc">Port ↓</option>
-                        <option value="protocol">Protocol</option>
-                        <option value="address">Address</option>
-                        <option value="process">Process</option>
-                      </select>
+                      <label>
+                        <span>Show</span>
+                        <select
+                          aria-label="Graph contents"
+                          value={kind}
+                          onChange={(event) => setKind(event.target.value as PortGraphKind)}
+                        >
+                          <option value="all">All ports</option>
+                          <option value="listeners">Listeners</option>
+                          <option value="connections">Connections</option>
+                          <option value="docker">Docker</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Protocol</span>
+                        <select
+                          aria-label="Protocol filter"
+                          value={protocol}
+                          onChange={(event) => setProtocol(event.target.value)}
+                        >
+                          <option value="all">TCP + UDP</option>
+                          <option value="tcp">TCP</option>
+                          <option value="udp">UDP</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Exposure</span>
+                        <select
+                          aria-label="Exposure filter"
+                          value={exposure}
+                          onChange={(event) => setExposure(event.target.value as Exposure | "all")}
+                        >
+                          <option value="all">Any exposure</option>
+                          <option value="all-interfaces">All interfaces</option>
+                          <option value="local-only">Local only</option>
+                          <option value="specific">Specific address</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Sort by</span>
+                        <select
+                          aria-label="Sort ports"
+                          value={sort}
+                          onChange={(event) => setSort(event.target.value as PortSort)}
+                        >
+                          <option value="port-asc">Port ↑</option>
+                          <option value="port-desc">Port ↓</option>
+                          <option value="protocol">Protocol</option>
+                          <option value="address">Address</option>
+                          <option value="process">Process</option>
+                        </select>
+                      </label>
                     </div>
-                    <footer className="ports-tools-footer">
-                      <button
-                        type="button"
-                        className="secondary-button ports-reset-button"
-                        disabled={!filtersActive}
-                        onClick={() => {
-                          setKind("all");
-                          setProtocol("all");
-                          setExposure("all");
-                          setSort("port-asc");
-                        }}
-                      >
-                        <RotateCcw size={14} /> Reset filters
-                      </button>
-                    </footer>
                   </>
                 )}
               </div>

@@ -5,6 +5,7 @@ interface TooltipState {
   top: number;
   left: number;
   anchorTop: number;
+  alignStart: boolean;
 }
 
 const TOOLTIP_DELAY_MS = 350;
@@ -30,7 +31,10 @@ export function TooltipLayer() {
     if (!tooltip || !tooltipRef.current) return;
     const width = tooltipRef.current.offsetWidth;
     const height = tooltipRef.current.offsetHeight;
-    const left = Math.max(8, Math.min(tooltip.left - width / 2, window.innerWidth - width - 8));
+    const left = Math.max(
+      8,
+      Math.min(tooltip.left - (tooltip.alignStart ? 0 : width / 2), window.innerWidth - width - 8),
+    );
     const below = tooltip.top + height <= window.innerHeight - 8;
     const top = Math.max(
       8,
@@ -85,7 +89,8 @@ export function TooltipLayer() {
         setTooltip({
           text,
           top: rect.bottom + 8,
-          left: rect.left + rect.width / 2,
+          left: target.dataset.tooltipAlign === "start" ? rect.left : rect.left + rect.width / 2,
+          alignStart: target.dataset.tooltipAlign === "start",
           anchorTop: rect.top,
         });
       };
