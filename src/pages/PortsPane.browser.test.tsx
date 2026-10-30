@@ -547,7 +547,6 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   await page.getByText("Host firewall policy", { exact: true }).click();
   expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
-  await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
 
 it("keeps sshd worker connections immediately below the related SSH listener", async () => {
@@ -699,4 +698,39 @@ it("reveals chips for keyboard focus without selecting them", async () => {
   }
   expect(focusedChips).toBeGreaterThan(1);
   expect(await inspectorHeading()).toBe("443 / TCP");
+});
+
+it("keeps warning retry actions below long messages without splitting their labels", async () => {
+  await page.viewport(960, 760);
+  const timeout =
+    "Connection timed out: ssh: connect to host 192.0.2.10 port 22: Connection timed out";
+  vi.mocked(api.inspectConnections).mockRejectedValueOnce(
+    "Remote operation queue was busy for 4 seconds",
+  );
+  vi.mocked(api.inspectFirewall).mockRejectedValueOnce(
+    "Permission denied while reading firewall rules",
+  );
+  renderPane(null, { ...sockets, error: timeout }, { ...containers, error: timeout });
+  await screen.findByRole("button", { name: "Retry connections" });
+  await screen.findByRole("button", { name: "Retry with sudo" });
+  for (const width of [960, 320]) {
+    await page.viewport(width, 760);
+    for (const name of ["Retry ports", "Retry connections", "Retry Docker", "Retry with sudo"]) {
+      const button = screen.getByRole("button", { name });
+      const warning = button.closest(".inline-warning")!;
+      const message = document.createRange();
+      message.setStart(warning, 0);
+      message.setEndBefore(button);
+      const bounds = button.getBoundingClientRect();
+      expect(bounds.height).toBeLessThanOrEqual(
+        parseFloat(getComputedStyle(button).lineHeight) + 1,
+      );
+      expect(bounds.top).toBeGreaterThanOrEqual(message.getBoundingClientRect().bottom + 8);
+      expect(bounds.right).toBeLessThanOrEqual(warning.getBoundingClientRect().right - 12);
+      expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
+    }
+  }
+  vi.mocked(api.listPorts).mockClear().mockResolvedValueOnce(sockets.items);
+  await userEvent.click(screen.getByRole("button", { name: "Retry ports" }));
+  expect(api.listPorts).toHaveBeenCalledExactlyOnceWith(connection.id, null);
 });

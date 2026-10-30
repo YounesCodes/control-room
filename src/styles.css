@@ -6433,8 +6433,16 @@ kbd {
   margin: 0 0 12px;
 }
 
+.ports-reading-body .inline-warning {
+  display: block;
+}
+
 .ports-reading-body .link-button {
   display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: normal;
+  text-align: left;
 }
 
 .firewall-warning {
