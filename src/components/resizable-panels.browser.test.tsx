@@ -612,7 +612,6 @@ describe("resizable connection panels in Chromium", () => {
         before,
       ),
     );
-    await page.getByRole("button", { name: "Fit to view" }).click();
     await vi.waitFor(() => {
       const canvas = document.querySelector(".arch-viewport")!.getBoundingClientRect();
       const graph = document.querySelector(".arch-content")!.getBoundingClientRect();

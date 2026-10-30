@@ -237,30 +237,23 @@ export function PortsGraph({
     setLinks(next);
   }, []);
 
-  const fit = useCallback(
-    (fitAll = false) => {
-      const viewport = viewportRef.current;
-      const content = contentRef.current;
-      if (!viewport || !content?.offsetWidth || !content.offsetHeight) return;
-      const top = (controlsRef.current?.offsetHeight ?? 90) + 32;
-      const width = Math.max(
-        200,
-        viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48,
-      );
-      const height = Math.max(160, viewport.clientHeight - top - 64);
-      // Large inventories start at a readable scale. Fit to view explicitly shows everything.
-      const scale = Math.max(
-        fitAll ? 0.1 : 0.85,
-        Math.min(1, width / content.offsetWidth, height / content.offsetHeight),
-      );
-      setView({
-        scale,
-        x: 24 + Math.max(0, (width - content.offsetWidth * scale) / 2),
-        y: top + Math.max(0, (height - content.offsetHeight * scale) / 2),
-      });
-    },
-    [setView],
-  );
+  const fit = useCallback(() => {
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content?.offsetWidth || !content.offsetHeight) return;
+    const top = (controlsRef.current?.offsetHeight ?? 90) + 32;
+    const width = Math.max(
+      1,
+      viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - (detailRef.current ? 60 : 48),
+    );
+    const height = Math.max(1, viewport.clientHeight - top - 64);
+    const scale = Math.min(1, width / content.offsetWidth, height / content.offsetHeight);
+    setView({
+      scale,
+      x: 24 + Math.max(0, (width - content.offsetWidth * scale) / 2),
+      y: top + Math.max(0, (height - content.offsetHeight * scale) / 2),
+    });
+  }, [setView]);
 
   useLayoutEffect(() => {
     measure();
@@ -340,12 +333,7 @@ export function PortsGraph({
         >
           <ZoomIn size={15} />
         </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Fit to view"
-          onClick={() => fit(true)}
-        >
+        <button type="button" className="icon-button" aria-label="Fit to view" onClick={fit}>
           <Scan size={15} />
         </button>
       </div>

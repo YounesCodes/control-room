@@ -2081,6 +2081,29 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
       await page.getByRole("button", { name: "Close port tools" }).click();
       await vi.waitFor(() => expect(element.querySelectorAll(".arch-chip").length).toBe(100));
+      const expectEntireGraph = () => {
+        const viewport = element.querySelector(".arch-viewport")!.getBoundingClientRect();
+        const graph = element.querySelector(".arch-content")!.getBoundingClientRect();
+        const toolbar = element.querySelector(".ports-canvas-controls")!.getBoundingClientRect();
+        expect(graph.left).toBeGreaterThanOrEqual(viewport.left + 12);
+        expect(graph.right).toBeLessThanOrEqual(viewport.right - 12);
+        expect(graph.top).toBeGreaterThanOrEqual(toolbar.bottom + 12);
+        expect(graph.bottom).toBeLessThanOrEqual(viewport.bottom - 48);
+      };
+      await vi.waitFor(expectEntireGraph);
+      const fittedHeight = element.querySelector(".arch-content")!.getBoundingClientRect().height;
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+      await vi.waitFor(() =>
+        expect(
+          element.querySelector(".arch-content")!.getBoundingClientRect().height,
+        ).toBeGreaterThan(fittedHeight),
+      );
+      await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+      await vi.waitFor(expectEntireGraph);
+      expect(element.querySelector(".arch-content")!.getBoundingClientRect().height).toBeCloseTo(
+        fittedHeight,
+        1,
+      );
       const last = element.querySelectorAll<HTMLButtonElement>(".arch-chip")[99];
       last.focus();
       await vi.waitFor(() => {
@@ -2091,6 +2114,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       });
       await userEvent.keyboard("{Enter}");
       await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+      await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+      await vi.waitFor(() => {
+        const graph = element.querySelector(".arch-content")!.getBoundingClientRect();
+        const inspector = element.querySelector(".arch-detail")!.getBoundingClientRect();
+        expect(graph.right).toBeLessThanOrEqual(inspector.left - 12);
+      });
       await page.getByRole("button", { name: "Close details" }).click();
     }
   });

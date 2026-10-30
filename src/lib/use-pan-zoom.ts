@@ -13,7 +13,7 @@ export interface PanZoomView {
   y: number;
 }
 
-export const MIN_ZOOM = 0.3;
+export const MIN_ZOOM = 0.01;
 export const MAX_ZOOM = 2.5;
 
 function clampScale(scale: number) {

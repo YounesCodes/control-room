@@ -158,8 +158,9 @@ opens a closable inspector over the graph. Keep its heading and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin
 scrollbar that fades when the body is not hovered. Keep every binding,
 firewall, ownership, endpoint, and Compose field available there, with the
-existing service, container, and log actions. Start large inventories at a
-readable scale; Fit to view may zoom out to show everything. Keyboard focus
+existing service, container, and log actions. Fit the entire graph on initial
+load, filtering, resize, and Fit to view, leaving space for controls and an open
+inspector. Keep the default and reset framing identical. Keyboard focus
 reveals offscreen nodes. Closing the inspector returns focus to its node.
 
 ## Visual language
