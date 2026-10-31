@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { DockerContainerInspector } from "../components/DockerContainerInspector";
+import { ContainerImageIcon } from "../components/ContainerImageIcon";
 import { InspectionGraph } from "../components/InspectionGraph";
 import { api, errorMessage } from "../lib/api";
 import {
@@ -157,7 +158,7 @@ export function DockerPane({
         content: (
           <>
             <span className="arch-chip-title docker-chip-title">
-              <Container size={14} />
+              <ContainerImageIcon image={container.image} />
               <strong>{grouped ? composeContainerLabel(container) : container.name}</strong>
             </span>
             <span className="arch-chip-meta">

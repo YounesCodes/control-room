@@ -6626,6 +6626,22 @@ kbd {
   flex: none;
 }
 
+.docker-image-icon {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  color: var(--text-muted);
+  -webkit-mask: var(--image-logo) center / contain no-repeat;
+  mask: var(--image-logo) center / contain no-repeat;
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.arch-chip:is(:hover, :focus-visible, .selected) .docker-image-icon {
+  color: var(--image-brand);
+}
+
 .docker-chip-title strong {
   min-width: 0;
   overflow-wrap: anywhere;

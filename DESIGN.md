@@ -34,7 +34,12 @@ guardrails, not every choice described below.
   at small sizes.
 - Docker navigation uses the whale silhouette in neutral gray at rest, including
   while selected. Reveal Docker blue on hover or keyboard focus. Individual
-  containers use the Lucide Container outline in graph nodes and container actions.
+  container graph cards use bundled SVG image logos for explicitly recognized
+  repositories, neutral at rest and showing brand hues on hover, keyboard focus,
+  or selection. Unknown images and container actions use the Lucide Container
+  outline. Dark brand hues are lightened enough to remain visible on graph cards.
+  Match full image repositories and known aliases, never container names
+  or arbitrary registry basenames. Compose project icons stay unchanged.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
