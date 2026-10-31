@@ -156,7 +156,6 @@ export function buildPortOverview(
     );
     if (exposure !== "all" && !boundSockets.length && !published.length) continue;
     if (kind === "listeners" && !boundSockets.length) continue;
-    if (kind === "docker" && !published.length) continue;
     if (kind === "connections" && !entry.connections.length) continue;
     if (kind === "overview" && !showConnections && !boundSockets.length && !published.length)
       continue;

@@ -1,3 +1,4 @@
+import { InspectorDisclosure } from "../InspectorDisclosure";
 import { Container, FileClock, Server } from "lucide-react";
 import { exposureLabel, firewallForSocket, socketExposure } from "../../lib/port-inspector";
 import type { PortOverviewItem } from "../../lib/port-overview";
@@ -24,7 +25,10 @@ export function PortOverviewDetail({
       [
         ...item.sockets.map((socket) => socket.systemdUnit),
         ...item.connections.map((connection) => connection.systemdUnit),
-      ].filter((unit): unit is string => !!unit),
+      ].filter(
+        (unit): unit is string =>
+          !!unit && !(containers.length && /^(docker|containerd)\.(service|socket)$/.test(unit)),
+      ),
     ),
   ];
   const count = item.connections.reduce((total, connection) => total + connection.established, 0);
@@ -93,8 +97,11 @@ export function PortOverviewDetail({
           </>
         )}
         {!!item.connections.length && (
-          <details className="port-disclosure" open={!item.sockets.length && !item.bindings.length}>
-            <summary>{count} established · Remote endpoints</summary>
+          <InspectorDisclosure
+            className="port-disclosure"
+            open={!item.sockets.length && !item.bindings.length}
+            title={`${count} established · Remote endpoints`}
+          >
             {item.connections.map((connection) => (
               <section key={connection.key}>
                 <dl className="detail-list">
@@ -137,10 +144,9 @@ export function PortOverviewDetail({
                 )}
               </section>
             ))}
-          </details>
+          </InspectorDisclosure>
         )}
-        <details className="port-disclosure">
-          <summary>Host firewall policy</summary>
+        <InspectorDisclosure title="Host firewall policy">
           <dl className="detail-list">
             <div>
               <dt>Backend</dt>
@@ -164,39 +170,9 @@ export function PortOverviewDetail({
             firewalls can apply separately. A missing port rule does not prove that traffic is
             blocked.
           </p>
-        </details>
-        {!!containers.length && (
-          <details className="port-disclosure">
-            <summary>Container &amp; Compose</summary>
-            {containers.map((container) => (
-              <dl className="detail-list" key={container.id}>
-                <div>
-                  <dt>Container</dt>
-                  <dd>{container.name}</dd>
-                </div>
-                <div className="inspector-wide-field">
-                  <dt>Image</dt>
-                  <dd className="technical">{container.image}</dd>
-                </div>
-                {container.composeProject && (
-                  <div>
-                    <dt>Project</dt>
-                    <dd>{container.composeProject}</dd>
-                  </div>
-                )}
-                {container.composeService && (
-                  <div>
-                    <dt>Service</dt>
-                    <dd>{container.composeService}</dd>
-                  </div>
-                )}
-              </dl>
-            ))}
-          </details>
-        )}
+        </InspectorDisclosure>
         {!!item.sockets.length && (
-          <details className="port-disclosure">
-            <summary>Socket diagnostics</summary>
+          <InspectorDisclosure title="Socket diagnostics">
             {item.sockets.map((socket) => (
               <dl className="detail-list" key={socket.id}>
                 <div className="inspector-wide-field">
@@ -233,7 +209,7 @@ export function PortOverviewDetail({
                 )}
               </dl>
             ))}
-          </details>
+          </InspectorDisclosure>
         )}
       </div>
       <div className="detail-actions">
@@ -265,13 +241,6 @@ export function PortOverviewDetail({
               onClick={() => onOpenContainer(container.id)}
             >
               <Container size={14} /> Open container
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => onViewLogs({ type: "docker", id: container.id })}
-            >
-              <FileClock size={14} /> View logs
             </button>
           </span>
         ))}

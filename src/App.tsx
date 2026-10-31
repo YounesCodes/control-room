@@ -1,3 +1,5 @@
+import type { PublishedPortSelection } from "./lib/port-inspector";
+import { transitionFocusMode } from "./lib/focus-mode-transition";
 import { Search } from "./components/MagnifierIcon";
 import { DockerIcon } from "./components/DockerIcon";
 import {
@@ -35,7 +37,7 @@ import {
   FolderCog,
   Gauge,
   History,
-  CircleHelp,
+  BookOpen,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -241,6 +243,16 @@ export function App() {
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [portFocus, setPortFocus] = useState<
+    (PublishedPortSelection & { workspaceId: string }) | null
+  >(null);
+  useEffect(() => {
+    if (
+      portFocus &&
+      workspaces.find((workspace) => workspace.id === portFocus.workspaceId)?.view !== "ports"
+    )
+      setPortFocus(null);
+  }, [workspaces, portFocus]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState(emptyEnvironment);
@@ -863,15 +875,19 @@ export function App() {
 
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
-    setSplitMenuOpen(false);
-    setNewTerminalMenuOpen(false);
-    setTerminalFocusMode(true);
+    transitionFocusMode("enter", () => {
+      setSplitMenuOpen(false);
+      setNewTerminalMenuOpen(false);
+      setTerminalFocusMode(true);
+    });
   }
 
   function exitTerminalFocus() {
-    setSplitMenuOpen(false);
-    setNewTerminalMenuOpen(false);
-    setTerminalFocusMode(false);
+    transitionFocusMode("exit", () => {
+      setSplitMenuOpen(false);
+      setNewTerminalMenuOpen(false);
+      setTerminalFocusMode(false);
+    });
   }
 
   function openScratchpad() {
@@ -1770,7 +1786,7 @@ export function App() {
           openingDocumentation ? "Opening documentation…" : "Documentation (opens in your browser)"
         }
       >
-        <CircleHelp size={18} />
+        <BookOpen size={18} />
       </button>
     );
   }
@@ -1810,9 +1826,11 @@ export function App() {
   });
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
+  const focusToggleAvailable = !settingsOpen && activeWorkspace?.view === "terminal";
   return (
     <div
       ref={shellSize.ref}
+      data-focus-toggle={focusToggleAvailable ? "visible" : "hidden"}
       className={
         settingsOpen
           ? "app-shell settings-mode"
@@ -1873,18 +1891,19 @@ export function App() {
       </header>
 
       <div className="app-window-actions" role="group" aria-label="Window actions">
-        {!settingsOpen && activeWorkspace?.view === "terminal" && (
-          <button
-            className="app-bar-button app-focus-toggle"
-            type="button"
-            onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
-            aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
-            aria-pressed={terminalFocusMode}
-            title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
-          >
-            {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          </button>
-        )}
+        <button
+          className="app-bar-button app-focus-toggle"
+          type="button"
+          inert={!focusToggleAvailable}
+          aria-hidden={!focusToggleAvailable}
+          disabled={!focusToggleAvailable}
+          onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
+          aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+          aria-pressed={terminalFocusMode}
+          title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+        >
+          {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
         <WindowControls />
       </div>
 
@@ -2552,6 +2571,9 @@ export function App() {
                     ))}
                   {activeRemoteWorkspace.view === "ports" && (
                     <PortsPane
+                      focusEndpoint={
+                        portFocus?.workspaceId === activeRemoteWorkspace.id ? portFocus : undefined
+                      }
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       capabilities={hostCapabilities[activeConnection.id] ?? null}
@@ -2579,10 +2601,15 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "docker" && (
                     <DockerPane
+                      onOpenPort={(endpoint) => {
+                        setPortFocus({ ...endpoint, workspaceId: activeRemoteWorkspace.id });
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
+                      }}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       windowsHost={windowsWorkspace}
                       cache={activeRemoteWorkspace.containersCache}
+                      capabilities={hostCapabilities[activeConnection.id] ?? null}
                       detailsCache={activeRemoteWorkspace.containerDetailsCache}
                       onCacheChange={(cache) =>
                         updateContainersCache(activeRemoteWorkspace.id, cache)

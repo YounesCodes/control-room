@@ -9,6 +9,7 @@ import {
   observeLayoutFallback,
   PanelLayoutContext,
   ResizeDivider,
+  ResizableSplit,
   SidebarSections,
 } from "./ResizablePanels";
 import { OverviewPane } from "../pages/OverviewPane";
@@ -194,6 +195,7 @@ function Fixture() {
                     {[
                       "overview",
                       "docker",
+                      "split",
                       "ports",
                       "systemd",
                       "boot",
@@ -231,6 +233,12 @@ function Fixture() {
           <div className="workspace-content">
             <ConnectionSection section={section}>
               {section === "overview" && <OverviewPane connection={connection} />}
+              {section === "split" && (
+                <ResizableSplit name="Example" className="feature-page split-page">
+                  <div className="list-panel">Example list</div>
+                  <aside className="detail-panel">Example details</aside>
+                </ResizableSplit>
+              )}
               {section === "docker" && (
                 <DockerPane
                   connection={connection}
@@ -302,9 +310,9 @@ describe("resizable connection panels in Chromium", () => {
   it("keeps both split-pane scrollbars clear of resize handles", async () => {
     await page.viewport(1280, 900);
     mount();
-    await page.getByRole("button", { name: "Open docker" }).click();
+    await page.getByRole("button", { name: "Open split" }).click();
     await expect
-      .element(page.getByRole("separator", { name: "Resize Docker panes" }))
+      .element(page.getByRole("separator", { name: "Resize Example panes" }))
       .toBeVisible();
     for (const selector of [".list-panel", ".detail-panel"]) {
       const section = document.querySelector<HTMLElement>(selector)!;
@@ -513,11 +521,11 @@ describe("resizable connection panels in Chromium", () => {
     );
   });
 
-  it("drags Docker panes, preserves per-section sizes, and stacks them in a narrow section", async () => {
+  it("drags split panes, preserves per-section sizes, and stacks them in a narrow section", async () => {
     await page.viewport(1280, 900);
     mount();
-    await page.getByRole("button", { name: "Open docker" }).click();
-    const split = page.getByRole("separator", { name: "Resize Docker panes" });
+    await page.getByRole("button", { name: "Open split" }).click();
+    const split = page.getByRole("separator", { name: "Resize Example panes" });
     await expect.element(split).toBeVisible();
     await vi.waitFor(() => {
       const handle = split.element().getBoundingClientRect();
@@ -542,7 +550,7 @@ describe("resizable connection panels in Chromium", () => {
     const detail = document.querySelector(".detail-panel")!.getBoundingClientRect();
     const list = document.querySelector(".list-panel")!.getBoundingClientRect();
     expect(detail.left).toBeGreaterThanOrEqual(list.right - 1);
-    const content = page.getByRole("separator", { name: "Resize Docker content" });
+    const content = page.getByRole("separator", { name: "Resize Split content" });
     await content.click();
     await userEvent.keyboard("{Home}");
     await expect.element(split).not.toBeInTheDocument();
@@ -557,15 +565,15 @@ describe("resizable connection panels in Chromium", () => {
     await userEvent.dblClick(content);
     await expect.element(split).toHaveAttribute("aria-valuenow", chosen!);
     await page.getByRole("button", { name: "Open overview" }).click();
-    await page.getByRole("button", { name: "Open docker" }).click();
+    await page.getByRole("button", { name: "Open split" }).click();
     await expect.element(split).toHaveAttribute("aria-valuenow", chosen!);
   });
 
   it("moves focus to the pane group when a focused split stacks", async () => {
     await page.viewport(1280, 900);
     mount();
-    await page.getByRole("button", { name: "Open docker" }).click();
-    const split = page.getByRole("separator", { name: "Resize Docker panes" });
+    await page.getByRole("button", { name: "Open split" }).click();
+    const split = page.getByRole("separator", { name: "Resize Example panes" });
     await split.click();
     await expect.element(split).toHaveFocus();
     const section = document.querySelector<HTMLElement>(".connection-section-content")!;

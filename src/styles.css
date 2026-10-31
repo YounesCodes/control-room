@@ -131,6 +131,7 @@
   /* Motion. */
   --motion-fast: 110ms;
   --motion-med: 160ms;
+  --motion-focus: 180ms;
   --motion-slow: 240ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -388,12 +389,17 @@ code,
   display: grid;
   --connection-rail-width: 244px;
   --window-control-width: 46px;
-  --window-actions-width: calc(40px + 3 * var(--window-control-width));
+  --focus-toggle-width: 0px;
+  --window-actions-width: calc(var(--focus-toggle-width) + 3 * var(--window-control-width));
   grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
   grid-template-rows: 42px minmax(0, 1fr);
   height: 100%;
   border: 1px solid #2a2a2a;
   background: var(--app-bg);
+}
+
+.app-shell[data-focus-toggle="visible"] {
+  --focus-toggle-width: 40px;
 }
 
 /* Layer order for the shell, lowest to highest: page content, the sidebar
@@ -410,6 +416,7 @@ code,
   border-bottom: 1px solid var(--border-subtle);
   background: var(--topbar-bg);
   padding-right: var(--window-actions-width);
+  transition: padding-right var(--motion-med) var(--ease);
 }
 
 /* One window-anchored control group serves both titlebar and Focus Mode. */
@@ -421,7 +428,10 @@ code,
   display: grid;
   width: var(--window-actions-width);
   height: 42px;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: var(--focus-toggle-width) minmax(0, 1fr);
+  transition:
+    width var(--motion-med) var(--ease),
+    grid-template-columns var(--motion-med) var(--ease);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--topbar-bg);
 }
@@ -431,7 +441,18 @@ code,
 }
 
 .app-window-actions .app-focus-toggle {
-  width: 40px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(8px);
+  transition:
+    opacity var(--motion-med) var(--ease),
+    transform var(--motion-med) var(--ease),
+    visibility var(--motion-med);
   height: 100%;
   border-right: 1px solid var(--border-subtle);
   border-radius: 0;
@@ -440,6 +461,13 @@ code,
 .app-focus-toggle[aria-pressed="true"] {
   background: var(--fill-active);
   color: var(--text-strong);
+}
+
+.app-shell[data-focus-toggle="visible"] .app-focus-toggle {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
 }
 
 .app-window-actions .app-focus-toggle:active:not(:disabled) {
@@ -3918,13 +3946,6 @@ dd {
   padding: 0 10px;
 }
 
-.docker-list-controls {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
 .systemd-list-controls {
   display: grid;
   grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(0, 92px));
@@ -4007,71 +4028,8 @@ dd {
   color: var(--failure);
 }
 
-.docker-list-controls .search-field {
-  min-width: 0;
-  min-height: 37px;
-  flex: 1;
-  padding: 0 10px;
-}
-
-.view-toggle {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-raised);
-  padding: 2px;
-}
-
-.view-toggle button {
-  border-radius: 4px;
-  background: transparent;
-  padding: 0 9px;
-  color: var(--text);
-  font-size: 11px;
-}
-
-.view-toggle button:hover,
-.view-toggle button[aria-pressed="true"] {
-  background: var(--fill-hover);
-  color: var(--text);
-}
-
-.view-toggle button[aria-pressed="true"] {
-  background: var(--fill-selected);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
 .dense-list {
   border-top: 1px solid var(--border);
-}
-
-.container-group + .container-group {
-  border-top: 1px solid var(--border);
-}
-
-.container-group-heading {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--surface-sunken);
-  padding: 6px 11px;
-}
-
-.container-group-heading h3,
-.container-group-heading span {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.container-group-heading span {
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
 }
 
 .dense-row {
@@ -4123,11 +4081,8 @@ dd {
 }
 
 .service-failed,
-.service-exited,
 .service-dead {
   background: var(--failure);
-  border-radius: 1px;
-  transform: rotate(45deg);
 }
 
 .row-main {
@@ -4223,11 +4178,6 @@ dd {
   padding-bottom: 18px;
 }
 
-.container-inspector-panel {
-  display: flex;
-  flex-direction: column;
-}
-
 .container-inspector-heading {
   display: flex;
   align-items: flex-start;
@@ -4237,41 +4187,17 @@ dd {
 
 .container-inspector-heading > div {
   min-width: 0;
+  flex: 1;
 }
 
-.inspector-tabs {
-  display: flex;
-  overflow-x: auto;
+.container-inspector-heading > .docker-image-icon,
+.container-inspector-heading > svg {
   flex: none;
-  gap: 2px;
-  border-bottom: 1px solid var(--border);
-  margin-top: 16px;
+  margin-top: 2px;
 }
 
-.inspector-tabs button {
-  min-height: 34px;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  padding: 0 9px;
-  color: var(--text);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.inspector-tabs button:hover,
-.inspector-tabs button[aria-selected="true"] {
-  background: var(--fill-hover);
-  color: var(--text);
-}
-
-.inspector-tabs button[aria-selected="true"] {
-  border-bottom-color: var(--accent);
-  background: var(--fill-selected);
-}
-
-.inspector-tab-panel {
-  min-height: 220px;
-  padding-top: 12px;
+.container-inspector-heading > .docker-image-icon {
+  color: var(--image-brand);
 }
 
 .container-detail-list dd.technical {
@@ -4331,11 +4257,6 @@ dd {
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.5;
-}
-
-.container-log-action {
-  align-self: flex-start;
-  margin-top: 18px;
 }
 
 .detail-list {
@@ -6212,7 +6133,7 @@ kbd {
   }
 }
 
-/* Ports workspace canvas */
+/* Shared inspection canvas */
 .ports-page {
   position: absolute;
   overflow: hidden;
@@ -6737,6 +6658,65 @@ kbd {
   font-size: 12px;
 }
 
+.docker-chip-title > svg {
+  flex: none;
+}
+
+.docker-image-icon {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  color: var(--text-muted);
+  -webkit-mask: var(--image-logo) center / contain no-repeat;
+  mask: var(--image-logo) center / contain no-repeat;
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.arch-chip:is(:hover, :focus-visible, .selected) .docker-image-icon {
+  color: var(--image-brand);
+}
+
+.docker-chip-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.docker-chip-state {
+  margin-left: 0;
+  gap: 6px;
+  line-height: 16px;
+}
+
+.docker-published-ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inspector-empty {
+  margin: 8px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.docker-published-ports .secondary-button {
+  max-width: 100%;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.docker-chip-state .service-indicator {
+  flex: none;
+}
+
+.docker-page .container-inspector-heading h2 {
+  overflow-wrap: anywhere;
+}
+
 .arch-group-head > span {
   overflow-wrap: anywhere;
   min-width: 0;
@@ -6780,6 +6760,27 @@ kbd {
 }
 .port-disclosure[open] > summary {
   margin-bottom: 8px;
+}
+
+details[open] > .inspector-disclosure-body {
+  animation: inspector-section-in var(--motion-med) var(--ease) both;
+}
+
+@keyframes inspector-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  details[open] > .inspector-disclosure-body {
+    animation: none;
+  }
 }
 .port-owner-actions {
   display: flex;
@@ -7131,8 +7132,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   max-width: none;
 }
 
-.page-heading > div,
-.docker-list-controls .search-field {
+.page-heading > div {
   min-width: 0;
 }
 
@@ -7166,13 +7166,8 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 @container (max-width: 480px) {
-  .docker-list-controls,
   .page-heading {
     flex-wrap: wrap;
-  }
-
-  .docker-list-controls .search-field {
-    flex: 1 1 100%;
   }
 
   .systemd-list-controls {

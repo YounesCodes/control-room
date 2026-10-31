@@ -125,15 +125,14 @@ describe("consolidated port graph", () => {
     expect(items(build())[0].connections).toEqual([connection]);
     expect(items(build(true))).toHaveLength(2);
   });
-  it("isolates listeners, Docker publications and connections while retaining related evidence", () => {
+  it("isolates listeners and connections while retaining published bindings", () => {
     const sockets = [socket, { ...socket, id: "loopback", port: 53, localAddress: "127.0.0.1" }];
     const connections = [connection, { ...connection, key: "outbound", localPort: 49100 }];
-    const build = (kind: "listeners" | "docker" | "connections") =>
+    const build = (kind: "listeners" | "connections") =>
       items(buildPortOverview(sockets, [container], connections, "", "all", "all", kind));
     expect(build("listeners")).toHaveLength(2);
-    expect(build("docker")).toHaveLength(1);
     expect(build("connections")).toHaveLength(2);
-    expect(build("docker")[0].sockets).toEqual([socket]);
+    expect(build("listeners")[0].sockets).toEqual([socket]);
   });
   it("filters loopback and non-loopback bindings without guessing a connection's scope", () => {
     const loopback = {

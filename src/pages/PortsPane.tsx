@@ -1,3 +1,4 @@
+import type { PublishedPortSelection } from "../lib/port-inspector";
 import { Search } from "../components/MagnifierIcon";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -41,7 +42,9 @@ export function PortsPane({
   onOpenSystemd,
   onOpenContainer,
   onViewLogs,
+  focusEndpoint,
 }: {
+  focusEndpoint?: PublishedPortSelection;
   connection: SavedConnection;
   capabilities: HostCapabilities | null;
   globalSudoEnabled: boolean;
@@ -274,6 +277,22 @@ export function PortsPane({
   return (
     <section className="feature-page ports-page">
       <PortsGraph
+        focusEndpoint={focusEndpoint}
+        loading={cache.loading || containersCache.loading || containersCache.fetchedAt === null}
+        loadingLabel={
+          kind === "connections"
+            ? connectionsLoading
+              ? "Reading established connections…"
+              : undefined
+            : cache.loading || (cache.fetchedAt === null && !cache.error)
+              ? "Reading listening ports…"
+              : containersCache.loading ||
+                  (containersCache.fetchedAt === null && !containersCache.error)
+                ? "Reading Docker containers…"
+                : connectionsVisible && connectionsLoading
+                  ? "Reading established connections…"
+                  : undefined
+        }
         sockets={cache.items}
         containers={containersCache.items}
         firewall={firewall}
@@ -291,17 +310,13 @@ export function PortsPane({
             ? "Reading established connections…"
             : kind === "connections" && connectionsError
               ? "Connections unavailable"
-              : kind === "docker" && containersCache.loading
-                ? "Reading Docker containers…"
-                : kind === "docker" && containersCache.error
-                  ? "Docker mappings unavailable"
-                  : cache.loading
-                    ? "Reading listening ports…"
-                    : kind === "listeners" && cache.error
-                      ? "Listening ports unavailable"
-                      : kind === "connections" && !connections?.groups.length
-                        ? "No established connections"
-                        : "No ports match the current filters"
+              : cache.loading
+                ? "Reading listening ports…"
+                : kind === "listeners" && cache.error
+                  ? "Listening ports unavailable"
+                  : kind === "connections" && !connections?.groups.length
+                    ? "No established connections"
+                    : "No ports match the current filters"
         }
         onOpenSystemd={onOpenSystemd}
         onOpenContainer={onOpenContainer}
@@ -548,7 +563,6 @@ export function PortsPane({
                           <option value="all">All socket types</option>
                           <option value="listeners">Listeners</option>
                           <option value="connections">Established / outbound</option>
-                          <option value="docker">Docker-published</option>
                         </select>
                       </label>
                       <label>
