@@ -1,6 +1,7 @@
+import { Search } from "../components/MagnifierIcon";
 import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileClock, RefreshCw, Search } from "lucide-react";
+import { FileClock, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";

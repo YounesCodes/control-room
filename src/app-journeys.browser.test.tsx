@@ -2076,9 +2076,51 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await checkList();
     }
     await navigate("Ports");
-    for (const tab of ["Table", "Connections", "Docker"]) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
-      await checkList();
+    for (const kind of ["listeners", "connections", "docker"]) {
+      await page.getByRole("button", { name: "Filter ports", exact: true }).click();
+      await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
+      await page.getByRole("button", { name: "Close port tools" }).click();
+      await vi.waitFor(() => expect(element.querySelectorAll(".arch-chip").length).toBe(100));
+      const expectEntireGraph = () => {
+        const viewport = element.querySelector(".arch-viewport")!.getBoundingClientRect();
+        const graph = element.querySelector(".arch-content")!.getBoundingClientRect();
+        const toolbar = element.querySelector(".ports-canvas-controls")!.getBoundingClientRect();
+        expect(graph.left).toBeGreaterThanOrEqual(viewport.left + 12);
+        expect(graph.right).toBeLessThanOrEqual(viewport.right - 12);
+        expect(graph.top).toBeGreaterThanOrEqual(toolbar.bottom + 12);
+        expect(graph.bottom).toBeLessThanOrEqual(viewport.bottom - 48);
+      };
+      await vi.waitFor(expectEntireGraph);
+      const fittedHeight = element.querySelector(".arch-content")!.getBoundingClientRect().height;
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+      await vi.waitFor(() =>
+        expect(
+          element.querySelector(".arch-content")!.getBoundingClientRect().height,
+        ).toBeGreaterThan(fittedHeight),
+      );
+      await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+      await vi.waitFor(expectEntireGraph);
+      expect(element.querySelector(".arch-content")!.getBoundingClientRect().height).toBeCloseTo(
+        fittedHeight,
+        1,
+      );
+      const last = element.querySelectorAll<HTMLButtonElement>(".arch-chip")[99];
+      last.focus();
+      await vi.waitFor(() => {
+        const viewport = element.querySelector(".arch-viewport")!.getBoundingClientRect();
+        const node = last.getBoundingClientRect();
+        expect(node.top).toBeGreaterThanOrEqual(viewport.top);
+        expect(node.bottom).toBeLessThanOrEqual(viewport.bottom);
+      });
+      await userEvent.keyboard("{Enter}");
+      await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+      await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+      await vi.waitFor(() => {
+        const graph = element.querySelector(".arch-content")!.getBoundingClientRect();
+        const inspector = element.querySelector(".arch-detail")!.getBoundingClientRect();
+        expect(graph.right).toBeLessThanOrEqual(inspector.left - 12);
+      });
+      await page.getByRole("button", { name: "Close details" }).click();
     }
   });
 
@@ -2394,17 +2436,259 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toHaveValue(fixtures.container.id);
   });
 
+  it("keeps the Docker whale neutral at rest and reveals blue on hover or keyboard focus", async () => {
+    await mount();
+    await navigate("Docker");
+    const docker = page.getByRole("button", { name: "Docker", exact: true });
+    const ports = page.getByRole("button", { name: "Ports", exact: true });
+    const icon = docker.element().querySelector("svg")!;
+    const color = () => getComputedStyle(icon).color;
+    await userEvent.hover(ports.element());
+    await vi.waitFor(() => expect(color()).not.toBe("rgb(2, 136, 209)"));
+    const resting = color();
+    await userEvent.hover(docker.element());
+    await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
+    await userEvent.hover(ports.element());
+    await vi.waitFor(() => expect(color()).toBe(resting));
+    await userEvent.keyboard("{Tab}");
+    (docker.element() as HTMLElement).focus();
+    await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
+  });
+
+  it("inspects listeners, Docker mappings, and remote connections on one full Ports canvas", async () => {
+    await page.viewport(1440, 900);
+    overrides.set("list_ports", () => [
+      {
+        ...fixtures.socket,
+        id: "web",
+        port: 443,
+        systemdUnit: "nginx.service",
+        processName: "nginx",
+      },
+      {
+        ...fixtures.socket,
+        id: "monitor",
+        port: 9100,
+        systemdUnit: "monitor.service",
+        processName: "monitor",
+      },
+      { ...fixtures.socket, id: "ssh", port: 22, systemdUnit: "sshd.service", processName: "sshd" },
+      {
+        ...fixtures.socket,
+        id: "database",
+        port: 5432,
+        localAddress: "127.0.0.1",
+        systemdUnit: "postgresql.service",
+        processName: "postgres",
+      },
+      {
+        ...fixtures.socket,
+        id: "dns",
+        port: 53,
+        protocol: "udp",
+        localAddress: "127.0.0.53",
+        systemdUnit: "systemd-resolved.service",
+        processName: "systemd-resolve",
+      },
+      {
+        ...fixtures.socket,
+        id: "container",
+        port: 8080,
+        processName: "docker-proxy",
+        systemdUnit: null,
+      },
+    ]);
+    overrides.set("list_containers", () => [
+      {
+        ...fixtures.container,
+        name: "gateway-1",
+        image: "nginx:stable",
+        ports: "0.0.0.0:8080->80/tcp",
+        composeProject: "edge",
+        composeService: "gateway",
+      },
+    ]);
+    overrides.set("inspect_connections", () => ({
+      groups: [
+        {
+          key: "web-peers",
+          protocol: "tcp",
+          localPort: 443,
+          processName: "nginx",
+          processId: 742,
+          systemdUnit: "nginx.service",
+          established: 12,
+          remoteAddressCount: 3,
+          remotes: [
+            { address: "203.0.113.9", count: 8 },
+            { address: "198.51.100.12", count: 3 },
+            { address: "192.0.2.8", count: 1 },
+          ],
+        },
+      ],
+      totalEstablished: 12,
+      truncated: false,
+      collectedAt: new Date().toISOString(),
+    }));
+    overrides.set("inspect_firewall", () => ({
+      backend: "ufw",
+      available: true,
+      active: true,
+      defaultIncoming: "deny",
+      rules: [
+        {
+          to: "443/tcp",
+          port: 443,
+          protocol: "tcp",
+          action: "ALLOW",
+          from: "Anywhere",
+          ipv6: false,
+        },
+      ],
+      collectedAt: new Date().toISOString(),
+    }));
+    await mount();
+    await navigate("Ports");
+    await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
+    expect(element.querySelectorAll(".arch-chip")).toHaveLength(6);
+    expect(element.querySelector(".owner-container .lucide-container")).toBeTruthy();
+    // Every orthogonal segment must stay outside unrelated owner cards.
+    const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
+    const rightmost = Math.max(...cards.map((card) => card.offsetLeft));
+    const finalColumn = cards.filter((card) => card.offsetLeft === rightmost);
+    expect(finalColumn.length).toBeGreaterThan(1);
+    const firstOnFinalColumn = finalColumn.reduce((first, card) =>
+      card.offsetTop < first.offsetTop ? card : first,
+    );
+    const paths = [...element.querySelectorAll(".arch-links path")];
+    expect(paths).toHaveLength(cards.length);
+    for (const [index, path] of paths.entries()) {
+      let x = 0,
+        y = 0;
+      const segments: number[][] = [];
+      for (const command of path
+        .getAttribute("d")!
+        .matchAll(/([MHV])(-?[\d.]+)(?:,(-?[\d.]+))?/g)) {
+        const nextX = command[1] === "V" ? x : Number(command[2]);
+        const nextY =
+          command[1] === "M" ? Number(command[3]) : command[1] === "V" ? Number(command[2]) : y;
+        if (command[1] !== "M") segments.push([x, y, nextX, nextY]);
+        x = nextX;
+        y = nextY;
+      }
+      const target = cards[index];
+      const lastInColumn = !cards.some(
+        (card) => card.offsetLeft === target.offsetLeft && card.offsetTop > target.offsetTop,
+      );
+      const entersTop = lastInColumn || target === firstOnFinalColumn;
+      expect(x).toBe(target.offsetLeft + (entersTop ? target.offsetWidth / 2 : 0));
+      expect(y).toBe(target.offsetTop + (entersTop ? 0 : 20));
+      for (const card of cards) {
+        const left = card.offsetLeft,
+          right = left + card.offsetWidth;
+        const top = card.offsetTop,
+          bottom = top + card.offsetHeight;
+        for (const [x1, y1, x2, y2] of segments) {
+          const intersects =
+            Math.max(x1, x2) > left + 0.5 &&
+            Math.min(x1, x2) < right - 0.5 &&
+            Math.max(y1, y2) > top + 0.5 &&
+            Math.min(y1, y2) < bottom - 0.5;
+          expect(intersects).toBe(false);
+        }
+      }
+    }
+    expect(
+      element.querySelector(".ports-canvas-controls")!.getBoundingClientRect().height,
+    ).toBeLessThan(50);
+    expect(element.querySelector(".ports-canvas-status")).toBeNull();
+    const summary = page.getByTitle(/Last collected at/);
+    expect(summary.element().getAttribute("title")).toContain("12 active connections");
+    await summary.click();
+    expect(element.querySelector("#ports-tools")).toBeNull();
+
+    const graph = element.querySelector(".ports-page")!;
+    expect((await axe.run(graph)).violations).toEqual([]);
+    await page.screenshot({ path: "../test-results/ports-graph-full.png" });
+    await page.getByRole("button", { name: "Find ports", exact: true }).click();
+    await page.getByRole("textbox", { name: "Search ports" }).fill("443");
+    const searchField = element.querySelector<HTMLElement>(".ports-search-field")!;
+    const searchPanel = element.querySelector<HTMLElement>("#ports-tools")!;
+    expect(searchPanel.querySelectorAll("button")).toHaveLength(1);
+    expect(searchPanel.getBoundingClientRect().width).toBe(
+      searchField.getBoundingClientRect().width,
+    );
+    expect(searchPanel.getBoundingClientRect().height).toBe(
+      searchField.getBoundingClientRect().height,
+    );
+    expect(searchField.querySelector("button[aria-label='Clear search']")).toBeTruthy();
+    expect(searchField.scrollWidth).toBeLessThanOrEqual(searchField.clientWidth + 1);
+    expect((await axe.run(element.querySelector("#ports-tools")!)).violations).toEqual([]);
+    await page.screenshot({ path: "../test-results/ports-search-controls.png" });
+    await page.getByRole("button", { name: "Clear search", exact: true }).click();
+    await page.getByRole("button", { name: "Filter ports", exact: true }).click();
+    await page.getByRole("combobox", { name: "Protocol filter" }).selectOptions("tcp");
+    await expect.element(page.getByRole("button", { name: "Reset filters" })).toBeEnabled();
+    await page.screenshot({ path: "../test-results/ports-filter-controls.png" });
+    await page.getByRole("button", { name: "Reset filters" }).click();
+    await expect.element(page.getByRole("button", { name: "Reset filters" })).toBeDisabled();
+    await page.getByRole("button", { name: "Close port tools" }).click();
+    await page.getByRole("button", { name: /12 established/ }).click();
+    await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+    await page.getByText("12 established · Remote endpoints", { exact: true }).click();
+    await expect.element(page.getByText("203.0.113.9", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "../test-results/ports-graph-inspector.png" });
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: /8080.*80/ }).click();
+    await page.getByText("Container & Compose", { exact: true }).click();
+    await expect.element(page.getByText("nginx:stable", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
+    async function checkInspectorLayout() {
+      const inspector = element.querySelector<HTMLElement>(".arch-detail")!;
+      const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
+      const header = inspector.querySelector("header")!;
+      const actions = inspector.querySelector(".detail-actions")!;
+      const beforeHeader = header.getBoundingClientRect().top;
+      const beforeActions = actions.getBoundingClientRect().bottom;
+      body.scrollTop = body.scrollHeight;
+      expect(header.getBoundingClientRect().top).toBe(beforeHeader);
+      expect(actions.getBoundingClientRect().bottom).toBe(beforeActions);
+      expect(getComputedStyle(inspector).overflowY).toBe("hidden");
+      expect(getComputedStyle(body, "::-webkit-scrollbar").width).toBe("8px");
+      expect(getComputedStyle(body, "::-webkit-scrollbar-button").display).toBe("none");
+      expect(body.scrollWidth).toBeLessThanOrEqual(body.clientWidth + 1);
+      expect(actions.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        inspector.getBoundingClientRect().bottom,
+      );
+      expect((await axe.run(inspector)).violations).toEqual([]);
+    }
+    await page.viewport(960, 640);
+    await checkInspectorLayout();
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: /443.*Listening/ }).click();
+    await page.getByText("Host firewall policy", { exact: true }).click();
+    await page.getByText("Socket diagnostics", { exact: true }).click();
+    await expect.element(page.getByText("UFW: allowed", { exact: true })).toBeVisible();
+    await checkInspectorLayout();
+    const body = element.querySelector<HTMLElement>(".port-inspector-body")!;
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+    await page.screenshot({ path: "../test-results/ports-listener-inspector-small.png" });
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: /12 established/ }).click();
+    await checkInspectorLayout();
+  });
+
   it("follows a known port owner to Systemd and reads connection and firewall uncertainty", async () => {
     await mount();
     await navigate("Ports");
-    await page.getByRole("tab", { name: "Table" }).click();
-    await page.getByRole("button", { name: /443/ }).click();
+    await page.getByRole("button", { name: /443.*Listening/ }).click();
     await page.getByRole("button", { name: /Open unit/ }).click();
     await expect
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
       .toBeVisible();
     await navigate("Ports");
-    await page.getByRole("tab", { name: "Connections" }).click();
+    await page.getByRole("button", { name: "Filter ports", exact: true }).click();
+    await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("connections");
     await expect.element(page.getByText(/No established/)).toBeVisible();
   });
 
@@ -2444,7 +2728,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await page.getByRole("button", { name: "Retry with sudo" }).click();
     await expect.element(page.getByRole("dialog", { name: "Sudo required" })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect
+      .element(page.getByRole("dialog", { name: "Sudo required" }))
+      .not.toBeInTheDocument();
+    await expect.element(page.getByRole("button", { name: "Retry with sudo" })).toBeVisible();
+    await page.getByRole("button", { name: "Retry with sudo" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect.element(page.getByRole("button", { name: "Retry with sudo" })).toBeVisible();
     expect(
       native.invoke.mock.calls.filter(
         ([command, args]) => command === "inspect_firewall" && args.sudoPassword,
