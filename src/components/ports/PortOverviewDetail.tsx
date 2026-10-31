@@ -1,3 +1,4 @@
+import { InspectorDisclosure } from "../InspectorDisclosure";
 import { Container, FileClock, Server } from "lucide-react";
 import { exposureLabel, firewallForSocket, socketExposure } from "../../lib/port-inspector";
 import type { PortOverviewItem } from "../../lib/port-overview";
@@ -93,8 +94,11 @@ export function PortOverviewDetail({
           </>
         )}
         {!!item.connections.length && (
-          <details className="port-disclosure" open={!item.sockets.length && !item.bindings.length}>
-            <summary>{count} established · Remote endpoints</summary>
+          <InspectorDisclosure
+            className="port-disclosure"
+            open={!item.sockets.length && !item.bindings.length}
+            title={`${count} established · Remote endpoints`}
+          >
             {item.connections.map((connection) => (
               <section key={connection.key}>
                 <dl className="detail-list">
@@ -137,10 +141,9 @@ export function PortOverviewDetail({
                 )}
               </section>
             ))}
-          </details>
+          </InspectorDisclosure>
         )}
-        <details className="port-disclosure">
-          <summary>Host firewall policy</summary>
+        <InspectorDisclosure title="Host firewall policy">
           <dl className="detail-list">
             <div>
               <dt>Backend</dt>
@@ -164,10 +167,9 @@ export function PortOverviewDetail({
             firewalls can apply separately. A missing port rule does not prove that traffic is
             blocked.
           </p>
-        </details>
+        </InspectorDisclosure>
         {!!item.sockets.length && (
-          <details className="port-disclosure">
-            <summary>Socket diagnostics</summary>
+          <InspectorDisclosure title="Socket diagnostics">
             {item.sockets.map((socket) => (
               <dl className="detail-list" key={socket.id}>
                 <div className="inspector-wide-field">
@@ -204,7 +206,7 @@ export function PortOverviewDetail({
                 )}
               </dl>
             ))}
-          </details>
+          </InspectorDisclosure>
         )}
       </div>
       <div className="detail-actions">

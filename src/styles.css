@@ -4162,6 +4162,17 @@ dd {
 
 .container-inspector-heading > div {
   min-width: 0;
+  flex: 1;
+}
+
+.container-inspector-heading > .docker-image-icon,
+.container-inspector-heading > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.container-inspector-heading > .docker-image-icon {
+  color: var(--image-brand);
 }
 
 .container-detail-list dd.technical {
@@ -6722,6 +6733,27 @@ kbd {
 }
 .port-disclosure[open] > summary {
   margin-bottom: 8px;
+}
+
+details[open] > .inspector-disclosure-body {
+  animation: inspector-section-in var(--motion-med) var(--ease) both;
+}
+
+@keyframes inspector-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  details[open] > .inspector-disclosure-body {
+    animation: none;
+  }
 }
 .port-owner-actions {
   display: flex;

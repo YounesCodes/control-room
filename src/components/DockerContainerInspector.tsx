@@ -1,6 +1,8 @@
+import { InspectorDisclosure } from "./InspectorDisclosure";
 import type { PublishedPortSelection } from "../lib/port-inspector";
 import { FileClock, RefreshCw } from "lucide-react";
 import { ErrorState, LoadingState } from "./PanelState";
+import { ContainerImageIcon } from "./ContainerImageIcon";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
 
 function displayTime(value: string | null) {
@@ -55,8 +57,7 @@ function Overview({ details }: { details: DockerContainerDetails }) {
           </dd>
         </div>
       </dl>
-      <details className="container-technical-details">
-        <summary>Technical identifiers</summary>
+      <InspectorDisclosure className="container-technical-details" title="Technical identifiers">
         <dl className="detail-list container-detail-list">
           <div>
             <dt>Container ID</dt>
@@ -71,7 +72,7 @@ function Overview({ details }: { details: DockerContainerDetails }) {
             <dd className="technical">{details.imageContentId || "Unknown"}</dd>
           </div>
         </dl>
-      </details>
+      </InspectorDisclosure>
     </>
   );
 }
@@ -215,6 +216,7 @@ export function DockerContainerInspector({
   return (
     <>
       <header className="container-inspector-heading">
+        <ContainerImageIcon image={details?.imageReference || summary.image} size={20} />
         <div>
           <h2>{details?.name || summary.name}</h2>
           <p>
@@ -247,22 +249,18 @@ export function DockerContainerInspector({
               <p className="inline-warning">Showing saved details. Refresh failed: {cache.error}</p>
             )}
             <Overview details={details} />
-            <details className="port-disclosure">
-              <summary>Published ports</summary>
+            <InspectorDisclosure title="Published ports">
               <Ports details={details} onOpenPort={onOpenPort} />
-            </details>
-            <details className="port-disclosure">
-              <summary>Networks</summary>
+            </InspectorDisclosure>
+            <InspectorDisclosure title="Networks">
               <Networks details={details} />
-            </details>
-            <details className="port-disclosure">
-              <summary>Mounts</summary>
+            </InspectorDisclosure>
+            <InspectorDisclosure title="Mounts">
               <Mounts details={details} />
-            </details>
-            <details className="port-disclosure">
-              <summary>Container &amp; Compose</summary>
+            </InspectorDisclosure>
+            <InspectorDisclosure title="Container &amp; Compose">
               <Metadata details={details} />
-            </details>
+            </InspectorDisclosure>
           </>
         )}
       </div>

@@ -209,6 +209,10 @@ Published ports are compact binding summaries that open the exact endpoint in
 Ports. Match the container ID, address, host port, target port, and protocol;
 report a missing publication rather than selecting another owner on the same port.
 Ports includes publications by default without a separate Docker-only filter.
+The container inspector repeats the selected image logo beside its title, using
+the same generic fallback for unknown images. Docker and Ports inspector sections
+share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
+behavior and show section content immediately when reduced motion is requested.
 
 ## Visual language
 
