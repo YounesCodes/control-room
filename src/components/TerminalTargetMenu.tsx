@@ -19,6 +19,7 @@ interface TerminalTargetMenuProps {
   groups: TerminalTargetGroup[];
   /** Rendered above the groups. Split uses it for its direction switch. */
   children?: ReactNode;
+  footer?: ReactNode;
   onClose: () => void;
   className?: string;
   /** Set by a caller that positions the menu itself rather than anchoring it. */
@@ -50,6 +51,7 @@ export function TerminalTargetMenu({
   label,
   groups,
   children,
+  footer,
   onClose,
   className,
   style,
@@ -147,6 +149,7 @@ export function TerminalTargetMenu({
           ))}
         </div>
       ))}
+      {footer}
     </div>
   );
 }

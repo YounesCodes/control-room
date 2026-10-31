@@ -28,7 +28,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit from a prebuilt release
-        uses: taiki-e/install-action@v2.87.30
+        uses: taiki-e/install-action@v2.87.32
         with:
           tool: cargo-audit
           fallback: none

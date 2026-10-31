@@ -77,7 +77,7 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     await browser.keys("exit");
     await browser.keys("Enter");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
-    await $("aria/Reconnect terminal").click();
+    await $(".terminal-workspace-pane.active .terminal-notice").$("button=Reconnect").click();
     await terminalCommand("echo CMD_RECONNECTED_OK", "CMD_RECONNECTED_OK");
     expect((await runtime()).sessionIds[0]).not.toBe(old);
   });
@@ -99,7 +99,9 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     const sockets = await ipc<ListeningSocket[]>("list_ports", { connectionId: saved.id });
     expect(sockets.some((socket) => socket.port === 22 && socket.protocol === "tcp")).toBe(true);
     await feature("Ports");
-    await $("button=Table").click();
+    await $("aria/Filter ports").click();
+    await $("[aria-label='Graph contents']").selectByAttribute("value", "listeners");
+    await $("aria/Close port tools").click();
     await browser.waitUntil(
       async () =>
         $(".feature-page")

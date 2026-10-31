@@ -1,10 +1,11 @@
+import { Search } from "./MagnifierIcon";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, RotateCw, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import {
@@ -36,6 +37,7 @@ interface TerminalPaneProps {
   onActivity?: (kind: "output" | "bell") => void;
   onProcessing?: (busy: boolean) => void;
   findRequest?: number;
+  onReconnect?: () => void;
 }
 
 interface PendingHistory {
@@ -62,6 +64,7 @@ export function TerminalPane({
   onActivity = () => undefined,
   onProcessing = () => undefined,
   findRequest = 0,
+  onReconnect,
 }: TerminalPaneProps) {
   const remote = isRemoteWorkspace(workspace) ? workspace : null;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -655,6 +658,7 @@ export function TerminalPane({
       .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
   }
 
+  const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
   return (
     <section
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
@@ -662,7 +666,15 @@ export function TerminalPane({
     >
       {(localError || workspace.reason) && (
         <div className="terminal-notice" role="status">
-          {localError ?? workspace.reason}
+          <span className="terminal-notice-message">{localError ?? workspace.reason}</span>
+          {/* The recovery action rides the notice that names the failure, so
+              an ended session is reconnectable where it died. */}
+          {terminalEnded && onReconnect && (
+            <button type="button" className="terminal-notice-action" onClick={onReconnect}>
+              <RotateCw size={13} aria-hidden="true" />
+              <span>{isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}</span>
+            </button>
+          )}
         </div>
       )}
       <div className="terminal-content">

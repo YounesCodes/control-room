@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -112,17 +112,21 @@ const containers: CachedList<DockerContainer> = {
   error: null,
 };
 
-function renderPane(capabilities: HostCapabilities | null = null, cache = sockets) {
+function renderPane(
+  capabilities: HostCapabilities | null = null,
+  cache = sockets,
+  containersCache = containers,
+) {
   const onOpenSystemd = vi.fn();
   const onOpenContainer = vi.fn();
   const onViewLogs = vi.fn();
-  render(
+  const result = render(
     <PortsPane
       connection={connection}
       capabilities={capabilities}
       globalSudoEnabled={false}
       cache={cache}
-      containersCache={containers}
+      containersCache={containersCache}
       onCacheChange={vi.fn()}
       onContainersCacheChange={vi.fn()}
       onOpenSystemd={onOpenSystemd}
@@ -130,11 +134,49 @@ function renderPane(capabilities: HostCapabilities | null = null, cache = socket
       onViewLogs={onViewLogs}
     />,
   );
-  return { onOpenSystemd, onOpenContainer, onViewLogs };
+  return { onOpenSystemd, onOpenContainer, onViewLogs, ...result };
 }
 
 describe("PortsPane", () => {
   afterEach(cleanup);
+
+  it("keeps canvas tools collapsed and preserves active filters when dismissed", async () => {
+    const user = userEvent.setup();
+    renderPane();
+    expect(screen.queryByRole("textbox", { name: "Search ports" })).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    const find = screen.getByRole("button", { name: "Find ports" });
+    await user.click(find);
+    expect(screen.queryByRole("button", { name: "Close port tools" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Search ports" }));
+    await user.type(screen.getByRole("textbox", { name: "Search ports" }), "unmatched");
+    await user.keyboard("{Escape}");
+    expect(document.activeElement).toBe(find);
+    expect(find.getAttribute("aria-pressed")).toBe("true");
+    await user.click(find);
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Search ports" }));
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Protocol filter" }), "udp");
+    await user.click(screen.getByRole("button", { name: "Close port tools" }));
+    expect(screen.getByRole("button", { name: "Filter ports" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
+    await user.click(screen.getByRole("button", { name: "Reset filters" }));
+    expect(screen.getByRole("button", { name: "Filter ports" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    await user.click(screen.getByRole("button", { name: "Close port tools" }));
+    const summary = screen.getByTitle(/Last collected at/);
+    await user.click(summary);
+    expect(document.querySelector("#ports-tools")).toBeNull();
+    expect(summary.tagName).toBe("H2");
+    expect(summary.textContent?.trim()).toBe("Ports");
+    expect(summary.title).toContain("1 listening port");
+    expect(summary.title).toContain("Last collected at");
+    expect(summary.title).toContain("12 active connections");
+  });
 
   it("keeps Windows ownership and firewall failures free of sudo prompts", async () => {
     vi.mocked(api.inspectFirewall).mockRejectedValueOnce("Permission denied by Windows");
@@ -156,17 +198,23 @@ describe("PortsPane", () => {
     expect(api.listContainers).not.toHaveBeenCalled();
   });
 
-  it("defaults to the Overview graph and navigates only through established owners", async () => {
+  it("fills the workspace with one graph and opens listener details only after selection", async () => {
     const user = userEvent.setup();
     const { onOpenSystemd, onOpenContainer, onViewLogs } = renderPane();
 
-    expect(screen.getByText(/collected at/i)).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
-    // Host root node and its owner node both render.
+    expect(screen.getByRole("region", { name: "Ports graph" })).toBeTruthy();
+    expect(screen.queryByRole("complementary", { name: "Port details" })).toBeNull();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("separator")).toBeNull();
     expect(screen.getByText("Host")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: /443/ }));
+    const listener = screen.getByRole("button", { name: /443.*Listening/ });
+    await user.click(listener);
+    const inspector = screen.getByRole("complementary", { name: "Port details" });
+    expect(within(inspector).getByText("IPV4")).toBeTruthy();
+    expect(within(inspector).getAllByText("742")[0]).toBeTruthy();
+    expect(within(inspector).getAllByText("gateway-1")[0]).toBeTruthy();
+    expect(within(inspector).getByText("proxy")).toBeTruthy();
+    expect(within(inspector).getByText("UFW: allowed")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: /Open unit/i }));
     expect(onOpenSystemd).toHaveBeenCalledWith("nginx.service");
@@ -174,16 +222,40 @@ describe("PortsPane", () => {
     expect(onOpenContainer).toHaveBeenCalledWith("container-id");
     await user.click(screen.getByRole("button", { name: /View journal/i }));
     expect(onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "nginx.service" });
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+    expect(screen.queryByRole("complementary", { name: "Port details" })).toBeNull();
+    expect(document.activeElement).toBe(listener);
   });
 
-  it("keeps a precise table view with the same owner detail", async () => {
+  it("dismisses details with Escape and closes them when filters hide the selected item", async () => {
     const user = userEvent.setup();
     renderPane();
+    await user.click(screen.getByRole("button", { name: /443.*Listening/ }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("complementary")));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /443.*Listening/ }));
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Protocol filter" }), "udp");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.getByText("No ports match the current filters")).toBeTruthy();
+  });
 
-    await user.click(screen.getByRole("tab", { name: "Table" }));
-    await user.click(screen.getByRole("button", { name: /443/ }));
-    // Owner label in the row plus the container row in the detail panel.
-    expect(screen.getAllByText("gateway-1")).toHaveLength(2);
+  it("shows Docker mappings and Compose details in the graph inspector", async () => {
+    const user = userEvent.setup();
+    const { onOpenContainer, onViewLogs } = renderPane();
+    await user.click(screen.getByRole("button", { name: "Filter ports" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Graph contents" }), "docker");
+    await user.click(screen.getByRole("button", { name: /443.*8443/ }));
+    const inspector = screen.getByRole("complementary");
+    expect(within(inspector).getByText("gateway:latest")).toBeTruthy();
+    expect(within(inspector).getByText("proxy")).toBeTruthy();
+    expect(within(inspector).getByText("gateway")).toBeTruthy();
+    expect(within(inspector).getByText("0.0.0.0:443 → 8443/tcp")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Open container" }));
+    expect(onOpenContainer).toHaveBeenCalledWith("container-id");
+    await user.click(screen.getByRole("button", { name: "View logs" }));
+    expect(onViewLogs).toHaveBeenCalledWith({ type: "docker", id: "container-id" });
   });
 
   it("offers a one-shot sudo retry after firewalld denies authorization", async () => {
@@ -219,12 +291,59 @@ describe("PortsPane", () => {
     expect(inspectFirewall).toHaveBeenCalledTimes(2);
   });
 
-  it("aggregates established connections in the Connections tab", async () => {
+  it("loads established connections alongside listeners and exposes remote endpoints", async () => {
+    const user = userEvent.setup();
+    const { onOpenSystemd } = renderPane();
+    await user.click(await screen.findByRole("button", { name: /12 established/ }));
+    const inspector = screen.getByRole("complementary");
+    expect(within(inspector).getByText("203.0.113.9")).toBeTruthy();
+    expect(within(inspector).getByText("12")).toBeTruthy();
+    expect(within(inspector).getByText("3")).toBeTruthy();
+    expect(within(inspector).getAllByText("742")[0]).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Open unit" }));
+    expect(onOpenSystemd).toHaveBeenCalledWith("nginx.service");
+    await user.click(screen.getByRole("button", { name: "Find ports" }));
+    await user.type(screen.getByRole("textbox", { name: "Search ports" }), "203.0.113.9");
+    expect(screen.getByRole("button", { name: /12 established/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /443.*Listening/ })).toBeTruthy();
+  });
+
+  it("keeps saved connection evidence visible and reports a refresh failure", async () => {
     const user = userEvent.setup();
     renderPane();
+    await screen.findByRole("button", { name: /12 established/ });
+    vi.mocked(api.inspectConnections).mockRejectedValueOnce("SSH disconnected");
+    await user.click(screen.getByRole("button", { name: "Refresh ports" }));
+    expect(
+      await screen.findByText(/Showing saved connections. Refresh failed: SSH disconnected/),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /12 established/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry connections" })).toBeTruthy();
+  });
 
-    await user.click(screen.getByRole("tab", { name: "Connections" }));
-    expect(await screen.findByText(/established connection/i)).toBeTruthy();
-    expect(screen.getByText(/12 est · 3 addr/)).toBeTruthy();
+  it("keeps Docker and connection data available when the listener read fails", async () => {
+    renderPane(null, { ...sockets, items: [], error: "Listener permission denied" });
+    expect(screen.getByRole("region", { name: "Ports graph" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /443.*8443/ })).toBeTruthy();
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Show established connections" }));
+    await screen.findByRole("button", { name: /12 established/ });
+    expect(
+      screen.getByText(/Listening ports unavailable: Listener permission denied/),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry ports" })).toBeTruthy();
+  });
+
+  it("reads Docker independently when the initial listener request fails", async () => {
+    vi.mocked(api.listPorts).mockRejectedValueOnce("Listener read failed");
+    vi.mocked(api.listContainers).mockClear().mockResolvedValueOnce(containers.items);
+    renderPane(
+      null,
+      { ...sockets, items: [], fetchedAt: null },
+      { ...containers, items: [], fetchedAt: null },
+    );
+    await waitFor(() => expect(api.listContainers).toHaveBeenCalledExactlyOnceWith(connection.id));
+    expect(api.inspectConnections).toHaveBeenCalledWith(connection.id);
   });
 });

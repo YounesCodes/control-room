@@ -1,7 +1,8 @@
+import { Search } from "../components/MagnifierIcon";
 import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { DockerContainerInspector } from "../components/DockerContainerInspector";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
