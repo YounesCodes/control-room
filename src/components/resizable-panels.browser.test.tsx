@@ -212,7 +212,6 @@ function Fixture() {
             }
           />
           <div className="sidebar-footer">
-            <button className="sidebar-secondary">Local terminal</button>
             <button className="sidebar-primary">
               <Plus size={16} /> Add connection
             </button>
