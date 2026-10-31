@@ -169,7 +169,9 @@ their own owner and source records; this layout relationship does not establish
 service ownership. Keep ambiguous matches and explicit conflicting units separate.
 Sort unrelated peer-only groups after listening owners.
 Keep cards compact: port, protocol, binding scope, Docker target and peer count.
-Keep process, Compose and per-socket information in expandable inspector sections.
+Keep process and per-socket information in expandable inspector sections.
+Show container ownership and published bindings in Ports; link to Docker for
+image, Compose, lifecycle, network, mount, and container log details.
 Show reachability as Not tested. Host firewall policy is separate evidence and
 must never label a card as reachable or blocked. Selecting a port or connection
 smoothly zooms and centers it in the graph area beside the inspector, then
@@ -181,7 +183,7 @@ the camera transition. Reduced motion applies the framing immediately. Keep the
 inspector heading and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin
 scrollbar that fades when the body is not hovered. Keep every binding,
-firewall, ownership, endpoint, and Compose field available there, with the
+firewall, ownership, and endpoint field available there, with the
 existing service, container, and log actions. Fit the entire graph on initial
 load, filtering, resize, and Fit to view, leaving space for controls and an open
 inspector. Keep the default and reset framing identical. Keyboard focus
@@ -198,6 +200,10 @@ the compact toolbar. Filters offer container state and an ungrouped layout.
 Keep counts and collection time in the heading tooltip. Container details use
 expandable sections in a scrolling body, with Refresh and View logs fixed outside
 that body. Follow a container opened from Ports directly to its node and inspector.
+Published ports are compact binding summaries that open the exact endpoint in
+Ports. Match the container ID, address, host port, target port, and protocol;
+report a missing publication rather than selecting another owner on the same port.
+Ports includes publications by default without a separate Docker-only filter.
 
 ## Visual language
 

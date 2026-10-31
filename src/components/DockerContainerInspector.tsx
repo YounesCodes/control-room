@@ -1,3 +1,4 @@
+import type { PublishedPortSelection } from "../lib/port-inspector";
 import { FileClock, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "./PanelState";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
@@ -75,20 +76,35 @@ function Overview({ details }: { details: DockerContainerDetails }) {
   );
 }
 
-function Ports({ details }: { details: DockerContainerDetails }) {
+function Ports({
+  details,
+  onOpenPort,
+}: {
+  details: DockerContainerDetails;
+  onOpenPort?: (port: PublishedPortSelection) => void;
+}) {
   if (!details.publishedPorts.length) return <EmptyState title="No published ports" />;
   return (
-    <div className="inspector-record-list">
+    <div className="docker-published-ports">
       {details.publishedPorts.map((port) => (
-        <div
-          className="inspector-record"
-          key={`${port.hostAddress}:${port.hostPort}:${port.containerPort}`}
+        <button
+          type="button"
+          className="secondary-button"
+          key={port.hostAddress + ":" + port.hostPort + ":" + port.containerPort}
+          aria-label={
+            "Open " +
+            (port.hostAddress.includes(":") ? "[" + port.hostAddress + "]" : port.hostAddress) +
+            ":" +
+            port.hostPort +
+            " → " +
+            port.containerPort +
+            " in Ports"
+          }
+          onClick={() => onOpenPort?.({ ...port, containerId: details.id })}
         >
-          <strong>
-            {port.hostAddress}:{port.hostPort}
-          </strong>
-          <span>to {port.containerPort}</span>
-        </div>
+          {port.hostAddress.includes(":") ? "[" + port.hostAddress + "]" : port.hostAddress}:
+          {port.hostPort} → {port.containerPort}
+        </button>
       ))}
     </div>
   );
@@ -179,7 +195,9 @@ export function DockerContainerInspector({
   onRetryWithSudo,
   onViewLogs,
   windowsHost = false,
+  onOpenPort,
 }: {
+  onOpenPort?: (port: PublishedPortSelection) => void;
   summary: DockerContainer;
   cache?: CachedValue<DockerContainerDetails>;
   onRefresh: () => void;
@@ -231,7 +249,7 @@ export function DockerContainerInspector({
             <Overview details={details} />
             <details className="port-disclosure">
               <summary>Published ports</summary>
-              <Ports details={details} />
+              <Ports details={details} onOpenPort={onOpenPort} />
             </details>
             <details className="port-disclosure">
               <summary>Networks</summary>

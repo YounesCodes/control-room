@@ -1,3 +1,4 @@
+import type { PublishedPortSelection } from "../lib/port-inspector";
 import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -37,7 +38,9 @@ export function DockerPane({
   onDetailsCacheChange,
   onViewLogs,
   focusId = null,
+  onOpenPort,
 }: {
+  onOpenPort?: (port: PublishedPortSelection) => void;
   connection: SavedConnection;
   windowsHost?: boolean;
   cache: CachedList<DockerContainer>;
@@ -243,6 +246,7 @@ export function DockerPane({
           selected && (
             <DockerContainerInspector
               key={selected.id}
+              onOpenPort={onOpenPort}
               summary={selected}
               windowsHost={windowsHost}
               cache={detailsCache[selected.id]}

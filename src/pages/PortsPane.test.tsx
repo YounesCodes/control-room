@@ -213,7 +213,7 @@ describe("PortsPane", () => {
     expect(within(inspector).getByText("IPV4")).toBeTruthy();
     expect(within(inspector).getAllByText("742")[0]).toBeTruthy();
     expect(within(inspector).getAllByText("gateway-1")[0]).toBeTruthy();
-    expect(within(inspector).getByText("proxy")).toBeTruthy();
+    expect(within(inspector).queryByText("proxy")).toBeNull();
     expect(within(inspector).getByText("UFW: allowed")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: /Open unit/i }));
@@ -241,21 +241,21 @@ describe("PortsPane", () => {
     expect(screen.getByText("No ports match the current filters")).toBeTruthy();
   });
 
-  it("shows Docker mappings and Compose details in the graph inspector", async () => {
+  it("keeps container ownership and bindings in Ports with a link to Docker", async () => {
     const user = userEvent.setup();
     const { onOpenContainer, onViewLogs } = renderPane();
     await user.click(screen.getByRole("button", { name: "Filter ports" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Graph contents" }), "docker");
+    expect(screen.queryByRole("option", { name: "Docker-published" })).toBeNull();
     await user.click(screen.getByRole("button", { name: /443.*8443/ }));
     const inspector = screen.getByRole("complementary");
-    expect(within(inspector).getByText("gateway:latest")).toBeTruthy();
-    expect(within(inspector).getByText("proxy")).toBeTruthy();
-    expect(within(inspector).getByText("gateway")).toBeTruthy();
+    expect(within(inspector).queryByText("gateway:latest")).toBeNull();
+    expect(within(inspector).queryByText("proxy")).toBeNull();
+    expect(within(inspector).getByText("gateway-1")).toBeTruthy();
     expect(within(inspector).getByText("0.0.0.0:443 → 8443/tcp")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Open container" }));
     expect(onOpenContainer).toHaveBeenCalledWith("container-id");
-    await user.click(screen.getByRole("button", { name: "View logs" }));
-    expect(onViewLogs).toHaveBeenCalledWith({ type: "docker", id: "container-id" });
+    expect(screen.queryByRole("button", { name: "View logs" })).toBeNull();
+    expect(onViewLogs).not.toHaveBeenCalled();
   });
 
   it("offers a one-shot sudo retry after firewalld denies authorization", async () => {

@@ -66,6 +66,37 @@ const details: DockerContainerDetails = {
 describe("DockerContainerInspector", () => {
   afterEach(cleanup);
 
+  it("opens the exact published binding in Ports", async () => {
+    const onOpenPort = vi.fn();
+    render(
+      <DockerContainerInspector
+        summary={summary}
+        cache={{
+          value: {
+            ...details,
+            publishedPorts: [{ hostAddress: "::", hostPort: 443, containerPort: "8443/udp" }],
+          },
+          fetchedAt: Date.now(),
+          loading: false,
+          error: null,
+        }}
+        onRefresh={vi.fn()}
+        onRetryWithSudo={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenPort={onOpenPort}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Published ports", { selector: "summary" }));
+    await user.click(screen.getByRole("button", { name: "Open [::]:443 → 8443/udp in Ports" }));
+    expect(onOpenPort).toHaveBeenCalledExactlyOnceWith({
+      containerId: id,
+      hostAddress: "::",
+      hostPort: 443,
+      containerPort: "8443/udp",
+    });
+  });
+
   it("shows typed sections and never renders sensitive Docker fields", async () => {
     const user = userEvent.setup();
     render(
@@ -83,7 +114,9 @@ describe("DockerContainerInspector", () => {
     expect(screen.getByText("Previous stop")).toBeTruthy();
     expect(screen.getByText("sha256:abc")).toBeTruthy();
     await user.click(screen.getByText("Published ports", { selector: "summary" }));
-    expect(screen.getByText("0.0.0.0:443")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Open 0.0.0.0:443 → 8443/tcp in Ports" }),
+    ).toBeTruthy();
     await user.click(screen.getByText("Networks", { selector: "summary" }));
     expect(screen.getByText("proxy_default")).toBeTruthy();
     await user.click(screen.getByText("Mounts", { selector: "summary" }));

@@ -1,3 +1,4 @@
+import type { PublishedPortSelection } from "./lib/port-inspector";
 import { Search } from "./components/MagnifierIcon";
 import { DockerIcon } from "./components/DockerIcon";
 import {
@@ -241,6 +242,16 @@ export function App() {
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [portFocus, setPortFocus] = useState<
+    (PublishedPortSelection & { workspaceId: string }) | null
+  >(null);
+  useEffect(() => {
+    if (
+      portFocus &&
+      workspaces.find((workspace) => workspace.id === portFocus.workspaceId)?.view !== "ports"
+    )
+      setPortFocus(null);
+  }, [workspaces, portFocus]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState(emptyEnvironment);
@@ -2552,6 +2563,9 @@ export function App() {
                     ))}
                   {activeRemoteWorkspace.view === "ports" && (
                     <PortsPane
+                      focusEndpoint={
+                        portFocus?.workspaceId === activeRemoteWorkspace.id ? portFocus : undefined
+                      }
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       capabilities={hostCapabilities[activeConnection.id] ?? null}
@@ -2579,6 +2593,10 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "docker" && (
                     <DockerPane
+                      onOpenPort={(endpoint) => {
+                        setPortFocus({ ...endpoint, workspaceId: activeRemoteWorkspace.id });
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
+                      }}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       windowsHost={windowsWorkspace}

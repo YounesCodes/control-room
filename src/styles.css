@@ -6635,6 +6635,19 @@ kbd {
   margin-left: 0;
 }
 
+.docker-published-ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.docker-published-ports .secondary-button {
+  max-width: 100%;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .docker-chip-state .service-indicator {
   flex: none;
 }

@@ -28,9 +28,11 @@ Details can include:
 - exit code and lifecycle timestamps
 - health status and failing streak
 - restart policy and maximum retries
-- published ports and network addresses
+- published port summaries and network addresses
 - mount destinations
 - validated Compose project, service, number, and one-off facts
+
+Select a published binding to open its endpoint in [Ports](/control-room/inspection/ports/), including binding, connection, and firewall evidence. If the publication is absent from the Ports snapshot, the view reports it instead of selecting another listener.
 
 The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). On Linux, if Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).
 

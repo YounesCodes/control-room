@@ -165,35 +165,6 @@ export function PortOverviewDetail({
             blocked.
           </p>
         </details>
-        {!!containers.length && (
-          <details className="port-disclosure">
-            <summary>Container &amp; Compose</summary>
-            {containers.map((container) => (
-              <dl className="detail-list" key={container.id}>
-                <div>
-                  <dt>Container</dt>
-                  <dd>{container.name}</dd>
-                </div>
-                <div className="inspector-wide-field">
-                  <dt>Image</dt>
-                  <dd className="technical">{container.image}</dd>
-                </div>
-                {container.composeProject && (
-                  <div>
-                    <dt>Project</dt>
-                    <dd>{container.composeProject}</dd>
-                  </div>
-                )}
-                {container.composeService && (
-                  <div>
-                    <dt>Service</dt>
-                    <dd>{container.composeService}</dd>
-                  </div>
-                )}
-              </dl>
-            ))}
-          </details>
-        )}
         {!!item.sockets.length && (
           <details className="port-disclosure">
             <summary>Socket diagnostics</summary>
@@ -265,13 +236,6 @@ export function PortOverviewDetail({
               onClick={() => onOpenContainer(container.id)}
             >
               <Container size={14} /> Open container
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => onViewLogs({ type: "docker", id: container.id })}
-            >
-              <FileClock size={14} /> View logs
             </button>
           </span>
         ))}

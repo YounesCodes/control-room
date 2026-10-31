@@ -117,12 +117,14 @@ function renderPane(
   capabilities: HostCapabilities | null = null,
   cache = sockets,
   containersCache = containers,
+  focusEndpoint?: import("../lib/port-inspector").PublishedPortSelection,
 ) {
   const onOpenSystemd = vi.fn();
   const onOpenContainer = vi.fn();
   const onViewLogs = vi.fn();
   const result = render(
     <PortsPane
+      focusEndpoint={focusEndpoint}
       connection={connection}
       capabilities={capabilities}
       globalSudoEnabled={false}
@@ -141,6 +143,39 @@ function renderPane(
 afterEach(() => {
   cleanup();
   document.getElementById("camera-motion-override")?.remove();
+});
+
+it("selects the requested container binding without confusing the same port on another owner", async () => {
+  await page.viewport(1280, 800);
+  const target = {
+    ...containers.items[0],
+    id: "target-container",
+    name: "dns",
+    ports: "[::]:443->53/udp",
+  };
+  renderPane(
+    null,
+    sockets,
+    { ...containers, items: [...containers.items, target] },
+    { containerId: target.id, hostAddress: "::", hostPort: 443, containerPort: "53/udp" },
+  );
+  const inspector = await screen.findByRole("complementary");
+  expect(within(inspector).getByRole("heading", { name: "443 / UDP" })).toBeTruthy();
+  expect(within(inspector).getByText("[::]:443 → 53/udp")).toBeTruthy();
+  expect(within(inspector).getByText("dns")).toBeTruthy();
+  await page.getByRole("button", { name: "Close details" }).click();
+  expect(screen.queryByRole("complementary")).toBeNull();
+});
+
+it("reports a missing publication instead of opening an unrelated listener on the same port", async () => {
+  renderPane(null, sockets, containers, {
+    containerId: "missing",
+    hostAddress: "0.0.0.0",
+    hostPort: 443,
+    containerPort: "8443/tcp",
+  });
+  expect(await screen.findByRole("status")).toBeTruthy();
+  expect(screen.queryByRole("complementary")).toBeNull();
 });
 
 function camera() {
@@ -517,8 +552,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(chips()).toHaveLength(4);
   expect(screen.getByRole("button", { name: /49100/ }).getAttribute("data-secondary")).toBe("true");
   await page.getByRole("button", { name: "Filter ports" }).click();
-  await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("docker");
-  expect(chips()).toHaveLength(1);
+  expect(screen.queryByRole("option", { name: "Docker-published" })).toBeNull();
   await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("listeners");
   expect(
     screen

@@ -2084,7 +2084,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await navigate(view);
       await checkList();
     }
-    for (const kind of ["containers", "listeners", "connections", "docker"]) {
+    for (const kind of ["containers", "listeners", "connections"]) {
       await navigate(kind === "containers" ? "Docker" : "Ports");
       if (kind !== "containers") {
         await page.getByRole("button", { name: "Filter ports", exact: true }).click();
@@ -2455,6 +2455,24 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toHaveValue(fixtures.container.id);
   });
 
+  it("follows a Docker publication to Ports and returns to its container", async () => {
+    overrides.set("inspect_container", () => ({
+      ...fixtures.containerDetails,
+      publishedPorts: [{ hostAddress: "0.0.0.0", hostPort: 443, containerPort: "443/tcp" }],
+    }));
+    await mount();
+    await navigate("Docker");
+    await page.getByRole("button", { name: /fixture-web/ }).click();
+    await page.getByText("Published ports", { exact: true }).click();
+    await page.getByRole("button", { name: "Open 0.0.0.0:443 → 443/tcp in Ports" }).click();
+    await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+    await expect.element(page.getByRole("heading", { name: "443 / TCP" })).toBeVisible();
+    await page.getByRole("button", { name: "Open container" }).click();
+    await expect
+      .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
+      .toBeVisible();
+  });
+
   it("keeps the Docker whale neutral at rest and reveals blue on hover or keyboard focus", async () => {
     await mount();
     await navigate("Docker");
@@ -2659,8 +2677,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/ports-graph-inspector.png" });
     await page.getByRole("button", { name: "Close details" }).click();
     await page.getByRole("button", { name: /8080.*80/ }).click();
-    await page.getByText("Container & Compose", { exact: true }).click();
-    await expect.element(page.getByText("nginx:stable", { exact: true })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Open container" })).toBeVisible();
+    expect(element.querySelector(".arch-detail")!.textContent).not.toContain("nginx:stable");
     await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
     async function checkInspectorLayout() {
       const inspector = element.querySelector<HTMLElement>(".arch-detail")!;

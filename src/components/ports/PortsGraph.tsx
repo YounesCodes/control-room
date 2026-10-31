@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import type { PublishedPortSelection } from "../../lib/port-inspector";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Container, Cpu, HelpCircle, Server } from "lucide-react";
 import { InspectionGraph } from "../InspectionGraph";
 import { PortOverviewDetail } from "./PortOverviewDetail";
@@ -89,7 +90,11 @@ export function PortsGraph({
   onOpenSystemd,
   onOpenContainer,
   onViewLogs,
+  focusEndpoint,
+  loading = false,
 }: {
+  focusEndpoint?: PublishedPortSelection;
+  loading?: boolean;
   sockets: ListeningSocket[];
   containers: DockerContainer[];
   firewall: FirewallStatus | null;
@@ -109,6 +114,7 @@ export function PortsGraph({
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const handledFocus = useRef<PublishedPortSelection | undefined>(undefined);
   const groups = useMemo(
     () =>
       buildPortOverview(
@@ -125,6 +131,24 @@ export function PortsGraph({
     [sockets, containers, connections, search, protocol, exposure, kind, sort, showConnections],
   );
   const selected = groups.flatMap((group) => group.items).find((item) => item.id === selectedId);
+
+  const focused = groups
+    .flatMap((group) => group.items)
+    .find((item) =>
+      item.bindings.some(
+        (binding) =>
+          binding.container.id === focusEndpoint?.containerId &&
+          binding.hostAddress === focusEndpoint.hostAddress &&
+          binding.hostPort === focusEndpoint.hostPort &&
+          binding.containerPort + "/" + binding.protocol === focusEndpoint.containerPort,
+      ),
+    );
+  useEffect(() => {
+    if (focused && focusEndpoint !== handledFocus.current) {
+      handledFocus.current = focusEndpoint;
+      setSelectedId(focused.id);
+    }
+  }, [focused?.id, focusEndpoint]);
 
   const graphGroups = useMemo(
     () =>
@@ -149,7 +173,16 @@ export function PortsGraph({
       hostDescription={[capabilities?.osName, capabilities?.osVersion].filter(Boolean).join(" ")}
       graphLabel="Ports graph"
       emptyMessage={emptyMessage}
-      toolbar={toolbar}
+      toolbar={
+        <>
+          {toolbar}
+          {focusEndpoint && focusEndpoint !== handledFocus.current && !focused && !loading && (
+            <p className="inline-warning" role="status">
+              Published endpoint was not found in this Ports snapshot.
+            </p>
+          )}
+        </>
+      }
       selectedId={selectedId}
       onSelectionChange={setSelectedId}
       inspectorId="port-inspector"
