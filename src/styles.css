@@ -4053,7 +4053,6 @@ dd {
 }
 
 .service-failed,
-.service-exited,
 .service-dead {
   background: var(--failure);
 }

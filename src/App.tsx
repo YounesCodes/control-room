@@ -36,7 +36,7 @@ import {
   FolderCog,
   Gauge,
   History,
-  CircleHelp,
+  BookOpen,
   Maximize2,
   MoreHorizontal,
   Minimize2,
@@ -1781,7 +1781,7 @@ export function App() {
           openingDocumentation ? "Opening documentation…" : "Documentation (opens in your browser)"
         }
       >
-        <CircleHelp size={18} />
+        <BookOpen size={18} />
       </button>
     );
   }

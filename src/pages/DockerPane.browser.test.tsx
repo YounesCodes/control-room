@@ -131,10 +131,21 @@ function renderPane(
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
-it("aligns circular running and exited markers with their status labels", async () => {
+it("aligns circular markers and reserves failure color for failed or dead containers", async () => {
   await page.viewport(1280, 800);
-  renderPane();
-  for (const state of ["running", "exited"]) {
+  const states = ["running", "exited", "failed", "dead", "created"];
+  renderPane(
+    null,
+    containers.map((container, index) => ({ ...container, state: states[index % states.length] })),
+  );
+  const color = (state: string) =>
+    getComputedStyle(document.querySelector(`.docker-chip-state .service-${state}`)!)
+      .backgroundColor;
+  expect(color("exited")).toBe(color("created"));
+  expect(color("failed")).toBe(color("dead"));
+  expect(color("exited")).not.toBe(color("failed"));
+  expect(color("running")).not.toBe(color("failed"));
+  for (const state of states) {
     const marker = document.querySelector<HTMLElement>(`.docker-chip-state .service-${state}`)!;
     const label = marker.nextElementSibling!;
     const dot = marker.getBoundingClientRect();

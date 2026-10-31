@@ -346,6 +346,7 @@ Session indicators keep a circular shape in every state, including errors.
 Service and container status markers also stay circular and align centrally with
 their status text. Keep the text label beside container markers so color is not
 the only cue.
+Exited containers use neutral gray; reserve red for failed or dead containers.
 Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
@@ -389,6 +390,7 @@ list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 Keep Documentation in the titlebar beside Settings. It opens the public docs in
 the default browser and remains available in Settings. Hide it during terminal
 Focus Mode to keep the terminal controls compact.
+Use an open-book icon for Documentation so it reads as a manual.
 
 Settings fills the window below a draggable titlebar with native window controls.
 Hide Connections and Workspace tabs while Settings is open, and restore the

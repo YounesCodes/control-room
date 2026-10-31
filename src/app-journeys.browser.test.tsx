@@ -1676,6 +1676,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(960, 640);
     await mount();
     const docs = page.getByRole("button", { name: "Open documentation", exact: true });
+    expect(docs.element().querySelector("svg.lucide-book-open")).toBeTruthy();
     await expect.element(docs).toHaveAttribute("title", "Documentation (opens in your browser)");
     const settingsButton = page.getByRole("button", { name: "Open Settings" }).element();
     expect(docs.element().nextElementSibling).toBe(settingsButton);
