@@ -22,3 +22,4 @@
 /.tauri/
 /vite.config.js
 /vite.config.d.ts
+/release-notes/

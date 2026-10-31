@@ -33,9 +33,11 @@ jobs:
           tool: cargo-audit
           fallback: none
 
-      - name: Prepare user-facing release notes
+      - name: Verify the authored GitHub draft release
         id: release-notes
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/generate-release-notes.mjs
 
       # Before the long build, not after it. A release that reaches the end and
@@ -85,8 +87,8 @@ jobs:
           cache-bin: false
           shared-key: "tauri-release-build"
 
-      # tauri-action builds, signs, creates the GitHub Release, and uploads the
-      # installer alongside its .sig and a latest.json describing them. Writing
+      # tauri-action builds, signs, and uploads to the authored GitHub draft.
+      # It uploads the installer, its .sig, and latest.json. Writing
       # that JSON by hand would mean reimplementing the updater's own protocol
       # and keeping it correct across plugin versions.
       #
@@ -103,12 +105,8 @@ jobs:
           SCCACHE_GHA_ENABLED: "true"
           RUSTC_WRAPPER: sccache
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
-          releaseBody: ${{ steps.release-notes.outputs.body }}
-          releaseDraft: true
-          prerelease: false
-          # Use the notes written for this version, not generated PR titles.
+          releaseId: ${{ steps.release-notes.outputs.id }}
+          # Keep the body authored on GitHub intact.
           generateReleaseNotes: false
           # Only NSIS is built, so this is the bundle the updater feed must name.
           updaterJsonPreferNsis: true
@@ -141,30 +139,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Parsed from the JSON object rather than taken as raw output: gh
-          # prints the body across several lines, and PowerShell would capture
-          # that as a string array, which serialises into the feed as a JSON
-          # array instead of the string the updater expects.
-          $body = (gh release view $env:GITHUB_REF_NAME --json body | ConvertFrom-Json).body
-          if (-not $body) { throw "The release has no body to use as update notes" }
           gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir . --clobber
           if ($LASTEXITCODE -ne 0) { throw "Could not download the updater feed" }
-          $feed = Get-Content -LiteralPath latest.json -Raw | ConvertFrom-Json
-          $feed.notes = $body
-          # Written as bytes rather than through Set-Content: a byte order mark
-          # would make the feed fail to parse, and which encodings avoid one
-          # differs between Windows PowerShell and PowerShell 7.
-          $json = $feed | ConvertTo-Json -Depth 10
-          [System.IO.File]::WriteAllText(
-            (Join-Path (Get-Location) "latest.json"),
-            $json,
-            [System.Text.UTF8Encoding]::new($false)
-          )
-          node scripts/generate-release-notes.mjs --validate-feed latest.json
-          if ($LASTEXITCODE -ne 0) { throw "Updater feed notes do not match the authored release notes" }
+          node scripts/generate-release-notes.mjs --sync-feed latest.json
+          if ($LASTEXITCODE -ne 0) { throw "Could not copy the GitHub release body into the updater feed" }
           gh release upload $env:GITHUB_REF_NAME latest.json --clobber
           if ($LASTEXITCODE -ne 0) { throw "Could not upload the updater feed" }
-          Write-Host "Updater feed carries $($body.Length) characters of notes"
 
       # A release that looks successful but cannot be consumed by the updater is
       # the failure worth catching here, because it only shows up later as
@@ -204,9 +184,8 @@ jobs:
           if ($feed.version -ne $expected) {
             throw "latest.json announces $($feed.version) but this tag is $expected"
           }
-          if (-not $feed.notes) {
-            throw "latest.json carries no notes, so an update would have nothing to show under What's new"
-          }
+          node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json
+          if ($LASTEXITCODE -ne 0) { throw "Uploaded updater notes do not match the GitHub release body" }
           Write-Host "latest.json announces $($feed.version) with $($feed.platforms.PSObject.Properties.Name -join ', ')"
           Write-Host "notes: $($feed.notes.Length) characters"
 
@@ -217,3 +196,5 @@ jobs:
         run: |
           gh release edit $env:GITHUB_REF_NAME --draft=false
           if ($LASTEXITCODE -ne 0) { throw "Could not publish the verified release" }
+          node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json
+          if ($LASTEXITCODE -ne 0) { throw "Published release body and updater notes are out of sync" }

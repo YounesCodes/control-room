@@ -1,57 +1,88 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { main, readReleaseNotes } from "./generate-release-notes.mjs";
 
-const script = fileURLToPath(new URL("./generate-release-notes.mjs", import.meta.url));
+vi.mock("node:child_process", () => ({ execFileSync: vi.fn() }));
+
 let directory;
+const notes = "- Find terminals faster.\r\n- Fixed a connection issue.\r\n";
+const release = { databaseId: 159, tagName: "v1.2.3", isDraft: true, body: notes };
 
-function run(args = [], tag = "v1.2.3") {
-  return execFileSync(process.execPath, [script, ...args], {
-    cwd: directory,
-    env: { ...process.env, GITHUB_REF_NAME: tag, GITHUB_OUTPUT: join(directory, "output") },
-    encoding: "utf8",
-    stdio: "pipe",
-  });
-}
-
-function setup(notes) {
+beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "control-room-release-"));
-  mkdirSync(join(directory, "release-notes"));
-  if (notes !== undefined) writeFileSync(join(directory, "release-notes", "v1.2.3.txt"), notes);
-}
+  vi.stubEnv("GITHUB_REF_NAME", "v1.2.3");
+  vi.stubEnv("GITHUB_OUTPUT", join(directory, "output"));
+  vi.mocked(execFileSync).mockReturnValue(JSON.stringify(release));
+});
 
 afterEach(() => {
-  if (directory) rmSync(directory, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+  vi.resetAllMocks();
+  rmSync(directory, { recursive: true, force: true });
 });
 
 describe("release notes workflow", () => {
-  it("writes the authored notes to the release body and accepts the same updater notes", () => {
-    const notes = "- Find terminals faster.\n- Fixed a connection issue.";
-    setup(`${notes.replace(/\n/g, "\r\n")}\r\n`);
-    run();
-    expect(readFileSync(join(directory, "output"), "utf8")).toContain(`\n${notes}\n`);
-    writeFileSync(join(directory, "latest.json"), JSON.stringify({ notes }));
-    expect(() => run(["--validate-feed", "latest.json"])).not.toThrow();
+  it("selects the authored GitHub draft without a versioned notes file", () => {
+    expect(readReleaseNotes("v1.2.3")).toEqual(release);
+    main([]);
+    expect(execFileSync).toHaveBeenCalledWith(
+      "gh",
+      ["release", "view", "v1.2.3", "--json", "databaseId,tagName,isDraft,body"],
+      { encoding: "utf8", stdio: "pipe" },
+    );
+    expect(readFileSync(join(directory, "output"), "utf8")).toBe("id=159\n");
   });
 
-  it("stops when notes are missing, empty, or for a different version", () => {
-    setup();
-    expect(() => run()).toThrow(/Missing release-notes\/v1\.2\.3\.txt/);
-    writeFileSync(join(directory, "release-notes", "v1.2.3.txt"), "  \n");
-    expect(() => run()).toThrow(/is empty/);
-    writeFileSync(join(directory, "release-notes", "v1.2.3.txt"), "- Fixed a connection issue.");
-    expect(() => run([], "v1.2.4")).toThrow(/Missing release-notes\/v1\.2\.4\.txt/);
-    expect(() => run([], "../other")).toThrow(/must be a release tag/);
+  it("rejects missing releases and invalid tags", () => {
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("release not found");
+    });
+    expect(() => main([])).toThrow(/draft release/);
+    vi.stubEnv("GITHUB_REF_NAME", "../other");
+    expect(() => main([])).toThrow(/must be a release tag/);
   });
 
-  it("rejects updater notes that do not match the authored release notes", () => {
-    setup("- Fixed a connection issue.");
-    writeFileSync(join(directory, "latest.json"), JSON.stringify({ notes: "Old release notes" }));
-    expect(() => run(["--validate-feed", "latest.json"])).toThrow(/do not match/);
-    writeFileSync(join(directory, "latest.json"), JSON.stringify({ notes: ["Not a string"] }));
-    expect(() => run(["--validate-feed", "latest.json"])).toThrow(/do not match/);
+  it("rejects empty notes, another tag, published releases, and invalid release IDs before building", () => {
+    for (const candidate of [
+      { ...release, body: " \r\n" },
+      { ...release, body: null },
+      { ...release, tagName: "v1.2.4" },
+      { ...release, isDraft: false },
+      { ...release, databaseId: null },
+    ]) {
+      vi.mocked(execFileSync).mockReturnValue(JSON.stringify(candidate));
+      expect(() => main([])).toThrow();
+    }
+  });
+
+  it("copies the exact current release body into the feed and preserves updater metadata", () => {
+    const path = join(directory, "latest.json");
+    const feed = { version: "1.2.3", platforms: { "windows-x86_64": { signature: "signed" } } };
+    writeFileSync(path, JSON.stringify(feed));
+    main(["--sync-feed", path]);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ ...feed, notes });
+    expect(() => main(["--validate-feed", path])).not.toThrow();
+    vi.mocked(execFileSync).mockReturnValue(JSON.stringify({ ...release, isDraft: false }));
+    expect(() => main(["--validate-feed", path])).not.toThrow();
+  });
+
+  it("rejects mismatched notes, non-string notes, and edits made on GitHub after syncing", () => {
+    const path = join(directory, "latest.json");
+    for (const value of ["Old release notes", [notes], notes.trim(), undefined]) {
+      writeFileSync(path, JSON.stringify({ notes: value }));
+      expect(() => main(["--validate-feed", path])).toThrow(/do not match/);
+    }
+    writeFileSync(path, JSON.stringify({ notes }));
+    vi.mocked(execFileSync).mockReturnValue(JSON.stringify({ ...release, body: "Edited notes" }));
+    expect(() => main(["--validate-feed", path])).toThrow(/do not match/);
+  });
+
+  it("rejects missing feed paths and unknown arguments", () => {
+    expect(() => main(["--sync-feed"])).toThrow(/latest.json path/);
+    expect(() => main(["--validate-feed"])).toThrow(/latest.json path/);
+    expect(() => main(["--unknown"])).toThrow(/Unknown/);
   });
 });
