@@ -27,11 +27,13 @@ import type {
   DockerContainerDetails,
   LogSourceSelection,
   SavedConnection,
+  HostCapabilities,
 } from "../types";
 
 export function DockerPane({
   connection,
   windowsHost = false,
+  capabilities = null,
   cache,
   detailsCache,
   onCacheChange,
@@ -43,6 +45,7 @@ export function DockerPane({
   onOpenPort?: (port: PublishedPortSelection) => void;
   connection: SavedConnection;
   windowsHost?: boolean;
+  capabilities?: HostCapabilities | null;
   cache: CachedList<DockerContainer>;
   detailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   onCacheChange: (cache: CachedList<DockerContainer>) => void;
@@ -226,7 +229,8 @@ export function DockerPane({
     <section className="feature-page ports-page docker-page">
       <InspectionGraph
         groups={groups}
-        hostLabel={connection.displayName}
+        hostLabel={capabilities?.hostname || connection.displayName}
+        hostDescription={[capabilities?.osName, capabilities?.osVersion].filter(Boolean).join(" ")}
         graphLabel="Docker graph"
         loading={cache.loading || (cache.fetchedAt === null && !cache.error)}
         selectedId={selectedId}

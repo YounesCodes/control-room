@@ -80,6 +80,39 @@ const details: DockerContainerDetails = {
 };
 
 describe("DockerPane container inspection", () => {
+  it("shows the detected host name and OS in the graph root", () => {
+    const capabilities = {
+      hostname: "debian-server",
+      osName: "Debian GNU/Linux",
+      osVersion: "13",
+    } as import("../types").HostCapabilities;
+    const { rerender } = render(
+      <DockerPane
+        connection={connection}
+        capabilities={capabilities}
+        cache={{ items: [container], fetchedAt: Date.now(), loading: false, error: null }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Debian GNU/Linux 13")).toBeTruthy();
+    expect(screen.getByText("debian-server")).toBeTruthy();
+    rerender(
+      <DockerPane
+        connection={connection}
+        capabilities={null}
+        cache={{ items: [container], fetchedAt: Date.now(), loading: false, error: null }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Debian GNU/Linux 13")).toBeNull();
+    expect(screen.getByText("Host")).toBeTruthy();
+  });
   it("does not offer Linux sudo for a Windows Docker permission error", async () => {
     render(
       <DockerPane

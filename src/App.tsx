@@ -2601,6 +2601,7 @@ export function App() {
                       connection={activeConnection}
                       windowsHost={windowsWorkspace}
                       cache={activeRemoteWorkspace.containersCache}
+                      capabilities={hostCapabilities[activeConnection.id] ?? null}
                       detailsCache={activeRemoteWorkspace.containerDetailsCache}
                       onCacheChange={(cache) =>
                         updateContainersCache(activeRemoteWorkspace.id, cache)
