@@ -1448,6 +1448,96 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
+  it("coordinates focus-mode regions and supports reversing an in-flight transition without restarting the terminal", async () => {
+    await page.viewport(1280, 800);
+    await mount();
+    await navigate("Terminal");
+    const originalMatch = window.matchMedia.bind(window);
+    const match = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+      const result = originalMatch(query);
+      if (query.includes("prefers-reduced-motion"))
+        Object.defineProperty(result, "matches", { value: false });
+      return result;
+    });
+    const start = vi.spyOn(document, "startViewTransition");
+    const style = document.createElement("style");
+    style.textContent =
+      "::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 2s !important; }";
+    document.head.append(style);
+    try {
+      const nativeBounds = page
+        .getByRole("button", { name: "Close window" })
+        .element()
+        .getBoundingClientRect();
+      const focus = page.getByRole("button", { name: "Focus terminal", exact: true }).element();
+      await userEvent.click(focus);
+      const entering = start.mock.results.at(-1)!.value as ViewTransition;
+      await entering.ready;
+      expect(document.documentElement.dataset.focusTransition).toBe("enter");
+      const regions = document
+        .getAnimations()
+        .map((animation) => (animation.effect as KeyframeEffect).pseudoElement);
+      expect(regions).toContain("::view-transition-old(focus-sidebar)");
+      expect(regions).toContain("::view-transition-old(focus-header)");
+      expect(regions).toContain("::view-transition-group(focus-tabs)");
+      expect(regions).toContain("::view-transition-group(focus-content)");
+      expect(
+        page.getByRole("button", { name: "Close window" }).element().getBoundingClientRect().x,
+      ).toBe(nativeBounds.x);
+      expect(page.getByRole("button", { name: "Exit terminal focus", exact: true }).element()).toBe(
+        focus,
+      );
+      await userEvent.click(focus);
+      const exiting = start.mock.results.at(-1)!.value as ViewTransition;
+      await exiting.ready;
+      expect(document.documentElement.dataset.focusTransition).toBe("exit");
+      exiting.skipTransition();
+      await exiting.finished;
+      await expect.poll(() => document.documentElement.dataset.focusTransition).toBeUndefined();
+      expect(element.querySelector(".terminal-focus-mode")).toBeNull();
+      expect(
+        native.invoke.mock.calls.filter(([command]) => command === "start_session"),
+      ).toHaveLength(1);
+      await userEvent.click(focus);
+      const focused = start.mock.results.at(-1)!.value as ViewTransition;
+      await focused.ready;
+      focused.skipTransition();
+      await focused.finished;
+      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await page
+        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+        .click();
+      await expect
+        .element(page.getByRole("navigation", { name: /Terminals in .* group/ }))
+        .toBeVisible();
+      const sessions = native.invoke.mock.calls.filter(
+        ([command]) => command === "start_session" || command === "start_local_session",
+      ).length;
+      for (const direction of ["exit", "enter"]) {
+        await userEvent.click(focus);
+        const transition = start.mock.results.at(-1)!.value as ViewTransition;
+        await transition.ready;
+        const panes = document
+          .getAnimations()
+          .map((animation) => (animation.effect as KeyframeEffect).pseudoElement);
+        expect(panes).toContain(
+          `::view-transition-${direction === "exit" ? "old" : "new"}(focus-panes)`,
+        );
+        transition.skipTransition();
+        await transition.finished;
+      }
+      expect(
+        native.invoke.mock.calls.filter(
+          ([command]) => command === "start_session" || command === "start_local_session",
+        ),
+      ).toHaveLength(sessions);
+    } finally {
+      style.remove();
+      start.mockRestore();
+      match.mockRestore();
+    }
+  });
+
   it("animates the focus slot out and back while native window controls stay fixed", async () => {
     await page.viewport(960, 700);
     await mount();

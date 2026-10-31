@@ -25,7 +25,10 @@ export function PortOverviewDetail({
       [
         ...item.sockets.map((socket) => socket.systemdUnit),
         ...item.connections.map((connection) => connection.systemdUnit),
-      ].filter((unit): unit is string => !!unit),
+      ].filter(
+        (unit): unit is string =>
+          !!unit && !(containers.length && /^(docker|containerd)\.(service|socket)$/.test(unit)),
+      ),
     ),
   ];
   const count = item.connections.reduce((total, connection) => total + connection.established, 0);

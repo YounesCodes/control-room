@@ -97,6 +97,11 @@ and overflowing tabs, so toggling never moves it away from the pointer.
 Outside Terminal, collapse its titlebar slot and fade and slide the button out;
 reverse the motion when Terminal returns. Keep native window controls fixed and
 make the hidden button inert. Reduced motion applies the layout change immediately.
+Entering and leaving Focus Mode coordinates the sidebar and titlebar exit/entrance,
+tab-strip movement, pane controls, and workspace bounds in one short transition.
+Keep terminal text at its original pixel size and native window controls fixed.
+Preserve the live terminal sessions and keyboard focus. Reverse promptly when the
+user toggles again. Reduced motion and unsupported webviews apply the state immediately.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Save pane proportions with
@@ -180,6 +185,9 @@ Keep cards compact: port, protocol, binding scope, Docker target and peer count.
 Keep process and per-socket information in expandable inspector sections.
 Show container ownership and published bindings in Ports; link to Docker for
 image, Compose, lifecycle, network, mount, and container log details.
+For container-owned endpoints, omit Docker and containerd daemon unit shortcuts;
+these describe the runtime rather than the container's service. Preserve the raw
+socket diagnostics and genuine service links, including standalone daemon listeners.
 Show reachability as Not tested. Host firewall policy is separate evidence and
 must never label a card as reachable or blocked. Selecting a port or connection
 smoothly zooms and centers it in the graph area beside the inspector, then

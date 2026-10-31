@@ -138,6 +138,38 @@ function renderPane(
 }
 
 describe("PortsPane", () => {
+  it("keeps a genuine Docker daemon listener linked to its unit", async () => {
+    const user = userEvent.setup();
+    const { onOpenSystemd } = renderPane(
+      null,
+      {
+        ...sockets,
+        items: sockets.items.map((socket) => ({
+          ...socket,
+          port: 2375,
+          systemdUnit: "docker.service",
+        })),
+      },
+      { ...containers, items: [] },
+    );
+    await user.click(screen.getByRole("button", { name: /2375.*Listening/ }));
+    await user.click(screen.getByRole("button", { name: "Open unit" }));
+    expect(onOpenSystemd).toHaveBeenCalledWith("docker.service");
+  });
+  it.each(["docker.service", "docker.socket", "containerd.service", "containerd.socket"])(
+    "does not present runtime unit %s as the service of a published container endpoint",
+    async (unit) => {
+      const user = userEvent.setup();
+      renderPane(null, {
+        ...sockets,
+        items: sockets.items.map((socket) => ({ ...socket, systemdUnit: unit })),
+      });
+      await user.click(screen.getByRole("button", { name: /443.*8443/ }));
+      expect(screen.queryByRole("button", { name: "Open unit" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "View journal" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Open container" })).toBeTruthy();
+    },
+  );
   afterEach(cleanup);
 
   it("keeps canvas tools collapsed and preserves active filters when dismissed", async () => {

@@ -1543,6 +1543,102 @@ code,
    Workspace shell
    ========================================================================== */
 
+/* Capture independent shell regions only during an explicit Focus Mode toggle.
+   Terminal snapshots are cropped at their original pixel scale, never stretched. */
+html[data-focus-transition] .sidebar {
+  view-transition-name: focus-sidebar;
+}
+html[data-focus-transition] .app-bar {
+  view-transition-name: focus-header;
+}
+html[data-focus-transition] .session-tabs {
+  view-transition-name: focus-tabs;
+}
+html[data-focus-transition] .session-pane-tabs {
+  view-transition-name: focus-panes;
+}
+html[data-focus-transition] .workspace-content {
+  view-transition-name: focus-content;
+}
+html[data-focus-transition] .app-window-actions {
+  view-transition-name: focus-window;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(*) {
+  animation-duration: var(--motion-slow);
+  animation-timing-function: var(--ease);
+}
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--motion-slow);
+  animation-timing-function: var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.01ms !important;
+  }
+}
+::view-transition-old(root),
+::view-transition-old(focus-window) {
+  display: none;
+}
+::view-transition-new(root),
+::view-transition-new(focus-window) {
+  animation: none;
+}
+::view-transition-old(focus-content),
+::view-transition-new(focus-content) {
+  width: 100%;
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+}
+::view-transition-old(focus-sidebar) {
+  animation: focus-sidebar-out var(--motion-slow) var(--ease) both;
+}
+::view-transition-new(focus-sidebar) {
+  animation: focus-sidebar-in var(--motion-slow) var(--ease) both;
+}
+::view-transition-old(focus-header) {
+  animation: focus-header-out var(--motion-slow) var(--ease) both;
+}
+::view-transition-new(focus-header),
+::view-transition-new(focus-panes) {
+  animation: focus-header-in var(--motion-slow) var(--ease) both;
+}
+::view-transition-old(focus-panes) {
+  animation: focus-header-out var(--motion-slow) var(--ease) both;
+}
+@keyframes focus-sidebar-out {
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+@keyframes focus-sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+@keyframes focus-header-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@keyframes focus-header-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
 .workspace-shell {
   position: relative;
   display: flex;

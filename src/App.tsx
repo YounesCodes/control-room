@@ -1,4 +1,5 @@
 import type { PublishedPortSelection } from "./lib/port-inspector";
+import { transitionFocusMode } from "./lib/focus-mode-transition";
 import { Search } from "./components/MagnifierIcon";
 import { DockerIcon } from "./components/DockerIcon";
 import {
@@ -874,15 +875,19 @@ export function App() {
 
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
-    setSplitMenuOpen(false);
-    setNewTerminalMenuOpen(false);
-    setTerminalFocusMode(true);
+    transitionFocusMode("enter", () => {
+      setSplitMenuOpen(false);
+      setNewTerminalMenuOpen(false);
+      setTerminalFocusMode(true);
+    });
   }
 
   function exitTerminalFocus() {
-    setSplitMenuOpen(false);
-    setNewTerminalMenuOpen(false);
-    setTerminalFocusMode(false);
+    transitionFocusMode("exit", () => {
+      setSplitMenuOpen(false);
+      setNewTerminalMenuOpen(false);
+      setTerminalFocusMode(false);
+    });
   }
 
   function openScratchpad() {
