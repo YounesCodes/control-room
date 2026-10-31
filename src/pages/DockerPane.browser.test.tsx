@@ -93,7 +93,11 @@ const cache: CachedList<DockerContainer> = {
   loading: false,
   error: null,
 };
-function renderPane(focusId: string | null = null, items = containers) {
+function renderPane(
+  focusId: string | null = null,
+  items = containers,
+  detailOverrides: Partial<DockerContainerDetails> = {},
+) {
   const onViewLogs = vi.fn();
   const result = render(
     <PanelLayoutContext.Provider
@@ -106,7 +110,12 @@ function renderPane(focusId: string | null = null, items = containers) {
           detailsCache={Object.fromEntries(
             items.map((container) => [
               container.id,
-              { value: details(container), fetchedAt: Date.now(), loading: false, error: null },
+              {
+                value: { ...details(container), ...detailOverrides },
+                fetchedAt: Date.now(),
+                loading: false,
+                error: null,
+              },
             ]),
           )}
           onCacheChange={vi.fn()}
@@ -121,6 +130,28 @@ function renderPane(focusId: string | null = null, items = containers) {
 }
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
+
+it("keeps empty Docker sections compact", async () => {
+  await page.viewport(960, 640);
+  renderPane(containers[0].id, containers, {
+    mounts: [],
+    networks: [],
+    publishedPorts: [],
+    composeProject: null,
+    composeService: null,
+  });
+  for (const [section, message] of [
+    ["Mounts", "No mounts"],
+    ["Networks", "No network attachments"],
+    ["Published ports", "No published ports"],
+    ["Container & Compose", "No validated Compose identity"],
+  ]) {
+    await page.getByText(section, { exact: true }).click();
+    const empty = screen.getByText(message);
+    expect(empty.getBoundingClientRect().height).toBeLessThanOrEqual(24);
+    expect(empty.closest("details")!.querySelector(".panel-state")).toBeNull();
+  }
+});
 
 function camera() {
   return document.querySelector<HTMLElement>(".arch-content")!.style.transform;

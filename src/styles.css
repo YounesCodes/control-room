@@ -6641,6 +6641,13 @@ kbd {
   gap: 6px;
 }
 
+.inspector-empty {
+  margin: 8px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .docker-published-ports .secondary-button {
   max-width: 100%;
   font-size: 12px;

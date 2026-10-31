@@ -1,6 +1,6 @@
 import type { PublishedPortSelection } from "../lib/port-inspector";
 import { FileClock, RefreshCw } from "lucide-react";
-import { EmptyState, ErrorState, LoadingState } from "./PanelState";
+import { ErrorState, LoadingState } from "./PanelState";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
 
 function displayTime(value: string | null) {
@@ -83,7 +83,7 @@ function Ports({
   details: DockerContainerDetails;
   onOpenPort?: (port: PublishedPortSelection) => void;
 }) {
-  if (!details.publishedPorts.length) return <EmptyState title="No published ports" />;
+  if (!details.publishedPorts.length) return <p className="inspector-empty">No published ports</p>;
   return (
     <div className="docker-published-ports">
       {details.publishedPorts.map((port) => (
@@ -111,7 +111,7 @@ function Ports({
 }
 
 function Networks({ details }: { details: DockerContainerDetails }) {
-  if (!details.networks.length) return <EmptyState title="No network attachments" />;
+  if (!details.networks.length) return <p className="inspector-empty">No network attachments</p>;
   return (
     <div className="inspector-record-list">
       {details.networks.map((network) => (
@@ -134,7 +134,7 @@ function Networks({ details }: { details: DockerContainerDetails }) {
 }
 
 function Mounts({ details }: { details: DockerContainerDetails }) {
-  if (!details.mounts.length) return <EmptyState title="No mounts" />;
+  if (!details.mounts.length) return <p className="inspector-empty">No mounts</p>;
   return (
     <div className="inspector-record-list">
       {details.mounts.map((mount) => (
@@ -178,7 +178,7 @@ function Metadata({ details }: { details: DockerContainerDetails }) {
           </div>
         </dl>
       ) : (
-        <EmptyState title="No validated Compose identity" />
+        <p className="inspector-empty">No validated Compose identity</p>
       )}
       <p className="sensitive-data-note">
         Environment values, command arguments, arbitrary labels, health logs, and host mount sources
