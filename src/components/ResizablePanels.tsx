@@ -287,7 +287,7 @@ export function ConnectionSection({
   const key = `content:${section}`;
   const max = Math.min(PANEL_LIMITS.content.max, width || PANEL_LIMITS.content.max);
   const min = Math.min(PANEL_LIMITS.content.min, max);
-  const fullWidth = section === "scratchpad";
+  const fullWidth = section === "scratchpad" || section === "ports";
   const size = fullWidth ? width : clampPanelSize(sizes[key] ?? max, min, max);
   if (section === "terminal") return null;
   return (

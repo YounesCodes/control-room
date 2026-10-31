@@ -151,8 +151,8 @@ const emptyState: PersistedWorkspaceState = {
 };
 
 async function openLocalShell(user: ReturnType<typeof userEvent.setup>, label: string) {
-  await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
-  await user.click(await screen.findByRole("menuitem", { name: label }));
+  await user.click(await screen.findByRole("button", { name: "New terminal" }));
+  await user.click(await screen.findByRole("button", { name: `Local terminals: ${label}` }));
 }
 
 /// Clicks a Saved Connection in the sidebar. Its row also carries an actions
@@ -336,11 +336,11 @@ describe("Local Terminal", () => {
       administratorStatus: "available",
     });
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
-    const gitChoice = screen.getByRole("menuitem", { name: "Git Bash" });
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
+    const gitChoice = screen.getByRole("button", { name: "Local terminals: Git Bash" });
     expect(gitChoice.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
-    const adminChoice = screen.getByRole("menuitem", {
-      name: "PowerShell 7, run as administrator",
+    const adminChoice = screen.getByRole("button", {
+      name: "Run as administrator: PowerShell 7",
     });
     expect(
       adminChoice.querySelector(".local-shell-icon-powershell-7 .local-shell-elevation"),
@@ -373,11 +373,12 @@ describe("Local Terminal", () => {
     expect(panes.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
   });
 
-  it("launches Git Bash directly without an administrator warning", async () => {
+  it("offers Git Bash in the unified launcher without an administrator warning", async () => {
     const user = userEvent.setup();
     api.listLocalShells.mockResolvedValue({ profiles: [gitBash], administratorStatus: "disabled" });
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
+    await user.click(await screen.findByRole("button", { name: "Local terminals: Git Bash" }));
     expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
     expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
     expect(screen.queryByText(/One-time setup/)).toBeNull();
@@ -385,7 +386,7 @@ describe("Local Terminal", () => {
 
   it("explains when the last available shell disappears before launch", async () => {
     render(<App />);
-    const launcher = await screen.findByRole("button", { name: /Local terminal/ });
+    const launcher = await screen.findByRole("button", { name: "New terminal" });
     api.listLocalShells.mockResolvedValue({
       profiles: [],
       administratorStatus: "unsupportedWindows",
@@ -410,8 +411,8 @@ describe("Local Terminal", () => {
       logTailOptions: [200],
     });
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
-    expect(await screen.findByRole("menuitem", { name: "Git Bash" })).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
+    expect(await screen.findByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
     expect(screen.queryByText(/One-time setup/)).toBeNull();
   });
 
@@ -419,13 +420,16 @@ describe("Local Terminal", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
 
-    expect(screen.getByRole("menuitem", { name: "PowerShell 7" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Git Bash" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Local terminals: PowerShell 7" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
     // Windows PowerShell and Command Prompt were not detected on this machine.
-    expect(screen.queryByRole("menuitem", { name: "Windows PowerShell" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Command Prompt" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Local terminals: Windows PowerShell" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Local terminals: Command Prompt" })).toBeNull();
+    await user.click(screen.getByText("Run as administrator", { selector: "summary" }));
     expect(
       screen.getByText(
         "One-time setup: in Windows Settings, open System > Advanced, turn on Enable sudo, and choose Inline. Then reopen this menu.",
@@ -442,16 +446,11 @@ describe("Local Terminal", () => {
     });
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
-    expect(screen.queryByRole("menuitem", { name: "PowerShell 7" })).toBeNull();
-    expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
-    expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
-
-    // The chooser reads the same list, so it is short the same entry rather
-    // than being the one surface the setting forgot.
-    await user.click(await screen.findByRole("button", { name: /New terminal/ }));
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
     expect(screen.queryByRole("button", { name: "Local terminals: PowerShell 7" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
+    expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
+    await user.click(await screen.findByRole("button", { name: "Local terminals: Git Bash" }));
+    expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe("git-bash");
   });
 
   it("drops the launcher once every local terminal is turned off", async () => {
@@ -463,8 +462,7 @@ describe("Local Terminal", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: /No connections yet/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Local terminal/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /New terminal/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New terminal" })).toBeNull();
     expect(screen.queryByText("Local terminal opens a shell on this machine.")).toBeNull();
   });
 
@@ -476,11 +474,11 @@ describe("Local Terminal", () => {
     });
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
 
     expect(screen.getByText("Run as administrator")).toBeTruthy();
-    const elevated = screen.getByRole("menuitem", {
-      name: "PowerShell 7, run as administrator",
+    const elevated = screen.getByRole("button", {
+      name: "Run as administrator: PowerShell 7",
     });
     expect(elevated).toBeTruthy();
 
@@ -503,10 +501,11 @@ describe("Local Terminal", () => {
     });
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Local terminal/ }));
+    await user.click(await screen.findByRole("button", { name: "New terminal" }));
 
     expect(screen.queryByText("Local terminals", { selector: "strong" })).toBeNull();
     expect(screen.queryByRole("menu", { name: "Local terminal" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Run as administrator: PowerShell 7" }));
     expect((await screen.findByTestId(/^terminal-/)).dataset.target).toBe(
       "powershell-7-administrator",
     );
@@ -515,17 +514,17 @@ describe("Local Terminal", () => {
   it("refreshes administrator availability when the shell menu reopens", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("button", { name: /Local terminal/ });
+    await screen.findByRole("button", { name: "New terminal" });
     api.listLocalShells.mockResolvedValue({
       profiles: [powershell, gitBash, administratorPowerShell],
       administratorStatus: "available",
     });
 
-    await user.click(screen.getByRole("button", { name: /Local terminal/ }));
+    await user.click(screen.getByRole("button", { name: "New terminal" }));
 
     expect(
-      await screen.findByRole("menuitem", {
-        name: "PowerShell 7, run as administrator",
+      await screen.findByRole("button", {
+        name: "Run as administrator: PowerShell 7",
       }),
     ).toBeTruthy();
   });
@@ -538,7 +537,7 @@ describe("Local Terminal", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: /No connections yet/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Local terminal/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New terminal" })).toBeNull();
   });
 
   it("opens a local shell as its own Workspace without a Saved Connection", async () => {

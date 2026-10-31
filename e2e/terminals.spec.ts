@@ -251,7 +251,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await browser.keys("Enter");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
     await expect($(".session-tab-wrap.active")).toBeDisplayed();
-    await $("aria/Restart terminal").click();
+    await $(".terminal-workspace-pane.active .terminal-notice").$("button=Restart").click();
     await terminalCommand("echo RESTARTED_OK", "RESTARTED_OK");
     expect((await runtime()).sessionIds[0]).not.toBe(initial);
   });
