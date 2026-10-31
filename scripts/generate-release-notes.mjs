@@ -1,43 +1,60 @@
-import { randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 export function readReleaseNotes(tag) {
   if (!/^v\d+\.\d+\.\d+$/.test(tag ?? "")) {
     throw new Error("GITHUB_REF_NAME must be a release tag such as v1.2.3");
   }
-  const path = `release-notes/${tag}.txt`;
-  let notes;
+  let release;
   try {
-    notes = readFileSync(path, "utf8").replace(/\r\n/g, "\n").trim();
+    release = JSON.parse(
+      execFileSync("gh", ["release", "view", tag, "--json", "databaseId,tagName,isDraft,body"], {
+        encoding: "utf8",
+        stdio: "pipe",
+      }),
+    );
   } catch (error) {
-    if (error.code === "ENOENT") {
-      throw new Error(`Missing ${path}. Write user-facing release notes before tagging.`, {
-        cause: error,
-      });
-    }
-    throw error;
+    throw new Error(
+      `Could not read ${tag}. Create a GitHub draft release with user-facing notes before pushing the tag.`,
+      { cause: error },
+    );
   }
-  if (!notes) throw new Error(`${path} is empty. Write user-facing release notes before tagging.`);
-  return notes;
+  if (
+    release.tagName !== tag ||
+    !Number.isSafeInteger(release.databaseId) ||
+    release.databaseId <= 0
+  ) {
+    throw new Error(`GitHub returned an invalid release for ${tag}`);
+  }
+  if (typeof release.body !== "string" || !release.body.trim()) {
+    throw new Error(`The GitHub release for ${tag} has no notes. Edit its body before releasing.`);
+  }
+  return release;
 }
 
-function main() {
-  const notes = readReleaseNotes(process.env.GITHUB_REF_NAME);
-  if (process.argv[2] === "--validate-feed") {
-    const path = process.argv[3];
-    if (!path) throw new Error("Pass the latest.json path to --validate-feed");
+export function main(args = process.argv.slice(2)) {
+  const [mode, path] = args;
+  if (mode && mode !== "--sync-feed" && mode !== "--validate-feed") {
+    throw new Error(`Unknown argument: ${mode}`);
+  }
+  if (mode && !path) throw new Error(`Pass the latest.json path to ${mode}`);
+  const release = readReleaseNotes(process.env.GITHUB_REF_NAME);
+  if (mode) {
     const feed = JSON.parse(readFileSync(path, "utf8"));
-    if (typeof feed.notes !== "string" || feed.notes.replace(/\r\n/g, "\n").trim() !== notes) {
-      throw new Error("latest.json notes do not match the release notes file");
+    if (mode === "--sync-feed") {
+      feed.notes = release.body;
+      writeFileSync(path, `${JSON.stringify(feed, null, 2)}\n`, "utf8");
+    } else if (feed.notes !== release.body) {
+      throw new Error("latest.json notes do not match the GitHub release body");
     }
     return;
   }
 
+  if (!release.isDraft) throw new Error("The release must be a draft before building");
   const output = process.env.GITHUB_OUTPUT;
   if (!output) throw new Error("GITHUB_OUTPUT is not set");
-  const delimiter = `release-notes-${randomUUID()}`;
-  appendFileSync(output, `body<<${delimiter}\n${notes}\n${delimiter}\n`, "utf8");
+  appendFileSync(output, `id=${release.databaseId}\n`, "utf8");
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) main();

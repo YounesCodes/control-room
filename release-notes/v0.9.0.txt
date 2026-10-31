@@ -1,4 +1,0 @@
-- Brighter classic terminal colors and regular-weight prompt text. Saved colors now apply consistently to every open terminal.
-- More accurate activity indicators: blank input and command editing no longer appear busy.
-- Matching shell icons across tabs, launchers, menus, and Settings, with clearer PowerShell artwork and centered sidebar actions.
-- Saved connection status indicators slide aside to reveal actions on hover or keyboard focus.
