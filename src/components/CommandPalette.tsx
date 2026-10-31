@@ -1,5 +1,6 @@
+import { Search } from "./MagnifierIcon";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Columns2, FolderCog, Pencil, Plus, Search, Settings, StickyNote } from "lucide-react";
+import { Columns2, FolderCog, Pencil, Plus, Settings, StickyNote } from "lucide-react";
 import { connectionTarget } from "../lib/format";
 import { HostOsIcon } from "./HostOsIcon";
 import { LocalShellIcon } from "./LocalShellIcon";

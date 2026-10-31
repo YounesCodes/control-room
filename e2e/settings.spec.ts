@@ -168,15 +168,15 @@ describe("Settings and native window", () => {
 
   it("hides and restores Command Prompt in the launcher without uninstalling it", async () => {
     await $("aria/Open Settings").click();
-    await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
+    await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
-    await $("button=Local terminal").click();
-    await expect($("aria/Command Prompt")).not.toExist();
+    await $('button[aria-label="New terminal"]').click();
+    await expect($(".new-terminal-menu").$("aria/Local terminals: Command Prompt")).not.toExist();
     await browser.keys("Escape");
     await restartApp();
     await $("aria/Open Settings").click();
-    await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
+    await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
     await openLocal();
@@ -240,13 +240,14 @@ describe("Local Terminal Mode desktop", () => {
     await restartApp();
     await expect($(".app-shell")).toHaveAttribute("class", "app-shell terminal-focus-mode");
     await expect($(".sidebar")).not.toBeDisplayed();
-    await expect($("aria/New terminal")).toBeDisplayed();
+    await expect($('button[aria-label="New terminal"]')).toBeDisplayed();
     await terminalCommand("echo CONTROL_ROOM_LOCAL_MODE_OK", "CONTROL_ROOM_LOCAL_MODE_OK");
     expect((await runtime()).sessionIds).toHaveLength(1);
     await $("aria/Exit terminal focus").click();
     await expect($("aria/Saved connections")).toBeDisplayed();
-    await $("button=Local terminal").click();
-    await expect($(".local-shell-menu")).not.toExist();
+    await $('button[aria-label="New terminal"]').click();
+    await expect($(".new-terminal-menu")).toBeDisplayed();
+    await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await $("button=Add connection").click();
     await expect($("[role=dialog]")).toBeDisplayed();

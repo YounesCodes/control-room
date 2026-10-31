@@ -208,8 +208,12 @@ describe("application hierarchy", () => {
     expect(appSource).toContain('aria-label="Copy terminal selection"');
     expect(appSource).toContain('aria-label="Paste into terminal"');
     expect(appSource).not.toContain('aria-label="Clear terminal"');
-    expect(appSource).toContain('"Restart terminal"');
-    expect(appSource).toContain('"Reconnect terminal"');
+    // The ended-session action is not strip chrome anymore: it rides the
+    // notice that names the failure, labelled for the session kind.
+    expect(appSource).not.toContain('"Reconnect terminal"');
+    expect(terminalSource).toContain("terminal-notice-action");
+    expect(terminalSource).toContain('"Reconnect"');
+    expect(terminalSource).toContain('"Restart"');
     expect(appSource).toContain("terminalHandlesRef.current.get(activeWorkspace.id)");
     expect(terminalSource).not.toContain("terminal-toolbar");
     expect(terminalSource).not.toContain("onDisconnect");
