@@ -40,9 +40,6 @@ guardrails, not every choice described below.
   outline. Dark brand hues are lightened enough to remain visible on graph cards.
   Match full image repositories and known aliases, never container names
   or arbitrary registry basenames. Compose project icons stay unchanged.
-  Ports container-owner nodes use the same image logos and generic fallback,
-  matched by container ID. Reveal their brand colors on group hover, keyboard
-  focus, or selection of an endpoint within the group.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.

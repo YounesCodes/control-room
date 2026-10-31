@@ -97,7 +97,7 @@ const containers: CachedList<DockerContainer> = {
     {
       id: "container-id",
       name: "gateway-1",
-      image: "nginx:stable",
+      image: "gateway:latest",
       state: "running",
       status: "Up",
       ports: "0.0.0.0:443->8443/tcp",
@@ -143,39 +143,6 @@ function renderPane(
 afterEach(() => {
   cleanup();
   document.getElementById("camera-motion-override")?.remove();
-});
-
-it("uses container IDs for owner logos with hover, focus, and endpoint selection colors", async () => {
-  await page.viewport(1280, 800);
-  const known = { ...containers.items[0], image: "postgres:17" };
-  const unknown = {
-    ...known,
-    id: "custom-container",
-    image: "private/postgres:17",
-    ports: "0.0.0.0:5440->5432/tcp",
-  };
-  renderPane(null, sockets, { ...containers, items: [known, unknown] });
-  const logo = screen.getByRole("img", { name: "PostgreSQL image" });
-  const group = logo.closest(".arch-group")!;
-  const fallback = [...document.querySelectorAll(".owner-container")].find(
-    (element) => element !== group,
-  )!;
-  expect(fallback.querySelector(".arch-group-head svg.lucide-container")).toBeTruthy();
-  expect(fallback.querySelector(".docker-image-icon")).toBeNull();
-  const color = () => getComputedStyle(logo).color;
-  await userEvent.hover(screen.getByRole("button", { name: "Fit to view" }));
-  const neutral = color();
-  await userEvent.hover(logo);
-  await waitFor(() => expect(color()).not.toBe(neutral));
-  const brand = color();
-  await userEvent.click(group.querySelector<HTMLButtonElement>(".arch-chip")!);
-  await userEvent.hover(screen.getByRole("button", { name: "Fit to view" }));
-  await waitFor(() => expect(color()).toBe(brand));
-  await page.getByRole("button", { name: "Close details" }).click();
-  expect(group.contains(document.activeElement)).toBe(true);
-  expect(color()).toBe(brand);
-  screen.getByRole("button", { name: "Fit to view" }).focus();
-  await waitFor(() => expect(color()).toBe(neutral));
 });
 
 it("selects the requested container binding without confusing the same port on another owner", async () => {

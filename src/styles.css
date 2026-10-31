@@ -6650,12 +6650,6 @@ kbd {
   color: var(--image-brand);
 }
 
-.arch-group.owner-container:is(:hover, :focus-within, :has(.arch-chip.selected))
-  > .arch-group-head
-  .docker-image-icon {
-  color: var(--image-brand);
-}
-
 .docker-chip-title strong {
   min-width: 0;
   overflow-wrap: anywhere;

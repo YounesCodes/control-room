@@ -1,7 +1,6 @@
 import type { PublishedPortSelection } from "../../lib/port-inspector";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Cpu, HelpCircle, Server } from "lucide-react";
-import { ContainerImageIcon } from "../ContainerImageIcon";
+import { Container, Cpu, HelpCircle, Server } from "lucide-react";
 import { InspectionGraph } from "../InspectionGraph";
 import { PortOverviewDetail } from "./PortOverviewDetail";
 import {
@@ -22,8 +21,8 @@ import type {
   LogSourceSelection,
 } from "../../types";
 
-function OwnerIcon({ kind, image }: { kind: OwnerKind; image?: string }) {
-  if (kind === "container") return <ContainerImageIcon image={image ?? ""} />;
+function OwnerIcon({ kind }: { kind: OwnerKind }) {
+  if (kind === "container") return <Container size={14} />;
   if (kind === "service") return <Server size={14} />;
   if (kind === "process") return <Cpu size={14} />;
   return <HelpCircle size={14} />;
@@ -151,22 +150,21 @@ export function PortsGraph({
     }
   }, [focused?.id, focusEndpoint]);
 
-  const graphGroups = useMemo(() => {
-    const images = new Map(
-      containers.map((container) => [`container:${container.id}`, container.image]),
-    );
-    return groups.map((group) => ({
-      id: group.key,
-      label: group.owner.label,
-      icon: <OwnerIcon kind={group.owner.kind} image={images.get(group.key)} />,
-      className: `owner-${group.owner.kind}`,
-      items: group.items.map((item) => ({
-        id: item.id,
-        secondary: !item.sockets.length && !item.bindings.length,
-        content: <GraphItem item={item} />,
+  const graphGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        id: group.key,
+        label: group.owner.label,
+        icon: <OwnerIcon kind={group.owner.kind} />,
+        className: `owner-${group.owner.kind}`,
+        items: group.items.map((item) => ({
+          id: item.id,
+          secondary: !item.sockets.length && !item.bindings.length,
+          content: <GraphItem item={item} />,
+        })),
       })),
-    }));
-  }, [groups, containers]);
+    [groups],
+  );
 
   return (
     <InspectionGraph
