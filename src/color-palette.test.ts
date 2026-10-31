@@ -18,6 +18,7 @@ const semanticUiColors = [
   "#d6a84a",
   "#ef5b6b",
   "#0078d4",
+  "#0288d1",
   "#5391fe",
   "#f05032",
   "#d70a53",

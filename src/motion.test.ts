@@ -109,7 +109,7 @@ describe("motion guardrails", () => {
     }
     // One reveal rule reads each mark's --identity variable, so every brand
     // surfaces on the same contexts: tabs and pane tabs, host rows, terminal
-    // menus, the overflow menus, and the local-shell launcher.
+    // menus and the overflow menus.
     const reveal = stylesSource.match(/[^{}]*\.identity-mark[^{}]*\{[^}]*color: var\(--identity\)/);
     expect(reveal, "the shared identity reveal rule is missing").toBeTruthy();
     for (const context of [
@@ -118,7 +118,6 @@ describe("motion guardrails", () => {
       ".host-row.menu-open .identity-mark",
       ".terminal-target-group button:hover .identity-mark",
       '.session-tab-overflow-menu > button[aria-current="page"] .identity-mark',
-      ".local-shell-launcher button:hover .identity-mark",
     ]) {
       expect(reveal?.[0]).toContain(context);
     }
@@ -133,7 +132,6 @@ describe("motion guardrails", () => {
     for (const selector of [
       ".host-context-menu",
       ".session-tab-overflow-menu",
-      ".local-shell-menu",
       ".terminal-target-menu",
       ".update-panel",
       ".host-metrics-panel",

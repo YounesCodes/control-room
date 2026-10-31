@@ -1,7 +1,8 @@
+import { Search } from "../components/MagnifierIcon";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowDown, Eraser, FileClock, Pause, Play, Search, Square, WrapText } from "lucide-react";
+import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";

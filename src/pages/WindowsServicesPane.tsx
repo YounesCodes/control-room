@@ -1,5 +1,6 @@
+import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { ResizableSplit } from "../components/ResizablePanels";
