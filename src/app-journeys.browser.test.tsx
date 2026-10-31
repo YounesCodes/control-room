@@ -2080,15 +2080,17 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
       expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     }
-    for (const view of ["Systemd", "Docker", "Baselines"]) {
+    for (const view of ["Systemd", "Baselines"]) {
       await navigate(view);
       await checkList();
     }
-    await navigate("Ports");
-    for (const kind of ["listeners", "connections", "docker"]) {
-      await page.getByRole("button", { name: "Filter ports", exact: true }).click();
-      await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
-      await page.getByRole("button", { name: "Close port tools" }).click();
+    for (const kind of ["containers", "listeners", "connections", "docker"]) {
+      await navigate(kind === "containers" ? "Docker" : "Ports");
+      if (kind !== "containers") {
+        await page.getByRole("button", { name: "Filter ports", exact: true }).click();
+        await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
+        await page.getByRole("button", { name: "Close port tools" }).click();
+      }
       await vi.waitFor(() => expect(element.querySelectorAll(".arch-chip").length).toBe(100));
       const expectEntireGraph = () => {
         const viewport = element.querySelector(".arch-viewport")!.getBoundingClientRect();
@@ -2122,7 +2124,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(node.bottom).toBeLessThanOrEqual(viewport.bottom);
       });
       await userEvent.keyboard("{Enter}");
-      await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+      await expect
+        .element(
+          page.getByRole("complementary", {
+            name: kind === "containers" ? "Container details" : "Port details",
+          }),
+        )
+        .toBeVisible();
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(() => {
         const graph = element.querySelector(".arch-content")!.getBoundingClientRect();
@@ -2434,11 +2442,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
       .toBeVisible();
+    await page.getByRole("button", { name: "Find containers" }).click();
     await page.getByPlaceholder("Search projects, services, or containers").fill("missing");
     await expect
       .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
       .not.toBeInTheDocument();
     await page.getByRole("button", { name: "Clear search" }).click();
+    await page.getByRole("button", { name: /fixture-web/ }).click();
     await page.getByRole("button", { name: "View logs" }).click();
     await expect
       .element(page.getByRole("combobox", { name: "Container", exact: true }))

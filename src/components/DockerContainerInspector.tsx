@@ -1,17 +1,6 @@
-import { useState } from "react";
 import { FileClock, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "./PanelState";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
-
-type InspectorTab = "overview" | "ports" | "networks" | "mounts" | "metadata";
-
-const tabs: { id: InspectorTab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "ports", label: "Ports" },
-  { id: "networks", label: "Networks" },
-  { id: "mounts", label: "Mounts" },
-  { id: "metadata", label: "Metadata" },
-];
 
 function displayTime(value: string | null) {
   if (!value) return "Not recorded";
@@ -198,75 +187,82 @@ export function DockerContainerInspector({
   onViewLogs: () => void;
   windowsHost?: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const permissionError = !windowsHost && cache?.error?.toLowerCase().includes("permission denied");
   const collectedAt = cache?.fetchedAt
     ? new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
 
-  if (cache?.loading && !cache.value) return <LoadingState label="Inspecting container…" />;
-  if (cache?.error && !cache.value) {
-    return (
-      <ErrorState
-        message={cache.error}
-        action={
-          <button onClick={permissionError ? onRetryWithSudo : onRefresh}>
-            {permissionError ? "Retry with sudo" : "Retry"}
-          </button>
-        }
-      />
-    );
-  }
   const details = cache?.value;
-  if (!details) return <LoadingState label="Inspecting container…" />;
 
   return (
     <>
       <header className="container-inspector-heading">
         <div>
-          <h2>{details.name || summary.name}</h2>
+          <h2>{details?.name || summary.name}</h2>
           <p>
-            {details.state}
-            {details.healthStatus ? ` · ${details.healthStatus}` : ""}
+            {details?.state ?? summary.state}
+            {details?.healthStatus ? ` · ${details.healthStatus}` : ""}
             {collectedAt ? ` · inspected at ${collectedAt}` : ""}
           </p>
         </div>
+      </header>
+      <div
+        className="port-inspector-body"
+        tabIndex={0}
+        role="region"
+        aria-label="Container information"
+      >
+        {cache?.error && !details ? (
+          <ErrorState
+            message={cache.error}
+            action={
+              <button onClick={permissionError ? onRetryWithSudo : onRefresh}>
+                {permissionError ? "Retry with sudo" : "Retry"}
+              </button>
+            }
+          />
+        ) : !details ? (
+          <LoadingState label="Inspecting container…" />
+        ) : (
+          <>
+            {cache?.error && (
+              <p className="inline-warning">Showing saved details. Refresh failed: {cache.error}</p>
+            )}
+            <Overview details={details} />
+            <details className="port-disclosure">
+              <summary>Published ports</summary>
+              <Ports details={details} />
+            </details>
+            <details className="port-disclosure">
+              <summary>Networks</summary>
+              <Networks details={details} />
+            </details>
+            <details className="port-disclosure">
+              <summary>Mounts</summary>
+              <Mounts details={details} />
+            </details>
+            <details className="port-disclosure">
+              <summary>Container &amp; Compose</summary>
+              <Metadata details={details} />
+            </details>
+          </>
+        )}
+      </div>
+      <div className="detail-actions">
+        <button className="secondary-button" type="button" onClick={onViewLogs}>
+          <FileClock size={15} /> View logs
+        </button>
         <button
           className="icon-button"
           type="button"
           onClick={onRefresh}
           aria-label="Refresh container details"
+          title="Refresh container details"
           disabled={cache?.loading}
         >
           <RefreshCw size={16} className={cache?.loading ? "spinning" : ""} />
         </button>
-      </header>
-      {cache?.error && (
-        <p className="inline-warning">Showing saved details. Refresh failed: {cache.error}</p>
-      )}
-      <div className="inspector-tabs" role="tablist" aria-label="Container detail sections">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
-      <div className="inspector-tab-panel" role="tabpanel">
-        {activeTab === "overview" && <Overview details={details} />}
-        {activeTab === "ports" && <Ports details={details} />}
-        {activeTab === "networks" && <Networks details={details} />}
-        {activeTab === "mounts" && <Mounts details={details} />}
-        {activeTab === "metadata" && <Metadata details={details} />}
-      </div>
-      <button className="secondary-button container-log-action" type="button" onClick={onViewLogs}>
-        <FileClock size={15} /> View logs
-      </button>
     </>
   );
 }

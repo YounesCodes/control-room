@@ -5,19 +5,21 @@ description: Find containers and inspect their current state.
 
 import dockerScreenshot from "../../../assets/screenshots/docker.png";
 
-Docker lists the host's containers, including stopped ones. Switch between a flat list and groups based on Docker Compose labels. Select a container to see its details.
+Docker shows the host's containers, including stopped ones, in a graph grouped by Docker Compose project. Select a container to zoom to it and open its details.
 
 <figure class="docs-screenshot">
   <a href={dockerScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={dockerScreenshot.src}
-      alt="The Control Room Docker view with grouped containers and a selected container detail panel."
+      alt="The Control Room Docker graph with Compose project branches and a selected container inspector."
     />
   </a>
-  <figcaption>Containers and details. Example data shown.</figcaption>
+  <figcaption>Container graph and details. Example data shown.</figcaption>
 </figure>
 
-Search by project, service, name, image, or container ID. A container appears under **Ungrouped** when its Compose labels are missing or invalid.
+Use **Find containers** to search by project, service, name, image, or container ID. **Filter containers** offers **Container state** and **Group by**. Choose **None** to give each container its own branch. A container appears under **Ungrouped** when its Compose labels are missing or invalid.
+
+Drag the canvas to pan, use the wheel or zoom buttons to zoom, and select **Fit to view** to frame the graph. Hover or focus **Containers** for counts and collection time. Close details with **Close details**, Escape, another press on the selected container, or a click on empty canvas. Dragging keeps details open.
 
 Details can include:
 

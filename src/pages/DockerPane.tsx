@@ -1,18 +1,24 @@
 import { Search } from "../components/MagnifierIcon";
-import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
-import { RefreshCw } from "lucide-react";
+import {
+  Container,
+  Layers,
+  RefreshCw,
+  RotateCcw,
+  ShieldAlert,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { DockerContainerInspector } from "../components/DockerContainerInspector";
-import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { InspectionGraph } from "../components/InspectionGraph";
 import { api, errorMessage } from "../lib/api";
 import {
   composeContainerLabel,
   filterDockerContainers,
   groupDockerContainers,
 } from "../lib/docker-compose-grouping";
-import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
+import { isCacheFresh } from "../lib/workspace-cache";
 import type {
   CachedList,
   CachedValue,
@@ -41,11 +47,13 @@ export function DockerPane({
   onViewLogs: (source: LogSourceSelection) => void;
   focusId?: string | null;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(
-    () => focusId ?? reconcileSelection(cache.items, null),
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(focusId);
   const [search, setSearch] = useState("");
   const [grouped, setGrouped] = useState(true);
+  const [state, setState] = useState("all");
+  const [tools, setTools] = useState<"search" | "filters" | "info" | null>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [sudoPurpose, setSudoPurpose] = useState<"list" | "details" | null>(null);
   const cacheRef = useRef(cache);
   const detailsCacheRef = useRef(detailsCache);
@@ -63,7 +71,6 @@ export function DockerPane({
       const items = await api.listContainers(connection.id, password);
       if (request !== requestRef.current) return;
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-      setSelectedId((selected) => reconcileSelection(items, selected));
       setSudoPurpose(null);
     } catch (caught) {
       if (request !== requestRef.current) return;
@@ -116,11 +123,6 @@ export function DockerPane({
   }, [connection.id]);
 
   useEffect(() => {
-    if (!cache.items.length) return;
-    setSelectedId((selected) => reconcileSelection(cache.items, selected));
-  }, [cache.items]);
-
-  useEffect(() => {
     if (focusId) setSelectedId(focusId);
   }, [focusId]);
 
@@ -128,180 +130,303 @@ export function DockerPane({
     if (selectedId) void loadDetails(selectedId);
   }, [selectedId]);
 
-  const filtered = useMemo(
-    () => filterDockerContainers(cache.items, search),
-    [cache.items, search],
-  );
-  const groups = useMemo(() => groupDockerContainers(cache.items, search), [cache.items, search]);
-  const visibleCount = grouped
-    ? groups.reduce((total, group) => total + group.containers.length, 0)
-    : filtered.length;
+  const groups = useMemo(() => {
+    const filtered = filterDockerContainers(cache.items, search).filter(
+      (container) => state === "all" || container.state === state,
+    );
+    const branches = grouped
+      ? groupDockerContainers(filtered).filter((group) => group.containers.length)
+      : filtered.map((container) => ({
+          id: container.id,
+          label: container.name,
+          project: null,
+          containers: [container],
+        }));
+    return branches.map((group) => ({
+      id: group.id,
+      label: group.label,
+      icon: group.project ? <Layers size={14} /> : <Container size={14} />,
+      items: group.containers.map((container) => ({
+        id: container.id,
+        content: (
+          <>
+            <span className="arch-chip-title docker-chip-title">
+              <Container size={14} />
+              <strong>{grouped ? composeContainerLabel(container) : container.name}</strong>
+            </span>
+            <span className="arch-chip-meta">
+              {grouped && composeContainerLabel(container) !== container.name
+                ? container.name
+                : container.image}
+            </span>
+            <span className="arch-chip-kind docker-chip-state">
+              <span className={`service-indicator service-${container.state}`} />
+              {container.state}
+            </span>
+          </>
+        ),
+      })),
+    }));
+  }, [cache.items, search, grouped, state]);
   const selected = cache.items.find((container) => container.id === selectedId) ?? null;
-  const selectedVisible = filtered.some((container) => container.id === selectedId);
   const permissionError = !windowsHost && cache.error?.toLowerCase().includes("permission denied");
+  const filtersActive = !grouped || state !== "all";
+  const states = [
+    ...new Set([
+      ...cache.items.map((container) => container.state),
+      ...(state === "all" ? [] : [state]),
+    ]),
+  ].sort();
+  const snapshotDescription = [
+    cache.fetchedAt
+      ? "Last collected at " +
+        new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : null,
+    `${cache.items.filter((container) => container.state === "running").length} running · ${cache.items.length} total`,
+    cache.loading ? "Reading Docker containers…" : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    const rows = Array.from(
-      event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-container-id]"),
-    );
-    if (!rows.length) return;
-    const current = rows.indexOf(event.target as HTMLButtonElement);
-    let next = current;
-    if (event.key === "Home") next = 0;
-    if (event.key === "End") next = rows.length - 1;
-    if (event.key === "ArrowDown") next = Math.min(current + 1, rows.length - 1);
-    if (event.key === "ArrowUp") next = Math.max(current - 1, 0);
-    if (next < 0) next = 0;
-    event.preventDefault();
-    rows[next].focus();
-  }
+  useEffect(() => {
+    if (cache.error) setTools("info");
+    else setTools((current) => (current === "info" ? null : current));
+  }, [cache.error]);
 
-  function renderContainer(container: DockerContainer, showComposeIdentity: boolean) {
-    return (
-      <button
-        className={container.id === selectedId ? "dense-row selected-row" : "dense-row"}
-        type="button"
-        key={container.id}
-        data-container-id={container.id}
-        onClick={() => setSelectedId(container.id)}
-      >
-        <span className={`service-indicator service-${container.state}`} />
-        <span className="row-main">
-          <strong>{showComposeIdentity ? composeContainerLabel(container) : container.name}</strong>
-          <small>
-            {showComposeIdentity
-              ? `${container.name} · ${container.id.slice(0, 12)}`
-              : container.image}
-          </small>
-        </span>
-        <span className="row-state">{container.state}</span>
-      </button>
-    );
-  }
+  useEffect(() => {
+    if (!tools || sudoPurpose) return;
+    const panel = toolsRef.current?.querySelector<HTMLElement>(".ports-tools-panel");
+    (panel?.querySelector<HTMLElement>("input, select") ?? panel)?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !toolsRef.current?.contains(event.target)) setTools(null);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTools(null);
+        toolsButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [tools, sudoPurpose]);
 
-  if (cache.loading && !cache.items.length)
-    return <LoadingState label="Reading Docker containers…" />;
-  if (cache.error && !cache.items.length) {
-    return (
-      <>
-        <ErrorState
-          message={cache.error}
-          action={
-            permissionError ? (
-              <button onClick={() => setSudoPurpose("list")}>Retry with sudo</button>
-            ) : (
-              <button onClick={() => load(null, true)}>Retry</button>
-            )
-          }
-        />
-        {sudoPurpose === "list" && (
-          <CredentialDialog
-            connectionLabel={connection.displayName}
-            onClose={() => setSudoPurpose(null)}
-            onSubmit={(password) => load(password, true)}
-          />
-        )}
-      </>
-    );
+  function toggleTools(next: "search" | "filters" | "info", button: HTMLButtonElement) {
+    toolsButtonRef.current = button;
+    setTools((current) => (current === next ? null : next));
   }
 
   return (
-    <ResizableSplit name="Docker" className="feature-page split-page">
-      <div className="list-panel">
-        <header className="page-heading compact-heading">
-          <div>
-            <h2>Containers</h2>
-            <p>
-              {cache.items.filter((container) => container.state === "running").length} running ·{" "}
-              {cache.items.length} total
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => load(null, true)}
-            aria-label="Refresh containers"
-            disabled={cache.loading}
-          >
-            <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
-          </button>
-        </header>
-        {cache.error && (
-          <p className="inline-warning">Showing saved results. Refresh failed: {cache.error}</p>
-        )}
-        <div className="docker-list-controls">
-          <label className="search-field">
-            <Search size={15} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search projects, services, or containers"
+    <section className="feature-page ports-page docker-page">
+      <InspectionGraph
+        groups={groups}
+        hostLabel={connection.displayName}
+        graphLabel="Docker graph"
+        loading={cache.loading || (cache.fetchedAt === null && !cache.error)}
+        selectedId={selectedId}
+        onSelectionChange={setSelectedId}
+        inspectorId="container-inspector"
+        inspectorLabel="Container details"
+        emptyMessage={
+          cache.loading
+            ? "Reading Docker containers…"
+            : cache.error && !cache.items.length
+              ? "Docker unavailable"
+              : cache.items.length
+                ? "No matching containers"
+                : "No containers found"
+        }
+        inspector={
+          selected && (
+            <DockerContainerInspector
+              key={selected.id}
+              summary={selected}
+              windowsHost={windowsHost}
+              cache={detailsCache[selected.id]}
+              onRefresh={() => loadDetails(selected.id, null, true)}
+              onRetryWithSudo={() => setSudoPurpose("details")}
+              onViewLogs={() => onViewLogs({ type: "docker", id: selected.id })}
             />
-          </label>
-          <div className="view-toggle" aria-label="Container list layout">
-            <button type="button" aria-pressed={grouped} onClick={() => setGrouped(true)}>
-              Grouped
-            </button>
-            <button type="button" aria-pressed={!grouped} onClick={() => setGrouped(false)}>
-              Flat
-            </button>
-          </div>
-        </div>
-        <div className="dense-list" onKeyDown={handleListKeyDown}>
-          {grouped
-            ? groups.map((group) => (
-                <section className="container-group" key={group.id}>
-                  <header className="container-group-heading">
-                    <h3>{group.label}</h3>
-                    <span>{group.containers.length}</span>
+          )
+        }
+        toolbar={
+          <div className="ports-controls" ref={toolsRef}>
+            <header className="ports-heading" data-tooltip-boundary>
+              <h2
+                tabIndex={0}
+                title={snapshotDescription}
+                data-tooltip-align="start"
+                aria-describedby="docker-snapshot-description"
+              >
+                Containers
+              </h2>
+              <span id="docker-snapshot-description" className="sr-only">
+                {snapshotDescription}
+              </span>
+              {cache.error && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Docker reading warnings"
+                  title="Docker reading warnings"
+                  aria-expanded={tools === "info"}
+                  aria-controls="docker-tools"
+                  onClick={(event) => toggleTools("info", event.currentTarget)}
+                >
+                  <ShieldAlert size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Find containers"
+                title="Find containers"
+                aria-expanded={tools === "search"}
+                aria-pressed={!!search}
+                aria-controls="docker-tools"
+                onClick={(event) => toggleTools("search", event.currentTarget)}
+              >
+                <Search size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Filter containers"
+                title="Filter containers"
+                aria-expanded={tools === "filters"}
+                aria-pressed={filtersActive}
+                aria-controls="docker-tools"
+                onClick={(event) => toggleTools("filters", event.currentTarget)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Refresh containers"
+                disabled={cache.loading}
+                onClick={() => load(null, true)}
+              >
+                <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
+              </button>
+            </header>
+            {tools && (
+              <div
+                id="docker-tools"
+                className="ports-tools-panel"
+                role="region"
+                tabIndex={-1}
+                aria-label={
+                  tools === "search"
+                    ? "Find containers"
+                    : tools === "filters"
+                      ? "Container filters"
+                      : "Docker reading warnings"
+                }
+              >
+                {tools !== "search" && (
+                  <header className="ports-tools-heading">
+                    <strong>{tools === "filters" ? "Filters" : "Reading warnings"}</strong>
+                    {tools === "filters" && (
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Reset filters"
+                        title="Reset filters"
+                        disabled={!filtersActive}
+                        onClick={() => {
+                          setGrouped(true);
+                          setState("all");
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Close container tools"
+                      onClick={() => {
+                        setTools(null);
+                        toolsButtonRef.current?.focus();
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
                   </header>
-                  {group.containers.map((container) => renderContainer(container, true))}
-                </section>
-              ))
-            : filtered.map((container) => renderContainer(container, false))}
-          {!visibleCount && (
-            <EmptyState
-              title={cache.items.length ? "No matching containers" : "No containers found"}
-            >
-              {cache.items.length
-                ? "No project, service, or container matches this search."
-                : "Docker returned an empty container list."}
-            </EmptyState>
-          )}
-        </div>
-      </div>
-      <aside className="detail-panel container-inspector-panel">
-        {!cache.items.length ? (
-          <EmptyState title="No containers found">
-            Docker returned an empty container list.
-          </EmptyState>
-        ) : !filtered.length ? (
-          <EmptyState title="No matching containers">
-            <button className="secondary-button" type="button" onClick={() => setSearch("")}>
-              Clear search
-            </button>
-          </EmptyState>
-        ) : selected && !selectedVisible ? (
-          <EmptyState title="Selected container is outside this search">
-            <button className="secondary-button" type="button" onClick={() => setSearch("")}>
-              Show selected container
-            </button>
-          </EmptyState>
-        ) : selected ? (
-          <DockerContainerInspector
-            key={selected.id}
-            summary={selected}
-            windowsHost={windowsHost}
-            cache={detailsCache[selected.id]}
-            onRefresh={() => loadDetails(selected.id, null, true)}
-            onRetryWithSudo={() => setSudoPurpose("details")}
-            onViewLogs={() => onViewLogs({ type: "docker", id: selected.id })}
-          />
-        ) : (
-          <EmptyState title="Select a container" />
-        )}
-      </aside>
+                )}
+                {tools === "search" && (
+                  <label className="search-field ports-search-field">
+                    <Search size={16} />
+                    <input
+                      aria-label="Search containers"
+                      placeholder="Search projects, services, or containers"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Clear search"
+                      disabled={!search}
+                      onClick={() => setSearch("")}
+                    >
+                      <X size={14} />
+                    </button>
+                  </label>
+                )}
+                {tools === "filters" && (
+                  <div className="port-list-controls">
+                    <label>
+                      <span>Container state</span>
+                      <select value={state} onChange={(event) => setState(event.target.value)}>
+                        <option value="all">All states</option>
+                        {states.map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Group by</span>
+                      <select
+                        value={grouped ? "project" : "none"}
+                        onChange={(event) => setGrouped(event.target.value === "project")}
+                      >
+                        <option value="project">Compose project</option>
+                        <option value="none">None</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {tools === "info" && (
+                  <div className="ports-reading-body">
+                    <p className="inline-warning">
+                      <span>
+                        {cache.items.length ? "Showing saved results. Refresh failed: " : ""}
+                        {cache.error}
+                      </span>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() =>
+                          permissionError ? setSudoPurpose("list") : load(null, true)
+                        }
+                      >
+                        {permissionError ? "Retry with sudo" : "Retry"}
+                      </button>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        }
+      />
       {sudoPurpose && (
         <CredentialDialog
           connectionLabel={connection.displayName}
@@ -313,6 +438,6 @@ export function DockerPane({
           }
         />
       )}
-    </ResizableSplit>
+    </section>
   );
 }

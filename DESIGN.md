@@ -190,6 +190,15 @@ to its node. The Close button, Escape, clicking the selected node again, and
 clicking empty canvas space all close it. Dragging the canvas pans without
 closing the inspector.
 
+Docker shares the Ports canvas, camera controls, selection behavior, and inspector
+layout. Fit the full container graph before a selection is made. Group container
+nodes by validated Compose project by default, with an Ungrouped branch for
+containers without a validated project and service. Search and filters open from
+the compact toolbar. Filters offer container state and an ungrouped layout.
+Keep counts and collection time in the heading tooltip. Container details use
+expandable sections in a scrolling body, with Refresh and View logs fixed outside
+that body. Follow a container opened from Ports directly to its node and inspector.
+
 ## Visual language
 
 ### Color and surfaces

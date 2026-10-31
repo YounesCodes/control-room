@@ -82,13 +82,13 @@ describe("DockerContainerInspector", () => {
     expect(technical?.open).toBe(false);
     expect(screen.getByText("Previous stop")).toBeTruthy();
     expect(screen.getByText("sha256:abc")).toBeTruthy();
-    await user.click(screen.getByRole("tab", { name: "Ports" }));
+    await user.click(screen.getByText("Published ports", { selector: "summary" }));
     expect(screen.getByText("0.0.0.0:443")).toBeTruthy();
-    await user.click(screen.getByRole("tab", { name: "Networks" }));
+    await user.click(screen.getByText("Networks", { selector: "summary" }));
     expect(screen.getByText("proxy_default")).toBeTruthy();
-    await user.click(screen.getByRole("tab", { name: "Mounts" }));
+    await user.click(screen.getByText("Mounts", { selector: "summary" }));
     expect(screen.getByText("/etc/gateway")).toBeTruthy();
-    await user.click(screen.getByRole("tab", { name: "Metadata" }));
+    await user.click(screen.getByText("Container & Compose", { selector: "summary" }));
     expect(
       screen.getByText(
         "Environment values, command arguments, arbitrary labels, health logs, and host mount sources are not collected.",
