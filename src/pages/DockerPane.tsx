@@ -234,6 +234,11 @@ export function DockerPane({
         hostDescription={[capabilities?.osName, capabilities?.osVersion].filter(Boolean).join(" ")}
         graphLabel="Docker graph"
         loading={cache.loading || (cache.fetchedAt === null && !cache.error)}
+        loadingLabel={
+          cache.loading || (cache.fetchedAt === null && !cache.error)
+            ? "Reading Docker containers…"
+            : undefined
+        }
         selectedId={selectedId}
         onSelectionChange={setSelectedId}
         inspectorId="container-inspector"

@@ -279,6 +279,20 @@ export function PortsPane({
       <PortsGraph
         focusEndpoint={focusEndpoint}
         loading={cache.loading || containersCache.loading || containersCache.fetchedAt === null}
+        loadingLabel={
+          kind === "connections"
+            ? connectionsLoading
+              ? "Reading established connections…"
+              : undefined
+            : cache.loading || (cache.fetchedAt === null && !cache.error)
+              ? "Reading listening ports…"
+              : containersCache.loading ||
+                  (containersCache.fetchedAt === null && !containersCache.error)
+                ? "Reading Docker containers…"
+                : connectionsVisible && connectionsLoading
+                  ? "Reading established connections…"
+                  : undefined
+        }
         sockets={cache.items}
         containers={containersCache.items}
         firewall={firewall}

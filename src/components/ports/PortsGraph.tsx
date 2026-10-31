@@ -92,9 +92,11 @@ export function PortsGraph({
   onViewLogs,
   focusEndpoint,
   loading = false,
+  loadingLabel,
 }: {
   focusEndpoint?: PublishedPortSelection;
   loading?: boolean;
+  loadingLabel?: string;
   sockets: ListeningSocket[];
   containers: DockerContainer[];
   firewall: FirewallStatus | null;
@@ -173,6 +175,7 @@ export function PortsGraph({
       hostDescription={[capabilities?.osName, capabilities?.osVersion].filter(Boolean).join(" ")}
       graphLabel="Ports graph"
       emptyMessage={emptyMessage}
+      loadingLabel={loadingLabel}
       toolbar={
         <>
           {toolbar}

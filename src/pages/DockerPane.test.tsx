@@ -80,6 +80,26 @@ const details: DockerContainerDetails = {
 };
 
 describe("DockerPane container inspection", () => {
+  it("uses a spinner while reading and an empty state only after the read completes", () => {
+    const props = {
+      connection,
+      detailsCache: {},
+      onCacheChange: vi.fn(),
+      onDetailsCacheChange: vi.fn(),
+      onViewLogs: vi.fn(),
+    };
+    const cache = { items: [], fetchedAt: Date.now(), loading: true, error: null };
+    const { container: element, rerender } = render(<DockerPane {...props} cache={cache} />);
+    expect(screen.getByText("Reading Docker containers…")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
+    expect(element.querySelector(".panel-state svg")).toBeNull();
+    rerender(<DockerPane {...props} cache={{ ...cache, loading: false }} />);
+    expect(screen.getByText("No containers found")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeNull();
+    rerender(<DockerPane {...props} cache={{ ...cache, items: [container] }} />);
+    expect(element.querySelector(".arch-chip")).toBeTruthy();
+    expect(element.querySelector(".panel-state")).toBeNull();
+  });
   it("shows the detected host name and OS in the graph root", () => {
     const capabilities = {
       hostname: "debian-server",

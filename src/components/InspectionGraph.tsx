@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Scan, Server, X } from "lucide-react";
-import { EmptyState } from "./PanelState";
+import { EmptyState, LoadingState } from "./PanelState";
 import { usePanZoom } from "../lib/use-pan-zoom";
 
 export interface InspectionGraphItem {
@@ -40,6 +40,7 @@ export function InspectionGraph({
   inspectorLabel,
   inspector,
   loading = false,
+  loadingLabel,
 }: {
   groups: InspectionGraphGroup[];
   hostLabel: string;
@@ -53,6 +54,7 @@ export function InspectionGraph({
   inspectorLabel: string;
   inspector: ReactNode;
   loading?: boolean;
+  loadingLabel?: string;
 }) {
   const nodeRefs = useRef(new Map<string, HTMLButtonElement>());
   const [focusing, setFocusing] = useState(false);
@@ -337,7 +339,11 @@ export function InspectionGraph({
         }}
       >
         {!groups.length ? (
-          <EmptyState title={emptyMessage} />
+          loadingLabel ? (
+            <LoadingState label={loadingLabel} />
+          ) : (
+            <EmptyState title={emptyMessage} />
+          )
         ) : (
           <div
             className={focusing ? "arch-content arch-focusing" : "arch-content"}

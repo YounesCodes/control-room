@@ -138,6 +138,43 @@ function renderPane(
 }
 
 describe("PortsPane", () => {
+  it.each(["ports", "docker"])(
+    "uses a spinner while reading %s without graph data",
+    async (source) => {
+      const { container: element } = renderPane(
+        null,
+        { ...sockets, items: [], loading: source === "ports" },
+        { ...containers, items: [], loading: source === "docker" },
+      );
+      expect(
+        screen.getByText(
+          source === "ports" ? "Reading listening ports…" : "Reading Docker containers…",
+        ),
+      ).toBeTruthy();
+      expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
+      expect(element.querySelector(".panel-state svg")).toBeNull();
+    },
+  );
+
+  it("does not show a loader for a completed empty Ports snapshot", () => {
+    const { container: element } = renderPane(
+      null,
+      { ...sockets, items: [] },
+      { ...containers, items: [] },
+    );
+    expect(screen.getByText("No ports match the current filters")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeNull();
+  });
+  it("shows a spinner before the first listener read has returned", () => {
+    const { container: element } = renderPane(
+      null,
+      { ...sockets, items: [], fetchedAt: null, loading: false },
+      { ...containers, items: [] },
+    );
+    expect(screen.getByText("Reading listening ports…")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
+    expect(element.querySelector(".panel-state svg")).toBeNull();
+  });
   it("keeps a genuine Docker daemon listener linked to its unit", async () => {
     const user = userEvent.setup();
     const { onOpenSystemd } = renderPane(
