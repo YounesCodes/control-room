@@ -11,17 +11,21 @@ Ports takes a snapshot of TCP and UDP listeners on the connected host. It can al
   <a href={portsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={portsScreenshot.src}
-      alt="The Control Room Ports view showing listener topology, binding exposure, firewall policy, and owner evidence."
+      alt="The Ports graph with a consolidated Docker endpoint and its IPv4 and IPv6 listener details."
     />
   </a>
-  <figcaption>Listeners and their available details. Example data shown.</figcaption>
+  <figcaption>Ports graph with grouped binding details. Example data shown.</figcaption>
 </figure>
 
-Switch between **Overview**, **Connections**, **Docker**, and **Table**. Filter by protocol, address, or text. The view shows when a result was collected or cut short by a limit.
+The graph groups ports by service or container and starts with the entire diagram visible. Matching Docker publications, listeners, IPv4/IPv6 bindings, and connection counts share one card. Selecting it preserves the individual records in the inspector. Entries are combined only when ownership and endpoint evidence match; sharing a port number is not enough. **Fit to view** restores that framing after zooming or panning and leaves room for an open inspector. Select a port or connection to inspect its binding, firewall policy, process, service, remote endpoints, or Docker mapping. Expand **Remote endpoints**, **Host firewall policy**, **Container & Compose**, or **Socket diagnostics** for more information. Close the inspector with **Close details**, **Escape**, another click on the selected card, or a click on empty canvas space. Closing restores the full-graph view.
+
+Drag the canvas to pan. Use the wheel or zoom buttons to zoom, and **Fit to view** to show the whole graph. Open **Find ports** to search ports, owners, or endpoints. Listeners and Docker publications appear by default. **Show established connections** adds connection-only endpoints with a dashed outline. A unique PID match or matching process name, protocol, and local port places a peer beside its listener, labeled **Related process**. This keeps the peer record separate and does not infer service ownership; ambiguous matches stay separate. Open **Filter ports** to isolate **Listeners**, **Established / outbound**, or **Docker-published** entries, or narrow by protocol and **Binding scope**. Use **Loopback only** for local bindings or **Non-loopback** for wildcard and specific network addresses. Active search and filters keep their toolbar buttons highlighted. Binding scope filters apply to known bind addresses. Connection-only summaries have no bind address and are hidden by these filters; counts attached to a listener describe its owner and local port, not an individual binding.
+
+Hover over **Ports** for collection time and connection limits. Keyboard focus exposes the same summary to screen readers. **Ports reading warnings** contains warnings and retry actions. Failed reads open those warnings automatically. Refresh failures keep existing results visible. Published Docker ports and established connections can appear even when no matching listener was reported.
 
 Some accounts cannot read which process owns a socket. The listener still appears, with its owner marked unavailable. On Linux, **Resolve owners with sudo** can retry the read where allowed. Control Room links to a service or container only when it can match it reliably.
 
-A listener on `0.0.0.0` accepts connections on more than one local interface, but that alone does not tell you whether it is reachable from the Internet. Firewall rules and network access are separate. Ports does not scan other machines or test reachability.
+A listener on `0.0.0.0` accepts connections on more than one local interface, but that alone does not tell you whether it is reachable from the Internet. The inspector separates listening scope, host firewall policy, and reachability. Reachability is marked **Not tested**. Ports does not scan other machines. UFW defaults and host port rules do not prove accessibility; Docker forwarding, routing, and upstream firewalls can apply separately.
 
 The firewall snapshot reads UFW or firewalld. UFW includes its incoming default policy. firewalld reports active zones and explicit numeric port rules, without deciding which zone governs a listener. A failed zone or port read reports an unavailable snapshot instead of an empty rule list. Service-name rules, rich rules, direct rules, and nftables-only or iptables-only configurations remain unavailable. A missing numeric rule does not mean a port is blocked.
 

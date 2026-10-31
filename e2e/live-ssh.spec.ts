@@ -103,7 +103,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await browser.keys("exit");
     await browser.keys("Enter");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
-    await $("aria/Reconnect terminal").click();
+    await $(".terminal-workspace-pane.active .terminal-notice").$("button=Reconnect").click();
     await terminalCommand("printf 'RECONNECTED_OK\\n'", "RECONNECTED_OK");
     expect((await runtime()).sessionIds[0]).not.toBe(old);
   });
@@ -143,7 +143,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await $(".dense-row").click();
     await expect($(".detail-panel")).toHaveText(expect.stringContaining(units[0].id));
   });
-  it("reads Ports in graph and table views and reads connection evidence", async () => {
+  it("reads Ports listeners and connection evidence through graph filters", async () => {
     const { saved } = await connect();
     const sockets = await ipc<ListeningSocket[]>("list_ports", {
       connectionId: saved.id,
@@ -151,11 +151,16 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     });
     expect(sockets.some((socket) => socket.port > 0)).toBe(true);
     await feature("Ports");
-    await expect($("h2=Ports")).toBeDisplayed();
-    await $("button=Table").click();
-    await expect($(".ports-page")).toHaveText(expect.stringContaining(String(sockets[0].port)));
-    await $("button=Connections").click();
-    await expect($(".ports-page")).toBeDisplayed();
+    await expect($("aria/Ports graph")).toBeDisplayed();
+    await $("aria/Filter ports").click();
+    await $("[aria-label='Graph contents']").selectByAttribute("value", "listeners");
+    await $("aria/Close port tools").click();
+    await expect($(".arch-content")).toHaveText(expect.stringContaining(String(sockets[0].port)));
+    await $("aria/Filter ports").click();
+    await $("[aria-label='Graph contents']").selectByAttribute("value", "connections");
+    await expect($("[aria-label='Graph contents']")).toHaveValue("connections");
+    await $("aria/Close port tools").click();
+    await expect($("aria/Ports graph")).toBeDisplayed();
   });
   it("reads current and discovered previous boot evidence without sudo", async () => {
     const { saved } = await connect();

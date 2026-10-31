@@ -1,3 +1,5 @@
+import { Search } from "./components/MagnifierIcon";
+import { DockerIcon } from "./components/DockerIcon";
 import {
   ConnectionSection,
   ResizeDivider,
@@ -11,6 +13,7 @@ import {
   type PanelSizes,
 } from "./lib/panel-layout";
 import {
+  type ComponentType,
   useCallback,
   lazy,
   Suspense,
@@ -23,7 +26,6 @@ import {
 } from "react";
 import {
   RotateCcw,
-  Boxes,
   Camera,
   ChevronDown,
   Clipboard,
@@ -42,8 +44,6 @@ import {
   Power,
   Plus,
   Rows2,
-  RefreshCw,
-  Search,
   Server,
   Settings,
   ShieldAlert,
@@ -174,12 +174,16 @@ function administratorTerminalNote(status: AdministratorTerminalStatus): string 
   }
 }
 
-const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
+const navigation: {
+  id: WorkspaceView;
+  label: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+}[] = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
-  { id: "docker", label: "Docker", icon: Boxes },
+  { id: "docker", label: "Docker", icon: DockerIcon },
   { id: "boot", label: "Boot", icon: Power },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "baselines", label: "Baselines", icon: Camera },
@@ -234,9 +238,6 @@ export function App() {
   const [localShells, setLocalShells] = useState<LocalShellProfile[]>([]);
   const [administratorTerminalStatus, setAdministratorTerminalStatus] =
     useState<AdministratorTerminalStatus>("unsupportedWindows");
-  const [localShellMenuOpen, setLocalShellMenuOpen] = useState(false);
-  const { present: localShellMenuPresent, closing: localShellMenuClosing } =
-    usePopoverExit(localShellMenuOpen);
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -290,7 +291,6 @@ export function App() {
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
-  const localShellButtonRef = useRef<HTMLButtonElement>(null);
   const splitMenuButtonRef = useRef<HTMLButtonElement>(null);
   const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
   // The closing transitions keep fading popovers mounted for a beat without
@@ -686,37 +686,6 @@ export function App() {
       document.removeEventListener("keydown", dismissMenuWithKeyboard);
     };
   }, [hostMenuConnectionId]);
-
-  useEffect(() => {
-    if (!localShellMenuOpen) return;
-
-    function dismissMenu(event: PointerEvent) {
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-local-shell-menu]")) return;
-      setLocalShellMenuOpen(false);
-    }
-
-    function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setLocalShellMenuOpen(false);
-        localShellButtonRef.current?.focus();
-      }
-    }
-
-    document.addEventListener("pointerdown", dismissMenu);
-    document.addEventListener("keydown", dismissMenuWithKeyboard);
-    return () => {
-      document.removeEventListener("pointerdown", dismissMenu);
-      document.removeEventListener("keydown", dismissMenuWithKeyboard);
-    };
-  }, [localShellMenuOpen]);
-
-  useLayoutEffect(() => {
-    if (!localShellMenuOpen) return;
-    localShellButtonRef.current?.parentElement
-      ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
-      ?.focus();
-  }, [localShellMenuOpen]);
 
   useEffect(() => {
     if (!newTerminalMenuOpen) return;
@@ -1133,34 +1102,7 @@ export function App() {
   /// Opens a local Windows shell as its own Workspace. Each launch is a new
   /// shell, so there is nothing to reuse, and no Saved Connection is involved.
   function openLocalShell(shell: LocalShellProfile) {
-    setLocalShellMenuOpen(false);
     closeSettings(() => openWorkspace(createLocalWorkspace(shell)));
-  }
-
-  function toggleLocalShellMenu() {
-    if (localShellMenuOpen) {
-      setLocalShellMenuOpen(false);
-      return;
-    }
-    void api
-      .listLocalShells()
-      .then((catalog) => {
-        setLocalShells(catalog.profiles);
-        setAdministratorTerminalStatus(catalog.administratorStatus);
-        const enabled = offeredLocalShells(
-          catalog.profiles,
-          settingsContract?.current.hiddenLocalShells ?? [],
-        );
-        if (enabled.length === 1) openLocalShell(enabled[0]);
-        else {
-          setLocalShellMenuOpen(enabled.length > 1);
-          if (!enabled.length)
-            setActionError(
-              "No enabled local terminals are available. Check installed shells and Settings.",
-            );
-        }
-      })
-      .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
   }
 
   function openWorkspace(workspace: Workspace) {
@@ -1185,6 +1127,23 @@ export function App() {
       );
     }
     setNewTerminalMenuOpen(true);
+    void api
+      .listLocalShells()
+      .then((catalog) => {
+        setLocalShells(catalog.profiles);
+        setAdministratorTerminalStatus(catalog.administratorStatus);
+        if (
+          !connections.length &&
+          !offeredLocalShells(catalog.profiles, settingsContract?.current.hiddenLocalShells ?? [])
+            .length
+        ) {
+          setActionError(
+            "No enabled local terminals are available. Check installed shells and Settings.",
+          );
+          setNewTerminalMenuOpen(false);
+        }
+      })
+      .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
   }
 
   /// Split's chooser anchors to its own button with the same geometry.
@@ -2017,93 +1976,6 @@ export function App() {
           }
         />
         <div className="sidebar-footer">
-          {!!offeredShells.length && (
-            <div className="local-shell-launcher" data-local-shell-menu>
-              <button
-                ref={localShellButtonRef}
-                className="sidebar-secondary"
-                type="button"
-                onClick={toggleLocalShellMenu}
-                aria-haspopup={offeredShells.length > 1 ? "menu" : undefined}
-                aria-expanded={offeredShells.length > 1 ? localShellMenuOpen : undefined}
-                title="Open a shell on this Windows machine"
-              >
-                <SquareTerminal size={16} className="local-shell-mark identity-mark" />
-                <span className="sidebar-action-label">Local terminal</span>
-              </button>
-              {localShellMenuPresent && (
-                <div
-                  className="local-shell-menu"
-                  role="menu"
-                  aria-label="Local terminal"
-                  aria-hidden={localShellMenuClosing || undefined}
-                  inert={localShellMenuClosing || undefined}
-                  data-closing={localShellMenuClosing || undefined}
-                  data-app-popover=""
-                  onKeyDown={(event) => {
-                    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-                    const items = [
-                      ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                        '[role="menuitem"]:not(:disabled)',
-                      ),
-                    ];
-                    if (!items.length) return;
-                    event.preventDefault();
-                    const current = items.indexOf(document.activeElement as HTMLButtonElement);
-                    const next =
-                      event.key === "Home"
-                        ? 0
-                        : event.key === "End"
-                          ? items.length - 1
-                          : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
-                            items.length;
-                    items[next].focus();
-                  }}
-                >
-                  {standardLocalShells.length > 0 && (
-                    <div className="local-shell-menu-group">
-                      <strong>Local terminals</strong>
-                      {standardLocalShells.map((shell) => (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          key={shell.id}
-                          onClick={() => openLocalShell(shell)}
-                        >
-                          <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />
-                          <span>{shell.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {administratorGroupOffered && (
-                    <div className="local-shell-menu-group local-shell-administrator-group">
-                      <strong>Run as administrator</strong>
-                      {administratorLocalShells.length ? (
-                        administratorLocalShells.map((shell) => (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            key={shell.id}
-                            onClick={() => openLocalShell(shell)}
-                            aria-label={`${shell.label}, run as administrator`}
-                          >
-                            <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />
-                            <span>{shell.label}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="local-shell-administrator-note">
-                          <ShieldAlert size={14} strokeWidth={1.8} />
-                          <span>{administratorTerminalNote(administratorTerminalStatus)}</span>
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
           <button
             className="sidebar-primary"
             type="button"
@@ -2125,7 +1997,7 @@ export function App() {
       </aside>
 
       <main className="workspace-shell">
-        {workspaces.length > 0 && (
+        {(workspaces.length > 0 || canOpenNewTerminal) && (
           <nav className="session-tabs" aria-label="Open Workspaces">
             <WorkspaceTabScroller
               activeTabId={settingsOpen ? null : activeWorkspaceId}
@@ -2209,7 +2081,11 @@ export function App() {
             <span className="session-new-terminal-anchor" data-new-terminal-menu>
               <button
                 ref={newTerminalButtonRef}
-                className="session-new-terminal"
+                className={
+                  workspaces.length
+                    ? "session-new-terminal"
+                    : "session-new-terminal session-new-terminal-empty"
+                }
                 type="button"
                 onClick={openNewTerminalMenu}
                 disabled={!canOpenNewTerminal}
@@ -2218,7 +2094,9 @@ export function App() {
                 aria-expanded={newTerminalMenuOpen}
                 title="Open a terminal for a Saved Connection or a local shell"
               >
-                <Plus size={16} /> <ChevronDown size={12} />
+                <Plus size={16} />
+                {!workspaces.length && <span>New terminal</span>}
+                <ChevronDown size={12} />
               </button>
               {newTerminalMenuPresent && (
                 <TerminalTargetMenu
@@ -2227,6 +2105,19 @@ export function App() {
                   groups={newTerminalGroups}
                   style={newTerminalMenuAt ?? undefined}
                   closing={newTerminalMenuClosing}
+                  footer={
+                    administratorGroupOffered &&
+                    !administratorLocalShells.length && (
+                      <details className="terminal-administrator-setup">
+                        <summary>
+                          <ShieldAlert size={14} />
+                          Run as administrator
+                          <ChevronDown size={12} />
+                        </summary>
+                        <p>{administratorTerminalNote(administratorTerminalStatus)}</p>
+                      </details>
+                    )
+                  }
                   onClose={() => {
                     setNewTerminalMenuOpen(false);
                     newTerminalButtonRef.current?.focus();
@@ -2323,27 +2214,6 @@ export function App() {
                       scratchpadButtonRef.current?.focus();
                     }}
                   />
-                )}
-                {activeTerminalEnded && (
-                  <button
-                    className="session-strip-button"
-                    type="button"
-                    onClick={() =>
-                      updateWorkspace(activeWorkspace.id, {
-                        connectRequested: true,
-                        restored: false,
-                        reconnectToken: activeWorkspace.reconnectToken + 1,
-                      })
-                    }
-                    aria-label={
-                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
-                    }
-                    title={
-                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
-                    }
-                  >
-                    <RefreshCw size={15} />
-                  </button>
                 )}
                 {terminalFocusMode && (
                   <>
@@ -2590,6 +2460,13 @@ export function App() {
                           })
                         }
                         findRequest={terminalFindRequests[workspace.id] ?? 0}
+                        onReconnect={() =>
+                          updateWorkspace(workspace.id, {
+                            connectRequested: true,
+                            restored: false,
+                            reconnectToken: workspace.reconnectToken + 1,
+                          })
+                        }
                       />
                     </div>
                   );
@@ -2813,7 +2690,6 @@ export function App() {
               {connections.length
                 ? "Choose a saved connection from the sidebar to open it."
                 : "Use Add connection in the sidebar to save an SSH destination."}
-              {!!offeredShells.length && " Local terminal opens a shell on this machine."}
             </p>
             {!connections.length && (
               <p className="empty-workspace-note">
@@ -2932,7 +2808,7 @@ export function App() {
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           activeView={activeWorkspace?.view ?? null}
-          canOpenNewTerminal={canOpenNewTerminal && workspaces.length > 0}
+          canOpenNewTerminal={canOpenNewTerminal}
           activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
           canSplitTerminal={canSplitTerminal}

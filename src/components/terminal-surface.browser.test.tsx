@@ -372,3 +372,114 @@ it("keeps every terminal on the saved palette through search and tab changes", a
   expectPalette(updated);
   expect(terminals).toHaveLength(4);
 });
+
+it("puts the reconnect action on the ended-session notice", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  const onReconnect = vi.fn();
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createRemoteWorkspace(connection()),
+        state: "error",
+        reason: "SSH connection was lost (exit code 255)",
+        connectRequested: false,
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onReconnect={onReconnect}
+    />,
+  );
+  const action = page.getByRole("button", { name: "Reconnect", exact: true });
+  await expect.element(action).toBeVisible();
+  for (const width of [960, 360, 240]) {
+    await page.viewport(width, 640);
+    const notice = container!.querySelector<HTMLElement>(".terminal-notice")!;
+    const message = notice.querySelector<HTMLElement>(".terminal-notice-message")!;
+    const button = notice.querySelector<HTMLButtonElement>(".terminal-notice-action")!;
+    await vi.waitFor(() => {
+      const banner = notice.getBoundingClientRect();
+      const text = message.getBoundingClientRect();
+      const recovery = button.getBoundingClientRect();
+      expect(Math.abs(text.y + text.height / 2 - recovery.y - recovery.height / 2)).toBeLessThan(1);
+      expect(recovery.right).toBeCloseTo(banner.right, 0);
+      expect(recovery.top).toBeCloseTo(banner.top, 0);
+      expect(recovery.bottom).toBeCloseTo(banner.bottom - 1, 0);
+      expect(text.right).toBeCloseTo(recovery.left, 0);
+      const icon = button.querySelector("svg")!.getBoundingClientRect();
+      const label = button.querySelector("span")!.getBoundingClientRect();
+      expect(Math.abs(icon.y + icon.height / 2 - label.y - label.height / 2)).toBeLessThan(1);
+      expect(message.scrollWidth).toBeLessThanOrEqual(message.clientWidth);
+      expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
+    });
+  }
+  action.element().focus();
+  await expect.element(action).toHaveFocus();
+  await userEvent.keyboard("{Enter}");
+  expect(getComputedStyle(action.element()).outlineStyle).toBe("solid");
+  expect(onReconnect).toHaveBeenCalledTimes(1);
+  await userEvent.click(action);
+  expect(onReconnect).toHaveBeenCalledTimes(2);
+});
+
+it("labels the notice action Restart for an ended local shell", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createLocalWorkspace({
+          id: "test-shell",
+          label: "Test shell",
+          kind: "git-bash",
+          elevated: false,
+        }),
+        state: "disconnected",
+        reason: "Test shell exited with code 0.",
+        connectRequested: false,
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onReconnect={() => undefined}
+    />,
+  );
+  await expect.element(page.getByRole("button", { name: "Restart", exact: true })).toBeVisible();
+});
+
+it("keeps the notice action off live sessions", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(
+    <TerminalPane
+      workspace={{
+        ...createRemoteWorkspace(connection()),
+        state: "connected",
+        connectRequested: false,
+      }}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onReconnect={() => undefined}
+    />,
+  );
+  const pane = container!;
+  await vi.waitFor(() => expect(pane.querySelector(".xterm")).not.toBeNull());
+  expect(pane.querySelector(".terminal-notice")).toBeNull();
+});
