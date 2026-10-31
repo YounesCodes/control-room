@@ -134,7 +134,7 @@ export async function connectionMenu(name: string) {
 // fallback before testing local workspace data or layout.
 export async function openOfflineConnection(name: string, forceNew = false) {
   if (forceNew) {
-    await $("aria/New terminal").click();
+    await $('button[aria-label="New terminal"]').click();
     await $(".new-terminal-menu").$(`button*=${name}`).click();
   } else {
     await $(`.host-main*=${name}`).click();
@@ -151,13 +151,8 @@ export async function openOfflineConnection(name: string, forceNew = false) {
 }
 
 export async function openLocal() {
-  const launcher = $("button=Local terminal");
-  if (await launcher.isDisplayed()) {
-    await launcher.click();
-  } else {
-    await $("aria/New terminal").click();
-  }
-  await $(".local-shell-menu, .new-terminal-menu").$("button*=Command Prompt").click();
+  await $('button[aria-label="New terminal"]').click();
+  await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
   await expect($(".terminal-workspace-pane.active .xterm-screen")).toBeDisplayed();
   await browser.waitUntil(async () => (await runtime()).sessionIds.length > 0);
 }
