@@ -1,4 +1,4 @@
-import { Boxes, FileClock, Server } from "lucide-react";
+import { Container, FileClock, Server } from "lucide-react";
 import type { FirewallStatus, ListeningSocket, LogSourceSelection } from "../../types";
 import {
   exposureLabel,
@@ -40,74 +40,82 @@ export function SocketDetail({
         </h2>
         <p>{socket.localAddress}</p>
       </header>
-      <h3 className="detail-section-heading">Listening</h3>
-      <dl className="detail-list">
-        <div>
-          <dt>Protocol</dt>
-          <dd>{socket.protocol.toUpperCase()}</dd>
-        </div>
-        <div>
-          <dt>Address family</dt>
-          <dd>{socket.addressFamily.toUpperCase()}</dd>
-        </div>
-        <div>
-          <dt>Bind address</dt>
-          <dd className="technical">{socket.localAddress}</dd>
-        </div>
-        <div>
-          <dt>Exposure</dt>
-          <dd>{exposureLabel(socketExposure(socket.localAddress))}</dd>
-        </div>
-        <div>
-          <dt>Scope</dt>
-          <dd>{socketScope(socket)}</dd>
-        </div>
-      </dl>
-      <h3 className="detail-section-heading">Firewall</h3>
-      <dl className="detail-list">
-        <div>
-          <dt>{firewallLabel}</dt>
-          <dd>{disposition.label}</dd>
-        </div>
-        {firewall?.backend === "windows" && (
+      <div
+        className="port-inspector-body"
+        tabIndex={0}
+        role="region"
+        aria-label="Listener information"
+      >
+        <h3 className="detail-section-heading">Listening</h3>
+        <dl className="detail-list">
           <div>
-            <dt>Profile policies</dt>
-            <dd>{firewall.defaultIncoming ?? "Unavailable"}</dd>
+            <dt>Protocol</dt>
+            <dd>{socket.protocol.toUpperCase()}</dd>
           </div>
-        )}
-      </dl>
-      <p className="unit-scope-note">
-        Binding and firewall policy are independent of Internet reachability.
-      </p>
-      <h3 className="detail-section-heading">Ownership evidence</h3>
-      <dl className="detail-list">
-        <div>
-          <dt>Process</dt>
-          <dd>
-            {socket.processName ?? (socket.ownership === "ambiguous" ? "Ambiguous" : "Unavailable")}
-          </dd>
-        </div>
-        <div>
-          <dt>PID</dt>
-          <dd>{socket.processId ?? "Unavailable"}</dd>
-        </div>
-        {firewall?.backend !== "windows" && (
           <div>
-            <dt>Systemd unit</dt>
-            <dd>{socket.systemdUnit ?? "Not established"}</dd>
+            <dt>Address family</dt>
+            <dd>{socket.addressFamily.toUpperCase()}</dd>
           </div>
-        )}
-        <div>
-          <dt>Container</dt>
-          <dd>{containerOwner?.container.name ?? "Not established"}</dd>
-        </div>
-        {containerOwner?.composeProject && (
           <div>
-            <dt>Compose project</dt>
-            <dd>{containerOwner.composeProject}</dd>
+            <dt>Bind address</dt>
+            <dd className="technical">{socket.localAddress}</dd>
           </div>
-        )}
-      </dl>
+          <div>
+            <dt>Exposure</dt>
+            <dd>{exposureLabel(socketExposure(socket.localAddress))}</dd>
+          </div>
+          <div>
+            <dt>Scope</dt>
+            <dd>{socketScope(socket)}</dd>
+          </div>
+        </dl>
+        <h3 className="detail-section-heading">Firewall</h3>
+        <dl className="detail-list">
+          <div>
+            <dt>{firewallLabel}</dt>
+            <dd>{disposition.label}</dd>
+          </div>
+          {firewall?.backend === "windows" && (
+            <div>
+              <dt>Profile policies</dt>
+              <dd>{firewall.defaultIncoming ?? "Unavailable"}</dd>
+            </div>
+          )}
+        </dl>
+        <p className="unit-scope-note">
+          Binding and firewall policy are independent of Internet reachability.
+        </p>
+        <h3 className="detail-section-heading">Ownership evidence</h3>
+        <dl className="detail-list">
+          <div>
+            <dt>Process</dt>
+            <dd>
+              {socket.processName ??
+                (socket.ownership === "ambiguous" ? "Ambiguous" : "Unavailable")}
+            </dd>
+          </div>
+          <div>
+            <dt>PID</dt>
+            <dd>{socket.processId ?? "Unavailable"}</dd>
+          </div>
+          {firewall?.backend !== "windows" && (
+            <div>
+              <dt>Systemd unit</dt>
+              <dd>{socket.systemdUnit ?? "Not established"}</dd>
+            </div>
+          )}
+          <div>
+            <dt>Container</dt>
+            <dd>{containerOwner?.container.name ?? "Not established"}</dd>
+          </div>
+          {containerOwner?.composeProject && (
+            <div>
+              <dt>Compose project</dt>
+              <dd>{containerOwner.composeProject}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
       <div className="detail-actions">
         {socket.systemdUnit && (
           <>
@@ -134,7 +142,7 @@ export function SocketDetail({
               type="button"
               onClick={() => onOpenContainer(containerOwner.container.id)}
             >
-              <Boxes size={15} /> Open container
+              <Container size={15} /> Open container
             </button>
             <button
               className="secondary-button"

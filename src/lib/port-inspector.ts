@@ -1,7 +1,7 @@
 import type { DockerContainer, FirewallStatus, ListeningSocket } from "../types";
 
 export type PortSort = "port-asc" | "port-desc" | "protocol" | "address" | "process";
-export type Exposure = "all-interfaces" | "local-only" | "specific";
+export type Exposure = "all-interfaces" | "local-only" | "specific" | "non-loopback";
 
 export interface SocketContainerOwner {
   container: DockerContainer;
@@ -106,7 +106,8 @@ export function socketExposure(address: string): Exposure {
 
 export function exposureLabel(exposure: Exposure): string {
   if (exposure === "all-interfaces") return "All interfaces";
-  if (exposure === "local-only") return "Local only";
+  if (exposure === "local-only") return "Loopback";
+  if (exposure === "non-loopback") return "Non-loopback";
   return "Specific address";
 }
 
@@ -323,7 +324,13 @@ export function filterAndSortSockets(
   const query = search.trim().toLowerCase();
   const filtered = sockets.filter((socket) => {
     if (protocol !== "all" && socket.protocol !== protocol) return false;
-    if (exposure !== "all" && socketExposure(socket.localAddress) !== exposure) return false;
+    if (
+      exposure !== "all" &&
+      (exposure === "non-loopback"
+        ? socketExposure(socket.localAddress) === "local-only"
+        : socketExposure(socket.localAddress) !== exposure)
+    )
+      return false;
     if (!query) return true;
     const owner = resolveSocketContainer(socket, containers);
     return [
@@ -353,3 +360,5 @@ export function filterAndSortSockets(
     return left.port - right.port || left.id.localeCompare(right.id);
   });
 }
+
+export type PortGraphKind = "overview" | "all" | "listeners" | "connections" | "docker";
