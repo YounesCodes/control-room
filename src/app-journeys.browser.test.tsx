@@ -273,6 +273,7 @@ beforeEach(async () => {
   root = createRoot(element);
 });
 afterEach(() => {
+  document.getElementById("focus-slot-motion-test")?.remove();
   root.unmount();
   element.remove();
   window.localStorage.clear();
@@ -1420,6 +1421,64 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(position()).toEqual(normalBounds);
     });
   }
+
+  it("collapses the focus button slot outside Terminal without leaving a titlebar gap", async () => {
+    await page.viewport(960, 700);
+    await mount();
+    await navigate("Terminal");
+    const controls = element.querySelector(".window-controls")!;
+    const nativeBounds = controls.getBoundingClientRect();
+    for (const view of ["Docker", "Ports", "Terminal"]) {
+      await navigate(view);
+      await expect
+        .poll(() => element.querySelector(".app-window-actions")!.getBoundingClientRect().width)
+        .toBeCloseTo(nativeBounds.width + (view === "Terminal" ? 40 : 0));
+      const settings = page
+        .getByRole("button", { name: "Open Settings" })
+        .element()
+        .getBoundingClientRect();
+      const actions = element.querySelector(".app-window-actions")!.getBoundingClientRect();
+      expect(actions.left - settings.right).toBeLessThanOrEqual(3);
+      expect(controls.getBoundingClientRect().left).toBe(nativeBounds.left);
+      if (view !== "Terminal") {
+        expect(actions.width).toBeCloseTo(controls.getBoundingClientRect().width);
+        expect(element.querySelector(".app-focus-toggle")).toHaveAttribute("inert");
+        expect(element.querySelector(".app-focus-toggle")).toHaveAttribute("aria-hidden", "true");
+      }
+    }
+  });
+
+  it("animates the focus slot out and back while native window controls stay fixed", async () => {
+    await page.viewport(960, 700);
+    await mount();
+    await navigate("Terminal");
+    const actions = element.querySelector(".app-window-actions")!;
+    const controls = element.querySelector(".window-controls")!;
+    const focus = element.querySelector(".app-focus-toggle")!;
+    const bar = element.querySelector(".app-bar")!;
+    const initial = controls.getBoundingClientRect().left;
+    const style = document.createElement("style");
+    style.id = "focus-slot-motion-test";
+    style.textContent =
+      ".app-window-actions, .app-bar, .app-window-actions .app-focus-toggle { transition-duration: 10s !important; transition-timing-function: linear !important; }";
+    document.head.append(style);
+    for (const view of ["Docker", "Terminal"]) {
+      await navigate(view);
+      // Flush layout before inspecting the real CSS transitions.
+      actions.getBoundingClientRect();
+      const animations = [actions, focus, bar].flatMap((node) => node.getAnimations());
+      expect(animations.length).toBeGreaterThan(0);
+      for (const animation of animations) {
+        animation.pause();
+        animation.currentTime = 5000;
+      }
+      expect(actions.getBoundingClientRect().width).toBeCloseTo(158, 0);
+      expect(Number(getComputedStyle(focus).opacity)).toBeCloseTo(0.5);
+      expect(controls.getBoundingClientRect().left).toBeCloseTo(initial);
+      for (const animation of animations) animation.finish();
+      expect(actions.getBoundingClientRect().width).toBeCloseTo(view === "Terminal" ? 178 : 138);
+    }
+  });
 
   it("slides sidebar status left to reveal connection actions on hover and focus", async () => {
     await mount();

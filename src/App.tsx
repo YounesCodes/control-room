@@ -1821,9 +1821,11 @@ export function App() {
   });
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
+  const focusToggleAvailable = !settingsOpen && activeWorkspace?.view === "terminal";
   return (
     <div
       ref={shellSize.ref}
+      data-focus-toggle={focusToggleAvailable ? "visible" : "hidden"}
       className={
         settingsOpen
           ? "app-shell settings-mode"
@@ -1884,18 +1886,19 @@ export function App() {
       </header>
 
       <div className="app-window-actions" role="group" aria-label="Window actions">
-        {!settingsOpen && activeWorkspace?.view === "terminal" && (
-          <button
-            className="app-bar-button app-focus-toggle"
-            type="button"
-            onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
-            aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
-            aria-pressed={terminalFocusMode}
-            title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
-          >
-            {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          </button>
-        )}
+        <button
+          className="app-bar-button app-focus-toggle"
+          type="button"
+          inert={!focusToggleAvailable}
+          aria-hidden={!focusToggleAvailable}
+          disabled={!focusToggleAvailable}
+          onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
+          aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+          aria-pressed={terminalFocusMode}
+          title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+        >
+          {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
         <WindowControls />
       </div>
 

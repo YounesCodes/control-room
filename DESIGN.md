@@ -94,6 +94,9 @@ or its session.
 Anchor the Focus terminal toggle beside the window controls at the top right.
 Keep the same button and screen position in both modes, including split groups
 and overflowing tabs, so toggling never moves it away from the pointer.
+Outside Terminal, collapse its titlebar slot and fade and slide the button out;
+reverse the motion when Terminal returns. Keep native window controls fixed and
+make the hidden button inert. Reduced motion applies the layout change immediately.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Save pane proportions with
