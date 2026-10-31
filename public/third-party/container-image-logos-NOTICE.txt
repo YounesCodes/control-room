@@ -594,10 +594,10 @@ Original source / attribution: https://github.com/getredash/website/blob/c454b52
 License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
 
 Redis (redis)
-Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/redis.svg
-Original source / attribution: https://redis.io/brand-guidelines
-License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
-Brand guidelines: https://redis.io/brand-guidelines
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/redis.svg
+Original source / attribution: https://www.redislabs.com/brand-guidelines/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/0af835e2949a9222965522780e5e0810d3c53382/LICENSE.md
+Brand guidelines: https://www.redislabs.com/brand-guidelines/
 
 Renovate (renovate)
 Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/renovate.svg

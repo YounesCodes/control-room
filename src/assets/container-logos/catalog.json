@@ -1372,16 +1372,16 @@
   },
   "redis": {
     "title": "Redis",
-    "hex": "FF4438",
+    "hex": "DC382D",
     "images": ["bitnami/redis", "redis", "redis/redis-stack", "redis/redis-stack-server"],
-    "source": "https://redis.io/brand-guidelines",
-    "upstream": "https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/redis.svg",
+    "source": "https://www.redislabs.com/brand-guidelines/",
+    "upstream": "https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/redis.svg",
     "license": {
       "type": "CC0-1.0",
-      "url": "https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md"
+      "url": "https://github.com/simple-icons/simple-icons/blob/0af835e2949a9222965522780e5e0810d3c53382/LICENSE.md"
     },
-    "guidelines": "https://redis.io/brand-guidelines",
-    "displayHex": "FF4438"
+    "guidelines": "https://www.redislabs.com/brand-guidelines/",
+    "displayHex": "DC382D"
   },
   "renovate": {
     "title": "Renovate",
