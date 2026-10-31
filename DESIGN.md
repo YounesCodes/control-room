@@ -102,6 +102,10 @@ tab-strip movement, pane controls, and workspace bounds in one short transition.
 Keep terminal text at its original pixel size and native window controls fixed.
 Preserve the live terminal sessions and keyboard focus. Reverse promptly when the
 user toggles again. Reduced motion and unsupported webviews apply the state immediately.
+Apply focus state synchronously. Documentation, Settings, and native window
+controls appear immediately on exit, outside the animated workspace. Use a short
+live workspace slide and sidebar fade rather than captured terminal frames or
+animated terminal scaling; resize the terminal once per toggle.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Save pane proportions with

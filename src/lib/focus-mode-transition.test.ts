@@ -6,58 +6,60 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(document, "startViewTransition");
+  document.body.replaceChildren();
   delete document.documentElement.dataset.focusTransition;
 });
 
-it("applies changes immediately without snapshotting for reduced motion or unsupported browsers", () => {
-  const start = vi.fn();
-  vi.stubGlobal(
-    "matchMedia",
-    vi.fn(() => ({ matches: true })),
-  );
-  Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
-  const update = vi.fn();
-  transitionFocusMode("enter", update);
-  expect(update).toHaveBeenCalledOnce();
-  expect(start).not.toHaveBeenCalled();
-  Object.defineProperty(document, "startViewTransition", { configurable: true, value: undefined });
-  transitionFocusMode("exit", update);
-  expect(update).toHaveBeenCalledTimes(2);
-});
+it.each([true, false])(
+  "updates controls synchronously without capturing frames, reduced motion: %s",
+  (reduced) => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({ matches: reduced })),
+    );
+    const start = vi.fn();
+    Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
+    const update = vi.fn();
+    transitionFocusMode("exit", update);
+    expect(update).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+  },
+);
 
-it("skips superseded callbacks and cleans up only after the newest transition", async () => {
+it("cancels superseded live motion without delaying the next state or leaving overlays", async () => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({ matches: false })),
   );
-  const callbacks: (() => void)[] = [];
-  const completions: (() => void)[] = [];
-  const transitions: { skipTransition: ReturnType<typeof vi.fn> }[] = [];
-  const start = vi.fn((callback: () => void) => {
-    callbacks.push(callback);
-    const transition = {
-      skipTransition: vi.fn(),
-      ready: Promise.resolve(),
-      updateCallbackDone: Promise.resolve(),
-      finished: new Promise<void>((resolve) => completions.push(resolve)),
-    };
-    transitions.push(transition);
-    return transition;
+  document.body.innerHTML =
+    '<div class="app-shell"><aside class="sidebar"></aside><main class="workspace-shell"></main></div>';
+  const motions: { cancel: ReturnType<typeof vi.fn>; finish: () => void }[] = [];
+  const animate = vi.fn(() => {
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const motion = { cancel: vi.fn(() => finish()), finish, finished };
+    motions.push(motion);
+    return motion;
   });
-  Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
-  const enter = vi.fn();
-  const exit = vi.fn();
-  transitionFocusMode("enter", enter);
-  transitionFocusMode("exit", exit);
-  expect(transitions[0].skipTransition).toHaveBeenCalledOnce();
-  callbacks[0]();
-  callbacks[1]();
-  expect(enter).not.toHaveBeenCalled();
-  expect(exit).toHaveBeenCalledOnce();
-  completions[0]();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(document.documentElement.dataset.focusTransition).toBe("exit");
-  completions[1]();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(document.documentElement.dataset.focusTransition).toBeUndefined();
+  vi.stubGlobal("HTMLElement", HTMLElement);
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
+  try {
+    const enter = vi.fn();
+    const exit = vi.fn();
+    transitionFocusMode("enter", enter);
+    const old = motions.slice();
+    expect(document.querySelector(".focus-departing-sidebar")).toHaveProperty("inert", true);
+    transitionFocusMode("exit", exit);
+    expect(enter).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledOnce();
+    expect(old.every((motion) => motion.cancel.mock.calls.length === 1)).toBe(true);
+    expect(document.querySelector(".focus-departing-sidebar")).toBeNull();
+    motions.forEach((motion) => motion.finish());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.documentElement.dataset.focusTransition).toBeUndefined();
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, "animate");
+  }
 });
