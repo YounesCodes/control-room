@@ -1,0 +1,740 @@
+Container image logos
+
+SVG artwork is bundled unmodified from Simple Icons at the pinned revisions listed below. Display color is applied by the application. Trademarks belong to their respective owners. These logos identify image repositories and do not imply endorsement.
+
+Actual Budget (actualbudget)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/actualbudget.svg
+Original source / attribution: https://github.com/actualbudget/actual/blob/f9f6917fcdeadd138f5e21c7bd24e475778c4263/packages/component-library/src/icons/logo/logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+AdGuard (adguard)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/adguard.svg
+Original source / attribution: https://adguard.com/en/media-materials.html
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+AlmaLinux (almalinux)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/almalinux.svg
+Original source / attribution: https://almalinux.org
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://almalinux.org/p/the-almalinux-os-trademark-usage-policy/
+
+Alpine Linux (alpinelinux)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/alpinelinux.svg
+Original source / attribution: https://alpinelinux.org
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Ansible (ansible)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/ansible.svg
+Original source / attribution: https://www.ansible.com/logos
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Apache (apache)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apache.svg
+Original source / attribution: https://www.apache.org/foundation/press/kit
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Airflow (apacheairflow)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apacheairflow.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Cassandra (apachecassandra)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachecassandra.svg
+Original source / attribution: https://www.apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache CouchDB (apachecouchdb)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachecouchdb.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Flink (apacheflink)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apacheflink.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Kafka (apachekafka)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachekafka.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache NiFi (apachenifi)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachenifi.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Pulsar (apachepulsar)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachepulsar.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Spark (apachespark)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachespark.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Apache Superset (apachesuperset)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachesuperset.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks/
+
+Apache Tomcat (apachetomcat)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/apachetomcat.svg
+Original source / attribution: https://apache.org/logos
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.apache.org/foundation/marks
+
+Appwrite (appwrite)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/appwrite.svg
+Original source / attribution: https://appwrite.io/assets
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://appwrite.io/assets
+
+Arch Linux (archlinux)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/archlinux.svg
+Original source / attribution: https://www.archlinux.org/art
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://wiki.archlinux.org/index.php/DeveloperWiki:TrademarkPolicy#Logo_Usage_Guidelines
+
+Argo (argo)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/argo.svg
+Original source / attribution: https://github.com/cncf/artwork/blob/c2e619cdf85e8bac090ceca7c0834c5cfedf9426/projects/argo/icon/black/argo-icon-black.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Authelia (authelia)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/authelia.svg
+Original source / attribution: https://github.com/authelia/authelia/blob/8316cd4eb7a6f0778c8f480c61ad76a88416fc3a/docs/static/images/branding/logo.svg
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+Brand guidelines: https://www.authelia.com/reference/guides/branding
+
+Authentik (authentik)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/authentik.svg
+Original source / attribution: https://github.com/goauthentik/authentik/blob/2c64f72ebc57dad9789c1fb799dd7cd39003d043/web/icons/icon.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Baserow (baserow)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/baserow.svg
+Original source / attribution: https://baserow.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Bitwarden (bitwarden)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/bitwarden.svg
+Original source / attribution: https://bitwarden.com/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://bitwarden.com/brand
+
+BookStack (bookstack)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/bookstack.svg
+Original source / attribution: https://www.bookstackapp.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Budibase (budibase)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/budibase.svg
+Original source / attribution: https://github.com/Budibase/budibase/blob/6137ffd9a278ecb3e4dbb42af804c9652741699e/packages/builder/assets/bb-emblem.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Bun (bun)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/bun.svg
+Original source / attribution: https://bun.sh/press-kit
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Caddy (caddy)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/caddy.svg
+Original source / attribution: https://caddyserver.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+ClickHouse (clickhouse)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/clickhouse.svg
+Original source / attribution: https://github.com/ClickHouse/ClickHouse/blob/12bd453a43819176d25ecf247033f6cb1af54beb/website/images/logo-clickhouse.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Cloudflare (cloudflare)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/cloudflare.svg
+Original source / attribution: https://www.cloudflare.com/logo/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.cloudflare.com/trademark/
+
+Cockroach Labs (cockroachlabs)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/cockroachlabs.svg
+Original source / attribution: https://www.cockroachlabs.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Consul (consul)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/consul.svg
+Original source / attribution: https://www.hashicorp.com/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.hashicorp.com/brand
+
+curl (curl)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/curl.svg
+Original source / attribution: https://curl.haxx.se/logo/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Debian (debian)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/debian.svg
+Original source / attribution: https://www.debian.org/logos
+License: CC-BY-SA-3.0 https://creativecommons.org/licenses/by-sa/3.0/
+Brand guidelines: https://www.debian.org/logos/
+
+Directus (directus)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/directus.svg
+Original source / attribution: https://directus.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Discourse (discourse)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/discourse.svg
+Original source / attribution: https://www.discourse.org
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Docker (docker)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/docker.svg
+Original source / attribution: https://www.docker.com/company/newsroom/media-resources
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+.NET (dotnet)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/dotnet.svg
+Original source / attribution: https://github.com/dotnet/brand/blob/c7d0f51b8ec59531332d05fb27a5b758a7a3d689/logo/dotnet-logo.svg
+License: CC0-1.0 https://creativecommons.org/licenses/cc0/1.0/
+Brand guidelines: https://github.com/dotnet/brand/blob/c7d0f51b8ec59531332d05fb27a5b758a7a3d689/dotnet-styleGuide-2024.pdf
+
+Drone (drone)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/drone.svg
+Original source / attribution: https://github.com/drone/brand/tree/f3ba7a1ad3c35abfe9571ea9c3ea93dff9912955
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Drupal (drupal)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/drupal.svg
+Original source / attribution: https://www.drupal.org/about/media-kit/logos
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Eclipse Adoptium (eclipseadoptium)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/eclipseadoptium.svg
+Original source / attribution: https://www.eclipse.org/org/artwork/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.eclipse.org/legal/logo_guidelines.php
+
+Eclipse Mosquitto (eclipsemosquitto)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/eclipsemosquitto.svg
+Original source / attribution: https://github.com/eclipse/mosquitto/blob/75fc908bba90d4bd06e85efc1c4ed77952ec842c/logo/mosquitto-logo-only.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Elasticsearch (elasticsearch)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/elasticsearch.svg
+Original source / attribution: https://www.elastic.co/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Element (element)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/element.svg
+Original source / attribution: https://element.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Emby (emby)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/emby.svg
+Original source / attribution: https://emby.media
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Envoy Proxy (envoyproxy)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/envoyproxy.svg
+Original source / attribution: https://d33wubrfki0l68.cloudfront.net/6f16455dae972425b77c7e31642269b375ec250e/3bd11/img/envoy-logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+ESPHome (esphome)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/esphome.svg
+Original source / attribution: https://github.com/esphome/developers.esphome.io/blob/7c0304aa36536c63c93b1f19ba18969f96df0e08/docs/images/logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Fluent Bit (fluentbit)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/fluentbit.svg
+Original source / attribution: https://github.com/fluent/fluent-bit/blob/cdb35721d06242d66a729656282831ccd1589ca2/snap/fluent-bit.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Fluentd (fluentd)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/fluentd.svg
+Original source / attribution: https://docs.fluentd.org/quickstart/logo
+License: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0
+
+Forgejo (forgejo)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/forgejo.svg
+Original source / attribution: https://codeberg.org/forgejo/meta/raw/branch/readme/branding/logo/forgejo-monochrome.svg
+License: CC-BY-SA-4.0 https://creativecommons.org/licenses/by-sa/4.0/
+Brand guidelines: https://codeberg.org/forgejo/meta/src/branch/readme/branding/README.md#logo
+
+Ghost (ghost)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/ghost.svg
+Original source / attribution: https://github.com/TryGhost/Admin/blob/e3e1fa3353767c3729b1658ad42cc35f883470c5/public/assets/icons/icon.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://ghost.org/docs/logos/
+
+Git (git)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/git.svg
+Original source / attribution: https://git-scm.com/community/logos
+License: CC-BY-3.0 https://creativecommons.org/licenses/by/3.0/
+
+Gitea (gitea)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/gitea.svg
+Original source / attribution: https://github.com/go-gitea/gitea/blob/e0c753e770a64cda5e3900aa1da3d7e1f3263c9a/assets/logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+GitLab (gitlab)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/gitlab.svg
+Original source / attribution: https://about.gitlab.com/press/press-kit/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://about.gitlab.com/handbook/marketing/corporate-marketing/brand-activation/trademark-guidelines/
+
+Go (go)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/go.svg
+Original source / attribution: https://blog.golang.org/go-brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://blog.golang.org/go-brand
+
+Grafana (grafana)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/grafana.svg
+Original source / attribution: https://grafana.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+HAProxy (haproxy)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/haproxy.svg
+Original source / attribution: https://github.com/simple-icons/simple-icons/pull/15025#issuecomment-5835041111
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Helm (helm)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/helm.svg
+Original source / attribution: https://helm.sh
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Homarr (homarr)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/homarr.svg
+Original source / attribution: https://github.com/ajnart/homarr/blob/2bf423132d9077d371d254e577fc57037a31ac4b/public/imgs/favicon/favicon.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Home Assistant (homeassistant)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/homeassistant.svg
+Original source / attribution: https://github.com/home-assistant/assets/blob/0f69676da79c3881e7dfca6d6c0a5739f88273d8/logo/home-assistant-logo.zip
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://design.home-assistant.io/#brand/logo
+
+Homebridge (homebridge)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/homebridge.svg
+Original source / attribution: https://github.com/homebridge/branding/blob/6ef3a1685e79f79a2ecdcc83824e53775ec0475d/logos/homebridge-silhouette-round-black.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Homepage (homepage)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/homepage.svg
+Original source / attribution: https://github.com/gethomepage/homepage/blob/e56dccc7f17144a53b97a315c2e4f622fa07e58d/public/safari-pinned-tab.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Immich (immich)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/immich.svg
+Original source / attribution: https://github.com/immich-app/immich/blob/25c9b779e4d19bc34551f8b137266a459e0d70e1/design/immich-logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+InfluxDB (influxdb)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/influxdb.svg
+Original source / attribution: https://influxdata.github.io/branding/logo/downloads/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://influxdata.github.io/branding/logo/usage/
+
+Jaeger (jaeger)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/jaeger.svg
+Original source / attribution: https://github.com/cncf/artwork/blob/e7e09686c20db6ddac06e482cf3338b0c8b2e22d/projects/jaeger/icon/black/jaeger-icon-black.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://github.com/cncf/artwork/blob/e7e09686c20db6ddac06e482cf3338b0c8b2e22d/projects/jaeger/jaeger-logo-guide.pdf
+
+Jellyfin (jellyfin)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/jellyfin.svg
+Original source / attribution: https://jellyfin.org/docs/general/contributing/branding.html
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://jellyfin.org/docs/general/contributing/branding.html
+
+Jenkins (jenkins)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/jenkins.svg
+Original source / attribution: https://get.jenkins.io/art/
+License: CC-BY-SA-3.0 https://creativecommons.org/licenses/by-sa/3.0/
+Brand guidelines: https://www.jenkins.io/press/
+
+Joomla (joomla)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/joomla.svg
+Original source / attribution: https://docs.joomla.org/Joomla:Brand_Identity_Elements/Official_Logo
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://docs.joomla.org/Joomla:Brand_Identity_Elements
+
+Jupyter (jupyter)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/jupyter.svg
+Original source / attribution: https://github.com/jupyter/design/blob/80716ee75dd7b2a6ec6abcd89922d020483589b1/logos/Logo%20Mark/logomark-whitebody-whitemoons/logomark-whitebody-whitemoons.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://github.com/jupyter/design
+
+Kibana (kibana)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/kibana.svg
+Original source / attribution: https://www.elastic.co/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Logstash (logstash)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/logstash.svg
+Original source / attribution: https://www.elastic.co/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.elastic.co/brand
+
+MariaDB (mariadb)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/mariadb.svg
+Original source / attribution: https://mariadb.com/about-us/logos/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://mariadb.com/about-us/logos/
+
+Matrix (matrix)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/matrix.svg
+Original source / attribution: https://matrix.org
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Mattermost (mattermost)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/mattermost.svg
+Original source / attribution: https://www.mattermost.org/brand-guidelines/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.mattermost.org/brand-guidelines/
+
+Mealie (mealie)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/mealie.svg
+Original source / attribution: https://github.com/mealie-recipes/mealie.io/blob/5519cac801c116a5688c63d8126c3bf1ce568c58/components/App/Toolbar.vue
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Metabase (metabase)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/metabase.svg
+Original source / attribution: https://www.metabase.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+MinIO (minio)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/minio.svg
+Original source / attribution: https://min.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://min.io/logo
+
+MLflow (mlflow)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/mlflow.svg
+Original source / attribution: https://github.com/mlflow/mlflow/blob/855881f93703b15ffe643003fb4d7c84f0ec2502/assets/icon.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+MongoDB (mongodb)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/mongodb.svg
+Original source / attribution: https://www.mongodb.com/pressroom
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+MySQL (mysql)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/mysql.svg
+Original source / attribution: https://www.mysql.com/about/legal/logos.html
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.mysql.com/about/legal/logos.html
+
+n8n (n8n)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/n8n.svg
+Original source / attribution: https://n8n.io/press
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+NATS.io (natsdotio)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/natsdotio.svg
+Original source / attribution: https://github.com/cncf/artwork/blob/88bc5e7a0cc7f3770ba6edddc92e1ab8a6006171/projects/nats/icon/black/nats-icon-black.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Neo4j (neo4j)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/neo4j.svg
+Original source / attribution: https://neo4j.com/brand/#logo
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://neo4j.com/brand/#logo
+
+Netdata (netdata)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/netdata.svg
+Original source / attribution: https://www.netdata.cloud
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Nextcloud (nextcloud)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/nextcloud.svg
+Original source / attribution: https://nextcloud.com/press/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://nextcloud.com/trademarks/
+
+NGINX (nginx)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/nginx.svg
+Original source / attribution: https://www.nginx.com/press/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.nginx.com/press/
+
+Nginx Proxy Manager (nginxproxymanager)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/nginxproxymanager.svg
+Original source / attribution: https://github.com/NginxProxyManager/nginx-proxy-manager/blob/2a06384a4aa597777931d38cef49cf89540392e6/docs/.vuepress/public/logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Node.js (nodedotjs)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/nodedotjs.svg
+Original source / attribution: https://nodejs.org/en/about/branding
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://nodejs.org/en/about/branding
+
+Node-RED (nodered)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/nodered.svg
+Original source / attribution: https://nodered.org/about/resources/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+ntfy (ntfy)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/ntfy.svg
+Original source / attribution: https://ntfy.sh
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Ollama (ollama)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/ollama.svg
+Original source / attribution: https://github.com/ollama/ollama/issues/2152#issuecomment-1905286922
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+openHAB (openhab)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/openhab.svg
+Original source / attribution: https://www.openhab.org/artwork.html
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.openhab.org/about/trademark.html
+
+OpenSearch (opensearch)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/opensearch.svg
+Original source / attribution: https://opensearch.org/trademark-brand-policy.html
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://opensearch.org/trademark-brand-policy.html
+
+openSUSE (opensuse)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/opensuse.svg
+Original source / attribution: https://github.com/openSUSE/artwork/blob/33e94aa76837c09f03d1712705949b71a246a53b/logos/buttons/button-colour.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://en.opensuse.org/Portal:Artwork
+
+OpenTelemetry (opentelemetry)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/opentelemetry.svg
+Original source / attribution: https://cncf-branding.netlify.app/projects/opentelemetry/
+License: CC-BY-4.0 https://creativecommons.org/licenses/by/4.0/
+Brand guidelines: https://cncf-branding.netlify.app/projects/opentelemetry/
+
+Outline (outline)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/outline.svg
+Original source / attribution: https://www.getoutline.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+ownCloud (owncloud)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/owncloud.svg
+Original source / attribution: https://owncloud.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Paperless-ngx (paperlessngx)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/paperlessngx.svg
+Original source / attribution: https://github.com/paperless-ngx/paperless-ngx/blob/e16645b146da24f07004eb772a455450354a37a7/resources/logo/web/svg/square.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+PHP (php)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/php.svg
+Original source / attribution: https://php.net/download-logos.php
+License: CC-BY-SA-4.0 https://creativecommons.org/licenses/by-sa/4.0/
+
+Pi-hole (pihole)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/pihole.svg
+Original source / attribution: https://docs.pi-hole.net
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://pi-hole.net/trademark-rules-and-brand-guidelines/
+
+Plex (plex)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/plex.svg
+Original source / attribution: https://brand.plex.tv
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://brand.plex.tv
+
+Podman (podman)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/podman.svg
+Original source / attribution: https://podman.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Portainer (portainer)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/portainer.svg
+Original source / attribution: https://www.portainer.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+PostgreSQL (postgresql)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/postgresql.svg
+Original source / attribution: https://wiki.postgresql.org/wiki/Logo
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.postgresql.org/about/policies/trademarks/
+
+Prometheus (prometheus)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/prometheus.svg
+Original source / attribution: https://prometheus.io
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Python (python)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/python.svg
+Original source / attribution: https://www.python.org/community/logos/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.python.org/community/logos/
+
+PyTorch (pytorch)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/pytorch.svg
+Original source / attribution: https://github.com/pytorch/pytorch.github.io/blob/8f083bd12192ca12d5e1c1f3d236f4831d823d8f/assets/images/logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://github.com/pytorch/pytorch.github.io/blob/381117ec296f002b2de475402ef29cca6c55e209/assets/brand-guidelines/PyTorch-Brand-Guidelines.pdf
+
+RabbitMQ (rabbitmq)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/rabbitmq.svg
+Original source / attribution: https://www.rabbitmq.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.rabbitmq.com/trademark-guidelines.html
+
+Redash (redash)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/redash.svg
+Original source / attribution: https://github.com/getredash/website/blob/c454b523fdaa60218845313904c5498cda7e7b7a/static/assets/images/elements/redash-logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Redis (redis)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/0af835e2949a9222965522780e5e0810d3c53382/icons/redis.svg
+Original source / attribution: https://www.redislabs.com/brand-guidelines/
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/0af835e2949a9222965522780e5e0810d3c53382/LICENSE.md
+Brand guidelines: https://www.redislabs.com/brand-guidelines/
+
+Renovate (renovate)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/renovate.svg
+Original source / attribution: https://github.com/user-attachments/assets/8533178e-b2c4-4e15-bb3d-8df9e19e3760
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://docs.renovatebot.com/logo-brand-guidelines
+
+Rocket.Chat (rocketdotchat)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/rocketdotchat.svg
+Original source / attribution: https://docs.rocket.chat/docs/media-kit
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://docs.rocket.chat/docs/brand-and-visual-guidelines
+
+Rocky Linux (rockylinux)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/rockylinux.svg
+Original source / attribution: https://github.com/rocky-linux/branding/blob/94e97dd30b87d909cc4f6a6838a2926f77f9ac47/logo/src/icon-black.svg
+License: CC-BY-SA-4.0 https://creativecommons.org/licenses/by-sa/4.0/
+
+Ruby (ruby)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/ruby.svg
+Original source / attribution: https://www.ruby-lang.org/en/about/logo/
+License: CC-BY-SA-2.5 https://creativecommons.org/licenses/by-sa/2.5/
+
+Rust (rust)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/rust.svg
+Original source / attribution: https://www.rust-lang.org
+License: CC-BY-SA-4.0 https://creativecommons.org/licenses/by-sa/4.0/
+Brand guidelines: https://www.rust-lang.org/policies/media-guide
+
+ScyllaDB (scylladb)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/scylladb.svg
+Original source / attribution: https://www.scylladb.com/media-kit
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.scylladb.com/media-kit
+
+SonarQube Server (sonarqubeserver)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/sonarqubeserver.svg
+Original source / attribution: https://www.sonarsource.com/company/press-kit
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Strapi (strapi)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/strapi.svg
+Original source / attribution: https://handbook.strapi.io/strapi-brand-book-2022/strapi-logo
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://handbook.strapi.io/strapi-brand-book-2022
+
+Supabase (supabase)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/supabase.svg
+Original source / attribution: https://github.com/supabase/supabase/blob/4031a7549f5d46da7bc79c01d56be4177dc7c114/packages/common/assets/images/supabase-logo-wordmark--light.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+SurrealDB (surrealdb)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/surrealdb.svg
+Original source / attribution: https://github.com/surrealdb/surrealdb/blob/b5b4601b09b8f1c1334675bbeb4e7408df8dc882/img/logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Syncthing (syncthing)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/syncthing.svg
+Original source / attribution: https://github.com/syncthing/syncthing/blob/bdfd0f0548d2f6fc4b5500690dbd383baa3b0561/assets/logo-only.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Tailscale (tailscale)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/tailscale.svg
+Original source / attribution: https://tailscale.com/press
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+TensorFlow (tensorflow)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/tensorflow.svg
+Original source / attribution: https://www.tensorflow.org
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Terraform (terraform)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/terraform.svg
+Original source / attribution: https://www.hashicorp.com/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.hashicorp.com/brand
+
+Traefik Proxy (traefikproxy)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/traefikproxy.svg
+Original source / attribution: https://traefik.io/traefik
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Transmission (transmission)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/transmission.svg
+Original source / attribution: https://github.com/transmission/transmission/blob/7c9e04d035f3f75a8124e83d612701824487eb4e/gtk/icons/hicolor_apps_symbolic_transmission-symbolic.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Trino (trino)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/trino.svg
+Original source / attribution: https://github.com/trinodb/docs.trino.io/blob/653a46f6bdc64b5f67302dc9ab8a0c432ca25e70/352/_static/trino.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Ubuntu (ubuntu)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/ubuntu.svg
+Original source / attribution: https://design.ubuntu.com/resources
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://design.ubuntu.com/brand
+
+Uptime Kuma (uptimekuma)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/uptimekuma.svg
+Original source / attribution: https://uptime.kuma.pet
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Vault (vault)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/vault.svg
+Original source / attribution: https://www.hashicorp.com/brand
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.hashicorp.com/brand
+
+Vaultwarden (vaultwarden)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/vaultwarden.svg
+Original source / attribution: https://github.com/dani-garcia/vaultwarden/blob/44e9e1a58ed37bf4b352bb499fd3e97adcd3b26b/resources/vaultwarden-icon.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+vLLM (vllm)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/vllm.svg
+Original source / attribution: https://github.com/vllm-project/media-kit/blob/79b2ea5db25b723f2d81dae203a87c5b9a076722/vLLM-Logo.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+Wiki.js (wikidotjs)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/wikidotjs.svg
+Original source / attribution: https://cdn.js.wiki/images/wikijs-butterfly-mono.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+
+WireGuard (wireguard)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/wireguard.svg
+Original source / attribution: https://www.wireguard.com
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://www.wireguard.com/trademark-policy
+
+WordPress (wordpress)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/wordpress.svg
+Original source / attribution: https://wordpress.org/about/logos
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md
+Brand guidelines: https://wordpressfoundation.org/trademark-policy
+
+Zigbee2MQTT (zigbee2mqtt)
+Artwork: https://raw.githubusercontent.com/simple-icons/simple-icons/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/icons/zigbee2mqtt.svg
+Original source / attribution: https://github.com/Koenkk/zigbee2mqtt/blob/434981b567122c745c6a5228cd89b74694b15e4c/images/logo_vector.svg
+License: CC0-1.0 https://github.com/simple-icons/simple-icons/blob/90646e4bf7f3b89df6c37e65baf3e7bc759a517c/LICENSE.md

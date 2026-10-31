@@ -5,19 +5,23 @@ description: Find containers and inspect their current state.
 
 import dockerScreenshot from "../../../assets/screenshots/docker.png";
 
-Docker lists the host's containers, including stopped ones. Switch between a flat list and groups based on Docker Compose labels. Select a container to see its details.
+Docker shows the host's containers, including stopped ones, in a graph grouped by Docker Compose project. Select a container to zoom to it and open its details.
+
+Known image repositories show a bundled logo, with brand colors on hover, keyboard focus, or selection. Unknown and custom images keep the generic container icon. Logos identify images, not container health.
 
 <figure class="docs-screenshot">
   <a href={dockerScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={dockerScreenshot.src}
-      alt="The Control Room Docker view with grouped containers and a selected container detail panel."
+      alt="The Control Room Docker graph with Compose project branches and a selected container inspector."
     />
   </a>
-  <figcaption>Containers and details. Example data shown.</figcaption>
+  <figcaption>Container graph and details. Example data shown.</figcaption>
 </figure>
 
-Search by project, service, name, image, or container ID. A container appears under **Ungrouped** when its Compose labels are missing or invalid.
+Use **Find containers** to search by project, service, name, image, or container ID. **Filter containers** offers **Container state** and **Group by**. Choose **None** to give each container its own branch. A container appears under **Ungrouped** when its Compose labels are missing or invalid.
+
+Drag the canvas to pan, use the wheel or zoom buttons to zoom, and select **Fit to view** to frame the graph. Hover or focus **Containers** for counts and collection time. Close details with **Close details**, Escape, another press on the selected container, or a click on empty canvas. Dragging keeps details open.
 
 Details can include:
 
@@ -26,9 +30,11 @@ Details can include:
 - exit code and lifecycle timestamps
 - health status and failing streak
 - restart policy and maximum retries
-- published ports and network addresses
+- published port summaries and network addresses
 - mount destinations
 - validated Compose project, service, number, and one-off facts
+
+Select a published binding to open its endpoint in [Ports](/control-room/inspection/ports/), including binding, connection, and firewall evidence. If the publication is absent from the Ports snapshot, the view reports it instead of selecting another listener.
 
 The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). On Linux, if Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).
 

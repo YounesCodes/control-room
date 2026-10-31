@@ -138,6 +138,75 @@ function renderPane(
 }
 
 describe("PortsPane", () => {
+  it.each(["ports", "docker"])(
+    "uses a spinner while reading %s without graph data",
+    async (source) => {
+      const { container: element } = renderPane(
+        null,
+        { ...sockets, items: [], loading: source === "ports" },
+        { ...containers, items: [], loading: source === "docker" },
+      );
+      expect(
+        screen.getByText(
+          source === "ports" ? "Reading listening ports…" : "Reading Docker containers…",
+        ),
+      ).toBeTruthy();
+      expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
+      expect(element.querySelector(".panel-state svg")).toBeNull();
+    },
+  );
+
+  it("does not show a loader for a completed empty Ports snapshot", () => {
+    const { container: element } = renderPane(
+      null,
+      { ...sockets, items: [] },
+      { ...containers, items: [] },
+    );
+    expect(screen.getByText("No ports match the current filters")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeNull();
+  });
+  it("shows a spinner before the first listener read has returned", () => {
+    const { container: element } = renderPane(
+      null,
+      { ...sockets, items: [], fetchedAt: null, loading: false },
+      { ...containers, items: [] },
+    );
+    expect(screen.getByText("Reading listening ports…")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
+    expect(element.querySelector(".panel-state svg")).toBeNull();
+  });
+  it("keeps a genuine Docker daemon listener linked to its unit", async () => {
+    const user = userEvent.setup();
+    const { onOpenSystemd } = renderPane(
+      null,
+      {
+        ...sockets,
+        items: sockets.items.map((socket) => ({
+          ...socket,
+          port: 2375,
+          systemdUnit: "docker.service",
+        })),
+      },
+      { ...containers, items: [] },
+    );
+    await user.click(screen.getByRole("button", { name: /2375.*Listening/ }));
+    await user.click(screen.getByRole("button", { name: "Open unit" }));
+    expect(onOpenSystemd).toHaveBeenCalledWith("docker.service");
+  });
+  it.each(["docker.service", "docker.socket", "containerd.service", "containerd.socket"])(
+    "does not present runtime unit %s as the service of a published container endpoint",
+    async (unit) => {
+      const user = userEvent.setup();
+      renderPane(null, {
+        ...sockets,
+        items: sockets.items.map((socket) => ({ ...socket, systemdUnit: unit })),
+      });
+      await user.click(screen.getByRole("button", { name: /443.*8443/ }));
+      expect(screen.queryByRole("button", { name: "Open unit" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "View journal" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Open container" })).toBeTruthy();
+    },
+  );
   afterEach(cleanup);
 
   it("keeps canvas tools collapsed and preserves active filters when dismissed", async () => {
@@ -213,7 +282,7 @@ describe("PortsPane", () => {
     expect(within(inspector).getByText("IPV4")).toBeTruthy();
     expect(within(inspector).getAllByText("742")[0]).toBeTruthy();
     expect(within(inspector).getAllByText("gateway-1")[0]).toBeTruthy();
-    expect(within(inspector).getByText("proxy")).toBeTruthy();
+    expect(within(inspector).queryByText("proxy")).toBeNull();
     expect(within(inspector).getByText("UFW: allowed")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: /Open unit/i }));
@@ -241,21 +310,21 @@ describe("PortsPane", () => {
     expect(screen.getByText("No ports match the current filters")).toBeTruthy();
   });
 
-  it("shows Docker mappings and Compose details in the graph inspector", async () => {
+  it("keeps container ownership and bindings in Ports with a link to Docker", async () => {
     const user = userEvent.setup();
     const { onOpenContainer, onViewLogs } = renderPane();
     await user.click(screen.getByRole("button", { name: "Filter ports" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Graph contents" }), "docker");
+    expect(screen.queryByRole("option", { name: "Docker-published" })).toBeNull();
     await user.click(screen.getByRole("button", { name: /443.*8443/ }));
     const inspector = screen.getByRole("complementary");
-    expect(within(inspector).getByText("gateway:latest")).toBeTruthy();
-    expect(within(inspector).getByText("proxy")).toBeTruthy();
-    expect(within(inspector).getByText("gateway")).toBeTruthy();
+    expect(within(inspector).queryByText("gateway:latest")).toBeNull();
+    expect(within(inspector).queryByText("proxy")).toBeNull();
+    expect(within(inspector).getByText("gateway-1")).toBeTruthy();
     expect(within(inspector).getByText("0.0.0.0:443 → 8443/tcp")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Open container" }));
     expect(onOpenContainer).toHaveBeenCalledWith("container-id");
-    await user.click(screen.getByRole("button", { name: "View logs" }));
-    expect(onViewLogs).toHaveBeenCalledWith({ type: "docker", id: "container-id" });
+    expect(screen.queryByRole("button", { name: "View logs" })).toBeNull();
+    expect(onViewLogs).not.toHaveBeenCalled();
   });
 
   it("offers a one-shot sudo retry after firewalld denies authorization", async () => {

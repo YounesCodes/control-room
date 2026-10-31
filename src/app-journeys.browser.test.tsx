@@ -273,6 +273,7 @@ beforeEach(async () => {
   root = createRoot(element);
 });
 afterEach(() => {
+  document.getElementById("focus-slot-motion-test")?.remove();
   root.unmount();
   element.remove();
   window.localStorage.clear();
@@ -1421,6 +1422,115 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
   }
 
+  it("collapses the focus button slot outside Terminal without leaving a titlebar gap", async () => {
+    await page.viewport(960, 700);
+    await mount();
+    await navigate("Terminal");
+    const controls = element.querySelector(".window-controls")!;
+    const nativeBounds = controls.getBoundingClientRect();
+    for (const view of ["Docker", "Ports", "Terminal"]) {
+      await navigate(view);
+      await expect
+        .poll(() => element.querySelector(".app-window-actions")!.getBoundingClientRect().width)
+        .toBeCloseTo(nativeBounds.width + (view === "Terminal" ? 40 : 0));
+      const settings = page
+        .getByRole("button", { name: "Open Settings" })
+        .element()
+        .getBoundingClientRect();
+      const actions = element.querySelector(".app-window-actions")!.getBoundingClientRect();
+      expect(actions.left - settings.right).toBeLessThanOrEqual(3);
+      expect(controls.getBoundingClientRect().left).toBe(nativeBounds.left);
+      if (view !== "Terminal") {
+        expect(actions.width).toBeCloseTo(controls.getBoundingClientRect().width);
+        expect(element.querySelector(".app-focus-toggle")).toHaveAttribute("inert");
+        expect(element.querySelector(".app-focus-toggle")).toHaveAttribute("aria-hidden", "true");
+      }
+    }
+  });
+
+  it("updates focus controls immediately and slides the live workspace without frame captures", async () => {
+    await page.viewport(1280, 800);
+    await mount();
+    await navigate("Terminal");
+    const originalMatch = window.matchMedia.bind(window);
+    const match = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+      const result = originalMatch(query);
+      if (query.includes("prefers-reduced-motion"))
+        Object.defineProperty(result, "matches", { value: false });
+      return result;
+    });
+    const capture = vi.spyOn(document, "startViewTransition");
+    const animate = vi.spyOn(HTMLElement.prototype, "animate");
+    const focus = page
+      .getByRole("button", { name: "Focus terminal", exact: true })
+      .element() as HTMLButtonElement;
+    const nativeLeft = page
+      .getByRole("button", { name: "Close window" })
+      .element()
+      .getBoundingClientRect().left;
+    try {
+      for (const mode of ["enter", "exit", "enter", "exit"]) {
+        focus.click();
+        expect(focus.getAttribute("aria-pressed")).toBe(mode === "enter" ? "true" : "false");
+        expect(
+          page.getByRole("button", { name: "Close window" }).element().getBoundingClientRect().left,
+        ).toBe(nativeLeft);
+        expect(animate.mock.contexts).not.toContain(element.querySelector(".app-window-actions"));
+        expect(animate.mock.contexts).not.toContain(element.querySelector(".app-bar"));
+        if (mode === "exit") {
+          const docs = page.getByRole("button", { name: "Open documentation" }).element();
+          const settings = page.getByRole("button", { name: "Open Settings" }).element();
+          expect(getComputedStyle(docs).opacity).toBe("1");
+          expect(getComputedStyle(settings).opacity).toBe("1");
+          expect(docs.getBoundingClientRect().width).toBeGreaterThan(0);
+        }
+      }
+      expect(capture).not.toHaveBeenCalled();
+      expect(animate.mock.contexts).toContain(element.querySelector(".workspace-shell"));
+      await expect.poll(() => document.documentElement.dataset.focusTransition).toBeUndefined();
+      expect(element.querySelector(".focus-departing-sidebar")).toBeNull();
+      expect(
+        native.invoke.mock.calls.filter(([command]) => command === "start_session"),
+      ).toHaveLength(1);
+    } finally {
+      capture.mockRestore();
+      animate.mockRestore();
+      match.mockRestore();
+    }
+  });
+
+  it("animates the focus slot out and back while native window controls stay fixed", async () => {
+    await page.viewport(960, 700);
+    await mount();
+    await navigate("Terminal");
+    const actions = element.querySelector(".app-window-actions")!;
+    const controls = element.querySelector(".window-controls")!;
+    const focus = element.querySelector(".app-focus-toggle")!;
+    const bar = element.querySelector(".app-bar")!;
+    const initial = controls.getBoundingClientRect().left;
+    const style = document.createElement("style");
+    style.id = "focus-slot-motion-test";
+    style.textContent =
+      ".app-window-actions, .app-bar, .app-window-actions .app-focus-toggle { transition-duration: 10s !important; transition-timing-function: linear !important; }";
+    document.head.append(style);
+    for (const view of ["Docker", "Terminal"]) {
+      await navigate(view);
+      // Flush layout before inspecting the real CSS transitions.
+      actions.getBoundingClientRect();
+      const animations = [actions, focus, bar].flatMap((node) => node.getAnimations());
+      expect(animations.length).toBeGreaterThan(0);
+      for (const animation of animations) {
+        animation.pause();
+        animation.currentTime = 5000;
+      }
+      expect(actions.getBoundingClientRect().width).toBeCloseTo(158, 0);
+      expect(Number(getComputedStyle(focus).opacity)).toBeCloseTo(0.5);
+      expect(controls.getBoundingClientRect().left).toBeCloseTo(initial);
+      for (const animation of animations) animation.finish();
+      expect(actions.getBoundingClientRect().width).toBeCloseTo(view === "Terminal" ? 178 : 138);
+    }
+  });
+
   it("slides sidebar status left to reveal connection actions on hover and focus", async () => {
     await mount();
     const host = element.querySelector<HTMLElement>(".host-row.active")!;
@@ -1676,6 +1786,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(960, 640);
     await mount();
     const docs = page.getByRole("button", { name: "Open documentation", exact: true });
+    expect(docs.element().querySelector("svg.lucide-book-open")).toBeTruthy();
     await expect.element(docs).toHaveAttribute("title", "Documentation (opens in your browser)");
     const settingsButton = page.getByRole("button", { name: "Open Settings" }).element();
     expect(docs.element().nextElementSibling).toBe(settingsButton);
@@ -2080,15 +2191,17 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
       expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     }
-    for (const view of ["Systemd", "Docker", "Baselines"]) {
+    for (const view of ["Systemd", "Baselines"]) {
       await navigate(view);
       await checkList();
     }
-    await navigate("Ports");
-    for (const kind of ["listeners", "connections", "docker"]) {
-      await page.getByRole("button", { name: "Filter ports", exact: true }).click();
-      await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
-      await page.getByRole("button", { name: "Close port tools" }).click();
+    for (const kind of ["containers", "listeners", "connections"]) {
+      await navigate(kind === "containers" ? "Docker" : "Ports");
+      if (kind !== "containers") {
+        await page.getByRole("button", { name: "Filter ports", exact: true }).click();
+        await page.getByRole("combobox", { name: "Graph contents" }).selectOptions(kind);
+        await page.getByRole("button", { name: "Close port tools" }).click();
+      }
       await vi.waitFor(() => expect(element.querySelectorAll(".arch-chip").length).toBe(100));
       const expectEntireGraph = () => {
         const viewport = element.querySelector(".arch-viewport")!.getBoundingClientRect();
@@ -2122,7 +2235,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(node.bottom).toBeLessThanOrEqual(viewport.bottom);
       });
       await userEvent.keyboard("{Enter}");
-      await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+      await expect
+        .element(
+          page.getByRole("complementary", {
+            name: kind === "containers" ? "Container details" : "Port details",
+          }),
+        )
+        .toBeVisible();
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(() => {
         const graph = element.querySelector(".arch-content")!.getBoundingClientRect();
@@ -2434,15 +2553,35 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
       .toBeVisible();
+    await page.getByRole("button", { name: "Find containers" }).click();
     await page.getByPlaceholder("Search projects, services, or containers").fill("missing");
     await expect
       .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
       .not.toBeInTheDocument();
     await page.getByRole("button", { name: "Clear search" }).click();
+    await page.getByRole("button", { name: /fixture-web/ }).click();
     await page.getByRole("button", { name: "View logs" }).click();
     await expect
       .element(page.getByRole("combobox", { name: "Container", exact: true }))
       .toHaveValue(fixtures.container.id);
+  });
+
+  it("follows a Docker publication to Ports and returns to its container", async () => {
+    overrides.set("inspect_container", () => ({
+      ...fixtures.containerDetails,
+      publishedPorts: [{ hostAddress: "0.0.0.0", hostPort: 443, containerPort: "443/tcp" }],
+    }));
+    await mount();
+    await navigate("Docker");
+    await page.getByRole("button", { name: /fixture-web/ }).click();
+    await page.getByText("Published ports", { exact: true }).click();
+    await page.getByRole("button", { name: "Open 0.0.0.0:443 → 443/tcp in Ports" }).click();
+    await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
+    await expect.element(page.getByRole("heading", { name: "443 / TCP" })).toBeVisible();
+    await page.getByRole("button", { name: "Open container" }).click();
+    await expect
+      .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
+      .toBeVisible();
   });
 
   it("keeps the Docker whale neutral at rest and reveals blue on hover or keyboard focus", async () => {
@@ -2649,8 +2788,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/ports-graph-inspector.png" });
     await page.getByRole("button", { name: "Close details" }).click();
     await page.getByRole("button", { name: /8080.*80/ }).click();
-    await page.getByText("Container & Compose", { exact: true }).click();
-    await expect.element(page.getByText("nginx:stable", { exact: true })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Open container" })).toBeVisible();
+    expect(element.querySelector(".arch-detail")!.textContent).not.toContain("nginx:stable");
     await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
     async function checkInspectorLayout() {
       const inspector = element.querySelector<HTMLElement>(".arch-detail")!;

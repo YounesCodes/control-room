@@ -2,8 +2,15 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DockerContainer, DockerContainerDetails, SavedConnection } from "../types";
+import type {
+  CachedList,
+  CachedValue,
+  DockerContainer,
+  DockerContainerDetails,
+  SavedConnection,
+} from "../types";
 import { DockerPane } from "./DockerPane";
 
 const api = vi.hoisted(() => ({
@@ -73,6 +80,59 @@ const details: DockerContainerDetails = {
 };
 
 describe("DockerPane container inspection", () => {
+  it("uses a spinner while reading and an empty state only after the read completes", () => {
+    const props = {
+      connection,
+      detailsCache: {},
+      onCacheChange: vi.fn(),
+      onDetailsCacheChange: vi.fn(),
+      onViewLogs: vi.fn(),
+    };
+    const cache = { items: [], fetchedAt: Date.now(), loading: true, error: null };
+    const { container: element, rerender } = render(<DockerPane {...props} cache={cache} />);
+    expect(screen.getByText("Reading Docker containers…")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
+    expect(element.querySelector(".panel-state svg")).toBeNull();
+    rerender(<DockerPane {...props} cache={{ ...cache, loading: false }} />);
+    expect(screen.getByText("No containers found")).toBeTruthy();
+    expect(element.querySelector(".panel-state .spinner")).toBeNull();
+    rerender(<DockerPane {...props} cache={{ ...cache, items: [container] }} />);
+    expect(element.querySelector(".arch-chip")).toBeTruthy();
+    expect(element.querySelector(".panel-state")).toBeNull();
+  });
+  it("shows the detected host name and OS in the graph root", () => {
+    const capabilities = {
+      hostname: "debian-server",
+      osName: "Debian GNU/Linux",
+      osVersion: "13",
+    } as import("../types").HostCapabilities;
+    const { rerender } = render(
+      <DockerPane
+        connection={connection}
+        capabilities={capabilities}
+        cache={{ items: [container], fetchedAt: Date.now(), loading: false, error: null }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Debian GNU/Linux 13")).toBeTruthy();
+    expect(screen.getByText("debian-server")).toBeTruthy();
+    rerender(
+      <DockerPane
+        connection={connection}
+        capabilities={null}
+        cache={{ items: [container], fetchedAt: Date.now(), loading: false, error: null }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Debian GNU/Linux 13")).toBeNull();
+    expect(screen.getByText("Host")).toBeTruthy();
+  });
   it("does not offer Linux sudo for a Windows Docker permission error", async () => {
     render(
       <DockerPane
@@ -92,6 +152,7 @@ describe("DockerPane container inspection", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    api.listContainers.mockResolvedValue([container]);
     api.inspectContainer.mockResolvedValue(details);
   });
 
@@ -112,6 +173,9 @@ describe("DockerPane container inspection", () => {
       />,
     );
 
+    expect(api.inspectContainer).not.toHaveBeenCalled();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /gateway-1.*running/ }));
     await waitFor(() => expect(api.inspectContainer).toHaveBeenCalledWith(connection.id, id, null));
     await waitFor(() =>
       expect(onDetailsCacheChange).toHaveBeenCalledWith(
@@ -149,16 +213,21 @@ describe("DockerPane container inspection", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: /gateway-1.*running/ }));
     expect(screen.getByRole("heading", { name: "gateway-1" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Find containers" }));
     await user.type(screen.getByPlaceholderText(/Search projects/), "database");
 
     expect(screen.queryByRole("heading", { name: "gateway-1" })).toBeNull();
-    expect(screen.getAllByText("No matching containers")).toHaveLength(2);
+    expect(screen.getAllByText("No matching containers")).toHaveLength(1);
+    expect(screen.queryByRole("complementary")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.queryByRole("complementary")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /gateway-1.*running/ }));
     expect(screen.getByRole("heading", { name: "gateway-1" })).toBeTruthy();
   });
 
-  it("coordinates the empty list and detail states", () => {
+  it("shows one empty graph without an inspector", () => {
     render(
       <DockerPane
         connection={connection}
@@ -170,7 +239,94 @@ describe("DockerPane container inspection", () => {
       />,
     );
 
-    expect(screen.getAllByText("No containers found")).toHaveLength(2);
+    expect(screen.getAllByText("No containers found")).toHaveLength(1);
+    expect(screen.queryByRole("complementary")).toBeNull();
     expect(screen.queryByText("Select a container")).toBeNull();
+  });
+
+  it("retains an incoming container selection while the inventory loads", async () => {
+    function Harness() {
+      const [cache, setCache] = useState<CachedList<DockerContainer>>({
+        items: [],
+        fetchedAt: null,
+        loading: false,
+        error: null,
+      });
+      const [detailsCache, setDetailsCache] = useState<
+        Record<string, CachedValue<DockerContainerDetails>>
+      >({});
+      return (
+        <DockerPane
+          connection={connection}
+          cache={cache}
+          detailsCache={detailsCache}
+          onCacheChange={setCache}
+          onDetailsCacheChange={(containerId, value) =>
+            setDetailsCache((current) => ({ ...current, [containerId]: value }))
+          }
+          onViewLogs={vi.fn()}
+          focusId={id}
+        />
+      );
+    }
+    render(<Harness />);
+    expect(await screen.findByRole("heading", { name: "gateway-1" })).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Container details" })).toBeTruthy();
+    expect(api.inspectContainer).toHaveBeenCalledExactlyOnceWith(connection.id, id, null);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+    await user.click(screen.getByRole("button", { name: "Refresh containers" }));
+    await waitFor(() => expect(api.listContainers).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("closes details when a refresh removes the selected container", () => {
+    const props = {
+      connection,
+      detailsCache: {
+        [id]: { value: details, fetchedAt: Date.now(), loading: false, error: null },
+      },
+      onCacheChange: vi.fn(),
+      onDetailsCacheChange: vi.fn(),
+      onViewLogs: vi.fn(),
+      focusId: id,
+    };
+    const { rerender } = render(
+      <DockerPane
+        {...props}
+        cache={{ items: [container], fetchedAt: Date.now(), loading: false, error: null }}
+      />,
+    );
+    expect(screen.getByRole("complementary")).toBeTruthy();
+    rerender(
+      <DockerPane
+        {...props}
+        cache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+      />,
+    );
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.getByText("No containers found")).toBeTruthy();
+  });
+
+  it("keeps saved nodes visible and offers Linux sudo after a failed list refresh", () => {
+    render(
+      <DockerPane
+        connection={connection}
+        cache={{
+          items: [container],
+          fetchedAt: Date.now(),
+          loading: false,
+          error: "permission denied",
+        }}
+        detailsCache={{}}
+        onCacheChange={vi.fn()}
+        onDetailsCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /gateway-1.*running/ })).toBeTruthy();
+    expect(screen.getByText(/Showing saved results. Refresh failed/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry with sudo" })).toBeTruthy();
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 });

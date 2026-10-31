@@ -34,7 +34,12 @@ guardrails, not every choice described below.
   at small sizes.
 - Docker navigation uses the whale silhouette in neutral gray at rest, including
   while selected. Reveal Docker blue on hover or keyboard focus. Individual
-  containers use the Lucide Container outline in graph nodes and container actions.
+  container graph cards use bundled SVG image logos for explicitly recognized
+  repositories, neutral at rest and showing brand hues on hover, keyboard focus,
+  or selection. Unknown images and container actions use the Lucide Container
+  outline. Dark brand hues are lightened enough to remain visible on graph cards.
+  Match full image repositories and known aliases, never container names
+  or arbitrary registry basenames. Compose project icons stay unchanged.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
@@ -89,6 +94,18 @@ or its session.
 Anchor the Focus terminal toggle beside the window controls at the top right.
 Keep the same button and screen position in both modes, including split groups
 and overflowing tabs, so toggling never moves it away from the pointer.
+Outside Terminal, collapse its titlebar slot and fade and slide the button out;
+reverse the motion when Terminal returns. Keep native window controls fixed and
+make the hidden button inert. Reduced motion applies the layout change immediately.
+Entering and leaving Focus Mode coordinates the sidebar and titlebar exit/entrance,
+tab-strip movement, pane controls, and workspace bounds in one short transition.
+Keep terminal text at its original pixel size and native window controls fixed.
+Preserve the live terminal sessions and keyboard focus. Reverse promptly when the
+user toggles again. Reduced motion and unsupported webviews apply the state immediately.
+Apply focus state synchronously. Documentation, Settings, and native window
+controls appear immediately on exit, outside the animated workspace. Use a short
+live workspace slide and sidebar fade rather than captured terminal frames or
+animated terminal scaling; resize the terminal once per toggle.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Save pane proportions with
@@ -169,7 +186,12 @@ their own owner and source records; this layout relationship does not establish
 service ownership. Keep ambiguous matches and explicit conflicting units separate.
 Sort unrelated peer-only groups after listening owners.
 Keep cards compact: port, protocol, binding scope, Docker target and peer count.
-Keep process, Compose and per-socket information in expandable inspector sections.
+Keep process and per-socket information in expandable inspector sections.
+Show container ownership and published bindings in Ports; link to Docker for
+image, Compose, lifecycle, network, mount, and container log details.
+For container-owned endpoints, omit Docker and containerd daemon unit shortcuts;
+these describe the runtime rather than the container's service. Preserve the raw
+socket diagnostics and genuine service links, including standalone daemon listeners.
 Show reachability as Not tested. Host firewall policy is separate evidence and
 must never label a card as reachable or blocked. Selecting a port or connection
 smoothly zooms and centers it in the graph area beside the inspector, then
@@ -181,7 +203,7 @@ the camera transition. Reduced motion applies the framing immediately. Keep the
 inspector heading and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin
 scrollbar that fades when the body is not hovered. Keep every binding,
-firewall, ownership, endpoint, and Compose field available there, with the
+firewall, ownership, and endpoint field available there, with the
 existing service, container, and log actions. Fit the entire graph on initial
 load, filtering, resize, and Fit to view, leaving space for controls and an open
 inspector. Keep the default and reset framing identical. Keyboard focus
@@ -189,6 +211,23 @@ reveals offscreen nodes. Closing the inspector restores the default full-graph f
 to its node. The Close button, Escape, clicking the selected node again, and
 clicking empty canvas space all close it. Dragging the canvas pans without
 closing the inspector.
+
+Docker shares the Ports canvas, camera controls, selection behavior, and inspector
+layout. Fit the full container graph before a selection is made. Group container
+nodes by validated Compose project by default, with an Ungrouped branch for
+containers without a validated project and service. Search and filters open from
+the compact toolbar. Filters offer container state and an ungrouped layout.
+Keep counts and collection time in the heading tooltip. Container details use
+expandable sections in a scrolling body, with Refresh and View logs fixed outside
+that body. Follow a container opened from Ports directly to its node and inspector.
+Published ports are compact binding summaries that open the exact endpoint in
+Ports. Match the container ID, address, host port, target port, and protocol;
+report a missing publication rather than selecting another owner on the same port.
+Ports includes publications by default without a separate Docker-only filter.
+The container inspector repeats the selected image logo beside its title, using
+the same generic fallback for unknown images. Docker and Ports inspector sections
+share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
+behavior and show section content immediately when reduced motion is requested.
 
 ## Visual language
 
@@ -319,6 +358,10 @@ state accessible in every mode. Local shells use running, stopped, and restarted
 remote sessions use connected, disconnected, and reconnected.
 
 Session indicators keep a circular shape in every state, including errors.
+Service and container status markers also stay circular and align centrally with
+their status text. Keep the text label beside container markers so color is not
+the only cue.
+Exited containers use neutral gray; reserve red for failed or dead containers.
 Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.
@@ -362,6 +405,7 @@ list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 Keep Documentation in the titlebar beside Settings. It opens the public docs in
 the default browser and remains available in Settings. Hide it during terminal
 Focus Mode to keep the terminal controls compact.
+Use an open-book icon for Documentation so it reads as a manual.
 
 Settings fills the window below a draggable titlebar with native window controls.
 Hide Connections and Workspace tabs while Settings is open, and restore the

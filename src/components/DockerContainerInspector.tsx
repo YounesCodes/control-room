@@ -1,17 +1,9 @@
-import { useState } from "react";
+import { InspectorDisclosure } from "./InspectorDisclosure";
+import type { PublishedPortSelection } from "../lib/port-inspector";
 import { FileClock, RefreshCw } from "lucide-react";
-import { EmptyState, ErrorState, LoadingState } from "./PanelState";
+import { ErrorState, LoadingState } from "./PanelState";
+import { ContainerImageIcon } from "./ContainerImageIcon";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
-
-type InspectorTab = "overview" | "ports" | "networks" | "mounts" | "metadata";
-
-const tabs: { id: InspectorTab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "ports", label: "Ports" },
-  { id: "networks", label: "Networks" },
-  { id: "mounts", label: "Mounts" },
-  { id: "metadata", label: "Metadata" },
-];
 
 function displayTime(value: string | null) {
   if (!value) return "Not recorded";
@@ -65,8 +57,7 @@ function Overview({ details }: { details: DockerContainerDetails }) {
           </dd>
         </div>
       </dl>
-      <details className="container-technical-details">
-        <summary>Technical identifiers</summary>
+      <InspectorDisclosure className="container-technical-details" title="Technical identifiers">
         <dl className="detail-list container-detail-list">
           <div>
             <dt>Container ID</dt>
@@ -81,32 +72,47 @@ function Overview({ details }: { details: DockerContainerDetails }) {
             <dd className="technical">{details.imageContentId || "Unknown"}</dd>
           </div>
         </dl>
-      </details>
+      </InspectorDisclosure>
     </>
   );
 }
 
-function Ports({ details }: { details: DockerContainerDetails }) {
-  if (!details.publishedPorts.length) return <EmptyState title="No published ports" />;
+function Ports({
+  details,
+  onOpenPort,
+}: {
+  details: DockerContainerDetails;
+  onOpenPort?: (port: PublishedPortSelection) => void;
+}) {
+  if (!details.publishedPorts.length) return <p className="inspector-empty">No published ports</p>;
   return (
-    <div className="inspector-record-list">
+    <div className="docker-published-ports">
       {details.publishedPorts.map((port) => (
-        <div
-          className="inspector-record"
-          key={`${port.hostAddress}:${port.hostPort}:${port.containerPort}`}
+        <button
+          type="button"
+          className="secondary-button"
+          key={port.hostAddress + ":" + port.hostPort + ":" + port.containerPort}
+          aria-label={
+            "Open " +
+            (port.hostAddress.includes(":") ? "[" + port.hostAddress + "]" : port.hostAddress) +
+            ":" +
+            port.hostPort +
+            " → " +
+            port.containerPort +
+            " in Ports"
+          }
+          onClick={() => onOpenPort?.({ ...port, containerId: details.id })}
         >
-          <strong>
-            {port.hostAddress}:{port.hostPort}
-          </strong>
-          <span>to {port.containerPort}</span>
-        </div>
+          {port.hostAddress.includes(":") ? "[" + port.hostAddress + "]" : port.hostAddress}:
+          {port.hostPort} → {port.containerPort}
+        </button>
       ))}
     </div>
   );
 }
 
 function Networks({ details }: { details: DockerContainerDetails }) {
-  if (!details.networks.length) return <EmptyState title="No network attachments" />;
+  if (!details.networks.length) return <p className="inspector-empty">No network attachments</p>;
   return (
     <div className="inspector-record-list">
       {details.networks.map((network) => (
@@ -129,7 +135,7 @@ function Networks({ details }: { details: DockerContainerDetails }) {
 }
 
 function Mounts({ details }: { details: DockerContainerDetails }) {
-  if (!details.mounts.length) return <EmptyState title="No mounts" />;
+  if (!details.mounts.length) return <p className="inspector-empty">No mounts</p>;
   return (
     <div className="inspector-record-list">
       {details.mounts.map((mount) => (
@@ -173,7 +179,7 @@ function Metadata({ details }: { details: DockerContainerDetails }) {
           </div>
         </dl>
       ) : (
-        <EmptyState title="No validated Compose identity" />
+        <p className="inspector-empty">No validated Compose identity</p>
       )}
       <p className="sensitive-data-note">
         Environment values, command arguments, arbitrary labels, health logs, and host mount sources
@@ -190,7 +196,9 @@ export function DockerContainerInspector({
   onRetryWithSudo,
   onViewLogs,
   windowsHost = false,
+  onOpenPort,
 }: {
+  onOpenPort?: (port: PublishedPortSelection) => void;
   summary: DockerContainer;
   cache?: CachedValue<DockerContainerDetails>;
   onRefresh: () => void;
@@ -198,75 +206,79 @@ export function DockerContainerInspector({
   onViewLogs: () => void;
   windowsHost?: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const permissionError = !windowsHost && cache?.error?.toLowerCase().includes("permission denied");
   const collectedAt = cache?.fetchedAt
     ? new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
 
-  if (cache?.loading && !cache.value) return <LoadingState label="Inspecting container…" />;
-  if (cache?.error && !cache.value) {
-    return (
-      <ErrorState
-        message={cache.error}
-        action={
-          <button onClick={permissionError ? onRetryWithSudo : onRefresh}>
-            {permissionError ? "Retry with sudo" : "Retry"}
-          </button>
-        }
-      />
-    );
-  }
   const details = cache?.value;
-  if (!details) return <LoadingState label="Inspecting container…" />;
 
   return (
     <>
       <header className="container-inspector-heading">
+        <ContainerImageIcon image={details?.imageReference || summary.image} size={20} />
         <div>
-          <h2>{details.name || summary.name}</h2>
+          <h2>{details?.name || summary.name}</h2>
           <p>
-            {details.state}
-            {details.healthStatus ? ` · ${details.healthStatus}` : ""}
+            {details?.state ?? summary.state}
+            {details?.healthStatus ? ` · ${details.healthStatus}` : ""}
             {collectedAt ? ` · inspected at ${collectedAt}` : ""}
           </p>
         </div>
+      </header>
+      <div
+        className="port-inspector-body"
+        tabIndex={0}
+        role="region"
+        aria-label="Container information"
+      >
+        {cache?.error && !details ? (
+          <ErrorState
+            message={cache.error}
+            action={
+              <button onClick={permissionError ? onRetryWithSudo : onRefresh}>
+                {permissionError ? "Retry with sudo" : "Retry"}
+              </button>
+            }
+          />
+        ) : !details ? (
+          <LoadingState label="Inspecting container…" />
+        ) : (
+          <>
+            {cache?.error && (
+              <p className="inline-warning">Showing saved details. Refresh failed: {cache.error}</p>
+            )}
+            <Overview details={details} />
+            <InspectorDisclosure title="Published ports">
+              <Ports details={details} onOpenPort={onOpenPort} />
+            </InspectorDisclosure>
+            <InspectorDisclosure title="Networks">
+              <Networks details={details} />
+            </InspectorDisclosure>
+            <InspectorDisclosure title="Mounts">
+              <Mounts details={details} />
+            </InspectorDisclosure>
+            <InspectorDisclosure title="Container &amp; Compose">
+              <Metadata details={details} />
+            </InspectorDisclosure>
+          </>
+        )}
+      </div>
+      <div className="detail-actions">
+        <button className="secondary-button" type="button" onClick={onViewLogs}>
+          <FileClock size={15} /> View logs
+        </button>
         <button
           className="icon-button"
           type="button"
           onClick={onRefresh}
           aria-label="Refresh container details"
+          title="Refresh container details"
           disabled={cache?.loading}
         >
           <RefreshCw size={16} className={cache?.loading ? "spinning" : ""} />
         </button>
-      </header>
-      {cache?.error && (
-        <p className="inline-warning">Showing saved details. Refresh failed: {cache.error}</p>
-      )}
-      <div className="inspector-tabs" role="tablist" aria-label="Container detail sections">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
-      <div className="inspector-tab-panel" role="tabpanel">
-        {activeTab === "overview" && <Overview details={details} />}
-        {activeTab === "ports" && <Ports details={details} />}
-        {activeTab === "networks" && <Networks details={details} />}
-        {activeTab === "mounts" && <Mounts details={details} />}
-        {activeTab === "metadata" && <Metadata details={details} />}
-      </div>
-      <button className="secondary-button container-log-action" type="button" onClick={onViewLogs}>
-        <FileClock size={15} /> View logs
-      </button>
     </>
   );
 }

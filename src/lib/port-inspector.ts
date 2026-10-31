@@ -361,4 +361,11 @@ export function filterAndSortSockets(
   });
 }
 
-export type PortGraphKind = "overview" | "all" | "listeners" | "connections" | "docker";
+export type PortGraphKind = "overview" | "all" | "listeners" | "connections";
+
+export interface PublishedPortSelection {
+  containerId: string;
+  hostAddress: string;
+  hostPort: number;
+  containerPort: string;
+}
