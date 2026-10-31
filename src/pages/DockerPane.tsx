@@ -167,8 +167,8 @@ export function DockerPane({
                 : container.image}
             </span>
             <span className="arch-chip-kind docker-chip-state">
-              <span className={`service-indicator service-${container.state}`} />
-              {container.state}
+              <span className={`service-indicator service-${container.state}`} aria-hidden="true" />
+              <span>{container.state}</span>
             </span>
           </>
         ),

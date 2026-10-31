@@ -131,6 +131,22 @@ function renderPane(
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
+it("aligns circular running and exited markers with their status labels", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  for (const state of ["running", "exited"]) {
+    const marker = document.querySelector<HTMLElement>(`.docker-chip-state .service-${state}`)!;
+    const label = marker.nextElementSibling!;
+    const dot = marker.getBoundingClientRect();
+    const text = label.getBoundingClientRect();
+    expect(Math.abs(dot.top + dot.height / 2 - text.top - text.height / 2)).toBeLessThan(0.5);
+    expect(dot.width).toBeCloseTo(dot.height);
+    expect(getComputedStyle(marker).borderRadius).toBe("50%");
+    expect(getComputedStyle(marker).transform).toBe("none");
+    expect(label.textContent).toBe(state);
+  }
+});
+
 it("keeps empty Docker sections compact", async () => {
   await page.viewport(960, 640);
   renderPane(containers[0].id, containers, {

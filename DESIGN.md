@@ -343,6 +343,9 @@ state accessible in every mode. Local shells use running, stopped, and restarted
 remote sessions use connected, disconnected, and reconnected.
 
 Session indicators keep a circular shape in every state, including errors.
+Service and container status markers also stay circular and align centrally with
+their status text. Keep the text label beside container markers so color is not
+the only cue.
 Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
 pane and group tabs. Reduced motion keeps the open ring without rotation.

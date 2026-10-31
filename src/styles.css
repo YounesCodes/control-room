@@ -4056,8 +4056,6 @@ dd {
 .service-exited,
 .service-dead {
   background: var(--failure);
-  border-radius: 1px;
-  transform: rotate(45deg);
 }
 
 .row-main {
@@ -6660,6 +6658,8 @@ kbd {
 
 .docker-chip-state {
   margin-left: 0;
+  gap: 6px;
+  line-height: 16px;
 }
 
 .docker-published-ports {
