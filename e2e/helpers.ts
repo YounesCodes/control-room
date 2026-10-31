@@ -151,13 +151,8 @@ export async function openOfflineConnection(name: string, forceNew = false) {
 }
 
 export async function openLocal() {
-  const launcher = $("button=Local terminal");
-  if (await launcher.isDisplayed()) {
-    await launcher.click();
-  } else {
-    await $("aria/New terminal").click();
-  }
-  await $(".local-shell-menu, .new-terminal-menu").$("button*=Command Prompt").click();
+  await $("aria/New terminal").click();
+  await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
   await expect($(".terminal-workspace-pane.active .xterm-screen")).toBeDisplayed();
   await browser.waitUntil(async () => (await runtime()).sessionIds.length > 0);
 }

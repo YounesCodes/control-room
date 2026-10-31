@@ -32,6 +32,9 @@ guardrails, not every choice described below.
   logo's proportions. Larger dialog-heading marks use the same sizing rule.
   Use the solid PowerShell mark with its cut-out prompt so it remains legible
   at small sizes.
+- Docker navigation uses the whale silhouette in neutral gray at rest, including
+  while selected. Reveal Docker blue on hover or keyboard focus. Individual
+  containers use the Lucide Container outline in graph nodes and container actions.
 - **Keyboard-first and desktop-native.** Keep important actions available by
   keyboard and discoverable in the interface. Use native window controls and
   app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
@@ -138,6 +141,55 @@ runs it. Restore legacy Scratchpad pages to Terminal without changing saved note
 Systemd service rows scroll within their own bounded
 area, leaving search, filters, and refresh available above the list.
 
+Ports uses the entire inspection area as a pan-and-zoom graph. Keep search,
+filters, and reading information in one compact toolbar. Show listener counts and collection time only
+in the Ports heading's hover tooltip and accessible description, with no click
+card. Align the tooltip to the heading and place it outside the entire toolbar
+with a clear gap. Keep warning recovery actions separate. Use search and filter
+panels opening on demand. Filter panels pair visible field labels with a compact
+heading containing Reset and Close, without a separate action footer. Keep zoom
+controls in the lower corner. Route owner
+branches orthogonally through reserved gutters, never through other cards.
+Use side connections where a column continues and enter its final card from
+the top, ending the branch at the card. End the horizontal bus at the top of
+the rightmost column's first card, even when that column has more cards below.
+Group listening
+sockets, established connections, and published Docker mappings by their known
+owners. Present matching Docker publications, listeners and their IPv4/IPv6
+bindings as one endpoint card while retaining every source record in the inspector.
+Match Docker by address, protocol and host port, and connection summaries by
+protocol, local port and explicit service or PID evidence. Keep ambiguous matches,
+different owners and unknown-owner sockets separate. Never merge solely by port.
+Default to listeners and published mappings; put connection-only endpoints behind
+Show established connections or the Established / outbound filter. Render those
+endpoints with a quieter dashed border. Place peer-only records inside a unique
+related listening group when PID evidence matches, or when process name, protocol
+and local port match one group. Label these as related processes and preserve
+their own owner and source records; this layout relationship does not establish
+service ownership. Keep ambiguous matches and explicit conflicting units separate.
+Sort unrelated peer-only groups after listening owners.
+Keep cards compact: port, protocol, binding scope, Docker target and peer count.
+Keep process, Compose and per-socket information in expandable inspector sections.
+Show reachability as Not tested. Host firewall policy is separate evidence and
+must never label a card as reachable or blocked. Selecting a port or connection
+smoothly zooms and centers it in the graph area beside the inspector, then
+slides a closable inspector in from the right. Give the inspector equal top and
+bottom canvas gutters. Slide zoom controls to the lower-left when it opens,
+then back to the lower-right when it closes, keeping its footer clear.
+Reduced motion moves the controls immediately. Direct pan and zoom interrupt
+the camera transition. Reduced motion applies the framing immediately. Keep the
+inspector heading and actions fixed,
+with grouped label/value rows in a separately scrolling body. Use a thin
+scrollbar that fades when the body is not hovered. Keep every binding,
+firewall, ownership, endpoint, and Compose field available there, with the
+existing service, container, and log actions. Fit the entire graph on initial
+load, filtering, resize, and Fit to view, leaving space for controls and an open
+inspector. Keep the default and reset framing identical. Keyboard focus
+reveals offscreen nodes. Closing the inspector restores the default full-graph framing and returns focus
+to its node. The Close button, Escape, clicking the selected node again, and
+clicking empty canvas space all close it. Dragging the canvas pans without
+closing the inspector.
+
 ## Visual language
 
 ### Color and surfaces
@@ -198,7 +250,9 @@ dismisses rather than floating away from its anchor after a resize. Live states 
 connecting, new terminal output, a bell, a downloaded update — use small
 one-purpose cues that rest once their point is made. Never animate the terminal
 surface itself. Respect `prefers-reduced-motion`. Use Lucide icons
-consistently, and pair icon-only actions with accessible names and tooltips
+consistently, except for the shared Phosphor Bold magnifiers used by every search
+and zoom control. Keep their filled silhouettes and use matching plus/minus
+variants for zoom. Pair icon-only actions with accessible names and tooltips
 where useful.
 
 ## Interaction patterns
@@ -221,7 +275,9 @@ below the targets so ordinary launches stay compact.
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting
 it as current. Give errors a recovery action when one exists, and preserve the
-specific cause when it helps the user recover.
+specific cause when it helps the user recover. Terminal failure banners use a
+full-height recovery action at the right edge, separated by a quiet divider.
+Center its icon and label together and let the message wrap independently.
 
 In split list/detail pages, keep the selection visible. If a filter hides the
 selected item, say that the selection is filtered and provide a direct way to

@@ -171,8 +171,8 @@ describe("Settings and native window", () => {
     await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
-    await $("button=Local terminal").click();
-    await expect($("aria/Command Prompt")).not.toExist();
+    await $("aria/New terminal").click();
+    await expect($(".new-terminal-menu").$("aria/Local terminals: Command Prompt")).not.toExist();
     await browser.keys("Escape");
     await restartApp();
     await $("aria/Open Settings").click();
@@ -245,8 +245,9 @@ describe("Local Terminal Mode desktop", () => {
     expect((await runtime()).sessionIds).toHaveLength(1);
     await $("aria/Exit terminal focus").click();
     await expect($("aria/Saved connections")).toBeDisplayed();
-    await $("button=Local terminal").click();
-    await expect($(".local-shell-menu")).not.toExist();
+    await $("aria/New terminal").click();
+    await expect($(".new-terminal-menu")).toBeDisplayed();
+    await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await $("button=Add connection").click();
     await expect($("[role=dialog]")).toBeDisplayed();

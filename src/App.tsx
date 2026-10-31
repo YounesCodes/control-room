@@ -1,3 +1,5 @@
+import { Search } from "./components/MagnifierIcon";
+import { DockerIcon } from "./components/DockerIcon";
 import {
   ConnectionSection,
   ResizeDivider,
@@ -11,6 +13,7 @@ import {
   type PanelSizes,
 } from "./lib/panel-layout";
 import {
+  type ComponentType,
   useCallback,
   lazy,
   Suspense,
@@ -23,7 +26,6 @@ import {
 } from "react";
 import {
   RotateCcw,
-  Boxes,
   Camera,
   ChevronDown,
   Clipboard,
@@ -42,8 +44,6 @@ import {
   Power,
   Plus,
   Rows2,
-  RefreshCw,
-  Search,
   Server,
   Settings,
   ShieldAlert,
@@ -174,12 +174,16 @@ function administratorTerminalNote(status: AdministratorTerminalStatus): string 
   }
 }
 
-const navigation: { id: WorkspaceView; label: string; icon: typeof Gauge }[] = [
+const navigation: {
+  id: WorkspaceView;
+  label: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+}[] = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
-  { id: "docker", label: "Docker", icon: Boxes },
+  { id: "docker", label: "Docker", icon: DockerIcon },
   { id: "boot", label: "Boot", icon: Power },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "baselines", label: "Baselines", icon: Camera },
@@ -2211,27 +2215,6 @@ export function App() {
                     }}
                   />
                 )}
-                {activeTerminalEnded && (
-                  <button
-                    className="session-strip-button"
-                    type="button"
-                    onClick={() =>
-                      updateWorkspace(activeWorkspace.id, {
-                        connectRequested: true,
-                        restored: false,
-                        reconnectToken: activeWorkspace.reconnectToken + 1,
-                      })
-                    }
-                    aria-label={
-                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
-                    }
-                    title={
-                      isLocalWorkspace(activeWorkspace) ? "Restart terminal" : "Reconnect terminal"
-                    }
-                  >
-                    <RefreshCw size={15} />
-                  </button>
-                )}
                 {terminalFocusMode && (
                   <>
                     <button
@@ -2477,6 +2460,13 @@ export function App() {
                           })
                         }
                         findRequest={terminalFindRequests[workspace.id] ?? 0}
+                        onReconnect={() =>
+                          updateWorkspace(workspace.id, {
+                            connectRequested: true,
+                            restored: false,
+                            reconnectToken: workspace.reconnectToken + 1,
+                          })
+                        }
                       />
                     </div>
                   );

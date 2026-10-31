@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, Search, ShieldAlert } from "lucide-react";
+import { Search } from "../components/MagnifierIcon";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowLeftRight,
+  RefreshCw,
+  RotateCcw,
+  ShieldAlert,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
-import { ErrorState, LoadingState } from "../components/PanelState";
-import { PortsConnections } from "../components/ports/PortsConnections";
-import { PortsDocker } from "../components/ports/PortsDocker";
-import { PortsOverview } from "../components/ports/PortsOverview";
-import { PortsTable } from "../components/ports/PortsTable";
+import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";
-import { filterAndSortSockets, ownerGapNotice, type Exposure } from "../lib/port-inspector";
+import {
+  ownerGapNotice,
+  type Exposure,
+  type PortGraphKind,
+  type PortSort,
+} from "../lib/port-inspector";
 import { elevationAllowed } from "../lib/sudo-elevation";
 import { isCacheFresh } from "../lib/workspace-cache";
 import type {
@@ -20,15 +29,6 @@ import type {
   LogSourceSelection,
   SavedConnection,
 } from "../types";
-
-type PortsTab = "overview" | "connections" | "docker" | "table";
-
-const TABS: { id: PortsTab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "connections", label: "Connections" },
-  { id: "docker", label: "Docker" },
-  { id: "table", label: "Table" },
-];
 
 export function PortsPane({
   connection,
@@ -53,10 +53,19 @@ export function PortsPane({
   onOpenContainer: (containerId: string) => void;
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
-  const [tab, setTab] = useState<PortsTab>("overview");
+  const [kind, setKind] = useState<PortGraphKind>("overview");
+  const [showConnections, setShowConnections] = useState(false);
+  const [sort, setSort] = useState<PortSort>("port-asc");
+  const [tools, setTools] = useState<"search" | "filters" | "info" | null>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useState("");
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
+  const filtersActive =
+    kind !== "overview" || protocol !== "all" || exposure !== "all" || sort !== "port-asc";
+  const connectionsVisible =
+    kind === "all" || kind === "connections" || (kind === "overview" && showConnections);
   const [portsSudo, setPortsSudo] = useState(false);
   // Whether the read behind the current list actually ran as root. A permission
   // the account cannot use does not elevate anything, so this is not the same
@@ -112,10 +121,7 @@ export function PortsPane({
 
   async function loadPorts(force = false, sudoPassword: string | null = null) {
     const current = cacheRef.current;
-    if (!force && isCacheFresh(current)) {
-      void loadContainers();
-      return;
-    }
+    if (!force && isCacheFresh(current)) return;
     const request = ++requestRef.current;
     onCacheChange({ ...current, loading: true, error: null });
     try {
@@ -123,7 +129,6 @@ export function PortsPane({
       if (request !== requestRef.current) return;
       setPortsElevated(sudoPassword !== null || elevationInEffect);
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-      void loadContainers();
     } catch (caught) {
       if (request !== requestRef.current) return;
       onCacheChange({ ...cacheRef.current, loading: false, error: errorMessage(caught) });
@@ -163,7 +168,9 @@ export function PortsPane({
 
   useEffect(() => {
     void loadPorts();
+    void loadContainers();
     void loadFirewall();
+    void loadConnections();
     return () => {
       requestRef.current += 1;
       ownerRequestRef.current += 1;
@@ -171,10 +178,6 @@ export function PortsPane({
       connectionsRef.current += 1;
     };
   }, [connection.id]);
-
-  useEffect(() => {
-    if (tab === "connections") void loadConnections();
-  }, [tab]);
 
   // Changing the elevation allowance changes what a read can see, so the cached
   // list from the other side of that change is stale by definition.
@@ -192,40 +195,45 @@ export function PortsPane({
     void loadPorts(true);
     void loadContainers(true);
     void loadFirewall();
-    if (tab === "connections") void loadConnections(true);
+    void loadConnections(true);
   }
 
-  const filteredSockets = useMemo(
-    () =>
-      filterAndSortSockets(
-        cache.items,
-        containersCache.items,
-        search,
-        protocol,
-        "port-asc",
-        exposure,
-      ),
-    [cache.items, containersCache.items, search, protocol, exposure],
-  );
+  useEffect(() => {
+    // The credential modal owns outside clicks and Escape until it closes.
+    if (!tools || firewallSudo || portsSudo) return;
+    const panel = toolsRef.current?.querySelector<HTMLElement>(".ports-tools-panel");
+    (panel?.querySelector<HTMLElement>("input, select") ?? panel)?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !toolsRef.current?.contains(event.target)) setTools(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTools(null);
+        toolsButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [tools, firewallSudo, portsSudo]);
+
+  useEffect(() => {
+    if (cache.error || firewallError || connectionsError || containersCache.error) setTools("info");
+  }, [cache.error, firewallError, connectionsError, containersCache.error]);
+
+  function toggleTools(next: "search" | "filters" | "info", button: HTMLButtonElement) {
+    toolsButtonRef.current = button;
+    setTools((current) => (current === next ? null : next));
+  }
 
   const collectedAt = cache.fetchedAt
     ? new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
   const hostLabel = capabilities?.hostname || connection.displayName;
 
-  if (cache.loading && !cache.items.length)
-    return <LoadingState label="Reading listening ports…" />;
-  if (cache.error && !cache.items.length) {
-    return (
-      <ErrorState
-        message={cache.error}
-        action={<button onClick={() => loadPorts(true)}>Retry</button>}
-      />
-    );
-  }
-
-  const showProtocol = tab !== "connections";
-  const showExposure = tab === "overview" || tab === "table";
   const ownerGap =
     capabilities?.osId === "windows"
       ? cache.items.some((socket) => socket.ownership === "unavailable")
@@ -236,153 +244,361 @@ export function PortsPane({
         : null
       : ownerGapNotice(cache.items, portsElevated);
 
+  const hasWarnings = !!(
+    cache.error ||
+    firewallError ||
+    connectionsError ||
+    containersCache.error ||
+    ownerGap
+  );
+  const snapshotDescription = [
+    collectedAt ? "Last collected at " + collectedAt : null,
+    cache.items.length + " listening port" + (cache.items.length === 1 ? "" : "s"),
+    connections
+      ? connections.totalEstablished +
+        " active connection" +
+        (connections.totalEstablished === 1 ? "" : "s")
+      : null,
+    connections?.truncated ? "Connection list limited to 4,000 rows" : null,
+    cache.loading ? "Reading listening ports…" : null,
+    connectionsLoading ? "Reading established connections…" : null,
+    containersCache.loading ? "Reading Docker containers…" : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  useEffect(() => {
+    if (!hasWarnings && tools === "info") setTools(null);
+  }, [hasWarnings, tools]);
+
   return (
     <section className="feature-page ports-page">
-      <header className="page-heading compact-heading">
-        <div>
-          <h2>Ports</h2>
-          <p>
-            {cache.items.length} listening socket{cache.items.length === 1 ? "" : "s"}
-            {collectedAt ? ` · collected at ${collectedAt}` : ""}
-          </p>
-          <small className="unit-scope-note">
-            Manual snapshot of the current host, not a network scan
-          </small>
-        </div>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={refresh}
-          aria-label="Refresh ports"
-          disabled={cache.loading}
-        >
-          <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
-        </button>
-      </header>
-
-      <nav className="ports-tabs" role="tablist" aria-label="Ports views">
-        {TABS.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === entry.id}
-            className={tab === entry.id ? "ports-tab active" : "ports-tab"}
-            onClick={() => setTab(entry.id)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
-
-      {cache.error && (
-        <p className="inline-warning">Showing saved results. Refresh failed: {cache.error}</p>
-      )}
-      {firewallError && (tab === "overview" || tab === "table") && (
-        <p className="inline-warning firewall-warning">
-          <ShieldAlert size={14} /> Firewall status unavailable: {firewallError}
-          {capabilities?.osId !== "windows" &&
-            firewallError.toLowerCase().includes("permission denied") && (
-              <button type="button" className="link-button" onClick={() => setFirewallSudo(true)}>
-                Retry with sudo
+      <PortsGraph
+        sockets={cache.items}
+        containers={containersCache.items}
+        firewall={firewall}
+        capabilities={capabilities}
+        hostLabel={hostLabel}
+        connections={connections}
+        search={search}
+        protocol={protocol}
+        exposure={exposure}
+        kind={kind}
+        sort={sort}
+        showConnections={showConnections}
+        emptyMessage={
+          kind === "connections" && connectionsLoading
+            ? "Reading established connections…"
+            : kind === "connections" && connectionsError
+              ? "Connections unavailable"
+              : kind === "docker" && containersCache.loading
+                ? "Reading Docker containers…"
+                : kind === "docker" && containersCache.error
+                  ? "Docker mappings unavailable"
+                  : cache.loading
+                    ? "Reading listening ports…"
+                    : kind === "listeners" && cache.error
+                      ? "Listening ports unavailable"
+                      : kind === "connections" && !connections?.groups.length
+                        ? "No established connections"
+                        : "No ports match the current filters"
+        }
+        onOpenSystemd={onOpenSystemd}
+        onOpenContainer={onOpenContainer}
+        onViewLogs={onViewLogs}
+        toolbar={
+          <div className="ports-controls" ref={toolsRef}>
+            <header className="ports-heading" data-tooltip-boundary>
+              <h2
+                tabIndex={0}
+                title={snapshotDescription}
+                data-tooltip-align="start"
+                aria-describedby="ports-snapshot-description"
+              >
+                Ports
+              </h2>
+              <span id="ports-snapshot-description" className="sr-only">
+                {snapshotDescription}
+              </span>
+              {hasWarnings && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Ports reading warnings"
+                  aria-label="Ports reading warnings"
+                  aria-expanded={tools === "info"}
+                  aria-controls="ports-tools"
+                  onClick={(event) => toggleTools("info", event.currentTarget)}
+                >
+                  <ShieldAlert size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Find ports"
+                title="Find ports"
+                aria-expanded={tools === "search"}
+                aria-pressed={!!search}
+                aria-controls="ports-tools"
+                onClick={(event) => toggleTools("search", event.currentTarget)}
+              >
+                <Search size={16} />
               </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Filter ports"
+                title="Filter ports"
+                aria-expanded={tools === "filters"}
+                aria-pressed={filtersActive}
+                aria-controls="ports-tools"
+                onClick={(event) => toggleTools("filters", event.currentTarget)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Show established connections"
+                title="Show established and outbound connections"
+                aria-pressed={connectionsVisible}
+                onClick={() => {
+                  setShowConnections(!connectionsVisible);
+                  setKind("overview");
+                }}
+              >
+                <ArrowLeftRight size={16} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={refresh}
+                aria-label="Refresh ports"
+                disabled={cache.loading || connectionsLoading}
+              >
+                <RefreshCw
+                  size={16}
+                  className={cache.loading || connectionsLoading ? "spinning" : ""}
+                />
+              </button>
+            </header>
+            {tools && (
+              <div
+                id="ports-tools"
+                className="ports-tools-panel"
+                role="region"
+                tabIndex={-1}
+                aria-label={
+                  tools === "search"
+                    ? "Find ports"
+                    : tools === "filters"
+                      ? "Port filters"
+                      : "Ports reading warnings"
+                }
+              >
+                {tools !== "search" && (
+                  <header className="ports-tools-heading">
+                    <strong>{tools === "filters" ? "Filters" : "Reading warnings"}</strong>
+                    {tools === "filters" && (
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Reset filters"
+                        title="Reset filters"
+                        disabled={!filtersActive}
+                        onClick={() => {
+                          setKind("overview");
+                          setProtocol("all");
+                          setExposure("all");
+                          setSort("port-asc");
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Close port tools"
+                      onClick={() => {
+                        setTools(null);
+                        toolsButtonRef.current?.focus();
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </header>
+                )}
+                {tools === "info" && (
+                  <>
+                    <div className="ports-reading-body">
+                      {cache.error && (
+                        <p className="inline-warning">
+                          {cache.items.length
+                            ? "Showing saved results. Refresh failed: "
+                            : "Listening ports unavailable: "}
+                          {cache.error}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => loadPorts(true)}
+                          >
+                            Retry ports
+                          </button>
+                        </p>
+                      )}
+                      {connectionsError && (
+                        <p className="inline-warning">
+                          {connections
+                            ? "Showing saved connections. Refresh failed: "
+                            : "Connections unavailable: "}
+                          {connectionsError}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => loadConnections(true)}
+                          >
+                            Retry connections
+                          </button>
+                        </p>
+                      )}
+                      {containersCache.error && (
+                        <p className="inline-warning">
+                          {containersCache.items.length
+                            ? "Showing saved Docker mappings. Refresh failed: "
+                            : "Docker mappings unavailable: "}
+                          {containersCache.error}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => loadContainers(true)}
+                          >
+                            Retry Docker
+                          </button>
+                        </p>
+                      )}
+                      {firewallError && (
+                        <p className="inline-warning">
+                          Firewall status unavailable: {firewallError}
+                          {capabilities?.osId !== "windows" &&
+                            firewallError.toLowerCase().includes("permission denied") && (
+                              <button
+                                type="button"
+                                className="link-button"
+                                onClick={() => setFirewallSudo(true)}
+                              >
+                                Retry with sudo
+                              </button>
+                            )}
+                        </p>
+                      )}
+                      {ownerGap && (
+                        <p className="inline-warning">
+                          {ownerGap.message}
+                          {ownerGap.offerSudo && (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() => setPortsSudo(true)}
+                            >
+                              Resolve owners with sudo
+                            </button>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+                {tools === "search" && (
+                  <div className="search-field ports-search-field">
+                    <Search size={15} />
+                    <input
+                      aria-label="Search ports"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search ports or owners"
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Clear search"
+                      title="Clear search"
+                      disabled={!search}
+                      onClick={() => {
+                        setSearch("");
+                        toolsRef.current?.querySelector("input")?.focus();
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                {tools === "filters" && (
+                  <>
+                    <div className="port-list-controls">
+                      <label>
+                        <span>Contents</span>
+                        <select
+                          aria-label="Graph contents"
+                          value={kind}
+                          onChange={(event) => setKind(event.target.value as PortGraphKind)}
+                        >
+                          <option value="overview">Listening + published</option>
+                          <option value="all">All socket types</option>
+                          <option value="listeners">Listeners</option>
+                          <option value="connections">Established / outbound</option>
+                          <option value="docker">Docker-published</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Protocol</span>
+                        <select
+                          aria-label="Protocol filter"
+                          value={protocol}
+                          onChange={(event) => setProtocol(event.target.value)}
+                        >
+                          <option value="all">TCP + UDP</option>
+                          <option value="tcp">TCP</option>
+                          <option value="udp">UDP</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Binding scope</span>
+                        <select
+                          aria-label="Binding scope"
+                          value={exposure}
+                          onChange={(event) => setExposure(event.target.value as Exposure | "all")}
+                        >
+                          <option value="all">Any binding scope</option>
+                          <option value="all-interfaces">All interfaces</option>
+                          <option value="local-only">Loopback only</option>
+                          <option value="non-loopback">Non-loopback</option>
+                          <option value="specific">Specific address</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Sort</span>
+                        <select
+                          aria-label="Sort ports"
+                          value={sort}
+                          onChange={(event) => setSort(event.target.value as PortSort)}
+                        >
+                          <option value="port-asc">Port ↑</option>
+                          <option value="port-desc">Port ↓</option>
+                          <option value="protocol">Protocol</option>
+                          <option value="address">Address</option>
+                          <option value="process">Process</option>
+                        </select>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
-        </p>
-      )}
-      {ownerGap && (tab === "overview" || tab === "table") && (
-        <p className="inline-warning firewall-warning">
-          <ShieldAlert size={14} />
-          <span className="inline-warning-text">{ownerGap.message}</span>
-          {ownerGap.offerSudo && (
-            <button type="button" className="link-button" onClick={() => setPortsSudo(true)}>
-              Resolve owners with sudo
-            </button>
-          )}
-        </p>
-      )}
-
-      <div className="port-list-controls">
-        <label className="search-field">
-          <Search size={15} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search ports, services, processes, or containers"
-          />
-        </label>
-        {showProtocol && (
-          <select
-            aria-label="Protocol filter"
-            value={protocol}
-            onChange={(event) => setProtocol(event.target.value)}
-          >
-            <option value="all">TCP + UDP</option>
-            <option value="tcp">TCP</option>
-            <option value="udp">UDP</option>
-          </select>
-        )}
-        {showExposure && (
-          <select
-            aria-label="Exposure filter"
-            value={exposure}
-            onChange={(event) => setExposure(event.target.value as Exposure | "all")}
-          >
-            <option value="all">Any exposure</option>
-            <option value="all-interfaces">All interfaces</option>
-            <option value="local-only">Local only</option>
-            <option value="specific">Specific address</option>
-          </select>
-        )}
-      </div>
-
-      <div className="ports-tab-body">
-        {tab === "overview" && (
-          <PortsOverview
-            sockets={filteredSockets}
-            containers={containersCache.items}
-            firewall={firewall}
-            capabilities={capabilities}
-            hostLabel={hostLabel}
-            onOpenSystemd={onOpenSystemd}
-            onOpenContainer={onOpenContainer}
-            onViewLogs={onViewLogs}
-          />
-        )}
-        {tab === "connections" && (
-          <PortsConnections
-            connections={connections}
-            loading={connectionsLoading}
-            error={connectionsError}
-            search={search}
-            onRetry={() => loadConnections(true)}
-            onOpenSystemd={onOpenSystemd}
-            onViewLogs={onViewLogs}
-          />
-        )}
-        {tab === "docker" && (
-          <PortsDocker
-            containersCache={containersCache}
-            search={search}
-            protocol={protocol}
-            onRetry={() => loadContainers(true)}
-            onOpenContainer={onOpenContainer}
-            onViewLogs={onViewLogs}
-          />
-        )}
-        {tab === "table" && (
-          <PortsTable
-            sockets={cache.items}
-            containers={containersCache.items}
-            firewall={firewall}
-            search={search}
-            protocol={protocol}
-            exposure={exposure}
-            onOpenSystemd={onOpenSystemd}
-            onOpenContainer={onOpenContainer}
-            onViewLogs={onViewLogs}
-          />
-        )}
-      </div>
+          </div>
+        }
+      />
 
       {firewallSudo && (
         <CredentialDialog
