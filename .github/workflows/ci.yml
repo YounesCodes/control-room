@@ -64,7 +64,7 @@ jobs:
           & ./scripts/test-windows-ssh-probe.ps1
           & ./scripts/test-windows-docker.ps1
       - name: Cache the Playwright browser
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~\AppData\Local\ms-playwright
           # The Chromium build rides the pinned playwright version in the lock.
@@ -88,7 +88,7 @@ jobs:
           workspaces: "./src-tauri -> target"
           cache-bin: false
       - name: Install cargo-audit from a prebuilt release
-        uses: taiki-e/install-action@v2.87.30
+        uses: taiki-e/install-action@v2.87.32
         with:
           tool: cargo-audit
           fallback: none
