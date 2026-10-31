@@ -168,7 +168,7 @@ describe("Settings and native window", () => {
 
   it("hides and restores Command Prompt in the launcher without uninstalling it", async () => {
     await $("aria/Open Settings").click();
-    await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
+    await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
     await $("aria/New terminal").click();
@@ -176,7 +176,7 @@ describe("Settings and native window", () => {
     await browser.keys("Escape");
     await restartApp();
     await $("aria/Open Settings").click();
-    await $("//label[input[@type='checkbox']][contains(.,'Command Prompt')]/input").click();
+    await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
     await openLocal();
