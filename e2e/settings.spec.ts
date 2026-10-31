@@ -171,7 +171,7 @@ describe("Settings and native window", () => {
     await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
-    await $("aria/New terminal").click();
+    await $('button[aria-label="New terminal"]').click();
     await expect($(".new-terminal-menu").$("aria/Local terminals: Command Prompt")).not.toExist();
     await browser.keys("Escape");
     await restartApp();
@@ -240,12 +240,12 @@ describe("Local Terminal Mode desktop", () => {
     await restartApp();
     await expect($(".app-shell")).toHaveAttribute("class", "app-shell terminal-focus-mode");
     await expect($(".sidebar")).not.toBeDisplayed();
-    await expect($("aria/New terminal")).toBeDisplayed();
+    await expect($('button[aria-label="New terminal"]')).toBeDisplayed();
     await terminalCommand("echo CONTROL_ROOM_LOCAL_MODE_OK", "CONTROL_ROOM_LOCAL_MODE_OK");
     expect((await runtime()).sessionIds).toHaveLength(1);
     await $("aria/Exit terminal focus").click();
     await expect($("aria/Saved connections")).toBeDisplayed();
-    await $("aria/New terminal").click();
+    await $('button[aria-label="New terminal"]').click();
     await expect($(".new-terminal-menu")).toBeDisplayed();
     await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
