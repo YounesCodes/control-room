@@ -13,6 +13,19 @@ export interface RuntimeStatus {
 let directory: string;
 
 export async function ipc<T>(command: string, args: object = {}): Promise<T> {
+  // A WebDriver session can exist while its initial WebView document is still empty.
+  await browser.waitUntil(
+    () =>
+      browser.execute(
+        () =>
+          typeof (
+            globalThis as unknown as {
+              __TAURI__?: { core?: { invoke?: unknown } };
+            }
+          ).__TAURI__?.core?.invoke === "function",
+      ),
+    { timeout: 20_000, timeoutMsg: "Tauri bridge did not become ready" },
+  );
   const result = await browser.execute(
     async (name, input) => {
       const native = (
@@ -139,7 +152,7 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   } else {
     await $(`.host-main*=${name}`).click();
   }
-  const dialog = $("[role=dialog]");
+  const dialog = $(".modal-backdrop [role=dialog]");
   if (await dialog.isExisting()) {
     await expect(dialog.$("h2")).toHaveText(`Connect to ${name}`);
     const fallback = dialog.$("button=Connect as Linux host");
