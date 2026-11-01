@@ -286,6 +286,19 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   node.focus();
   await userEvent.keyboard("{Enter}");
   expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+  const panel = screen.getByRole("complementary", { name: "Unit details" });
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    expect(getComputedStyle(panel).animationDelay).toBe("0s");
+    const entrance = panel
+      .getAnimations()
+      .find(
+        (animation) => (animation as CSSAnimation).animationName === "systemd-graph-inspector-in",
+      )!;
+    expect(entrance).toBeTruthy();
+    const effect = entrance.effect as KeyframeEffect;
+    expect(Number(effect.getTiming().duration)).toBe(160);
+    expect(Number(effect.getKeyframes()[0].opacity)).toBeGreaterThanOrEqual(0.65);
+  }
   await userEvent.keyboard("{Escape}");
   await waitFor(() => expect(document.activeElement?.textContent).toContain("database.service"));
   await page.getByRole("button", { name: /^database.service/ }).dblClick();

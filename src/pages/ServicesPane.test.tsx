@@ -57,6 +57,38 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it("opens a graph inspector and frames its node immediately while details are pending", async () => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1280);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    try {
+      api.inspectSystemdUnit.mockImplementation((_host, id) =>
+        id === "a.service"
+          ? Promise.resolve(systemdInspection(id, { Requires: "b.service" }))
+          : new Promise(() => {}),
+      );
+      const user = userEvent.setup();
+      render(
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("a.service", "service", "active", "running")])}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+        />,
+      );
+      await user.click(screen.getByRole("button", { name: "Explore a.service" }));
+      const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+      const node = await within(graph).findByRole("button", { name: /^b.service/ });
+      const content = graph.querySelector<HTMLElement>(".systemd-graph-content")!;
+      const before = content.style.transform;
+      await user.click(node);
+      expect(screen.getByRole("heading", { name: "b.service" })).toBeTruthy();
+      expect(content.style.transform).not.toBe(before);
+      expect(screen.getByText("Reading unit details…")).toBeTruthy();
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+    }
+  });
   it("never opens the graph when rapidly toggling an inventory inspector", async () => {
     const user = userEvent.setup();
     render(

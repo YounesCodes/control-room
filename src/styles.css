@@ -4228,6 +4228,19 @@ dd {
   max-height: calc(100% - 24px);
   animation: systemd-inspector-in var(--motion-slow) var(--ease) both;
 }
+.systemd-canvas .systemd-presence:not([data-leaving]) > .systemd-inspector {
+  animation: systemd-graph-inspector-in var(--motion-med) var(--ease) both;
+}
+@keyframes systemd-graph-inspector-in {
+  from {
+    opacity: 0.65;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 .systemd-inspector > header {
   padding: 14px 42px 12px 16px;
 }

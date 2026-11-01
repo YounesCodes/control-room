@@ -49,12 +49,13 @@ export function SystemdGraph({
   const { setView } = pan;
   const [moving, setMoving] = useState(false);
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const lastNodeClick = useRef<{ id: string; x: number; y: number; time: number } | null>(null);
+  const consumeClick = useRef(false);
   const previous = useRef<{
     root: string;
     frame: string;
     layout: ReturnType<typeof layoutSystemdGraph>;
   } | null>(null);
-  const cameraTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeEdge, setActiveEdge] = useState<string | null>(null);
   const layout = useMemo(() => {
     const old = previous.current;
@@ -117,39 +118,33 @@ export function SystemdGraph({
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
-    if (cameraTimer.current) clearTimeout(cameraTimer.current);
     if (selectedId) {
       detailRef.current?.focus({ preventScroll: true });
       wasInspecting.current = true;
-      cameraTimer.current = setTimeout(() => {
-        const viewport = viewportRef.current,
-          node = previous.current?.layout.positions.get(selectedId);
-        if (!viewport || !node) return;
-        const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
-        if (width < 240) return;
-        const height = Math.max(100, viewport.clientHeight - 108);
-        const scale = Math.max(
-          0.85,
-          Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
-        );
-        setMoving(true);
-        setView({
-          scale,
-          x: 24 + width / 2 - (node.x + node.width / 2) * scale,
-          y: 48 + height / 2 - (node.y + node.height / 2) * scale,
-        });
-      }, 220);
+      const viewport = viewportRef.current,
+        node = previous.current?.layout.positions.get(selectedId);
+      if (!viewport || !node) return;
+      const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
+      if (width < 240) return;
+      const height = Math.max(100, viewport.clientHeight - 108);
+      const scale = Math.max(
+        0.85,
+        Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
+      );
+      setMoving(true);
+      setView({
+        scale,
+        x: 24 + width / 2 - (node.x + node.width / 2) * scale,
+        y: 48 + height / 2 - (node.y + node.height / 2) * scale,
+      });
     } else if (wasInspecting.current) {
       wasInspecting.current = false;
       fit();
     }
-    return () => {
-      if (cameraTimer.current) clearTimeout(cameraTimer.current);
-    };
   }, [selectedId]);
 
   function stopCamera() {
-    if (cameraTimer.current) clearTimeout(cameraTimer.current);
+    lastNodeClick.current = null;
     setMoving(false);
   }
 
@@ -186,6 +181,31 @@ export function SystemdGraph({
   return (
     <div
       className={"arch-canvas systemd-canvas" + (selectedId ? " inspecting" : "")}
+      onPointerDownCapture={(event) => {
+        const last = lastNodeClick.current;
+        // The camera may move the node out from under the second click.
+        // Recognize that gesture before it reaches the canvas or inspector.
+        if (
+          event.button === 0 &&
+          last &&
+          event.timeStamp - last.time < 300 &&
+          Math.hypot(event.clientX - last.x, event.clientY - last.y) < 5
+        ) {
+          lastNodeClick.current = null;
+          consumeClick.current = true;
+          event.preventDefault();
+          event.stopPropagation();
+          setMoving(false);
+          onRefocus(last.id);
+        } else consumeClick.current = false;
+      }}
+      onClickCapture={(event) => {
+        if (consumeClick.current) {
+          consumeClick.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && selectedId) {
           event.stopPropagation();
@@ -330,7 +350,13 @@ export function SystemdGraph({
                     if (element) nodes.current.set(id, element);
                     else nodes.current.delete(id);
                   }}
-                  onClick={() => onSelect(id)}
+                  onClick={(event) => {
+                    lastNodeClick.current =
+                      event.detail > 0
+                        ? { id, x: event.clientX, y: event.clientY, time: event.timeStamp }
+                        : null;
+                    onSelect(id);
+                  }}
                   onDoubleClick={() => {
                     stopCamera();
                     onRefocus(id);
