@@ -246,8 +246,8 @@ Show one category at a time: Dependencies (Requires/Wants), Ordering (After/Befo
 or Activation (Triggers). Consolidate relationships with the same direction into
 one connector. Keep opposite requirements separate. Ordering arrows run from the
 earlier unit to the later unit, combining equivalent After/Before constraints.
-Keep short relationship labels visible and show exact reported evidence on hover
-or keyboard focus. Explain arrow direction for the active category. End each line
+Keep edges free of text and show exact reported evidence on hover
+or keyboard focus. Explain arrow direction once for the active category. End each line
 at the base of its arrowhead, leaving the tip clear of the target card. Never use
 label boxes or relationship nodes. Pair line patterns with directed arrows, keep
 arrowheads crisp, and route connectors outside cards. Use consistent node sizes
@@ -266,7 +266,9 @@ Keep inspectors closed until selection. Use a compact, content-height panel with
 a visible 32px slide on entry and a slide on exit. Graph selection opens the inspector
 and starts camera framing immediately,
 without a click timer or waiting for remote details. Keep that inspector visible from
-its first frame with a short 160ms entrance. Keep exiting controls inert and hidden from assistive
+its first frame with a short 160ms entrance. Center the graph inspector vertically
+at the right of the canvas, including while its content changes.
+Keep exiting controls inert and hidden from assistive
 technology, cancel exits when reopened, and remove them immediately under reduced
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat Graph in the inspector.

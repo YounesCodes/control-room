@@ -260,7 +260,7 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
     expect(within(graph).getByRole("button", { name: /^database.service/ })).toBeTruthy(),
   );
   expect(document.querySelectorAll(".systemd-edge-badge, .systemd-edges rect")).toHaveLength(0);
-  expect(document.querySelectorAll(".systemd-edge-label").length).toBeGreaterThan(0);
+  expect(document.querySelectorAll(".systemd-edges text")).toHaveLength(0);
   const node = within(graph).getByRole("button", { name: /^database.service/ });
   await settleMotion();
   const before = node.getBoundingClientRect();
@@ -287,6 +287,11 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   await userEvent.keyboard("{Enter}");
   expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
   const panel = screen.getByRole("complementary", { name: "Unit details" });
+  const panelBox = panel.getBoundingClientRect();
+  const canvasBox = panel.closest(".systemd-canvas")!.getBoundingClientRect();
+  expect(
+    Math.abs(panelBox.top + panelBox.height / 2 - canvasBox.top - canvasBox.height / 2),
+  ).toBeLessThan(1);
   if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     expect(getComputedStyle(panel).animationDelay).toBe("0s");
     const entrance = panel
@@ -375,9 +380,8 @@ it.each([false, true])(
       .getAllByRole("img")
       .find((element) => element.getAttribute("aria-label")?.includes("Requires"))!;
     edge.focus();
-    await waitFor(() =>
-      expect(document.querySelectorAll(".edge-active .systemd-edge-label")).toHaveLength(1),
-    );
+    await waitFor(() => expect(document.querySelectorAll(".edge-active")).toHaveLength(1));
+    expect(document.querySelectorAll(".systemd-edges text")).toHaveLength(0);
     expect(edge.getAttribute("aria-label")).toContain("Requires");
   },
 );

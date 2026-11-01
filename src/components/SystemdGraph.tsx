@@ -314,14 +314,6 @@ export function SystemdGraph({
                     vectorEffect="non-scaling-stroke"
                   />
                   <path className="systemd-arrowhead" d={connection.arrowhead} />
-                  <text
-                    className="systemd-edge-label"
-                    x={connection.labelPoint.x}
-                    y={connection.labelPoint.y}
-                    textAnchor="middle"
-                  >
-                    {connection.label}
-                  </text>
                 </g>
               );
             })}

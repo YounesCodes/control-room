@@ -4231,6 +4231,10 @@ dd {
 .systemd-canvas .systemd-presence:not([data-leaving]) > .systemd-inspector {
   animation: systemd-graph-inspector-in var(--motion-med) var(--ease) both;
 }
+.systemd-canvas .systemd-inspector.arch-detail {
+  top: 50%;
+  translate: 0 -50%;
+}
 @keyframes systemd-graph-inspector-in {
   from {
     opacity: 0.65;
@@ -4464,12 +4468,6 @@ dd {
 .systemd-connection:focus-visible .systemd-edge-path {
   stroke: var(--text);
   stroke-width: 2.5;
-}
-.systemd-edge-label {
-  fill: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  pointer-events: none;
 }
 .systemd-graph-node {
   position: absolute;
