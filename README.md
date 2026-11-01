@@ -24,7 +24,3 @@ _Note that Windows may warn that the publisher is unsigned._
 ## Documentation
 
 **[Quick start](https://younescodes.github.io/control-room/start-here/quick-start/)**
-
-## Release
-
-Create a GitHub draft release for the next `vX.Y.Z` tag and write its release notes in the draft body before pushing the tag. Keep the release as a draft. The tag workflow builds the app, copies the GitHub body into `latest.json`, verifies that the notes match, and publishes the release. Release notes do not need a file or commit in this repository.

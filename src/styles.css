@@ -3185,7 +3185,6 @@ code,
   background: var(--app-bg);
 }
 
-.overview-page,
 .history-page,
 .logs-page,
 .boot-page {
@@ -3351,427 +3350,6 @@ code,
   font-size: 11px;
 }
 
-.overview-content {
-  width: 100%;
-  max-width: 980px;
-}
-
-/* Overview owns live readings while it is visible. Tables stay bounded within
-   panels so long device names never widen the inspection workspace. */
-.diagnostic-toolbar,
-.diagnostic-title,
-.diagnostic-controls,
-.diagnostic-panel > header,
-.diagnostic-system-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.diagnostic-toolbar {
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.diagnostic-title h2 {
-  margin: 0;
-  font: 600 22px var(--font-display);
-}
-.diagnostic-title time,
-.diagnostic-panel > header > span,
-.diagnostic-system-heading > span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-.diagnostic-controls {
-  gap: 6px;
-}
-.diagnostic-controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-.diagnostic-controls select,
-.diagnostic-panel select {
-  width: auto;
-  max-width: 200px;
-  min-height: 28px;
-  padding: 3px 28px 3px 8px;
-  background-position: right 8px center;
-  font-size: 12px;
-}
-.diagnostic-status {
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.diagnostic-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.diagnostic-status[data-state="live"] {
-  color: var(--success);
-}
-.diagnostic-status[data-state="stale"] {
-  color: var(--warning);
-}
-.diagnostic-status[data-state="unavailable"] {
-  color: var(--failure);
-}
-.diagnostic-status[data-state="paused"],
-.diagnostic-status[data-state="reading"] {
-  color: var(--text-muted);
-}
-.diagnostic-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.diagnostic-panel {
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-base);
-}
-.diagnostic-panel > header {
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.diagnostic-panel h3 {
-  margin: 0;
-  font: 600 15px var(--font-display);
-}
-.diagnostic-panel > header > strong {
-  font: 500 23px var(--font-display);
-  font-variant-numeric: tabular-nums;
-}
-.diagnostic-wide {
-  grid-column: 1 / -1;
-}
-.diagnostic-chart {
-  margin: 0 0 10px;
-  position: relative;
-}
-.diagnostic-chart-scale {
-  position: absolute;
-  right: 2px;
-  top: 0;
-  padding: 0 2px;
-  background: var(--surface-base);
-  color: var(--text-muted);
-  font-size: 10px;
-  pointer-events: none;
-}
-.diagnostic-chart svg {
-  display: block;
-  width: 100%;
-  height: 84px;
-  overflow: visible;
-}
-.diagnostic-gridline {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 1;
-}
-.diagnostic-trace {
-  fill: none;
-  stroke: var(--text);
-  stroke-width: 1.5;
-  vector-effect: non-scaling-stroke;
-}
-.diagnostic-trace.trace-1 {
-  stroke: var(--text-muted);
-  stroke-dasharray: 4 3;
-}
-.diagnostic-point {
-  fill: var(--text);
-}
-.diagnostic-point.trace-1 {
-  fill: var(--text-muted);
-}
-.diagnostic-cursor {
-  stroke: var(--text-faint);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
-}
-.diagnostic-chart figcaption {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 18px;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-.diagnostic-chart figcaption > span {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.diagnostic-legend::before {
-  content: "";
-  display: inline-block;
-  width: 10px;
-  border-top: 2px solid var(--text);
-  margin-right: 4px;
-  vertical-align: middle;
-}
-.diagnostic-legend.trace-1::before {
-  border-color: var(--text-muted);
-  border-top-style: dashed;
-}
-.diagnostic-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  margin: 0;
-}
-.diagnostic-facts dt {
-  color: var(--text-muted);
-  font-size: 11px;
-  margin-bottom: 3px;
-}
-.diagnostic-facts dd {
-  margin: 0;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-.diagnostic-cores {
-  margin-top: 12px;
-  font-size: 11px;
-}
-.diagnostic-cores summary {
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 4px 0;
-}
-.diagnostic-cores > div {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: 190px;
-  overflow: auto;
-  gap: 5px 16px;
-  margin-top: 6px;
-}
-.diagnostic-cores > div > div {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.diagnostic-cores > div > div > span:last-child {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-.diagnostic-panel meter {
-  display: block;
-  width: 100%;
-  min-width: 20px;
-  height: 5px;
-}
-.diagnostic-panel meter::-webkit-meter-bar {
-  background: var(--border);
-  border: 0;
-  border-radius: 2px;
-}
-.diagnostic-panel meter::-webkit-meter-optimum-value {
-  background: var(--text-muted);
-}
-.diagnostic-table-scroll {
-  overflow: auto;
-  max-height: 250px;
-  scrollbar-gutter: stable;
-}
-.diagnostic-panel table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.diagnostic-panel th,
-.diagnostic-panel td {
-  padding: 6px 7px;
-  border-bottom: 1px solid var(--border);
-  text-align: right;
-  white-space: nowrap;
-}
-.diagnostic-panel thead th {
-  position: sticky;
-  top: 0;
-  background: var(--surface-base);
-  color: var(--text-muted);
-  font-weight: 500;
-  z-index: 1;
-}
-.diagnostic-panel th:first-child {
-  text-align: left;
-}
-.diagnostic-panel tbody th {
-  font-weight: 400;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.diagnostic-panel th button {
-  font: inherit;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  padding: 0;
-}
-.diagnostic-panel td small {
-  color: var(--text-muted);
-  margin-left: 3px;
-}
-.diagnostic-panel tbody tr:hover {
-  background: var(--fill-hover);
-}
-.diagnostic-empty {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin: 10px 0 0;
-}
-.diagnostic-saved-changes {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.6;
-  margin: 0 0 8px;
-}
-.diagnostic-storage-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  min-width: 0;
-}
-.diagnostic-storage-grid > * {
-  min-width: 0;
-}
-.diagnostic-workloads {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-}
-.diagnostic-workloads section {
-  min-width: 0;
-}
-.diagnostic-workloads h4 {
-  margin: 0 0 10px;
-  font-size: 12px;
-}
-.diagnostic-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.diagnostic-link:hover {
-  text-decoration: underline;
-}
-.diagnostic-link:disabled {
-  opacity: 1;
-  cursor: default;
-}
-.diagnostic-states {
-  margin: 0;
-  font-size: 12px;
-}
-.diagnostic-states > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 0;
-}
-.diagnostic-states dt {
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-.diagnostic-states dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-.diagnostic-states [data-attention] dt,
-.diagnostic-states [data-attention] dd {
-  color: var(--failure);
-}
-.diagnostic-baselines {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.diagnostic-baselines li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 16px;
-  font-size: 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-}
-.diagnostic-baselines li > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.diagnostic-baselines li > span:nth-child(2) {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-.diagnostic-system-heading {
-  margin: 20px 0 12px;
-}
-.diagnostic-system-heading h3 {
-  margin: 0;
-}
-.diagnostic-system-heading .secondary-button {
-  margin-left: auto;
-}
-
-@container (max-width: 900px) {
-  .diagnostic-storage-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-  }
-}
-@container (max-width: 640px) {
-  .diagnostic-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .diagnostic-workloads {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-  }
-  .diagnostic-workloads section + section {
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
-  }
-  .diagnostic-baselines li {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-  }
-  .diagnostic-baselines li > span:nth-child(2) {
-    display: none;
-  }
-}
-
 .page-heading {
   display: flex;
   align-items: flex-start;
@@ -3840,12 +3418,8 @@ dd {
 }
 
 /* ==========================================================================
-   Overview dashboard
+   Boot summary
    ========================================================================== */
-
-.overview-heading {
-  align-items: center;
-}
 
 .overview-stats {
   display: grid;
@@ -3855,10 +3429,6 @@ dd {
   background: var(--surface-raised);
   margin-bottom: 26px;
   overflow: hidden;
-}
-
-.overview-counts {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .overview-stat {
@@ -3893,23 +3463,6 @@ dd {
 .overview-stat-hint {
   color: var(--text-faint);
   font-size: 11px;
-}
-
-.overview-section {
-  margin-top: 24px;
-}
-
-.overview-section-title {
-  margin: 0 0 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.overview-section .definition-grid {
-  border-top: 0;
 }
 
 .capability-list {
@@ -6503,7 +6056,6 @@ kbd {
     grid-template-columns: minmax(300px, 50%) minmax(240px, 1fr);
   }
 
-  .overview-page,
   .history-page,
   .logs-page {
     padding: 22px;
@@ -7543,11 +7095,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   overflow-wrap: anywhere;
 }
 
-.overview-content,
-.overview-page .definition-grid {
-  max-width: none;
-}
-
 .page-heading > div {
   min-width: 0;
 }
@@ -7557,19 +7104,10 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 @container (max-width: 720px) {
-  .overview-page,
   .history-page,
   .logs-page,
   .boot-page {
     padding: 20px;
-  }
-
-  .overview-page .definition-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .overview-page .definition-grid > div:nth-child(odd) {
-    margin-right: 0;
   }
 
   .port-list-controls {

@@ -19,14 +19,6 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("IPC data and lifetime contracts", () => {
-  it("passes the Overview inventory cadence to one bounded read", async () => {
-    await api.sampleOverviewDiagnostics("host", false);
-    expect(invoke).toHaveBeenCalledExactlyOnceWith("sample_overview_diagnostics", {
-      connectionId: "host",
-      workloads: false,
-    });
-    expect(vi.getTimerCount()).toBe(0);
-  });
   it("allows two platform probes before timing out remote shell detection", async () => {
     invoke.mockImplementation(() => new Promise(() => undefined));
     const failed = vi.fn();

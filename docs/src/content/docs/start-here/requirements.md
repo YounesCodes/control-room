@@ -19,16 +19,16 @@ Docker inspection also needs an account that can read the Docker daemon. On Linu
 
 Control Room recognizes these distribution families:
 
-| Distribution                   | Overview | Systemd                 | Ports                                       | Docker         | Boot                      | Logs               | Baselines                                        |
-| ------------------------------ | -------- | ----------------------- | ------------------------------------------- | -------------- | ------------------------- | ------------------ | ------------------------------------------------ |
-| Debian and Ubuntu              | Yes      | With systemd            | With iproute2                               | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Rocky Linux and AlmaLinux      | Yes      | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Oracle Linux and CentOS Stream | Yes      | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Amazon Linux 2023              | Yes      | With systemd            | With iproute2; firewalld when installed     | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Fedora Server                  | Yes      | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| openSUSE Leap                  | Yes      | With systemd            | With iproute2; firewalld when installed     | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Arch Linux                     | Yes      | With systemd            | With iproute2                               | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Alpine Linux                   | Yes      | Unavailable with OpenRC | With iproute2; no systemd owner correlation | When installed | Unavailable with OpenRC   | Docker only        | Host, filesystem, port, and Docker sections only |
+| Distribution                   | Systemd                 | Ports                                       | Docker         | Boot                      | Logs               | Baselines                                        |
+| ------------------------------ | ----------------------- | ------------------------------------------- | -------------- | ------------------------- | ------------------ | ------------------------------------------------ |
+| Debian and Ubuntu              | With systemd            | With iproute2                               | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| Rocky Linux and AlmaLinux      | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| Oracle Linux and CentOS Stream | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| Amazon Linux 2023              | With systemd            | With iproute2; firewalld when installed     | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| Fedora Server                  | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| openSUSE Leap                  | With systemd            | With iproute2; firewalld when installed     | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| Arch Linux                     | With systemd            | With iproute2                               | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
+| Alpine Linux                   | Unavailable with OpenRC | With iproute2; no systemd owner correlation | When installed | Unavailable with OpenRC   | Docker only        | Host, filesystem, port, and Docker sections only |
 
 RHEL and SLES use the same inspection commands as Rocky or AlmaLinux and openSUSE Leap respectively, but they are not listed as validated targets until the live SSH suite passes on the actual vendor distributions.
 

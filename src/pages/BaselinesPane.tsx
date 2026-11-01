@@ -31,17 +31,11 @@ interface BaselinesPaneProps {
   connection: SavedConnection;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  initialComparisonId?: string | null;
 }
 
 // Capture only ever starts from the button below. There is no timer here and no
 // automatic recapture: a baseline exists because someone asked for one.
-export function BaselinesPane({
-  connection,
-  selectedId,
-  onSelect,
-  initialComparisonId,
-}: BaselinesPaneProps) {
+export function BaselinesPane({ connection, selectedId, onSelect }: BaselinesPaneProps) {
   const [baselines, setBaselines] = useState<HostBaselineSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -62,7 +56,6 @@ export function BaselinesPane({
   const [deleteTarget, setDeleteTarget] = useState<HostBaselineSummary | null>(null);
   const detailRequestRef = useRef(0);
   const comparisonRequestRef = useRef(0);
-  const openedComparison = useRef(false);
 
   const selected = baselines.find((baseline) => baseline.id === selectedId) ?? null;
   const others = useMemo(
@@ -120,18 +113,6 @@ export function BaselinesPane({
       comparisonRequestRef.current += 1;
     };
   }, [selectedId]);
-
-  useEffect(() => {
-    if (
-      openedComparison.current ||
-      !initialComparisonId ||
-      !baselines.some((item) => item.id === selectedId) ||
-      !baselines.some((item) => item.id === initialComparisonId)
-    )
-      return;
-    openedComparison.current = true;
-    void compare(initialComparisonId);
-  }, [baselines, selectedId, initialComparisonId]);
 
   async function capture() {
     if (captureId || !chosenSections.length) return;

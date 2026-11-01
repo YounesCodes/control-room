@@ -1,7 +1,6 @@
 mod baselines;
 mod commands;
 mod database;
-mod diagnostics;
 mod documentation;
 mod fonts;
 mod header_metrics;
@@ -130,7 +129,6 @@ pub fn run() {
             commands::refresh_capabilities,
             commands::sample_host_resources,
             commands::sample_header_metrics,
-            commands::sample_overview_diagnostics,
             commands::list_services,
             commands::list_windows_services,
             commands::list_containers,

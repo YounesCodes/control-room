@@ -4,7 +4,7 @@ description: Install the app and open your first SSH host.
 ---
 
 import connectionScreenshot from "../../../assets/screenshots/connection-editor.png";
-import overviewScreenshot from "../../../assets/screenshots/overview.png";
+import terminalScreenshot from "../../../assets/screenshots/terminal.png";
 
 Select **Documentation**, the question-mark icon beside Settings, to open this
 website in your default browser. It is also available in Settings. Exit terminal
@@ -24,13 +24,13 @@ You need a Linux or Windows host and an SSH account for it. Windows hosts requir
   <figcaption>Add an SSH host. Example data shown.</figcaption>
 </figure>
 
-Open **Overview** to see basic host details and runtime capabilities. Try **Systemd** for services or **Ports** for listeners. These views read information from the host; use the terminal when you want to run commands.
+Open **Systemd** for services or **Ports** for listeners. These views read information from the host; use the terminal when you want to run commands.
 
 <figure class="docs-screenshot">
-  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
-    <img src={overviewScreenshot.src} alt="The Overview view for a connected host." />
+  <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
+    <img src={terminalScreenshot.src} alt="The Terminal view for a connected host." />
   </a>
-  <figcaption>Overview for an SSH host. Example data shown.</figcaption>
+  <figcaption>Terminal for an SSH host. Example data shown.</figcaption>
 </figure>
 
 Your tabs return after an app restart and open fresh terminal sessions. If a start fails, use **Reconnect** for SSH or **Restart** for a local shell in the tab strip.

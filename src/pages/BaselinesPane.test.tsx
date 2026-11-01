@@ -199,27 +199,6 @@ afterEach(() => {
 });
 
 describe("baselines pane", () => {
-  it("opens a saved comparison linked from Overview without a live host read", async () => {
-    api.listHostBaselines.mockResolvedValue([
-      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
-      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
-    ]);
-    api.getHostBaseline.mockResolvedValue(detail);
-    api.compareHostBaselines.mockResolvedValue(comparison);
-    render(
-      <BaselinesPane
-        connection={connection}
-        selectedId="later"
-        onSelect={vi.fn()}
-        initialComparisonId="earlier"
-      />,
-    );
-    await waitFor(() => expect(api.compareHostBaselines).toHaveBeenCalledWith("earlier", "later"));
-    expect(api.compareHostBaselineWithLive).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("earlier"),
-    );
-  });
   it("ignores a comparison that finishes after No comparison is selected", async () => {
     api.listHostBaselines.mockResolvedValue([
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),

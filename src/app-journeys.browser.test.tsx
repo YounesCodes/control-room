@@ -69,11 +69,6 @@ async function respond(command: string, args: any = {}) {
   if (failures.has(command)) throw new Error(failures.get(command));
   if (overrides.has(command)) return overrides.get(command)!(args);
   switch (command) {
-    case "sample_overview_diagnostics":
-      return {
-        ...fixtures.diagnostics(),
-        workloads: args.workloads ? fixtures.diagnostics().workloads : null,
-      };
     case "get_environment_info":
       return {
         sshPath: "fixture-ssh",
@@ -738,6 +733,28 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(menu).not.toBeInTheDocument();
   });
 
+  it("restores retired Overview tabs to Terminal without offering Overview navigation", async () => {
+    persisted.workspaces = [
+      {
+        id: "retired-overview",
+        label: null,
+        connectionId: "host-a",
+        localShellId: null,
+        view: "overview",
+        historyPaused: false,
+      },
+    ];
+    persisted.activeWorkspaceId = "retired-overview";
+    await mount();
+    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+    await expect
+      .element(
+        page
+          .getByRole("navigation", { name: "Workspace features" })
+          .getByRole("button", { name: "Overview", exact: true }),
+      )
+      .not.toBeInTheDocument();
+  });
   it("keeps an idle host solid during header polling while foreground reads still spin", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
     let finishHeader!: (value: unknown) => void;
@@ -2101,102 +2118,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Boot");
     await expect.element(page.getByText(/permission denied/)).toBeVisible();
   });
-  it.each([700, 1180, 1600])(
-    "collects visible Overview diagnostics without duplicate header reads at %s px",
-    async (width) => {
-      await page.viewport(width, 1000);
-      currentSettings = { ...currentSettings, hostMetricsEnabled: true };
-      await mount();
-      await navigate("Overview");
-      await expect
-        .element(page.getByRole("heading", { name: "Overview", exact: true }))
-        .toBeVisible();
-      const overview = document.querySelector(".overview-page")!;
-      expect(overview.textContent).toContain("Runtime and capabilities");
-      for (const label of ["CPU", "Uptime", "Memory", "Network", "Workloads", "Storage"])
-        expect(overview.textContent).toContain(label);
-      expect(
-        native.invoke.mock.calls.filter(([command]) => command === "sample_host_resources"),
-      ).toHaveLength(0);
-      expect(document.querySelector(".host-metrics")).toBeNull();
-      await page.getByRole("button", { name: "Refresh facts", exact: true }).click();
-      await vi.waitFor(() =>
-        expect(
-          native.invoke.mock.calls.some(([command]) => command === "refresh_capabilities"),
-        ).toBe(true),
-      );
-      expect(
-        native.invoke.mock.calls.filter(([command]) => command === "sample_host_resources"),
-      ).toHaveLength(0);
-      expect((await axe.run(overview)).violations).toEqual([]);
-      await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
-      const pane = overview as HTMLElement;
-      expect(pane.scrollWidth).toBeLessThanOrEqual(pane.clientWidth + 1);
-      pane.scrollTop = 0;
-      await page.screenshot({
-        element: overview,
-        path: `../test-results/overview-diagnostics-${width}.png`,
-      });
-      await page.screenshot({ path: `../test-results/overview-full-${width}.png` });
-      await page.getByRole("button", { name: "Pause", exact: true }).click();
-      await expect.element(page.getByText("Paused", { exact: true })).toBeVisible();
-      const reads = native.invoke.mock.calls.filter(
-        ([command]) => command === "sample_overview_diagnostics",
-      ).length;
-      await navigate("Terminal");
-      await expect.element(page.getByRole("button", { name: /Host metrics for/ })).toBeVisible();
-      expect(
-        native.invoke.mock.calls.filter(([command]) => command === "sample_overview_diagnostics")
-          .length,
-      ).toBe(reads);
-    },
-  );
-
-  it("inspects diagnostic history with keyboard and interface selection", async () => {
-    await page.viewport(1600, 1100);
-    let sequence = 0;
-    const start = Date.now() - 40_000;
-    overrides.set("sample_overview_diagnostics", () => {
-      const sample = fixtures.diagnostics();
-      const index = sequence++;
-      return {
-        ...sample,
-        sampledAt: new Date(start + index * 5000).toISOString(),
-        cpuPercent: [12, 19, 15, 43, 61, 37, 28, 21, 24][index % 9],
-        interfaces: sample.interfaces!.map((item) => ({
-          ...item,
-          receiveBytesPerSecond: (120 + (index % 3) * 55) * 1024,
-        })),
-        disks: sample.disks!.map((item) => ({
-          ...item,
-          readBytesPerSecond: (80 + (index % 4) * 20) * 1024,
-        })),
-      };
-    });
-    await mount();
-    await navigate("Overview");
-    await vi.waitFor(() => expect(sequence).toBeGreaterThan(0));
-    for (let index = 1; index < 9; index++) {
-      await page.getByRole("button", { name: "Refresh diagnostics", exact: true }).click();
-      await vi.waitFor(() => expect(sequence).toBeGreaterThan(index));
-    }
-    const chart = document.querySelector<SVGSVGElement>('[aria-label^="CPU utilization history"]')!;
-    expect(
-      chart.querySelector(".diagnostic-trace")!.getAttribute("d")!.split("L").length,
-    ).toBeGreaterThan(2);
-    chart.focus();
-    await userEvent.keyboard("{ArrowLeft}");
-    expect(chart.closest("figure")!.textContent).toContain("CPU 21%");
-    await page.getByLabelText("Network interface").selectOptions("eth0");
-    expect(
-      (document.querySelector('[aria-label="Network interface"]') as HTMLSelectElement).value,
-    ).toBe("eth0");
-    chart.blur();
-    const overview = document.querySelector<HTMLElement>(".overview-page")!;
-    overview.scrollTop = 0;
-    await page.screenshot({ path: "../test-results/overview-history.png" });
-    expect((await axe.run(overview)).violations).toEqual([]);
-  });
 
   it.each([960, 1600])("keeps long inspection lists scrollable at %s px", async (width) => {
     await page.viewport(width, 700);
@@ -2402,9 +2323,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
       output.scrollTop = output.scrollHeight;
       expect(output.scrollTop).toBeGreaterThan(0);
-      await navigate("Overview");
+      await navigate("Docker");
       await expect
-        .element(page.getByRole("heading", { name: "Overview", exact: true }))
+        .element(page.getByRole("heading", { name: "Containers", exact: true }))
         .toBeVisible();
       await navigate("Terminal");
       await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
@@ -2452,7 +2373,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(navigation.getByRole("button", { name: "Scratchpad", exact: true }))
       .not.toBeInTheDocument();
     expect(element.querySelector(".scratchpad-page")).toBeNull();
-    await navigate("Overview");
+    await navigate("Docker");
     await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
     await page.getByRole("combobox", { name: "Search commands" }).fill("Scratchpad");
     await userEvent.keyboard("{Enter}");
@@ -2579,7 +2500,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("navigates every remote page through the real app and keeps the terminal Workspace", async () => {
     await mount();
     for (const [view, heading] of [
-      ["Overview", "Overview"],
       ["Systemd", "Systemd"],
       ["Docker", "Containers"],
       ["Ports", "Ports"],
@@ -2611,7 +2531,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByText("Stream active", { exact: true })).toBeVisible();
     streamOutput!.onmessage(new TextEncoder().encode("journal fixture line\n").buffer);
     await expect.element(page.getByText(/journal fixture line/)).toBeVisible();
-    await navigate("Overview");
+    await navigate("Docker");
     await vi.waitFor(() =>
       expect(native.invoke.mock.calls.some(([command]) => command === "stop_log_stream")).toBe(
         true,

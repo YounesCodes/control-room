@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
-const overviewSource = readFileSync(new URL("./pages/OverviewPane.tsx", import.meta.url), "utf8");
 const settingsSource = readFileSync(new URL("./pages/SettingsPane.tsx", import.meta.url), "utf8");
 const historySource = readFileSync(new URL("./pages/HistoryPane.tsx", import.meta.url), "utf8");
 const logsSource = readFileSync(new URL("./pages/LogsPane.tsx", import.meta.url), "utf8");
@@ -160,16 +159,6 @@ describe("application hierarchy", () => {
     expect(logsSource).toContain("Retry with sudo");
     expect(portsSource).toContain("Retry with sudo");
     expect(dockerSource).toContain("Retry with sudo");
-  });
-
-  it("shows whether the host can act on an elevation allowance", () => {
-    // A permission the account cannot use is the confusing case, so Overview
-    // reports passwordless sudo as a host fact beside systemd and Docker.
-    expect(overviewSource).toContain('label: "sudo"');
-    expect(overviewSource).toContain("capabilities.passwordlessSudo");
-    // Docker reachable only under sudo is its own answer, not "sudo required".
-    expect(overviewSource).toContain("dockerAccessibleWithSudo");
-    expect(overviewSource).toContain("reachable with sudo");
   });
 
   it("offers sudo when Docker log source discovery lacks permission", () => {
@@ -331,7 +320,7 @@ describe("application hierarchy", () => {
     // Update checking is not per-Workspace work: one hook, mounted once, so the
     // schedule cannot multiply with panes or connections.
     expect(appSource.match(/useAppUpdater\(/g)).toHaveLength(1);
-    const panes = ["OverviewPane", "LogsPane", "ServicesPane", "PortsPane", "DockerPane"];
+    const panes = ["LogsPane", "ServicesPane", "PortsPane", "DockerPane"];
     for (const pane of panes) {
       const source = code(`./pages/${pane}.tsx`);
       expect(source).not.toContain("useAppUpdater");

@@ -35,7 +35,6 @@ import {
   Copy,
   FileClock,
   FolderCog,
-  Gauge,
   History,
   BookOpen,
   Maximize2,
@@ -126,7 +125,6 @@ import { DockerPane } from "./pages/DockerPane";
 import { BootDiagnosticsPane } from "./pages/BootDiagnosticsPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
-import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
@@ -181,7 +179,6 @@ const navigation: {
   label: string;
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }[] = [
-  { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
@@ -257,7 +254,6 @@ export function App() {
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState(emptyEnvironment);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [overviewComparisonId, setOverviewComparisonId] = useState<string | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [openingDocumentation, setOpeningDocumentation] = useState(false);
@@ -496,9 +492,6 @@ export function App() {
   // a remote Workspace. A local one is terminal-only.
   const activeRemoteWorkspace =
     activeWorkspace && isRemoteWorkspace(activeWorkspace) ? activeWorkspace : null;
-  useEffect(() => {
-    if (activeWorkspace?.view !== "baselines") setOverviewComparisonId(null);
-  }, [activeWorkspace?.id, activeWorkspace?.view]);
   const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
   const windowsWorkspace =
     !!activeRemoteWorkspace &&
@@ -510,9 +503,7 @@ export function App() {
       ? navigation.filter((item) => item.id === "terminal")
       : windowsWorkspace
         ? navigation
-            .filter((item) =>
-              ["overview", "terminal", "services", "ports", "docker", "logs"].includes(item.id),
-            )
+            .filter((item) => ["terminal", "services", "ports", "docker", "logs"].includes(item.id))
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
         : navigation;
   const activeSavedConnection = activeRemoteWorkspace
@@ -1853,7 +1844,6 @@ export function App() {
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
-          activeWorkspace.view !== "overview" &&
           headerMetrics.length > 0 && (
             <HostMetrics
               key={
@@ -2547,21 +2537,6 @@ export function App() {
                   section={activeRemoteWorkspace.view}
                   layout={panelLayout}
                 >
-                  {activeRemoteWorkspace.view === "overview" && (
-                    <OverviewPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      onCapabilitiesChange={rememberCapabilities}
-                      active={!settingsOpen}
-                      onNavigate={(view, baselineSelectionId, comparisonId) => {
-                        setOverviewComparisonId(comparisonId ?? null);
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
-                          view,
-                          ...(baselineSelectionId ? { baselineSelectionId } : {}),
-                        });
-                      }}
-                    />
-                  )}
                   {activeRemoteWorkspace.view === "services" &&
                     (windowsWorkspace ? (
                       <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
@@ -2671,7 +2646,6 @@ export function App() {
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       selectedId={activeRemoteWorkspace.baselineSelectionId}
-                      initialComparisonId={overviewComparisonId}
                       onSelect={(baselineSelectionId) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
                       }

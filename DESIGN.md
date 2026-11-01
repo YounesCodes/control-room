@@ -343,7 +343,7 @@ Group Windows shells, WSL distributions, and supported Windows Terminal profiles
 in compact radio rows. Use a quiet hover fill, a persistent selected border, and
 an inset focus ring for keyboard navigation. Windows marks stay gray and include
 the detected 10 or 11 version when known.
-Windows hosts offer Overview, Terminal, Services, Ports, Docker, and container Logs.
+Windows hosts offer Terminal, Services, Ports, Docker, and container Logs.
 Scratchpad opens from their terminal toolbar. Keep Docker and Logs discoverable even when Docker is missing;
 their views report installation or daemon access failures. Optional header metrics inspect
 Windows itself, including when the terminal runs WSL. Service inventory is read-only;
@@ -464,22 +464,7 @@ must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Overview is an on-demand diagnostics workspace. Group CPU, memory, network,
-processes, storage, and workload summaries in compact panels with bounded tables.
-Use neutral charts with solid and dashed traces, readable current values, and
-pointer and keyboard inspection. Graph only measured points against host sample
-times; missing readings break the line. CPU and memory use a fixed 0–100 scale.
-Keep up to five minutes and 120 samples in memory. Clear trends when collection
-pauses or the host changes. Never save samples or collect in the background.
-Overview owns resource collection while active and visible; hide and stop the
-optional header collector during that view. Pause Overview in Settings and hidden
-windows. Use one batched read, configurable at 2, 5, 10, or 30 seconds, with workload
-inventory at most every 30 seconds. Distinguish live, stale, unavailable, and paused
-readings. Keep cached System facts and their refresh action separate from live
-readings. Workload and saved baseline summaries link to the existing inspectors
-and comparisons. Host identity and OS belong in System facts rather than a
-repeated heading mark. A live baseline comparison should be visibly identified
-as live and unsaved.
+Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, logs, boot evidence, and saved baselines. Restore retired Overview selections to Terminal. A live baseline comparison should be visibly identified as live and unsaved.
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking

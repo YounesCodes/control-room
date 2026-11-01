@@ -1,30 +1,6 @@
 ---
-title: Overview
-description: Inspect live host performance, workloads, and recent saved changes.
+title: Host inspection
+description: Open focused host inspectors.
 ---
 
-import overviewScreenshot from "../../../assets/screenshots/overview.png";
-
-Overview shows CPU, memory, storage, network traffic, and top processes for the active SSH host. Choose a **Refresh** interval of 2, 5, 10, or 30 seconds, or use **Pause** and **Resume**. Move over a chart or focus it and use the arrow keys to inspect readings.
-
-<figure class="docs-screenshot">
-  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={overviewScreenshot.src}
-      alt="Control Room Overview showing live CPU, memory, network, process, and storage diagnostics."
-    />
-  </a>
-  <figcaption>Host diagnostics. Example data shown.</figcaption>
-</figure>
-
-Charts keep up to five minutes and 120 samples in memory. Collection stops when you leave Overview, open Settings, pause, or hide the window. Returning starts a new chart history. Samples are never saved. The optional header collector stops while Overview is open to avoid duplicate reads.
-
-Select an interface to isolate its upload and download graph. The combined graph includes virtual interfaces and excludes Linux loopback, so traffic crossing several interfaces can be counted more than once. Errors and drops are cumulative interface counters. Click **CPU** or **Memory** in the process table to sort the top visible consumers. Process CPU is a share of total host capacity.
-
-Storage shows local filesystem capacity and whole disk read/write speeds, operations per second, and busy time. Linux reads leaf disks to avoid counting partitions or stacked volumes twice. Filesystem and workload reads require `timeout` on Linux; missing tools or account permissions leave those sections unavailable.
-
-Workloads refresh about every 30 seconds. Open **Systemd**, **Docker**, or **Listening ports** for the existing inspectors. Container summaries include reported health checks. Linux **Baselines** summarizes the latest saved configuration comparison and links directly to saved comparisons. These describe saved captures, not a fresh host scan.
-
-**System** and **Runtime and capabilities** show cached host information separately. Use **Refresh facts** to read it again. Control Room marks facts older than 24 hours as stale. Failed metric reads retain the last sample with a stale status and the failure reason.
-
-Windows hosts use Windows performance counters, fixed drives, services, and page files. Linux load averages and buffers are unsupported there. Any unavailable counter stays unavailable; it does not become zero.
+Overview has been removed. Use **Terminal** for host commands, **Systemd** or **Services** for services, **Docker** for containers, and **Ports** for listeners. Optional header metrics remain available in Settings.
