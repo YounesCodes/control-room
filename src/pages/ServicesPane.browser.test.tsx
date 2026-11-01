@@ -132,9 +132,43 @@ function renderPane(items = units) {
     </ConnectionSection>,
   );
 }
+async function settleMotion() {
+  await waitFor(() =>
+    expect(
+      document.getAnimations().filter((animation) => animation.playState === "running"),
+    ).toHaveLength(0),
+  );
+}
+async function audit() {
+  await settleMotion();
+  return axe.run(document.querySelector(".systemd-page")!);
+}
 function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
+
+it("slides relationship controls and filter panels out without leaving focusable duplicates", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  const group = screen.getByRole("group", { name: "Relationship category" });
+  expect(getComputedStyle(group).animationName).toBe(reduced ? "none" : "systemd-controls-in");
+  await page.getByRole("button", { name: "Explorer", exact: true }).click();
+  expect(screen.queryByRole("group", { name: "Relationship category" })).toBeNull();
+  if (!reduced) {
+    expect(group.parentElement?.hasAttribute("inert")).toBe(true);
+    expect(getComputedStyle(group).animationName).toBe("systemd-slide-out");
+  }
+  await page.getByRole("button", { name: "Filter and sort units" }).click();
+  const panel = screen.getByRole("region", { name: "Unit filters" });
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("region", { name: "Unit filters" })).toBeNull();
+  if (!reduced) expect(panel.parentElement?.hasAttribute("inert")).toBe(true);
+  await waitFor(() => expect(document.querySelectorAll("[data-leaving]")).toHaveLength(0));
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  expect(screen.getAllByRole("button", { name: /graph/i })).toHaveLength(1);
+});
 
 it.each([1, 1000])(
   "keeps long unit text inside a vertical inventory with %s units",
@@ -219,13 +253,15 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
     expect(within(graph).getByRole("button", { name: /^database.service/ })).toBeTruthy(),
   );
   expect(document.querySelectorAll(".systemd-edge-badge, .systemd-edges rect")).toHaveLength(0);
-  expect(document.querySelectorAll(".systemd-edge-label")).toHaveLength(0);
+  expect(document.querySelectorAll(".systemd-edge-label").length).toBeGreaterThan(0);
   const node = within(graph).getByRole("button", { name: /^database.service/ });
+  await settleMotion();
   const before = node.getBoundingClientRect();
   await page.getByRole("button", { name: "Expand database.service" }).click();
   await waitFor(() =>
     expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
   );
+  await settleMotion();
   const after = node.getBoundingClientRect();
   expect(Math.abs(before.left - after.left)).toBeLessThan(1);
   expect(Math.abs(before.top - after.top)).toBeLessThan(1);
@@ -319,9 +355,10 @@ it.each([false, true])(
       .getAllByRole("img")
       .find((element) => element.getAttribute("aria-label")?.includes("Requires"))!;
     edge.focus();
-    await waitFor(() => expect(document.querySelectorAll(".systemd-edge-label")).toHaveLength(1));
+    await waitFor(() =>
+      expect(document.querySelectorAll(".edge-active .systemd-edge-label")).toHaveLength(1),
+    );
     expect(edge.getAttribute("aria-label")).toContain("Requires");
-    await page.screenshot({ path: "../../test-results/systemd-focused-routing-" + cycle + ".png" });
   },
 );
 
@@ -331,14 +368,14 @@ it.each([360, 960, 1400])(
     await page.viewport(width, 800);
     renderPane();
     expect(screen.queryByRole("complementary")).toBeNull();
-    expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
+    expect((await audit()).violations).toEqual([]);
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
     const inspector = screen.getByRole("complementary");
     expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(320);
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
     expect(inspector.querySelectorAll("details[open]")).toHaveLength(0);
-    expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
+    expect((await audit()).violations).toEqual([]);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.getByText("Advanced", { exact: true }).click();
     await page.viewport(width, 500);
@@ -348,6 +385,15 @@ it.each([360, 960, 1400])(
     body.scrollTop = body.scrollHeight;
     expect(body.scrollTop).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Close details" }).click();
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const exiting = document.querySelector<HTMLElement>("[data-leaving] > .systemd-inspector")!;
+      expect(exiting).toBeTruthy();
+      expect(getComputedStyle(exiting).animationName).toBe("systemd-slide-out");
+      expect(exiting.parentElement?.hasAttribute("inert")).toBe(true);
+      await waitFor(() =>
+        expect(document.querySelector("[data-leaving] > .systemd-inspector")).toBeNull(),
+      );
+    }
     await page.viewport(width, 800);
     await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
     await waitFor(() =>
@@ -355,7 +401,7 @@ it.each([360, 960, 1400])(
     );
     expect(screen.queryByRole("complementary")).toBeNull();
     expect(Number(screen.getByText(/%$/).textContent?.replace("%", ""))).toBeGreaterThanOrEqual(85);
-    expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
+    expect((await audit()).violations).toEqual([]);
     const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
     viewport.element().querySelector<HTMLButtonElement>(".arch-chip")!.focus();
     await userEvent.keyboard("{ArrowDown}{Enter}");
@@ -364,19 +410,3 @@ it.each([360, 960, 1400])(
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
   },
 );
-
-it("captures the simplified explorer, graph and contextual inspector", async () => {
-  await page.viewport(1280, 800);
-  renderPane();
-  await page.screenshot({ path: "../../test-results/systemd-inventory.png" });
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
-  await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(5));
-  await page
-    .getByRole("region", { name: "Systemd dependency graph" })
-    .click({ position: { x: 20, y: 80 } });
-  await page.screenshot({ path: "../../test-results/systemd-graph.png" });
-  await page.getByRole("button", { name: /^worker.service Failed/ }).click();
-  await waitFor(() => expect(screen.getByText("exit-code")).toBeTruthy());
-  await waitFor(() => expect(screen.getByText("110%")).toBeTruthy());
-  await page.screenshot({ path: "../../test-results/systemd-inspector.png" });
-});

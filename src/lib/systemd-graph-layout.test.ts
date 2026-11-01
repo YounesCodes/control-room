@@ -8,6 +8,29 @@ import { systemdEdges } from "./systemd-units";
 import { systemdInspection } from "../test/systemd-fixtures";
 
 describe("focused Systemd graph", () => {
+  it("ends each line at its arrow base with the tip clear of the destination card", () => {
+    const layout = layoutSystemdGraph(
+      ["a.service", "b.service"],
+      systemdEdges([
+        systemdInspection("a.service", { Requires: "b.service", RequiredBy: "b.service" }),
+      ]),
+      "a.service",
+    );
+    for (const edge of layout.connections) {
+      const end = edge.path.match(/(-?[\d.]+),(-?[\d.]+)$/)!;
+      const arrow = edge.arrowhead.match(/M(-?[\d.]+),(-?[\d.]+) L(-?[\d.]+),/)!;
+      expect(Number(end[1])).toBe(Number(arrow[3]));
+      expect(Number(end[2])).toBe(Number(arrow[2]));
+      expect(Math.abs(Number(arrow[1]) - Number(end[1]))).toBe(8);
+      const card = layout.positions.get(edge.target)!;
+      expect(
+        Math.min(
+          Math.abs(Number(arrow[1]) - card.x),
+          Math.abs(Number(arrow[1]) - card.x - card.width),
+        ),
+      ).toBe(4);
+    }
+  });
   it("consolidates one direction without hiding a reverse requirement", () => {
     const edges = systemdEdges([
       systemdInspection("a.service", {

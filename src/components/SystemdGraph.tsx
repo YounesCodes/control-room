@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -9,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Expand, X } from "lucide-react";
+import { SystemdPresence } from "./SystemdPresence";
 import { GraphControls } from "./GraphControls";
 import { usePanZoom } from "../lib/use-pan-zoom";
 import { observeLayoutFallback } from "./ResizablePanels";
@@ -48,7 +48,6 @@ export function SystemdGraph({
   const pan = usePanZoom(viewportRef);
   const { setView } = pan;
   const [moving, setMoving] = useState(false);
-  const marker = useId().replace(/:/g, "");
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const previous = useRef<{
     root: string;
@@ -72,7 +71,7 @@ export function SystemdGraph({
       if (!viewport) return;
       const width = Math.max(
         100,
-        viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48,
+        viewport.clientWidth - (selectedId ? (detailRef.current?.offsetWidth ?? 0) : 0) - 48,
       );
       const height = Math.max(100, viewport.clientHeight - 108);
       const natural = Math.min(1, width / layout.width, height / layout.height);
@@ -83,7 +82,7 @@ export function SystemdGraph({
       setMoving(animate);
       setView({ scale, x: 24 + width / 2 - centerX * scale, y: 48 + height / 2 - centerY * scale });
     },
-    [layout, rootId, setView],
+    [layout, rootId, selectedId, setView],
   );
 
   useLayoutEffect(() => {
@@ -205,6 +204,13 @@ export function SystemdGraph({
           fit(true, true);
         }}
       />
+      <div className="systemd-direction-key" aria-label="Arrow direction">
+        {frameKey.startsWith("ordering")
+          ? "A → B: A is ordered before B"
+          : frameKey.startsWith("activation")
+            ? "A → B: A activates B"
+            : "A → B: A requires or wants B"}
+      </div>
       <div
         className="arch-viewport"
         ref={viewportRef}
@@ -261,20 +267,6 @@ export function SystemdGraph({
             height={layout.height}
             aria-label="Dependency relationships"
           >
-            <defs>
-              <marker
-                id={marker}
-                viewBox="0 0 8 8"
-                refX="8"
-                refY="4"
-                markerWidth="8"
-                markerHeight="8"
-                markerUnits="userSpaceOnUse"
-                orient="auto-start-reverse"
-              >
-                <path d="M 0 0 L 8 4 L 0 8 z" fill="currentColor" />
-              </marker>
-            </defs>
             {layout.connections.map((connection) => {
               const evidence = connection.edges
                 .map((edge) => edge.source + " " + edge.relationship + " " + edge.target)
@@ -299,19 +291,17 @@ export function SystemdGraph({
                   <path
                     className="systemd-edge-path"
                     d={connection.path}
-                    markerEnd={"url(#" + marker + ")"}
                     vectorEffect="non-scaling-stroke"
                   />
-                  {activeEdge === connection.id && (
-                    <text
-                      className="systemd-edge-label"
-                      x={connection.labelPoint.x}
-                      y={connection.labelPoint.y}
-                      textAnchor="middle"
-                    >
-                      {connection.label}
-                    </text>
-                  )}
+                  <path className="systemd-arrowhead" d={connection.arrowhead} />
+                  <text
+                    className="systemd-edge-label"
+                    x={connection.labelPoint.x}
+                    y={connection.labelPoint.y}
+                    textAnchor="middle"
+                  >
+                    {connection.label}
+                  </text>
                 </g>
               );
             })}
@@ -398,7 +388,7 @@ export function SystemdGraph({
           })}
         </div>
       </div>
-      {selectedId && (
+      <SystemdPresence open={!!selectedId}>
         <aside
           className="detail-panel arch-detail systemd-inspector"
           id="systemd-graph-inspector"
@@ -416,7 +406,7 @@ export function SystemdGraph({
           </button>
           {inspector}
         </aside>
-      )}
+      </SystemdPresence>
     </div>
   );
 }

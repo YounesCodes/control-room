@@ -113,7 +113,7 @@ describe("ServicesPane failed units view", () => {
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     expect(screen.queryByRole("complementary")).toBeNull();
-    expect(graph.querySelectorAll("rect, .systemd-edge-label")).toHaveLength(0);
+    expect(graph.querySelectorAll("rect")).toHaveLength(0);
     expect(within(graph).queryByRole("button", { name: /^ordering.target/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: /Show more/ }));
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);

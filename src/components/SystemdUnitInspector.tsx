@@ -91,7 +91,6 @@ export function SystemdUnitInspector({
   revision,
   onRefresh,
   onNavigate,
-  onExplore,
   onViewLogs,
   onOpenPorts,
   onOpenBoot,
@@ -104,7 +103,6 @@ export function SystemdUnitInspector({
   revision: number;
   onRefresh: () => void;
   onNavigate: (id: string) => void;
-  onExplore?: () => void;
   onViewLogs: (source: LogSourceSelection) => void;
   onOpenPorts?: (unit: string) => void;
   onOpenBoot?: () => void;
@@ -265,13 +263,6 @@ export function SystemdUnitInspector({
         )}
         {!!essentials.length && <Fields rows={essentials} />}
         <InspectorDisclosure title="Dependencies">
-          <button
-            type="button"
-            className="link-button"
-            onClick={onExplore ?? (() => onNavigate(unitId))}
-          >
-            Explore dependencies
-          </button>
           {related.size ? (
             <div className="systemd-related">
               {[...related].map(([id, labels]) => (
@@ -407,14 +398,6 @@ export function SystemdUnitInspector({
         >
           <FileClock size={14} />
           View journal
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={onExplore ?? (() => onNavigate(unitId))}
-        >
-          <GitBranch size={14} />
-          Graph
         </button>
         <button
           type="button"

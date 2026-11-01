@@ -25,6 +25,7 @@ export interface SystemdConnection {
   edges: SystemdEdge[];
   kind: "requires" | "wants" | "ordering" | "activation";
   path: string;
+  arrowhead: string;
   label: string;
   labelPoint: GraphPoint;
 }
@@ -77,6 +78,7 @@ export function layoutSystemdGraph(
               ? "requires"
               : "wants",
         path: "",
+        arrowhead: "",
         label: "",
         labelPoint: { x: 0, y: 0 },
       };
@@ -186,6 +188,10 @@ export function layoutSystemdGraph(
     const direction = Math.sign(target.x - source.x);
     const start = port(connection.source, connection, direction),
       end = port(connection.target, connection, -direction);
+    // Keep the stroke behind the triangle, with its tip four pixels off the card.
+    const tip = { ...end };
+    end.x -= direction * 8;
+    connection.arrowhead = `M${tip.x},${tip.y} L${end.x},${end.y - 4} L${end.x},${end.y + 4} Z`;
     const middle = (start.x + end.x) / 2;
     const track = long.indexOf(connection);
     connection.path =

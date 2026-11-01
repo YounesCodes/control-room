@@ -245,7 +245,9 @@ Show one category at a time: Dependencies (Requires/Wants), Ordering (After/Befo
 or Activation (Triggers). Consolidate relationships with the same direction into
 one connector. Keep opposite requirements separate. Ordering arrows run from the
 earlier unit to the later unit, combining equivalent After/Before constraints.
-Hover or focus an edge for its inline label and exact reported evidence. Never use
+Keep short relationship labels visible and show exact reported evidence on hover
+or keyboard focus. Explain arrow direction for the active category. End each line
+at the base of its arrowhead, leaving the tip clear of the target card. Never use
 label boxes or relationship nodes. Pair line patterns with directed arrows, keep
 arrowheads crisp, and route connectors outside cards. Use consistent node sizes
 and deterministic columns, placing incoming units left and outgoing units right.
@@ -260,7 +262,11 @@ the graph. Selection, filters, root, and expansion stay with the workspace durin
 navigation. Changed SSH targets discard that context and use separate detail caches.
 
 Keep inspectors closed until selection. Use a compact, content-height panel with
-a separately scrolling body and fixed actions. Unit inspectors adapt to services,
+a slide on entry and exit. Keep exiting controls inert and hidden from assistive
+technology, cancel exits when reopened, and remove them immediately under reduced
+motion. Use the same transitions for relationship categories and filter panels.
+Keep view switching in one visible toolbar control; do not repeat Graph in the inspector.
+Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
 timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
 and failure results. Dependencies, Recent journal, and Advanced start collapsed.
 Put conditions, assertions, configuration, and effective properties under Advanced.

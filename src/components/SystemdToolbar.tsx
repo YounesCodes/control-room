@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { GitBranch, List, RefreshCw, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import { SystemdPresence } from "./SystemdPresence";
 import { Search } from "./MagnifierIcon";
 import type { SystemdExplorerState } from "../types";
 import { SYSTEMD_INITIAL_VISIBLE } from "../lib/systemd-units";
@@ -110,7 +111,7 @@ export function SystemdToolbar({
             Graph
           </button>
         </div>
-        {graph && (
+        <SystemdPresence open={graph}>
           <div
             className="systemd-relationship-groups"
             role="group"
@@ -136,7 +137,7 @@ export function SystemdToolbar({
               </button>
             ))}
           </div>
-        )}
+        </SystemdPresence>
         <div className="systemd-toolbar-actions">
           <button
             type="button"
@@ -150,7 +151,7 @@ export function SystemdToolbar({
           >
             <Search size={16} />
           </button>
-          {!graph && (
+          <SystemdPresence open={!graph}>
             <button
               type="button"
               className="icon-button"
@@ -163,7 +164,7 @@ export function SystemdToolbar({
             >
               <SlidersHorizontal size={16} />
             </button>
-          )}
+          </SystemdPresence>
           <button
             type="button"
             className="icon-button"
@@ -176,7 +177,7 @@ export function SystemdToolbar({
           </button>
         </div>
       </header>
-      {tools && (
+      <SystemdPresence open={!!tools}>
         <div
           id="systemd-tools"
           className="ports-tools-panel systemd-tools-panel"
@@ -281,7 +282,7 @@ export function SystemdToolbar({
             </div>
           )}
         </div>
-      )}
+      </SystemdPresence>
     </div>
   );
 }

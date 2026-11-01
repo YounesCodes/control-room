@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { SystemdUnitInspector } from "../components/SystemdUnitInspector";
 import { SystemdInventory } from "../components/SystemdInventory";
 import { SystemdGraph } from "../components/SystemdGraph";
+import { SystemdPresence } from "../components/SystemdPresence";
 import { SystemdToolbar } from "../components/SystemdToolbar";
 import { api, errorMessage } from "../lib/api";
 import { connectionTargetKey } from "../lib/connection-validation";
@@ -257,10 +258,6 @@ export function ServicesPane({
       revision={revision}
       onRefresh={refreshDetails}
       onNavigate={refocus}
-      onExplore={() => {
-        patch({ relationshipGroup: "dependencies" });
-        refocus(selectedId);
-      }}
       onViewLogs={onViewLogs}
       onOpenPorts={onOpenPorts}
       onOpenBoot={onOpenBoot}
@@ -340,7 +337,7 @@ export function ServicesPane({
               emptyTitle={cache.items.length ? "No matching units" : "No units found"}
             />
           </div>
-          {visibleInspector && (
+          <SystemdPresence open={visibleInspector}>
             <aside
               ref={inspectorRef}
               className="detail-panel arch-detail systemd-inspector"
@@ -363,7 +360,7 @@ export function ServicesPane({
               </button>
               {inspector}
             </aside>
-          )}
+          </SystemdPresence>
         </div>
       ) : (
         <div className="systemd-graph-stage">

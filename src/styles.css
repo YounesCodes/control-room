@@ -3997,6 +3997,36 @@ dd {
   flex: none;
   z-index: 5;
 }
+.systemd-presence {
+  display: contents;
+}
+.systemd-presence[data-leaving] > *,
+.systemd-presence[data-leaving] > .systemd-inspector,
+.systemd-presence[data-leaving] > .systemd-tools-panel {
+  pointer-events: none;
+  animation: systemd-slide-out 180ms var(--ease) both;
+}
+.systemd-presence:not([data-leaving]) > .systemd-relationship-groups,
+.systemd-presence:not([data-leaving]) > .systemd-tools-panel,
+.systemd-presence:not([data-leaving]) > .icon-button {
+  animation: systemd-controls-in 180ms var(--ease) both;
+}
+@keyframes systemd-slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+@keyframes systemd-controls-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 .systemd-heading {
   display: flex;
   align-items: center;
@@ -4031,7 +4061,10 @@ dd {
   gap: 2px;
 }
 .systemd-view-switch {
-  margin-left: auto;
+  margin-left: 8px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 .systemd-view-switch button,
 .systemd-relationship-groups button {
@@ -4055,6 +4088,7 @@ dd {
   background: var(--fill-active);
 }
 .systemd-toolbar-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -4349,10 +4383,31 @@ dd {
   fill: none;
   stroke: var(--text-faint);
   stroke-width: 1.5;
-  stroke-linecap: round;
+  stroke-linecap: butt;
   stroke-linejoin: round;
   pointer-events: stroke;
   cursor: help;
+}
+.systemd-arrowhead {
+  fill: var(--text-faint);
+  stroke: none;
+}
+.systemd-connection.edge-active .systemd-arrowhead,
+.systemd-connection:focus-visible .systemd-arrowhead {
+  fill: var(--text);
+}
+.systemd-direction-key {
+  position: absolute;
+  z-index: 1;
+  bottom: 22px;
+  left: 16px;
+  max-width: calc(100% - 190px);
+  font-size: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.systemd-canvas.inspecting .systemd-direction-key {
+  bottom: 64px;
 }
 .systemd-connection.relationship-wants .systemd-edge-path {
   stroke-dasharray: 6 4;
@@ -4374,7 +4429,7 @@ dd {
   stroke-width: 2.5;
 }
 .systemd-edge-label {
-  fill: var(--text);
+  fill: var(--text-muted);
   font-size: 11px;
   font-weight: 500;
   pointer-events: none;
@@ -4494,6 +4549,9 @@ dd {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .systemd-presence > * {
+    animation: none !important;
+  }
   .systemd-graph-node,
   .systemd-inspector.arch-detail {
     animation: none;
