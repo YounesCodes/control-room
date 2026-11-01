@@ -238,6 +238,7 @@ refreshes and show a reveal action when filters hide it. Large inventories rende
 only the visible rows while retaining keyboard access to every unit.
 Keep the inventory vertical-only. Truncate long unit names and descriptions inside
 their row, with complete values available in the tooltip and inspector.
+Outline the whole selected Systemd row rather than marking only its left edge.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.
@@ -262,7 +263,7 @@ the graph. Selection, filters, root, and expansion stay with the workspace durin
 navigation. Changed SSH targets discard that context and use separate detail caches.
 
 Keep inspectors closed until selection. Use a compact, content-height panel with
-a slide on entry and exit. Keep exiting controls inert and hidden from assistive
+a visible 32px slide on entry and a slide on exit. Keep exiting controls inert and hidden from assistive
 technology, cancel exits when reopened, and remove them immediately under reduced
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat Graph in the inspector.

@@ -376,8 +376,22 @@ it.each([360, 960, 1400])(
     renderPane();
     expect(screen.queryByRole("complementary")).toBeNull();
     expect((await audit()).violations).toEqual([]);
+    const row = screen.getByRole("button", { name: /worker.service Queue worker/ });
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
     const inspector = screen.getByRole("complementary");
+    expect(getComputedStyle(row).outlineStyle).toBe("solid");
+    expect(getComputedStyle(row).outlineWidth).toBe("1px");
+    expect(getComputedStyle(row, "::before").content).toBe("none");
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const entrance = inspector
+        .getAnimations()
+        .find((animation) => (animation as CSSAnimation).animationName === "systemd-inspector-in")!;
+      expect(entrance).toBeTruthy();
+      const effect = entrance.effect as KeyframeEffect;
+      const first = effect.getKeyframes()[0];
+      expect(new DOMMatrix(String(first.transform)).m41).toBeGreaterThanOrEqual(32);
+      expect(Number(effect.getTiming().duration)).toBeGreaterThanOrEqual(220);
+    }
     expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(320);
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
