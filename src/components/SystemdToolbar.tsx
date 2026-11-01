@@ -3,7 +3,6 @@ import { GitBranch, List, RefreshCw, RotateCcw, SlidersHorizontal, X } from "luc
 import { SystemdPresence } from "./SystemdPresence";
 import { Search } from "./MagnifierIcon";
 import type { SystemdExplorerState } from "../types";
-import { SYSTEMD_INITIAL_VISIBLE } from "../lib/systemd-units";
 
 export function SystemdToolbar({
   state,
@@ -133,9 +132,7 @@ export function SystemdToolbar({
                       ? "Before and After ordering constraints"
                       : "Triggers and TriggeredBy activation evidence"
                 }
-                onClick={() =>
-                  onChange({ relationshipGroup: category, visibleLimit: SYSTEMD_INITIAL_VISIBLE })
-                }
+                onClick={() => onChange({ relationshipGroup: category })}
               >
                 {category[0].toUpperCase() + category.slice(1)}
               </button>

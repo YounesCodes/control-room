@@ -73,8 +73,6 @@ export const SYSTEMD_RELATIONSHIP_GROUPS = {
   ordering: ["After", "Before"],
   activation: ["Triggers"],
 } as const;
-export const SYSTEMD_INITIAL_VISIBLE = 7;
-export const SYSTEMD_MAX_VISIBLE = 25;
 
 export function systemdStateLabel(active: string | undefined, sub?: string) {
   const meaningful =
@@ -134,7 +132,7 @@ export function systemdNeighborhood(
   edges: SystemdEdge[],
   relationships: string[],
   search = "",
-  limit = SYSTEMD_INITIAL_VISIBLE,
+  limit = Infinity,
 ) {
   const allowed = edges.filter((edge) => relationships.includes(edge.relationship));
   const candidates = new Set([root]);
@@ -194,7 +192,6 @@ export function navigateSystemdExplorer(
     ...state,
     rootId: unit,
     expanded: [],
-    visibleLimit: SYSTEMD_INITIAL_VISIBLE,
     search: "",
     dependencySearch: "",
     state: "all",

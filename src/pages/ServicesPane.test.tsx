@@ -60,6 +60,9 @@ describe("ServicesPane failed units view", () => {
   it("opens a graph inspector and frames its node immediately while details are pending", async () => {
     const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1280);
     const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    const inspectorWidth = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockReturnValue(320);
     try {
       api.inspectSystemdUnit.mockImplementation((_host, id) =>
         id === "a.service"
@@ -87,6 +90,7 @@ describe("ServicesPane failed units view", () => {
     } finally {
       width.mockRestore();
       height.mockRestore();
+      inspectorWidth.mockRestore();
     }
   });
   it("never opens the graph when rapidly toggling an inventory inspector", async () => {
@@ -139,7 +143,7 @@ describe("ServicesPane failed units view", () => {
     expect(row.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("starts the graph closed with a bounded dependency category and reveals more on request", async () => {
+  it("shows every reported neighbor and highlights the focused unit without opening an inspector", async () => {
     const user = userEvent.setup();
     const neighbors = Array.from({ length: 30 }, (_, index) => "neighbor-" + index + ".service");
     api.inspectSystemdUnit.mockImplementation((_connection, id) =>
@@ -161,12 +165,16 @@ describe("ServicesPane failed units view", () => {
     );
     await user.click(screen.getByRole("button", { name: /^Explore / }));
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
-    await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
+    await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(31));
     expect(screen.queryByRole("complementary")).toBeNull();
     expect(graph.querySelectorAll("rect")).toHaveLength(0);
     expect(within(graph).queryByRole("button", { name: /^ordering.target/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Show more/ }));
-    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
+    expect(screen.queryByRole("button", { name: /Show more/ })).toBeNull();
+    expect(
+      within(graph)
+        .getByRole("button", { name: /^a.service/ })
+        .getAttribute("aria-current"),
+    ).toBe("true");
     await user.click(screen.getByRole("button", { name: "Ordering" }));
     expect(await within(graph).findByRole("button", { name: /^ordering.target/ })).toBeTruthy();
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(2);

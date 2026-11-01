@@ -13,8 +13,6 @@ import {
   filterSystemdUnits,
   isSystemdUnitName,
   SYSTEMD_RELATIONSHIP_GROUPS,
-  SYSTEMD_INITIAL_VISIBLE,
-  SYSTEMD_MAX_VISIBLE,
   systemdEdges,
   systemdNeighborhood,
 } from "../lib/systemd-units";
@@ -37,7 +35,6 @@ const DEFAULT: SystemdExplorerState = {
   unitType: "all",
   sort: "priority",
   relationshipGroup: "dependencies",
-  visibleLimit: SYSTEMD_INITIAL_VISIBLE,
 };
 
 export function ServicesPane({
@@ -153,10 +150,9 @@ export function ServicesPane({
             edges,
             [...SYSTEMD_RELATIONSHIP_GROUPS[state.relationshipGroup]],
             graphSearch,
-            state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
           )
         : null,
-    [rootId, state.expanded, edges, state.relationshipGroup, state.visibleLimit, graphSearch],
+    [rootId, state.expanded, edges, state.relationshipGroup, graphSearch],
   );
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
   const filtered = useMemo(
@@ -215,7 +211,6 @@ export function ServicesPane({
         rootId: id,
         expanded: [],
         dependencySearch: "",
-        visibleLimit: SYSTEMD_INITIAL_VISIBLE,
       });
   }
   function refreshDetails() {
@@ -226,7 +221,7 @@ export function ServicesPane({
     setSelectedId(id);
     setInspectorOpen(false);
     setGraphSearch("");
-    patch({ mode: "graph", rootId: id, expanded: [], visibleLimit: SYSTEMD_INITIAL_VISIBLE });
+    patch({ mode: "graph", rootId: id, expanded: [] });
   }
 
   const visibleInspector =
@@ -375,28 +370,6 @@ export function ServicesPane({
               <GitBranch size={14} />
               {rootId}
             </button>
-            {!!neighborhood?.hidden && (
-              <button
-                className="systemd-more"
-                type="button"
-                disabled={(state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE}
-                title={
-                  (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE
-                    ? "Search or refocus to explore other units"
-                    : "Reveal more related units"
-                }
-                onClick={() =>
-                  patch({
-                    visibleLimit: Math.min(
-                      SYSTEMD_MAX_VISIBLE,
-                      (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 6,
-                    ),
-                  })
-                }
-              >
-                Show more · {neighborhood.hidden}
-              </button>
-            )}
           </div>
           {rootId && neighborhood ? (
             <SystemdGraph
@@ -417,10 +390,6 @@ export function ServicesPane({
                   expanded: state.expanded.includes(id)
                     ? state.expanded.filter((unit) => unit !== id)
                     : [...state.expanded, id].slice(0, 24),
-                  visibleLimit: Math.min(
-                    SYSTEMD_MAX_VISIBLE,
-                    (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 3,
-                  ),
                 })
               }
               inspector={inspector}

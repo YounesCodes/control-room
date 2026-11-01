@@ -67,7 +67,7 @@ export function SystemdGraph({
   }, [ids, edges, rootId, frameKey]);
 
   const fit = useCallback(
-    (animate = true, entire = false) => {
+    (animate = true) => {
       const viewport = viewportRef.current;
       if (!viewport) return;
       const width = Math.max(
@@ -75,11 +75,9 @@ export function SystemdGraph({
         viewport.clientWidth - (selectedId ? (detailRef.current?.offsetWidth ?? 0) : 0) - 48,
       );
       const height = Math.max(100, viewport.clientHeight - 108);
-      const natural = Math.min(1, width / layout.width, height / layout.height);
-      const scale = Math.max(entire ? 0.01 : 0.85, natural);
-      const root = layout.positions.get(rootId)!;
-      const centerX = natural < scale ? root.x + root.width / 2 : layout.width / 2;
-      const centerY = natural < scale ? root.y + root.height / 2 : layout.height / 2;
+      const scale = Math.max(0.01, Math.min(1, width / layout.width, height / layout.height));
+      const centerX = layout.width / 2;
+      const centerY = layout.height / 2;
       setMoving(animate);
       setView({ scale, x: 24 + width / 2 - centerX * scale, y: 48 + height / 2 - centerY * scale });
     },
@@ -88,7 +86,13 @@ export function SystemdGraph({
 
   useLayoutEffect(() => {
     const old = previous.current;
-    if (old && old.root === rootId && old.frame === frameKey) {
+    if (
+      old &&
+      old.root === rootId &&
+      old.frame === frameKey &&
+      old.layout.positions.size === layout.positions.size &&
+      ids.every((id) => old.layout.positions.has(id))
+    ) {
       const before = old.layout.positions.get(rootId)!;
       const after = layout.positions.get(rootId)!;
       setView((view) => ({
@@ -121,22 +125,7 @@ export function SystemdGraph({
     if (selectedId) {
       detailRef.current?.focus({ preventScroll: true });
       wasInspecting.current = true;
-      const viewport = viewportRef.current,
-        node = previous.current?.layout.positions.get(selectedId);
-      if (!viewport || !node) return;
-      const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
-      if (width < 240) return;
-      const height = Math.max(100, viewport.clientHeight - 108);
-      const scale = Math.max(
-        0.85,
-        Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
-      );
-      setMoving(true);
-      setView({
-        scale,
-        x: 24 + width / 2 - (node.x + node.width / 2) * scale,
-        y: 48 + height / 2 - (node.y + node.height / 2) * scale,
-      });
+      fit();
     } else if (wasInspecting.current) {
       wasInspecting.current = false;
       fit();
@@ -221,7 +210,7 @@ export function SystemdGraph({
         }}
         onFit={() => {
           stopCamera();
-          fit(true, true);
+          fit(true);
         }}
       />
       <div className="systemd-direction-key" aria-label="Arrow direction">
@@ -336,6 +325,7 @@ export function SystemdGraph({
                   type="button"
                   className={"arch-chip" + (selectedId === id ? " selected" : "")}
                   title={id}
+                  aria-current={id === rootId ? "true" : undefined}
                   aria-pressed={selectedId === id}
                   aria-controls={selectedId === id ? "systemd-graph-inspector" : undefined}
                   ref={(element) => {

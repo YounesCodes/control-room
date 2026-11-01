@@ -125,7 +125,6 @@ export interface SystemdExplorerState {
   unitType: string;
   sort: "priority" | "name" | "state" | "type";
   relationshipGroup: "dependencies" | "ordering" | "activation";
-  visibleLimit?: number;
 }
 
 export interface WindowsService {

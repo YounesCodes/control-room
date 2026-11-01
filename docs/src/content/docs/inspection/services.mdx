@@ -13,7 +13,7 @@ Select a row or graph node to open its inspector. It shows essential runtime det
 
 ## Explore dependencies
 
-Choose **Explore** beside the selected unit's name to open its dependency graph with up to six neighbors. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood, or **Show more** to reveal more known neighbors.
+Choose **Explore** beside the selected unit's name to open its dependency graph with every reported neighbor in the selected category. The explored unit stays outlined. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood.
 
 Choose one relationship category:
 
@@ -23,7 +23,7 @@ Choose one relationship category:
 
 Relationships in the same direction share a connector. The direction key explains the arrows for the selected category. Hover or focus an edge to read its reported evidence. Reverse dependencies come from systemd's properties; unit names alone never establish a relationship.
 
-**Find dependencies** searches known relationships and keeps paths to matches. Expansion preserves the current view. Automatic framing keeps nodes readable; **Fit to view** can zoom out further. The graph shows at most 25 units and allows 24 expanded neighborhoods. Search or refocus to explore beyond that limit.
+**Find dependencies** searches known relationships and keeps paths to matches. The graph fits all visible nodes when opened, expanded, or inspected. Zoom in to read larger graphs. Up to 24 neighborhoods can be expanded at once; refocus to explore further. Only reported relationships are shown, so unavailable or truncated reads can leave the graph incomplete.
 
 ## Investigate a failure
 

@@ -97,7 +97,6 @@ describe("Systemd dependency evidence", () => {
       ...current,
       rootId: "c.timer",
       expanded: [],
-      visibleLimit: 7,
       search: "",
       dependencySearch: "",
       state: "all",
