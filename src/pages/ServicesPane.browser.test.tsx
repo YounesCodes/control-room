@@ -147,40 +147,15 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
-it("fits all reported neighbors and keeps the explored unit highlighted with an inspector open", async () => {
-  await page.viewport(1280, 800);
-  const neighbors = Array.from({ length: 45 }, (_, index) => "neighbor-" + index + ".service");
-  api.inspectSystemdUnit.mockImplementation((_host, id) =>
-    Promise.resolve(systemdInspection(id, { Requires: neighbors.join(" ") })),
-  );
-  renderPane();
-  await page.getByRole("button", { name: "Explore worker.service" }).click();
-  const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
-  await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(46));
-  await settleMotion();
-  expect(screen.queryByRole("button", { name: /Show more/ })).toBeNull();
-  await page.getByRole("button", { name: /^neighbor-0.service/ }).click();
-  await settleMotion();
-  const bounds = graph.getBoundingClientRect();
-  const inspector = screen.getByRole("complementary").getBoundingClientRect();
-  for (const card of graph.querySelectorAll(".systemd-graph-node")) {
-    const box = card.getBoundingClientRect();
-    expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
-    expect(box.right).toBeLessThanOrEqual(inspector.left + 1);
-    expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
-    expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
-  }
-  expect(
-    within(graph)
-      .getByRole("button", { name: /^worker.service/ })
-      .getAttribute("aria-current"),
-  ).toBe("true");
-});
-
 it("slides relationship controls and filter panels out without leaving focusable duplicates", async () => {
   await page.viewport(1280, 800);
   renderPane();
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  expect(
+    (screen.getByRole("button", { name: "Explore selected unit" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(document.querySelectorAll(".systemd-inventory .selected-row")).toHaveLength(0);
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
   await page.getByRole("button", { name: /^Explore /, exact: true }).click();
   const group = screen.getByRole("group", { name: "Relationship category" });
   expect(getComputedStyle(group).animationName).toBe(reduced ? "none" : "systemd-controls-in");
@@ -284,6 +259,7 @@ it("opens graph without an inspector, separates categories and keeps selection a
 it("supports focused expansion, camera controls, pointer refocusing and focus return", async () => {
   await page.viewport(1280, 800);
   renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
   await page.getByRole("button", { name: /^Explore /, exact: true }).click();
   const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
   await waitFor(() =>
@@ -293,19 +269,15 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   expect(document.querySelectorAll(".systemd-edges text")).toHaveLength(0);
   const node = within(graph).getByRole("button", { name: /^database.service/ });
   await settleMotion();
+  const before = node.getBoundingClientRect();
   await page.getByRole("button", { name: "Expand database.service" }).click();
   await waitFor(() =>
     expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
   );
   await settleMotion();
-  const bounds = graph.getBoundingClientRect();
-  for (const card of graph.querySelectorAll(".systemd-graph-node")) {
-    const box = card.getBoundingClientRect();
-    expect(box.left).toBeGreaterThanOrEqual(bounds.left);
-    expect(box.right).toBeLessThanOrEqual(bounds.right);
-    expect(box.top).toBeGreaterThanOrEqual(bounds.top);
-    expect(box.bottom).toBeLessThanOrEqual(bounds.bottom);
-  }
+  const after = node.getBoundingClientRect();
+  expect(Math.abs(before.left - after.left)).toBeLessThan(1);
+  expect(Math.abs(before.top - after.top)).toBeLessThan(1);
   const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
   const initial = camera();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
@@ -472,7 +444,7 @@ it.each([360, 960, 1400])(
       expect(document.querySelectorAll(".systemd-graph-node").length).toBeGreaterThan(1),
     );
     expect(screen.queryByRole("complementary")).toBeNull();
-    expect(Number(screen.getByText(/%$/).textContent?.replace("%", ""))).toBeGreaterThan(0);
+    expect(Number(screen.getByText(/%$/).textContent?.replace("%", ""))).toBeGreaterThanOrEqual(85);
     expect((await audit()).violations).toEqual([]);
     const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
     viewport.element().querySelector<HTMLButtonElement>(".arch-chip")!.focus();

@@ -3,7 +3,7 @@ title: Systemd
 description: Find services and other systemd units on a Linux host.
 ---
 
-Systemd lists the host's loaded system services, timers, mounts, and sockets. Rows show the unit name, description, and state. Failed units appear first; inactive and disabled units are not failures.
+Systemd lists the host's loaded system services, timers, mounts, and sockets. Rows show the unit name, description, and state. No unit is selected initially; select one to inspect it or enable **Explore**. Refresh keeps your choice. Failed units appear first; inactive and disabled units are not failures.
 
 Select the failed count to find failures. **Find units** opens search; **Filter and sort units** offers state, type, and sort controls. The heading tooltip shows all counts and collection time for the collected system scope.
 
@@ -13,7 +13,7 @@ Select a row or graph node to open its inspector. It shows essential runtime det
 
 ## Explore dependencies
 
-Choose **Explore** beside the selected unit's name to open its dependency graph with every reported neighbor in the selected category. The explored unit stays outlined. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood.
+Choose **Explore** beside the selected unit's name to open its dependency graph with up to six neighbors. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood, or **Show more** to reveal more known neighbors.
 
 Choose one relationship category:
 
@@ -23,7 +23,7 @@ Choose one relationship category:
 
 Relationships in the same direction share a connector. The direction key explains the arrows for the selected category. Hover or focus an edge to read its reported evidence. Reverse dependencies come from systemd's properties; unit names alone never establish a relationship.
 
-**Find dependencies** searches known relationships and keeps paths to matches. The graph fits all visible nodes when opened, expanded, or inspected. Zoom in to read larger graphs. Up to 24 neighborhoods can be expanded at once; refocus to explore further. Only reported relationships are shown, so unavailable or truncated reads can leave the graph incomplete.
+**Find dependencies** searches known relationships and keeps paths to matches. Expansion preserves the current view. Automatic framing keeps nodes readable; **Fit to view** can zoom out further. The graph shows at most 25 units and allows 24 expanded neighborhoods. Search or refocus to explore beyond that limit.
 
 ## Investigate a failure
 

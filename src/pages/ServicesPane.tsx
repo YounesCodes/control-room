@@ -13,11 +13,13 @@ import {
   filterSystemdUnits,
   isSystemdUnitName,
   SYSTEMD_RELATIONSHIP_GROUPS,
+  SYSTEMD_INITIAL_VISIBLE,
+  SYSTEMD_MAX_VISIBLE,
   systemdEdges,
   systemdNeighborhood,
 } from "../lib/systemd-units";
 import { invalidateSystemdReads, useSystemdReads } from "../lib/systemd-inspection";
-import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
+import { isCacheFresh } from "../lib/workspace-cache";
 import type {
   CachedList,
   LogSourceSelection,
@@ -35,6 +37,7 @@ const DEFAULT: SystemdExplorerState = {
   unitType: "all",
   sort: "priority",
   relationshipGroup: "dependencies",
+  visibleLimit: SYSTEMD_INITIAL_VISIBLE,
 };
 
 export function ServicesPane({
@@ -60,13 +63,8 @@ export function ServicesPane({
   onOpenPorts?: (unit: string) => void;
   onOpenBoot?: () => void;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(
-    () =>
-      focusId ??
-      reconcileSelection(
-        filterSystemdUnits(cache.items, { search: "", state: "all", unitType: "all" }),
-        null,
-      ),
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    focusId && isSystemdUnitName(focusId) ? focusId : null,
   );
   const [state, setState] = useState<SystemdExplorerState>(() => ({ ...DEFAULT, ...initialState }));
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -103,7 +101,6 @@ export function ServicesPane({
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
       // Dependencies outside the inventory and disappeared units retain their
       // identity. Their own detail reads report their current availability.
-      setSelectedId((selected) => selected ?? reconcileSelection(items, null));
     } catch (caught) {
       if (request !== requestRef.current) return;
       onCacheChange({ ...cacheRef.current, loading: false, error: errorMessage(caught) });
@@ -150,9 +147,10 @@ export function ServicesPane({
             edges,
             [...SYSTEMD_RELATIONSHIP_GROUPS[state.relationshipGroup]],
             graphSearch,
+            state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
           )
         : null,
-    [rootId, state.expanded, edges, state.relationshipGroup, graphSearch],
+    [rootId, state.expanded, edges, state.relationshipGroup, state.visibleLimit, graphSearch],
   );
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
   const filtered = useMemo(
@@ -211,6 +209,7 @@ export function ServicesPane({
         rootId: id,
         expanded: [],
         dependencySearch: "",
+        visibleLimit: SYSTEMD_INITIAL_VISIBLE,
       });
   }
   function refreshDetails() {
@@ -221,7 +220,7 @@ export function ServicesPane({
     setSelectedId(id);
     setInspectorOpen(false);
     setGraphSearch("");
-    patch({ mode: "graph", rootId: id, expanded: [] });
+    patch({ mode: "graph", rootId: id, expanded: [], visibleLimit: SYSTEMD_INITIAL_VISIBLE });
   }
 
   const visibleInspector =
@@ -370,6 +369,28 @@ export function ServicesPane({
               <GitBranch size={14} />
               {rootId}
             </button>
+            {!!neighborhood?.hidden && (
+              <button
+                className="systemd-more"
+                type="button"
+                disabled={(state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE}
+                title={
+                  (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE
+                    ? "Search or refocus to explore other units"
+                    : "Reveal more related units"
+                }
+                onClick={() =>
+                  patch({
+                    visibleLimit: Math.min(
+                      SYSTEMD_MAX_VISIBLE,
+                      (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 6,
+                    ),
+                  })
+                }
+              >
+                Show more · {neighborhood.hidden}
+              </button>
+            )}
           </div>
           {rootId && neighborhood ? (
             <SystemdGraph
@@ -390,6 +411,10 @@ export function ServicesPane({
                   expanded: state.expanded.includes(id)
                     ? state.expanded.filter((unit) => unit !== id)
                     : [...state.expanded, id].slice(0, 24),
+                  visibleLimit: Math.min(
+                    SYSTEMD_MAX_VISIBLE,
+                    (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 3,
+                  ),
                 })
               }
               inspector={inspector}

@@ -230,7 +230,9 @@ share a short fade-and-slide reveal when expanded. Keep native disclosure keyboa
 behavior and show section content immediately when reduced motion is requested.
 
 Systemd starts with a compact unit inventory: name, description, and one meaningful
-state. Keep enablement and other metadata in the inspector. Show a failed count
+state. Start without a selected unit; loading or refreshing never picks one.
+Restore an explicit selection when returning to an existing workspace or following
+a unit link. Keep enablement and other metadata in the inspector. Show a failed count
 only when nonzero; keep other counts and collection time in the heading tooltip.
 Search, filtering, and sorting open from one toolbar. Failed rows use failure color;
 inactive and disabled units remain neutral. Preserve the selected identity through
@@ -254,11 +256,10 @@ arrowheads crisp, and route connectors outside cards. Use consistent node sizes
 and deterministic columns, placing incoming units left and outgoing units right.
 
 Include reported reverse and activation dependencies, without deriving links from unit
-names. Show every reported neighbor in the selected category without a preview or
-visible-node cap. Expand a node on request to read its deeper neighborhood, keeping
-existing layout positions where practical. Fit all visible nodes on opening and
-expansion, including when an inspector opens. Keep the explored unit outlined even
-with its inspector closed. Search retains paths to matches.
+names. Start at one unit and up to six neighbors. Show more or expand a node on
+request, up to 25 visible units. Preserve existing positions and camera framing
+during expansion. Automatic framing keeps nodes readable at 85% or larger; explicit
+Fit to view can zoom out to the full diagram. Search retains paths to matches.
 Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during
 navigation. Changed SSH targets discard that context and use separate detail caches.

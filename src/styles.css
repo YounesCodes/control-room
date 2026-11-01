@@ -4398,6 +4398,17 @@ dd {
   font-size: 12px;
   pointer-events: auto;
 }
+.systemd-more {
+  margin-left: auto;
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-muted);
+  font-size: 11px;
+  pointer-events: auto;
+}
 .systemd-graph-content {
   position: absolute;
   transform-origin: 0 0;
@@ -4472,8 +4483,7 @@ dd {
   background: var(--surface-overlay);
 }
 .systemd-graph-node.graph-root > .arch-chip {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: var(--text-muted);
 }
 .systemd-graph-node .arch-chip-title strong {
   min-width: 0;
