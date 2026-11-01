@@ -19,6 +19,7 @@ import type {
   HostBaseline,
   HostBaselineSummary,
   HostResources,
+  OverviewDiagnostics,
   HeaderMetric,
   HeaderMetrics,
   ListeningSocket,
@@ -207,6 +208,11 @@ export const api = {
     ),
   sampleHostResources: (connectionId: string) =>
     invokeRemoteInspection<HostResources>("sample_host_resources", { connectionId }),
+  sampleOverviewDiagnostics: (connectionId: string, workloads: boolean) =>
+    invokeRemoteRead<OverviewDiagnostics>("sample_overview_diagnostics", {
+      connectionId,
+      workloads,
+    }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listWindowsServices: (connectionId: string) =>

@@ -4083,6 +4083,10 @@ esac
         );
         let resources = collect_host_resources(&connection).unwrap();
         assert!(resources.memory_total_kib.is_some());
+        let diagnostics = crate::diagnostics::collect(&connection, true).unwrap();
+        assert!(diagnostics.memory.total_kib.is_some_and(|value| value > 0));
+        assert!(diagnostics.cpu_percent.is_some());
+        assert!(diagnostics.workloads.is_some());
         let _filesystems = list_filesystems(&connection).unwrap();
         match list_firewall(&connection, Elevation::None) {
             Ok(firewall) => assert!(!firewall.available || firewall.active.is_some()),

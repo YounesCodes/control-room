@@ -464,10 +464,21 @@ must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Keep resource readings in the optional host header. Overview presents host identity,
-service and container counts, and runtime capabilities without duplicate readings
-or resource polling. Its heading shows inspection time; host identity and OS
-belong in the System facts rather than a repeated heading mark. A live baseline comparison should be visibly identified
+Overview is an on-demand diagnostics workspace. Group CPU, memory, network,
+processes, storage, and workload summaries in compact panels with bounded tables.
+Use neutral charts with solid and dashed traces, readable current values, and
+pointer and keyboard inspection. Graph only measured points against host sample
+times; missing readings break the line. CPU and memory use a fixed 0–100 scale.
+Keep up to five minutes and 120 samples in memory. Clear trends when collection
+pauses or the host changes. Never save samples or collect in the background.
+Overview owns resource collection while active and visible; hide and stop the
+optional header collector during that view. Pause Overview in Settings and hidden
+windows. Use one batched read, configurable at 2, 5, 10, or 30 seconds, with workload
+inventory at most every 30 seconds. Distinguish live, stale, unavailable, and paused
+readings. Keep cached System facts and their refresh action separate from live
+readings. Workload and saved baseline summaries link to the existing inspectors
+and comparisons. Host identity and OS belong in System facts rather than a
+repeated heading mark. A live baseline comparison should be visibly identified
 as live and unsaved.
 
 Control Room's own updater is quiet while the app is current. When an update is

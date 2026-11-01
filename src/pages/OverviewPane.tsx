@@ -4,6 +4,7 @@ import { api, errorMessage } from "../lib/api";
 import { relativeTime } from "../lib/format";
 import type { HostCapabilities, SavedConnection } from "../types";
 import { ErrorState, LoadingState } from "../components/PanelState";
+import { OverviewDiagnostics, type OverviewNavigate } from "../components/OverviewDiagnostics";
 
 type CapabilityTone = "ok" | "warn" | "off";
 
@@ -14,15 +15,19 @@ const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function isStale(detectedAt: string): boolean {
   const detected = new Date(detectedAt).getTime();
-  return Number.isFinite(detected) && Date.now() - detected > STALE_AFTER_MS;
+  return !Number.isFinite(detected) || Date.now() - detected > STALE_AFTER_MS;
 }
 
 export function OverviewPane({
   connection,
   onCapabilitiesChange,
+  active = true,
+  onNavigate,
 }: {
   connection: SavedConnection;
   onCapabilitiesChange?: (capabilities: HostCapabilities) => void;
+  active?: boolean;
+  onNavigate?: OverviewNavigate;
 }) {
   const [capabilities, setCapabilities] = useState<HostCapabilities | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +52,8 @@ export function OverviewPane({
 
   useEffect(() => {
     let current = true;
+    setCapabilities(null);
+    setError(null);
     setLoading(true);
     void api
       .cachedCapabilities(connection.id)
@@ -90,7 +97,6 @@ export function OverviewPane({
     ["Default shell", capabilities.defaultShell ?? "Unavailable"],
   ];
 
-  const dockerReachable = capabilities.dockerAccessible || capabilities.dockerAccessibleWithSudo;
   const dockerValue = capabilities.dockerAvailable
     ? capabilities.dockerAccessible
       ? `Version ${capabilities.dockerVersion ?? "unknown"}`
@@ -125,35 +131,15 @@ export function OverviewPane({
     { label: "Docker", value: dockerValue, tone: dockerTone },
   ];
 
-  const containersValue = dockerReachable
-    ? capabilities.runningContainerCount !== null && capabilities.totalContainerCount !== null
-      ? `${capabilities.runningContainerCount} / ${capabilities.totalContainerCount}`
-      : "Unavailable"
-    : "—";
-  const stats: { label: string; value: string; hint?: string }[] = [
-    {
-      label: "Running services",
-      value: capabilities.runningServiceCount?.toString() ?? "—",
-    },
-    {
-      label: "Containers",
-      value: containersValue,
-      hint: dockerReachable ? "running / total" : "Docker unavailable",
-    },
-  ];
-
   return (
     <section className="feature-page overview-page">
       <div className="overview-content">
-        <header className="page-heading overview-heading">
-          <div>
-            <h2>Overview</h2>
-            <p>Last inspected {relativeTime(capabilities.detectedAt)}</p>
-          </div>
-          <button className="secondary-button" type="button" onClick={refresh} disabled={loading}>
-            <RefreshCw size={15} className={loading ? "spinning" : ""} /> Refresh
-          </button>
-        </header>
+        <OverviewDiagnostics
+          target={connection.id}
+          active={active}
+          windows={windows}
+          onNavigate={onNavigate}
+        />
         {error && <p className="inline-warning">Showing cached data. Refresh failed: {error}</p>}
         {!error && isStale(capabilities.detectedAt) && (
           <p className="inline-warning">
@@ -162,18 +148,14 @@ export function OverviewPane({
           </p>
         )}
 
-        <div className="overview-stats overview-counts">
-          {stats.map((stat) => (
-            <div className="overview-stat" key={stat.label}>
-              <span className="overview-stat-label">{stat.label}</span>
-              <strong className="overview-stat-value">{stat.value}</strong>
-              {stat.hint && <span className="overview-stat-hint">{stat.hint}</span>}
-            </div>
-          ))}
-        </div>
-
         <section className="overview-section">
-          <h3 className="overview-section-title">System</h3>
+          <header className="diagnostic-system-heading">
+            <h3 className="overview-section-title">System</h3>
+            <span>Cached facts · {relativeTime(capabilities.detectedAt)}</span>
+            <button className="secondary-button" type="button" onClick={refresh} disabled={loading}>
+              <RefreshCw size={15} className={loading ? "spinning" : ""} /> Refresh facts
+            </button>
+          </header>
           <dl className="definition-grid">
             {systemRows.map(([label, value]) => (
               <div key={label}>

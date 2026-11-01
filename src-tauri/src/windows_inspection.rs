@@ -46,6 +46,36 @@ fn parse<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, String> {
     serde_json::from_str(text.trim_start_matches('\u{feff}').trim())
         .map_err(|error| format!("Windows inspection returned invalid data: {error}"))
 }
+pub fn diagnostics(
+    connection: &SavedConnection,
+    workloads: bool,
+) -> Result<crate::diagnostics::Diagnostics, String> {
+    let script = format!(
+        "$overviewWorkloads=${};\n{}",
+        if workloads { "true" } else { "false" },
+        include_str!("diagnostics.ps1")
+    );
+    let text = RemoteCommandExecutor::execute_with_input(
+        connection,
+        "overview_diagnostics",
+        &powershell_command(
+            "$script=[Console]::In.ReadToEnd(); & ([ScriptBlock]::Create($script))",
+        ),
+        script.as_bytes(),
+    )?
+    .success_text()?;
+    parse_diagnostics(&text)
+}
+fn parse_diagnostics(text: &str) -> Result<crate::diagnostics::Diagnostics, String> {
+    let mut result: crate::diagnostics::Diagnostics = parse(text)?;
+    // Match Linux and header timestamps. Remote wall-clock skew must not make
+    // a new reading stale or keep a future-dated reading live indefinitely.
+    result.sampled_at = Utc::now().to_rfc3339();
+    if let Some(workloads) = result.workloads.as_mut() {
+        workloads.collected_at = result.sampled_at.clone();
+    }
+    Ok(result)
+}
 pub fn ports(connection: &SavedConnection) -> Result<Vec<ListeningSocket>, String> {
     parse(&read(connection, "ports", "")?)
 }
@@ -148,6 +178,12 @@ pub fn docker_log_command(container: &str, lines: u16, follow: bool) -> Result<S
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn diagnostics_stamp_uses_client_time_instead_of_remote_clock_skew() {
+        let sample = super::parse_diagnostics(r#"{"sampledAt":"2099-01-01T00:00:00Z","workloads":{"collectedAt":"2099-01-01T00:00:00Z"}}"#).unwrap();
+        assert!(!sample.sampled_at.starts_with("2099"));
+        assert_eq!(sample.workloads.unwrap().collected_at, sample.sampled_at);
+    }
     use super::*;
     #[test]
     fn disk_io_reports_rates_independently_of_capacity_and_rejects_partial_pairs() {

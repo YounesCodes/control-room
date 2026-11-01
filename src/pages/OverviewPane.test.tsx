@@ -8,6 +8,9 @@ const api = vi.hoisted(() => ({
   cachedCapabilities: vi.fn(),
   refreshCapabilities: vi.fn(),
   sampleHostResources: vi.fn(),
+  sampleOverviewDiagnostics: vi.fn(),
+  listHostBaselines: vi.fn(),
+  compareHostBaselines: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -17,6 +20,7 @@ vi.mock("../lib/api", () => ({
 
 import type { HostCapabilities, SavedConnection } from "../types";
 import { OverviewPane } from "./OverviewPane";
+import { baseline, comparison, diagnostics, summary } from "../test/app-fixtures";
 
 const connection: SavedConnection = {
   id: "connection-a",
@@ -68,6 +72,8 @@ function renderPane(caps: HostCapabilities = capabilities()) {
 beforeEach(() => {
   api.cachedCapabilities.mockResolvedValue(capabilities());
   api.refreshCapabilities.mockResolvedValue(capabilities());
+  api.sampleOverviewDiagnostics.mockImplementation(async () => diagnostics());
+  api.listHostBaselines.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -77,6 +83,29 @@ afterEach(() => {
 });
 
 describe("OverviewPane", () => {
+  it("summarizes saved configuration changes and links the exact comparison", async () => {
+    const old = { ...baseline("old"), capturedAt: "2026-10-01T10:00:00Z" };
+    const recent = { ...baseline("recent"), capturedAt: "2026-10-02T10:00:00Z" };
+    const diff = comparison(old, recent);
+    diff.sections[0].changed = [
+      {
+        identity: "host",
+        label: "Host",
+        changes: [{ name: "kernel", baseValue: "6.8", targetValue: "6.9" }],
+      },
+    ];
+    api.listHostBaselines.mockResolvedValue([
+      summary(old),
+      { ...summary(recent), changesSincePrevious: 1 },
+    ]);
+    api.compareHostBaselines.mockResolvedValue(diff);
+    const navigate = vi.fn();
+    render(<OverviewPane connection={connection} onNavigate={navigate} />);
+    expect(await screen.findByText(/Latest saved comparison.*1 changed/)).toBeTruthy();
+    expect(api.compareHostBaselines).toHaveBeenCalledWith("old", "recent");
+    await userEvent.click(screen.getByRole("button", { name: "1 change" }));
+    expect(navigate).toHaveBeenCalledWith("baselines", "recent", "old");
+  });
   it("does not publish host facts from a refresh after the pane is unmounted", async () => {
     let finish!: (value: HostCapabilities) => void;
     api.refreshCapabilities.mockImplementationOnce(
@@ -88,46 +117,44 @@ describe("OverviewPane", () => {
     const changed = vi.fn();
     const view = render(<OverviewPane connection={connection} onCapabilitiesChange={changed} />);
     await screen.findByText("Debian GNU/Linux 12");
-    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh facts" }));
     view.unmount();
     await act(async () => finish(capabilities({ hostname: "old-host" })));
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
-  it("shows host facts and capabilities without duplicate resource readings", async () => {
+  it("shows live diagnostics beside cached host facts", async () => {
     renderPane();
     expect(await screen.findByText("Debian GNU/Linux 12")).toBeTruthy();
     const heading = screen.getByRole("heading", { name: "Overview" }).closest("header")!;
     expect(heading.textContent).not.toContain("debian");
     expect(heading.querySelector(".host-os-icon")).toBeNull();
     expect(screen.getAllByText("debian", { exact: true })).toHaveLength(1);
-    for (const label of [
-      "Architecture",
-      "Default shell",
-      "Running services",
-      "Containers",
-      "systemd",
-      "journald",
-      "Docker",
-    ]) {
-      expect(screen.getByText(label)).toBeTruthy();
+    for (const label of ["Architecture", "Default shell", "systemd", "journald", "Docker"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    for (const label of ["Live load", "CPU", "Memory", "Uptime"]) {
-      expect(screen.queryByText(label)).toBeNull();
-    }
-    expect(screen.queryByRole("button", { name: /Pause|Resume/ })).toBeNull();
+    for (const label of ["CPU", "Memory", "Network", "Processes", "Storage", "Workloads", "Uptime"])
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Live", { exact: true })).toBeTruthy();
+    expect(screen.getByText(/Cached facts/)).toBeTruthy();
+    expect(api.sampleOverviewDiagnostics).toHaveBeenCalledWith(connection.id, true);
     expect(api.sampleHostResources).not.toHaveBeenCalled();
   });
 
-  it("does not poll resource readings while open or after refreshing host facts", async () => {
+  it("pauses diagnostics without discarding cached facts", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderPane();
     await screen.findByText("Debian GNU/Linux 12");
-    await vi.advanceTimersByTimeAsync(60_000);
-    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await screen.findByText("Live", { exact: true });
+    await user.click(screen.getByRole("button", { name: "Pause" }));
+    const reads = api.sampleOverviewDiagnostics.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    await user.click(screen.getByRole("button", { name: "Refresh facts" }));
     await waitFor(() => expect(api.refreshCapabilities).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.sampleOverviewDiagnostics).toHaveBeenCalledTimes(reads);
     expect(api.sampleHostResources).not.toHaveBeenCalled();
   });
 
@@ -136,7 +163,7 @@ describe("OverviewPane", () => {
     api.refreshCapabilities.mockResolvedValue(capabilities({ kernel: "new-kernel" }));
     renderPane();
     await screen.findByText("6.1.0-51-amd64");
-    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await user.click(screen.getByRole("button", { name: "Refresh facts" }));
     expect(await screen.findByText("new-kernel")).toBeTruthy();
     expect(api.refreshCapabilities).toHaveBeenCalledWith(connection.id);
   });
@@ -146,7 +173,7 @@ describe("OverviewPane", () => {
     api.refreshCapabilities.mockRejectedValue(new Error("Host unavailable"));
     renderPane();
     await screen.findByText("Debian GNU/Linux 12");
-    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await user.click(screen.getByRole("button", { name: "Refresh facts" }));
     expect(await screen.findByText(/Showing cached data.*Host unavailable/)).toBeTruthy();
     expect(screen.getByText("Debian GNU/Linux 12")).toBeTruthy();
   });
@@ -181,7 +208,20 @@ describe("OverviewPane", () => {
     await screen.findByText("Windows 11 Pro 10.0.26100");
     expect(screen.getByText("Windows services")).toBeTruthy();
     expect(screen.getByText("TCP and UDP listeners")).toBeTruthy();
-    expect(screen.getByText("Running services")).toBeTruthy();
+    expect(screen.getByText("Unsupported on Windows")).toBeTruthy();
     expect(screen.queryByText("Password required")).toBeNull();
+  });
+  it("sorts process consumers and navigates to the existing workload inspectors", async () => {
+    const navigate = vi.fn();
+    render(<OverviewPane connection={connection} onNavigate={navigate} />);
+    await screen.findByText("worker");
+    const table = screen.getByText("worker").closest("table")!;
+    expect(table.querySelector("tbody tr")!.textContent).toContain("worker");
+    await userEvent.click(screen.getByRole("button", { name: "Memory" }));
+    expect(table.querySelector("tbody tr")!.textContent).toContain("database");
+    await userEvent.click(screen.getByRole("button", { name: "Systemd" }));
+    expect(navigate).toHaveBeenCalledWith("services", undefined, undefined);
+    await userEvent.click(screen.getByRole("button", { name: "Listening ports" }));
+    expect(navigate).toHaveBeenCalledWith("ports", undefined, undefined);
   });
 });

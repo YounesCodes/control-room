@@ -257,6 +257,7 @@ export function App() {
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState(emptyEnvironment);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overviewComparisonId, setOverviewComparisonId] = useState<string | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [openingDocumentation, setOpeningDocumentation] = useState(false);
@@ -495,6 +496,9 @@ export function App() {
   // a remote Workspace. A local one is terminal-only.
   const activeRemoteWorkspace =
     activeWorkspace && isRemoteWorkspace(activeWorkspace) ? activeWorkspace : null;
+  useEffect(() => {
+    if (activeWorkspace?.view !== "baselines") setOverviewComparisonId(null);
+  }, [activeWorkspace?.id, activeWorkspace?.view]);
   const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
   const windowsWorkspace =
     !!activeRemoteWorkspace &&
@@ -1849,6 +1853,7 @@ export function App() {
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
           activeWorkspace &&
+          activeWorkspace.view !== "overview" &&
           headerMetrics.length > 0 && (
             <HostMetrics
               key={
@@ -2547,6 +2552,14 @@ export function App() {
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       onCapabilitiesChange={rememberCapabilities}
+                      active={!settingsOpen}
+                      onNavigate={(view, baselineSelectionId, comparisonId) => {
+                        setOverviewComparisonId(comparisonId ?? null);
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
+                          view,
+                          ...(baselineSelectionId ? { baselineSelectionId } : {}),
+                        });
+                      }}
                     />
                   )}
                   {activeRemoteWorkspace.view === "services" &&
@@ -2658,6 +2671,7 @@ export function App() {
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       selectedId={activeRemoteWorkspace.baselineSelectionId}
+                      initialComparisonId={overviewComparisonId}
                       onSelect={(baselineSelectionId) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
                       }

@@ -368,6 +368,31 @@ pub async fn sample_header_metrics(
     .map_err(|error| format!("Host metrics worker failed: {error}"))?
 }
 
+#[tauri::command]
+pub async fn sample_overview_diagnostics(
+    app: AppHandle,
+    connection_id: String,
+    workloads: bool,
+) -> Result<crate::diagnostics::Diagnostics, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        // Share the header's host permit across transitions and separate tabs.
+        let state = app.state::<header_metrics::HeaderMetricsState>();
+        let _reading = state.begin(Some(&connection_id))?;
+        let limiter = app.state::<RemoteOperationLimiter>();
+        let _permit = limiter.acquire(&connection_id)?;
+        let database = app.state::<Database>();
+        let connection = database.get_connection(&connection_id)?;
+        if windows_host(&database, &connection_id)? {
+            windows_inspection::diagnostics(&connection, workloads)
+        } else {
+            crate::diagnostics::collect(&connection, workloads)
+        }
+    })
+    .await
+    .map_err(|error| format!("Overview worker failed: {error}"))?
+}
+
 /// Samples current load. Deliberately not saved anywhere: unlike capabilities,
 /// which are cached so a Workspace can open without a round trip, a load sample
 /// is only true for the instant it was taken, and keeping a history of them
@@ -996,6 +1021,7 @@ mod tests {
             "start_local_session",
             "refresh_capabilities",
             "sample_header_metrics",
+            "sample_overview_diagnostics",
             "list_services",
             "list_windows_services",
             "list_containers",

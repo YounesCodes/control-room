@@ -93,6 +93,57 @@ export interface HostResources {
   swapFreeKib: number | null;
 }
 
+export interface DiagnosticState {
+  state: string;
+  count: number;
+}
+export interface DiagnosticWorkloads {
+  collectedAt: string;
+  services: DiagnosticState[] | null;
+  containers: DiagnosticState[] | null;
+  listeners: DiagnosticState[] | null;
+  warnings: string[];
+}
+export interface OverviewDiagnostics {
+  sampledAt: string;
+  cpuPercent: number | null;
+  cores: { name: string; percent: number | null }[];
+  load: number[];
+  uptimeSeconds: number | null;
+  memory: {
+    totalKib: number | null;
+    availableKib: number | null;
+    buffersKib: number | null;
+    cacheKib: number | null;
+    swapTotalKib: number | null;
+    swapFreeKib: number | null;
+  };
+  filesystems:
+    | { device: string; mount: string; totalKib: number; usedKib: number; availableKib: number }[]
+    | null;
+  disks:
+    | {
+        name: string;
+        readBytesPerSecond: number | null;
+        writeBytesPerSecond: number | null;
+        operationsPerSecond: number | null;
+        busyPercent: number | null;
+      }[]
+    | null;
+  interfaces:
+    | {
+        name: string;
+        receiveBytesPerSecond: number | null;
+        transmitBytesPerSecond: number | null;
+        errors: number | null;
+        drops: number | null;
+      }[]
+    | null;
+  processes: { pid: number; name: string; cpuPercent: number | null; memoryKib: number }[] | null;
+  workloads: DiagnosticWorkloads | null;
+  warnings: string[];
+}
+
 export interface SystemdUnit {
   id: string;
   unitType: string;

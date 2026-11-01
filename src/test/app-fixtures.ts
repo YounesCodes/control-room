@@ -8,10 +8,79 @@ import type {
   HostBaselineSummary,
   HostCapabilities,
   HostResources,
+  OverviewDiagnostics,
   ListeningSocket,
   SavedConnection,
   SystemdUnit,
 } from "../types";
+
+export function diagnostics(): OverviewDiagnostics {
+  const now = new Date().toISOString();
+  return {
+    sampledAt: now,
+    cpuPercent: 24,
+    cores: Array.from({ length: 4 }, (_, i) => ({ name: `cpu${i}`, percent: 24 + i * 7 })),
+    load: [0.82, 0.61, 0.44],
+    uptimeSeconds: 86400,
+    memory: {
+      totalKib: 8 * 1024 * 1024,
+      availableKib: 5 * 1024 * 1024,
+      buffersKib: 128 * 1024,
+      cacheKib: 2 * 1024 * 1024,
+      swapTotalKib: 2 * 1024 * 1024,
+      swapFreeKib: 2 * 1024 * 1024,
+    },
+    filesystems: [
+      {
+        device: "/dev/sda1",
+        mount: "/",
+        totalKib: 100 * 1024 * 1024,
+        usedKib: 42 * 1024 * 1024,
+        availableKib: 58 * 1024 * 1024,
+      },
+    ],
+    disks: [
+      {
+        name: "sda",
+        readBytesPerSecond: 140 * 1024,
+        writeBytesPerSecond: 32 * 1024,
+        operationsPerSecond: 27,
+        busyPercent: 4,
+      },
+    ],
+    interfaces: [
+      {
+        name: "eth0",
+        receiveBytesPerSecond: 230 * 1024,
+        transmitBytesPerSecond: 21 * 1024,
+        errors: 0,
+        drops: 2,
+      },
+    ],
+    processes: [
+      { pid: 100, name: "worker", cpuPercent: 16, memoryKib: 128 * 1024 },
+      { pid: 101, name: "database", cpuPercent: 4, memoryKib: 512 * 1024 },
+    ],
+    workloads: {
+      collectedAt: now,
+      services: [
+        { state: "active", count: 34 },
+        { state: "failed", count: 1 },
+      ],
+      containers: [
+        { state: "running", count: 3 },
+        { state: "healthy", count: 2 },
+        { state: "unhealthy", count: 1 },
+      ],
+      listeners: [
+        { state: "tcp listeners", count: 5 },
+        { state: "tcp 0.0.0.0:22", count: 1 },
+      ],
+      warnings: [],
+    },
+    warnings: [],
+  };
+}
 
 export const settings: AppSettings = {
   terminalFontFamily: "Consolas",

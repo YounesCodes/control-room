@@ -1,24 +1,30 @@
 ---
 title: Overview
-description: Check host identity and runtime capabilities.
+description: Inspect live host performance, workloads, and recent saved changes.
 ---
 
 import overviewScreenshot from "../../../assets/screenshots/overview.png";
 
-Overview shows the host name, operating system, kernel, architecture, shell, and whether systemd, journald, and Docker are available. It can also show service and container counts.
+Overview shows CPU, memory, storage, network traffic, and top processes for the active SSH host. Choose a **Refresh** interval of 2, 5, 10, or 30 seconds, or use **Pause** and **Resume**. Move over a chart or focus it and use the arrow keys to inspect readings.
 
 <figure class="docs-screenshot">
   <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={overviewScreenshot.src}
-      alt="Control Room Overview showing host details, service and container counts, and capability rows."
+      alt="Control Room Overview showing live CPU, memory, network, process, and storage diagnostics."
     />
   </a>
-  <figcaption>Host details and runtime capabilities. Example data shown.</figcaption>
+  <figcaption>Host diagnostics. Example data shown.</figcaption>
 </figure>
 
-Use **Refresh** to read host details again. Control Room keeps the last result locally and marks it stale after 24 hours.
+Charts keep up to five minutes and 120 samples in memory. Collection stops when you leave Overview, open Settings, pause, or hide the window. Returning starts a new chart history. Samples are never saved. The optional header collector stops while Overview is open to avoid duplicate reads.
 
-Windows Overview shows Windows identity, the running service count, and available inspection capabilities. Docker counts are unavailable when its daemon cannot be read.
+Select an interface to isolate its upload and download graph. The combined graph includes virtual interfaces and excludes Linux loopback, so traffic crossing several interfaces can be counted more than once. Errors and drops are cumulative interface counters. Click **CPU** or **Memory** in the process table to sort the top visible consumers. Process CPU is a share of total host capacity.
 
-Resource readings appear in the optional header instead of Overview. Enable **Show host metrics in header** in Settings, then choose CPU, RAM, GPU, Disk I/O, or uptime and a refresh interval. Disk I/O shows read/write speeds. The header follows the active local or SSH workspace. Overview does not poll resource readings.
+Storage shows local filesystem capacity and whole disk read/write speeds, operations per second, and busy time. Linux reads leaf disks to avoid counting partitions or stacked volumes twice. Filesystem and workload reads require `timeout` on Linux; missing tools or account permissions leave those sections unavailable.
+
+Workloads refresh about every 30 seconds. Open **Systemd**, **Docker**, or **Listening ports** for the existing inspectors. Container summaries include reported health checks. Linux **Baselines** summarizes the latest saved configuration comparison and links directly to saved comparisons. These describe saved captures, not a fresh host scan.
+
+**System** and **Runtime and capabilities** show cached host information separately. Use **Refresh facts** to read it again. Control Room marks facts older than 24 hours as stale. Failed metric reads retain the last sample with a stale status and the failure reason.
+
+Windows hosts use Windows performance counters, fixed drives, services, and page files. Linux load averages and buffers are unsupported there. Any unavailable counter stays unavailable; it does not become zero.
