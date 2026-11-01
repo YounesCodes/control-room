@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut } from "./MagnifierIcon";
+import { GraphControls } from "./GraphControls";
 import { observeLayoutFallback } from "./ResizablePanels";
 import {
   useCallback,
@@ -9,7 +9,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Scan, Server, X } from "lucide-react";
+import { Server, X } from "lucide-react";
 import { EmptyState, LoadingState } from "./PanelState";
 import { usePanZoom } from "../lib/use-pan-zoom";
 
@@ -279,42 +279,17 @@ export function InspectionGraph({
       <div className="ports-canvas-controls" ref={controlsRef}>
         {toolbar}
       </div>
-      <div className="graph-toolbar" role="toolbar" aria-label="Graph controls">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Zoom out"
-          onClick={() => {
-            setFocusing(false);
-            panZoom.zoomBy(1 / 1.2);
-          }}
-        >
-          <ZoomOut size={15} />
-        </button>
-        <span className="zoom-level">{Math.round(view.scale * 100)}%</span>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Zoom in"
-          onClick={() => {
-            setFocusing(false);
-            panZoom.zoomBy(1.2);
-          }}
-        >
-          <ZoomIn size={15} />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Fit to view"
-          onClick={() => {
-            setFocusing(false);
-            fit();
-          }}
-        >
-          <Scan size={15} />
-        </button>
-      </div>
+      <GraphControls
+        scale={view.scale}
+        onZoom={(factor) => {
+          setFocusing(false);
+          panZoom.zoomBy(factor);
+        }}
+        onFit={() => {
+          setFocusing(false);
+          fit();
+        }}
+      />
       <div
         className="arch-viewport"
         role="region"

@@ -1,13 +1,44 @@
-import { Search } from "../components/MagnifierIcon";
-import { ResizableSplit } from "../components/ResizablePanels";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FileClock, RefreshCw } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { GitBranch, X } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { SystemdUnitInspector } from "../components/SystemdUnitInspector";
+import { SystemdInventory } from "../components/SystemdInventory";
+import { SystemdGraph } from "../components/SystemdGraph";
+import { SystemdPresence } from "../components/SystemdPresence";
+import { SystemdToolbar } from "../components/SystemdToolbar";
 import { api, errorMessage } from "../lib/api";
-import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
-import type { SystemdStateFilter } from "../lib/systemd-units";
-import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
-import type { CachedList, LogSourceSelection, SavedConnection, SystemdUnit } from "../types";
+import { connectionTargetKey } from "../lib/connection-validation";
+import {
+  countSystemdUnits,
+  filterSystemdUnits,
+  isSystemdUnitName,
+  SYSTEMD_RELATIONSHIP_GROUPS,
+  SYSTEMD_INITIAL_VISIBLE,
+  SYSTEMD_MAX_VISIBLE,
+  systemdEdges,
+  systemdNeighborhood,
+} from "../lib/systemd-units";
+import { invalidateSystemdReads, useSystemdReads } from "../lib/systemd-inspection";
+import { isCacheFresh } from "../lib/workspace-cache";
+import type {
+  CachedList,
+  LogSourceSelection,
+  SavedConnection,
+  SystemdExplorerState,
+  SystemdUnit,
+} from "../types";
+
+const DEFAULT: SystemdExplorerState = {
+  mode: "inventory",
+  rootId: null,
+  expanded: [],
+  search: "",
+  state: "all",
+  unitType: "all",
+  sort: "priority",
+  relationshipGroup: "dependencies",
+  visibleLimit: SYSTEMD_INITIAL_VISIBLE,
+};
 
 export function ServicesPane({
   connection,
@@ -15,22 +46,49 @@ export function ServicesPane({
   onCacheChange,
   onViewLogs,
   focusId = null,
+  initialState,
+  onStateChange,
+  onSelectionChange,
+  onOpenPorts,
+  onOpenBoot,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
   onCacheChange: (cache: CachedList<SystemdUnit>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
   focusId?: string | null;
+  initialState?: SystemdExplorerState;
+  onStateChange?: (state: SystemdExplorerState) => void;
+  onSelectionChange?: (id: string | null) => void;
+  onOpenPorts?: (unit: string) => void;
+  onOpenBoot?: () => void;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(
-    () => focusId ?? reconcileSelection(cache.items, null),
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    focusId && isSystemdUnitName(focusId) ? focusId : null,
   );
-  const [search, setSearch] = useState("");
-  const [stateFilter, setStateFilter] = useState<SystemdStateFilter>("all");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [state, setState] = useState<SystemdExplorerState>(() => ({ ...DEFAULT, ...initialState }));
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const inspectorRef = useRef<HTMLElement>(null);
+  const inventoryRef = useRef<HTMLDivElement>(null);
+  const graphSearch = state.dependencySearch ?? "";
+  function setGraphSearch(dependencySearch: string) {
+    setState((current) => ({ ...current, dependencySearch }));
+  }
+  const deferredSearch = useDeferredValue(state.search);
+  const [revision, setRevision] = useState(0);
   const cacheRef = useRef(cache);
   const requestRef = useRef(0);
+  const selectionCallback = useRef(onSelectionChange);
+  const stateCallback = useRef(onStateChange);
   cacheRef.current = cache;
+  selectionCallback.current = onSelectionChange;
+  stateCallback.current = onStateChange;
+  useEffect(() => {
+    stateCallback.current?.(state);
+  }, [state]);
+  useEffect(() => {
+    selectionCallback.current?.(selectedId);
+  }, [selectedId]);
 
   async function load(force = false) {
     const current = cacheRef.current;
@@ -41,14 +99,11 @@ export function ServicesPane({
       const items = await api.listServices(connection.id);
       if (request !== requestRef.current) return;
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-      setSelectedId((selected) => reconcileSelection(items, selected));
+      // Dependencies outside the inventory and disappeared units retain their
+      // identity. Their own detail reads report their current availability.
     } catch (caught) {
       if (request !== requestRef.current) return;
-      onCacheChange({
-        ...cacheRef.current,
-        loading: false,
-        error: errorMessage(caught),
-      });
+      onCacheChange({ ...cacheRef.current, loading: false, error: errorMessage(caught) });
     }
   }
 
@@ -58,183 +113,342 @@ export function ServicesPane({
       requestRef.current += 1;
     };
   }, [connection.id]);
-
   useEffect(() => {
-    if (!cache.items.length) return;
-    setSelectedId((selected) => reconcileSelection(cache.items, selected));
-  }, [cache.items]);
-
-  useEffect(() => {
-    if (focusId) setSelectedId(focusId);
+    if (focusId && isSystemdUnitName(focusId)) setSelectedId(focusId);
   }, [focusId]);
 
+  const rootId = state.rootId ?? selectedId;
+  const readIds = useMemo(
+    () => [
+      ...new Set(
+        [
+          inspectorOpen ? selectedId : null,
+          ...(state.mode === "graph" ? [rootId, ...state.expanded] : []),
+        ].filter((id): id is string => !!id && isSystemdUnitName(id)),
+      ),
+    ],
+    [selectedId, inspectorOpen, rootId, state.mode, state.expanded],
+  );
+  const cacheScope = connectionTargetKey(connection);
+  const details = useSystemdReads(connection.id, readIds, revision, "properties", cacheScope);
+  const edges = useMemo(
+    () =>
+      systemdEdges(
+        Object.values(details).flatMap((result) => (result.value ? [result.value] : [])),
+      ),
+    [details],
+  );
+  const neighborhood = useMemo(
+    () =>
+      rootId
+        ? systemdNeighborhood(
+            rootId,
+            state.expanded,
+            edges,
+            [...SYSTEMD_RELATIONSHIP_GROUPS[state.relationshipGroup]],
+            graphSearch,
+            state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
+          )
+        : null,
+    [rootId, state.expanded, edges, state.relationshipGroup, state.visibleLimit, graphSearch],
+  );
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
   const filtered = useMemo(
-    () =>
-      filterSystemdUnits(cache.items, {
-        search,
-        state: stateFilter,
-        unitType: typeFilter,
-      }),
-    [cache.items, search, stateFilter, typeFilter],
+    () => filterSystemdUnits(cache.items, { ...state, search: deferredSearch }),
+    [cache.items, state, deferredSearch],
   );
   const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
+  const graphUnits = useMemo(() => {
+    const units = new Map(cache.items.map((unit) => [unit.id, unit]));
+    for (const result of Object.values(details)) {
+      if (!result.value?.properties.ActiveState) continue;
+      const { id, properties: p } = result.value;
+      units.set(id, {
+        id,
+        unitType: id.split(".").at(-1) ?? "",
+        description: p.Description ?? "",
+        activeState: p.ActiveState,
+        subState: p.SubState ?? "Unavailable",
+        loadState: p.LoadState ?? "Unavailable",
+        unitFileState: p.UnitFileState || null,
+      });
+    }
+    return [...units.values()];
+  }, [cache.items, details]);
   const selectedVisible = filtered.some((unit) => unit.id === selectedId);
-  const filtersActive = search.length > 0 || stateFilter !== "all" || typeFilter !== "all";
+  const failedGraphRead = readIds.find(
+    (id) => (!inspectorOpen || id !== selectedId) && details[id]?.error,
+  );
+  const filtersActive = !!state.search || state.state !== "all" || state.unitType !== "all";
+  const types = [
+    ...new Set([
+      ...cache.items.map((unit) => unit.unitType),
+      "service",
+      "timer",
+      "socket",
+      "mount",
+    ]),
+  ].sort();
+  const states = [
+    ...new Set(["failed", "active", "inactive", ...cache.items.map((unit) => unit.activeState)]),
+  ];
 
+  function patch(next: Partial<SystemdExplorerState>) {
+    if (next.relationshipGroup || (state.mode === "graph" && next.dependencySearch !== undefined))
+      setInspectorOpen(false);
+    setState((current) => ({ ...current, ...next }));
+  }
   function clearFilters() {
-    setSearch("");
-    setStateFilter("all");
-    setTypeFilter("all");
+    patch({ search: "", state: "all", unitType: "all" });
+  }
+  function selectInventoryUnit(id: string) {
+    setInspectorOpen(id !== selectedId || !inspectorOpen);
+    setSelectedId(id);
+    if (id !== selectedId)
+      patch({
+        rootId: id,
+        expanded: [],
+        dependencySearch: "",
+        visibleLimit: SYSTEMD_INITIAL_VISIBLE,
+      });
+  }
+  function refreshDetails() {
+    invalidateSystemdReads(connection.id);
+    setRevision((n) => n + 1);
+  }
+  function refocus(id: string) {
+    setSelectedId(id);
+    setInspectorOpen(false);
+    setGraphSearch("");
+    patch({ mode: "graph", rootId: id, expanded: [], visibleLimit: SYSTEMD_INITIAL_VISIBLE });
   }
 
+  const visibleInspector =
+    inspectorOpen && !!selectedId && (state.mode === "graph" || !selected || selectedVisible);
+  useEffect(() => {
+    if (visibleInspector && state.mode === "inventory")
+      inspectorRef.current?.focus({ preventScroll: true });
+  }, [selectedId, visibleInspector, state.mode]);
+
+  function closeInventoryInspector() {
+    setInspectorOpen(false);
+    const row = [
+      ...(inventoryRef.current?.querySelectorAll<HTMLButtonElement>(".dense-row") ?? []),
+    ].find((element) => element.getAttribute("aria-pressed") === "true");
+    requestAnimationFrame(() =>
+      (row ?? inventoryRef.current?.querySelector<HTMLElement>(".dense-list"))?.focus({
+        preventScroll: true,
+      }),
+    );
+  }
+  const inspector = selectedId && (
+    <SystemdUnitInspector
+      key={selectedId}
+      connectionId={connection.id}
+      cacheScope={cacheScope}
+      unitId={selectedId}
+      summary={selected}
+      result={details[selectedId]}
+      revision={revision}
+      onRefresh={refreshDetails}
+      onNavigate={refocus}
+      onViewLogs={onViewLogs}
+      onOpenPorts={onOpenPorts}
+      onOpenBoot={onOpenBoot}
+    />
+  );
+
   if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
-  if (cache.error && !cache.items.length) {
+  if (cache.error && !cache.items.length)
     return (
       <ErrorState
         message={cache.error}
         action={<button onClick={() => load(true)}>Retry</button>}
       />
     );
-  }
 
+  const snapshot = [
+    cache.items.length + " units",
+    counts.active + " active",
+    counts.failed + " failed",
+    counts.inactive + " inactive",
+    "Current system scope only, not a complete host health check",
+    cache.fetchedAt ? "Collected " + new Date(cache.fetchedAt).toLocaleTimeString() : "",
+  ].join(" · ");
   return (
-    <ResizableSplit name="Services" className="feature-page split-page services-page">
-      <div className="list-panel">
-        <header className="page-heading compact-heading">
-          <div>
-            <h2>Systemd</h2>
-            <p>
-              {counts.active} active ·{" "}
-              <span className={counts.failed ? "failed-count" : ""}>{counts.failed} failed</span>
-            </p>
-            <small className="unit-scope-note">
-              Current system scope only, not a complete host health check
-            </small>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => load(true)}
-            aria-label="Refresh systemd units"
-            disabled={cache.loading}
-          >
-            <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
-          </button>
-        </header>
-        {cache.error && (
-          <p className="inline-warning">Showing saved results. Refresh failed: {cache.error}</p>
-        )}
-        <div className="systemd-list-controls">
-          <label className="search-field">
-            <Search size={15} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search units"
+    <section className="feature-page systemd-page">
+      <SystemdToolbar
+        state={state}
+        total={cache.items.length}
+        failed={counts.failed}
+        snapshot={snapshot}
+        loading={cache.loading}
+        canGraph={!!selectedId}
+        selectedUnit={selectedId}
+        types={types}
+        states={states}
+        onChange={patch}
+        onMode={(mode) => {
+          setInspectorOpen(false);
+          if (mode === "graph" && selectedId && selectedId !== rootId) refocus(selectedId);
+          else patch({ mode, rootId });
+        }}
+        onRefresh={() => {
+          refreshDetails();
+          void load(true);
+        }}
+      />
+      {cache.error && (
+        <p className="inline-warning" role="status">
+          Showing saved results. Refresh failed: {cache.error}
+        </p>
+      )}
+      {state.mode === "inventory" ? (
+        <div
+          className={"systemd-explorer-stage" + (visibleInspector ? " inspecting" : "")}
+          ref={inventoryRef}
+        >
+          <div className="systemd-inventory services-page">
+            {filtersActive && (
+              <div className="systemd-filter-result">
+                <span>{filtered.length} matching units</span>
+                <button type="button" className="link-button" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              </div>
+            )}
+            {selectedId && selected && !selectedVisible && (
+              <div className="systemd-filter-result" role="status">
+                Selected unit is outside this filter{" "}
+                <button type="button" className="link-button" onClick={clearFilters}>
+                  Show selected unit
+                </button>
+              </div>
+            )}
+            <SystemdInventory
+              units={filtered}
+              selectedId={selectedId}
+              onSelect={selectInventoryUnit}
+              emptyTitle={cache.items.length ? "No matching units" : "No units found"}
             />
-          </label>
-          <select
-            aria-label="Unit state"
-            value={stateFilter}
-            onChange={(event) => setStateFilter(event.target.value as SystemdStateFilter)}
-          >
-            <option value="all">All states</option>
-            <option value="failed">Failed</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-          <select
-            aria-label="Unit type"
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
-          >
-            <option value="all">All types</option>
-            <option value="service">Services</option>
-            <option value="timer">Timers</option>
-            <option value="mount">Mounts</option>
-            <option value="socket">Sockets</option>
-          </select>
-        </div>
-        <div className="dense-list" role="region" aria-label="Systemd units" tabIndex={0}>
-          {filtered.map((unit) => (
-            <button
-              className={unit.id === selectedId ? "dense-row selected-row" : "dense-row"}
-              type="button"
-              key={unit.id}
-              onClick={() => setSelectedId(unit.id)}
+          </div>
+          <SystemdPresence open={visibleInspector}>
+            <aside
+              ref={inspectorRef}
+              className="detail-panel arch-detail systemd-inspector"
+              aria-label="Unit details"
+              tabIndex={-1}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  closeInventoryInspector();
+                }
+              }}
             >
-              <span className={`service-indicator service-${unit.activeState}`} />
-              <span className="row-main">
-                <strong>{unit.id}</strong>
-                <small>{unit.description || "No description"}</small>
-              </span>
-              <span className="row-state unit-row-state">
-                <span className="unit-type-label">{unit.unitType}</span>
-                <span>{unit.subState}</span>
-              </span>
+              <button
+                type="button"
+                className="icon-button inspector-close"
+                aria-label="Close details"
+                onClick={closeInventoryInspector}
+              >
+                <X size={16} />
+              </button>
+              {inspector}
+            </aside>
+          </SystemdPresence>
+        </div>
+      ) : (
+        <div className="systemd-graph-stage">
+          <div className="systemd-graph-context">
+            <button
+              type="button"
+              className="systemd-root-label"
+              title="Refocus on current unit"
+              onClick={() => rootId && refocus(rootId)}
+            >
+              <GitBranch size={14} />
+              {rootId}
             </button>
-          ))}
-          {!filtered.length && (
-            <EmptyState title={cache.items.length ? "No matching units" : "No units found"} />
+            {!!neighborhood?.hidden && (
+              <button
+                className="systemd-more"
+                type="button"
+                disabled={(state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE}
+                title={
+                  (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE
+                    ? "Search or refocus to explore other units"
+                    : "Reveal more related units"
+                }
+                onClick={() =>
+                  patch({
+                    visibleLimit: Math.min(
+                      SYSTEMD_MAX_VISIBLE,
+                      (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 6,
+                    ),
+                  })
+                }
+              >
+                Show more · {neighborhood.hidden}
+              </button>
+            )}
+          </div>
+          {rootId && neighborhood ? (
+            <SystemdGraph
+              ids={neighborhood.ids}
+              edges={neighborhood.edges}
+              units={graphUnits}
+              rootId={rootId}
+              selectedId={visibleInspector ? selectedId : null}
+              expanded={state.expanded}
+              frameKey={state.relationshipGroup + ":" + graphSearch}
+              onSelect={(id) => {
+                if (id) setSelectedId(id);
+                setInspectorOpen(!!id);
+              }}
+              onRefocus={refocus}
+              onExpand={(id) =>
+                patch({
+                  expanded: state.expanded.includes(id)
+                    ? state.expanded.filter((unit) => unit !== id)
+                    : [...state.expanded, id].slice(0, 24),
+                  visibleLimit: Math.min(
+                    SYSTEMD_MAX_VISIBLE,
+                    (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 3,
+                  ),
+                })
+              }
+              inspector={inspector}
+            />
+          ) : (
+            <EmptyState title="Select a unit to explore" />
+          )}
+          {failedGraphRead ? (
+            <div className="systemd-graph-notice" role="status">
+              {details[failedGraphRead]?.value
+                ? "Saved dependency evidence. "
+                : "Dependencies unavailable. "}
+              {failedGraphRead}: {details[failedGraphRead]?.error}{" "}
+              <button className="link-button" type="button" onClick={refreshDetails}>
+                Retry
+              </button>
+            </div>
+          ) : readIds.some((id) => details[id]?.loading) ? (
+            <span className="systemd-graph-status" role="status">
+              Reading dependencies…
+            </span>
+          ) : (
+            rootId &&
+            details[rootId]?.value &&
+            neighborhood?.ids.length === 1 && (
+              <span className="systemd-graph-status" role="status">
+                {graphSearch
+                  ? "No matching relationships"
+                  : "No reported relationships in this category"}
+              </span>
+            )
           )}
         </div>
-      </div>
-      <aside className="detail-panel">
-        {!cache.items.length ? (
-          <EmptyState title="No units found" />
-        ) : !filtered.length ? (
-          <EmptyState title="No matching units">
-            <button className="secondary-button" type="button" onClick={clearFilters}>
-              Clear filters
-            </button>
-          </EmptyState>
-        ) : selected && !selectedVisible ? (
-          <EmptyState title="Selected unit is outside this filter">
-            <button className="secondary-button" type="button" onClick={clearFilters}>
-              Show selected unit
-            </button>
-          </EmptyState>
-        ) : selected ? (
-          <>
-            <header>
-              <h2>{selected.id}</h2>
-              <p>{selected.description || "No description"}</p>
-            </header>
-            <dl className="detail-list">
-              <div>
-                <dt>Unit type</dt>
-                <dd>{selected.unitType}</dd>
-              </div>
-              <div>
-                <dt>State</dt>
-                <dd>
-                  {selected.activeState} / {selected.subState}
-                </dd>
-              </div>
-              <div>
-                <dt>Load state</dt>
-                <dd>{selected.loadState}</dd>
-              </div>
-              <div>
-                <dt>Unit-file state</dt>
-                <dd>{selected.unitFileState ?? "Unknown"}</dd>
-              </div>
-            </dl>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => onViewLogs({ type: "systemd", id: selected.id })}
-            >
-              <FileClock size={15} /> View journal
-            </button>
-          </>
-        ) : filtersActive ? (
-          <EmptyState title="Select a matching unit" />
-        ) : (
-          <EmptyState title="Select a unit" />
-        )}
-      </aside>
-    </ResizableSplit>
+      )}
+    </section>
   );
 }

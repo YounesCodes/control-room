@@ -19,6 +19,18 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("IPC data and lifetime contracts", () => {
+  it("routes unit evidence reads with an explicit section and literal unit name", async () => {
+    await api.inspectSystemdUnit(
+      "host",
+      String.raw`srv-data\x2darchive.mount`,
+      "effectiveConfiguration",
+    );
+    expect(invoke).toHaveBeenCalledWith("inspect_systemd_unit", {
+      connectionId: "host",
+      unit: String.raw`srv-data\x2darchive.mount`,
+      section: "effectiveConfiguration",
+    });
+  });
   it("allows two platform probes before timing out remote shell detection", async () => {
     invoke.mockImplementation(() => new Promise(() => undefined));
     const failed = vi.fn();

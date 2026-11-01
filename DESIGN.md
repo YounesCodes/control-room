@@ -229,6 +229,64 @@ the same generic fallback for unknown images. Docker and Ports inspector section
 share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
 behavior and show section content immediately when reduced motion is requested.
 
+Systemd starts with a compact unit inventory: name, description, and one meaningful
+state. Start without a selected unit; loading or refreshing never picks one.
+Restore an explicit selection when returning to an existing workspace or following
+a unit link. Keep enablement and other metadata in the inspector. Show a failed count
+only when nonzero; keep other counts and collection time in the heading tooltip.
+Search, filtering, and sorting open from one toolbar. Failed rows use failure color;
+inactive and disabled units remain neutral. Preserve the selected identity through
+refreshes and show a reveal action when filters hide it. Large inventories render
+only the visible rows while retaining keyboard access to every unit.
+Keep the inventory vertical-only. Truncate long unit names and descriptions inside
+their row, with complete values available in the tooltip and inspector.
+Outline the whole selected Systemd row rather than marking only its left edge.
+
+The dependency view uses the shared graph controls, pan/zoom camera behavior, and
+closable inspector. Its links represent systemd evidence rather than host grouping.
+Show one category at a time: Dependencies (Requires/Wants), Ordering (After/Before),
+or Activation (Triggers). Consolidate relationships with the same direction into
+one connector. Keep opposite requirements separate. Ordering arrows run from the
+earlier unit to the later unit, combining equivalent After/Before constraints.
+Keep edges free of text and show exact reported evidence on hover
+or keyboard focus. Explain arrow direction once for the active category. End each line
+at the base of its arrowhead, leaving the tip clear of the target card. Never use
+label boxes or relationship nodes. Pair line patterns with directed arrows, keep
+arrowheads crisp, and route connectors outside cards. Use consistent node sizes
+and deterministic columns, placing incoming units left and outgoing units right.
+
+Include reported reverse and activation dependencies, without deriving links from unit
+names. Start at one unit and up to six neighbors. Show more or expand a node on
+request, up to 25 visible units. Preserve existing positions and camera framing
+during expansion. Automatic framing keeps nodes readable at 85% or larger; explicit
+Fit to view can zoom out to the full diagram. Search retains paths to matches.
+Double-click or Shift+Enter refocuses
+the graph. Selection, filters, root, and expansion stay with the workspace during
+navigation. Changed SSH targets discard that context and use separate detail caches.
+
+Keep inspectors closed until selection. Use a compact, content-height panel with
+a visible 32px slide on entry and a slide on exit. Graph selection opens the inspector
+and starts camera framing immediately,
+without a click timer or waiting for remote details. Keep that inspector visible from
+its first frame with a short 160ms entrance. Center the graph inspector vertically
+at the right of the canvas, including while its content changes.
+Keep exiting controls inert and hidden from assistive
+technology, cancel exits when reopened, and remove them immediately under reduced
+motion. Use the same transitions for relationship categories and filter panels.
+Keep view switching in one visible toolbar control; do not repeat Graph in the inspector.
+Name the graph action Explore followed by the selected unit. Opening it focuses
+that unit, including a selected neighbor of a previously explored root. Inventory
+row clicks only toggle inspection; double-clicks must not change views.
+Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
+timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
+and failure results. Dependencies, Recent journal, and Advanced start collapsed.
+Put conditions, assertions, configuration, and effective properties under Advanced.
+Journal, unit files, and full effective properties load when opened, with separate
+unavailable and truncated states. Keep file contents distinct from the manager's
+effective properties. Reuse inspector disclosure motion. Reduced motion removes camera, node, and
+disclosure animation. Ports navigation uses explicit unit evidence; current Boot
+unit rows link back to Systemd without attributing a cause.
+
 ## Visual language
 
 ### Color and surfaces

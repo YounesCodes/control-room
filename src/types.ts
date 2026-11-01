@@ -103,6 +103,31 @@ export interface SystemdUnit {
   unitFileState: string | null;
 }
 
+export type SystemdReadSection =
+  "properties" | "configuration" | "effectiveConfiguration" | "journal";
+
+export interface SystemdInspection {
+  id: string;
+  properties: Record<string, string>;
+  text: string;
+  warnings: string[];
+  truncated: boolean;
+  collectedAt: string;
+}
+
+export interface SystemdExplorerState {
+  mode: "inventory" | "graph";
+  rootId: string | null;
+  expanded: string[];
+  search: string;
+  dependencySearch?: string;
+  state: string;
+  unitType: string;
+  sort: "priority" | "name" | "state" | "type";
+  relationshipGroup: "dependencies" | "ordering" | "activation";
+  visibleLimit?: number;
+}
+
 export interface WindowsService {
   id: string;
   displayName: string;
@@ -580,6 +605,7 @@ export interface RemoteWorkspace extends WorkspaceBase {
   portsCache: CachedList<ListeningSocket>;
   containersCache: CachedList<DockerContainer>;
   systemdSelectionId: string | null;
+  systemdExplorer?: SystemdExplorerState;
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   bootDiagnostics: BootDiagnostics | null;
