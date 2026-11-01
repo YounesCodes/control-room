@@ -266,6 +266,9 @@ a slide on entry and exit. Keep exiting controls inert and hidden from assistive
 technology, cancel exits when reopened, and remove them immediately under reduced
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat Graph in the inspector.
+Name the graph action Explore followed by the selected unit. Opening it focuses
+that unit, including a selected neighbor of a previously explored root. Inventory
+row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
 timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
 and failure results. Dependencies, Recent journal, and Advanced start collapsed.

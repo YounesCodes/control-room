@@ -4082,7 +4082,23 @@ dd {
 .systemd-relationship-groups button:hover {
   background: var(--fill-hover);
 }
+.systemd-explore-unit {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+@container (max-width: 640px) {
+  .systemd-explore-unit {
+    max-width: 110px;
+  }
+  .systemd-heading .systemd-view-switch {
+    min-width: 0;
+  }
+}
 .systemd-view-switch [aria-pressed="true"],
+.systemd-view-switch [aria-current="page"],
 .systemd-relationship-groups [aria-pressed="true"] {
   color: var(--text);
   background: var(--fill-active);

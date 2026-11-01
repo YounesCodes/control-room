@@ -786,7 +786,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .poll(() => element.querySelector(".host-row.active .presence-busy"))
         .not.toBeNull();
       finishServices([fixtures.service]);
-      await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+      await expect.element(page.getByRole("button", { name: /^fixture.service/ })).toBeVisible();
       await expect.poll(() => element.querySelector(".host-row.active .presence-busy")).toBeNull();
     } finally {
       finishServices?.([]);
@@ -2523,7 +2523,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Systemd");
     await page.getByRole("button", { name: "Filter and sort units" }).click();
     await page.getByRole("combobox", { name: "Unit state" }).selectOptions("failed");
-    await page.getByRole("button", { name: /failed.service/ }).click();
+    await page.getByRole("button", { name: /^failed.service/ }).click();
     await page.getByRole("button", { name: "View journal" }).click();
     await expect
       .element(page.getByRole("combobox", { name: "Unit", exact: true }))
@@ -2825,7 +2825,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await page.getByRole("button", { name: /443.*Listening/ }).click();
     await page.getByRole("button", { name: /Open unit/ }).click();
-    const selectedUnit = page.getByRole("button", { name: new RegExp(fixtures.service.id) });
+    const selectedUnit = page.getByRole("button", { name: new RegExp("^" + fixtures.service.id) });
     await expect.element(selectedUnit).toHaveAttribute("aria-pressed", "true");
     await expect
       .element(page.getByRole("complementary", { name: "Unit details" }))
@@ -2858,11 +2858,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("reports refresh failure, keeps existing Systemd data and recovers", async () => {
     await mount();
     await navigate("Systemd");
-    await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: /^fixture.service/ })).toBeVisible();
     failures.set("list_services", "Fixture network failure");
     await page.getByRole("button", { name: "Refresh systemd units", exact: true }).click();
     await expect.element(page.getByText(/Refresh failed: Fixture network failure/)).toBeVisible();
-    await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: /^fixture.service/ })).toBeVisible();
     failures.delete("list_services");
     await page.getByRole("button", { name: "Refresh systemd units", exact: true }).click();
     await expect

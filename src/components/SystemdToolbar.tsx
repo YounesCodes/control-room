@@ -12,6 +12,7 @@ export function SystemdToolbar({
   snapshot,
   loading,
   canGraph,
+  selectedUnit,
   types,
   states,
   onChange,
@@ -24,6 +25,7 @@ export function SystemdToolbar({
   snapshot: string;
   loading: boolean;
   canGraph: boolean;
+  selectedUnit: string | null;
   types: string[];
   states: string[];
   onChange: (patch: Partial<SystemdExplorerState>) => void;
@@ -101,14 +103,16 @@ export function SystemdToolbar({
           </button>
           <button
             type="button"
-            aria-label="Dependency graph"
-            aria-pressed={graph}
-            title="Dependency graph"
+            aria-label={selectedUnit ? "Explore " + selectedUnit : "Explore selected unit"}
+            aria-current={graph && state.rootId === selectedUnit ? "page" : undefined}
+            title={
+              selectedUnit ? "Explore dependencies of " + selectedUnit : "Select a unit to explore"
+            }
             disabled={!canGraph}
             onClick={() => onMode("graph")}
           >
             <GitBranch size={14} />
-            Graph
+            Explore <span className="systemd-explore-unit">{selectedUnit ?? "selected unit"}</span>
           </button>
         </div>
         <SystemdPresence open={graph}>

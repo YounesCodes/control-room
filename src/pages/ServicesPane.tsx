@@ -289,13 +289,15 @@ export function ServicesPane({
         failed={counts.failed}
         snapshot={snapshot}
         loading={cache.loading}
-        canGraph={!!rootId}
+        canGraph={!!selectedId}
+        selectedUnit={selectedId}
         types={types}
         states={states}
         onChange={patch}
         onMode={(mode) => {
           setInspectorOpen(false);
-          patch({ mode, rootId });
+          if (mode === "graph" && selectedId && selectedId !== rootId) refocus(selectedId);
+          else patch({ mode, rootId });
         }}
         onRefresh={() => {
           refreshDetails();
@@ -333,7 +335,6 @@ export function ServicesPane({
               units={filtered}
               selectedId={selectedId}
               onSelect={selectInventoryUnit}
-              onExplore={refocus}
               emptyTitle={cache.items.length ? "No matching units" : "No units found"}
             />
           </div>

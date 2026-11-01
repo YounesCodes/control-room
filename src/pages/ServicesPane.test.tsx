@@ -57,6 +57,24 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it("never opens the graph when rapidly toggling an inventory inspector", async () => {
+    const user = userEvent.setup();
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("a.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    const row = screen.getByRole("button", { name: /a.service description/ });
+    await user.click(row);
+    await user.dblClick(row);
+    expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Systemd units" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+    expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
+  });
   afterEach(cleanup);
   beforeEach(() => {
     invalidateSystemdReads(connection.id);
@@ -109,7 +127,7 @@ describe("ServicesPane failed units view", () => {
         onViewLogs={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Dependency graph" }));
+    await user.click(screen.getByRole("button", { name: /^Explore / }));
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     expect(screen.queryByRole("complementary")).toBeNull();
@@ -149,7 +167,7 @@ describe("ServicesPane failed units view", () => {
     await user.selectOptions(screen.getByLabelText("Unit state"), "failed");
     await user.selectOptions(screen.getByLabelText("Unit type"), "timer");
     expect(screen.getByRole("button", { name: /backup.timer/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /data.mount/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^data.mount/i })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /backup.timer/i }));
     await user.click(screen.getByRole("button", { name: "View journal" }));
@@ -241,11 +259,11 @@ describe("ServicesPane failed units view", () => {
         onViewLogs={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Dependency graph" }));
+    await user.click(screen.getByRole("button", { name: /^Explore / }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("a.service");
     await user.click(screen.getByRole("button", { name: "Explorer" }));
     await user.click(screen.getByRole("button", { name: /b.service description/ }));
-    await user.click(screen.getByRole("button", { name: "Dependency graph" }));
+    await user.click(screen.getByRole("button", { name: /^Explore / }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");
   });
 
@@ -269,7 +287,7 @@ describe("ServicesPane failed units view", () => {
         onViewLogs={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Dependency graph" }));
+    await user.click(screen.getByRole("button", { name: /^Explore / }));
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     expect(await within(graph).findByRole("button", { name: /^b.service/ })).toBeTruthy();
     expect(api.inspectSystemdUnit).not.toHaveBeenCalledWith(
@@ -287,5 +305,9 @@ describe("ServicesPane failed units view", () => {
     expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Close details" }));
     expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+    await user.click(within(graph).getByRole("button", { name: /^c.service/ }));
+    expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");
+    await user.click(screen.getByRole("button", { name: "Explore c.service" }));
+    expect(screen.getByTitle("Refocus on current unit").textContent).toBe("c.service");
   });
 });

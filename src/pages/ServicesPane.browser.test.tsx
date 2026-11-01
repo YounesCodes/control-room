@@ -151,7 +151,7 @@ it("slides relationship controls and filter panels out without leaving focusable
   await page.viewport(1280, 800);
   renderPane();
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  await page.getByRole("button", { name: /^Explore /, exact: true }).click();
   const group = screen.getByRole("group", { name: "Relationship category" });
   expect(getComputedStyle(group).animationName).toBe(reduced ? "none" : "systemd-controls-in");
   await page.getByRole("button", { name: "Explorer", exact: true }).click();
@@ -167,7 +167,7 @@ it("slides relationship controls and filter panels out without leaving focusable
   if (!reduced) expect(panel.parentElement?.hasAttribute("inert")).toBe(true);
   await waitFor(() => expect(document.querySelectorAll("[data-leaving]")).toHaveLength(0));
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  expect(screen.getAllByRole("button", { name: /graph/i })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: /^Explore / })).toHaveLength(1);
 });
 
 it.each([1, 1000])(
@@ -223,7 +223,14 @@ it("opens graph without an inspector, separates categories and keeps selection a
   renderPane();
   await page.getByRole("button", { name: /database.service Database/ }).click();
   expect(screen.getByRole("heading", { name: "database.service" })).toBeTruthy();
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  await page.getByRole("button", { name: /database.service Database/ }).dblClick();
+  expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
+  await page.getByRole("button", { name: "Close details" }).click();
+  expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Explore database.service" }).textContent).toContain(
+    "database.service",
+  );
+  await page.getByRole("button", { name: /^Explore /, exact: true }).click();
   expect(screen.queryByRole("complementary")).toBeNull();
   expect(screen.getByTitle("Refocus on current unit").textContent).toBe("database.service");
   expect(screen.getByRole("button", { name: "Dependencies" }).getAttribute("aria-pressed")).toBe(
@@ -238,7 +245,7 @@ it("opens graph without an inspector, separates categories and keeps selection a
     screen.getByRole("button", { name: /database.service Database/ }).getAttribute("aria-pressed"),
   ).toBe("true");
   expect(screen.queryByRole("complementary")).toBeNull();
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  await page.getByRole("button", { name: /^Explore /, exact: true }).click();
   expect(screen.getByRole("button", { name: "Ordering" }).getAttribute("aria-pressed")).toBe(
     "true",
   );
@@ -247,7 +254,7 @@ it("opens graph without an inspector, separates categories and keeps selection a
 it("supports focused expansion, camera controls, pointer refocusing and focus return", async () => {
   await page.viewport(1280, 800);
   renderPane();
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  await page.getByRole("button", { name: /^Explore /, exact: true }).click();
   const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
   await waitFor(() =>
     expect(within(graph).getByRole("button", { name: /^database.service/ })).toBeTruthy(),
@@ -395,7 +402,7 @@ it.each([360, 960, 1400])(
       );
     }
     await page.viewport(width, 800);
-    await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+    await page.getByRole("button", { name: /^Explore /, exact: true }).click();
     await waitFor(() =>
       expect(document.querySelectorAll(".systemd-graph-node").length).toBeGreaterThan(1),
     );

@@ -12,13 +12,11 @@ export function SystemdInventory({
   units,
   selectedId,
   onSelect,
-  onExplore,
   emptyTitle,
 }: {
   units: SystemdUnit[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onExplore: (id: string) => void;
   emptyTitle: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -115,7 +113,6 @@ export function SystemdInventory({
           aria-pressed={unit.id === selectedId}
           title={unit.id + "\n" + unit.description}
           onClick={() => onSelect(unit.id)}
-          onDoubleClick={() => onExplore(unit.id)}
         >
           <span className="row-main">
             <strong>{unit.id}</strong>
