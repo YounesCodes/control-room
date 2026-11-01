@@ -127,6 +127,7 @@ import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
+import { navigateSystemdExplorer } from "./lib/systemd-units";
 import { SettingsPane } from "./pages/SettingsPane";
 import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
@@ -240,6 +241,18 @@ export function App() {
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [systemdPortFocus, setSystemdPortFocus] = useState<{
+    workspaceId: string;
+    unit: string;
+  } | null>(null);
+  useEffect(() => {
+    if (
+      systemdPortFocus &&
+      workspaces.find((workspace) => workspace.id === systemdPortFocus.workspaceId)?.view !==
+        "ports"
+    )
+      setSystemdPortFocus(null);
+  }, [workspaces, systemdPortFocus]);
   const [portFocus, setPortFocus] = useState<
     (PublishedPortSelection & { workspaceId: string }) | null
   >(null);
@@ -1015,6 +1028,20 @@ export function App() {
 
   function openLogs(id: string, logSource: LogSourceSelection) {
     updateRemoteWorkspace(id, { view: "logs", logSource });
+  }
+
+  function openSystemd(id: string, unit: string) {
+    const workspace = workspaces.find((item) => item.id === id);
+    if (!workspace || !isRemoteWorkspace(workspace)) return;
+    updateRemoteWorkspace(id, {
+      view: "services",
+      systemdSelectionId: unit,
+      systemdExplorer: navigateSystemdExplorer(
+        workspace.systemdExplorer,
+        workspace.systemdSelectionId,
+        unit,
+      ),
+    });
   }
 
   function splitWithNewWorkspace(workspace: Workspace) {
@@ -2555,10 +2582,29 @@ export function App() {
                         }
                         onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
                         focusId={activeRemoteWorkspace.systemdSelectionId}
+                        initialState={activeRemoteWorkspace.systemdExplorer}
+                        onStateChange={(systemdExplorer) =>
+                          updateRemoteWorkspace(activeRemoteWorkspace.id, { systemdExplorer })
+                        }
+                        onSelectionChange={(systemdSelectionId) =>
+                          updateRemoteWorkspace(activeRemoteWorkspace.id, { systemdSelectionId })
+                        }
+                        onOpenPorts={(unit) => {
+                          setSystemdPortFocus({ workspaceId: activeRemoteWorkspace.id, unit });
+                          updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
+                        }}
+                        onOpenBoot={() =>
+                          updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "boot" })
+                        }
                       />
                     ))}
                   {activeRemoteWorkspace.view === "ports" && (
                     <PortsPane
+                      focusUnit={
+                        systemdPortFocus?.workspaceId === activeRemoteWorkspace.id
+                          ? systemdPortFocus.unit
+                          : undefined
+                      }
                       focusEndpoint={
                         portFocus?.workspaceId === activeRemoteWorkspace.id ? portFocus : undefined
                       }
@@ -2572,12 +2618,7 @@ export function App() {
                       onContainersCacheChange={(cache) =>
                         updateContainersCache(activeRemoteWorkspace.id, cache)
                       }
-                      onOpenSystemd={(systemdSelectionId) =>
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
-                          view: "services",
-                          systemdSelectionId,
-                        })
-                      }
+                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
                       onOpenContainer={(containerSelectionId) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, {
                           view: "docker",
@@ -2611,6 +2652,7 @@ export function App() {
                   )}
                   {activeRemoteWorkspace.view === "boot" && (
                     <BootDiagnosticsPane
+                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       snapshot={activeRemoteWorkspace.bootDiagnostics}

@@ -3986,6 +3986,390 @@ dd {
   font-size: 11px;
 }
 
+.systemd-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.systemd-heading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.systemd-heading h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.systemd-summary {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.systemd-summary button,
+.systemd-relation {
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  background: transparent;
+}
+.systemd-summary button.failed-count {
+  color: var(--failure);
+}
+.systemd-summary button:hover,
+.systemd-relation:hover {
+  background: var(--fill-hover);
+}
+.systemd-summary button[aria-pressed="true"],
+.systemd-relation[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  background: var(--fill-active);
+  color: var(--text);
+}
+.systemd-summary > span {
+  font-size: 11px;
+  color: var(--text-faint);
+  align-self: center;
+}
+.systemd-view-switch {
+  display: flex;
+  gap: 3px;
+}
+.systemd-view-switch [aria-pressed="true"] {
+  background: var(--fill-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.systemd-page > .inline-warning {
+  flex: none;
+  margin: 0;
+  padding: 8px 18px;
+}
+.systemd-inventory.resizable-split {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.systemd-inventory .list-panel {
+  padding: 12px;
+}
+.systemd-inventory-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.systemd-inventory-toolbar select {
+  margin-left: auto;
+  width: auto;
+  min-height: 28px;
+  padding: 2px 30px 2px 8px;
+  font-size: 11px;
+}
+.systemd-inventory .dense-row {
+  min-height: 52px;
+}
+.systemd-virtual-list .dense-row {
+  height: 52px;
+}
+.systemd-virtual-list .row-main small,
+.systemd-virtual-list .row-main strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.systemd-inventory-detail {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.systemd-inventory-detail > header {
+  flex: none;
+  padding: 16px 48px 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.systemd-inventory-detail > header h2 {
+  margin: 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.systemd-inventory-detail > header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.systemd-inventory-detail > .detail-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.systemd-focus-action {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+}
+.systemd-evidence {
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.65;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.systemd-evidence-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+.systemd-related {
+  display: grid;
+  gap: 4px;
+}
+.systemd-related-unit {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  padding: 7px 4px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 11px;
+}
+.systemd-related-unit:hover {
+  background: var(--fill-hover);
+}
+.systemd-related-unit span {
+  color: var(--text-muted);
+}
+.systemd-related-unit strong {
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.systemd-graph-tools {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 4px;
+}
+.systemd-root-label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 45%;
+  overflow-wrap: anywhere;
+  background: transparent;
+  font-size: 12px;
+}
+.systemd-graph-tools .search-field {
+  min-width: 130px;
+  flex: 1;
+  max-width: 280px;
+  padding: 6px 8px;
+}
+.systemd-relationship-filters {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 4px 14px 10px;
+}
+.systemd-relationship-filters > span {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.systemd-relation::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  border-top: 2px solid currentColor;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.systemd-relation.relationship-wants::before {
+  border-top-style: dashed;
+}
+.systemd-relation.relationship-after::before {
+  border-top-style: dotted;
+}
+.systemd-relation.relationship-before::before {
+  border-top: 3px double currentColor;
+}
+.systemd-relation.relationship-triggers::before {
+  border-top-width: 3px;
+}
+.systemd-relation[aria-pressed="false"] {
+  opacity: 0.6;
+}
+.systemd-graph-stage {
+  position: relative;
+  flex: 1;
+  min-height: 200px;
+}
+.systemd-graph-content {
+  position: absolute;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.systemd-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--text-faint);
+}
+.systemd-edge > path {
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+}
+.systemd-edge.relationship-wants > path {
+  stroke-dasharray: 7 4;
+}
+.systemd-edge.relationship-after > path {
+  stroke-dasharray: 2 4;
+}
+.systemd-edge.relationship-before > path {
+  stroke-dasharray: 9 3 2 3;
+}
+.systemd-edge.relationship-triggers > path {
+  stroke-width: 2.5;
+}
+.systemd-edge text {
+  fill: var(--text-muted);
+  paint-order: stroke;
+  stroke: var(--surface-sunken);
+  stroke-width: 4px;
+  font-size: 10px;
+}
+.systemd-graph-node {
+  position: absolute;
+  animation: systemd-node-in var(--motion-normal) var(--ease) both;
+  transition:
+    left var(--motion-slow) var(--ease),
+    top var(--motion-slow) var(--ease);
+}
+.systemd-graph-node > .arch-chip {
+  width: 100%;
+  height: 100%;
+  padding-right: 34px;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-overlay);
+}
+.systemd-graph-node.graph-root > .arch-chip {
+  border-width: 2px;
+}
+.systemd-graph-node .arch-chip-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.systemd-graph-node .arch-chip-kind {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.systemd-expand {
+  position: absolute;
+  right: 5px;
+  top: 23px;
+}
+.systemd-graph-status {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  background: var(--surface-overlay);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+.systemd-graph-notice {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.systemd-port-scope {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+@keyframes systemd-node-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .systemd-graph-node {
+    animation: none;
+    transition: none;
+  }
+}
+@container (max-width: 565px) {
+  .systemd-heading {
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .systemd-summary {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .systemd-view-switch {
+    margin-left: auto;
+  }
+  .systemd-inventory.resizable-split.stacked {
+    grid-template-rows: minmax(260px, 1fr) minmax(280px, 1fr);
+  }
+  .systemd-inventory.stacked .list-panel {
+    min-height: 0;
+  }
+  .systemd-root-label {
+    max-width: 100%;
+  }
+  .systemd-canvas.inspecting .graph-toolbar {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 .unit-scope-note {
   display: block;
   margin-top: 3px;

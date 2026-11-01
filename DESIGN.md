@@ -229,6 +229,30 @@ the same generic fallback for unknown images. Docker and Ports inspector section
 share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
 behavior and show section content immediately when reduced motion is requested.
 
+Systemd starts with a dense, sortable unit inventory. Failed counts and rows use
+failure color; inactive and disabled units remain neutral. State summaries filter
+the inventory. Preserve the selected identity through refreshes and show a reveal
+action when filters hide it. Large inventories render only the visible rows while
+retaining keyboard access to every unit.
+
+The dependency view uses the shared graph controls, pan/zoom camera behavior, and
+closable inspector. Its links represent systemd evidence rather than host grouping.
+Requires and Wants are requirement relationships; After and Before only constrain
+ordering. Pair line patterns with relationship labels and directed arrows. Include
+reported reverse and activation dependencies, without deriving links from unit
+names. Start at one unit and its neighbors; expand only on request and keep visible
+nodes bounded. Search retains paths to matches. Double-click or Shift+Enter refocuses
+the graph. Selection, filters, root, and expansion stay with the workspace during
+navigation. Changed SSH targets discard that context and use separate detail caches.
+
+Unit inspectors adapt to services, timers, sockets, and mounts. Prioritize execution
+results and dependencies for failed units. Journal, unit files, and full effective
+properties load when opened, with separate unavailable and truncated states. Keep
+file contents distinct from the manager's effective properties. Reuse inspector
+disclosure motion and fixed actions. Reduced motion removes camera, node, and
+disclosure animation. Ports navigation uses explicit unit evidence; current Boot
+unit rows link back to Systemd without attributing a cause.
+
 ## Visual language
 
 ### Color and surfaces

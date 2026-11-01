@@ -5,18 +5,36 @@ description: Find services and other systemd units on a Linux host.
 
 import servicesScreenshot from "../../../assets/screenshots/services.png";
 
-Systemd lists the host's system services, timers, mounts, and sockets. Failed units appear first. Select one to see its current state or open its journal in Logs.
+Systemd lists the host's loaded system services, timers, mounts, and sockets. Failed units appear first. Select a count to filter by state, or use search, type filters, and sorting. Inactive and disabled units are not failures. The counts describe the collected system scope, not overall host health.
 
 <figure class="docs-screenshot">
   <a href={servicesScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={servicesScreenshot.src}
-      alt="The Control Room Systemd view with failed units first and a selected service detail panel."
+      alt="The Systemd inventory with a failed queue worker selected, its exit status, and related dependencies."
     />
   </a>
-  <figcaption>A selected systemd unit and its state. Example data shown.</figcaption>
+  <figcaption>Failure evidence for a selected unit. Example data shown.</figcaption>
 </figure>
 
-Use search or filter by state and type to find a unit. The view reads system units with `systemctl`; it does not include user units or change service state. If the read fails, the view shows the error and a **Retry** button.
+The inspector adapts to the unit type. Services show execution results, exit status or signal, restart policy and count, uptime, and available resource counters. Timers show schedules and triggers; sockets show listening endpoints and activation evidence; mounts show their source, destination, filesystem, and options. Missing or unsupported values appear as **Unavailable**.
+
+Expand **Configuration** for the unit-file path, drop-ins, and files on disk. **Effective properties** reads the manager's current properties. These can differ from files awaiting a daemon reload. Both reads are on demand and read-only.
+
+## Explore dependencies
+
+Choose **Dependency graph** or **Explore dependencies** to focus on the selected unit and its immediate neighbors. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to restore the full diagram. Select a node for its inspector. Double-click it, or press **Shift+Enter** on a focused node, to refocus the graph. Use each node's **Expand** button to read another neighborhood.
+
+The relationship buttons filter **Requires**, **Wants**, **After**, **Before**, and **Triggers**. Arrows point from the source unit to the named target. Requires and Wants pull in units; After and Before are ordering constraints. Reverse dependencies come from systemd's reported properties. Unit names alone never establish a relationship. Graph search retains the path to matching nodes. The graph shows at most 60 units and allows 24 expanded neighborhoods; narrow the search or refocus to continue.
+
+## Investigate a failure
+
+Select the failed count, then a unit. **Failure evidence** shows the systemd result and recorded execution status. **Show failure journal** reads up to 40 recent entries visible to your SSH account. **View journal** opens the full Logs view for that unit. Journal entries and related units are evidence, not a diagnosis.
+
+Dependency rows open the related unit in the graph. **Ports** shows endpoints with an explicit link to the selected unit; its unit label returns to Systemd. **Boot** opens boot diagnostics, where current failed and slow units link back to Systemd. Selection, filters, and graph expansion survive navigation within the workspace and refreshes. A filtered selection offers a way to reveal it.
+
+Systemd reads system units with `systemctl` and `journalctl`; it does not include user units or change service state. Details and evidence show permission errors separately. Evidence reads are limited to 128 KiB, with truncation reported. Refresh retries failed reads and keeps saved evidence visible when available.
+
+## Windows services
 
 On Windows hosts, the navigation shows **Services**. Search or filter the service inventory by state, then select a service to see its name, status, startup mode, and process ID. **Refresh** reads it again. This view does not start or stop services or open Windows event logs.

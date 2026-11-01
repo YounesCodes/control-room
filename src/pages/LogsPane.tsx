@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
+import { isSystemdUnitName } from "../lib/systemd-units";
 import type {
   AppSettings,
   CachedList,
@@ -50,6 +51,11 @@ export function LogsPane({
     windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
   );
   const [sourceId, setSourceId] = useState(selectedSource?.id ?? "");
+  const explicitSystemdSource =
+    sourceType === "systemd" &&
+    selectedSource?.type === "systemd" &&
+    sourceId === selectedSource.id &&
+    isSystemdUnitName(sourceId);
   const [tail, setTail] = useState(settings.defaultLogTail);
   const [follow, setFollow] = useState(true);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("stopped");
@@ -186,12 +192,13 @@ export function LogsPane({
   }, [connection.id]);
 
   useEffect(() => {
+    if (explicitSystemdSource) return;
     const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
     const next = reconcileSelection(items, sourceId) ?? "";
     if (next === sourceId) return;
     setSourceId(next);
     onSourceChange(next ? { type: sourceType, id: next } : null);
-  }, [sourceType, sourceId, servicesCache.items, containersCache.items]);
+  }, [sourceType, sourceId, servicesCache.items, containersCache.items, explicitSystemdSource]);
 
   useEffect(() => {
     let listenerDisposed = false;
@@ -388,9 +395,9 @@ export function LogsPane({
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
   const sourceOptions = sourceCache.items;
   const controlsLocked = streamStatus !== "stopped";
-  if (sourceCache.loading && !sourceCache.items.length)
+  if (sourceCache.loading && !sourceCache.items.length && !explicitSystemdSource)
     return <LoadingState label="Finding available log sources…" />;
-  if (sourceCache.error && !sourceCache.items.length) {
+  if (sourceCache.error && !sourceCache.items.length && !explicitSystemdSource) {
     const dockerPermissionError =
       !windowsHost &&
       sourceType === "docker" &&
@@ -490,6 +497,9 @@ export function LogsPane({
             }}
             disabled={controlsLocked}
           >
+            {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
+              <option value={sourceId}>{sourceId}</option>
+            )}
             {sourceOptions.map((source) => (
               <option value={source.id} key={source.id}>
                 {"name" in source ? source.name : source.id}

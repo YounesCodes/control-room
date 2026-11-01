@@ -138,6 +138,44 @@ function renderPane(
 }
 
 describe("PortsPane", () => {
+  it("scopes Systemd navigation by exact unit evidence and returns to that unit", async () => {
+    const onOpenSystemd = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PortsPane
+        connection={connection}
+        capabilities={null}
+        globalSudoEnabled={false}
+        cache={{
+          ...sockets,
+          items: [
+            ...sockets.items,
+            {
+              ...sockets.items[0],
+              id: "other",
+              port: 8080,
+              systemdUnit: "nginx-helper.service",
+              processId: 1001,
+            },
+          ],
+        }}
+        containersCache={{ ...containers, items: [] }}
+        onCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onOpenSystemd={onOpenSystemd}
+        onOpenContainer={vi.fn()}
+        onViewLogs={vi.fn()}
+        focusUnit="nginx.service"
+      />,
+    );
+    const graph = screen.getByRole("region", { name: "Ports graph" });
+    expect(within(graph).getByRole("button", { name: /443/ })).toBeTruthy();
+    expect(within(graph).queryByRole("button", { name: /8080/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "nginx.service" }));
+    expect(onOpenSystemd).toHaveBeenCalledWith("nginx.service");
+    await user.click(screen.getByRole("button", { name: "Clear unit filter" }));
+    expect(within(graph).getByRole("button", { name: /8080/ })).toBeTruthy();
+  });
   it.each(["ports", "docker"])(
     "uses a spinner while reading %s without graph data",
     async (source) => {

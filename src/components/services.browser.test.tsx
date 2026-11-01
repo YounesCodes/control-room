@@ -6,7 +6,22 @@ import { ServicesPane } from "../pages/ServicesPane";
 import * as fixtures from "../test/app-fixtures";
 import "../styles.css";
 
-vi.mock("../lib/api", () => ({ api: { listServices: vi.fn() }, errorMessage: String }));
+vi.mock("../lib/api", () => ({
+  api: {
+    listServices: vi.fn(),
+    inspectSystemdUnit: vi.fn().mockImplementation((_connection, id) =>
+      Promise.resolve({
+        id,
+        properties: {},
+        text: "",
+        warnings: [],
+        truncated: false,
+        collectedAt: "2026-11-01T10:00:00Z",
+      }),
+    ),
+  },
+  errorMessage: String,
+}));
 let root: Root;
 let host: HTMLDivElement;
 afterEach(() => {
