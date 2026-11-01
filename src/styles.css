@@ -4189,10 +4189,11 @@ dd {
   max-width: 100%;
   padding: 5px 9px;
   border-bottom-color: transparent;
+  border-radius: var(--radius-lg);
 }
 .systemd-inventory .selected-row {
-  outline: 1px solid var(--text);
-  outline-offset: -1px;
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
 }
 .systemd-inventory .selected-row::before {
   content: none;
