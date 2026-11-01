@@ -107,18 +107,6 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await terminalCommand("printf 'RECONNECTED_OK\\n'", "RECONNECTED_OK");
     expect((await runtime()).sessionIds[0]).not.toBe(old);
   });
-  it("reads Overview identity and capabilities without duplicate resource readings", async () => {
-    await connect();
-    await feature("Overview");
-    await expect($(".overview-page")).toHaveText(expect.stringContaining("Ubuntu"));
-    await expect($(".overview-page")).toHaveText(expect.stringMatching(/running services/i));
-    await expect($(".overview-page")).not.toHaveText(expect.stringMatching(/live load/i));
-    await expect($(".overview-page")).not.toHaveText(expect.stringMatching(/uptime/i));
-    await expect($(".overview-page")).not.toHaveText(expect.stringMatching(/memory/i));
-    await expect($("button=Pause")).not.toExist();
-    await $("button=Refresh").click();
-    await expect($("h2=Overview")).toBeDisplayed();
-  });
   it("discovers Systemd units and selects a real unit", async () => {
     const { saved } = await connect();
     const units = await ipc<SystemdUnit[]>("list_services", { connectionId: saved.id });
@@ -210,7 +198,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     }
     await $("button=Pause").click();
     await $("button=Resume").click();
-    await feature("Overview");
+    await feature("Terminal");
     await browser.waitUntil(async () => (await runtime()).streamIds.length === 0);
   });
   it("discovers Docker containers and follows real container details to Logs", async function () {
@@ -245,7 +233,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
         (await $(".logs-page [role=status]").getText()).includes("stopped"),
     );
     expect(await $(".inline-error").isExisting()).toBe(false);
-    await feature("Overview");
+    await feature("Terminal");
     await browser.waitUntil(async () => (await runtime()).streamIds.length === 0);
   });
   it("persists baselines locally and compares stored and live state", async () => {

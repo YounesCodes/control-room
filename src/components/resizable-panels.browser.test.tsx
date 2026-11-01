@@ -12,7 +12,25 @@ import {
   ResizableSplit,
   SidebarSections,
 } from "./ResizablePanels";
-import { OverviewPane } from "../pages/OverviewPane";
+function TestContent() {
+  return (
+    <section
+      className="feature-page test-content"
+      tabIndex={0}
+      style={{ overflow: "auto", padding: 20 }}
+    >
+      <h2>Example</h2>
+      <dl className="definition-grid" style={{ gridTemplateColumns: "minmax(0,1fr)" }}>
+        {Array.from({ length: 30 }, (_, i) => (
+          <div key={i}>
+            <dt>Fact {i}</dt>
+            <dd style={{ overflowWrap: "anywhere" }}>{capabilities().hostname}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 import { DockerPane } from "../pages/DockerPane";
 import { PortsPane } from "../pages/PortsPane";
 import { clampPanelSize, type PanelSizes } from "../lib/panel-layout";
@@ -158,7 +176,7 @@ afterEach(() => {
 
 function Fixture() {
   const [sizes, setSizes] = useState<PanelSizes>({});
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState("example");
   const [remote, setRemote] = useState(true);
   const setSize = (key: string, size: number | null) =>
     setSizes((current) => {
@@ -193,7 +211,7 @@ function Fixture() {
                 <div className="workspace-navigation">
                   <nav className="feature-nav" aria-label="Workspace features">
                     {[
-                      "overview",
+                      "example",
                       "docker",
                       "split",
                       "ports",
@@ -232,7 +250,7 @@ function Fixture() {
         <main className="workspace-shell">
           <div className="workspace-content">
             <ConnectionSection section={section}>
-              {section === "overview" && <OverviewPane connection={connection} />}
+              {section === "example" && <TestContent />}
               {section === "split" && (
                 <ResizableSplit name="Example" className="feature-page split-page">
                   <div className="list-panel">Example list</div>
@@ -293,10 +311,8 @@ describe("resizable connection panels in Chromium", () => {
   it("keeps the content scrollbar clear of the content resize handle", async () => {
     await page.viewport(960, 640);
     mount();
-    await expect
-      .element(page.getByRole("heading", { name: "Overview", exact: true }))
-      .toBeVisible();
-    const section = document.querySelector<HTMLElement>(".overview-page")!;
+    await expect.element(page.getByRole("heading", { name: "Example", exact: true })).toBeVisible();
+    const section = document.querySelector<HTMLElement>(".test-content")!;
     await vi.waitFor(() => expect(section.scrollHeight).toBeGreaterThan(section.clientHeight));
     const bounds = section.getBoundingClientRect();
     expect(document.elementFromPoint(bounds.right - 5, bounds.top + 50)).toBe(section);
@@ -494,13 +510,11 @@ describe("resizable connection panels in Chromium", () => {
     );
   });
 
-  it("resizes Overview content and reflows long host facts without horizontal overflow", async () => {
+  it("resizes Example content and reflows long host facts without horizontal overflow", async () => {
     await page.viewport(1280, 900);
     mount();
-    const divider = page.getByRole("separator", { name: "Resize Overview content" });
-    await expect
-      .element(page.getByRole("heading", { name: "Overview", exact: true }))
-      .toBeVisible();
+    const divider = page.getByRole("separator", { name: "Resize Example content" });
+    await expect.element(page.getByRole("heading", { name: "Example", exact: true })).toBeVisible();
     await userEvent.dragAndDrop(divider, page.getByRole("main"), {
       targetPosition: { x: 500, y: 100 },
     });
@@ -510,7 +524,7 @@ describe("resizable connection panels in Chromium", () => {
     await divider.click();
     await userEvent.keyboard("{Home}");
     await expect.element(divider).toHaveAttribute("aria-valuenow", "360");
-    assertNoHorizontalOverflow(".overview-page, .definition-grid, .capability-row");
+    assertNoHorizontalOverflow(".test-content, .definition-grid, .capability-row");
     const rows = document.querySelectorAll(".definition-grid > div");
     expect(rows[1].getBoundingClientRect().top).toBeGreaterThan(
       rows[0].getBoundingClientRect().bottom - 1,
@@ -564,7 +578,7 @@ describe("resizable connection panels in Chromium", () => {
     assertNoHorizontalOverflow(".list-panel, .detail-panel");
     await userEvent.dblClick(content);
     await expect.element(split).toHaveAttribute("aria-valuenow", chosen!);
-    await page.getByRole("button", { name: "Open overview" }).click();
+    await page.getByRole("button", { name: "Open example" }).click();
     await page.getByRole("button", { name: "Open split" }).click();
     await expect.element(split).toHaveAttribute("aria-valuenow", chosen!);
   });

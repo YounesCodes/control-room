@@ -63,7 +63,6 @@ export default defineConfig({
           label: "Host inspection",
           collapsed: false,
           items: [
-            { label: "Overview", slug: "inspection/overview" },
             { label: "Systemd", slug: "inspection/services" },
             { label: "Ports", slug: "inspection/ports" },
             { label: "Docker", slug: "inspection/docker" },

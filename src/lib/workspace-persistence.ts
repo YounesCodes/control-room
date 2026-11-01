@@ -27,7 +27,7 @@ export function restoreWorkspaceState(
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
   const shellsById = new Map(localShells.map((shell) => [shell.id, shell]));
   const workspaces = state.workspaces.flatMap<Workspace>((saved) => {
-    const view = saved.view === "scratchpad" ? "terminal" : saved.view;
+    const view = saved.view === "scratchpad" || saved.view === "overview" ? "terminal" : saved.view;
     const reconnecting = {
       id: saved.id,
       label: saved.label,
@@ -56,8 +56,7 @@ export function restoreWorkspaceState(
         ...createRemoteWorkspace(connection, saved.remoteShell),
         ...reconnecting,
         view:
-          saved.remoteShell &&
-          !["overview", "terminal", "services", "ports", "docker", "logs"].includes(view)
+          saved.remoteShell && !["terminal", "services", "ports", "docker", "logs"].includes(view)
             ? "terminal"
             : view,
         historyPaused: saved.historyPaused,

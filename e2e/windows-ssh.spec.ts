@@ -46,8 +46,6 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
       connectionId: saved.id,
     });
     expect(capabilities.osId).toBe("windows");
-    await feature("Overview");
-    await expect($(".overview-page")).toHaveText(expect.stringContaining("Windows"));
     await expect($(".feature-nav").$("button=Systemd")).not.toExist();
     await expect($(".feature-nav").$("button=Ports")).toExist();
   });

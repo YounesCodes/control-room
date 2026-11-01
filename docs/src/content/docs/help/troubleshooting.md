@@ -7,7 +7,7 @@ description: Fix common SSH, inspection, Docker, and local shell problems.
 
 **A view needs permission.** Some Docker, port, firewall, and boot reads need more access. Allow passwordless sudo for that host or use the one-time retry offered by the view. The view marks missing information instead of showing it as zero.
 
-**Docker is unavailable.** Check Docker in Overview. The daemon may be missing or your account may lack access. Containers with incomplete Compose labels appear under **Ungrouped**.
+**Docker is unavailable.** Open Docker to read the failure reason. The daemon may be missing or your account may lack access. Containers with incomplete Compose labels appear under **Ungrouped**.
 
 **A local shell is missing.** Install the shell, then check **Settings → Local terminal**. Use **Show all** if you hid it earlier. Git Bash means Git for Windows, not the Windows WSL launcher.
 

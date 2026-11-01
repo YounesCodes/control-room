@@ -3185,7 +3185,6 @@ code,
   background: var(--app-bg);
 }
 
-.overview-page,
 .history-page,
 .logs-page,
 .boot-page {
@@ -3351,11 +3350,6 @@ code,
   font-size: 11px;
 }
 
-.overview-content {
-  width: 100%;
-  max-width: 980px;
-}
-
 .page-heading {
   display: flex;
   align-items: flex-start;
@@ -3424,12 +3418,8 @@ dd {
 }
 
 /* ==========================================================================
-   Overview dashboard
+   Boot summary
    ========================================================================== */
-
-.overview-heading {
-  align-items: center;
-}
 
 .overview-stats {
   display: grid;
@@ -3439,10 +3429,6 @@ dd {
   background: var(--surface-raised);
   margin-bottom: 26px;
   overflow: hidden;
-}
-
-.overview-counts {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .overview-stat {
@@ -3477,23 +3463,6 @@ dd {
 .overview-stat-hint {
   color: var(--text-faint);
   font-size: 11px;
-}
-
-.overview-section {
-  margin-top: 24px;
-}
-
-.overview-section-title {
-  margin: 0 0 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.overview-section .definition-grid {
-  border-top: 0;
 }
 
 .capability-list {
@@ -6087,7 +6056,6 @@ kbd {
     grid-template-columns: minmax(300px, 50%) minmax(240px, 1fr);
   }
 
-  .overview-page,
   .history-page,
   .logs-page {
     padding: 22px;
@@ -7127,11 +7095,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   overflow-wrap: anywhere;
 }
 
-.overview-content,
-.overview-page .definition-grid {
-  max-width: none;
-}
-
 .page-heading > div {
   min-width: 0;
 }
@@ -7141,19 +7104,10 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 @container (max-width: 720px) {
-  .overview-page,
   .history-page,
   .logs-page,
   .boot-page {
     padding: 20px;
-  }
-
-  .overview-page .definition-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .overview-page .definition-grid > div:nth-child(odd) {
-    margin-right: 0;
   }
 
   .port-list-controls {

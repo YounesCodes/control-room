@@ -532,15 +532,7 @@ export interface LocalShellCatalog {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  | "overview"
-  | "terminal"
-  | "services"
-  | "ports"
-  | "docker"
-  | "boot"
-  | "logs"
-  | "baselines"
-  | "history";
+  "terminal" | "services" | "ports" | "docker" | "boot" | "logs" | "baselines" | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -617,7 +609,7 @@ interface PersistedWorkspace {
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
   /** Older app versions persisted the standalone Scratchpad page. */
-  view: WorkspaceView | "scratchpad";
+  view: WorkspaceView | "scratchpad" | "overview";
   historyPaused: boolean;
 }
 

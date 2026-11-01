@@ -25,6 +25,7 @@ Find nearby tests and existing implementation before changing a feature contract
 - Do not create additional `.md` file unless explicitly asked to.
 - Always work in a dedicated branch unless explicitly asked not to.
 - After completing and validating the task, commit and push all task-related changes to that branch, then open a PR against main.
+- For releases, create a GitHub draft release for the next `vX.Y.Z` tag and write its release notes in the draft body before pushing the tag. Keep the release as a draft. The tag workflow builds the app, copies the GitHub body into `latest.json`, verifies that the notes match, and publishes the release. Release notes do not need a file or commit in this repository.
 - Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
 - Make the best decision that will elevate all three: the user experience (UX), developer experience (DX), and agent experience (AX) always, without breaking anything.
 

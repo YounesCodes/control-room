@@ -35,7 +35,6 @@ import {
   Copy,
   FileClock,
   FolderCog,
-  Gauge,
   History,
   BookOpen,
   Maximize2,
@@ -126,7 +125,6 @@ import { DockerPane } from "./pages/DockerPane";
 import { BootDiagnosticsPane } from "./pages/BootDiagnosticsPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
-import { OverviewPane } from "./pages/OverviewPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { SettingsPane } from "./pages/SettingsPane";
@@ -181,7 +179,6 @@ const navigation: {
   label: string;
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }[] = [
-  { id: "overview", label: "Overview", icon: Gauge },
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
   { id: "services", label: "Systemd", icon: Server },
   { id: "ports", label: "Ports", icon: Network },
@@ -506,9 +503,7 @@ export function App() {
       ? navigation.filter((item) => item.id === "terminal")
       : windowsWorkspace
         ? navigation
-            .filter((item) =>
-              ["overview", "terminal", "services", "ports", "docker", "logs"].includes(item.id),
-            )
+            .filter((item) => ["terminal", "services", "ports", "docker", "logs"].includes(item.id))
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
         : navigation;
   const activeSavedConnection = activeRemoteWorkspace
@@ -2542,13 +2537,6 @@ export function App() {
                   section={activeRemoteWorkspace.view}
                   layout={panelLayout}
                 >
-                  {activeRemoteWorkspace.view === "overview" && (
-                    <OverviewPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      onCapabilitiesChange={rememberCapabilities}
-                    />
-                  )}
                   {activeRemoteWorkspace.view === "services" &&
                     (windowsWorkspace ? (
                       <Suspense fallback={<LoadingState label="Loading Windows services..." />}>

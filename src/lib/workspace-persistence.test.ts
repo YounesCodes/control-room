@@ -78,7 +78,18 @@ describe("Workspace restoration", () => {
       state.terminalGroups,
     );
   });
-  it.each(["overview", "services", "ports", "docker", "logs"] as const)(
+  it.each(["overview", "scratchpad"] as const)(
+    "restores retired %s selections to Terminal",
+    (view) => {
+      const workspace = createRemoteWorkspace(connection("host"));
+      const saved = persistWorkspaceState([workspace], workspace.id, []);
+      saved.workspaces[0].view = view;
+      expect(restoreWorkspaceState([connection("host")], saved).workspaces[0].view).toBe(
+        "terminal",
+      );
+    },
+  );
+  it.each(["services", "ports", "docker", "logs"] as const)(
     "preserves the supported Windows %s view",
     (view) => {
       const workspace = createRemoteWorkspace(connection("windows-host"), {

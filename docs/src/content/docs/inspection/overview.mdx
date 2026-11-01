@@ -1,24 +1,6 @@
 ---
-title: Overview
-description: Check host identity and runtime capabilities.
+title: Host inspection
+description: Open focused host inspectors.
 ---
 
-import overviewScreenshot from "../../../assets/screenshots/overview.png";
-
-Overview shows the host name, operating system, kernel, architecture, shell, and whether systemd, journald, and Docker are available. It can also show service and container counts.
-
-<figure class="docs-screenshot">
-  <a href={overviewScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={overviewScreenshot.src}
-      alt="Control Room Overview showing host details, service and container counts, and capability rows."
-    />
-  </a>
-  <figcaption>Host details and runtime capabilities. Example data shown.</figcaption>
-</figure>
-
-Use **Refresh** to read host details again. Control Room keeps the last result locally and marks it stale after 24 hours.
-
-Windows Overview shows Windows identity, the running service count, and available inspection capabilities. Docker counts are unavailable when its daemon cannot be read.
-
-Resource readings appear in the optional header instead of Overview. Enable **Show host metrics in header** in Settings, then choose CPU, RAM, GPU, Disk I/O, or uptime and a refresh interval. Disk I/O shows read/write speeds. The header follows the active local or SSH workspace. Overview does not poll resource readings.
+Overview has been removed. Use **Terminal** for host commands, **Systemd** or **Services** for services, **Docker** for containers, and **Ports** for listeners. Optional header metrics remain available in Settings.
