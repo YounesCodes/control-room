@@ -229,35 +229,44 @@ the same generic fallback for unknown images. Docker and Ports inspector section
 share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
 behavior and show section content immediately when reduced motion is requested.
 
-Systemd starts with a dense, sortable unit inventory. Failed counts and rows use
-failure color; inactive and disabled units remain neutral. State summaries filter
-the inventory. Preserve the selected identity through refreshes and show a reveal
-action when filters hide it. Large inventories render only the visible rows while
-retaining keyboard access to every unit.
+Systemd starts with a compact unit inventory: name, description, and one meaningful
+state. Keep enablement and other metadata in the inspector. Show a failed count
+only when nonzero; keep other counts and collection time in the heading tooltip.
+Search, filtering, and sorting open from one toolbar. Failed rows use failure color;
+inactive and disabled units remain neutral. Preserve the selected identity through
+refreshes and show a reveal action when filters hide it. Large inventories render
+only the visible rows while retaining keyboard access to every unit.
 Keep the inventory vertical-only. Truncate long unit names and descriptions inside
 their row, with complete values available in the tooltip and inspector.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.
-Requires and Wants are requirement relationships; After and Before only constrain
-ordering. Pair line patterns with relationship labels and directed arrows.
-Group parallel links between the same two units in one connector with a separate
-label and direction for each relationship. Reserve space for these labels and route
-connectors outside both labels and cards. Keep arrowheads crisp and labels free of
-text outlines. Apply node and connector layout changes together so endpoints stay
-attached during expansion.
+Show one category at a time: Dependencies (Requires/Wants), Ordering (After/Before),
+or Activation (Triggers). Consolidate relationships with the same direction into
+one connector. Keep opposite requirements separate. Ordering arrows run from the
+earlier unit to the later unit, combining equivalent After/Before constraints.
+Hover or focus an edge for its inline label and exact reported evidence. Never use
+label boxes or relationship nodes. Pair line patterns with directed arrows, keep
+arrowheads crisp, and route connectors outside cards. Use consistent node sizes
+and deterministic columns, placing incoming units left and outgoing units right.
 
 Include reported reverse and activation dependencies, without deriving links from unit
-names. Start at one unit and its neighbors; expand only on request and keep visible
-nodes bounded. Search retains paths to matches. Double-click or Shift+Enter refocuses
+names. Start at one unit and up to six neighbors. Show more or expand a node on
+request, up to 25 visible units. Preserve existing positions and camera framing
+during expansion. Automatic framing keeps nodes readable at 85% or larger; explicit
+Fit to view can zoom out to the full diagram. Search retains paths to matches.
+Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during
 navigation. Changed SSH targets discard that context and use separate detail caches.
 
-Unit inspectors adapt to services, timers, sockets, and mounts. Prioritize execution
-results and dependencies for failed units. Journal, unit files, and full effective
-properties load when opened, with separate unavailable and truncated states. Keep
-file contents distinct from the manager's effective properties. Reuse inspector
-disclosure motion and fixed actions. Reduced motion removes camera, node, and
+Keep inspectors closed until selection. Use a compact, content-height panel with
+a separately scrolling body and fixed actions. Unit inspectors adapt to services,
+timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
+and failure results. Dependencies, Recent journal, and Advanced start collapsed.
+Put conditions, assertions, configuration, and effective properties under Advanced.
+Journal, unit files, and full effective properties load when opened, with separate
+unavailable and truncated states. Keep file contents distinct from the manager's
+effective properties. Reuse inspector disclosure motion. Reduced motion removes camera, node, and
 disclosure animation. Ports navigation uses explicit unit evidence; current Boot
 unit rows link back to Systemd without attributing a cause.
 

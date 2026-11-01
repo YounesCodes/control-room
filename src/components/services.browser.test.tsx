@@ -59,10 +59,12 @@ describe("Linux service scrolling with a refresh warning", () => {
       .toBeInTheDocument();
     const list = page.getByRole("region", { name: "Systemd units" });
     const rows = list.element();
-    expect(rows.clientHeight).toBeGreaterThanOrEqual(52);
+    expect(rows.clientHeight).toBeGreaterThanOrEqual(44);
     await userEvent.wheel(list, { delta: { y: 500 } });
     await vi.waitFor(() => expect(rows.scrollTop).toBeGreaterThan(0));
+    await page.getByRole("button", { name: "Find units", exact: true }).click();
     await expect.element(page.getByPlaceholder("Search units")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
     rows.focus();
     await userEvent.keyboard("{End}");
     await vi.waitFor(() =>

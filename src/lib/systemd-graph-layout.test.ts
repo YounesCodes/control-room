@@ -1,70 +1,78 @@
 import { describe, expect, it } from "vitest";
-import { layoutSystemdGraph } from "./systemd-graph-layout";
+import {
+  layoutSystemdGraph,
+  SYSTEMD_NODE_WIDTH,
+  SYSTEMD_NODE_HEIGHT,
+} from "./systemd-graph-layout";
 import { systemdEdges } from "./systemd-units";
 import { systemdInspection } from "../test/systemd-fixtures";
 
-describe("Systemd graph routing", () => {
-  it("preserves each reported direction when a pair has parallel and reverse relationships", () => {
-    const evidence = systemdEdges([
+describe("focused Systemd graph", () => {
+  it("consolidates one direction without hiding a reverse requirement", () => {
+    const edges = systemdEdges([
       systemdInspection("a.service", {
         Requires: "b.service",
-        After: "b.service",
+        Wants: "b.service",
         RequiredBy: "b.service",
       }),
     ]);
-    const layout = layoutSystemdGraph(["a.service", "b.service"], evidence, "a.service");
+    const layout = layoutSystemdGraph(["a.service", "b.service"], edges, "a.service");
+    expect(layout.connections).toHaveLength(2);
+    const forward = layout.connections.find((edge) => edge.source === "a.service")!;
+    expect(forward.label).toBe("Requires · Wants");
+    expect(forward.edges).toHaveLength(2);
+    expect(layout.connections.find((edge) => edge.source === "b.service")?.target).toBe(
+      "a.service",
+    );
+    expect(layout.connections[0].path).not.toBe(layout.connections[1].path);
+  });
+
+  it("draws After and its reverse Before as one ordering constraint, keeping the original evidence", () => {
+    const edges = systemdEdges([
+      systemdInspection("a.service", { After: "b.service" }),
+      systemdInspection("b.service", { Before: "a.service" }),
+    ]);
+    const layout = layoutSystemdGraph(["a.service", "b.service"], edges, "a.service");
     expect(layout.connections).toHaveLength(1);
-    expect(layout.connections[0].edges).toEqual(evidence);
-    expect(layout.connections[0].arrowLeft).toBe(true);
-    expect(layout.connections[0].arrowRight).toBe(true);
-    const reverseOnly = layoutSystemdGraph(["a.service", "b.service"], [evidence[1]], "a.service");
-    expect(reverseOnly.connections[0].arrowLeft).toBe(true);
-    expect(reverseOnly.connections[0].arrowRight).toBe(false);
+    expect(layout.connections[0]).toMatchObject({
+      source: "b.service",
+      target: "a.service",
+      label: "Before",
+      kind: "ordering",
+      edges,
+    });
+    expect(layout.positions.get("b.service")!.x).toBeLessThan(layout.positions.get("a.service")!.x);
   });
 
-  it("keeps cycle members in separate columns and reserves space for labels", () => {
-    const evidence = systemdEdges([
+  it("preserves existing relative positions while expanding, with consistent node sizes", () => {
+    const edges = systemdEdges([
       systemdInspection("a.service", { Requires: "b.service c.service" }),
-      systemdInspection("b.service", { After: "c.service", Wants: "a.service" }),
+      systemdInspection("b.service", { Wants: "d.service" }),
     ]);
-    const layout = layoutSystemdGraph(
-      ["a.service", "b.service", "c.service"],
-      evidence,
+    const first = layoutSystemdGraph(["a.service", "b.service", "c.service"], edges, "a.service");
+    const next = layoutSystemdGraph(
+      ["a.service", "b.service", "c.service", "d.service"],
+      edges,
       "a.service",
+      first.placements,
     );
-    expect(new Set([...layout.positions.values()].map((node) => node.x)).size).toBe(3);
-    expect(layout.connections.flatMap((connection) => connection.edges)).toHaveLength(
-      evidence.length,
-    );
-    for (const connection of layout.connections) {
-      const left = layout.positions.get(connection.left)!;
-      const right = layout.positions.get(connection.right)!;
-      expect(connection.badge.x).toBeGreaterThan(left.x + left.width);
-      expect(connection.badge.x + connection.badge.width).toBeLessThan(right.x);
-      expect(connection.badge.height).toBeGreaterThan(connection.edges.length * 20);
-    }
+    for (const id of first.placements.keys())
+      expect(next.placements.get(id)).toEqual(first.placements.get(id));
+    for (const node of next.positions.values())
+      expect([node.width, node.height]).toEqual([SYSTEMD_NODE_WIDTH, SYSTEMD_NODE_HEIGHT]);
+    expect(next.connections.flatMap((edge) => edge.edges)).toHaveLength(edges.length);
   });
 
-  it("balances large neighborhoods without merging distinct unit identities or clipping routes", () => {
-    const ids = [
-      "a.service",
-      ...Array.from({ length: 59 }, (_, index) => "neighbor-" + index + ".target"),
-    ];
-    const evidence = systemdEdges([
-      systemdInspection(ids[0], {
-        Requires: ids.slice(1).join(" "),
-        After: ids.slice(1).join(" "),
-      }),
+  it("keeps cycles out of the same column and gives identical evidence a deterministic layout", () => {
+    const edges = systemdEdges([
+      systemdInspection("a.service", { Requires: "b.service c.service" }),
+      systemdInspection("b.service", { Wants: "c.service a.service" }),
     ]);
-    const layout = layoutSystemdGraph(ids, evidence, ids[0]);
-    expect(layout.positions.size).toBe(60);
-    expect(layout.connections).toHaveLength(59);
-    const columns = new Map<number, number>();
-    for (const node of layout.positions.values()) {
-      columns.set(node.x, (columns.get(node.x) ?? 0) + 1);
-      expect(node.x + node.width).toBeLessThan(layout.width);
-      expect(node.y + node.height).toBeLessThan(layout.height);
-    }
-    expect(Math.max(...columns.values())).toBeLessThanOrEqual(8);
+    const ids = ["a.service", "b.service", "c.service"];
+    const first = layoutSystemdGraph(ids, edges, ids[0]);
+    const second = layoutSystemdGraph([...ids].reverse(), [...edges].reverse(), ids[0]);
+    for (const id of ids) expect(second.positions.get(id)).toEqual(first.positions.get(id));
+    for (const edge of first.connections)
+      expect(first.positions.get(edge.source)!.x).not.toBe(first.positions.get(edge.target)!.x);
   });
 });

@@ -56,8 +56,9 @@ it("shows service execution evidence, actual uptime and unavailable resource sen
   );
   expect(screen.getByText("Failure evidence")).toBeTruthy();
   expect(screen.getByText("exit-code")).toBeTruthy();
-  expect(screen.getByText("Exited")).toBeTruthy();
-  expect(screen.getByText("Not assigned")).toBeTruthy();
+  expect(screen.getByText("1")).toBeTruthy();
+  expect(screen.queryByText("Execution result")).toBeNull();
+  expect(screen.queryByText("Not assigned")).toBeNull();
   expect(screen.queryByText(/18446744073709551615/)).toBeNull();
   expect(api.inspectSystemdUnit).not.toHaveBeenCalled();
 });
@@ -82,7 +83,7 @@ it.each([
       TimersCalendar: "OnCalendar=daily",
       Unit: "backup.service",
     },
-    "OnCalendar=daily",
+    "backup.service",
   ],
   ["api.socket", { Listen: "[::]:8080 (Stream)", Triggers: "api.service" }, "[::]:8080 (Stream)"],
   [
@@ -105,6 +106,7 @@ it("loads configuration, effective properties and failure journal only when open
     }),
   );
   expect(api.inspectSystemdUnit).not.toHaveBeenCalled();
+  await user.click(screen.getByText("Advanced", { selector: "summary" }));
   await user.click(screen.getByText("Configuration", { selector: "summary" }));
   await waitFor(() =>
     expect(api.inspectSystemdUnit).toHaveBeenCalledWith("host", "worker.service", "configuration"),
@@ -117,11 +119,12 @@ it("loads configuration, effective properties and failure journal only when open
       "effectiveConfiguration",
     ),
   );
-  await user.click(screen.getByRole("button", { name: "Show failure journal" }));
+  await user.click(screen.getByText("Recent journal", { selector: "summary" }));
   expect(await screen.findByText("Process exited with status 1")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "View journal" }));
   expect(props.onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "worker.service" });
-  await user.click(screen.getByRole("button", { name: /Requires\s*database.service/ }));
+  await user.click(screen.getByText("Dependencies", { selector: "summary" }));
+  await user.click(screen.getByRole("button", { name: /database.service.*Requires/ }));
   expect(props.onNavigate).toHaveBeenCalledWith("database.service");
   await user.click(screen.getByRole("button", { name: "Ports" }));
   expect(props.onOpenPorts).toHaveBeenCalledWith("worker.service");

@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import axe from "axe-core";
 import { ServicesPane } from "./ServicesPane";
+import { useState } from "react";
 import { SystemdGraph } from "../components/SystemdGraph";
 import { systemdEdges } from "../lib/systemd-units";
 import { ConnectionSection } from "../components/ResizablePanels";
@@ -136,118 +137,171 @@ function camera() {
 }
 
 it.each([1, 1000])(
-  "keeps long unit names and descriptions inside the inventory with %s units",
+  "keeps long unit text inside a vertical inventory with %s units",
   async (count) => {
     await page.viewport(960, 800);
     renderPane(
       Array.from({ length: count }, (_, index) => ({
         ...units[1],
-        id:
-          "run-credentials-systemd" +
-          String.raw`\x2d` +
-          "resolved-".repeat(12) +
-          index +
-          ".service.mount",
+        id: "credentials-" + "systemd-resolved-".repeat(8) + index + ".mount",
         description: "A".repeat(600),
       })),
     );
     const list = screen.getByRole("region", { name: "Systemd units" });
-    if (count > 1) expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth + 1);
     list.scrollLeft = 1000;
     expect(list.scrollLeft).toBe(0);
+    const row = list.querySelector(".dense-row")!;
+    expect(row.getBoundingClientRect().height).toBe(44);
+    expect(row.textContent).not.toContain("enabled");
   },
 );
 
-it.each(["immediate", "cycle", "wrapped"])(
-  "separates parallel and reverse relationship labels and keeps %s routes clear",
-  async (scenario) => {
+it("keeps a large inventory bounded, keyboard navigable and searchable from the toolbar", async () => {
+  await page.viewport(1280, 800);
+  renderPane(
+    Array.from({ length: 4000 }, (_, index) => ({
+      ...units[1],
+      id: "unit-" + String(index).padStart(4, "0") + ".service",
+    })),
+  );
+  expect(document.querySelectorAll(".dense-row").length).toBeLessThan(50);
+  expect(screen.queryByRole("complementary")).toBeNull();
+  const list = screen.getByRole("region", { name: "Systemd units" });
+  list.focus();
+  await userEvent.keyboard("{End}");
+  await waitFor(() => expect(document.activeElement?.textContent).toContain("unit-3999.service"));
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByRole("heading", { name: "unit-3999.service" })).toBeTruthy();
+  await page.getByRole("button", { name: "Close details" }).click();
+  await page.getByRole("button", { name: "Find units", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search units", exact: true }).fill("unit-0010");
+  await expect
+    .element(page.getByRole("button", { name: /unit-0010.service Database/ }))
+    .toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("region", { name: "Find units" })).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find units" }));
+});
+
+it("opens graph without an inspector, separates categories and keeps selection across view changes", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  await page.getByRole("button", { name: /database.service Database/ }).click();
+  expect(screen.getByRole("heading", { name: "database.service" })).toBeTruthy();
+  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(screen.getByTitle("Refocus on current unit").textContent).toBe("database.service");
+  expect(screen.getByRole("button", { name: "Dependencies" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  await page.getByRole("button", { name: "Ordering", exact: true }).click();
+  expect(screen.getByRole("button", { name: "Ordering" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  await page.getByRole("button", { name: "Explorer", exact: true }).click();
+  expect(
+    screen.getByRole("button", { name: /database.service Database/ }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(screen.queryByRole("complementary")).toBeNull();
+  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  expect(screen.getByRole("button", { name: "Ordering" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+});
+
+it("supports focused expansion, camera controls, pointer refocusing and focus return", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+  const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+  await waitFor(() =>
+    expect(within(graph).getByRole("button", { name: /^database.service/ })).toBeTruthy(),
+  );
+  expect(document.querySelectorAll(".systemd-edge-badge, .systemd-edges rect")).toHaveLength(0);
+  expect(document.querySelectorAll(".systemd-edge-label")).toHaveLength(0);
+  const node = within(graph).getByRole("button", { name: /^database.service/ });
+  const before = node.getBoundingClientRect();
+  await page.getByRole("button", { name: "Expand database.service" }).click();
+  await waitFor(() =>
+    expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
+  );
+  const after = node.getBoundingClientRect();
+  expect(Math.abs(before.left - after.left)).toBeLessThan(1);
+  expect(Math.abs(before.top - after.top)).toBeLessThan(1);
+  const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
+  const initial = camera();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  expect(camera()).not.toBe(initial);
+  await page.getByRole("button", { name: "Fit to view" }).click();
+  const beforePan = camera();
+  await userEvent.dragAndDrop(viewport, viewport, {
+    sourcePosition: { x: 20, y: 80 },
+    targetPosition: { x: 75, y: 100 },
+  });
+  expect(camera()).not.toBe(beforePan);
+  node.focus();
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+  await userEvent.keyboard("{Escape}");
+  await waitFor(() => expect(document.activeElement?.textContent).toContain("database.service"));
+  await page.getByRole("button", { name: /^database.service/ }).dblClick();
+  expect(screen.getByTitle("Refocus on current unit").textContent).toBe("database.service");
+  expect(screen.queryByRole("complementary")).toBeNull();
+});
+
+function RoutingFixture({ cycle = false }: { cycle?: boolean }) {
+  const ids = ["a.service", "b.service", "c.service", "d.service"];
+  const edges = systemdEdges([
+    systemdInspection(ids[0], {
+      Requires: "b.service c.service",
+      Wants: "b.service",
+      RequiredBy: "d.service",
+    }),
+    ...(cycle ? [systemdInspection("b.service", { Wants: "c.service a.service" })] : []),
+  ]);
+  const [selected, setSelected] = useState<string | null>(null);
+  return (
+    <div style={{ position: "relative", width: "100%", height: 700 }}>
+      <SystemdGraph
+        ids={ids}
+        edges={edges}
+        units={units}
+        rootId={ids[0]}
+        selectedId={selected}
+        expanded={[]}
+        onSelect={setSelected}
+        onRefocus={() => setSelected(null)}
+        onExpand={vi.fn()}
+        inspector={
+          <header>
+            <h2>Selected</h2>
+          </header>
+        }
+      />
+    </div>
+  );
+}
+
+it.each([false, true])(
+  "routes consolidated edges outside unit cards with cycle=%s",
+  async (cycle) => {
     await page.viewport(1280, 800);
-    const root = "dev-mqueue.mount";
-    const ids =
-      scenario === "wrapped"
-        ? [root, ...Array.from({ length: 19 }, (_, index) => "neighbor-" + index + ".target")]
-        : [root, "-.slice", "-.mount", "sysinit.target", "systemd-journald.socket"];
-    const edges =
-      scenario === "wrapped"
-        ? systemdEdges([
-            systemdInspection(root, {
-              Requires: ids.slice(1).join(" "),
-              After: ids.slice(1).join(" "),
-            }),
-          ])
-        : systemdEdges([
-            systemdInspection(root, {
-              Requires: ids.slice(1).join(" "),
-              After: ids.slice(1).join(" "),
-              Before: "sysinit.target",
-              Wants: "sysinit.target",
-              RequiredBy: "sysinit.target",
-            }),
-            ...(scenario === "cycle"
-              ? [
-                  systemdInspection("-.slice", {
-                    Wants: "-.mount sysinit.target",
-                    Before: "systemd-journald.socket",
-                  }),
-                  systemdInspection("sysinit.target", { Requires: "-.mount" }),
-                ]
-              : []),
-          ]);
-    render(
-      <div style={{ position: "relative", width: "100%", height: 760 }}>
-        <SystemdGraph
-          ids={ids}
-          edges={edges}
-          units={[]}
-          rootId={root}
-          selectedId={null}
-          expanded={[]}
-          onSelect={vi.fn()}
-          onRefocus={vi.fn()}
-          onExpand={vi.fn()}
-          inspector={null}
-        />
-      </div>,
-    );
-    const labels = [...document.querySelectorAll<SVGGraphicsElement>(".systemd-edge text")];
-    expect(labels).toHaveLength(edges.length);
-    const overlaps: string[] = [];
-    const gap = 4 * labels[0].getScreenCTM()!.a;
-    for (let a = 0; a < labels.length; a++)
-      for (let b = a + 1; b < labels.length; b++) {
-        const first = labels[a].getBoundingClientRect();
-        const second = labels[b].getBoundingClientRect();
-        if (
-          first.left < second.right + gap &&
-          first.right + gap > second.left &&
-          first.top < second.bottom + gap &&
-          first.bottom + gap > second.top
-        )
-          overlaps.push(labels[a].textContent + " / " + labels[b].textContent);
-      }
-    expect(overlaps).toEqual([]);
-    const obstacles = [
-      ...[...document.querySelectorAll<SVGRectElement>(".systemd-edge-badge")].map((badge) => ({
-        x: badge.x.baseVal.value,
-        y: badge.y.baseVal.value,
-        width: badge.width.baseVal.value,
-        height: badge.height.baseVal.value,
-      })),
-      ...[...document.querySelectorAll<HTMLElement>(".systemd-graph-node")].map((node) => ({
+    render(<RoutingFixture cycle={cycle} />);
+    const boxes = [...document.querySelectorAll<HTMLElement>(".systemd-graph-node")].map(
+      (node) => ({
         x: node.offsetLeft,
         y: node.offsetTop,
         width: node.offsetWidth,
         height: node.offsetHeight,
-      })),
-    ];
+      }),
+    );
     const blocked: string[] = [];
-    for (const path of document.querySelectorAll<SVGPathElement>(".systemd-edge-path")) {
-      const length = path.getTotalLength();
-      for (let distance = 0; distance <= length; distance += 6) {
+    for (const path of document.querySelectorAll<SVGPathElement>(".systemd-edge-path"))
+      for (let distance = 0; distance <= path.getTotalLength(); distance += 6) {
         const point = path.getPointAtLength(distance);
         if (
-          obstacles.some(
+          boxes.some(
             (box) =>
               point.x > box.x &&
               point.x < box.x + box.width &&
@@ -259,105 +313,70 @@ it.each(["immediate", "cycle", "wrapped"])(
           break;
         }
       }
-    }
     expect(blocked).toEqual([]);
-    await page.screenshot({ path: "../../test-results/systemd-routing-" + scenario + ".png" });
+    expect(document.querySelectorAll(".systemd-edges rect")).toHaveLength(0);
+    const edge = screen
+      .getAllByRole("img")
+      .find((element) => element.getAttribute("aria-label")?.includes("Requires"))!;
+    edge.focus();
+    await waitFor(() => expect(document.querySelectorAll(".systemd-edge-label")).toHaveLength(1));
+    expect(edge.getAttribute("aria-label")).toContain("Requires");
+    await page.screenshot({ path: "../../test-results/systemd-focused-routing-" + cycle + ".png" });
   },
 );
 
-it("keeps a large inventory bounded and supports keyboard navigation to its last unit", async () => {
-  await page.viewport(1280, 800);
-  renderPane(
-    Array.from({ length: 4000 }, (_, index) => ({
-      ...units[1],
-      id: "unit-" + String(index).padStart(4, "0") + ".service",
-    })),
-  );
-  expect(document.querySelectorAll(".dense-row").length).toBeLessThan(50);
-  const list = screen.getByRole("region", { name: "Systemd units" });
-  list.focus();
-  await userEvent.keyboard("{End}");
-  await waitFor(() => expect(document.activeElement?.textContent).toContain("unit-3999.service"));
-  await userEvent.keyboard("{Enter}");
-  expect(screen.getByRole("heading", { name: "unit-3999.service" })).toBeTruthy();
-  expect(document.querySelectorAll(".dense-row").length).toBeLessThan(50);
-  await page.getByRole("textbox", { name: "Search units", exact: true }).fill("unit-0010");
-  await expect
-    .element(page.getByRole("button", { name: /unit-0010.service Database/ }))
-    .toBeVisible();
-});
+it.each([360, 960, 1400])(
+  "keeps a quiet explorer and compact inspector accessible at %s px",
+  async (width) => {
+    await page.viewport(width, 800);
+    renderPane();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    const inspector = screen.getByRole("complementary");
+    expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(320);
+    expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
+    expect(screen.queryByText("Condition passed")).toBeNull();
+    expect(inspector.querySelectorAll("details[open]")).toHaveLength(0);
+    expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.getByText("Advanced", { exact: true }).click();
+    await page.viewport(width, 500);
+    const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
+    await waitFor(() => expect(body.scrollHeight).toBeGreaterThan(body.clientHeight));
+    expect(inspector.getBoundingClientRect().bottom).toBeLessThanOrEqual(500);
+    body.scrollTop = body.scrollHeight;
+    expect(body.scrollTop).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.viewport(width, 800);
+    await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
+    await waitFor(() =>
+      expect(document.querySelectorAll(".systemd-graph-node").length).toBeGreaterThan(1),
+    );
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(Number(screen.getByText(/%$/).textContent?.replace("%", ""))).toBeGreaterThanOrEqual(85);
+    expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
+    const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
+    viewport.element().querySelector<HTMLButtonElement>(".arch-chip")!.focus();
+    await userEvent.keyboard("{ArrowDown}{Enter}");
+    expect(screen.getByRole("complementary")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+  },
+);
 
-it("supports graph expansion, relationship filters, pan, zoom and keyboard refocusing", async () => {
-  await page.viewport(1400, 820);
-  renderPane();
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
-  const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
-  await waitFor(() =>
-    expect(within(graph).getByRole("button", { name: /^database.service/ })).toBeTruthy(),
-  );
-  const initial = camera();
-  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
-  expect(camera()).not.toBe(initial);
-  await page.getByRole("button", { name: "Fit to view" }).click();
-  expect(camera()).toBe(initial);
-  await page.getByRole("button", { name: "Expand database.service" }).click();
-  await waitFor(() =>
-    expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
-  );
-  await page.getByRole("button", { name: "Requires", exact: true }).click();
-  expect(within(graph).queryByRole("button", { name: /^storage.target/ })).toBeNull();
-  await page.getByRole("button", { name: "Requires", exact: true }).click();
-  await page.getByRole("button", { name: "Close details" }).click();
-  const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
-  const before = camera();
-  await userEvent.dragAndDrop(viewport, viewport, {
-    sourcePosition: { x: 15, y: 10 },
-    targetPosition: { x: 70, y: 45 },
-  });
-  expect(camera()).not.toBe(before);
-  const database = within(graph).getByRole("button", { name: /^database.service/ });
-  database.focus();
-  await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
-  await waitFor(() =>
-    expect(screen.getByTitle("Refocus on current unit").textContent).toBe("database.service"),
-  );
-  expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
-  await userEvent.keyboard("{Escape}");
-  expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
-  expect(document.activeElement?.textContent).toContain("database.service");
-  await page.getByRole("button", { name: /^storage.target/ }).dblClick();
-  await waitFor(() =>
-    expect(screen.getByTitle("Refocus on current unit").textContent).toBe("storage.target"),
-  );
-});
-
-it.each([360, 960, 1400])("keeps the explorer accessible at %s px", async (width) => {
-  await page.viewport(width, 800);
-  renderPane();
-  await waitFor(() => expect(screen.getByText("exit-code")).toBeTruthy());
-  expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
-  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
-  await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
-  expect((await axe.run(document.querySelector(".systemd-page")!)).violations).toEqual([]);
-  expect(getComputedStyle(document.querySelector(".systemd-graph-node")!).animationName).toBe(
-    "none",
-  );
-  await page.getByRole("button", { name: "Close details" }).click();
-  await page.getByRole("button", { name: "Fit to view" }).click();
-  const content = document.querySelector(".systemd-graph-content")!.getBoundingClientRect();
-  const viewport = screen
-    .getByRole("region", { name: "Systemd dependency graph" })
-    .getBoundingClientRect();
-  expect(content.left).toBeGreaterThanOrEqual(viewport.left);
-  expect(content.right).toBeLessThanOrEqual(viewport.right);
-});
-
-it("captures the current inventory with fictional failure evidence", async () => {
+it("captures the simplified explorer, graph and contextual inspector", async () => {
   await page.viewport(1280, 800);
   renderPane();
-  await waitFor(() => expect(screen.getByText("exit-code")).toBeTruthy());
   await page.screenshot({ path: "../../test-results/systemd-inventory.png" });
   await page.getByRole("button", { name: "Dependency graph", exact: true }).click();
-  await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(6));
+  await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(5));
+  await page
+    .getByRole("region", { name: "Systemd dependency graph" })
+    .click({ position: { x: 20, y: 80 } });
   await page.screenshot({ path: "../../test-results/systemd-graph.png" });
+  await page.getByRole("button", { name: /^worker.service Failed/ }).click();
+  await waitFor(() => expect(screen.getByText("exit-code")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("110%")).toBeTruthy());
+  await page.screenshot({ path: "../../test-results/systemd-inspector.png" });
 });

@@ -86,18 +86,18 @@ describe("Systemd dependency evidence", () => {
       state: "failed",
       unitType: "service",
       sort: "priority",
-      relationships: ["Requires"],
+      relationshipGroup: "dependencies",
     } as const;
     const current = {
       ...state,
       expanded: [...state.expanded],
-      relationships: [...state.relationships],
     };
     expect(navigateSystemdExplorer(current, "b.service", "b.service")).toBe(current);
     expect(navigateSystemdExplorer(current, "b.service", "c.timer")).toEqual({
       ...current,
       rootId: "c.timer",
       expanded: [],
+      visibleLimit: 7,
       search: "",
       dependencySearch: "",
       state: "all",

@@ -1,18 +1,19 @@
-import { Search } from "../components/MagnifierIcon";
-import { ResizableSplit } from "../components/ResizablePanels";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { GitBranch, List, RefreshCw, RotateCcw, X } from "lucide-react";
+import { GitBranch, X } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { SystemdUnitInspector } from "../components/SystemdUnitInspector";
 import { SystemdInventory } from "../components/SystemdInventory";
 import { SystemdGraph } from "../components/SystemdGraph";
+import { SystemdToolbar } from "../components/SystemdToolbar";
 import { api, errorMessage } from "../lib/api";
 import { connectionTargetKey } from "../lib/connection-validation";
 import {
   countSystemdUnits,
   filterSystemdUnits,
   isSystemdUnitName,
-  SYSTEMD_RELATIONSHIPS,
+  SYSTEMD_RELATIONSHIP_GROUPS,
+  SYSTEMD_INITIAL_VISIBLE,
+  SYSTEMD_MAX_VISIBLE,
   systemdEdges,
   systemdNeighborhood,
 } from "../lib/systemd-units";
@@ -34,7 +35,8 @@ const DEFAULT: SystemdExplorerState = {
   state: "all",
   unitType: "all",
   sort: "priority",
-  relationships: [...SYSTEMD_RELATIONSHIPS],
+  relationshipGroup: "dependencies",
+  visibleLimit: SYSTEMD_INITIAL_VISIBLE,
 };
 
 export function ServicesPane({
@@ -68,7 +70,10 @@ export function ServicesPane({
         null,
       ),
   );
-  const [state, setState] = useState<SystemdExplorerState>(initialState ?? DEFAULT);
+  const [state, setState] = useState<SystemdExplorerState>(() => ({ ...DEFAULT, ...initialState }));
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const inspectorRef = useRef<HTMLElement>(null);
+  const inventoryRef = useRef<HTMLDivElement>(null);
   const graphSearch = state.dependencySearch ?? "";
   function setGraphSearch(dependencySearch: string) {
     setState((current) => ({ ...current, dependencySearch }));
@@ -121,12 +126,13 @@ export function ServicesPane({
   const readIds = useMemo(
     () => [
       ...new Set(
-        [selectedId, ...(state.mode === "graph" ? [rootId, ...state.expanded] : [])].filter(
-          (id): id is string => !!id && isSystemdUnitName(id),
-        ),
+        [
+          inspectorOpen ? selectedId : null,
+          ...(state.mode === "graph" ? [rootId, ...state.expanded] : []),
+        ].filter((id): id is string => !!id && isSystemdUnitName(id)),
       ),
     ],
-    [selectedId, rootId, state.mode, state.expanded],
+    [selectedId, inspectorOpen, rootId, state.mode, state.expanded],
   );
   const cacheScope = connectionTargetKey(connection);
   const details = useSystemdReads(connection.id, readIds, revision, "properties", cacheScope);
@@ -140,9 +146,16 @@ export function ServicesPane({
   const neighborhood = useMemo(
     () =>
       rootId
-        ? systemdNeighborhood(rootId, state.expanded, edges, state.relationships, graphSearch)
+        ? systemdNeighborhood(
+            rootId,
+            state.expanded,
+            edges,
+            [...SYSTEMD_RELATIONSHIP_GROUPS[state.relationshipGroup]],
+            graphSearch,
+            state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
+          )
         : null,
-    [rootId, state.expanded, edges, state.relationships, graphSearch],
+    [rootId, state.expanded, edges, state.relationshipGroup, state.visibleLimit, graphSearch],
   );
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
   const filtered = useMemo(
@@ -168,7 +181,9 @@ export function ServicesPane({
     return [...units.values()];
   }, [cache.items, details]);
   const selectedVisible = filtered.some((unit) => unit.id === selectedId);
-  const failedGraphRead = readIds.find((id) => id !== selectedId && details[id]?.error);
+  const failedGraphRead = readIds.find(
+    (id) => (!inspectorOpen || id !== selectedId) && details[id]?.error,
+  );
   const filtersActive = !!state.search || state.state !== "all" || state.unitType !== "all";
   const types = [
     ...new Set([
@@ -184,14 +199,23 @@ export function ServicesPane({
   ];
 
   function patch(next: Partial<SystemdExplorerState>) {
+    if (next.relationshipGroup || (state.mode === "graph" && next.dependencySearch !== undefined))
+      setInspectorOpen(false);
     setState((current) => ({ ...current, ...next }));
   }
   function clearFilters() {
     patch({ search: "", state: "all", unitType: "all" });
   }
   function selectInventoryUnit(id: string) {
+    setInspectorOpen(id !== selectedId || !inspectorOpen);
     setSelectedId(id);
-    if (id !== selectedId) patch({ rootId: id, expanded: [], dependencySearch: "" });
+    if (id !== selectedId)
+      patch({
+        rootId: id,
+        expanded: [],
+        dependencySearch: "",
+        visibleLimit: SYSTEMD_INITIAL_VISIBLE,
+      });
   }
   function refreshDetails() {
     invalidateSystemdReads(connection.id);
@@ -199,10 +223,29 @@ export function ServicesPane({
   }
   function refocus(id: string) {
     setSelectedId(id);
+    setInspectorOpen(false);
     setGraphSearch("");
-    patch({ mode: "graph", rootId: id, expanded: [] });
+    patch({ mode: "graph", rootId: id, expanded: [], visibleLimit: SYSTEMD_INITIAL_VISIBLE });
   }
 
+  const visibleInspector =
+    inspectorOpen && !!selectedId && (state.mode === "graph" || !selected || selectedVisible);
+  useEffect(() => {
+    if (visibleInspector && state.mode === "inventory")
+      inspectorRef.current?.focus({ preventScroll: true });
+  }, [selectedId, visibleInspector, state.mode]);
+
+  function closeInventoryInspector() {
+    setInspectorOpen(false);
+    const row = [
+      ...(inventoryRef.current?.querySelectorAll<HTMLButtonElement>(".dense-row") ?? []),
+    ].find((element) => element.getAttribute("aria-pressed") === "true");
+    requestAnimationFrame(() =>
+      (row ?? inventoryRef.current?.querySelector<HTMLElement>(".dense-list"))?.focus({
+        preventScroll: true,
+      }),
+    );
+  }
   const inspector = selectedId && (
     <SystemdUnitInspector
       key={selectedId}
@@ -214,6 +257,10 @@ export function ServicesPane({
       revision={revision}
       onRefresh={refreshDetails}
       onNavigate={refocus}
+      onExplore={() => {
+        patch({ relationshipGroup: "dependencies" });
+        refocus(selectedId);
+      }}
       onViewLogs={onViewLogs}
       onOpenPorts={onOpenPorts}
       onOpenBoot={onOpenBoot}
@@ -229,140 +276,62 @@ export function ServicesPane({
       />
     );
 
+  const snapshot = [
+    cache.items.length + " units",
+    counts.active + " active",
+    counts.failed + " failed",
+    counts.inactive + " inactive",
+    "Current system scope only, not a complete host health check",
+    cache.fetchedAt ? "Collected " + new Date(cache.fetchedAt).toLocaleTimeString() : "",
+  ].join(" · ");
   return (
     <section className="feature-page systemd-page">
-      <header className="systemd-heading">
-        <h2
-          tabIndex={0}
-          title={
-            "Current system scope only, not a complete host health check" +
-            (cache.fetchedAt ? "\nCollected " + new Date(cache.fetchedAt).toLocaleTimeString() : "")
-          }
-        >
-          Systemd
-        </h2>
-        <div className="systemd-summary" role="group" aria-label="Unit summaries">
-          {(["failed", "active", "inactive"] as const).map((status) => (
-            <button
-              type="button"
-              key={status}
-              className={status === "failed" && counts.failed ? "failed-count" : ""}
-              aria-pressed={state.state === status}
-              onClick={() =>
-                patch({ mode: "inventory", state: state.state === status ? "all" : status })
-              }
-            >
-              {counts[status]} {status}
-            </button>
-          ))}
-          {!!counts.other && <span>{counts.other} transitioning / other</span>}
-        </div>
-        <div className="systemd-view-switch" role="group" aria-label="Systemd view">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Unit inventory"
-            title="Unit inventory"
-            aria-pressed={state.mode === "inventory"}
-            onClick={() => patch({ mode: "inventory" })}
-          >
-            <List size={16} />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Dependency graph"
-            title="Dependency graph"
-            aria-pressed={state.mode === "graph"}
-            disabled={!rootId}
-            onClick={() => patch({ mode: "graph", rootId })}
-          >
-            <GitBranch size={16} />
-          </button>
-        </div>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={() => {
-            refreshDetails();
-            void load(true);
-          }}
-          aria-label="Refresh systemd units"
-          disabled={cache.loading}
-        >
-          <RefreshCw size={16} className={cache.loading ? "spinning" : ""} />
-        </button>
-      </header>
+      <SystemdToolbar
+        state={state}
+        total={cache.items.length}
+        failed={counts.failed}
+        snapshot={snapshot}
+        loading={cache.loading}
+        canGraph={!!rootId}
+        types={types}
+        states={states}
+        onChange={patch}
+        onMode={(mode) => {
+          setInspectorOpen(false);
+          patch({ mode, rootId });
+        }}
+        onRefresh={() => {
+          refreshDetails();
+          void load(true);
+        }}
+      />
       {cache.error && (
         <p className="inline-warning" role="status">
           Showing saved results. Refresh failed: {cache.error}
         </p>
       )}
       {state.mode === "inventory" ? (
-        <ResizableSplit name="Services" className="split-page services-page systemd-inventory">
-          <div className="list-panel">
-            <div className="systemd-list-controls">
-              <label className="search-field">
-                <Search size={15} />
-                <input
-                  aria-label="Search units"
-                  value={state.search}
-                  onChange={(event) => patch({ search: event.target.value })}
-                  placeholder="Search units"
-                />
-              </label>
-              <select
-                aria-label="Unit state"
-                value={state.state}
-                onChange={(event) => patch({ state: event.target.value })}
-              >
-                <option value="all">All states</option>
-                {states.map((value) => (
-                  <option key={value} value={value}>
-                    {value[0].toUpperCase() + value.slice(1)}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Unit type"
-                value={state.unitType}
-                onChange={(event) => patch({ unitType: event.target.value })}
-              >
-                <option value="all">All types</option>
-                {types.map((type) => (
-                  <option key={type} value={type}>
-                    {type[0].toUpperCase() + type.slice(1) + "s"}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="systemd-inventory-toolbar">
-              <span>
-                {filtered.length} / {cache.items.length} units
-              </span>
-              <select
-                aria-label="Sort units"
-                value={state.sort}
-                onChange={(event) =>
-                  patch({ sort: event.target.value as SystemdExplorerState["sort"] })
-                }
-              >
-                <option value="priority">Failed first</option>
-                <option value="name">Name</option>
-                <option value="state">State</option>
-                <option value="type">Type</option>
-              </select>
-              {filtersActive && (
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Clear filters"
-                  onClick={clearFilters}
-                >
-                  <RotateCcw size={14} />
+        <div
+          className={"systemd-explorer-stage" + (visibleInspector ? " inspecting" : "")}
+          ref={inventoryRef}
+        >
+          <div className="systemd-inventory services-page">
+            {filtersActive && (
+              <div className="systemd-filter-result">
+                <span>{filtered.length} matching units</span>
+                <button type="button" className="link-button" onClick={clearFilters}>
+                  Clear filters
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+            {selectedId && selected && !selectedVisible && (
+              <div className="systemd-filter-result" role="status">
+                Selected unit is outside this filter{" "}
+                <button type="button" className="link-button" onClick={clearFilters}>
+                  Show selected unit
+                </button>
+              </div>
+            )}
             <SystemdInventory
               units={filtered}
               selectedId={selectedId}
@@ -371,38 +340,34 @@ export function ServicesPane({
               emptyTitle={cache.items.length ? "No matching units" : "No units found"}
             />
           </div>
-          <aside className="detail-panel systemd-inventory-detail" aria-label="Unit details">
-            {selectedId && selected && !selectedVisible ? (
-              <EmptyState
-                title={
-                  filtered.length ? "Selected unit is outside this filter" : "No matching units"
+          {visibleInspector && (
+            <aside
+              ref={inspectorRef}
+              className="detail-panel arch-detail systemd-inspector"
+              aria-label="Unit details"
+              tabIndex={-1}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  closeInventoryInspector();
                 }
+              }}
+            >
+              <button
+                type="button"
+                className="icon-button inspector-close"
+                aria-label="Close details"
+                onClick={closeInventoryInspector}
               >
-                <button className="secondary-button" type="button" onClick={clearFilters}>
-                  Show selected unit
-                </button>
-              </EmptyState>
-            ) : selectedId ? (
-              <>
-                {inspector}
-                <button
-                  type="button"
-                  className="icon-button systemd-focus-action"
-                  aria-label="Explore dependencies"
-                  title="Explore dependencies"
-                  onClick={() => refocus(selectedId)}
-                >
-                  <GitBranch size={16} />
-                </button>
-              </>
-            ) : (
-              <EmptyState title={cache.items.length ? "Select a unit" : "No units found"} />
-            )}
-          </aside>
-        </ResizableSplit>
+                <X size={16} />
+              </button>
+              {inspector}
+            </aside>
+          )}
+        </div>
       ) : (
-        <>
-          <div className="systemd-graph-tools">
+        <div className="systemd-graph-stage">
+          <div className="systemd-graph-context">
             <button
               type="button"
               className="systemd-root-label"
@@ -412,132 +377,85 @@ export function ServicesPane({
               <GitBranch size={14} />
               {rootId}
             </button>
-            <label className="search-field">
-              <Search size={14} />
-              <input
-                aria-label="Search dependencies"
-                placeholder="Search dependencies"
-                value={graphSearch}
-                onChange={(event) => setGraphSearch(event.target.value)}
-              />
-            </label>
-            {graphSearch && (
+            {!!neighborhood?.hidden && (
               <button
-                className="icon-button"
+                className="systemd-more"
                 type="button"
-                aria-label="Clear dependency search"
-                onClick={() => setGraphSearch("")}
-              >
-                <X size={14} />
-              </button>
-            )}
-            {selectedId && selectedId !== rootId && (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => refocus(selectedId)}
-              >
-                Focus selected unit
-              </button>
-            )}
-          </div>
-          <div
-            className="systemd-relationship-filters"
-            role="group"
-            aria-label="Relationship filters"
-          >
-            {SYSTEMD_RELATIONSHIPS.map((relationship) => (
-              <button
-                className={"systemd-relation relationship-" + relationship.toLowerCase()}
-                key={relationship}
-                type="button"
-                aria-pressed={state.relationships.includes(relationship)}
+                disabled={(state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE}
                 title={
-                  relationship === "After" || relationship === "Before"
-                    ? "Ordering constraint only"
-                    : relationship === "Triggers"
-                      ? "Activation evidence"
-                      : "Requirement relationship, including reverse dependencies"
+                  (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE
+                    ? "Search or refocus to explore other units"
+                    : "Reveal more related units"
                 }
                 onClick={() =>
                   patch({
-                    relationships: state.relationships.includes(relationship)
-                      ? state.relationships.filter((value) => value !== relationship)
-                      : [...state.relationships, relationship],
+                    visibleLimit: Math.min(
+                      SYSTEMD_MAX_VISIBLE,
+                      (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 6,
+                    ),
                   })
                 }
               >
-                {relationship}
+                Show more · {neighborhood.hidden}
               </button>
-            ))}
-            {!!neighborhood?.hidden && (
-              <span role="status">{neighborhood.hidden} more. Narrow search or refocus.</span>
-            )}
-            {state.expanded.length >= 24 && (
-              <span role="status">Expansion limit reached. Refocus to explore further.</span>
             )}
           </div>
-          <div className="systemd-graph-stage">
-            {failedGraphRead && (
-              <div className="systemd-graph-notice" role="status">
-                {details[failedGraphRead]?.value
-                  ? "Saved dependency evidence. "
-                  : "Dependencies unavailable. "}
-                {failedGraphRead}: {details[failedGraphRead]?.error}{" "}
-                <button className="link-button" type="button" onClick={refreshDetails}>
-                  Retry
-                </button>
-              </div>
-            )}
-            {!failedGraphRead &&
-              selectedId &&
-              neighborhood &&
-              !neighborhood.ids.includes(selectedId) && (
-                <div className="systemd-graph-notice" role="status">
-                  Selected unit is outside this graph filter.{" "}
-                  <button className="link-button" type="button" onClick={() => refocus(selectedId)}>
-                    Show selected unit
-                  </button>
-                </div>
-              )}
-            {!failedGraphRead &&
-              (!selectedId || neighborhood?.ids.includes(selectedId)) &&
-              graphSearch &&
-              neighborhood?.ids.length === 1 &&
-              !rootId?.toLowerCase().includes(graphSearch.toLowerCase()) && (
-                <div className="systemd-graph-notice" role="status">
-                  No matching dependencies
-                </div>
-              )}
-            {rootId && neighborhood ? (
-              <SystemdGraph
-                ids={neighborhood.ids}
-                edges={neighborhood.edges}
-                units={graphUnits}
-                rootId={rootId}
-                selectedId={selectedId}
-                expanded={state.expanded}
-                onSelect={setSelectedId}
-                onRefocus={refocus}
-                onExpand={(id) =>
-                  patch({
-                    expanded: state.expanded.includes(id)
-                      ? state.expanded.filter((value) => value !== id)
-                      : [...state.expanded, id].slice(0, 24),
-                  })
-                }
-                inspector={inspector}
-              />
-            ) : (
-              <EmptyState title="Select a unit to explore" />
-            )}
-            {readIds.some((id) => details[id]?.loading) && (
+          {rootId && neighborhood ? (
+            <SystemdGraph
+              ids={neighborhood.ids}
+              edges={neighborhood.edges}
+              units={graphUnits}
+              rootId={rootId}
+              selectedId={visibleInspector ? selectedId : null}
+              expanded={state.expanded}
+              frameKey={state.relationshipGroup + ":" + graphSearch}
+              onSelect={(id) => {
+                if (id) setSelectedId(id);
+                setInspectorOpen(!!id);
+              }}
+              onRefocus={refocus}
+              onExpand={(id) =>
+                patch({
+                  expanded: state.expanded.includes(id)
+                    ? state.expanded.filter((unit) => unit !== id)
+                    : [...state.expanded, id].slice(0, 24),
+                  visibleLimit: Math.min(
+                    SYSTEMD_MAX_VISIBLE,
+                    (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 3,
+                  ),
+                })
+              }
+              inspector={inspector}
+            />
+          ) : (
+            <EmptyState title="Select a unit to explore" />
+          )}
+          {failedGraphRead ? (
+            <div className="systemd-graph-notice" role="status">
+              {details[failedGraphRead]?.value
+                ? "Saved dependency evidence. "
+                : "Dependencies unavailable. "}
+              {failedGraphRead}: {details[failedGraphRead]?.error}{" "}
+              <button className="link-button" type="button" onClick={refreshDetails}>
+                Retry
+              </button>
+            </div>
+          ) : readIds.some((id) => details[id]?.loading) ? (
+            <span className="systemd-graph-status" role="status">
+              Reading dependencies…
+            </span>
+          ) : (
+            rootId &&
+            details[rootId]?.value &&
+            neighborhood?.ids.length === 1 && (
               <span className="systemd-graph-status" role="status">
-                Reading dependencies…
+                {graphSearch
+                  ? "No matching relationships"
+                  : "No reported relationships in this category"}
               </span>
-            )}
-          </div>
-        </>
+            )
+          )}
+        </div>
       )}
     </section>
   );

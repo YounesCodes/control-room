@@ -8,11 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Expand, GitBranch, X } from "lucide-react";
+import { Expand, X } from "lucide-react";
 import { GraphControls } from "./GraphControls";
 import { usePanZoom } from "../lib/use-pan-zoom";
 import { observeLayoutFallback } from "./ResizablePanels";
-import type { SystemdEdge } from "../lib/systemd-units";
+import { systemdStateLabel, type SystemdEdge } from "../lib/systemd-units";
 import type { SystemdUnit } from "../types";
 import { layoutSystemdGraph } from "../lib/systemd-graph-layout";
 
@@ -27,6 +27,7 @@ export function SystemdGraph({
   onRefocus,
   onExpand,
   inspector,
+  frameKey = "",
 }: {
   ids: string[];
   edges: SystemdEdge[];
@@ -38,6 +39,7 @@ export function SystemdGraph({
   onRefocus: (id: string) => void;
   onExpand: (id: string) => void;
   inspector: ReactNode;
+  frameKey?: string;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
@@ -48,56 +50,114 @@ export function SystemdGraph({
   const [moving, setMoving] = useState(false);
   const marker = useId().replace(/:/g, "");
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const layout = useMemo(() => layoutSystemdGraph(ids, edges, rootId), [ids, edges, rootId]);
+  const previous = useRef<{
+    root: string;
+    frame: string;
+    layout: ReturnType<typeof layoutSystemdGraph>;
+  } | null>(null);
+  const cameraTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeEdge, setActiveEdge] = useState<string | null>(null);
+  const layout = useMemo(() => {
+    const old = previous.current;
+    const growing =
+      old?.root === rootId &&
+      old.frame === frameKey &&
+      [...old.layout.positions.keys()].every((id) => ids.includes(id));
+    return layoutSystemdGraph(ids, edges, rootId, growing ? old.layout.placements : undefined);
+  }, [ids, edges, rootId, frameKey]);
 
   const fit = useCallback(
-    (animate = true) => {
+    (animate = true, entire = false) => {
       const viewport = viewportRef.current;
       if (!viewport) return;
       const width = Math.max(
         100,
         viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48,
       );
-      const height = Math.max(100, viewport.clientHeight - 90);
-      const scale = Math.max(0.01, Math.min(1, width / layout.width, height / layout.height));
+      const height = Math.max(100, viewport.clientHeight - 108);
+      const natural = Math.min(1, width / layout.width, height / layout.height);
+      const scale = Math.max(entire ? 0.01 : 0.85, natural);
+      const root = layout.positions.get(rootId)!;
+      const centerX = natural < scale ? root.x + root.width / 2 : layout.width / 2;
+      const centerY = natural < scale ? root.y + root.height / 2 : layout.height / 2;
       setMoving(animate);
-      setView({
-        scale,
-        x: 24 + (width - layout.width * scale) / 2,
-        y: 24 + (height - layout.height * scale) / 2,
-      });
+      setView({ scale, x: 24 + width / 2 - centerX * scale, y: 48 + height / 2 - centerY * scale });
     },
-    [layout.width, layout.height, setView],
+    [layout, rootId, setView],
   );
 
   useLayoutEffect(() => {
-    fit();
-  }, [fit, rootId, ids.join("\n")]);
+    const old = previous.current;
+    if (old && old.root === rootId && old.frame === frameKey) {
+      const before = old.layout.positions.get(rootId)!;
+      const after = layout.positions.get(rootId)!;
+      setView((view) => ({
+        ...view,
+        x: view.x + (before.x - after.x) * view.scale,
+        y: view.y + (before.y - after.y) * view.scale,
+      }));
+    } else fit();
+    previous.current = { root: rootId, frame: frameKey, layout };
+  }, [layout, rootId, frameKey, fit, setView]);
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const resize = () => fit(false);
+    let width = viewport.clientWidth,
+      height = viewport.clientHeight;
+    const resize = () => {
+      if (width === viewport.clientWidth && height === viewport.clientHeight) return;
+      width = viewport.clientWidth;
+      height = viewport.clientHeight;
+      fitRef.current(false);
+    };
     if (typeof ResizeObserver === "undefined") return observeLayoutFallback(viewport, resize);
     const observer = new ResizeObserver(resize);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [fit]);
+  }, []);
   useLayoutEffect(() => {
-    if (selectedId) detailRef.current?.focus({ preventScroll: true });
-    const opened = !!selectedId && !wasInspecting.current;
-    wasInspecting.current = !!selectedId;
-    if (opened) {
-      const frame = requestAnimationFrame(() => fit());
-      return () => cancelAnimationFrame(frame);
+    if (cameraTimer.current) clearTimeout(cameraTimer.current);
+    if (selectedId) {
+      detailRef.current?.focus({ preventScroll: true });
+      wasInspecting.current = true;
+      cameraTimer.current = setTimeout(() => {
+        const viewport = viewportRef.current,
+          node = previous.current?.layout.positions.get(selectedId);
+        if (!viewport || !node) return;
+        const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
+        if (width < 240) return;
+        const height = Math.max(100, viewport.clientHeight - 108);
+        const scale = Math.max(
+          0.85,
+          Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
+        );
+        setMoving(true);
+        setView({
+          scale,
+          x: 24 + width / 2 - (node.x + node.width / 2) * scale,
+          y: 48 + height / 2 - (node.y + node.height / 2) * scale,
+        });
+      }, 220);
+    } else if (wasInspecting.current) {
+      wasInspecting.current = false;
+      fit();
     }
-  }, [selectedId, fit]);
+    return () => {
+      if (cameraTimer.current) clearTimeout(cameraTimer.current);
+    };
+  }, [selectedId]);
+
+  function stopCamera() {
+    if (cameraTimer.current) clearTimeout(cameraTimer.current);
+    setMoving(false);
+  }
 
   function close() {
     onSelect(null);
-    (nodes.current.get(selectedId ?? rootId) ?? nodes.current.get(rootId))?.focus({
-      preventScroll: true,
-    });
-    requestAnimationFrame(() => fit());
+    const node = nodes.current.get(selectedId ?? rootId) ?? nodes.current.get(rootId);
+    requestAnimationFrame(() => node?.focus({ preventScroll: true }));
   }
 
   function reveal(element: HTMLButtonElement) {
@@ -137,10 +197,13 @@ export function SystemdGraph({
       <GraphControls
         scale={pan.view.scale}
         onZoom={(factor) => {
-          setMoving(false);
+          stopCamera();
           pan.zoomBy(factor);
         }}
-        onFit={() => fit()}
+        onFit={() => {
+          stopCamera();
+          fit(true, true);
+        }}
       />
       <div
         className="arch-viewport"
@@ -149,13 +212,17 @@ export function SystemdGraph({
         tabIndex={0}
         aria-label="Systemd dependency graph"
         onWheel={(event) => {
-          setMoving(false);
+          stopCamera();
           pan.onWheel(event);
         }}
         onPointerDown={(event) => {
-          if (event.button !== 0 || (event.target as Element).closest("button")) return;
+          if (
+            event.button !== 0 ||
+            (event.target as Element).closest("button, .systemd-connection")
+          )
+            return;
           press.current = { x: event.clientX, y: event.clientY, moved: false };
-          setMoving(false);
+          stopCamera();
           pan.onPointerDown(event);
         }}
         onPointerMove={(event) => {
@@ -168,7 +235,7 @@ export function SystemdGraph({
         }}
         onPointerUp={(event) => {
           pan.onPointerUp(event);
-          if (press.current && !press.current.moved) close();
+          if (press.current && !press.current.moved && selectedId) close();
           press.current = null;
         }}
         onPointerCancel={(event) => {
@@ -209,59 +276,42 @@ export function SystemdGraph({
               </marker>
             </defs>
             {layout.connections.map((connection) => {
-              const kinds = new Set(connection.edges.map((edge) => edge.relationship));
-              const kind =
-                kinds.size === 1 ? connection.edges[0].relationship.toLowerCase() : "mixed";
-              const badge = connection.badge;
+              const evidence = connection.edges
+                .map((edge) => edge.source + " " + edge.relationship + " " + edge.target)
+                .join("; ");
               return (
-                <g key={connection.id} className={"systemd-connection relationship-" + kind}>
+                <g
+                  key={connection.id}
+                  className={
+                    "systemd-connection relationship-" +
+                    connection.kind +
+                    (activeEdge === connection.id ? " edge-active" : "")
+                  }
+                  tabIndex={0}
+                  role="img"
+                  aria-label={evidence}
+                  onMouseEnter={() => setActiveEdge(connection.id)}
+                  onMouseLeave={() => setActiveEdge(null)}
+                  onFocus={() => setActiveEdge(connection.id)}
+                  onBlur={() => setActiveEdge(null)}
+                >
+                  <title>{evidence}</title>
                   <path
                     className="systemd-edge-path"
-                    d={connection.paths[0]}
-                    markerStart={connection.arrowLeft ? "url(#" + marker + ")" : undefined}
+                    d={connection.path}
+                    markerEnd={"url(#" + marker + ")"}
                     vectorEffect="non-scaling-stroke"
                   />
-                  <path
-                    className="systemd-edge-path"
-                    d={connection.paths[1]}
-                    markerEnd={connection.arrowRight ? "url(#" + marker + ")" : undefined}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <rect
-                    className="systemd-edge-badge"
-                    x={badge.x}
-                    y={badge.y}
-                    width={badge.width}
-                    height={badge.height}
-                    rx={6}
-                  />
-                  {connection.edges.map((edge, index) => {
-                    const y = badge.y + 19 + index * 26;
-                    const rightward = edge.source === connection.left;
-                    return (
-                      <g
-                        key={edge.id}
-                        className={"systemd-edge relationship-" + edge.relationship.toLowerCase()}
-                      >
-                        <title>{edge.source + " " + edge.relationship + " " + edge.target}</title>
-                        <path
-                          className="systemd-edge-swatch"
-                          d={"M" + (badge.x + 10) + "," + y + " h14"}
-                        />
-                        <text x={badge.x + 34} y={y + 4}>
-                          {edge.relationship}
-                        </text>
-                        <path
-                          className="systemd-edge-direction"
-                          d={
-                            rightward
-                              ? "M" + (badge.x + 118) + "," + y + " h14 m-4,-4 4,4 -4,4"
-                              : "M" + (badge.x + 132) + "," + y + " h-14 m4,-4 -4,4 4,4"
-                          }
-                        />
-                      </g>
-                    );
-                  })}
+                  {activeEdge === connection.id && (
+                    <text
+                      className="systemd-edge-label"
+                      x={connection.labelPoint.x}
+                      y={connection.labelPoint.y}
+                      textAnchor="middle"
+                    >
+                      {connection.label}
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -291,7 +341,10 @@ export function SystemdGraph({
                     else nodes.current.delete(id);
                   }}
                   onClick={() => onSelect(id)}
-                  onDoubleClick={() => onRefocus(id)}
+                  onDoubleClick={() => {
+                    stopCamera();
+                    onRefocus(id);
+                  }}
                   onFocus={(event) => {
                     if (event.currentTarget.matches(":focus-visible")) reveal(event.currentTarget);
                   }}
@@ -319,26 +372,27 @@ export function SystemdGraph({
                   }}
                 >
                   <span className="arch-chip-title">
-                    <GitBranch size={14} />
                     <strong>{id}</strong>{" "}
                   </span>
                   <span className="arch-chip-kind">
                     <span
                       className={"service-indicator service-" + (unit?.activeState ?? "unknown")}
                     />
-                    {unit ? unit.activeState + " / " + unit.subState : "State not read"}
+                    {systemdStateLabel(unit?.activeState, unit?.subState)}
                   </span>
                 </button>
-                <button
-                  className="icon-button systemd-expand"
-                  type="button"
-                  aria-label={(expanded.includes(id) ? "Collapse " : "Expand ") + id}
-                  disabled={id === rootId || (!expanded.includes(id) && expanded.length >= 24)}
-                  aria-pressed={id === rootId || expanded.includes(id)}
-                  onClick={() => onExpand(id)}
-                >
-                  <Expand size={13} />
-                </button>
+                {id !== rootId && (
+                  <button
+                    className="icon-button systemd-expand"
+                    type="button"
+                    aria-label={(expanded.includes(id) ? "Collapse " : "Expand ") + id}
+                    disabled={id === rootId || (!expanded.includes(id) && expanded.length >= 24)}
+                    aria-pressed={id === rootId || expanded.includes(id)}
+                    onClick={() => onExpand(id)}
+                  >
+                    <Expand size={13} />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -346,7 +400,7 @@ export function SystemdGraph({
       </div>
       {selectedId && (
         <aside
-          className="detail-panel arch-detail"
+          className="detail-panel arch-detail systemd-inspector"
           id="systemd-graph-inspector"
           ref={detailRef}
           aria-label="Unit details"

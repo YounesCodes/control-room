@@ -124,7 +124,8 @@ export interface SystemdExplorerState {
   state: string;
   unitType: string;
   sort: "priority" | "name" | "state" | "type";
-  relationships: string[];
+  relationshipGroup: "dependencies" | "ordering" | "activation";
+  visibleLimit?: number;
 }
 
 export interface WindowsService {

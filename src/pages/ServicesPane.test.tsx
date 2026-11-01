@@ -65,6 +65,65 @@ describe("ServicesPane failed units view", () => {
       .mockImplementation((_connection, id) => Promise.resolve(systemdInspection(id)));
   });
 
+  it("starts with a quiet list and reads details only after a row is selected", async () => {
+    const user = userEvent.setup();
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([
+          { ...unit("old.service", "service", "inactive", "dead"), unitFileState: "disabled" },
+        ])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(api.inspectSystemdUnit).not.toHaveBeenCalled();
+    const row = screen.getByRole("button", { name: /old.service description/ });
+    expect(row.textContent).toContain("Inactive");
+    expect(row.textContent).not.toMatch(/dead|disabled/);
+    expect(screen.queryByLabelText("Unit state")).toBeNull();
+    await user.click(row);
+    expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("starts the graph closed with a bounded dependency category and reveals more on request", async () => {
+    const user = userEvent.setup();
+    const neighbors = Array.from({ length: 30 }, (_, index) => "neighbor-" + index + ".service");
+    api.inspectSystemdUnit.mockImplementation((_connection, id) =>
+      Promise.resolve(
+        systemdInspection(id, {
+          Requires: neighbors.join(" "),
+          After: "ordering.target",
+          Triggers: "activation.service",
+        }),
+      ),
+    );
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("a.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Dependency graph" }));
+    const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+    await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(graph.querySelectorAll("rect, .systemd-edge-label")).toHaveLength(0);
+    expect(within(graph).queryByRole("button", { name: /^ordering.target/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Show more/ }));
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
+    await user.click(screen.getByRole("button", { name: "Ordering" }));
+    expect(await within(graph).findByRole("button", { name: /^ordering.target/ })).toBeTruthy();
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Activation" }));
+    expect(await within(graph).findByRole("button", { name: /^activation.service/ })).toBeTruthy();
+  });
+
   it("shows counts, filters across types, and opens the selected unit journal", async () => {
     const user = userEvent.setup();
     const onViewLogs = vi.fn();
@@ -83,9 +142,10 @@ describe("ServicesPane failed units view", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Systemd" })).toBeTruthy();
-    expect(screen.getByText(/2 active/)).toBeTruthy();
+    expect(screen.getByText("4 units")).toBeTruthy();
     expect(screen.getByText(/2 failed/)).toBeTruthy();
 
+    await user.click(screen.getByRole("button", { name: "Filter and sort units" }));
     await user.selectOptions(screen.getByLabelText("Unit state"), "failed");
     await user.selectOptions(screen.getByLabelText("Unit type"), "timer");
     expect(screen.getByRole("button", { name: /backup.timer/i })).toBeTruthy();
@@ -106,7 +166,7 @@ describe("ServicesPane failed units view", () => {
       />,
     );
 
-    expect(screen.getByText(/0 failed/)).toBeTruthy();
+    expect(screen.queryByText("0 failed")).toBeNull();
     expect(screen.getByRole("heading", { name: "Systemd" }).title).toContain(
       "not a complete host health check",
     );
@@ -126,7 +186,9 @@ describe("ServicesPane failed units view", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: /data.mount description/ }));
     expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Find units" }));
     await user.type(screen.getByPlaceholderText("Search units"), "ssh");
 
     expect(screen.queryByRole("heading", { name: "data.mount" })).toBeNull();
@@ -181,7 +243,7 @@ describe("ServicesPane failed units view", () => {
     );
     await user.click(screen.getByRole("button", { name: "Dependency graph" }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("a.service");
-    await user.click(screen.getByRole("button", { name: "Unit inventory" }));
+    await user.click(screen.getByRole("button", { name: "Explorer" }));
     await user.click(screen.getByRole("button", { name: /b.service description/ }));
     await user.click(screen.getByRole("button", { name: "Dependency graph" }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");
@@ -220,6 +282,9 @@ describe("ServicesPane failed units view", () => {
     expect(await within(graph).findByRole("button", { name: /^c.service/ })).toBeTruthy();
     await user.dblClick(within(graph).getByRole("button", { name: /^b.service/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");
+    expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+    await user.click(within(graph).getByRole("button", { name: /^b.service/ }));
+    expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Close details" }));
     expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
   });

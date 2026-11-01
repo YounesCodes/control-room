@@ -76,7 +76,7 @@ describe("Saved Connection workspace removal", () => {
       state: "all",
       unitType: "all",
       sort: "priority",
-      relationships: ["Requires"],
+      relationshipGroup: "dependencies",
     };
     const updated = updateWorkspaceConnectionSnapshots([remote], {
       ...remote.connectionSnapshot,

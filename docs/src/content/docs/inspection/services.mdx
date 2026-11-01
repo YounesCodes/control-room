@@ -5,33 +5,43 @@ description: Find services and other systemd units on a Linux host.
 
 import servicesScreenshot from "../../../assets/screenshots/services.png";
 
-Systemd lists the host's loaded system services, timers, mounts, and sockets. Failed units appear first. Select a count to filter by state, or use search, type filters, and sorting. Inactive and disabled units are not failures. The counts describe the collected system scope, not overall host health.
+Systemd lists the host's loaded system services, timers, mounts, and sockets. Rows show the unit name, description, and state. Failed units appear first; inactive and disabled units are not failures.
+
+Select the failed count to find failures. **Find units** opens search; **Filter and sort units** offers state, type, and sort controls. The heading tooltip shows all counts and collection time for the collected system scope.
 
 <figure class="docs-screenshot">
   <a href={servicesScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={servicesScreenshot.src}
-      alt="The Systemd inventory with a failed queue worker selected, its exit status, and related dependencies."
+      alt="The Systemd graph centered on a failed queue worker, with Dependencies selected and the inspector closed."
     />
   </a>
-  <figcaption>Failure evidence for a selected unit. Example data shown.</figcaption>
+  <figcaption>A focused dependency view. Example data shown.</figcaption>
 </figure>
 
-The inspector adapts to the unit type. Services show execution results, exit status or signal, restart policy and count, uptime, and available resource counters. Timers show schedules and triggers; sockets show listening endpoints and activation evidence; mounts show their source, destination, filesystem, and options. Missing or unsupported values appear as **Unavailable**.
+Select a row or graph node to open its inspector. It shows essential runtime details for the unit type, or failure evidence for a failed unit. Expand **Dependencies**, **Recent journal**, or **Advanced** when needed. Close the inspector with **Close details** or **Escape**. Missing or unsupported values appear as **Unavailable**.
 
-Expand **Configuration** for the unit-file path, drop-ins, and files on disk. **Effective properties** reads the manager's current properties. These can differ from files awaiting a daemon reload. Both reads are on demand and read-only.
+**Advanced** contains enablement, conditions, assertions, and further runtime details. Its **Configuration** section reads unit files and drop-ins; **Effective properties** reads the manager's current properties. These can differ from files awaiting a daemon reload. Both reads happen on demand.
 
 ## Explore dependencies
 
-Choose **Dependency graph** or **Explore dependencies** to focus on the selected unit and its immediate neighbors. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to restore the full diagram. Select a node for its inspector. Double-click it, or press **Shift+Enter** on a focused node, to refocus the graph. Use each node's **Expand** button to read another neighborhood.
+Choose **Graph** to explore the selected unit and up to six neighbors. The inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood, or **Show more** to reveal more known neighbors.
 
-The relationship buttons filter **Requires**, **Wants**, **After**, **Before**, and **Triggers**. Each badge lists the reported relationships between its two units, with an arrow beside each row showing its direction. Connectors can have arrowheads at both ends. Requires and Wants pull in units; After and Before are ordering constraints. Reverse dependencies come from systemd's reported properties. Unit names alone never establish a relationship. Graph search retains the path to matching nodes. The graph shows at most 60 units and allows 24 expanded neighborhoods; narrow the search or refocus to continue.
+Choose one relationship category:
+
+- **Dependencies** shows Requires and Wants. They pull in other units.
+- **Ordering** shows After and Before. Arrows point from the earlier unit to the later unit; ordering alone does not pull in a unit.
+- **Activation** shows Triggers, such as a socket activating a service.
+
+Relationships in the same direction share a connector. Hover or focus an edge to see its label and reported evidence. Reverse dependencies come from systemd's properties; unit names alone never establish a relationship.
+
+**Find dependencies** searches known relationships and keeps paths to matches. Expansion preserves the current view. Automatic framing keeps nodes readable; **Fit to view** can zoom out further. The graph shows at most 25 units and allows 24 expanded neighborhoods. Search or refocus to explore beyond that limit.
 
 ## Investigate a failure
 
-Select the failed count, then a unit. **Failure evidence** shows the systemd result and recorded execution status. **Show failure journal** reads up to 40 recent entries visible to your SSH account. **View journal** opens the full Logs view for that unit. Journal entries and related units are evidence, not a diagnosis.
+Select the failed count, then a unit. **Failure evidence** shows the systemd result and recorded exit status or signal. **Recent journal** reads up to 40 recent entries visible to your SSH account. **View journal** opens the full Logs view for that unit. Journal entries and related units are evidence, not a diagnosis.
 
-Dependency rows open the related unit in the graph. **Ports** shows endpoints with an explicit link to the selected unit; its unit label returns to Systemd. **Boot** opens boot diagnostics, where current failed and slow units link back to Systemd. Selection, filters, and graph expansion survive navigation within the workspace and refreshes. A filtered selection offers a way to reveal it.
+Dependency rows open the related unit in the graph. **Ports** and **Boot** are under **Advanced**. Ports shows endpoints with an explicit link to the unit; its unit label returns to Systemd. Boot diagnostics links current failed and slow units back to Systemd. Selection, filters, and graph expansion survive switching views, workspace navigation, and refreshes. A filtered selection offers a way to reveal it.
 
 Systemd reads system units with `systemctl` and `journalctl`; it does not include user units or change service state. Details and evidence show permission errors separately. Evidence reads are limited to 128 KiB, with truncation reported. Refresh retries failed reads and keeps saved evidence visible when available.
 

@@ -2420,7 +2420,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
   });
 
   it.each([960, 1600])(
-    "scrolls Linux service rows while keeping the filters visible at %s px",
+    "scrolls Linux service rows while keeping the toolbar available at %s px",
     async (width) => {
       await page.viewport(width, 600);
       overrides.set("list_services", () =>
@@ -2431,13 +2431,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
       );
       await mount();
       await navigate("Systemd");
-      await expect
-        .element(page.getByRole("button", { name: /example-99.service/ }))
-        .toBeInTheDocument();
+      await expect.element(page.getByRole("region", { name: "Systemd units" })).toBeVisible();
       const list = element.querySelector<HTMLElement>(".dense-list")!;
       await userEvent.wheel(list, { delta: { y: 700 } });
       await vi.waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+      await page.getByRole("button", { name: "Find units", exact: true }).click();
       await expect.element(page.getByPlaceholder("Search units")).toBeVisible();
+      await userEvent.keyboard("{Escape}");
       list.focus();
       expect(document.activeElement).toBe(list);
       await userEvent.keyboard("{End}");
@@ -2521,6 +2521,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("filters Systemd, selects a unit, follows its journal and cleans up its stream on navigation", async () => {
     await mount();
     await navigate("Systemd");
+    await page.getByRole("button", { name: "Filter and sort units" }).click();
     await page.getByRole("combobox", { name: "Unit state" }).selectOptions("failed");
     await page.getByRole("button", { name: /failed.service/ }).click();
     await page.getByRole("button", { name: "View journal" }).click();
@@ -2824,6 +2825,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await page.getByRole("button", { name: /443.*Listening/ }).click();
     await page.getByRole("button", { name: /Open unit/ }).click();
+    const selectedUnit = page.getByRole("button", { name: new RegExp(fixtures.service.id) });
+    await expect.element(selectedUnit).toHaveAttribute("aria-pressed", "true");
+    await expect
+      .element(page.getByRole("complementary", { name: "Unit details" }))
+      .not.toBeInTheDocument();
+    await selectedUnit.click();
     await expect
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
       .toBeVisible();

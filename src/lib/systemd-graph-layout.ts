@@ -1,15 +1,18 @@
 import type { SystemdEdge } from "./systemd-units";
 
-export const SYSTEMD_NODE_WIDTH = 236;
-export const SYSTEMD_NODE_HEIGHT = 78;
-const GAP = 248;
+export const SYSTEMD_NODE_WIDTH = 216;
+export const SYSTEMD_NODE_HEIGHT = 64;
+const COLUMN_STEP = 360;
+const ROW_STEP = 88;
 const PADDING = 24;
-const BADGE_WIDTH = 144;
-const ROW_HEIGHT = 26;
 
 export interface GraphPoint {
   x: number;
   y: number;
+}
+export interface SystemdGraphPlacement {
+  column: number;
+  row: number;
 }
 export interface SystemdGraphNode extends GraphPoint {
   width: number;
@@ -17,219 +20,202 @@ export interface SystemdGraphNode extends GraphPoint {
 }
 export interface SystemdConnection {
   id: string;
-  left: string;
-  right: string;
+  source: string;
+  target: string;
   edges: SystemdEdge[];
-  badge: GraphPoint & { width: number; height: number };
-  paths: [string, string];
-  arrowLeft: boolean;
-  arrowRight: boolean;
+  kind: "requires" | "wants" | "ordering" | "activation";
+  path: string;
+  label: string;
+  labelPoint: GraphPoint;
 }
 
-/** Round a gutter route without cutting across the cards at its endpoints. */
 function roundedPath(points: GraphPoint[]) {
   let path = `M${points[0].x},${points[0].y}`;
-  for (let index = 1; index < points.length - 1; index++) {
-    const before = points[index - 1];
-    const corner = points[index];
-    const after = points[index + 1];
-    const incoming = Math.hypot(corner.x - before.x, corner.y - before.y);
-    const outgoing = Math.hypot(after.x - corner.x, after.y - corner.y);
+  for (let i = 1; i < points.length - 1; i++) {
+    const previous = points[i - 1],
+      corner = points[i],
+      next = points[i + 1];
+    const incoming = Math.hypot(corner.x - previous.x, corner.y - previous.y);
+    const outgoing = Math.hypot(next.x - corner.x, next.y - corner.y);
     if (!incoming || !outgoing) continue;
     const radius = Math.min(8, incoming / 2, outgoing / 2);
-    const start = {
-      x: corner.x + ((before.x - corner.x) * radius) / incoming,
-      y: corner.y + ((before.y - corner.y) * radius) / incoming,
-    };
-    const end = {
-      x: corner.x + ((after.x - corner.x) * radius) / outgoing,
-      y: corner.y + ((after.y - corner.y) * radius) / outgoing,
-    };
-    path += ` L${start.x},${start.y} Q${corner.x},${corner.y} ${end.x},${end.y}`;
+    path += ` L${corner.x + ((previous.x - corner.x) * radius) / incoming},${corner.y + ((previous.y - corner.y) * radius) / incoming} Q${corner.x},${corner.y} ${corner.x + ((next.x - corner.x) * radius) / outgoing},${corner.y + ((next.y - corner.y) * radius) / outgoing}`;
   }
-  const end = points.at(-1)!;
-  return path + ` L${end.x},${end.y}`;
+  const last = points.at(-1)!;
+  return path + ` L${last.x},${last.y}`;
 }
 
-function curve(start: GraphPoint, end: GraphPoint) {
-  const middle = (start.x + end.x) / 2;
-  return `M${start.x},${start.y} C${middle},${start.y} ${middle},${end.y} ${end.x},${end.y}`;
-}
-
-/** Labels own real layout space. Parallel relationships share a connector,
- * while each reported relationship keeps its own label and direction. */
-export function layoutSystemdGraph(ids: string[], edges: SystemdEdge[], root: string) {
+/** Ordering is drawn from the earlier unit to the later unit. Before and its
+ * inverse After are the same constraint; keep both original evidence records. */
+export function layoutSystemdGraph(
+  ids: string[],
+  edges: SystemdEdge[],
+  root: string,
+  previous = new Map<string, SystemdGraphPlacement>(),
+) {
   const visible = new Set(ids);
-  const evidence = edges.filter(
-    (edge) => visible.has(edge.source) && visible.has(edge.target) && edge.source !== edge.target,
-  );
-  const neighbors = new Map(ids.map((id) => [id, new Set<string>()]));
-  for (const edge of evidence) {
-    neighbors.get(edge.source)!.add(edge.target);
-    neighbors.get(edge.target)!.add(edge.source);
-  }
-  const depths = new Map([[root, 0]]);
-  const order = [root];
-  for (let index = 0; index < order.length; index++)
-    for (const neighbor of neighbors.get(order[index]) ?? []) {
-      if (depths.has(neighbor)) continue;
-      depths.set(neighbor, (depths.get(order[index]) ?? 0) + 1);
-      order.push(neighbor);
-    }
-  for (const id of ids)
-    if (!depths.has(id)) {
-      depths.set(id, 1);
-      order.push(id);
-    }
-
-  // Adjacent units never occupy the same column, including cycle members.
-  // This lets every connector stay in gutters rather than crossing cards.
-  const columns = new Map<string, number>();
-  const columnSizes = new Map<number, number>();
-  for (const id of order) {
-    let column = depths.get(id) ?? 1;
-    while (
-      (columnSizes.get(column) ?? 0) >= 8 ||
-      [...(neighbors.get(id) ?? [])].some((neighbor) => columns.get(neighbor) === column)
-    )
-      column++;
-    columns.set(id, column);
-    columnSizes.set(column, (columnSizes.get(column) ?? 0) + 1);
-  }
-  const columnNumbers = [...new Set(columns.values())].sort((a, b) => a - b);
-  const compactColumns = new Map(columnNumbers.map((column, index) => [column, index]));
-  for (const [id, column] of columns) columns.set(id, compactColumns.get(column)!);
-
-  const pairs = new Map<string, SystemdConnection>();
-  for (const edge of evidence) {
-    const left = columns.get(edge.source)! < columns.get(edge.target)! ? edge.source : edge.target;
-    const right = left === edge.source ? edge.target : edge.source;
-    const id = JSON.stringify([left, right]);
-    let connection = pairs.get(id);
+  const grouped = new Map<string, SystemdConnection>();
+  for (const edge of edges) {
+    if (!visible.has(edge.source) || !visible.has(edge.target) || edge.source === edge.target)
+      continue;
+    const source = edge.relationship === "After" ? edge.target : edge.source;
+    const target = edge.relationship === "After" ? edge.source : edge.target;
+    const ordering = edge.relationship === "After" || edge.relationship === "Before";
+    const id = JSON.stringify([source, target, ordering ? "ordering" : "dependency"]);
+    let connection = grouped.get(id);
     if (!connection) {
       connection = {
         id,
-        left,
-        right,
+        source,
+        target,
         edges: [],
-        badge: { x: 0, y: 0, width: BADGE_WIDTH, height: 0 },
-        paths: ["", ""],
-        arrowLeft: false,
-        arrowRight: false,
+        kind: ordering
+          ? "ordering"
+          : edge.relationship === "Triggers"
+            ? "activation"
+            : edge.relationship === "Requires"
+              ? "requires"
+              : "wants",
+        path: "",
+        label: "",
+        labelPoint: { x: 0, y: 0 },
       };
-      pairs.set(id, connection);
+      grouped.set(id, connection);
     }
     connection.edges.push(edge);
-    connection.arrowLeft ||= edge.target === left;
-    connection.arrowRight ||= edge.target === right;
+    if (edge.relationship === "Requires") connection.kind = "requires";
   }
-  const connections = [...pairs.values()];
-  const incoming = new Map(
-    ids.map((id) => [id, connections.filter((connection) => connection.right === id)]),
+  const connections = [...grouped.values()].sort((a, b) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
   );
-  const incident = new Map(
-    ids.map((id) => [
-      id,
-      connections.filter((connection) => connection.left === id || connection.right === id),
-    ]),
-  );
-  const longConnections = connections.filter(
-    (connection) => columns.get(connection.right)! - columns.get(connection.left)! > 1,
-  );
-  const top = PADDING + longConnections.length * 12;
-  const nodeHeights = new Map(
-    ids.map((id) => [id, Math.max(SYSTEMD_NODE_HEIGHT, (incident.get(id)?.length ?? 0) * 8 + 24)]),
-  );
-  const blocks = new Map(
-    ids.map((id) => [
-      id,
-      Math.max(
-        nodeHeights.get(id)! + 32,
-        (incoming.get(id) ?? []).reduce(
-          (height, connection) => height + connection.edges.length * ROW_HEIGHT + 24,
-          0,
-        ),
-      ),
-    ]),
-  );
-  const heights = columnNumbers.map((_, column) =>
-    ids
-      .filter((id) => columns.get(id) === column)
-      .reduce((height, id) => height + blocks.get(id)!, 0),
-  );
-  const bodyHeight = Math.max(SYSTEMD_NODE_HEIGHT + 32, ...heights);
-  const positions = new Map<string, SystemdGraphNode>();
-  for (let column = 0; column < columnNumbers.length; column++) {
-    let y = top + PADDING + (bodyHeight - heights[column]) / 2;
-    for (const id of ids.filter((id) => columns.get(id) === column)) {
-      const x = PADDING + column * (SYSTEMD_NODE_WIDTH + GAP);
-      positions.set(id, {
-        x,
-        y: y + (blocks.get(id)! - nodeHeights.get(id)!) / 2,
-        width: SYSTEMD_NODE_WIDTH,
-        height: nodeHeights.get(id)!,
-      });
-      const badges = incoming.get(id) ?? [];
-      const total = badges.reduce(
-        (height, connection) => height + connection.edges.length * ROW_HEIGHT + 24,
-        0,
-      );
-      let badgeY = y + (blocks.get(id)! - total) / 2 + 6;
-      for (const connection of badges) {
-        connection.badge = {
-          x: x - GAP / 2 - BADGE_WIDTH / 2,
-          y: badgeY,
-          width: BADGE_WIDTH,
-          height: connection.edges.length * ROW_HEIGHT + 12,
-        };
-        badgeY += connection.badge.height + 12;
-      }
-      y += blocks.get(id)!;
+  const adjacent = new Map(ids.map((id) => [id, new Set<string>()]));
+  for (const edge of connections) {
+    adjacent.get(edge.source)!.add(edge.target);
+    adjacent.get(edge.target)!.add(edge.source);
+  }
+  const placements = new Map<string, SystemdGraphPlacement>([[root, { column: 0, row: 0 }]]);
+  const occupied = new Map<number, Set<number>>([[0, new Set([0])]]);
+  const queue = [root];
+  for (let i = 0; i < queue.length; i++) {
+    const parent = queue[i];
+    const neighbors = [...(adjacent.get(parent) ?? [])].sort(
+      (a, b) => Number(previous.has(b)) - Number(previous.has(a)) || (a < b ? -1 : a > b ? 1 : 0),
+    );
+    for (const id of neighbors) {
+      if (placements.has(id)) continue;
+      const direction =
+        parent === root
+          ? connections.some((edge) => edge.source === root && edge.target === id)
+            ? 1
+            : -1
+          : Math.sign(placements.get(parent)!.column);
+      const old = previous.get(id);
+      let column =
+        old && Math.sign(old.column) === direction
+          ? old.column
+          : placements.get(parent)!.column + direction;
+      while (
+        [...(adjacent.get(id) ?? [])].some(
+          (neighbor) => placements.get(neighbor)?.column === column,
+        )
+      )
+        column += direction;
+      const rows = occupied.get(column) ?? new Set<number>();
+      let row = old?.column === column ? old.row : 0;
+      for (let slot = 0; rows.has(row); slot++)
+        row = slot % 2 === 0 ? -(slot / 2 + 1) : (slot + 1) / 2;
+      rows.add(row);
+      occupied.set(column, rows);
+      placements.set(id, { column, row });
+      queue.push(id);
     }
   }
-
-  function port(id: string, connection: SystemdConnection, side: "left" | "right") {
+  for (const id of ids)
+    if (!placements.has(id)) {
+      const column = 1,
+        rows = occupied.get(column) ?? new Set<number>();
+      let row = 0;
+      while (rows.has(row)) row++;
+      rows.add(row);
+      occupied.set(column, rows);
+      placements.set(id, { column, row });
+    }
+  const minX = Math.min(...[...placements.values()].map((point) => point.column * COLUMN_STEP));
+  const minY = Math.min(...[...placements.values()].map((point) => point.row * ROW_STEP));
+  const long = connections.filter(
+    (edge) =>
+      Math.abs(placements.get(edge.source)!.column - placements.get(edge.target)!.column) > 1,
+  );
+  const top = long.length * 12;
+  const positions = new Map<string, SystemdGraphNode>(
+    ids.map((id) => {
+      const point = placements.get(id)!;
+      return [
+        id,
+        {
+          x: PADDING + point.column * COLUMN_STEP - minX,
+          y: PADDING + top + point.row * ROW_STEP - minY,
+          width: SYSTEMD_NODE_WIDTH,
+          height: SYSTEMD_NODE_HEIGHT,
+        },
+      ];
+    }),
+  );
+  function port(id: string, connection: SystemdConnection, side: number) {
     const node = positions.get(id)!;
-    const onSide = (incident.get(id) ?? [])
-      .filter((candidate) => (side === "right" ? candidate.left === id : candidate.right === id))
-      .sort((a, b) => a.badge.y - b.badge.y);
-    const index = onSide.indexOf(connection);
+    const onSide = connections
+      .filter((edge) => edge.source === id || edge.target === id)
+      .filter((edge) => {
+        const other = positions.get(edge.source === id ? edge.target : edge.source)!;
+        return Math.sign(other.x - node.x) === side;
+      })
+      .sort((a, b) => {
+        const otherA = positions.get(a.source === id ? a.target : a.source)!;
+        const otherB = positions.get(b.source === id ? b.target : b.source)!;
+        return otherA.y - otherB.y || (a.id < b.id ? -1 : 1);
+      });
     return {
-      x: side === "right" ? node.x + node.width + 5 : node.x - 5,
-      y: node.y + 12 + ((node.height - 24) * (index + 1)) / (onSide.length + 1),
+      x: side > 0 ? node.x + node.width + 4 : node.x - 4,
+      y:
+        node.y + 10 + ((node.height - 20) * (onSide.indexOf(connection) + 1)) / (onSide.length + 1),
     };
   }
-
   for (const connection of connections) {
-    const left = port(connection.left, connection, "right");
-    const right = port(connection.right, connection, "left");
-    const badge = connection.badge;
-    const entrance = { x: badge.x - 4, y: badge.y + badge.height / 2 };
-    const exit = { x: badge.x + badge.width + 4, y: entrance.y };
-    const track = longConnections.indexOf(connection);
-    const laneX = left.x + 12;
-    const lastLaneX = positions.get(connection.right)!.x - GAP + 20;
-    connection.paths = [
+    const source = positions.get(connection.source)!,
+      target = positions.get(connection.target)!;
+    const direction = Math.sign(target.x - source.x);
+    const start = port(connection.source, connection, direction),
+      end = port(connection.target, connection, -direction);
+    const middle = (start.x + end.x) / 2;
+    const track = long.indexOf(connection);
+    connection.path =
       track < 0
-        ? curve(left, entrance)
+        ? `M${start.x},${start.y} C${middle},${start.y} ${middle},${end.y} ${end.x},${end.y}`
         : roundedPath([
-            left,
-            { x: laneX, y: left.y },
-            { x: laneX, y: PADDING + track * 12 },
-            { x: lastLaneX, y: PADDING + track * 12 },
-            { x: lastLaneX, y: entrance.y },
-            entrance,
-          ]),
-      curve(exit, right),
-    ];
+            start,
+            { x: start.x + direction * 12, y: start.y },
+            { x: start.x + direction * 12, y: 12 + track * 12 },
+            { x: end.x - direction * 12, y: 12 + track * 12 },
+            { x: end.x - direction * 12, y: end.y },
+            end,
+          ]);
+    connection.label =
+      connection.kind === "ordering"
+        ? "Before"
+        : [...new Set(connection.edges.map((edge) => edge.relationship))].join(" · ");
+    const farTarget =
+      Math.abs(placements.get(connection.target)!.column) >=
+      Math.abs(placements.get(connection.source)!.column);
+    connection.labelPoint = {
+      x: farTarget ? end.x - direction * 66 : start.x + direction * 66,
+      y: (farTarget ? end.y : start.y) - 7,
+    };
   }
   return {
     positions,
+    placements,
     connections,
-    width:
-      PADDING * 2 +
-      Math.max(0, columnNumbers.length - 1) * (SYSTEMD_NODE_WIDTH + GAP) +
-      SYSTEMD_NODE_WIDTH,
-    height: top + bodyHeight + PADDING * 2,
+    width: Math.max(...[...positions.values()].map((node) => node.x + node.width)) + PADDING,
+    height: Math.max(...[...positions.values()].map((node) => node.y + node.height)) + PADDING,
   };
 }

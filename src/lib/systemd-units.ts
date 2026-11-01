@@ -68,6 +68,21 @@ export function filterSystemdUnits(units: SystemdUnit[], filters: SystemdUnitFil
 }
 
 export const SYSTEMD_RELATIONSHIPS = ["Requires", "Wants", "After", "Before", "Triggers"] as const;
+export const SYSTEMD_RELATIONSHIP_GROUPS = {
+  dependencies: ["Requires", "Wants"],
+  ordering: ["After", "Before"],
+  activation: ["Triggers"],
+} as const;
+export const SYSTEMD_INITIAL_VISIBLE = 7;
+export const SYSTEMD_MAX_VISIBLE = 25;
+
+export function systemdStateLabel(active: string | undefined, sub?: string) {
+  const meaningful =
+    active === "active" && ["running", "listening", "waiting", "mounted"].includes(sub ?? "")
+      ? sub!
+      : active;
+  return meaningful ? meaningful[0].toUpperCase() + meaningful.slice(1) : "Unknown";
+}
 export type SystemdRelationship = (typeof SYSTEMD_RELATIONSHIPS)[number];
 export interface SystemdEdge {
   id: string;
@@ -119,7 +134,7 @@ export function systemdNeighborhood(
   edges: SystemdEdge[],
   relationships: string[],
   search = "",
-  limit = 60,
+  limit = SYSTEMD_INITIAL_VISIBLE,
 ) {
   const allowed = edges.filter((edge) => relationships.includes(edge.relationship));
   const candidates = new Set([root]);
@@ -179,6 +194,7 @@ export function navigateSystemdExplorer(
     ...state,
     rootId: unit,
     expanded: [],
+    visibleLimit: SYSTEMD_INITIAL_VISIBLE,
     search: "",
     dependencySearch: "",
     state: "all",

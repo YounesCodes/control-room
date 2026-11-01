@@ -2,8 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { EmptyState } from "./PanelState";
 import { observeLayoutFallback } from "./ResizablePanels";
 import type { SystemdUnit } from "../types";
+import { systemdStateLabel } from "../lib/systemd-units";
 
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = 44;
 const OVERSCAN = 6;
 
 /** Keep the inventory scrollable and keyboard navigable without mounting every unit. */
@@ -116,16 +117,13 @@ export function SystemdInventory({
           onClick={() => onSelect(unit.id)}
           onDoubleClick={() => onExplore(unit.id)}
         >
-          <span className={"service-indicator service-" + unit.activeState} />
           <span className="row-main">
             <strong>{unit.id}</strong>
             <small>{unit.description || "No description"}</small>
           </span>
           <span className="row-state unit-row-state">
-            <span>
-              {unit.activeState} / {unit.subState}
-            </span>
-            <span className="unit-type-label">{unit.unitFileState ?? "Enablement unknown"}</span>
+            <span className={"service-indicator service-" + unit.activeState} aria-hidden="true" />
+            <span>{systemdStateLabel(unit.activeState, unit.subState)}</span>
           </span>
         </button>
       ))}
