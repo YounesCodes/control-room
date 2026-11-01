@@ -25,7 +25,7 @@ Expand **Configuration** for the unit-file path, drop-ins, and files on disk. **
 
 Choose **Dependency graph** or **Explore dependencies** to focus on the selected unit and its immediate neighbors. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to restore the full diagram. Select a node for its inspector. Double-click it, or press **Shift+Enter** on a focused node, to refocus the graph. Use each node's **Expand** button to read another neighborhood.
 
-The relationship buttons filter **Requires**, **Wants**, **After**, **Before**, and **Triggers**. Arrows point from the source unit to the named target. Requires and Wants pull in units; After and Before are ordering constraints. Reverse dependencies come from systemd's reported properties. Unit names alone never establish a relationship. Graph search retains the path to matching nodes. The graph shows at most 60 units and allows 24 expanded neighborhoods; narrow the search or refocus to continue.
+The relationship buttons filter **Requires**, **Wants**, **After**, **Before**, and **Triggers**. Each badge lists the reported relationships between its two units, with an arrow beside each row showing its direction. Connectors can have arrowheads at both ends. Requires and Wants pull in units; After and Before are ordering constraints. Reverse dependencies come from systemd's reported properties. Unit names alone never establish a relationship. Graph search retains the path to matching nodes. The graph shows at most 60 units and allows 24 expanded neighborhoods; narrow the search or refocus to continue.
 
 ## Investigate a failure
 

@@ -14,9 +14,7 @@ import { usePanZoom } from "../lib/use-pan-zoom";
 import { observeLayoutFallback } from "./ResizablePanels";
 import type { SystemdEdge } from "../lib/systemd-units";
 import type { SystemdUnit } from "../types";
-
-const WIDTH = 236;
-const HEIGHT = 78;
+import { layoutSystemdGraph } from "../lib/systemd-graph-layout";
 
 export function SystemdGraph({
   ids,
@@ -50,40 +48,7 @@ export function SystemdGraph({
   const [moving, setMoving] = useState(false);
   const marker = useId().replace(/:/g, "");
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const layout = useMemo(() => {
-    const distances = new Map([[rootId, 0]]);
-    const queue = [rootId];
-    for (let i = 0; i < queue.length; i++) {
-      const id = queue[i];
-      for (const edge of edges) {
-        const neighbor = edge.source === id ? edge.target : edge.target === id ? edge.source : null;
-        if (neighbor && !distances.has(neighbor)) {
-          distances.set(neighbor, (distances.get(id) ?? 0) + 1);
-          queue.push(neighbor);
-        }
-      }
-    }
-    const columns = new Map<number, string[]>();
-    for (const id of ids) {
-      const depth = distances.get(id) ?? 1;
-      const list = columns.get(depth) ?? [];
-      list.push(id);
-      columns.set(depth, list);
-    }
-    const positions = new Map<string, { x: number; y: number }>();
-    let column = 0;
-    const rows = Math.min(8, Math.max(1, ...[...columns.values()].map((list) => list.length)));
-    for (const [, list] of [...columns.entries()].sort((a, b) => a[0] - b[0])) {
-      list.forEach((id, index) =>
-        positions.set(id, {
-          x: 24 + (column + Math.floor(index / 8)) * 370,
-          y: 24 + (id === rootId ? (rows - 1) / 2 : index % 8) * 112,
-        }),
-      );
-      column += Math.ceil(list.length / 8);
-    }
-    return { positions, width: Math.max(320, column * 370), height: rows * 112 + 24 };
-  }, [ids, edges, rootId]);
+  const layout = useMemo(() => layoutSystemdGraph(ids, edges, rootId), [ids, edges, rootId]);
 
   const fit = useCallback(
     (animate = true) => {
@@ -213,6 +178,10 @@ export function SystemdGraph({
       >
         <div
           className={"systemd-graph-content" + (moving ? " arch-focusing" : "")}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && event.propertyName === "transform")
+              setMoving(false);
+          }}
           style={{
             width: layout.width,
             height: layout.height,
@@ -228,40 +197,71 @@ export function SystemdGraph({
             <defs>
               <marker
                 id={marker}
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="6"
-                markerHeight="6"
+                viewBox="0 0 8 8"
+                refX="8"
+                refY="4"
+                markerWidth="8"
+                markerHeight="8"
+                markerUnits="userSpaceOnUse"
                 orient="auto-start-reverse"
               >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+                <path d="M 0 0 L 8 4 L 0 8 z" fill="currentColor" />
               </marker>
             </defs>
-            {edges.map((edge, index) => {
-              const source = layout.positions.get(edge.source);
-              const target = layout.positions.get(edge.target);
-              if (!source || !target) return null;
-              const forward = source.x < target.x;
-              const x1 = source.x + (forward ? WIDTH : 0);
-              const x2 = target.x + (forward ? 0 : WIDTH);
-              const offset = ((index % 3) - 1) * 14;
-              const y1 = source.y + HEIGHT / 2 + offset;
-              const y2 = target.y + HEIGHT / 2 + offset;
-              const mid = (x1 + x2) / 2;
+            {layout.connections.map((connection) => {
+              const kinds = new Set(connection.edges.map((edge) => edge.relationship));
+              const kind =
+                kinds.size === 1 ? connection.edges[0].relationship.toLowerCase() : "mixed";
+              const badge = connection.badge;
               return (
-                <g
-                  key={edge.id}
-                  className={"systemd-edge relationship-" + edge.relationship.toLowerCase()}
-                >
-                  <title>{edge.source + " " + edge.relationship + " " + edge.target}</title>
+                <g key={connection.id} className={"systemd-connection relationship-" + kind}>
                   <path
-                    d={`M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`}
-                    markerEnd={`url(#${marker})`}
+                    className="systemd-edge-path"
+                    d={connection.paths[0]}
+                    markerStart={connection.arrowLeft ? "url(#" + marker + ")" : undefined}
+                    vectorEffect="non-scaling-stroke"
                   />
-                  <text x={mid} y={(y1 + y2) / 2 - 5} textAnchor="middle">
-                    {edge.relationship}
-                  </text>
+                  <path
+                    className="systemd-edge-path"
+                    d={connection.paths[1]}
+                    markerEnd={connection.arrowRight ? "url(#" + marker + ")" : undefined}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <rect
+                    className="systemd-edge-badge"
+                    x={badge.x}
+                    y={badge.y}
+                    width={badge.width}
+                    height={badge.height}
+                    rx={6}
+                  />
+                  {connection.edges.map((edge, index) => {
+                    const y = badge.y + 19 + index * 26;
+                    const rightward = edge.source === connection.left;
+                    return (
+                      <g
+                        key={edge.id}
+                        className={"systemd-edge relationship-" + edge.relationship.toLowerCase()}
+                      >
+                        <title>{edge.source + " " + edge.relationship + " " + edge.target}</title>
+                        <path
+                          className="systemd-edge-swatch"
+                          d={"M" + (badge.x + 10) + "," + y + " h14"}
+                        />
+                        <text x={badge.x + 34} y={y + 4}>
+                          {edge.relationship}
+                        </text>
+                        <path
+                          className="systemd-edge-direction"
+                          d={
+                            rightward
+                              ? "M" + (badge.x + 118) + "," + y + " h14 m-4,-4 4,4 -4,4"
+                              : "M" + (badge.x + 132) + "," + y + " h-14 m4,-4 -4,4 4,4"
+                          }
+                        />
+                      </g>
+                    );
+                  })}
                 </g>
               );
             })}
@@ -273,7 +273,12 @@ export function SystemdGraph({
               <div
                 key={id}
                 className={"systemd-graph-node" + (id === rootId ? " graph-root" : "")}
-                style={{ left: position.x, top: position.y, width: WIDTH, height: HEIGHT }}
+                style={{
+                  left: position.x,
+                  top: position.y,
+                  width: position.width,
+                  height: position.height,
+                }}
               >
                 <button
                   type="button"

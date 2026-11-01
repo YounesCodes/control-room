@@ -3,6 +3,8 @@ import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import axe from "axe-core";
 import { ServicesPane } from "./ServicesPane";
+import { SystemdGraph } from "../components/SystemdGraph";
+import { systemdEdges } from "../lib/systemd-units";
 import { ConnectionSection } from "../components/ResizablePanels";
 import { connection } from "../test/app-fixtures";
 import { systemdInspection } from "../test/systemd-fixtures";
@@ -132,6 +134,136 @@ function renderPane(items = units) {
 function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
+
+it.each([1, 1000])(
+  "keeps long unit names and descriptions inside the inventory with %s units",
+  async (count) => {
+    await page.viewport(960, 800);
+    renderPane(
+      Array.from({ length: count }, (_, index) => ({
+        ...units[1],
+        id:
+          "run-credentials-systemd" +
+          String.raw`\x2d` +
+          "resolved-".repeat(12) +
+          index +
+          ".service.mount",
+        description: "A".repeat(600),
+      })),
+    );
+    const list = screen.getByRole("region", { name: "Systemd units" });
+    if (count > 1) expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth + 1);
+    list.scrollLeft = 1000;
+    expect(list.scrollLeft).toBe(0);
+  },
+);
+
+it.each(["immediate", "cycle", "wrapped"])(
+  "separates parallel and reverse relationship labels and keeps %s routes clear",
+  async (scenario) => {
+    await page.viewport(1280, 800);
+    const root = "dev-mqueue.mount";
+    const ids =
+      scenario === "wrapped"
+        ? [root, ...Array.from({ length: 19 }, (_, index) => "neighbor-" + index + ".target")]
+        : [root, "-.slice", "-.mount", "sysinit.target", "systemd-journald.socket"];
+    const edges =
+      scenario === "wrapped"
+        ? systemdEdges([
+            systemdInspection(root, {
+              Requires: ids.slice(1).join(" "),
+              After: ids.slice(1).join(" "),
+            }),
+          ])
+        : systemdEdges([
+            systemdInspection(root, {
+              Requires: ids.slice(1).join(" "),
+              After: ids.slice(1).join(" "),
+              Before: "sysinit.target",
+              Wants: "sysinit.target",
+              RequiredBy: "sysinit.target",
+            }),
+            ...(scenario === "cycle"
+              ? [
+                  systemdInspection("-.slice", {
+                    Wants: "-.mount sysinit.target",
+                    Before: "systemd-journald.socket",
+                  }),
+                  systemdInspection("sysinit.target", { Requires: "-.mount" }),
+                ]
+              : []),
+          ]);
+    render(
+      <div style={{ position: "relative", width: "100%", height: 760 }}>
+        <SystemdGraph
+          ids={ids}
+          edges={edges}
+          units={[]}
+          rootId={root}
+          selectedId={null}
+          expanded={[]}
+          onSelect={vi.fn()}
+          onRefocus={vi.fn()}
+          onExpand={vi.fn()}
+          inspector={null}
+        />
+      </div>,
+    );
+    const labels = [...document.querySelectorAll<SVGGraphicsElement>(".systemd-edge text")];
+    expect(labels).toHaveLength(edges.length);
+    const overlaps: string[] = [];
+    const gap = 4 * labels[0].getScreenCTM()!.a;
+    for (let a = 0; a < labels.length; a++)
+      for (let b = a + 1; b < labels.length; b++) {
+        const first = labels[a].getBoundingClientRect();
+        const second = labels[b].getBoundingClientRect();
+        if (
+          first.left < second.right + gap &&
+          first.right + gap > second.left &&
+          first.top < second.bottom + gap &&
+          first.bottom + gap > second.top
+        )
+          overlaps.push(labels[a].textContent + " / " + labels[b].textContent);
+      }
+    expect(overlaps).toEqual([]);
+    const obstacles = [
+      ...[...document.querySelectorAll<SVGRectElement>(".systemd-edge-badge")].map((badge) => ({
+        x: badge.x.baseVal.value,
+        y: badge.y.baseVal.value,
+        width: badge.width.baseVal.value,
+        height: badge.height.baseVal.value,
+      })),
+      ...[...document.querySelectorAll<HTMLElement>(".systemd-graph-node")].map((node) => ({
+        x: node.offsetLeft,
+        y: node.offsetTop,
+        width: node.offsetWidth,
+        height: node.offsetHeight,
+      })),
+    ];
+    const blocked: string[] = [];
+    for (const path of document.querySelectorAll<SVGPathElement>(".systemd-edge-path")) {
+      const length = path.getTotalLength();
+      for (let distance = 0; distance <= length; distance += 6) {
+        const point = path.getPointAtLength(distance);
+        if (
+          obstacles.some(
+            (box) =>
+              point.x > box.x &&
+              point.x < box.x + box.width &&
+              point.y > box.y &&
+              point.y < box.y + box.height,
+          )
+        ) {
+          blocked.push(path.getAttribute("d")!);
+          break;
+        }
+      }
+    }
+    expect(blocked).toEqual([]);
+    await page.screenshot({ path: "../../test-results/systemd-routing-" + scenario + ".png" });
+  },
+);
 
 it("keeps a large inventory bounded and supports keyboard navigation to its last unit", async () => {
   await page.viewport(1280, 800);

@@ -234,12 +234,20 @@ failure color; inactive and disabled units remain neutral. State summaries filte
 the inventory. Preserve the selected identity through refreshes and show a reveal
 action when filters hide it. Large inventories render only the visible rows while
 retaining keyboard access to every unit.
+Keep the inventory vertical-only. Truncate long unit names and descriptions inside
+their row, with complete values available in the tooltip and inspector.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.
 Requires and Wants are requirement relationships; After and Before only constrain
-ordering. Pair line patterns with relationship labels and directed arrows. Include
-reported reverse and activation dependencies, without deriving links from unit
+ordering. Pair line patterns with relationship labels and directed arrows.
+Group parallel links between the same two units in one connector with a separate
+label and direction for each relationship. Reserve space for these labels and route
+connectors outside both labels and cards. Keep arrowheads crisp and labels free of
+text outlines. Apply node and connector layout changes together so endpoints stay
+attached during expansion.
+
+Include reported reverse and activation dependencies, without deriving links from unit
 names. Start at one unit and its neighbors; expand only on request and keep visible
 nodes bounded. Search retains paths to matches. Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during

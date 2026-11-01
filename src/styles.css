@@ -4078,15 +4078,32 @@ dd {
 }
 .systemd-inventory .dense-row {
   min-height: 52px;
+  min-width: 0;
+  max-width: 100%;
 }
-.systemd-virtual-list .dense-row {
-  height: 52px;
+.systemd-inventory .dense-list {
+  overflow-x: hidden;
 }
-.systemd-virtual-list .row-main small,
-.systemd-virtual-list .row-main strong {
+.systemd-inventory .row-main small,
+.systemd-inventory .row-main strong {
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.systemd-inventory .unit-row-state {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 48%;
+}
+.systemd-inventory .unit-row-state > span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.systemd-virtual-list .dense-row {
+  height: 52px;
 }
 .systemd-inventory-detail {
   display: flex;
@@ -4233,45 +4250,52 @@ dd {
 .systemd-graph-content {
   position: absolute;
   transform-origin: 0 0;
-  will-change: transform;
 }
 .systemd-edges {
   position: absolute;
   inset: 0;
   overflow: visible;
   pointer-events: none;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
-.systemd-edge > path {
+.systemd-edge-path,
+.systemd-edge-swatch,
+.systemd-edge-direction {
   fill: none;
-  stroke: var(--text-faint);
+  stroke: var(--text-muted);
   stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.systemd-edge.relationship-wants > path {
+.systemd-edge.relationship-wants > .systemd-edge-swatch,
+.systemd-connection.relationship-wants > .systemd-edge-path {
   stroke-dasharray: 7 4;
 }
-.systemd-edge.relationship-after > path {
+.systemd-edge.relationship-after > .systemd-edge-swatch,
+.systemd-connection.relationship-after > .systemd-edge-path {
   stroke-dasharray: 2 4;
 }
-.systemd-edge.relationship-before > path {
+.systemd-edge.relationship-before > .systemd-edge-swatch,
+.systemd-connection.relationship-before > .systemd-edge-path {
   stroke-dasharray: 9 3 2 3;
 }
-.systemd-edge.relationship-triggers > path {
+.systemd-edge.relationship-triggers > .systemd-edge-swatch,
+.systemd-connection.relationship-triggers > .systemd-edge-path {
   stroke-width: 2.5;
 }
+.systemd-edge-badge {
+  fill: var(--surface-overlay);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
 .systemd-edge text {
-  fill: var(--text-muted);
-  paint-order: stroke;
-  stroke: var(--surface-sunken);
-  stroke-width: 4px;
-  font-size: 10px;
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 500;
 }
 .systemd-graph-node {
   position: absolute;
   animation: systemd-node-in var(--motion-normal) var(--ease) both;
-  transition:
-    left var(--motion-slow) var(--ease),
-    top var(--motion-slow) var(--ease);
 }
 .systemd-graph-node > .arch-chip {
   width: 100%;
@@ -4297,7 +4321,7 @@ dd {
 .systemd-expand {
   position: absolute;
   right: 5px;
-  top: 23px;
+  top: calc(50% - 15px);
 }
 .systemd-graph-status {
   position: absolute;
@@ -4330,11 +4354,9 @@ dd {
 @keyframes systemd-node-in {
   from {
     opacity: 0;
-    translate: 0 6px;
   }
   to {
     opacity: 1;
-    translate: 0 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
