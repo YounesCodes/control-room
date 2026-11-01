@@ -165,6 +165,15 @@ describe("Systemd dependency evidence", () => {
     expect(systemdValue("0")).toBe("0");
     expect(systemdValue("18446744073709551615")).toBe("Unavailable");
   });
+
+  it("keeps different relationships distinct when unit names contain colons", () => {
+    const edges = systemdEdges([
+      systemdInspection("a.service", { Requires: "b.service:Requires:c.service" }),
+      systemdInspection("a.service:Requires:b.service", { Requires: "c.service" }),
+    ]);
+    expect(edges).toHaveLength(2);
+    expect(new Set(edges.map((edge) => edge.id)).size).toBe(2);
+  });
   it("never treats inactive, disabled, or transitioning units as failed", () => {
     const units = [
       { ...unit("idle.service", "service", "inactive"), unitFileState: "disabled" },

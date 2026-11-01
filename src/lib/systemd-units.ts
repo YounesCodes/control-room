@@ -95,7 +95,7 @@ export function systemdEdges(details: SystemdInspection[]): SystemdEdge[] {
         if (!isSystemdUnitName(neighbor) || neighbor === detail.id) continue;
         const source = reverse ? neighbor : detail.id;
         const target = reverse ? detail.id : neighbor;
-        const id = `${source}:${relationship}:${target}`;
+        const id = JSON.stringify([source, relationship, target]);
         edges.set(id, { id, source, target, relationship });
       }
     }
