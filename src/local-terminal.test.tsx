@@ -619,7 +619,7 @@ describe("Local Terminal", () => {
     await openLocalShell(user, "Git Bash");
 
     expect(screen.queryByRole("navigation", { name: "Workspace features" })).toBeNull();
-    expect(screen.getByTestId(/^terminal-/)).toBeTruthy();
+    expect(await screen.findByTestId(/^terminal-/)).toBeTruthy();
     for (const view of [
       "Overview",
       "Systemd",
@@ -635,8 +635,8 @@ describe("Local Terminal", () => {
 
     // Opening the Saved Connection brings them back.
     await openConnection(user, "prod-web");
-    expect(await screen.findByRole("button", { name: "Overview" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Systemd" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Systemd" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Overview" })).toBeNull();
   });
 
   it("gives the connection list the whole sidebar when a local shell is open", async () => {
@@ -1252,7 +1252,7 @@ describe("Local Terminal", () => {
     expect(screen.queryByTestId(/^terminal-/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Connect" }));
     await screen.findByTestId(/^terminal-/);
-    expect(container.querySelector(".feature-nav")?.textContent).toContain("Overview");
+    expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Overview");
     expect(container.querySelector(".feature-nav")?.textContent).toContain("Docker");
     expect(container.querySelector(".feature-nav")?.textContent).toContain("Logs");
     expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Systemd");
