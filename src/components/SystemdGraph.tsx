@@ -8,12 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import { Expand, Minimize2, X } from "lucide-react";
+import { flushSync } from "react-dom";
 import { SystemdGraphExits } from "./SystemdGraphExits";
 import { SystemdPresence } from "./SystemdPresence";
 import { GraphControls } from "./GraphControls";
 import { usePanZoom } from "../lib/use-pan-zoom";
 import { observeLayoutFallback } from "./ResizablePanels";
-import { systemdStateLabel, type SystemdEdge } from "../lib/systemd-units";
+import { SYSTEMD_INITIAL_VISIBLE, systemdStateLabel, type SystemdEdge } from "../lib/systemd-units";
 import type { SystemdUnit } from "../types";
 import { layoutSystemdGraph } from "../lib/systemd-graph-layout";
 
@@ -29,6 +30,7 @@ export function SystemdGraph({
   onExpand,
   inspector,
   frameKey = "",
+  expansionKey = "",
 }: {
   ids: string[];
   edges: SystemdEdge[];
@@ -41,9 +43,14 @@ export function SystemdGraph({
   onExpand: (id: string) => void;
   inspector: ReactNode;
   frameKey?: string;
+  expansionKey?: string;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const overview = useRef(false);
+  const interrupted = useRef(false);
+  const fitFrame = useRef<number | null>(null);
   const nodes = useRef(new Map<string, HTMLButtonElement>());
   const wasInspecting = useRef(!!selectedId);
   const pan = usePanZoom(viewportRef);
@@ -55,6 +62,7 @@ export function SystemdGraph({
   const previous = useRef<{
     root: string;
     frame: string;
+    expansion: string;
     layout: ReturnType<typeof layoutSystemdGraph>;
   } | null>(null);
   const [activeEdge, setActiveEdge] = useState<string | null>(null);
@@ -89,16 +97,53 @@ export function SystemdGraph({
     if (old && old.root === rootId && old.frame === frameKey) {
       const before = old.layout.positions.get(rootId)!;
       const after = layout.positions.get(rootId)!;
-      setView((view) => ({
-        ...view,
-        x: view.x + (before.x - after.x) * view.scale,
-        y: view.y + (before.y - after.y) * view.scale,
-      }));
-    } else fit();
-    previous.current = { root: rootId, frame: frameKey, layout };
-  }, [layout, rootId, frameKey, fit, setView]);
+      const expansionChanged = old.expansion !== expansionKey;
+      const shapeChanged =
+        old.layout.width !== layout.width ||
+        old.layout.height !== layout.height ||
+        old.layout.positions.size !== layout.positions.size ||
+        ids.some((id) => !old.layout.positions.has(id));
+      if (expansionChanged) {
+        overview.current = true;
+        interrupted.current = false;
+      }
+      if (expansionChanged || (shapeChanged && !interrupted.current)) {
+        cancelFitFrame();
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+          fit(true, overview.current);
+        } else {
+          // Normalize the new scene without moving its root on screen, then
+          // animate from that pose on the next frame instead of jumping first.
+          const view = renderedView();
+          setMoving(false);
+          setView({
+            ...view,
+            x: view.x + (before.x - after.x) * view.scale,
+            y: view.y + (before.y - after.y) * view.scale,
+          });
+          fitFrame.current = requestAnimationFrame(() => {
+            fitFrame.current = null;
+            fitRef.current(true, overview.current);
+          });
+        }
+      } else if (before.x !== after.x || before.y !== after.y) {
+        setView((view) => ({
+          ...view,
+          x: view.x + (before.x - after.x) * view.scale,
+          y: view.y + (before.y - after.y) * view.scale,
+        }));
+      }
+    } else {
+      cancelFitFrame();
+      overview.current = expanded.length > 0 || ids.length > SYSTEMD_INITIAL_VISIBLE;
+      interrupted.current = false;
+      fit(true, overview.current);
+    }
+    previous.current = { root: rootId, frame: frameKey, expansion: expansionKey, layout };
+  }, [layout, rootId, frameKey, expansionKey, fit, setView, ids, expanded]);
   const fitRef = useRef(fit);
   fitRef.current = fit;
+  useEffect(() => () => cancelFitFrame(), []);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -108,7 +153,8 @@ export function SystemdGraph({
       if (width === viewport.clientWidth && height === viewport.clientHeight) return;
       width = viewport.clientWidth;
       height = viewport.clientHeight;
-      fitRef.current(false);
+      cancelFitFrame();
+      fitRef.current(false, overview.current);
     };
     if (typeof ResizeObserver === "undefined") return observeLayoutFallback(viewport, resize);
     const observer = new ResizeObserver(resize);
@@ -116,9 +162,14 @@ export function SystemdGraph({
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
+    cancelFitFrame();
     if (selectedId) {
       detailRef.current?.focus({ preventScroll: true });
       wasInspecting.current = true;
+      if (overview.current) {
+        fit(true, true);
+        return;
+      }
       const viewport = viewportRef.current,
         node = previous.current?.layout.positions.get(selectedId);
       if (!viewport || !node) return;
@@ -137,12 +188,27 @@ export function SystemdGraph({
       });
     } else if (wasInspecting.current) {
       wasInspecting.current = false;
-      fit();
+      fit(true, overview.current);
     }
   }, [selectedId]);
 
+  function cancelFitFrame() {
+    if (fitFrame.current !== null) cancelAnimationFrame(fitFrame.current);
+    fitFrame.current = null;
+  }
+  function renderedView() {
+    const transform = contentRef.current && getComputedStyle(contentRef.current).transform;
+    if (transform && transform !== "none" && typeof DOMMatrix !== "undefined") {
+      const matrix = new DOMMatrix(transform);
+      return { scale: matrix.a, x: matrix.e, y: matrix.f };
+    }
+    return pan.view;
+  }
   function stopCamera() {
+    cancelFitFrame();
     lastNodeClick.current = null;
+    interrupted.current = true;
+    setView(renderedView());
     setMoving(false);
   }
 
@@ -219,6 +285,8 @@ export function SystemdGraph({
         }}
         onFit={() => {
           stopCamera();
+          overview.current = true;
+          interrupted.current = false;
           fit(true, true);
         }}
       />
@@ -258,7 +326,7 @@ export function SystemdGraph({
           )
             return;
           press.current = { x: event.clientX, y: event.clientY, moved: false };
-          stopCamera();
+          flushSync(stopCamera);
           pan.onPointerDown(event);
         }}
         onPointerMove={(event) => {
@@ -280,6 +348,7 @@ export function SystemdGraph({
         }}
       >
         <div
+          ref={contentRef}
           className={"systemd-graph-content" + (moving ? " arch-focusing" : "")}
           onTransitionEnd={(event) => {
             if (event.target === event.currentTarget && event.propertyName === "transform")

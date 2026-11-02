@@ -520,6 +520,10 @@ export function ServicesPane({
               selectedId={visibleInspector ? selectedId : null}
               expanded={state.expanded}
               frameKey={state.relationshipGroup + ":" + graphSearch}
+              expansionKey={JSON.stringify([
+                state.expanded,
+                state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
+              ])}
               onSelect={(id) => {
                 if (id) setSelectedId(id);
                 setInspectorOpen(!!id);

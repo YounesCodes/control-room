@@ -147,6 +147,94 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("refits and zooms in both directions on show more, show less and undo, including inspector space", async () => {
+  await page.viewport(1280, 800);
+  const neighbors = Array.from({ length: 20 }, (_, index) => "neighbor-" + index + ".service");
+  api.inspectSystemdUnit.mockImplementation((_host, id) =>
+    Promise.resolve(
+      systemdInspection(id, { Requires: id === "worker.service" ? neighbors.join(" ") : "" }),
+    ),
+  );
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+  await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
+  await settleMotion();
+  const scale = () => new DOMMatrix(camera()).a;
+  const initial = scale();
+  const focused = within(graph).getByRole("button", { name: /^worker.service Failed/ });
+  const beforeExpansion = focused.getBoundingClientRect();
+  const contained = async () => {
+    await settleMotion();
+    const bounds = graph.getBoundingClientRect();
+    const right = screen.queryByRole("complementary")?.getBoundingClientRect().left ?? bounds.right;
+    for (const card of graph.querySelectorAll(".systemd-graph-node")) {
+      const box = card.getBoundingClientRect();
+      expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+      expect(box.right).toBeLessThanOrEqual(right + 1);
+      expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+      expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+    }
+  };
+  await page.getByRole("button", { name: /Show more/ }).click();
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const firstFrame = focused.getBoundingClientRect();
+    expect(
+      Math.abs(
+        firstFrame.top + firstFrame.height / 2 - beforeExpansion.top - beforeExpansion.height / 2,
+      ),
+    ).toBeLessThan(40);
+  }
+  await contained();
+  expect(scale()).toBeLessThan(initial);
+  const first = scale();
+  await page.getByRole("button", { name: /Show more/ }).click();
+  await contained();
+  expect(scale()).toBeLessThan(first);
+  const second = scale();
+  await page.getByRole("button", { name: "Show less" }).click();
+  await contained();
+  expect(scale()).toBeGreaterThan(second);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await contained();
+  expect(scale()).toBeCloseTo(second);
+  await page.getByRole("button", { name: /^neighbor-0.service/ }).click();
+  await contained();
+  await page.getByRole("button", { name: "Close details" }).click();
+  await contained();
+});
+
+it("keeps a manual pan when a pending expansion finishes, until the next expansion action", async () => {
+  await page.viewport(1280, 800);
+  let resolve!: (value: ReturnType<typeof systemdInspection>) => void;
+  api.inspectSystemdUnit.mockImplementation((_host, id) =>
+    id === "database.service"
+      ? new Promise((done) => {
+          resolve = done;
+        })
+      : Promise.resolve(systemdInspection(id, { Requires: "database.service" })),
+  );
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  await page.getByRole("button", { name: "Expand database.service" }).click();
+  await waitFor(() => expect(resolve).toBeTruthy());
+  const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
+  await userEvent.dragAndDrop(viewport, viewport, {
+    sourcePosition: { x: 20, y: 80 },
+    targetPosition: { x: 90, y: 130 },
+  });
+  const root = screen.getByRole("button", { name: /^worker.service Failed/ });
+  const before = root.getBoundingClientRect();
+  resolve(systemdInspection("database.service", { Requires: "leaf.service" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: /^leaf.service/ })).toBeTruthy());
+  await settleMotion();
+  const after = root.getBoundingClientRect();
+  expect(Math.abs(after.left - before.left)).toBeLessThan(1);
+  expect(Math.abs(after.top - before.top)).toBeLessThan(1);
+});
+
 it("reverses show-more and branch expansion with animated, noninteractive exits", async () => {
   await page.viewport(1280, 800);
   const neighbors = Array.from(
@@ -409,15 +497,19 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   expect(document.querySelectorAll(".systemd-edges text")).toHaveLength(0);
   const node = within(graph).getByRole("button", { name: /^database.service/ });
   await settleMotion();
-  const before = node.getBoundingClientRect();
   await page.getByRole("button", { name: "Expand database.service" }).click();
   await waitFor(() =>
     expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
   );
   await settleMotion();
-  const after = node.getBoundingClientRect();
-  expect(Math.abs(before.left - after.left)).toBeLessThan(1);
-  expect(Math.abs(before.top - after.top)).toBeLessThan(1);
+  const bounds = graph.getBoundingClientRect();
+  for (const card of graph.querySelectorAll(".systemd-graph-node")) {
+    const box = card.getBoundingClientRect();
+    expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+    expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
+    expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+    expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+  }
   const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
   const initial = camera();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();

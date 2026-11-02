@@ -23,7 +23,7 @@ Choose one relationship category:
 
 Relationships in the same direction share a connector. The bottom-left key explains arrow direction. Dependencies also shows line samples: solid means Requires is present, dashed means Wants only. Ordering and Activation use solid arrows. Hover or focus an edge to read its reported evidence, including combined Requires and Wants. Reverse dependencies come from systemd's properties; unit names alone never establish a relationship.
 
-**Find dependencies** searches known relationships and keeps paths to matches. Expansion preserves the current view. Automatic framing keeps nodes readable; **Fit to view** can zoom out further. The graph shows at most 25 units and allows 24 expanded neighborhoods. Search or refocus to explore beyond that limit.
+**Find dependencies** searches known relationships and keeps paths to matches. Show more, Show less, Undo, and branch expansion or collapse smoothly adjust zoom and position to fit the visible graph, leaving room for an open inspector. Pan or zoom to take control; pending reads will not override that view until your next expansion action. **Fit to view** restores the overview. The graph shows at most 25 units and allows 24 expanded neighborhoods. Search or refocus to explore beyond that limit.
 
 Use **Show less** to reduce the visible set, or **Undo** to reverse the last expansion change, including a collapse. Expanded nodes keep a visible **Collapse** button. Collapsing a branch removes its deeper units unless another expanded path still reaches them. Undo history stays with the workspace and resets when you refocus, search, or change relationship category.
 

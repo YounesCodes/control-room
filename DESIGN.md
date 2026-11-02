@@ -260,9 +260,14 @@ and deterministic columns, placing incoming units left and outgoing units right.
 
 Include reported reverse and activation dependencies, without deriving links from unit
 names. Start at one unit and up to six neighbors. Show more or expand a node on
-request, up to 25 visible units. Preserve existing positions and camera framing
-during expansion. Automatic framing keeps nodes readable at 85% or larger; explicit
-Fit to view can zoom out to the full diagram. Search retains paths to matches.
+request, up to 25 visible units. Preserve layout slots and smoothly refit zoom and
+position after Show more, Show less, Undo, and branch expansion or collapse. Rebase
+scene coordinates before the camera transition so the root does not jump. Include
+nodes arriving from pending reads, but let manual pan/zoom cancel that adjustment
+until the next expansion action. Reserve inspector space when fitting an expanded
+overview and keep that overview when the inspector closes. Initial focused framing
+keeps nodes readable at 85% or larger; expansion and Fit to view may zoom out further.
+Search retains paths to matches.
 Pair Show more with Show less and a bounded Undo history for expansion changes.
 Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
 expanded descendants while keeping shared branches; Undo restores both the expanded
