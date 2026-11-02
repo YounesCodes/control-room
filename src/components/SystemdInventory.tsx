@@ -27,6 +27,16 @@ export function SystemdInventory({
   const [window, setWindow] = useState({ top: 0, height: 500 });
   const virtual = units.length > 300;
   const signature = units.map((unit) => unit.id).join("\n");
+  const selectedIndex = units.findIndex((unit) => unit.id === selectedId);
+  const previousSelection = useRef({ signature, index: selectedIndex });
+  const glide =
+    previousSelection.current.signature === signature &&
+    previousSelection.current.index >= 0 &&
+    Math.abs(selectedIndex - previousSelection.current.index) <
+      Math.ceil(window.height / ROW_HEIGHT);
+  useLayoutEffect(() => {
+    previousSelection.current = { signature, index: selectedIndex };
+  }, [signature, selectedIndex]);
   const previousSignature = useRef(signature);
   const first = virtual ? Math.max(0, Math.floor(window.top / ROW_HEIGHT) - OVERSCAN) : 0;
   const last = virtual
@@ -124,34 +134,47 @@ export function SystemdInventory({
         focus(next, event.key === "ArrowUp" || event.key === "ArrowDown");
       }}
     >
-      {first > 0 && <div aria-hidden="true" style={{ height: first * ROW_HEIGHT }} />}
-      {units.slice(first, last).map((unit) => (
-        <button
-          key={unit.id}
-          type="button"
-          ref={(element) => {
-            if (element) rows.current.set(unit.id, element);
-            else rows.current.delete(unit.id);
-          }}
-          className={"dense-row" + (unit.id === selectedId ? " selected-row" : "")}
-          aria-pressed={unit.id === selectedId}
-          title={unit.id + "\n" + unit.description}
-          onClick={() => onSelect(unit.id)}
-        >
-          <span className="row-main">
-            <strong>{unit.id}</strong>
-            <small>{unit.description || "No description"}</small>
-          </span>
-          <span className="row-state unit-row-state">
-            <span className={"service-indicator service-" + unit.activeState} aria-hidden="true" />
-            <span>{systemdStateLabel(unit.activeState, unit.subState)}</span>
-          </span>
-        </button>
-      ))}
-      {last < units.length && (
-        <div aria-hidden="true" style={{ height: (units.length - last) * ROW_HEIGHT }} />
-      )}
-      {!units.length && <EmptyState title={emptyTitle} />}
+      <div className="systemd-inventory-rows">
+        {selectedIndex >= 0 && (
+          <div
+            className="systemd-selection-indicator"
+            aria-hidden="true"
+            data-glide={glide || undefined}
+            style={{ transform: `translateY(${selectedIndex * ROW_HEIGHT}px)` }}
+          />
+        )}
+        {first > 0 && <div aria-hidden="true" style={{ height: first * ROW_HEIGHT }} />}
+        {units.slice(first, last).map((unit) => (
+          <button
+            key={unit.id}
+            type="button"
+            ref={(element) => {
+              if (element) rows.current.set(unit.id, element);
+              else rows.current.delete(unit.id);
+            }}
+            className={"dense-row" + (unit.id === selectedId ? " selected-row" : "")}
+            aria-pressed={unit.id === selectedId}
+            title={unit.id + "\n" + unit.description}
+            onClick={() => onSelect(unit.id)}
+          >
+            <span className="row-main">
+              <strong>{unit.id}</strong>
+              <small>{unit.description || "No description"}</small>
+            </span>
+            <span className="row-state unit-row-state">
+              <span
+                className={"service-indicator service-" + unit.activeState}
+                aria-hidden="true"
+              />
+              <span>{systemdStateLabel(unit.activeState, unit.subState)}</span>
+            </span>
+          </button>
+        ))}
+        {last < units.length && (
+          <div aria-hidden="true" style={{ height: (units.length - last) * ROW_HEIGHT }} />
+        )}
+        {!units.length && <EmptyState title={emptyTitle} />}
+      </div>
     </div>
   );
 }

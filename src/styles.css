@@ -4318,9 +4318,33 @@ dd {
   border-bottom-color: transparent;
   border-radius: var(--radius-lg);
 }
-.systemd-inventory .selected-row {
-  outline: 1.5px solid var(--accent);
-  outline-offset: -1.5px;
+.systemd-inventory-rows {
+  position: relative;
+  isolation: isolate;
+}
+.systemd-selection-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--fill-selected);
+  pointer-events: none;
+}
+.systemd-selection-indicator[data-glide] {
+  transition: transform var(--motion-slow) cubic-bezier(0.22, 1, 0.36, 1);
+}
+.systemd-inventory .dense-row {
+  z-index: 1;
+}
+.systemd-inventory .selected-row,
+.systemd-inventory .selected-row:hover {
+  background: transparent;
+}
+.systemd-inventory .selected-row:focus-visible {
+  outline: none;
 }
 .systemd-inventory .selected-row::before {
   content: none;
@@ -4869,6 +4893,9 @@ dd {
     animation: none;
   }
   .systemd-inventory {
+    transition: none;
+  }
+  .systemd-selection-indicator[data-glide] {
     transition: none;
   }
 }

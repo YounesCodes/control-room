@@ -147,6 +147,53 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("glides one shared service highlight and retargets it during rapid switching", async () => {
+  await page.viewport(1280, 800);
+  renderPane(["a", "b", "c"].map((name) => ({ ...units[1], id: name + ".service" })));
+  await page.getByRole("button", { name: /^a.service Database/ }).click();
+  await settleMotion();
+  const marker = document.querySelector<HTMLElement>(".systemd-selection-indicator")!;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  await page.getByRole("button", { name: /^c.service Database/ }).click();
+  expect(document.querySelectorAll(".systemd-selection-indicator")).toHaveLength(1);
+  expect(document.querySelector(".systemd-selection-indicator")).toBe(marker);
+  expect(screen.getByRole("heading", { name: "c.service" })).toBeTruthy();
+  if (!reduced) {
+    const motion = marker.getAnimations()[0];
+    motion.pause();
+    motion.currentTime = 80;
+    const middle = new DOMMatrix(getComputedStyle(marker).transform).m42;
+    expect(middle).toBeGreaterThan(0);
+    expect(middle).toBeLessThan(88);
+    await page.getByRole("button", { name: /^b.service Database/ }).click();
+    const retargeted = marker.getAnimations()[0];
+    retargeted.pause();
+    retargeted.currentTime = 0;
+    expect(Math.abs(new DOMMatrix(getComputedStyle(marker).transform).m42 - middle)).toBeLessThan(
+      1,
+    );
+    retargeted.finish();
+  } else {
+    expect(marker.getAnimations()).toHaveLength(0);
+    await page.getByRole("button", { name: /^b.service Database/ }).click();
+  }
+  await settleMotion();
+  expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44);
+  expect(marker.getBoundingClientRect().height).toBe(44);
+  expect(getComputedStyle(marker).borderRadius).not.toBe("0px");
+  const row = document.querySelector<HTMLElement>(".systemd-inventory .selected-row")!;
+  expect(marker.getBoundingClientRect().top).toBe(row.getBoundingClientRect().top);
+  row.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  await settleMotion();
+  expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(88);
+  expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true");
+  expect(getComputedStyle(document.activeElement!).outlineStyle).toBe("none");
+  await page.getByRole("button", { name: "Find units", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search units" }).fill("a.service");
+  await waitFor(() => expect(document.querySelector(".systemd-selection-indicator")).toBeNull());
+});
+
 it("removes the search field outline after clicking its magnifier to collapse", async () => {
   renderPane();
   const magnifier = page.getByRole("button", { name: "Find units", exact: true });
@@ -987,8 +1034,9 @@ it.each([360, 960, 1400])(
     const row = screen.getByRole("button", { name: /worker.service Queue worker/ });
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
     const inspector = screen.getByRole("complementary");
-    expect(getComputedStyle(row).outlineStyle).toBe("solid");
-    expect(getComputedStyle(row).outlineWidth).toBe("1px");
+    const marker = document.querySelector<HTMLElement>(".systemd-selection-indicator")!;
+    expect(getComputedStyle(marker).borderTopStyle).toBe("solid");
+    expect(getComputedStyle(marker).borderTopWidth).toBe("1px");
     expect(getComputedStyle(row, "::before").content).toBe("none");
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       const entrance = inspector

@@ -247,6 +247,9 @@ only the visible rows while retaining keyboard access to every unit.
 Keep the inventory vertical-only. Truncate long unit names and descriptions inside
 their row, with complete values available in the tooltip and inspector.
 Outline the whole selected Systemd row rather than marking only its left edge.
+Use one shared rounded highlight that glides between nearby selections. Retarget
+from its current position during rapid navigation. Snap on filter changes or
+distant virtual-list jumps so the selected unit is never waiting for a long sweep.
 Up/Down selects adjacent units in the filtered, sorted inventory and updates the
 open inspector immediately. Keep keyboard focus on the row and scroll it into
 view, including in virtual inventories. The inspector itself also accepts Up/Down;
