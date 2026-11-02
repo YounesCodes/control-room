@@ -200,9 +200,58 @@ it("refits and zooms in both directions on show more, show less and undo, includ
   await contained();
   expect(scale()).toBeCloseTo(second);
   await page.getByRole("button", { name: /^neighbor-0.service/ }).click();
+  await settleMotion();
+  expect(scale()).toBeCloseTo(1.1);
+  const selected = within(graph)
+    .getByRole("button", { name: /^neighbor-0.service/ })
+    .getBoundingClientRect();
+  const viewport = graph.getBoundingClientRect();
+  const panel = screen.getByRole("complementary").getBoundingClientRect();
+  expect(selected.left).toBeGreaterThanOrEqual(viewport.left);
+  expect(selected.right).toBeLessThanOrEqual(panel.left);
+  expect(
+    Math.abs(selected.top + selected.height / 2 - viewport.top - viewport.height / 2),
+  ).toBeLessThan(15);
+  await page.getByRole("button", { name: "Show less" }).click();
   await contained();
+  expect(scale()).toBeLessThan(1.1);
   await page.getByRole("button", { name: "Close details" }).click();
   await contained();
+});
+
+it("keeps selected-node focus when a pending expanded neighborhood arrives", async () => {
+  await page.viewport(1280, 800);
+  let resolve!: (value: ReturnType<typeof systemdInspection>) => void;
+  api.inspectSystemdUnit.mockImplementation((_host, id) =>
+    id === "database.service"
+      ? new Promise((done) => {
+          resolve = done;
+        })
+      : Promise.resolve(systemdInspection(id, { Requires: "database.service" })),
+  );
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  await page.getByRole("button", { name: "Expand database.service" }).click();
+  await waitFor(() => expect(resolve).toBeTruthy());
+  await page.getByRole("button", { name: /^database.service/ }).click();
+  await settleMotion();
+  const node = screen.getByRole("button", { name: /^database.service/ });
+  const before = node.getBoundingClientRect();
+  expect(new DOMMatrix(camera()).a).toBeCloseTo(1.1);
+  resolve(systemdInspection("database.service", { Requires: "leaf.service" }));
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole("region", { name: "Systemd dependency graph" })).getByRole("button", {
+        name: /^leaf.service/,
+      }),
+    ).toBeTruthy(),
+  );
+  await settleMotion();
+  const after = node.getBoundingClientRect();
+  expect(new DOMMatrix(camera()).a).toBeCloseTo(1.1);
+  expect(Math.abs(after.left - before.left)).toBeLessThan(1);
+  expect(Math.abs(after.top - before.top)).toBeLessThan(1);
 });
 
 it("keeps a manual pan when a pending expansion finishes, until the next expansion action", async () => {
@@ -228,7 +277,13 @@ it("keeps a manual pan when a pending expansion finishes, until the next expansi
   const root = screen.getByRole("button", { name: /^worker.service Failed/ });
   const before = root.getBoundingClientRect();
   resolve(systemdInspection("database.service", { Requires: "leaf.service" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: /^leaf.service/ })).toBeTruthy());
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole("region", { name: "Systemd dependency graph" })).getByRole("button", {
+        name: /^leaf.service/,
+      }),
+    ).toBeTruthy(),
+  );
   await settleMotion();
   const after = root.getBoundingClientRect();
   expect(Math.abs(after.left - before.left)).toBeLessThan(1);

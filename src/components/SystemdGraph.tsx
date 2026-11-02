@@ -166,10 +166,9 @@ export function SystemdGraph({
     if (selectedId) {
       detailRef.current?.focus({ preventScroll: true });
       wasInspecting.current = true;
-      if (overview.current) {
-        fit(true, true);
-        return;
-      }
+      // Selection focuses this node; late inspection data must not replace
+      // that framing. The next expansion action resumes automatic fitting.
+      interrupted.current = true;
       const viewport = viewportRef.current,
         node = previous.current?.layout.positions.get(selectedId);
       if (!viewport || !node) return;
@@ -188,6 +187,7 @@ export function SystemdGraph({
       });
     } else if (wasInspecting.current) {
       wasInspecting.current = false;
+      interrupted.current = false;
       fit(true, overview.current);
     }
   }, [selectedId]);

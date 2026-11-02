@@ -265,8 +265,10 @@ position after Show more, Show less, Undo, and branch expansion or collapse. Reb
 scene coordinates before the camera transition so the root does not jump. Include
 nodes arriving from pending reads, but let manual pan/zoom cancel that adjustment
 until the next expansion action. Reserve inspector space when fitting an expanded
-overview and keep that overview when the inspector closes. Initial focused framing
-keeps nodes readable at 85% or larger; expansion and Fit to view may zoom out further.
+overview and return to that overview when the inspector closes.
+Selecting a node always zooms directly to it, including in an expanded graph.
+Late inspector data must not replace that focus; an expansion action resumes fitting.
+Initial focused framing keeps nodes readable at 85% or larger; expansion and Fit to view may zoom out further.
 Search retains paths to matches.
 Pair Show more with Show less and a bounded Undo history for expansion changes.
 Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
