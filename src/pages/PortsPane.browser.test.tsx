@@ -161,6 +161,8 @@ it("switches graph selection and inspector with arrows and returns focus on Esca
     return items;
   });
   nodes[0].focus();
+  expect(getComputedStyle(nodes[0]).outlineStyle).toBe("none");
+  expect(getComputedStyle(nodes[0]).boxShadow).not.toBe("none");
   await userEvent.keyboard("{ArrowRight}");
   expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
   const inspector = screen.getByRole("complementary");
