@@ -234,8 +234,11 @@ state. Start without a selected unit; loading or refreshing never picks one.
 Restore an explicit selection when returning to an existing workspace or following
 a unit link. Keep enablement and other metadata in the inspector. Show a failed count
 only when nonzero; keep other counts and collection time in the heading tooltip.
-Search, filtering, and sorting open from one toolbar. Failed rows use failure color;
-inactive and disabled units remain neutral. Preserve the selected identity through
+Search, filtering, and sorting open from one toolbar.
+Search expands inline into the toolbar's free space and retracts on dismissal.
+Use a full-width toolbar row when needed at narrow widths. Anchor filters below
+their icon and toolbar edge, clamp them inside the pane, and reposition on resize.
+Failed rows use failure color; inactive and disabled units remain neutral. Preserve the selected identity through
 refreshes and show a reveal action when filters hide it. Large inventories render
 only the visible rows while retaining keyboard access to every unit.
 Keep the inventory vertical-only. Truncate long unit names and descriptions inside

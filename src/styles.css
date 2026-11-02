@@ -4108,16 +4108,99 @@ dd {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex: 1 1 90px;
+  min-width: 90px;
+  justify-content: flex-end;
+}
+.systemd-toolbar-actions > .icon-button {
+  flex: none;
+}
+.systemd-inline-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 4px 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.systemd-inline-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  font-size: 12px;
+}
+.systemd-presence:not([data-leaving]) > .systemd-inline-search {
+  animation: systemd-search-in 180ms ease-out both;
+}
+.systemd-presence[data-leaving] > .systemd-inline-search {
+  animation: systemd-search-out 180ms ease-in both;
+}
+@keyframes systemd-search-in {
+  from {
+    max-width: 0;
+    opacity: 0;
+  }
+  to {
+    max-width: 420px;
+    opacity: 1;
+  }
+}
+@keyframes systemd-search-out {
+  from {
+    max-width: 420px;
+    opacity: 1;
+  }
+  to {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+@container (max-width: 640px) {
+  .systemd-toolbar-actions:has(.systemd-inline-search) {
+    flex-basis: 100%;
+    order: 5;
+  }
+}
+@container (max-width: 960px) {
+  .systemd-toolbar[data-mode="graph"] .systemd-toolbar-actions:has(.systemd-inline-search) {
+    flex-basis: 100%;
+    order: 5;
+  }
 }
 .systemd-toolbar-actions [aria-pressed="true"],
 .systemd-toolbar-actions [aria-expanded="true"] {
   background: var(--fill-active);
 }
-.systemd-tools-panel {
-  left: auto;
-  right: 12px;
+.systemd-toolbar .systemd-tools-panel {
+  right: auto;
   z-index: 6;
   width: min(330px, calc(100% - 24px));
+}
+.systemd-toolbar .systemd-presence:not([data-leaving]) > .systemd-tools-panel {
+  animation: systemd-filters-in 180ms var(--ease) both;
+}
+.systemd-toolbar .systemd-presence[data-leaving] > .systemd-tools-panel {
+  animation: systemd-filters-out 180ms var(--ease) both;
+}
+@keyframes systemd-filters-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes systemd-filters-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 .systemd-tools-panel .search-field {
   padding: 4px 6px 4px 10px;

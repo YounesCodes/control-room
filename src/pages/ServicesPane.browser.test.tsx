@@ -147,6 +147,77 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it.each([360, 960, 1400])(
+  "keeps search inline and anchors filters below their icon at %s px",
+  async (width) => {
+    await page.viewport(width, 800);
+    renderPane();
+    await page.getByRole("button", { name: "Find units", exact: true }).click();
+    const input = screen.getByRole("textbox", { name: "Search units" });
+    expect(document.activeElement).toBe(input);
+    expect(input.closest(".systemd-heading")).toBeTruthy();
+    expect(document.querySelector(".systemd-tools-panel")).toBeNull();
+    const search = input.closest<HTMLElement>(".systemd-inline-search")!;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const animation = search
+        .getAnimations()
+        .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
+      animation.pause();
+      animation.currentTime = 0;
+      const start = search.getBoundingClientRect().width;
+      animation.currentTime = 90;
+      expect(search.getBoundingClientRect().width).toBeGreaterThan(start);
+      animation.finish();
+    }
+    await settleMotion();
+    const header = document.querySelector(".systemd-heading")!.getBoundingClientRect();
+    const box = search.getBoundingClientRect();
+    expect(box.top).toBeGreaterThanOrEqual(header.top);
+    expect(box.bottom).toBeLessThanOrEqual(header.bottom);
+    expect(box.right).toBeLessThanOrEqual(
+      screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().left + 1,
+    );
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("textbox", { name: "Search units" })).toBeNull();
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const closing = search
+        .getAnimations()
+        .find((item) => (item as CSSAnimation).animationName === "systemd-search-out")!;
+      closing.pause();
+      closing.currentTime = 0;
+      const expanded = search.getBoundingClientRect().width;
+      closing.currentTime = 150;
+      expect(search.getBoundingClientRect().width).toBeLessThan(expanded);
+      closing.finish();
+    }
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find units" }));
+    await page.getByRole("button", { name: "Filter and sort units" }).click();
+    await settleMotion();
+    const panel = screen.getByRole("region", { name: "Unit filters" });
+    const icon = screen.getByRole("button", { name: "Filter and sort units" });
+    const panelBox = panel.getBoundingClientRect(),
+      iconBox = icon.getBoundingClientRect();
+    expect(panelBox.top - iconBox.bottom).toBeGreaterThanOrEqual(8);
+    expect(panelBox.top - iconBox.bottom).toBeLessThanOrEqual(26);
+    expect(panelBox.left).toBeGreaterThanOrEqual(0);
+    expect(panelBox.right).toBeLessThanOrEqual(width);
+    expect(iconBox.left).toBeLessThanOrEqual(panelBox.right);
+    expect(panelBox.top).toBeGreaterThanOrEqual(
+      document.querySelector(".systemd-heading")!.getBoundingClientRect().bottom,
+    );
+    expect((await audit()).violations).toEqual([]);
+    const resized = width === 360 ? 520 : width - 160;
+    await page.viewport(resized, 500);
+    await waitFor(() => expect(panel.getBoundingClientRect().bottom).toBeLessThanOrEqual(500));
+    await waitFor(() =>
+      expect(
+        Math.abs(panel.getBoundingClientRect().right - icon.getBoundingClientRect().right),
+      ).toBeLessThanOrEqual(12),
+    );
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(resized);
+  },
+);
+
 it("toggles the selected node back to a fitted overview without changing graph focus", async () => {
   await page.viewport(960, 800);
   renderPane();

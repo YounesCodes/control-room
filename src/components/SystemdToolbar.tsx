@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GitBranch, List, RefreshCw, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { SystemdPresence } from "./SystemdPresence";
 import { Search } from "./MagnifierIcon";
@@ -35,16 +35,50 @@ export function SystemdToolbar({
   const [tools, setTools] = useState<"search" | "filters" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
+  const filterTrigger = useRef<HTMLButtonElement>(null);
+  const filterPanel = useRef<HTMLDivElement>(null);
   const graph = state.mode === "graph";
   const search = graph ? (state.dependencySearch ?? "") : state.search;
   const filtered = state.state !== "all" || state.unitType !== "all" || state.sort !== "priority";
   useEffect(() => {
     setTools(null);
   }, [state.mode]);
+  useLayoutEffect(() => {
+    if (tools !== "filters") return;
+    const position = () => {
+      const toolbar = ref.current,
+        icon = filterTrigger.current,
+        panel = filterPanel.current;
+      if (!toolbar || !icon || !panel) return;
+      const bounds = toolbar.getBoundingClientRect();
+      const anchor = icon.getBoundingClientRect();
+      const width = Math.min(330, Math.max(0, bounds.width - 24));
+      panel.style.width = width + "px";
+      panel.style.left =
+        Math.max(12, Math.min(anchor.right - bounds.left - width, bounds.width - width - 12)) +
+        "px";
+      const top = Math.max(anchor.bottom + 8, bounds.bottom + 6);
+      panel.style.top = top - bounds.top + "px";
+      panel.style.maxHeight = Math.max(80, window.innerHeight - top - 12) + "px";
+    };
+    position();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(position);
+    if (ref.current) observer?.observe(ref.current);
+    if (filterTrigger.current) observer?.observe(filterTrigger.current);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [tools]);
   useEffect(() => {
     if (!tools) return;
     ref.current
-      ?.querySelector<HTMLElement>(".systemd-tools-panel input, .systemd-tools-panel select")
+      ?.querySelector<HTMLElement>(
+        tools === "search" ? ".systemd-inline-search input" : ".systemd-tools-panel select",
+      )
       ?.focus();
     const dismiss = (event: PointerEvent) => {
       if (event.target instanceof Node && !ref.current?.contains(event.target)) setTools(null);
@@ -71,7 +105,7 @@ export function SystemdToolbar({
     onChange({ state: "all", unitType: "all", sort: "priority" });
   }
   return (
-    <div className="systemd-toolbar" ref={ref}>
+    <div className="systemd-toolbar" ref={ref} data-mode={state.mode}>
       <header className="systemd-heading">
         <h2 title={snapshot} tabIndex={0}>
           Systemd
@@ -143,81 +177,13 @@ export function SystemdToolbar({
           </div>
         </SystemdPresence>
         <div className="systemd-toolbar-actions">
-          <button
-            type="button"
-            className="icon-button"
-            title={graph ? "Find dependencies" : "Find units"}
-            aria-label={graph ? "Find dependencies" : "Find units"}
-            aria-expanded={tools === "search"}
-            aria-pressed={!!search}
-            aria-controls="systemd-tools"
-            onClick={(event) => toggle("search", event.currentTarget)}
-          >
-            <Search size={16} />
-          </button>
-          <SystemdPresence open={!graph}>
-            <button
-              type="button"
-              className="icon-button"
-              title="Filter and sort units"
-              aria-label="Filter and sort units"
-              aria-expanded={tools === "filters"}
-              aria-pressed={filtered}
-              aria-controls="systemd-tools"
-              onClick={(event) => toggle("filters", event.currentTarget)}
+          <SystemdPresence open={tools === "search"}>
+            <div
+              id="systemd-search"
+              className="systemd-inline-search search-field"
+              role="region"
+              aria-label={graph ? "Find dependencies" : "Find units"}
             >
-              <SlidersHorizontal size={16} />
-            </button>
-          </SystemdPresence>
-          <button
-            type="button"
-            className="icon-button"
-            title="Refresh systemd units"
-            aria-label="Refresh systemd units"
-            disabled={loading}
-            onClick={onRefresh}
-          >
-            <RefreshCw size={16} className={loading ? "spinning" : ""} />
-          </button>
-        </div>
-      </header>
-      <SystemdPresence open={!!tools}>
-        <div
-          id="systemd-tools"
-          className="ports-tools-panel systemd-tools-panel"
-          role="region"
-          aria-label={
-            tools === "filters" ? "Unit filters" : graph ? "Find dependencies" : "Find units"
-          }
-        >
-          <header className="ports-tools-heading">
-            <strong>{tools === "filters" ? "Filters" : "Search"}</strong>
-            {tools === "filters" && (
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Reset filters"
-                disabled={!filtered}
-                onClick={reset}
-              >
-                <RotateCcw size={14} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close unit tools"
-              onClick={() => {
-                setTools(null);
-                trigger.current?.focus();
-              }}
-            >
-              <X size={14} />
-            </button>
-          </header>
-          {tools === "search" ? (
-            <label className="search-field">
-              <Search size={14} />
               <input
                 aria-label={graph ? "Search dependencies" : "Search units"}
                 placeholder={graph ? "Search dependencies" : "Search units"}
@@ -239,52 +205,121 @@ export function SystemdToolbar({
               >
                 <X size={14} />
               </button>
-            </label>
-          ) : (
-            <div className="systemd-filter-fields">
-              <label>
-                State
-                <select
-                  aria-label="Unit state"
-                  value={state.state}
-                  onChange={(event) => onChange({ state: event.target.value })}
-                >
-                  <option value="all">All states</option>
-                  {states.map((value) => (
-                    <option key={value}>{value}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Type
-                <select
-                  aria-label="Unit type"
-                  value={state.unitType}
-                  onChange={(event) => onChange({ unitType: event.target.value })}
-                >
-                  <option value="all">All types</option>
-                  {types.map((value) => (
-                    <option key={value}>{value}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Sort
-                <select
-                  aria-label="Sort units"
-                  value={state.sort}
-                  onChange={(event) =>
-                    onChange({ sort: event.target.value as SystemdExplorerState["sort"] })
-                  }
-                >
-                  <option value="priority">Failed first</option>
-                  <option value="name">Name</option>
-                  <option value="state">State</option>
-                  <option value="type">Type</option>
-                </select>
-              </label>
             </div>
-          )}
+          </SystemdPresence>
+          <button
+            type="button"
+            className="icon-button"
+            title={graph ? "Find dependencies" : "Find units"}
+            aria-label={graph ? "Find dependencies" : "Find units"}
+            aria-expanded={tools === "search"}
+            aria-pressed={!!search}
+            aria-controls="systemd-search"
+            onClick={(event) => toggle("search", event.currentTarget)}
+          >
+            <Search size={16} />
+          </button>
+          <SystemdPresence open={!graph}>
+            <button
+              type="button"
+              className="icon-button"
+              ref={filterTrigger}
+              title="Filter and sort units"
+              aria-label="Filter and sort units"
+              aria-expanded={tools === "filters"}
+              aria-pressed={filtered}
+              aria-controls="systemd-filters"
+              onClick={(event) => toggle("filters", event.currentTarget)}
+            >
+              <SlidersHorizontal size={16} />
+            </button>
+          </SystemdPresence>
+          <button
+            type="button"
+            className="icon-button"
+            title="Refresh systemd units"
+            aria-label="Refresh systemd units"
+            disabled={loading}
+            onClick={onRefresh}
+          >
+            <RefreshCw size={16} className={loading ? "spinning" : ""} />
+          </button>
+        </div>
+      </header>
+      <SystemdPresence open={tools === "filters"}>
+        <div
+          ref={filterPanel}
+          id="systemd-filters"
+          className="ports-tools-panel systemd-tools-panel"
+          role="region"
+          aria-label="Unit filters"
+        >
+          <header className="ports-tools-heading">
+            <strong>Filters</strong>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Reset filters"
+              disabled={!filtered}
+              onClick={reset}
+            >
+              <RotateCcw size={14} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Close unit tools"
+              onClick={() => {
+                setTools(null);
+                trigger.current?.focus();
+              }}
+            >
+              <X size={14} />
+            </button>
+          </header>
+          <div className="systemd-filter-fields">
+            <label>
+              State
+              <select
+                aria-label="Unit state"
+                value={state.state}
+                onChange={(event) => onChange({ state: event.target.value })}
+              >
+                <option value="all">All states</option>
+                {states.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Type
+              <select
+                aria-label="Unit type"
+                value={state.unitType}
+                onChange={(event) => onChange({ unitType: event.target.value })}
+              >
+                <option value="all">All types</option>
+                {types.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Sort
+              <select
+                aria-label="Sort units"
+                value={state.sort}
+                onChange={(event) =>
+                  onChange({ sort: event.target.value as SystemdExplorerState["sort"] })
+                }
+              >
+                <option value="priority">Failed first</option>
+                <option value="name">Name</option>
+                <option value="state">State</option>
+                <option value="type">Type</option>
+              </select>
+            </label>
+          </div>
         </div>
       </SystemdPresence>
     </div>
