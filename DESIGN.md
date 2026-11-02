@@ -212,6 +212,9 @@ to its node. The Close button, Escape, clicking the selected node again, and
 clicking empty canvas space all close it. Dragging the canvas pans without
 closing the inspector.
 
+Inspector panels keep their normal surface border without an outer focus outline.
+Keep visible keyboard focus indicators on their buttons, fields, and disclosures.
+
 Docker shares the Ports canvas, camera controls, selection behavior, and inspector
 layout. Fit the full container graph before a selection is made. Group container
 nodes by validated Compose project by default, with an Ungrouped branch for

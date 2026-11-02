@@ -3908,6 +3908,10 @@ dd {
 .list-panel {
   border-right: 1px solid var(--border);
 }
+.detail-panel:focus-visible,
+.arch-detail:focus-visible {
+  outline: none;
+}
 
 .list-panel > .search-field {
   min-height: 37px;
@@ -3945,10 +3949,6 @@ dd {
 
 .windows-service-list-controls {
   grid-template-columns: minmax(120px, 1fr) minmax(0, 110px);
-}
-
-.windows-services-page .detail-panel:focus-visible {
-  outline-offset: -2px;
 }
 
 .port-list-controls {
@@ -4378,9 +4378,6 @@ dd {
   bottom: auto;
   max-height: calc(100% - 24px);
   animation: systemd-inspector-in var(--motion-slow) var(--ease) both;
-}
-.systemd-inspector.arch-detail:focus-visible {
-  outline: none;
 }
 .systemd-canvas .systemd-presence:not([data-leaving]) > .systemd-inspector {
   animation: systemd-graph-inspector-in var(--motion-med) var(--ease) both;

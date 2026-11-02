@@ -160,6 +160,12 @@ it("selects the requested container binding without confusing the same port on a
     { containerId: target.id, hostAddress: "::", hostPort: 443, containerPort: "53/udp" },
   );
   const inspector = await screen.findByRole("complementary");
+  inspector.focus();
+  expect(getComputedStyle(inspector).outlineStyle).toBe("none");
+  await userEvent.keyboard("{Tab}");
+  const close = within(inspector).getByRole("button", { name: "Close details" });
+  expect(document.activeElement).toBe(close);
+  expect(getComputedStyle(close).outlineStyle).toBe("solid");
   expect(within(inspector).getByRole("heading", { name: "443 / UDP" })).toBeTruthy();
   expect(within(inspector).getByText("[::]:443 → 53/udp")).toBeTruthy();
   expect(within(inspector).getByText("dns")).toBeTruthy();
