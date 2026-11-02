@@ -4409,6 +4409,42 @@ dd {
   font-size: 11px;
   pointer-events: auto;
 }
+.systemd-expansion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  pointer-events: auto;
+}
+.systemd-expansion-actions .systemd-more {
+  margin-left: 0;
+}
+.systemd-graph-context {
+  flex-wrap: wrap;
+}
+.systemd-graph-exits,
+.systemd-graph-exit-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.systemd-graph-exits * {
+  pointer-events: none !important;
+}
+.systemd-graph-exit-scene {
+  animation: systemd-node-out var(--motion-med) var(--ease) both;
+}
+.systemd-graph-ghost {
+  position: absolute;
+}
+@keyframes systemd-node-out {
+  to {
+    opacity: 0;
+  }
+}
+.systemd-connection {
+  animation: systemd-node-in var(--motion-med) var(--ease) both;
+}
 .systemd-graph-content {
   position: absolute;
   transform-origin: 0 0;
@@ -4486,7 +4522,8 @@ dd {
   position: absolute;
   animation: systemd-node-in var(--motion-med) var(--ease) both;
 }
-.systemd-graph-node > .arch-chip {
+.systemd-graph-node > .arch-chip,
+.systemd-graph-ghost > .arch-chip {
   width: 100%;
   height: 100%;
   padding: 10px 30px 10px 12px;
@@ -4498,14 +4535,16 @@ dd {
 .systemd-graph-node.graph-root > .arch-chip {
   border-color: var(--text-muted);
 }
-.systemd-graph-node .arch-chip-title strong {
+.systemd-graph-node .arch-chip-title strong,
+.systemd-graph-ghost .arch-chip-title strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
 }
-.systemd-graph-node .arch-chip-kind {
+.systemd-graph-node .arch-chip-kind,
+.systemd-graph-ghost .arch-chip-kind {
   display: flex;
   align-items: center;
   align-self: flex-start;
@@ -4525,6 +4564,9 @@ dd {
 }
 .systemd-graph-node:hover .systemd-expand,
 .systemd-graph-node:focus-within .systemd-expand {
+  opacity: 1;
+}
+.systemd-expand.expanded {
   opacity: 1;
 }
 .systemd-graph-status {
@@ -4597,6 +4639,12 @@ dd {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .systemd-graph-exit-scene {
+    display: none;
+  }
+  .systemd-connection {
+    animation: none;
+  }
   .systemd-presence > * {
     animation: none !important;
   }

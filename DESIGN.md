@@ -263,6 +263,13 @@ names. Start at one unit and up to six neighbors. Show more or expand a node on
 request, up to 25 visible units. Preserve existing positions and camera framing
 during expansion. Automatic framing keeps nodes readable at 85% or larger; explicit
 Fit to view can zoom out to the full diagram. Search retains paths to matches.
+Pair Show more with Show less and a bounded Undo history for expansion changes.
+Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
+expanded descendants while keeping shared branches; Undo restores both the expanded
+units and visible limit. Clear history when refocusing, searching, or changing category.
+Fade new nodes and connectors in together. Keep removed nodes and edges as inert,
+visual-only snapshots for a 160ms exit, cancel ghosts when nodes reappear, and skip
+exit retention under reduced motion. Preserve layout slots during collapse as well.
 Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during
 navigation. Changed SSH targets discard that context and use separate detail caches.

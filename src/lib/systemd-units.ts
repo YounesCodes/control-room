@@ -195,6 +195,7 @@ export function navigateSystemdExplorer(
     rootId: unit,
     expanded: [],
     visibleLimit: SYSTEMD_INITIAL_VISIBLE,
+    expansionHistory: [],
     search: "",
     dependencySearch: "",
     state: "all",

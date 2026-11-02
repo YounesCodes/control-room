@@ -57,6 +57,42 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it("collapses unreachable descendants while retaining dependencies shared by an expanded branch", async () => {
+    const user = userEvent.setup();
+    const requirements: Record<string, string> = {
+      "a.service": "b.service d.service",
+      "b.service": "c.service",
+      "d.service": "c.service",
+      "c.service": "leaf.service",
+    };
+    api.inspectSystemdUnit.mockImplementation((_host, id) =>
+      Promise.resolve(systemdInspection(id, { Requires: requirements[id] ?? "" })),
+    );
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("a.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /a.service description/ }));
+    await user.click(screen.getByRole("button", { name: "Explore a.service" }));
+    await user.click(await screen.findByRole("button", { name: "Expand b.service" }));
+    await user.click(await screen.findByRole("button", { name: "Expand c.service" }));
+    await screen.findByRole("button", { name: /^leaf.service/ });
+    await user.click(screen.getByRole("button", { name: "Expand d.service" }));
+    await waitFor(() =>
+      expect(api.inspectSystemdUnit).toHaveBeenCalledWith(connection.id, "d.service", "properties"),
+    );
+    await user.click(screen.getByRole("button", { name: "Collapse b.service" }));
+    expect(await screen.findByRole("button", { name: /^leaf.service/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Collapse d.service" }));
+    expect(screen.queryByRole("button", { name: /^leaf.service/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Collapse c.service" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("button", { name: /^leaf.service/ })).toBeTruthy();
+  });
   it("does not select the first unit when an inventory request completes", async () => {
     const items = [unit("a.service", "service", "active", "running")];
     api.listServices.mockResolvedValue(items);
@@ -94,7 +130,7 @@ describe("ServicesPane failed units view", () => {
       const user = userEvent.setup();
       render(
         <ServicesPane
-          connection={connection}
+          connection={{ ...connection, id: "pending-details-host" }}
           cache={cache([unit("a.service", "service", "active", "running")])}
           onCacheChange={vi.fn()}
           onViewLogs={vi.fn()}
@@ -198,7 +234,20 @@ describe("ServicesPane failed units view", () => {
     expect(within(graph).queryByRole("button", { name: /^ordering.target/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: /Show more/ }));
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
+    await user.click(screen.getByRole("button", { name: /Show more/ }));
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(19);
+    await user.click(screen.getByRole("button", { name: "Show less" }));
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(19);
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7);
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Show more/ }));
     await user.click(screen.getByRole("button", { name: "Ordering" }));
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     expect(await within(graph).findByRole("button", { name: /^ordering.target/ })).toBeTruthy();
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(2);
     await user.click(screen.getByRole("button", { name: "Activation" }));
@@ -362,6 +411,10 @@ describe("ServicesPane failed units view", () => {
     );
     expect(within(graph).queryByRole("button", { name: /^c.service/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Expand b.service" }));
+    expect(await within(graph).findByRole("button", { name: /^c.service/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Collapse b.service" }));
+    expect(within(graph).queryByRole("button", { name: /^c.service/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
     expect(await within(graph).findByRole("button", { name: /^c.service/ })).toBeTruthy();
     await user.dblClick(within(graph).getByRole("button", { name: /^b.service/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");

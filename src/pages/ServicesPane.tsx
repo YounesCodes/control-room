@@ -70,6 +70,7 @@ export function ServicesPane({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const inspectorRef = useRef<HTMLElement>(null);
   const inventoryRef = useRef<HTMLDivElement>(null);
+  const graphContextRef = useRef<HTMLDivElement>(null);
   const graphSearch = state.dependencySearch ?? "";
   function setGraphSearch(dependencySearch: string) {
     setState((current) => ({ ...current, dependencySearch }));
@@ -196,7 +197,71 @@ export function ServicesPane({
   function patch(next: Partial<SystemdExplorerState>) {
     if (next.relationshipGroup || (state.mode === "graph" && next.dependencySearch !== undefined))
       setInspectorOpen(false);
-    setState((current) => ({ ...current, ...next }));
+    setState((current) => ({
+      ...current,
+      ...((next.rootId && next.rootId !== current.rootId) ||
+      (next.relationshipGroup && next.relationshipGroup !== current.relationshipGroup) ||
+      (next.dependencySearch !== undefined && next.dependencySearch !== current.dependencySearch)
+        ? { expansionHistory: [] }
+        : {}),
+      ...next,
+    }));
+  }
+  function changeExpansion(expanded: string[], visibleLimit: number) {
+    setState((current) => ({
+      ...current,
+      expanded,
+      visibleLimit,
+      expansionHistory: [
+        ...(current.expansionHistory ?? []),
+        {
+          expanded: current.expanded,
+          visibleLimit: current.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
+        },
+      ].slice(-32),
+    }));
+  }
+  function undoExpansion() {
+    setState((current) => {
+      const history = current.expansionHistory ?? [];
+      const previous = history.at(-1);
+      return previous
+        ? { ...current, ...previous, expansionHistory: history.slice(0, -1) }
+        : current;
+    });
+  }
+  function toggleExpansion(id: string) {
+    const collapsing = state.expanded.includes(id);
+    let expanded = collapsing
+      ? state.expanded.filter((unit) => unit !== id)
+      : [...state.expanded, id].slice(0, 24);
+    if (collapsing && rootId) {
+      const reachable = new Set(
+        systemdNeighborhood(
+          rootId,
+          expanded,
+          edges,
+          [...SYSTEMD_RELATIONSHIP_GROUPS[state.relationshipGroup]],
+          "",
+          Infinity,
+        ).ids,
+      );
+      expanded = expanded.filter((unit) => reachable.has(unit));
+    }
+    changeExpansion(
+      expanded,
+      collapsing
+        ? (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE)
+        : Math.min(SYSTEMD_MAX_VISIBLE, (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 3),
+    );
+  }
+  function keepExpansionFocus(control: HTMLButtonElement) {
+    requestAnimationFrame(() => {
+      if (!control.isConnected)
+        graphContextRef.current
+          ?.querySelector<HTMLButtonElement>(".systemd-root-label")
+          ?.focus({ preventScroll: true });
+    });
   }
   function clearFilters() {
     patch({ search: "", state: "all", unitType: "all" });
@@ -220,11 +285,27 @@ export function ServicesPane({
     setSelectedId(id);
     setInspectorOpen(false);
     setGraphSearch("");
-    patch({ mode: "graph", rootId: id, expanded: [], visibleLimit: SYSTEMD_INITIAL_VISIBLE });
+    patch({
+      mode: "graph",
+      rootId: id,
+      expanded: [],
+      visibleLimit: SYSTEMD_INITIAL_VISIBLE,
+      expansionHistory: [],
+    });
   }
 
   const visibleInspector =
     inspectorOpen && !!selectedId && (state.mode === "graph" || !selected || selectedVisible);
+  useEffect(() => {
+    if (
+      state.mode === "graph" &&
+      inspectorOpen &&
+      selectedId &&
+      neighborhood &&
+      !neighborhood.ids.includes(selectedId)
+    )
+      setInspectorOpen(false);
+  }, [state.mode, inspectorOpen, selectedId, neighborhood]);
   useEffect(() => {
     if (visibleInspector && state.mode === "inventory")
       inspectorRef.current?.focus({ preventScroll: true });
@@ -359,7 +440,7 @@ export function ServicesPane({
         </div>
       ) : (
         <div className="systemd-graph-stage">
-          <div className="systemd-graph-context">
+          <div className="systemd-graph-context" ref={graphContextRef}>
             <button
               type="button"
               className="systemd-root-label"
@@ -369,28 +450,66 @@ export function ServicesPane({
               <GitBranch size={14} />
               {rootId}
             </button>
-            {!!neighborhood?.hidden && (
-              <button
-                className="systemd-more"
-                type="button"
-                disabled={(state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE}
-                title={
-                  (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE
-                    ? "Search or refocus to explore other units"
-                    : "Reveal more related units"
-                }
-                onClick={() =>
-                  patch({
-                    visibleLimit: Math.min(
-                      SYSTEMD_MAX_VISIBLE,
-                      (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 6,
-                    ),
-                  })
-                }
-              >
-                Show more · {neighborhood.hidden}
-              </button>
-            )}
+            <div className="systemd-expansion-actions" role="group" aria-label="Graph expansion">
+              {!!state.expansionHistory?.length && (
+                <button
+                  type="button"
+                  className="systemd-more"
+                  title="Undo last expansion change"
+                  onClick={(event) => {
+                    undoExpansion();
+                    keepExpansionFocus(event.currentTarget);
+                  }}
+                >
+                  Undo
+                </button>
+              )}
+              {(neighborhood?.ids.length ?? 0) > SYSTEMD_INITIAL_VISIBLE && (
+                <button
+                  type="button"
+                  className="systemd-more"
+                  onClick={(event) => {
+                    changeExpansion(
+                      state.expanded,
+                      Math.max(
+                        SYSTEMD_INITIAL_VISIBLE,
+                        Math.min(
+                          state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
+                          neighborhood?.ids.length ?? SYSTEMD_INITIAL_VISIBLE,
+                        ) - 6,
+                      ),
+                    );
+                    keepExpansionFocus(event.currentTarget);
+                  }}
+                >
+                  Show less
+                </button>
+              )}
+              {!!neighborhood?.hidden && (
+                <button
+                  className="systemd-more"
+                  type="button"
+                  disabled={(state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE}
+                  title={
+                    (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) >= SYSTEMD_MAX_VISIBLE
+                      ? "Search or refocus to explore other units"
+                      : "Reveal more related units"
+                  }
+                  onClick={(event) => {
+                    changeExpansion(
+                      state.expanded,
+                      Math.min(
+                        SYSTEMD_MAX_VISIBLE,
+                        (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 6,
+                      ),
+                    );
+                    keepExpansionFocus(event.currentTarget);
+                  }}
+                >
+                  Show more · {neighborhood.hidden}
+                </button>
+              )}
+            </div>
           </div>
           {rootId && neighborhood ? (
             <SystemdGraph
@@ -406,17 +525,7 @@ export function ServicesPane({
                 setInspectorOpen(!!id);
               }}
               onRefocus={refocus}
-              onExpand={(id) =>
-                patch({
-                  expanded: state.expanded.includes(id)
-                    ? state.expanded.filter((unit) => unit !== id)
-                    : [...state.expanded, id].slice(0, 24),
-                  visibleLimit: Math.min(
-                    SYSTEMD_MAX_VISIBLE,
-                    (state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE) + 3,
-                  ),
-                })
-              }
+              onExpand={toggleExpansion}
               inspector={inspector}
             />
           ) : (

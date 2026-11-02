@@ -7,7 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Expand, X } from "lucide-react";
+import { Expand, Minimize2, X } from "lucide-react";
+import { SystemdGraphExits } from "./SystemdGraphExits";
 import { SystemdPresence } from "./SystemdPresence";
 import { GraphControls } from "./GraphControls";
 import { usePanZoom } from "../lib/use-pan-zoom";
@@ -59,11 +60,8 @@ export function SystemdGraph({
   const [activeEdge, setActiveEdge] = useState<string | null>(null);
   const layout = useMemo(() => {
     const old = previous.current;
-    const growing =
-      old?.root === rootId &&
-      old.frame === frameKey &&
-      [...old.layout.positions.keys()].every((id) => ids.includes(id));
-    return layoutSystemdGraph(ids, edges, rootId, growing ? old.layout.placements : undefined);
+    const sameContext = old?.root === rootId && old.frame === frameKey;
+    return layoutSystemdGraph(ids, edges, rootId, sameContext ? old.layout.placements : undefined);
   }, [ids, edges, rootId, frameKey]);
 
   const fit = useCallback(
@@ -330,6 +328,7 @@ export function SystemdGraph({
               );
             })}
           </svg>
+          <SystemdGraphExits layout={layout} root={rootId} scope={frameKey} units={units} />
           {ids.map((id, index) => {
             const position = layout.positions.get(id)!;
             const unit = units.find((candidate) => candidate.id === id);
@@ -403,14 +402,17 @@ export function SystemdGraph({
                 </button>
                 {id !== rootId && (
                   <button
-                    className="icon-button systemd-expand"
+                    className={
+                      "icon-button systemd-expand" + (expanded.includes(id) ? " expanded" : "")
+                    }
                     type="button"
                     aria-label={(expanded.includes(id) ? "Collapse " : "Expand ") + id}
+                    title={(expanded.includes(id) ? "Collapse " : "Expand ") + id}
                     disabled={id === rootId || (!expanded.includes(id) && expanded.length >= 24)}
                     aria-pressed={id === rootId || expanded.includes(id)}
                     onClick={() => onExpand(id)}
                   >
-                    <Expand size={13} />
+                    {expanded.includes(id) ? <Minimize2 size={13} /> : <Expand size={13} />}
                   </button>
                 )}
               </div>

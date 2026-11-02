@@ -147,6 +147,62 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("reverses show-more and branch expansion with animated, noninteractive exits", async () => {
+  await page.viewport(1280, 800);
+  const neighbors = Array.from(
+    { length: 12 },
+    (_, index) => "branch-" + String(index).padStart(2, "0") + ".service",
+  );
+  api.inspectSystemdUnit.mockImplementation((_host, id) =>
+    Promise.resolve(
+      systemdInspection(id, {
+        Requires:
+          id === "worker.service" ? neighbors.join(" ") : id === neighbors[0] ? "leaf.service" : "",
+      }),
+    ),
+  );
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  const count = () => document.querySelectorAll(".systemd-graph-node").length;
+  await waitFor(() => expect(count()).toBe(7));
+  await page.getByRole("button", { name: /Show more/ }).click();
+  expect(count()).toBe(13);
+  await page.getByRole("button", { name: "Show less" }).click();
+  expect(count()).toBe(7);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(count()).toBe(13);
+  await page.getByRole("button", { name: "Expand " + neighbors[0] }).click();
+  await waitFor(() => expect(count()).toBe(14));
+  await settleMotion();
+  expect(
+    getComputedStyle(screen.getByRole("button", { name: "Collapse " + neighbors[0] })).opacity,
+  ).toBe("1");
+  await page.getByRole("button", { name: "Collapse " + neighbors[0] }).click();
+  expect(count()).toBe(13);
+  expect(screen.queryByRole("button", { name: /^leaf.service/ })).toBeNull();
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const ghost = document.querySelector<HTMLElement>(
+      '.systemd-graph-ghost[data-unit="leaf.service"]',
+    )!;
+    expect(ghost).toBeTruthy();
+    expect(getComputedStyle(ghost.parentElement!).animationName).toBe("systemd-node-out");
+    expect(ghost.closest("[inert][aria-hidden=true]")).toBeTruthy();
+  }
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(count()).toBe(14);
+  expect(document.querySelector('.systemd-graph-ghost[data-unit="leaf.service"]')).toBeNull();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(count()).toBe(13);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(count()).toBe(7);
+  expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByTitle("Refocus on current unit")),
+  );
+  await waitFor(() => expect(document.querySelectorAll(".systemd-graph-ghost")).toHaveLength(0));
+});
+
 it("explains meaningful dependency line styles and keeps ordering and activation solid", async () => {
   await page.viewport(1280, 800);
   api.inspectSystemdUnit.mockResolvedValue(
