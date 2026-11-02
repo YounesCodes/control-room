@@ -213,6 +213,17 @@ export function InspectionGraph({
       selectionTrigger.current.focus({ preventScroll: true });
   }
 
+  function navigateSelection(key: string, currentId: string | null) {
+    const items = groups.flatMap((group) => group.items);
+    const index = items.findIndex((item) => item.id === currentId);
+    const next =
+      items[Math.max(0, Math.min(items.length - 1, index + (key === "ArrowDown" ? 1 : -1)))];
+    if (!next) return;
+    const node = nodeRefs.current.get(next.id);
+    if (node) selectionTrigger.current = node;
+    onSelectionChange(next.id);
+  }
+
   function commitSelection(item: InspectionGraphItem, element: HTMLButtonElement) {
     selectionTrigger.current = element;
     if (item.id === selectedId) closeDetail();
@@ -379,21 +390,17 @@ export function InspectionGraph({
                           else nodeRefs.current.delete(item.id);
                         }}
                         onKeyDown={(event) => {
-                          if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+                            return;
+                          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            navigateSelection(event.key, item.id);
+                            return;
+                          }
+                          if (!["Home", "End"].includes(event.key)) return;
                           const nodes = [...nodeRefs.current.values()];
-                          const index = nodes.indexOf(event.currentTarget);
-                          const next =
-                            event.key === "Home"
-                              ? 0
-                              : event.key === "End"
-                                ? nodes.length - 1
-                                : Math.max(
-                                    0,
-                                    Math.min(
-                                      nodes.length - 1,
-                                      index + (event.key === "ArrowDown" ? 1 : -1),
-                                    ),
-                                  );
+                          const next = event.key === "Home" ? 0 : nodes.length - 1;
                           event.preventDefault();
                           nodes[next]?.focus();
                           if (nodes[next]) revealNode(nodes[next]);
@@ -441,6 +448,18 @@ export function InspectionGraph({
           tabIndex={-1}
           ref={detailRef}
           onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.shiftKey &&
+              (event.key === "ArrowUp" || event.key === "ArrowDown")
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              navigateSelection(event.key, selectedId);
+            }
             if (event.key === "Escape") {
               event.stopPropagation();
               closeDetail();

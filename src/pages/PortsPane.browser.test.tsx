@@ -145,6 +145,36 @@ afterEach(() => {
   document.getElementById("camera-motion-override")?.remove();
 });
 
+it("switches graph selection and inspector with arrows and returns focus on Escape", async () => {
+  await page.viewport(1280, 800);
+  renderPane(null, {
+    ...sockets,
+    items: [80, 443, 3000].map((port) => ({
+      ...sockets.items[0],
+      id: "tcp:0.0.0.0:" + port,
+      port,
+    })),
+  });
+  const nodes = await waitFor(() => {
+    const items = [...document.querySelectorAll<HTMLButtonElement>(".arch-chip")];
+    expect(items.length).toBeGreaterThan(2);
+    return items;
+  });
+  nodes[0].focus();
+  await userEvent.keyboard("{ArrowDown}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  const inspector = screen.getByRole("complementary");
+  expect(document.activeElement).toBe(inspector);
+  await userEvent.keyboard("{ArrowDown}");
+  expect(nodes[2].getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("complementary")).toBe(inspector);
+  await userEvent.keyboard("{ArrowUp}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(document.activeElement).toBe(nodes[1]);
+});
+
 it("selects the requested container binding without confusing the same port on another owner", async () => {
   await page.viewport(1280, 800);
   const target = {

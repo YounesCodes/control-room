@@ -949,6 +949,23 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   expect(screen.queryByRole("complementary")).toBeNull();
 });
 
+it("switches dependency graph inspection with arrows from a node or inspector", async () => {
+  await page.viewport(1280, 800);
+  render(<RoutingFixture />);
+  const nodes = [
+    ...document.querySelectorAll<HTMLButtonElement>(".systemd-graph-node > .arch-chip"),
+  ];
+  nodes[0].focus();
+  await userEvent.keyboard("{ArrowDown}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  const inspector = screen.getByRole("complementary");
+  expect(document.activeElement).toBe(inspector);
+  await userEvent.keyboard("{ArrowDown}{ArrowUp}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{Escape}");
+  await waitFor(() => expect(document.activeElement).toBe(nodes[1]));
+});
+
 function RoutingFixture({ cycle = false }: { cycle?: boolean }) {
   const ids = ["a.service", "b.service", "c.service", "d.service"];
   const edges = systemdEdges([

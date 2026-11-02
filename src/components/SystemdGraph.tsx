@@ -272,6 +272,23 @@ export function SystemdGraph({
         }
       }}
       onKeyDown={(event) => {
+        if (
+          event.target === detailRef.current &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey &&
+          (event.key === "ArrowUp" || event.key === "ArrowDown")
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          const index = ids.indexOf(selectedId ?? "");
+          const next =
+            ids[
+              Math.max(0, Math.min(ids.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))
+            ];
+          if (next) onSelect(next);
+        }
         if (event.key === "Escape" && selectedId) {
           event.stopPropagation();
           close();
@@ -450,20 +467,20 @@ export function SystemdGraph({
                       onRefocus(id);
                       return;
                     }
-                    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const next = Math.max(
+                        0,
+                        Math.min(ids.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)),
+                      );
+                      onSelect(ids[next]);
+                      return;
+                    }
+                    if (!["Home", "End"].includes(event.key)) return;
                     event.preventDefault();
-                    const next =
-                      event.key === "Home"
-                        ? 0
-                        : event.key === "End"
-                          ? ids.length - 1
-                          : Math.max(
-                              0,
-                              Math.min(
-                                ids.length - 1,
-                                index + (event.key === "ArrowDown" ? 1 : -1),
-                              ),
-                            );
+                    const next = event.key === "Home" ? 0 : ids.length - 1;
                     nodes.current.get(ids[next])?.focus();
                   }}
                 >

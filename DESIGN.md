@@ -214,6 +214,9 @@ closing the inspector.
 
 Inspector panels keep their normal surface border without an outer focus outline.
 Keep visible keyboard focus indicators on their buttons, fields, and disclosures.
+Up/Down on a graph node or the focused inspector selects the adjacent node and
+frames it immediately. Keep Home/End as focus-only navigation. Leave inspector
+controls and scrollable evidence to their native keys; Escape returns to the selected node.
 
 Docker shares the Ports canvas, camera controls, selection behavior, and inspector
 layout. Fit the full container graph before a selection is made. Group container
