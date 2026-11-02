@@ -191,49 +191,51 @@ export function SystemdToolbar({
           </div>
         </SystemdPresence>
         <div className="systemd-toolbar-actions">
-          <button
-            type="button"
-            className="icon-button"
-            title={graph ? "Find dependencies" : "Find units"}
-            aria-label={graph ? "Find dependencies" : "Find units"}
-            aria-expanded={tools === "search"}
-            aria-pressed={!!search}
-            aria-controls="systemd-search"
-            onClick={(event) => toggle("search", event.currentTarget)}
-          >
-            <Search size={16} />
-          </button>
-          <SystemdPresence open={tools === "search"}>
-            <div
-              ref={searchField}
-              id="systemd-search"
-              className="systemd-inline-search search-field"
-              role="region"
+          <div className="systemd-search-control search-field">
+            <button
+              type="button"
+              className="icon-button"
+              title={graph ? "Find dependencies" : "Find units"}
               aria-label={graph ? "Find dependencies" : "Find units"}
+              aria-expanded={tools === "search"}
+              aria-pressed={!!search}
+              aria-controls="systemd-search"
+              onClick={(event) => toggle("search", event.currentTarget)}
             >
-              <input
-                aria-label={graph ? "Search dependencies" : "Search units"}
-                placeholder={graph ? "Search dependencies" : "Search units"}
-                value={search}
-                onChange={(event) =>
-                  onChange(
-                    graph
-                      ? { dependencySearch: event.target.value }
-                      : { search: event.target.value },
-                  )
-                }
-              />
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Clear search"
-                disabled={!search}
-                onClick={() => onChange(graph ? { dependencySearch: "" } : { search: "" })}
+              <Search size={16} />
+            </button>
+            <SystemdPresence open={tools === "search"}>
+              <div
+                ref={searchField}
+                id="systemd-search"
+                className="systemd-inline-search"
+                role="region"
+                aria-label={graph ? "Find dependencies" : "Find units"}
               >
-                <X size={14} />
-              </button>
-            </div>
-          </SystemdPresence>
+                <input
+                  aria-label={graph ? "Search dependencies" : "Search units"}
+                  placeholder={graph ? "Search dependencies" : "Search units"}
+                  value={search}
+                  onChange={(event) =>
+                    onChange(
+                      graph
+                        ? { dependencySearch: event.target.value }
+                        : { search: event.target.value },
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Clear search"
+                  disabled={!search}
+                  onClick={() => onChange(graph ? { dependencySearch: "" } : { search: "" })}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </SystemdPresence>
+          </div>
           <SystemdPresence open={!graph}>
             <button
               type="button"

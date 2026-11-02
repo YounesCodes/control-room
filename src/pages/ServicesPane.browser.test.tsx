@@ -228,8 +228,30 @@ it.each([360, 960, 1400])(
     expect(box.left).toBeGreaterThanOrEqual(
       screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().right - 1,
     );
-    expect(getComputedStyle(search).boxShadow).toBe("none");
-    expect(getComputedStyle(search).borderTopWidth).toBe("1px");
+    const control = search.closest<HTMLElement>(".systemd-search-control")!;
+    const icon = screen.getByRole("button", { name: "Find units" });
+    expect(control.contains(icon)).toBe(true);
+    expect(control.contains(screen.getByRole("button", { name: "Clear search" }))).toBe(true);
+    const iconBounds = icon.getBoundingClientRect();
+    const controlBounds = control.getBoundingClientRect();
+    expect(box.height).toBe(iconBounds.height);
+    expect(box.top).toBe(iconBounds.top);
+    expect(controlBounds.width).toBeGreaterThan(box.width);
+    expect(controlBounds.left).toBeGreaterThanOrEqual(header.left);
+    expect(controlBounds.right).toBeLessThanOrEqual(header.right);
+    expect(getComputedStyle(control).boxShadow).toBe("none");
+    expect(getComputedStyle(control).borderTopWidth).toBe("1px");
+    expect(getComputedStyle(search).borderTopWidth).toBe("0px");
+    await page.getByRole("textbox", { name: "Search units" }).fill("database");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /worker.service Queue worker/ })).toBeNull(),
+    );
+    await page.getByRole("button", { name: "Clear search" }).click();
+    expect(input).toHaveValue("");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /worker.service Queue worker/ })).toBeTruthy(),
+    );
+    expect((await audit()).violations).toEqual([]);
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("textbox", { name: "Search units" })).toBeNull();
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -247,9 +269,9 @@ it.each([360, 960, 1400])(
     await page.getByRole("button", { name: "Filter and sort units" }).click();
     await settleMotion();
     const panel = screen.getByRole("region", { name: "Unit filters" });
-    const icon = screen.getByRole("button", { name: "Filter and sort units" });
+    const filterIcon = screen.getByRole("button", { name: "Filter and sort units" });
     const panelBox = panel.getBoundingClientRect(),
-      iconBox = icon.getBoundingClientRect();
+      iconBox = filterIcon.getBoundingClientRect();
     expect(panelBox.top - iconBox.bottom).toBeGreaterThanOrEqual(8);
     expect(panelBox.top - iconBox.bottom).toBeLessThanOrEqual(26);
     expect(panelBox.left).toBeGreaterThanOrEqual(0);
@@ -264,7 +286,7 @@ it.each([360, 960, 1400])(
     await waitFor(() => expect(panel.getBoundingClientRect().bottom).toBeLessThanOrEqual(500));
     await waitFor(() =>
       expect(
-        Math.abs(panel.getBoundingClientRect().right - icon.getBoundingClientRect().right),
+        Math.abs(panel.getBoundingClientRect().right - filterIcon.getBoundingClientRect().right),
       ).toBeLessThanOrEqual(12),
     );
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(resized);
