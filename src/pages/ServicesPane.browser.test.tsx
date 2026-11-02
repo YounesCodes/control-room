@@ -10,7 +10,7 @@ import { ConnectionSection } from "../components/ResizablePanels";
 import { connection } from "../test/app-fixtures";
 import { systemdInspection } from "../test/systemd-fixtures";
 import { invalidateSystemdReads } from "../lib/systemd-inspection";
-import type { SystemdUnit } from "../types";
+import type { SystemdInspection, SystemdUnit } from "../types";
 import "../styles.css";
 
 const api = vi.hoisted(() => ({ listServices: vi.fn(), inspectSystemdUnit: vi.fn() }));
@@ -146,6 +146,113 @@ async function audit() {
 function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
+
+it("switches units immediately with arrows and keeps late details out of the current inspector", async () => {
+  await page.viewport(1280, 800);
+  const pending = new Map<string, (value: SystemdInspection) => void>();
+  api.inspectSystemdUnit.mockImplementation(
+    (_host, id) => new Promise<SystemdInspection>((resolve) => pending.set(id, resolve)),
+  );
+  renderPane(
+    ["a", "b", "c"].map((name) => ({
+      ...units[1],
+      id: name + ".service",
+      description: name,
+    })),
+  );
+  const list = screen.getByRole("region", { name: "Systemd units" });
+  list.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  const inspector = screen.getByRole("complementary", { name: "Unit details" });
+  expect(screen.getByRole("heading", { name: "a.service" })).toBeTruthy();
+  expect(document.activeElement).toBe(within(list).getByRole("button", { name: /^a.service/ }));
+  await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+  expect(screen.getByRole("heading", { name: "c.service" })).toBeTruthy();
+  expect(screen.getByRole("complementary")).toBe(inspector);
+  expect(document.activeElement).toBe(within(list).getByRole("button", { name: /^c.service/ }));
+  const heading = inspector.querySelector<HTMLElement>("header")!;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  expect(getComputedStyle(heading).animationName).toBe(reduced ? "none" : "systemd-unit-in");
+  if (!reduced) {
+    const animation = heading.getAnimations()[0];
+    animation.pause();
+    animation.currentTime = 0;
+    const start = getComputedStyle(heading);
+    expect(Number(start.opacity)).toBeLessThan(1);
+    expect(new DOMMatrix(start.transform).m42).toBeGreaterThan(0);
+    animation.finish();
+  }
+  for (const id of ["b.service", "a.service", "c.service"]) {
+    pending.get(id)!(
+      systemdInspection(id, {
+        ActiveState: "active",
+        SubState: "running",
+        MainPID: id === "c.service" ? "333" : "111",
+      }),
+    );
+  }
+  await waitFor(() => expect(within(inspector).getByText("333")).toBeTruthy());
+  expect(within(inspector).queryByText("111")).toBeNull();
+  await userEvent.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
+  expect(screen.getByRole("heading", { name: "a.service" })).toBeTruthy();
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(document.activeElement).toBe(within(list).getByRole("button", { name: /^a.service/ }));
+});
+
+it.each([360, 1280])(
+  "switches from the focused inspector without stealing native keys at %s px",
+  async (width) => {
+    await page.viewport(width, 800);
+    renderPane(["a", "b", "c"].map((name) => ({ ...units[1], id: name + ".service" })));
+    await page.getByRole("button", { name: /^a.service Database/ }).click();
+    const inspector = screen.getByRole("complementary");
+    expect(document.activeElement).toBe(inspector);
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowUp}");
+    expect(screen.getByRole("heading", { name: "b.service" })).toBeTruthy();
+    expect(document.activeElement).toBe(inspector);
+    const disclosure = within(inspector).getByText("Advanced");
+    disclosure.focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(screen.getByRole("heading", { name: "b.service" })).toBeTruthy();
+    await page.getByRole("button", { name: "Find units", exact: true }).click();
+    await userEvent.keyboard("{ArrowDown}{ArrowUp}");
+    expect(screen.getByRole("heading", { name: "b.service" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Search units" }));
+  },
+);
+
+it("follows filtered sort order and scrolls through virtual rows during repeated arrow navigation", async () => {
+  await page.viewport(1280, 600);
+  renderPane(
+    Array.from({ length: 1000 }, (_, index) => ({
+      ...units[1],
+      id: "unit-" + String(index).padStart(4, "0") + ".service",
+    })),
+  );
+  const list = screen.getByRole("region", { name: "Systemd units" });
+  list.focus();
+  await userEvent.keyboard("{End}{ArrowUp}{ArrowUp}");
+  expect(screen.getByRole("heading", { name: "unit-0997.service" })).toBeTruthy();
+  const row = list.querySelector<HTMLElement>(".selected-row")!;
+  expect(document.activeElement).toBe(row);
+  expect(row.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+    list.getBoundingClientRect().bottom + 1,
+  );
+  expect(row.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    list.getBoundingClientRect().top - 1,
+  );
+  expect(list.querySelectorAll(".dense-row").length).toBeLessThan(50);
+  await page.getByRole("button", { name: "Find units", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search units" }).fill("unit-000");
+  await waitFor(() => expect(list.querySelectorAll(".dense-row")).toHaveLength(10));
+  await userEvent.keyboard("{Escape}");
+  list.focus();
+  await userEvent.keyboard("{ArrowUp}");
+  expect(screen.getByRole("heading", { name: "unit-0009.service" })).toBeTruthy();
+  await userEvent.keyboard("{ArrowUp}{ArrowDown}");
+  expect(screen.getByRole("heading", { name: "unit-0009.service" })).toBeTruthy();
+});
 
 it("does not flash the field when search is dismissed during the icon's travel", async () => {
   await page.viewport(1280, 800);

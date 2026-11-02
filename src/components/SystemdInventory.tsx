@@ -12,15 +12,18 @@ export function SystemdInventory({
   units,
   selectedId,
   onSelect,
+  onNavigate,
   emptyTitle,
 }: {
   units: SystemdUnit[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onNavigate: (id: string) => void;
   emptyTitle: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
+  const pendingFocus = useRef<string | null>(null);
   const [window, setWindow] = useState({ top: 0, height: 500 });
   const virtual = units.length > 300;
   const signature = units.map((unit) => unit.id).join("\n");
@@ -45,27 +48,38 @@ export function SystemdInventory({
     const index = units.findIndex((unit) => unit.id === selectedId);
     if (
       index >= 0 &&
-      virtual &&
       (index * ROW_HEIGHT < element.scrollTop ||
         (index + 1) * ROW_HEIGHT > element.scrollTop + element.clientHeight)
     )
-      element.scrollTop = index * ROW_HEIGHT;
+      element.scrollTop =
+        index * ROW_HEIGHT < element.scrollTop
+          ? index * ROW_HEIGHT
+          : (index + 1) * ROW_HEIGHT - element.clientHeight;
     else if (previousSignature.current !== signature && index < 0) element.scrollTop = 0;
     previousSignature.current = signature;
     setWindow({ top: element.scrollTop, height: element.clientHeight });
   }, [signature, selectedId, virtual]);
+  useLayoutEffect(() => {
+    if (!pendingFocus.current) return;
+    const row = rows.current.get(pendingFocus.current);
+    if (!row) {
+      if (!units.some((unit) => unit.id === pendingFocus.current)) pendingFocus.current = null;
+      return;
+    }
+    pendingFocus.current = null;
+    row.focus({ preventScroll: true });
+  });
 
-  function focus(index: number) {
+  function focus(index: number, select: boolean) {
     const element = ref.current;
     const id = units[index]?.id;
     if (!element || !id) return;
-    if (virtual) {
-      if (index * ROW_HEIGHT < element.scrollTop) element.scrollTop = index * ROW_HEIGHT;
-      else if ((index + 1) * ROW_HEIGHT > element.scrollTop + element.clientHeight)
-        element.scrollTop = (index + 1) * ROW_HEIGHT - element.clientHeight;
-      setWindow({ top: element.scrollTop, height: element.clientHeight });
-    }
-    requestAnimationFrame(() => rows.current.get(id)?.focus({ preventScroll: virtual }));
+    if (index * ROW_HEIGHT < element.scrollTop) element.scrollTop = index * ROW_HEIGHT;
+    else if ((index + 1) * ROW_HEIGHT > element.scrollTop + element.clientHeight)
+      element.scrollTop = (index + 1) * ROW_HEIGHT - element.clientHeight;
+    pendingFocus.current = id;
+    setWindow({ top: element.scrollTop, height: element.clientHeight });
+    if (select) onNavigate(id);
   }
 
   return (
@@ -83,11 +97,14 @@ export function SystemdInventory({
           });
       }}
       onKeyDown={(event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
         if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || !units.length) return;
         event.preventDefault();
-        const current = units.findIndex(
+        event.stopPropagation();
+        const focused = units.findIndex(
           (unit) => rows.current.get(unit.id) === document.activeElement,
         );
+        const current = focused >= 0 ? focused : units.findIndex((unit) => unit.id === selectedId);
         const next =
           event.key === "Home"
             ? 0
@@ -95,9 +112,16 @@ export function SystemdInventory({
               ? units.length - 1
               : Math.max(
                   0,
-                  Math.min(units.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)),
+                  Math.min(
+                    units.length - 1,
+                    current < 0
+                      ? event.key === "ArrowDown"
+                        ? 0
+                        : units.length - 1
+                      : current + (event.key === "ArrowDown" ? 1 : -1),
+                  ),
                 );
-        focus(next);
+        focus(next, event.key === "ArrowUp" || event.key === "ArrowDown");
       }}
     >
       {first > 0 && <div aria-hidden="true" style={{ height: first * ROW_HEIGHT }} />}

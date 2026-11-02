@@ -247,6 +247,12 @@ only the visible rows while retaining keyboard access to every unit.
 Keep the inventory vertical-only. Truncate long unit names and descriptions inside
 their row, with complete values available in the tooltip and inspector.
 Outline the whole selected Systemd row rather than marking only its left edge.
+Up/Down selects adjacent units in the filtered, sorted inventory and updates the
+open inspector immediately. Keep keyboard focus on the row and scroll it into
+view, including in virtual inventories. The inspector itself also accepts Up/Down;
+leave its fields, disclosures, and scrollable evidence to their native keys.
+Keep the panel in place while its new identity and content briefly fade and slide
+into view. Skip these transitions under reduced motion.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.

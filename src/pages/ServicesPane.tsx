@@ -70,6 +70,7 @@ export function ServicesPane({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const inspectorRef = useRef<HTMLElement>(null);
   const inventoryRef = useRef<HTMLDivElement>(null);
+  const selectionFocus = useRef<"inventory" | "inspector">("inspector");
   const graphContextRef = useRef<HTMLDivElement>(null);
   const graphSearch = state.dependencySearch ?? "";
   function setGraphSearch(dependencySearch: string) {
@@ -266,8 +267,8 @@ export function ServicesPane({
   function clearFilters() {
     patch({ search: "", state: "all", unitType: "all" });
   }
-  function selectInventoryUnit(id: string) {
-    setInspectorOpen(id !== selectedId || !inspectorOpen);
+  function selectInventoryUnit(id: string, navigate = false) {
+    setInspectorOpen(navigate || id !== selectedId || !inspectorOpen);
     setSelectedId(id);
     if (id !== selectedId)
       patch({
@@ -307,7 +308,14 @@ export function ServicesPane({
       setInspectorOpen(false);
   }, [state.mode, inspectorOpen, selectedId, neighborhood]);
   useEffect(() => {
-    if (visibleInspector && state.mode === "inventory")
+    const list = inventoryRef.current?.querySelector(".dense-list");
+    if (
+      visibleInspector &&
+      state.mode === "inventory" &&
+      (selectionFocus.current === "inspector" ||
+        !list ||
+        getComputedStyle(list).visibility === "hidden")
+    )
       inspectorRef.current?.focus({ preventScroll: true });
   }, [selectedId, visibleInspector, state.mode]);
 
@@ -388,6 +396,31 @@ export function ServicesPane({
         <div
           className={"systemd-explorer-stage" + (visibleInspector ? " inspecting" : "")}
           ref={inventoryRef}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && visibleInspector) {
+              event.stopPropagation();
+              closeInventoryInspector();
+            }
+            if (
+              event.altKey ||
+              event.ctrlKey ||
+              event.metaKey ||
+              event.shiftKey ||
+              event.target !== inspectorRef.current ||
+              !["ArrowUp", "ArrowDown"].includes(event.key) ||
+              !filtered.length
+            )
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            const current = filtered.findIndex((unit) => unit.id === selectedId);
+            const next = Math.max(
+              0,
+              Math.min(filtered.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)),
+            );
+            selectionFocus.current = "inspector";
+            selectInventoryUnit(filtered[next].id, true);
+          }}
         >
           <div className="systemd-inventory services-page">
             {filtersActive && (
@@ -409,7 +442,14 @@ export function ServicesPane({
             <SystemdInventory
               units={filtered}
               selectedId={selectedId}
-              onSelect={selectInventoryUnit}
+              onSelect={(id) => {
+                selectionFocus.current = "inspector";
+                selectInventoryUnit(id);
+              }}
+              onNavigate={(id) => {
+                selectionFocus.current = "inventory";
+                selectInventoryUnit(id, true);
+              }}
               emptyTitle={cache.items.length ? "No matching units" : "No units found"}
             />
           </div>

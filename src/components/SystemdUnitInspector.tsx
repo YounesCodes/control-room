@@ -214,7 +214,7 @@ export function SystemdUnitInspector({
             : [];
   return (
     <>
-      <header>
+      <header className="systemd-unit-reveal">
         <h2>{unitId}</h2>
         <p>{p.Description ?? summary?.description}</p>
         <span className="systemd-inspector-state">
@@ -225,7 +225,7 @@ export function SystemdUnitInspector({
           {systemdStateLabel(active, sub)}
         </span>
       </header>
-      <div className="port-inspector-body">
+      <div className="port-inspector-body systemd-unit-reveal">
         {result?.loading && (
           <p className="systemd-read-status" role="status">
             {result.value ? "Refreshing saved details…" : "Reading unit details…"}
