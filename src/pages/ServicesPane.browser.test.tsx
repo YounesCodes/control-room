@@ -147,6 +147,27 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("removes the search field outline after clicking its magnifier to collapse", async () => {
+  renderPane();
+  const magnifier = page.getByRole("button", { name: "Find units", exact: true });
+  await magnifier.click();
+  const control = document.querySelector<HTMLElement>(".systemd-search-control")!;
+  await settleMotion();
+  expect(getComputedStyle(control).borderTopColor).not.toBe("rgba(0, 0, 0, 0)");
+  await magnifier.click();
+  await waitFor(() => expect(control.querySelector(".systemd-inline-search")).toBeNull());
+  await settleMotion();
+  expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+  expect(getComputedStyle(control).boxShadow).toBe("none");
+  await magnifier.click();
+  await userEvent.keyboard("{Escape}");
+  await settleMotion();
+  expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+  const button = screen.getByRole("button", { name: "Find units" });
+  expect(button.matches(":focus-visible")).toBe(true);
+  expect(getComputedStyle(button).outlineStyle).not.toBe("none");
+});
+
 it("switches units immediately with arrows and keeps late details out of the current inspector", async () => {
   await page.viewport(1280, 800);
   const pending = new Map<string, (value: SystemdInspection) => void>();

@@ -4137,6 +4137,9 @@ dd {
 .systemd-search-control:focus-within {
   box-shadow: none;
 }
+.systemd-search-control:not(:has(.systemd-inline-search)) {
+  border-color: transparent;
+}
 .systemd-search-control:has(.systemd-inline-search):focus-within {
   border-color: var(--accent);
 }
