@@ -168,6 +168,34 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
   await waitFor(() => expect(count()).toBe(7));
   await page.getByRole("button", { name: /Show more/ }).click();
   expect(count()).toBe(13);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const node = screen
+      .getByRole("button", { name: /^branch-11.service/ })
+      .closest<HTMLElement>(".systemd-graph-node")!;
+    const animation = node
+      .getAnimations()
+      .find((item) => (item as CSSAnimation).animationName === "systemd-node-in")!;
+    animation.pause();
+    animation.currentTime = 0;
+    const start = new DOMMatrix(getComputedStyle(node).transform);
+    animation.currentTime = 120;
+    const middle = new DOMMatrix(getComputedStyle(node).transform);
+    expect(start.m42).toBeGreaterThanOrEqual(8);
+    expect(middle.m42).toBeLessThan(start.m42);
+    expect(middle.m42).toBeGreaterThan(0);
+    animation.finish();
+    expect(new DOMMatrix(getComputedStyle(node).transform).m42).toBe(0);
+    const edge = document.querySelector<SVGGElement>(
+      '.systemd-connection[aria-label*="branch-11.service"]',
+    )!;
+    const reveal = edge.getAnimations()[0];
+    reveal.pause();
+    reveal.currentTime = 0;
+    const clipped = getComputedStyle(edge).clipPath;
+    reveal.currentTime = 120;
+    expect(getComputedStyle(edge).clipPath).not.toBe(clipped);
+    reveal.finish();
+  }
   await page.getByRole("button", { name: "Show less" }).click();
   expect(count()).toBe(7);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -187,6 +215,15 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
     )!;
     expect(ghost).toBeTruthy();
     expect(getComputedStyle(ghost.parentElement!).animationName).toBe("systemd-node-out");
+    const fade = ghost.parentElement!.getAnimations()[0];
+    fade.pause();
+    fade.currentTime = 0;
+    const startOpacity = Number(getComputedStyle(ghost.parentElement!).opacity);
+    fade.currentTime = 120;
+    const halfwayOpacity = Number(getComputedStyle(ghost.parentElement!).opacity);
+    expect(halfwayOpacity).toBeGreaterThan(0);
+    expect(halfwayOpacity).toBeLessThan(startOpacity);
+    fade.finish();
     expect(ghost.closest("[inert][aria-hidden=true]")).toBeTruthy();
   }
   await page.getByRole("button", { name: "Undo", exact: true }).click();

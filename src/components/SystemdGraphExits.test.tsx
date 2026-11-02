@@ -32,7 +32,7 @@ it("fades removed nodes and edges, cancels ghosts on reentry, and clears timers 
   expect(view.container.querySelectorAll(".systemd-graph-ghost")).toHaveLength(0);
   view.rerender(scene(small));
   expect(view.container.querySelectorAll(".systemd-graph-ghost")).toHaveLength(1);
-  act(() => vi.advanceTimersByTime(160));
+  act(() => vi.advanceTimersByTime(240));
   expect(view.container.querySelectorAll(".systemd-graph-exit-scene")).toHaveLength(0);
   view.rerender(scene(full));
   view.rerender(scene(small));

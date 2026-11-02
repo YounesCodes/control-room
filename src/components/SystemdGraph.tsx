@@ -307,6 +307,10 @@ export function SystemdGraph({
                   className={
                     "systemd-connection relationship-" +
                     connection.kind +
+                    (layout.positions.get(connection.source)!.x >
+                    layout.positions.get(connection.target)!.x
+                      ? " edge-reverse"
+                      : "") +
                     (activeEdge === connection.id ? " edge-active" : "")
                   }
                   tabIndex={0}

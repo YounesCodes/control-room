@@ -4432,7 +4432,15 @@ dd {
   pointer-events: none !important;
 }
 .systemd-graph-exit-scene {
-  animation: systemd-node-out var(--motion-med) var(--ease) both;
+  animation: systemd-node-out var(--motion-slow) ease-in-out both;
+}
+.systemd-graph-ghost > .arch-chip {
+  animation: systemd-node-content-out var(--motion-slow) ease-in-out both;
+}
+@keyframes systemd-node-content-out {
+  to {
+    transform: translateY(8px) scale(0.96);
+  }
 }
 .systemd-graph-ghost {
   position: absolute;
@@ -4443,7 +4451,30 @@ dd {
   }
 }
 .systemd-connection {
-  animation: systemd-node-in var(--motion-med) var(--ease) both;
+  animation: systemd-edge-in var(--motion-slow) ease-out both;
+}
+.systemd-connection.edge-reverse {
+  animation-name: systemd-edge-in-reverse;
+}
+@keyframes systemd-edge-in {
+  from {
+    opacity: 0;
+    clip-path: inset(-8px 100% -8px -8px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(-8px);
+  }
+}
+@keyframes systemd-edge-in-reverse {
+  from {
+    opacity: 0;
+    clip-path: inset(-8px -8px -8px 100%);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(-8px);
+  }
 }
 .systemd-graph-content {
   position: absolute;
@@ -4520,7 +4551,7 @@ dd {
 }
 .systemd-graph-node {
   position: absolute;
-  animation: systemd-node-in var(--motion-med) var(--ease) both;
+  animation: systemd-node-in var(--motion-slow) ease-out both;
 }
 .systemd-graph-node > .arch-chip,
 .systemd-graph-ghost > .arch-chip {
@@ -4601,9 +4632,11 @@ dd {
 @keyframes systemd-node-in {
   from {
     opacity: 0;
+    transform: translateY(8px) scale(0.96);
   }
   to {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 @keyframes systemd-inspector-in {
@@ -4642,7 +4675,8 @@ dd {
   .systemd-graph-exit-scene {
     display: none;
   }
-  .systemd-connection {
+  .systemd-connection,
+  .systemd-connection.edge-reverse {
     animation: none;
   }
   .systemd-presence > * {

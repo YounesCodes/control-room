@@ -267,8 +267,9 @@ Pair Show more with Show less and a bounded Undo history for expansion changes.
 Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
 expanded descendants while keeping shared branches; Undo restores both the expanded
 units and visible limit. Clear history when refocusing, searching, or changing category.
-Fade new nodes and connectors in together. Keep removed nodes and edges as inert,
-visual-only snapshots for a 160ms exit, cancel ghosts when nodes reappear, and skip
+Reveal connectors in their arrow direction while nodes move 8px into place over 240ms.
+Keep removed nodes and edges as inert,
+visual-only snapshots for a 240ms fade and slight movement, cancel ghosts when nodes reappear, and skip
 exit retention under reduced motion. Preserve layout slots during collapse as well.
 Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during

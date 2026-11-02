@@ -57,7 +57,7 @@ export function SystemdGraphExits({ layout, root, scope, units }: Scene) {
       setTimeout(() => {
         setExits((current) => current.filter((exit) => exit.key !== key));
         timers.current.delete(key);
-      }, 160),
+      }, 240),
     );
   }, [layout, root, scope, units]);
   const activeEdges = new Set(layout.connections.map((edge) => edge.id));
