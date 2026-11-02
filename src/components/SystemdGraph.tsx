@@ -17,6 +17,11 @@ import { observeLayoutFallback } from "./ResizablePanels";
 import { SYSTEMD_INITIAL_VISIBLE, systemdStateLabel, type SystemdEdge } from "../lib/systemd-units";
 import type { SystemdUnit } from "../types";
 import { layoutSystemdGraph } from "../lib/systemd-graph-layout";
+import {
+  isGraphDirection,
+  spatialGraphNeighbor,
+  type GraphDirection,
+} from "../lib/graph-navigation";
 
 export function SystemdGraph({
   ids,
@@ -213,6 +218,19 @@ export function SystemdGraph({
     setMoving(false);
   }
 
+  function navigateSelection(direction: GraphDirection, currentId: string | null) {
+    const next = spatialGraphNeighbor(
+      direction,
+      currentId,
+      ids.flatMap((id) => {
+        const position = layout.positions.get(id);
+        return position
+          ? [{ id, x: position.x + position.width / 2, y: position.y + position.height / 2 }]
+          : [];
+      }),
+    );
+    if (next) onSelect(next);
+  }
   function close() {
     onSelect(null);
     const node = nodes.current.get(selectedId ?? rootId) ?? nodes.current.get(rootId);
@@ -278,16 +296,11 @@ export function SystemdGraph({
           !event.ctrlKey &&
           !event.metaKey &&
           !event.shiftKey &&
-          (event.key === "ArrowUp" || event.key === "ArrowDown")
+          isGraphDirection(event.key)
         ) {
           event.preventDefault();
           event.stopPropagation();
-          const index = ids.indexOf(selectedId ?? "");
-          const next =
-            ids[
-              Math.max(0, Math.min(ids.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))
-            ];
-          if (next) onSelect(next);
+          navigateSelection(event.key, selectedId);
         }
         if (event.key === "Escape" && selectedId) {
           event.stopPropagation();
@@ -422,7 +435,7 @@ export function SystemdGraph({
             })}
           </svg>
           <SystemdGraphExits layout={layout} root={rootId} scope={frameKey} units={units} />
-          {ids.map((id, index) => {
+          {ids.map((id) => {
             const position = layout.positions.get(id)!;
             const unit = units.find((candidate) => candidate.id === id);
             return (
@@ -468,14 +481,10 @@ export function SystemdGraph({
                       return;
                     }
                     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    if (isGraphDirection(event.key)) {
                       event.preventDefault();
                       event.stopPropagation();
-                      const next = Math.max(
-                        0,
-                        Math.min(ids.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)),
-                      );
-                      onSelect(ids[next]);
+                      navigateSelection(event.key, id);
                       return;
                     }
                     if (!["Home", "End"].includes(event.key)) return;

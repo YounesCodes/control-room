@@ -161,7 +161,7 @@ it("switches graph selection and inspector with arrows and returns focus on Esca
     return items;
   });
   nodes[0].focus();
-  await userEvent.keyboard("{ArrowDown}");
+  await userEvent.keyboard("{ArrowRight}");
   expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
   const inspector = screen.getByRole("complementary");
   expect(document.activeElement).toBe(inspector);
@@ -170,9 +170,11 @@ it("switches graph selection and inspector with arrows and returns focus on Esca
   expect(screen.getByRole("complementary")).toBe(inspector);
   await userEvent.keyboard("{ArrowUp}");
   expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{ArrowLeft}");
+  expect(nodes[0].getAttribute("aria-pressed")).toBe("true");
   await userEvent.keyboard("{Escape}");
   expect(screen.queryByRole("complementary")).toBeNull();
-  expect(document.activeElement).toBe(nodes[1]);
+  expect(document.activeElement).toBe(nodes[0]);
 });
 
 it("selects the requested container binding without confusing the same port on another owner", async () => {

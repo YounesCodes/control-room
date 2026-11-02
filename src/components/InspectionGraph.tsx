@@ -12,6 +12,11 @@ import {
 import { Server, X } from "lucide-react";
 import { EmptyState, LoadingState } from "./PanelState";
 import { usePanZoom } from "../lib/use-pan-zoom";
+import {
+  isGraphDirection,
+  spatialGraphNeighbor,
+  type GraphDirection,
+} from "../lib/graph-navigation";
 
 export interface InspectionGraphItem {
   id: string;
@@ -213,15 +218,23 @@ export function InspectionGraph({
       selectionTrigger.current.focus({ preventScroll: true });
   }
 
-  function navigateSelection(key: string, currentId: string | null) {
-    const items = groups.flatMap((group) => group.items);
-    const index = items.findIndex((item) => item.id === currentId);
-    const next =
-      items[Math.max(0, Math.min(items.length - 1, index + (key === "ArrowDown" ? 1 : -1)))];
+  function navigateSelection(key: GraphDirection, currentId: string | null) {
+    const positions = [...nodeRefs.current].map(([id, node]) => {
+      let x = node.offsetWidth / 2,
+        y = node.offsetHeight / 2;
+      let ancestor: HTMLElement | null = node;
+      while (ancestor && ancestor !== contentRef.current) {
+        x += ancestor.offsetLeft;
+        y += ancestor.offsetTop;
+        ancestor = ancestor.offsetParent as HTMLElement | null;
+      }
+      return { id, x, y };
+    });
+    const next = spatialGraphNeighbor(key, currentId, positions);
     if (!next) return;
-    const node = nodeRefs.current.get(next.id);
+    const node = nodeRefs.current.get(next);
     if (node) selectionTrigger.current = node;
-    onSelectionChange(next.id);
+    onSelectionChange(next);
   }
 
   function commitSelection(item: InspectionGraphItem, element: HTMLButtonElement) {
@@ -392,7 +405,7 @@ export function InspectionGraph({
                         onKeyDown={(event) => {
                           if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
                             return;
-                          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                          if (isGraphDirection(event.key)) {
                             event.preventDefault();
                             event.stopPropagation();
                             navigateSelection(event.key, item.id);
@@ -454,7 +467,7 @@ export function InspectionGraph({
               !event.ctrlKey &&
               !event.metaKey &&
               !event.shiftKey &&
-              (event.key === "ArrowUp" || event.key === "ArrowDown")
+              isGraphDirection(event.key)
             ) {
               event.preventDefault();
               event.stopPropagation();

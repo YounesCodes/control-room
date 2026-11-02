@@ -956,14 +956,18 @@ it("switches dependency graph inspection with arrows from a node or inspector", 
     ...document.querySelectorAll<HTMLButtonElement>(".systemd-graph-node > .arch-chip"),
   ];
   nodes[0].focus();
-  await userEvent.keyboard("{ArrowDown}");
+  await userEvent.keyboard("{ArrowRight}");
   expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
   const inspector = screen.getByRole("complementary");
   expect(document.activeElement).toBe(inspector);
-  await userEvent.keyboard("{ArrowDown}{ArrowUp}");
+  await userEvent.keyboard("{ArrowUp}");
+  expect(nodes[2].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{ArrowDown}");
   expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{ArrowLeft}");
+  expect(nodes[0].getAttribute("aria-pressed")).toBe("true");
   await userEvent.keyboard("{Escape}");
-  await waitFor(() => expect(document.activeElement).toBe(nodes[1]));
+  await waitFor(() => expect(document.activeElement).toBe(nodes[0]));
 });
 
 function RoutingFixture({ cycle = false }: { cycle?: boolean }) {
