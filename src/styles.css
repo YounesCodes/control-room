@@ -4379,6 +4379,9 @@ dd {
   max-height: calc(100% - 24px);
   animation: systemd-inspector-in var(--motion-slow) var(--ease) both;
 }
+.systemd-inspector.arch-detail:focus-visible {
+  outline: none;
+}
 .systemd-canvas .systemd-presence:not([data-leaving]) > .systemd-inspector {
   animation: systemd-graph-inspector-in var(--motion-med) var(--ease) both;
 }

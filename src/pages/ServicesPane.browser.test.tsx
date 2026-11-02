@@ -1035,6 +1035,12 @@ it.each([360, 960, 1400])(
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
     const inspector = screen.getByRole("complementary");
     const marker = document.querySelector<HTMLElement>(".systemd-selection-indicator")!;
+    expect(document.activeElement).toBe(inspector);
+    expect(getComputedStyle(inspector).outlineStyle).toBe("none");
+    await userEvent.keyboard("{Tab}");
+    const close = within(inspector).getByRole("button", { name: "Close details" });
+    expect(document.activeElement).toBe(close);
+    expect(getComputedStyle(close).outlineStyle).toBe("solid");
     expect(getComputedStyle(marker).borderTopStyle).toBe("solid");
     expect(getComputedStyle(marker).borderTopWidth).toBe("1px");
     expect(getComputedStyle(row, "::before").content).toBe("none");
