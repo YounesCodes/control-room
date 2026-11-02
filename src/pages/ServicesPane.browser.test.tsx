@@ -147,6 +147,30 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("toggles the selected node back to a fitted overview without changing graph focus", async () => {
+  await page.viewport(960, 800);
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  await page.getByRole("button", { name: /^database.service Running/ }).click();
+  await settleMotion();
+  expect(new DOMMatrix(camera()).a).toBeCloseTo(1.1);
+  await page.getByRole("button", { name: /^database.service Running/ }).click();
+  expect(screen.queryByRole("complementary")).toBeNull();
+  await settleMotion();
+  expect(new DOMMatrix(camera()).a).toBeLessThan(1.1);
+  expect(screen.getByTitle("Refocus on current unit").textContent).toBe("worker.service");
+  const viewport = screen.getByRole("region", { name: "Systemd dependency graph" });
+  const bounds = viewport.getBoundingClientRect();
+  for (const node of viewport.querySelectorAll(".systemd-graph-node")) {
+    const box = node.getBoundingClientRect();
+    expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+    expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
+    expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+    expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+  }
+});
+
 it("refits and zooms in both directions on show more, show less and undo, including inspector space", async () => {
   await page.viewport(1280, 800);
   const neighbors = Array.from({ length: 20 }, (_, index) => "neighbor-" + index + ".service");
@@ -581,7 +605,7 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
   const panel = screen.getByRole("complementary", { name: "Unit details" });
   const panelBox = panel.getBoundingClientRect();
-  const canvasBox = panel.closest(".systemd-canvas")!.getBoundingClientRect();
+  const canvasBox = graph.getBoundingClientRect();
   expect(
     Math.abs(panelBox.top + panelBox.height / 2 - canvasBox.top - canvasBox.height / 2),
   ).toBeLessThan(1);
@@ -737,6 +761,21 @@ it.each([360, 960, 1400])(
     viewport.element().querySelector<HTMLButtonElement>(".arch-chip")!.focus();
     await userEvent.keyboard("{ArrowDown}{Enter}");
     expect(screen.getByRole("complementary")).toBeTruthy();
+    const plot = viewport.element().getBoundingClientRect();
+    const footer = document.querySelector(".systemd-graph-footer")!.getBoundingClientRect();
+    const key = screen.getByLabelText("Arrow direction").getBoundingClientRect();
+    const controls = screen
+      .getByRole("toolbar", { name: "Graph controls" })
+      .getBoundingClientRect();
+    expect(plot.bottom).toBeLessThanOrEqual(footer.top + 1);
+    expect(key.top).toBeGreaterThanOrEqual(footer.top);
+    expect(key.bottom).toBeLessThanOrEqual(footer.bottom);
+    expect(controls.top).toBeGreaterThanOrEqual(footer.top);
+    expect(controls.bottom).toBeLessThanOrEqual(footer.bottom);
+    expect(key.right <= controls.left || key.bottom <= controls.top).toBe(true);
+    expect(screen.getByRole("complementary").getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      footer.top,
+    );
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
   },

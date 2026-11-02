@@ -188,7 +188,8 @@ export function SystemdGraph({
     } else if (wasInspecting.current) {
       wasInspecting.current = false;
       interrupted.current = false;
-      fit(true, overview.current);
+      overview.current = true;
+      fit(true, true);
     }
   }, [selectedId]);
 
@@ -277,38 +278,40 @@ export function SystemdGraph({
         }
       }}
     >
-      <GraphControls
-        scale={pan.view.scale}
-        onZoom={(factor) => {
-          stopCamera();
-          pan.zoomBy(factor);
-        }}
-        onFit={() => {
-          stopCamera();
-          overview.current = true;
-          interrupted.current = false;
-          fit(true, true);
-        }}
-      />
-      <div className="systemd-direction-key" aria-label="Arrow direction">
-        <span>
-          {frameKey.startsWith("ordering")
-            ? "A → B: A is ordered before B"
-            : frameKey.startsWith("activation")
-              ? "A → B: A activates B"
-              : "A → B: A requires or wants B"}
-        </span>
-        {!frameKey.startsWith("ordering") && !frameKey.startsWith("activation") && (
-          <span className="systemd-line-key" aria-label="Dependency line styles">
-            <span>
-              <i aria-hidden="true" /> Requires
-            </span>
-            <span>
-              <i className="wants-line" aria-hidden="true" /> Wants only
-            </span>
+      <footer className="systemd-graph-footer">
+        <GraphControls
+          scale={pan.view.scale}
+          onZoom={(factor) => {
+            stopCamera();
+            pan.zoomBy(factor);
+          }}
+          onFit={() => {
+            stopCamera();
+            overview.current = true;
+            interrupted.current = false;
+            fit(true, true);
+          }}
+        />
+        <div className="systemd-direction-key" aria-label="Arrow direction">
+          <span>
+            {frameKey.startsWith("ordering")
+              ? "A → B: A is ordered before B"
+              : frameKey.startsWith("activation")
+                ? "A → B: A activates B"
+                : "A → B: A requires or wants B"}
           </span>
-        )}
-      </div>
+          {!frameKey.startsWith("ordering") && !frameKey.startsWith("activation") && (
+            <span className="systemd-line-key" aria-label="Dependency line styles">
+              <span>
+                <i aria-hidden="true" /> Requires
+              </span>
+              <span>
+                <i className="wants-line" aria-hidden="true" /> Wants only
+              </span>
+            </span>
+          )}
+        </div>
+      </footer>
       <div
         className="arch-viewport"
         ref={viewportRef}
@@ -431,7 +434,8 @@ export function SystemdGraph({
                       event.detail > 0
                         ? { id, x: event.clientX, y: event.clientY, time: event.timeStamp }
                         : null;
-                    onSelect(id);
+                    if (selectedId === id) close();
+                    else onSelect(id);
                   }}
                   onDoubleClick={() => {
                     stopCamera();
@@ -493,25 +497,27 @@ export function SystemdGraph({
           })}
         </div>
       </div>
-      <SystemdPresence open={!!selectedId}>
-        <aside
-          className="detail-panel arch-detail systemd-inspector"
-          id="systemd-graph-inspector"
-          ref={detailRef}
-          aria-label="Unit details"
-          tabIndex={-1}
-        >
-          <button
-            className="icon-button inspector-close"
-            type="button"
-            aria-label="Close details"
-            onClick={close}
+      <div className="systemd-graph-inspector-layer">
+        <SystemdPresence open={!!selectedId}>
+          <aside
+            className="detail-panel arch-detail systemd-inspector"
+            id="systemd-graph-inspector"
+            ref={detailRef}
+            aria-label="Unit details"
+            tabIndex={-1}
           >
-            <X size={16} />
-          </button>
-          {inspector}
-        </aside>
-      </SystemdPresence>
+            <button
+              className="icon-button inspector-close"
+              type="button"
+              aria-label="Close details"
+              onClick={close}
+            >
+              <X size={16} />
+            </button>
+            {inspector}
+          </aside>
+        </SystemdPresence>
+      </div>
     </div>
   );
 }

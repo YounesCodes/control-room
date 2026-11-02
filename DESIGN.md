@@ -267,6 +267,10 @@ nodes arriving from pending reads, but let manual pan/zoom cancel that adjustmen
 until the next expansion action. Reserve inspector space when fitting an expanded
 overview and return to that overview when the inspector closes.
 Selecting a node always zooms directly to it, including in an expanded graph.
+Clicking the selected node again closes inspection and fits all visible nodes to
+the available plot. Keep the direction key and zoom controls in a separate footer
+row outside the clipped, pannable viewport. Let that row wrap at narrow widths;
+neither the inspector nor graph content may cover its controls or legend.
 Late inspector data must not replace that focus; an expansion action resumes fitting.
 Initial focused framing keeps nodes readable at 85% or larger; expansion and Fit to view may zoom out further.
 Search retains paths to matches.

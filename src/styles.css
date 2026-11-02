@@ -4480,6 +4480,54 @@ dd {
   position: absolute;
   transform-origin: 0 0;
 }
+.systemd-canvas {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.systemd-canvas > .arch-viewport {
+  position: relative;
+  grid-area: 1 / 1;
+  inset: auto;
+  min-height: 0;
+}
+.systemd-graph-footer {
+  grid-area: 2 / 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  z-index: 2;
+}
+.systemd-canvas .systemd-graph-footer .graph-toolbar[role="toolbar"] {
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  transition: none;
+  order: 2;
+  flex: none;
+  margin-left: auto;
+  visibility: visible;
+  pointer-events: auto;
+}
+.systemd-graph-footer .systemd-direction-key {
+  position: static;
+  max-width: none;
+  flex: 1 1 220px;
+}
+.systemd-graph-inspector-layer {
+  grid-area: 1 / 1;
+  position: relative;
+  min-height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.systemd-graph-inspector-layer .systemd-inspector {
+  pointer-events: auto;
+}
 .systemd-edges {
   position: absolute;
   inset: 0;
@@ -4532,9 +4580,6 @@ dd {
 }
 .systemd-line-key .wants-line {
   border-top-style: dashed;
-}
-.systemd-canvas.inspecting .systemd-direction-key {
-  bottom: 64px;
 }
 .systemd-connection.relationship-wants .systemd-edge-path {
   stroke-dasharray: 6 4;
@@ -4665,10 +4710,6 @@ dd {
   .systemd-explorer-stage.inspecting .systemd-inventory {
     padding-right: 12px;
     visibility: hidden;
-  }
-  .systemd-canvas.inspecting .graph-toolbar {
-    visibility: hidden;
-    pointer-events: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
