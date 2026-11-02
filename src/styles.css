@@ -4438,6 +4438,8 @@ dd {
   fill: var(--text);
 }
 .systemd-direction-key {
+  display: grid;
+  gap: 6px;
   position: absolute;
   z-index: 1;
   bottom: 22px;
@@ -4447,17 +4449,28 @@ dd {
   color: var(--text-muted);
   pointer-events: none;
 }
+.systemd-line-key,
+.systemd-line-key > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.systemd-line-key {
+  flex-wrap: wrap;
+  column-gap: 14px;
+}
+.systemd-line-key i {
+  width: 22px;
+  border-top: 1.5px solid currentColor;
+}
+.systemd-line-key .wants-line {
+  border-top-style: dashed;
+}
 .systemd-canvas.inspecting .systemd-direction-key {
   bottom: 64px;
 }
 .systemd-connection.relationship-wants .systemd-edge-path {
   stroke-dasharray: 6 4;
-}
-.systemd-connection.relationship-ordering .systemd-edge-path {
-  stroke-dasharray: 2 4;
-}
-.systemd-connection.relationship-activation .systemd-edge-path {
-  stroke-width: 2;
 }
 .systemd-connection.edge-active .systemd-edge-path {
   stroke: var(--text);
@@ -4516,7 +4529,7 @@ dd {
 }
 .systemd-graph-status {
   position: absolute;
-  bottom: 18px;
+  bottom: 96px;
   left: 16px;
   padding: 5px 8px;
   color: var(--text-faint);

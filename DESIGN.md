@@ -249,8 +249,11 @@ or Activation (Triggers). Consolidate relationships with the same direction into
 one connector. Keep opposite requirements separate. Ordering arrows run from the
 earlier unit to the later unit, combining equivalent After/Before constraints.
 Keep edges free of text and show exact reported evidence on hover
-or keyboard focus. Explain arrow direction once for the active category. End each line
-at the base of its arrowhead, leaving the tip clear of the target card. Never use
+or keyboard focus. Explain arrow direction once for the active category. Use
+solid strokes in Ordering and Activation. In Dependencies, use solid strokes
+when Requires is present and dashed strokes for Wants-only links. Show matching
+line samples and their meanings beside the direction key.
+End each line at the base of its arrowhead, leaving the tip clear of the target card. Never use
 label boxes or relationship nodes. Pair line patterns with directed arrows, keep
 arrowheads crisp, and route connectors outside cards. Use consistent node sizes
 and deterministic columns, placing incoming units left and outgoing units right.

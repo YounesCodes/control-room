@@ -147,6 +147,53 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("explains meaningful dependency line styles and keeps ordering and activation solid", async () => {
+  await page.viewport(1280, 800);
+  api.inspectSystemdUnit.mockResolvedValue(
+    systemdInspection("worker.service", {
+      Requires: "database.service",
+      Wants: "database.service data.mount",
+      After: "database.service",
+      Triggers: "api.socket",
+    }),
+  );
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  const requires = await waitFor(() => {
+    const element = document.querySelector<SVGPathElement>(
+      ".relationship-requires .systemd-edge-path",
+    );
+    expect(element).toBeTruthy();
+    return element!;
+  });
+  await waitFor(() =>
+    expect(document.querySelector(".relationship-wants .systemd-edge-path")).toBeTruthy(),
+  );
+  expect(getComputedStyle(requires).strokeDasharray).toBe("none");
+  expect(
+    getComputedStyle(document.querySelector(".relationship-wants .systemd-edge-path")!)
+      .strokeDasharray,
+  ).not.toBe("none");
+  expect(screen.getByLabelText("Dependency line styles").textContent).toContain("Wants only");
+  expect(requires.parentElement?.getAttribute("aria-label")).toContain("Wants");
+  for (const category of ["Ordering", "Activation"]) {
+    await page.getByRole("button", { name: category, exact: true }).click();
+    const path = await waitFor(() => {
+      const element = document.querySelector<SVGPathElement>(
+        category === "Ordering"
+          ? ".relationship-ordering .systemd-edge-path"
+          : ".relationship-activation .systemd-edge-path",
+      );
+      expect(element).toBeTruthy();
+      return element!;
+    });
+    expect(getComputedStyle(path).strokeDasharray).toBe("none");
+    expect(getComputedStyle(path).strokeWidth).toBe("1.5px");
+    expect(screen.queryByLabelText("Dependency line styles")).toBeNull();
+  }
+});
+
 it("slides relationship controls and filter panels out without leaving focusable duplicates", async () => {
   await page.viewport(1280, 800);
   renderPane();

@@ -225,11 +225,23 @@ export function SystemdGraph({
         }}
       />
       <div className="systemd-direction-key" aria-label="Arrow direction">
-        {frameKey.startsWith("ordering")
-          ? "A → B: A is ordered before B"
-          : frameKey.startsWith("activation")
-            ? "A → B: A activates B"
-            : "A → B: A requires or wants B"}
+        <span>
+          {frameKey.startsWith("ordering")
+            ? "A → B: A is ordered before B"
+            : frameKey.startsWith("activation")
+              ? "A → B: A activates B"
+              : "A → B: A requires or wants B"}
+        </span>
+        {!frameKey.startsWith("ordering") && !frameKey.startsWith("activation") && (
+          <span className="systemd-line-key" aria-label="Dependency line styles">
+            <span>
+              <i aria-hidden="true" /> Requires
+            </span>
+            <span>
+              <i className="wants-line" aria-hidden="true" /> Wants only
+            </span>
+          </span>
+        )}
       </div>
       <div
         className="arch-viewport"
