@@ -235,7 +235,9 @@ Restore an explicit selection when returning to an existing workspace or followi
 a unit link. Keep enablement and other metadata in the inspector. Show a failed count
 only when nonzero; keep other counts and collection time in the heading tooltip.
 Search, filtering, and sorting open from one toolbar.
-Search expands inline into the toolbar's free space and retracts on dismissal.
+Search moves its icon left to reserve toolbar space, then reveals the input in
+that space. Keep the focused field to a single thin border, with no extra ring.
+Retract from the current width and opacity so early dismissal does not flash.
 Use a full-width toolbar row when needed at narrow widths. Anchor filters below
 their icon and toolbar edge, clamp them inside the pane, and reposition on resize.
 Failed rows use failure color; inactive and disabled units remain neutral. Preserve the selected identity through

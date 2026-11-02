@@ -32,9 +32,23 @@ export function SystemdToolbar({
   onMode: (mode: SystemdExplorerState["mode"]) => void;
   onRefresh: () => void;
 }) {
-  const [tools, setTools] = useState<"search" | "filters" | null>(null);
+  const [tools, setToolsState] = useState<"search" | "filters" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
+  const searchField = useRef<HTMLDivElement>(null);
+  function setTools(next: "search" | "filters" | null) {
+    if (next === "search" && tools !== "search" && searchField.current) {
+      const field = searchField.current;
+      field.style.setProperty("--search-enter-width", field.getBoundingClientRect().width + "px");
+      field.style.setProperty("--search-enter-opacity", getComputedStyle(field).opacity);
+    }
+    if (tools === "search" && next !== "search" && searchField.current) {
+      const field = searchField.current;
+      field.style.setProperty("--search-exit-width", field.getBoundingClientRect().width + "px");
+      field.style.setProperty("--search-exit-opacity", getComputedStyle(field).opacity);
+    }
+    setToolsState(next);
+  }
   const filterTrigger = useRef<HTMLButtonElement>(null);
   const filterPanel = useRef<HTMLDivElement>(null);
   const graph = state.mode === "graph";
@@ -99,7 +113,7 @@ export function SystemdToolbar({
   }, [tools]);
   function toggle(value: "search" | "filters", button: HTMLButtonElement) {
     trigger.current = button;
-    setTools((current) => (current === value ? null : value));
+    setTools(tools === value ? null : value);
   }
   function reset() {
     onChange({ state: "all", unitType: "all", sort: "priority" });
@@ -177,8 +191,21 @@ export function SystemdToolbar({
           </div>
         </SystemdPresence>
         <div className="systemd-toolbar-actions">
+          <button
+            type="button"
+            className="icon-button"
+            title={graph ? "Find dependencies" : "Find units"}
+            aria-label={graph ? "Find dependencies" : "Find units"}
+            aria-expanded={tools === "search"}
+            aria-pressed={!!search}
+            aria-controls="systemd-search"
+            onClick={(event) => toggle("search", event.currentTarget)}
+          >
+            <Search size={16} />
+          </button>
           <SystemdPresence open={tools === "search"}>
             <div
+              ref={searchField}
               id="systemd-search"
               className="systemd-inline-search search-field"
               role="region"
@@ -207,18 +234,6 @@ export function SystemdToolbar({
               </button>
             </div>
           </SystemdPresence>
-          <button
-            type="button"
-            className="icon-button"
-            title={graph ? "Find dependencies" : "Find units"}
-            aria-label={graph ? "Find dependencies" : "Find units"}
-            aria-expanded={tools === "search"}
-            aria-pressed={!!search}
-            aria-controls="systemd-search"
-            onClick={(event) => toggle("search", event.currentTarget)}
-          >
-            <Search size={16} />
-          </button>
           <SystemdPresence open={!graph}>
             <button
               type="button"

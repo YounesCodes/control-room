@@ -4133,16 +4133,24 @@ dd {
   padding: 0;
   font-size: 12px;
 }
+.systemd-inline-search:focus-within {
+  box-shadow: none;
+  border-color: var(--accent);
+}
 .systemd-presence:not([data-leaving]) > .systemd-inline-search {
-  animation: systemd-search-in 180ms ease-out both;
+  animation: systemd-search-in 320ms ease-out both;
 }
 .systemd-presence[data-leaving] > .systemd-inline-search {
   animation: systemd-search-out 180ms ease-in both;
 }
 @keyframes systemd-search-in {
   from {
-    max-width: 0;
-    opacity: 0;
+    max-width: var(--search-enter-width, 0px);
+    opacity: var(--search-enter-opacity, 0);
+  }
+  55% {
+    max-width: 420px;
+    opacity: var(--search-enter-opacity, 0);
   }
   to {
     max-width: 420px;
@@ -4151,8 +4159,12 @@ dd {
 }
 @keyframes systemd-search-out {
   from {
-    max-width: 420px;
-    opacity: 1;
+    max-width: var(--search-exit-width, 420px);
+    opacity: var(--search-exit-opacity, 1);
+  }
+  35% {
+    max-width: var(--search-exit-width, 420px);
+    opacity: 0;
   }
   to {
     max-width: 0;

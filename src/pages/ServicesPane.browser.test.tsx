@@ -147,6 +147,48 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("does not flash the field when search is dismissed during the icon's travel", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  await page.getByRole("button", { name: "Find units", exact: true }).click();
+  const search = document.querySelector<HTMLElement>(".systemd-inline-search")!;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduced) {
+    const opening = search
+      .getAnimations()
+      .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
+    opening.pause();
+    opening.currentTime = 80;
+    expect(Number(getComputedStyle(search).opacity)).toBe(0);
+  }
+  const width = search.getBoundingClientRect().width;
+  await userEvent.keyboard("{Escape}");
+  if (!reduced) {
+    const closing = search
+      .getAnimations()
+      .find((item) => (item as CSSAnimation).animationName === "systemd-search-out")!;
+    closing.pause();
+    closing.currentTime = 0;
+    expect(Number(getComputedStyle(search).opacity)).toBe(0);
+    expect(search.getBoundingClientRect().width).toBeLessThanOrEqual(width + 1);
+    closing.currentTime = 60;
+    expect(Number(getComputedStyle(search).opacity)).toBe(0);
+    const partial = search.getBoundingClientRect().width;
+    await userEvent.keyboard("{Enter}");
+    const reopened = search
+      .getAnimations()
+      .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
+    reopened.pause();
+    reopened.currentTime = 0;
+    expect(Math.abs(search.getBoundingClientRect().width - partial)).toBeLessThanOrEqual(1);
+    expect(Number(getComputedStyle(search).opacity)).toBe(0);
+    reopened.finish();
+    await userEvent.keyboard("{Escape}");
+  }
+  await waitFor(() => expect(document.querySelector(".systemd-inline-search")).toBeNull());
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find units" }));
+});
+
 it.each([360, 960, 1400])(
   "keeps search inline and anchors filters below their icon at %s px",
   async (width) => {
@@ -165,8 +207,17 @@ it.each([360, 960, 1400])(
       animation.pause();
       animation.currentTime = 0;
       const start = search.getBoundingClientRect().width;
-      animation.currentTime = 90;
+      const iconStart = screen
+        .getByRole("button", { name: "Find units" })
+        .getBoundingClientRect().left;
+      animation.currentTime = 120;
       expect(search.getBoundingClientRect().width).toBeGreaterThan(start);
+      expect(
+        screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().left,
+      ).toBeLessThan(iconStart);
+      expect(Number(getComputedStyle(search).opacity)).toBe(0);
+      animation.currentTime = 260;
+      expect(Number(getComputedStyle(search).opacity)).toBeGreaterThan(0);
       animation.finish();
     }
     await settleMotion();
@@ -174,9 +225,11 @@ it.each([360, 960, 1400])(
     const box = search.getBoundingClientRect();
     expect(box.top).toBeGreaterThanOrEqual(header.top);
     expect(box.bottom).toBeLessThanOrEqual(header.bottom);
-    expect(box.right).toBeLessThanOrEqual(
-      screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().left + 1,
+    expect(box.left).toBeGreaterThanOrEqual(
+      screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().right - 1,
     );
+    expect(getComputedStyle(search).boxShadow).toBe("none");
+    expect(getComputedStyle(search).borderTopWidth).toBe("1px");
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("textbox", { name: "Search units" })).toBeNull();
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
