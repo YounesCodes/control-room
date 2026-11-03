@@ -1743,15 +1743,11 @@ export function App() {
               title={`Terminal ${workspaceStatus(workspace)}`}
             />
           )}
-          {terminalActivity[workspace.id] && (
+          {terminalActivity[workspace.id] === "bell" && (
             <span
-              className={`terminal-activity terminal-activity-${terminalActivity[workspace.id]}`}
-              aria-label={
-                terminalActivity[workspace.id] === "bell" ? "Terminal bell" : "New terminal output"
-              }
-              title={
-                terminalActivity[workspace.id] === "bell" ? "Terminal bell" : "New terminal output"
-              }
+              className="terminal-activity terminal-activity-bell"
+              aria-label="Terminal bell"
+              title="Terminal bell"
             />
           )}
         </button>
@@ -2095,12 +2091,10 @@ export function App() {
                                 className={`presence presence-${state}${members.some(workspaceProcessing) ? " presence-busy" : ""}`}
                                 aria-hidden="true"
                               />
-                              {activity && (
+                              {activity === "bell" && (
                                 <span
-                                  className={`terminal-activity terminal-activity-${activity}`}
-                                  aria-label={
-                                    activity === "bell" ? "Terminal bell" : "New terminal output"
-                                  }
+                                  className="terminal-activity terminal-activity-bell"
+                                  aria-label="Terminal bell"
                                 />
                               )}
                             </button>

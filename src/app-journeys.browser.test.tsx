@@ -1127,6 +1127,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .getByRole("button", { name: /Command Prompt/ })
       .click();
     const remoteSession = "session-1";
+    remote.onmessage(new TextEncoder().encode("Background output\r\n").buffer);
+    await expect.element(group).toHaveAccessibleDescription(/new output/);
+    expect(element.querySelector(".terminal-activity-output")).toBeNull();
     remote.onmessage(new TextEncoder().encode("\x07Background build complete\r\n").buffer);
     await expect.element(group).toHaveAccessibleDescription(/terminal bell/);
     expect(group.element().querySelector(".terminal-activity-bell")).not.toBeNull();
