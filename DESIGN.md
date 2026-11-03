@@ -454,9 +454,8 @@ firewall profiles describe policy without claiming a port is reachable.
 
 Use host marks and session presence to help users find a connection or
 Workspace. Put session indicators after labels, separate from OS and shell marks.
-When the sidebar is visible, connected tabs do not repeat its normal connection
-dots. Tabs retain connecting, disconnected, and error indicators; in Focus Mode,
-they also show normal connection state because the sidebar is hidden. Keep session
+Hide idle connection and session dots in host rows, tabs, and Focus Mode.
+Show indicators for connecting, busy, and error states. Keep session
 state accessible in every mode. Local shells use running, stopped, and restarted;
 remote sessions use connected, disconnected, and reconnected.
 

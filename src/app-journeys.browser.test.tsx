@@ -1594,9 +1594,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const mark = host.querySelector<HTMLElement>(".target-mark")!;
     const presence = host.querySelector<HTMLElement>(".presence-connected")!;
     expect(mark.contains(presence)).toBe(false);
-    expect(presence.getBoundingClientRect().left).toBeGreaterThan(
-      mark.getBoundingClientRect().right,
-    );
+    expect(getComputedStyle(presence).display).toBe("none");
     expect(tab.querySelector(".presence")).toBeNull();
     expect(tab.querySelector(".sr-only")?.textContent).toBe("Terminal connected");
     await page.screenshot({ element: host, path: "../test-results/host-status-placement.png" });
@@ -1607,9 +1605,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const focusMark = tab.querySelector<HTMLElement>(".target-mark")!;
     const focusPresence = tab.querySelector<HTMLElement>(".presence-connected")!;
     expect(focusMark.contains(focusPresence)).toBe(false);
-    expect(focusPresence.getBoundingClientRect().left).toBeGreaterThan(
-      focusMark.getBoundingClientRect().right,
-    );
+    expect(getComputedStyle(focusPresence).display).toBe("none");
     await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
     await expect.poll(() => tab.querySelector(".presence")).toBeNull();
   });

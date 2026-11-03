@@ -2082,6 +2082,9 @@ code,
 .presence-disconnected {
   --presence-color: #6a6a6a;
 }
+.presence:not(.presence-busy):not(.presence-connecting):not(.presence-error) {
+  display: none;
+}
 
 .presence.presence-busy,
 .presence.presence-connecting {
