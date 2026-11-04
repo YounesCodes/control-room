@@ -563,6 +563,21 @@ it.each([360, 960])("names the relationship target without overflowing at %ipx",
   expect(screen.getByTitle("Refocus on current unit").textContent).toBe(id);
 });
 
+it("keeps the unit count width and view switch position stable across scopes", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  const count = document.querySelector<HTMLElement>(".systemd-unit-count")!;
+  const view = screen.getByRole("group", { name: "Systemd view" });
+  const width = count.getBoundingClientRect().width;
+  const left = view.getBoundingClientRect().left;
+  for (const scope of ["All units", "Focused"]) {
+    await page.getByRole("button", { name: scope, exact: true }).click();
+    await settleMotion();
+    expect(count.getBoundingClientRect().width).toBeCloseTo(width, 2);
+    expect(view.getBoundingClientRect().left).toBeCloseTo(left, 2);
+  }
+});
+
 it("reveals the inventory on scope changes and continues an interrupted reveal without remounting rows", async () => {
   await page.viewport(1280, 800);
   renderPane();

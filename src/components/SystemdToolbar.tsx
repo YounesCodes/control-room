@@ -220,9 +220,10 @@ export function SystemdToolbar({
         </h2>
         <span
           className="systemd-unit-count"
+          data-count-width={total + " / " + total + " units"}
           title={visible + " units in inventory; " + total + " collected"}
         >
-          {visible !== total ? visible + " / " + total + " units" : total + " units"}
+          <span>{visible !== total ? visible + " / " + total + " units" : total + " units"}</span>
         </span>
         {failed > 0 && (
           <button

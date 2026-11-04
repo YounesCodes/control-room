@@ -4115,11 +4115,20 @@ dd {
   left: 2px;
 }
 .systemd-unit-count {
+  display: inline-grid;
   flex-shrink: 0;
   white-space: nowrap;
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+.systemd-unit-count::before {
+  content: attr(data-count-width);
+  visibility: hidden;
+}
+.systemd-unit-count::before,
+.systemd-unit-count > span {
+  grid-area: 1 / 1;
 }
 .systemd-failures {
   padding: 3px 5px;
