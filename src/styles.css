@@ -4023,6 +4023,7 @@ dd {
   container-type: inline-size;
 }
 .systemd-toolbar {
+  --systemd-switch-ease: cubic-bezier(0.4, 0, 0.6, 1);
   --search-layout-duration: 180ms;
   --search-layout-ease: ease-in;
   --search-actions-min-width: 280px;
@@ -4211,8 +4212,8 @@ dd {
 }
 .systemd-mode-switch[data-animated]::before {
   transition:
-    transform 180ms var(--ease),
-    width 180ms var(--ease);
+    transform 180ms var(--systemd-switch-ease),
+    width 180ms var(--systemd-switch-ease);
 }
 .systemd-mode-switch [aria-pressed="true"] {
   background: transparent;
@@ -4225,7 +4226,7 @@ dd {
   width: calc(50% - 3px);
   border-radius: var(--radius-sm);
   background: var(--fill-active);
-  transition: transform 180ms var(--ease);
+  transition: transform 180ms var(--systemd-switch-ease);
 }
 .systemd-scope-switch:has(button:last-child[aria-pressed="true"])::before {
   transform: translateX(calc(100% + 2px));

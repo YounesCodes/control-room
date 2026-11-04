@@ -345,7 +345,8 @@ technology, cancel exits when reopened, and remove them immediately under reduce
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat the graph action in the inspector.
 Slide one selection fill between Explorer and Relationships with the same motion
-as Focused / All units. Measure its position and width so it fits the unequal
+as Focused / All units. Use symmetric easing so expansion and contraction feel equally quick.
+Measure its position and width so it fits the unequal
 labels, follows target-name and window-size changes, and reverses from its current
 pose on rapid switching. Apply the same sliding fill to Dependencies, Ordering,
 and Activation. Place the initial fill immediately and skip motion when reduced motion is requested.

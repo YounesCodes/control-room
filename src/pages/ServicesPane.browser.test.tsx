@@ -245,6 +245,12 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
     });
     for (const animation of forward) {
       animation.pause();
+      const duration = Number(animation.effect!.getTiming().duration);
+      animation.currentTime = duration / 4;
+      const early = animation.effect!.getComputedTiming().progress!;
+      animation.currentTime = (duration * 3) / 4;
+      const late = animation.effect!.getComputedTiming().progress!;
+      expect(early + late).toBeCloseTo(1, 2);
       animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
     }
     const midway = pose();
