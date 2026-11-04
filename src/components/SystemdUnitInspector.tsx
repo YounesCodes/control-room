@@ -112,6 +112,7 @@ export function SystemdUnitInspector({
   onOpenPorts,
   onRequestPorts,
   onOpenBoot,
+  onRequestBoot,
 }: {
   connectionId: string;
   cacheScope?: string;
@@ -124,6 +125,7 @@ export function SystemdUnitInspector({
   onOpenPorts?: (unit: string) => void;
   onRequestPorts?: () => void;
   onOpenBoot?: () => void;
+  onRequestBoot?: () => void;
 }) {
   const [configuration, setConfiguration] = useState(false);
   const [effective, setEffective] = useState(false);
@@ -290,6 +292,7 @@ export function SystemdUnitInspector({
           onToggle={(open) => {
             setAdvanced(open);
             if (open && (type === "service" || type === "socket")) onRequestPorts?.();
+            if (open) onRequestBoot?.();
             if (!open) {
               setEffective(false);
             }

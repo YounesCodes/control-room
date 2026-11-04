@@ -4543,6 +4543,9 @@ dd {
   gap: 14px;
   margin-top: 14px;
 }
+.systemd-inspector-links:empty {
+  display: none;
+}
 .systemd-inspector-links button {
   display: inline-flex;
   gap: 5px;

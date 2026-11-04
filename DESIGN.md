@@ -364,7 +364,11 @@ Reuse inspector disclosure motion. Reduced motion removes camera, node, and
 disclosure animation. Show Ports navigation only for services or sockets with a
 fresh, known listener ownership match to that exact unit. Opening Advanced may read
 listeners without elevation, sharing the Ports view's workspace cache. Hide the
-shortcut while ownership is unknown or its read is unavailable. Current Boot
+shortcut while ownership is unknown or its read is unavailable. Show Boot only
+when fresh current-boot diagnostics contain a matching slow-unit or failed-unit
+entry from a readable section. Opening Advanced may collect current boot evidence
+without elevation, sharing the Boot view's workspace snapshot. Hide unrelated,
+historical, or unavailable evidence. Current Boot
 unit rows link back to Systemd without attributing a cause.
 
 ## Visual language

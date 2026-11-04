@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   listServices: vi.fn(),
   inspectSystemdUnit: vi.fn(),
   listPorts: vi.fn(),
+  collectBootDiagnostics: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -16,7 +17,14 @@ vi.mock("../lib/api", () => ({
   errorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
-import type { CachedList, ListeningSocket, SavedConnection, SystemdUnit } from "../types";
+import type {
+  BootDiagnostics,
+  CachedList,
+  ListeningSocket,
+  SavedConnection,
+  SystemdUnit,
+} from "../types";
+import { bootDiagnostics } from "../test/boot-fixtures";
 import { ServicesPane } from "./ServicesPane";
 import { invalidateSystemdReads } from "../lib/systemd-inspection";
 import { systemdInspection } from "../test/systemd-fixtures";
@@ -59,6 +67,141 @@ function cache<T>(items: T[]): CachedList<T> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it.each(["slow", "failed", "unrelated", "historical"])(
+    "gates Boot using current unit evidence: %s",
+    async (kind) => {
+      const user = userEvent.setup();
+      const snapshot = bootDiagnostics();
+      if (kind === "failed")
+        snapshot.failedUnits.data = [unit("worker.service", "service", "failed", "failed")];
+      else
+        snapshot.slowUnits.data = [
+          { unit: kind === "unrelated" ? "other.service" : "worker.service", duration: "2s" },
+        ];
+      if (kind === "historical") snapshot.selectedBootId = "b".repeat(32);
+      const onOpenBoot = vi.fn();
+      render(
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          bootSnapshot={snapshot}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenBoot={onOpenBoot}
+        />,
+      );
+      await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+      await user.click(screen.getByText("Advanced", { selector: "summary" }));
+      const visible = kind === "slow" || kind === "failed";
+      expect(!!screen.queryByRole("button", { name: "Boot" })).toBe(visible);
+      if (visible) {
+        await user.click(screen.getByRole("button", { name: "Boot" }));
+        expect(onOpenBoot).toHaveBeenCalledTimes(1);
+      }
+      expect(api.collectBootDiagnostics).not.toHaveBeenCalled();
+    },
+  );
+  it("collects boot evidence lazily, reuses the snapshot, and removes Boot when refreshed evidence no longer matches", async () => {
+    const user = userEvent.setup();
+    const snapshot = bootDiagnostics();
+    snapshot.slowUnits.data = [{ unit: "worker.service", duration: "2s" }];
+    api.collectBootDiagnostics
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(bootDiagnostics());
+    const updates = vi.fn();
+    function Pane() {
+      const [bootSnapshot, setBootSnapshot] = useState<BootDiagnostics | null>(null);
+      return (
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          bootSnapshot={bootSnapshot}
+          onBootSnapshotChange={(next) => {
+            updates(next);
+            setBootSnapshot(next);
+          }}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenBoot={vi.fn()}
+        />
+      );
+    }
+    render(<Pane />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    expect(api.collectBootDiagnostics).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    expect(await screen.findByRole("button", { name: "Boot" })).toBeTruthy();
+    expect(api.collectBootDiagnostics).toHaveBeenCalledWith(connection.id, null, null);
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    expect(api.collectBootDiagnostics).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Refresh unit details" }));
+    await waitFor(() => expect(updates).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Boot" })).toBeNull();
+  });
+  it("hides Boot on a failed collection and retries on unit refresh", async () => {
+    const user = userEvent.setup();
+    api.collectBootDiagnostics.mockRejectedValueOnce(new Error("Boot unavailable"));
+    function Pane() {
+      const [bootSnapshot, setBootSnapshot] = useState<BootDiagnostics | null>(null);
+      return (
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          bootSnapshot={bootSnapshot}
+          onBootSnapshotChange={setBootSnapshot}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenBoot={vi.fn()}
+        />
+      );
+    }
+    render(<Pane />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    await waitFor(() => expect(api.collectBootDiagnostics).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Boot" })).toBeNull();
+    const next = bootDiagnostics();
+    next.slowUnits.data = [{ unit: "worker.service", duration: "2s" }];
+    api.collectBootDiagnostics.mockResolvedValueOnce(next);
+    await user.click(screen.getByRole("button", { name: "Refresh unit details" }));
+    expect(await screen.findByRole("button", { name: "Boot" })).toBeTruthy();
+  });
+  it("discards boot evidence after the SSH target changes and changes back", async () => {
+    const user = userEvent.setup();
+    let resolve!: (snapshot: BootDiagnostics) => void;
+    api.collectBootDiagnostics.mockImplementation(
+      () =>
+        new Promise<BootDiagnostics>((done) => {
+          resolve = done;
+        }),
+    );
+    const onBootSnapshotChange = vi.fn();
+    const props = {
+      cache: cache([unit("worker.service", "service", "active", "running")]),
+      bootSnapshot: null,
+      onBootSnapshotChange,
+      onCacheChange: vi.fn(),
+      onViewLogs: vi.fn(),
+      onOpenBoot: vi.fn(),
+    };
+    const view = render(<ServicesPane {...props} connection={connection} />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    await waitFor(() => expect(api.collectBootDiagnostics).toHaveBeenCalledTimes(1));
+    view.rerender(
+      <ServicesPane {...props} connection={{ ...connection, destination: "another-host" }} />,
+    );
+    view.rerender(<ServicesPane {...props} connection={connection} />);
+    const old = bootDiagnostics();
+    old.slowUnits.data = [{ unit: "worker.service", duration: "2s" }];
+    await act(async () => {
+      resolve(old);
+    });
+    expect(onBootSnapshotChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Boot" })).toBeNull();
+  });
+
   const listener: ListeningSocket = {
     id: "tcp:8080",
     protocol: "tcp",
@@ -445,6 +588,7 @@ describe("ServicesPane failed units view", () => {
   });
   afterEach(cleanup);
   beforeEach(() => {
+    api.collectBootDiagnostics.mockReset();
     api.listPorts.mockReset();
     invalidateSystemdReads(connection.id);
     api.inspectSystemdUnit

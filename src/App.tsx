@@ -2572,6 +2572,10 @@ export function App() {
                         connection={activeConnection}
                         cache={activeRemoteWorkspace.servicesCache}
                         portsCache={activeRemoteWorkspace.portsCache}
+                        bootSnapshot={activeRemoteWorkspace.bootDiagnostics}
+                        onBootSnapshotChange={(snapshot) =>
+                          updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
+                        }
                         onPortsCacheChange={(cache) =>
                           updatePortsCache(activeRemoteWorkspace.id, cache)
                         }
