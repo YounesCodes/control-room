@@ -732,6 +732,43 @@ it("glides one shared service highlight and retargets it during rapid switching"
   await waitFor(() => expect(document.querySelector(".systemd-selection-indicator")).toBeNull());
 });
 
+it.each([1000, 1280])(
+  "keeps search inline beside a long relationship target at %ipx",
+  async (width) => {
+    await page.viewport(width, 800);
+    const id = "actions.runner.YounesCodes-control-room.production-worker.service";
+    renderPane([{ ...units[0], id, activeState: "active", subState: "running" }]);
+    await page.getByRole("button", { name: new RegExp(id + " Queue worker") }).click();
+    await settleMotion();
+    const heading = document.querySelector<HTMLElement>(".systemd-heading")!;
+    for (const graph of [false, true]) {
+      if (graph) {
+        await page.getByRole("button", { name: "Relationships " + id }).click();
+        await settleMotion();
+      }
+      const height = heading.getBoundingClientRect().height;
+      await page
+        .getByRole("button", { name: graph ? "Find dependencies" : "Find units", exact: true })
+        .click();
+      await settleMotion();
+      const input = screen.getByRole("textbox", {
+        name: graph ? "Search dependencies" : "Search units",
+      });
+      expect(input.getBoundingClientRect().width).toBeGreaterThanOrEqual(120);
+      expect(heading.getBoundingClientRect().height).toBe(height);
+      const mode = screen.getByRole("group", { name: "Systemd view" });
+      const actions = document.querySelector<HTMLElement>(".systemd-toolbar-actions")!;
+      expect(actions.getBoundingClientRect().top).toBeLessThan(mode.getBoundingClientRect().bottom);
+      expect(actions.getBoundingClientRect().right).toBeLessThanOrEqual(
+        heading.getBoundingClientRect().right,
+      );
+      expect(screen.getByRole("button", { name: "Relationships " + id }).title).toContain(id);
+      await page.getByRole("button", { name: "Hide search", exact: true }).click();
+      await settleMotion();
+    }
+  },
+);
+
 it.each(["inventory", "graph"])(
   "clears a query before hiding search with X in %s",
   async (mode) => {

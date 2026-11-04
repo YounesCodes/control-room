@@ -4035,6 +4035,18 @@ dd {
   margin: 0;
   font-size: 14px;
 }
+.systemd-heading:has(.systemd-inline-search) > .systemd-mode-switch {
+  flex: 1 1 220px;
+  min-width: 220px;
+  max-width: max-content;
+}
+.systemd-heading > .systemd-mode-switch > button {
+  flex-shrink: 0;
+}
+.systemd-heading > .systemd-mode-switch > button:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .systemd-mode-tools {
   position: relative;
   display: grid;
@@ -4287,12 +4299,6 @@ dd {
 }
 @container (max-width: 640px) {
   .systemd-toolbar-actions:has(.systemd-inline-search) {
-    flex-basis: 100%;
-    order: 5;
-  }
-}
-@container (max-width: 960px) {
-  .systemd-toolbar[data-mode="graph"] .systemd-toolbar-actions:has(.systemd-inline-search) {
     flex-basis: 100%;
     order: 5;
   }
