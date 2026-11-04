@@ -4153,6 +4153,11 @@ dd {
   background: transparent;
   color: var(--text-muted);
   font-size: 11.5px;
+  white-space: nowrap;
+}
+.systemd-view-switch button > svg,
+.systemd-relationship-groups button > svg {
+  flex-shrink: 0;
 }
 .systemd-view-switch button:hover,
 .systemd-relationship-groups button:hover {

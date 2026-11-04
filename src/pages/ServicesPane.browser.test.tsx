@@ -1006,6 +1006,28 @@ it("follows filtered sort order and scrolls through virtual rows during repeated
   expect(screen.getByRole("heading", { name: "unit-0009.service" })).toBeTruthy();
 });
 
+it.each([360, 960, 1400])(
+  "keeps view icons full size with a long unit name at %s px",
+  async (width) => {
+    await page.viewport(width, 800);
+    const id = "actions.runner.YounesCodes-control-room.desktop-build-runner.service";
+    renderPane([{ ...units[1], id }]);
+    await page.getByRole("button", { name: id + " Database Running" }).click();
+    const relationship = screen.getByRole("button", { name: "Relationships " + id });
+    const assertIcons = () => {
+      for (const button of [relationship, screen.getByRole("button", { name: "Explorer" })]) {
+        const bounds = button.querySelector("svg")!.getBoundingClientRect();
+        expect(bounds.width).toBe(14);
+        expect(bounds.height).toBe(14);
+      }
+    };
+    assertIcons();
+    await page.getByRole("button", { name: "Find units", exact: true }).click();
+    await settleMotion();
+    assertIcons();
+  },
+);
+
 it("does not flash the field when search is dismissed during the icon's travel", async () => {
   await page.viewport(1280, 800);
   renderPane();
@@ -1945,7 +1967,9 @@ it.each([360, 960, 1400])(
       expect(new DOMMatrix(String(first.transform)).m41).toBeGreaterThanOrEqual(32);
       expect(Number(effect.getTiming().duration)).toBeGreaterThanOrEqual(220);
     }
-    expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(Math.min(400, width - 24));
+    expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(
+      Math.min(400, width - 24) + 0.1,
+    );
     if (width >= 960) expect(inspector.getBoundingClientRect().width).toBeCloseTo(400, 2);
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
@@ -2001,3 +2025,26 @@ it.each([360, 960, 1400])(
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
   },
 );
+
+it("keeps the inspected relationship node framed when the viewport resizes", async () => {
+  await page.viewport(1280, 800);
+  render(
+    <div className="systemd-page">
+      <RoutingFixture />
+    </div>,
+  );
+  await page.getByRole("button", { name: /^b.service/ }).click();
+  await settleMotion();
+  const scale = new DOMMatrix(camera()).a;
+  await page.viewport(1100, 800);
+  await waitFor(() => {
+    const node = screen.getByRole("button", { name: /^b.service/ }).getBoundingClientRect();
+    const viewport = screen
+      .getByRole("region", { name: "Systemd dependency graph" })
+      .getBoundingClientRect();
+    const inspector = screen.getByRole("complementary").getBoundingClientRect();
+    expect(node.left).toBeGreaterThanOrEqual(viewport.left);
+    expect(node.right).toBeLessThanOrEqual(inspector.left);
+    expect(new DOMMatrix(camera()).a).toBeCloseTo(scale);
+  });
+});

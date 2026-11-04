@@ -81,8 +81,19 @@ export function ServicesPane({
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     focusId && isSystemdUnitName(focusId) ? focusId : null,
   );
-  const [state, setState] = useState<SystemdExplorerState>(() => ({ ...DEFAULT, ...initialState }));
-  const [inspectors, setInspectors] = useState({ inventory: false, graph: false });
+  const [state, setState] = useState<SystemdExplorerState>(() => {
+    const restored = { ...DEFAULT, ...initialState };
+    if (
+      selectedId &&
+      !filterSystemdUnits(cache.items, restored).some((unit) => unit.id === selectedId)
+    )
+      return { ...restored, search: "", state: "all", unitType: "all", scope: "all" };
+    return restored;
+  });
+  const [inspectors, setInspectors] = useState({
+    inventory: !!selectedId && state.mode === "inventory",
+    graph: !!selectedId && state.mode === "graph",
+  });
   const inspectorViews = useRef(new Map<string, SystemdInspectorViewState>());
   const inspectorOpen = inspectors[state.mode];
   function setInspectorOpen(open: boolean) {
@@ -158,7 +169,18 @@ export function ServicesPane({
     };
   }, [connection.id]);
   useEffect(() => {
-    if (focusId && isSystemdUnitName(focusId)) setSelectedId(focusId);
+    if (focusId && isSystemdUnitName(focusId) && focusId !== selectedId) {
+      setSelectedId(focusId);
+      setInspectorOpen(true);
+      if (!filterSystemdUnits(cache.items, state).some((unit) => unit.id === focusId))
+        setState((current) => ({
+          ...current,
+          search: "",
+          state: "all",
+          unitType: "all",
+          scope: "all",
+        }));
+    }
   }, [focusId]);
 
   const rootId = state.rootId ?? selectedId;

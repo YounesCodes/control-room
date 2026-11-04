@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FileClock, Network, RefreshCw, Timer } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
@@ -160,6 +160,13 @@ export function SystemdUnitInspector({
   const [configuration, setConfiguration] = useState(initialViewState?.configuration ?? false);
   const [effective, setEffective] = useState(initialViewState?.effective ?? false);
   const [advanced, setAdvanced] = useState(initialViewState?.advanced ?? false);
+  useEffect(() => {
+    if (!initialViewState?.advanced) return;
+    // Restoring an open disclosure must recheck evidence freshness too.
+    // The parent loaders reuse fresh caches and deduplicate pending requests.
+    if (/\.(service|socket)$/.test(unitId)) onRequestPorts?.();
+    onRequestBoot?.();
+  }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
   const latestView = useRef({ configuration, effective, advanced, onViewStateChange });
   latestView.current = { configuration, effective, advanced, onViewStateChange };

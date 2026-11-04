@@ -67,6 +67,40 @@ function cache<T>(items: T[]): CachedList<T> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it.each([
+    ["worker.service", true],
+    ["systemd-udevd.service", true],
+    ["systemd-udevd.service", false],
+  ] as const)(
+    "opens details for %s reached from another inspection pane, cached=%s",
+    async (id, cached) => {
+      const view = render(
+        <ServicesPane
+          connection={connection}
+          cache={cache(cached ? [unit(id, "service", "active", "running")] : [])}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          focusId={id}
+        />,
+      );
+      expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+      if (!cached) {
+        view.rerender(
+          <ServicesPane
+            connection={connection}
+            cache={cache([unit(id, "service", "active", "running")])}
+            onCacheChange={vi.fn()}
+            onViewLogs={vi.fn()}
+            focusId={id}
+          />,
+        );
+        expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+      }
+      await waitFor(() =>
+        expect(api.inspectSystemdUnit).toHaveBeenCalledWith(connection.id, id, "properties"),
+      );
+    },
+  );
   it("restores each view's inspector state when switching between Explorer and Relationships", async () => {
     const user = userEvent.setup();
     render(
@@ -237,11 +271,11 @@ describe("ServicesPane failed units view", () => {
   });
   it("discards boot evidence after the SSH target changes and changes back", async () => {
     const user = userEvent.setup();
-    let resolve!: (snapshot: BootDiagnostics) => void;
+    const resolvers: ((snapshot: BootDiagnostics) => void)[] = [];
     api.collectBootDiagnostics.mockImplementation(
       () =>
         new Promise<BootDiagnostics>((done) => {
-          resolve = done;
+          resolvers.push(done);
         }),
     );
     const onBootSnapshotChange = vi.fn();
@@ -261,13 +295,19 @@ describe("ServicesPane failed units view", () => {
       <ServicesPane {...props} connection={{ ...connection, destination: "another-host" }} />,
     );
     view.rerender(<ServicesPane {...props} connection={connection} />);
+    await waitFor(() => expect(api.collectBootDiagnostics).toHaveBeenCalledTimes(2));
     const old = bootDiagnostics();
     old.slowUnits.data = [{ unit: "worker.service", duration: "2s" }];
     await act(async () => {
-      resolve(old);
+      resolvers[0](old);
     });
     expect(onBootSnapshotChange).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Boot" })).toBeNull();
+    const current = bootDiagnostics();
+    await act(async () => {
+      resolvers[1](current);
+    });
+    expect(onBootSnapshotChange).toHaveBeenCalledExactlyOnceWith(current);
   });
 
   const listener: ListeningSocket = {
@@ -357,11 +397,11 @@ describe("ServicesPane failed units view", () => {
 
   it("discards a listener read after the SSH target changes, including changing back", async () => {
     const user = userEvent.setup();
-    let resolve!: (items: ListeningSocket[]) => void;
+    const resolvers: ((items: ListeningSocket[]) => void)[] = [];
     api.listPorts.mockImplementation(
       () =>
         new Promise<ListeningSocket[]>((done) => {
-          resolve = done;
+          resolvers.push(done);
         }),
     );
     const onPortsCacheChange = vi.fn();
@@ -386,11 +426,19 @@ describe("ServicesPane failed units view", () => {
       <ServicesPane {...props} connection={{ ...connection, destination: "another-host" }} />,
     );
     view.rerender(<ServicesPane {...props} connection={connection} />);
+    await waitFor(() => expect(api.listPorts).toHaveBeenCalledTimes(2));
     await act(async () => {
-      resolve([listener]);
+      resolvers[0]([listener]);
     });
-    expect(onPortsCacheChange).toHaveBeenCalledTimes(1);
+    expect(onPortsCacheChange).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("button", { name: "Ports" })).toBeNull();
+    await act(async () => {
+      resolvers[1]([]);
+    });
+    expect(onPortsCacheChange).toHaveBeenCalledTimes(3);
+    expect(onPortsCacheChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ items: [], loading: false, error: null }),
+    );
   });
 
   it("hides Ports when the listener read fails", async () => {

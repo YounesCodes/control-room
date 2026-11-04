@@ -149,6 +149,30 @@ export function SystemdGraph({
   }, [layout, rootId, frameKey, expansionKey, fit, setView, ids, expanded]);
   const fitRef = useRef(fit);
   fitRef.current = fit;
+  const frameSelected = useCallback(
+    (animate: boolean) => {
+      const viewport = viewportRef.current;
+      const node = selectedId ? layout.positions.get(selectedId) : undefined;
+      if (!viewport || !node) return false;
+      const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
+      if (width < 240) return false;
+      const height = Math.max(100, viewport.clientHeight - 108);
+      const scale = Math.max(
+        0.85,
+        Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
+      );
+      setMoving(animate);
+      setView({
+        scale,
+        x: 24 + width / 2 - (node.x + node.width / 2) * scale,
+        y: 48 + height / 2 - (node.y + node.height / 2) * scale,
+      });
+      return true;
+    },
+    [selectedId, layout, setView],
+  );
+  const frameSelectedRef = useRef(frameSelected);
+  frameSelectedRef.current = frameSelected;
   useEffect(() => () => cancelFitFrame(), []);
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -160,7 +184,8 @@ export function SystemdGraph({
       width = viewport.clientWidth;
       height = viewport.clientHeight;
       cancelFitFrame();
-      fitRef.current(false, overview.current);
+      if (!interrupted.current || !frameSelectedRef.current(false))
+        fitRef.current(false, overview.current);
     };
     if (typeof ResizeObserver === "undefined") return observeLayoutFallback(viewport, resize);
     const observer = new ResizeObserver(resize);
@@ -175,22 +200,7 @@ export function SystemdGraph({
       // Selection focuses this node; late inspection data must not replace
       // that framing. The next expansion action resumes automatic fitting.
       interrupted.current = true;
-      const viewport = viewportRef.current,
-        node = previous.current?.layout.positions.get(selectedId);
-      if (!viewport || !node) return;
-      const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
-      if (width < 240) return;
-      const height = Math.max(100, viewport.clientHeight - 108);
-      const scale = Math.max(
-        0.85,
-        Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
-      );
-      setMoving(true);
-      setView({
-        scale,
-        x: 24 + width / 2 - (node.x + node.width / 2) * scale,
-        y: 48 + height / 2 - (node.y + node.height / 2) * scale,
-      });
+      frameSelectedRef.current(true);
     } else if (wasInspecting.current) {
       wasInspecting.current = false;
       interrupted.current = false;

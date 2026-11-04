@@ -2883,10 +2883,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: /Open unit/ }).click();
     const selectedUnit = page.getByRole("button", { name: new RegExp("^" + fixtures.service.id) });
     await expect.element(selectedUnit).toHaveAttribute("aria-pressed", "true");
-    await expect
-      .element(page.getByRole("complementary", { name: "Unit details" }))
-      .not.toBeInTheDocument();
-    await selectedUnit.click();
+    await expect.element(page.getByRole("complementary", { name: "Unit details" })).toBeVisible();
     await expect
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
       .toBeVisible();

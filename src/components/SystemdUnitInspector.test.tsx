@@ -68,6 +68,38 @@ it("computes uptime from the host collection time rather than the local wall clo
   expect(screen.getByText("1h 1m", { selector: ".sr-only" })).toBeTruthy();
 });
 
+it.each(["worker.service", "worker.socket", "backup.timer"])(
+  "rechecks restored Advanced evidence once for %s without treating native toggle as another request",
+  async (unitId) => {
+    const onRequestPorts = vi.fn();
+    const onRequestBoot = vi.fn();
+    const props = {
+      connectionId: "host",
+      unitId,
+      summary: null,
+      revision: 0,
+      onRefresh: vi.fn(),
+      onViewLogs: vi.fn(),
+      onRequestPorts,
+      onRequestBoot,
+      initialViewState: {
+        configuration: false,
+        advanced: true,
+        effective: false,
+        scroll: {},
+      },
+    };
+    const view = render(<SystemdUnitInspector {...props} />);
+    await waitFor(() => expect(onRequestBoot).toHaveBeenCalledTimes(1));
+    expect(onRequestPorts).toHaveBeenCalledTimes(unitId.endsWith(".timer") ? 0 : 1);
+    view.rerender(<SystemdUnitInspector {...props} revision={1} />);
+    expect(onRequestBoot).toHaveBeenCalledTimes(1);
+    await userEvent.setup().click(screen.getByText("Advanced", { selector: "summary" }));
+    await userEvent.setup().click(screen.getByText("Advanced", { selector: "summary" }));
+    await waitFor(() => expect(onRequestBoot).toHaveBeenCalledTimes(2));
+  },
+);
+
 it("formats animated runtime readings while leaving process identifiers exact", async () => {
   inspector(
     systemdInspection("worker.service", {
