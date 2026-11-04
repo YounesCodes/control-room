@@ -345,6 +345,10 @@ Refresh runtime properties for the inspected service periodically without insert
 loading text or resetting open sections. Pause reads in hidden windows and stop
 when the inspector closes. Keep the last reading with an error if refresh fails;
 never replace unavailable memory with zero.
+Interpolate memory numbers briefly between readings with tabular digits, starting
+from the displayed value if a newer reading arrives mid-transition. Show the first
+reading immediately. Reduced motion uses the latest value directly, and assistive
+technology reads the collected value rather than intermediate animation frames.
 Name the graph action Relationships followed by the selected unit, separated by
 a quiet dot. Keep the full target in its accessible name and tooltip, and truncate
 only the visible unit name when space is limited. Before selection, show a disabled

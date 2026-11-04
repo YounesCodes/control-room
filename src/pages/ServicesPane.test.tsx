@@ -85,14 +85,18 @@ describe("ServicesPane failed units view", () => {
       const row = screen.getByRole("button", { name: /worker.service description/ });
       fireEvent.click(row);
       await act(async () => {});
-      expect(screen.getByText("1 MiB")).toBeTruthy();
+      expect(
+        screen.getByText("1 MiB", { selector: ".systemd-memory-value > [aria-hidden]" }),
+      ).toBeTruthy();
       api.inspectSystemdUnit.mockResolvedValue(
         systemdInspection("worker.service", { MemoryCurrent: "2097152" }),
       );
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3000);
       });
-      expect(screen.getByText("2 MiB")).toBeTruthy();
+      expect(
+        screen.getByText("2 MiB", { selector: ".systemd-memory-value > [aria-hidden]" }),
+      ).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Close details" }));
       const count = api.inspectSystemdUnit.mock.calls.length;
       await act(async () => {

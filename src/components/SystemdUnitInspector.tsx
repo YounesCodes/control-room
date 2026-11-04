@@ -1,10 +1,73 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { FileClock, Network, RefreshCw, Timer } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
 import { useSystemdReads } from "../lib/systemd-inspection";
 import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
+
+function formatMemory(bytes: number) {
+  return resource(String(bytes), 1048576, " MiB");
+}
+
+function MemoryValue({ value }: { value: string }) {
+  const visual = useRef<HTMLSpanElement>(null);
+  const shown = useRef<number | null>(null);
+  const parsed = Number(value);
+  const target = Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  useLayoutEffect(() => {
+    const element = visual.current;
+    if (!element) return;
+    let frame = 0;
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const duration = parseFloat(getComputedStyle(element).getPropertyValue("--motion-slow")) || 0;
+    const paint = (bytes: number | null) => {
+      shown.current = bytes;
+      element.textContent = bytes === null ? "Unavailable" : formatMemory(bytes);
+    };
+    const finish = () => {
+      cancelAnimationFrame(frame);
+      paint(target);
+    };
+    const from = shown.current;
+    if (
+      from === null ||
+      target === null ||
+      from === target ||
+      media?.matches ||
+      document.hidden ||
+      !duration
+    ) {
+      finish();
+      return;
+    }
+    paint(from);
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, Math.max(0, (now - start) / duration));
+      paint(from + (target - from) * (1 - Math.pow(1 - progress, 3)));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+      else paint(target);
+    };
+    const settle = () => {
+      if (media?.matches || document.hidden) finish();
+    };
+    frame = requestAnimationFrame(tick);
+    media?.addEventListener("change", settle);
+    document.addEventListener("visibilitychange", settle);
+    return () => {
+      cancelAnimationFrame(frame);
+      media?.removeEventListener("change", settle);
+      document.removeEventListener("visibilitychange", settle);
+    };
+  }, [target]);
+  return (
+    <span className="systemd-memory-value">
+      <span ref={visual} aria-hidden="true" />
+      <span className="sr-only">{target === null ? "Unavailable" : formatMemory(target)}</span>
+    </span>
+  );
+}
 
 function Fields({ rows }: { rows: [string, string | undefined][] }) {
   return (
@@ -21,7 +84,9 @@ function Fields({ rows }: { rows: [string, string | undefined][] }) {
           <div key={label} className={code ? "inspector-wide-field" : undefined}>
             <dt>{label}</dt>
             <dd>
-              {code ? (
+              {label === "Memory" ? (
+                <MemoryValue value={formatted} />
+              ) : code ? (
                 <SystemdCode text={formatted} label={label} command />
               ) : path ? (
                 <code className="systemd-inline-code">{formatted}</code>
@@ -163,7 +228,7 @@ export function SystemdUnitInspector({
               ]
             : []),
           ...(p.MemoryCurrent && systemdValue(p.MemoryCurrent) !== "Unavailable"
-            ? [["Memory", resource(p.MemoryCurrent, 1048576, " MiB")] as [string, string]]
+            ? [["Memory", p.MemoryCurrent] as [string, string]]
             : []),
         ]
       : type === "timer"

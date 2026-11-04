@@ -4513,6 +4513,9 @@ dd {
   overflow-wrap: anywhere;
   color: var(--text-muted);
 }
+.systemd-memory-value {
+  font-variant-numeric: tabular-nums;
+}
 .systemd-inspector-state {
   display: inline-flex;
   align-items: center;
