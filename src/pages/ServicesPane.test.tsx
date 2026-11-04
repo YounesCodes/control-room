@@ -57,6 +57,40 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it.each(["button", "row", "escape"])(
+    "clears the selection when closing the inspector by %s",
+    async (method) => {
+      const user = userEvent.setup();
+      const onSelectionChange = vi.fn();
+      render(
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("a.service", "service", "active", "running")])}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onSelectionChange={onSelectionChange}
+        />,
+      );
+      const row = screen.getByRole("button", { name: /a.service description/ });
+      await user.click(row);
+      expect(row.getAttribute("aria-pressed")).toBe("true");
+      if (method === "button")
+        await user.click(screen.getByRole("button", { name: "Close details" }));
+      else if (method === "row") await user.click(row);
+      else await user.keyboard("{Escape}");
+      expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+      expect(row.getAttribute("aria-pressed")).toBe("false");
+      expect(row.classList.contains("selected-row")).toBe(false);
+      expect(document.querySelector(".systemd-selection-indicator")).toBeNull();
+      expect(onSelectionChange).toHaveBeenLastCalledWith(null);
+      expect(
+        (screen.getByRole("button", { name: "Relationships" }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      await user.click(row);
+      expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+      expect(row.getAttribute("aria-pressed")).toBe("true");
+    },
+  );
   it("defaults to focused, restores its scope, and reveals a hidden selection without losing it", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn();
@@ -262,7 +296,7 @@ describe("ServicesPane failed units view", () => {
     await user.click(row);
     expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Close details" }));
-    expect(row.getAttribute("aria-pressed")).toBe("true");
+    expect(row.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("starts the graph closed with a bounded dependency category and reveals more on request", async () => {

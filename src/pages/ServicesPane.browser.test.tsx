@@ -1205,6 +1205,53 @@ it("keeps a large inventory bounded, keyboard navigable and searchable from the 
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find units" }));
 });
 
+it.each(["button", "item", "escape"])(
+  "deselects inspected units and removes their highlight on close by %s",
+  async (method) => {
+    await page.viewport(1280, 800);
+    renderPane();
+    const row = screen.getByRole("button", { name: /worker.service Queue worker/ });
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    if (method === "button") await page.getByRole("button", { name: "Close details" }).click();
+    else if (method === "item")
+      await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    else await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(row.getAttribute("aria-pressed")).toBe("false");
+    expect(row.classList.contains("selected-row")).toBe(false);
+    expect(document.querySelector(".systemd-selection-indicator")).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: "Relationships" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    await page.getByRole("button", { name: "Relationships worker.service" }).click();
+    const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+    const node = within(graph).getByRole("button", { name: /^worker.service/ });
+    await page
+      .getByRole("region", { name: "Systemd dependency graph" })
+      .getByRole("button", { name: /^worker.service/ })
+      .click();
+    if (method === "button") await page.getByRole("button", { name: "Close details" }).click();
+    else if (method === "item")
+      await page
+        .getByRole("region", { name: "Systemd dependency graph" })
+        .getByRole("button", { name: /^worker.service/ })
+        .click();
+    else await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(node.getAttribute("aria-pressed")).toBe("false");
+    expect(node.classList.contains("selected")).toBe(false);
+    expect(screen.getByTitle("Refocus on current unit").textContent).toBe("worker.service");
+    await page.getByRole("button", { name: "Explorer", exact: true }).click();
+    expect(
+      screen
+        .getByRole("button", { name: /worker.service Queue worker/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(document.querySelector(".systemd-selection-indicator")).toBeNull();
+  },
+);
+
 it("opens graph without an inspector, separates categories and keeps selection across view changes", async () => {
   await page.viewport(1280, 800);
   renderPane();
@@ -1214,6 +1261,7 @@ it("opens graph without an inspector, separates categories and keeps selection a
   expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
   await page.getByRole("button", { name: "Close details" }).click();
   expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
+  await page.getByRole("button", { name: /database.service Database/ }).click();
   expect(screen.getByRole("button", { name: /^Relationships(?: |$)/ }).title).toContain(
     "database.service",
   );
@@ -1429,7 +1477,8 @@ it.each([360, 960, 1400])(
       expect(new DOMMatrix(String(first.transform)).m41).toBeGreaterThanOrEqual(32);
       expect(Number(effect.getTiming().duration)).toBeGreaterThanOrEqual(220);
     }
-    expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(320);
+    expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(Math.min(400, width - 24));
+    if (width >= 960) expect(inspector.getBoundingClientRect().width).toBeCloseTo(400, 2);
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
     expect(inspector.querySelectorAll("details[open]")).toHaveLength(0);
@@ -1453,6 +1502,7 @@ it.each([360, 960, 1400])(
       );
     }
     await page.viewport(width, 800);
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
     await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
     await waitFor(() =>
       expect(document.querySelectorAll(".systemd-graph-node").length).toBeGreaterThan(1),

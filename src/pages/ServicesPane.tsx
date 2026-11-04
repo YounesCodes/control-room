@@ -272,7 +272,11 @@ export function ServicesPane({
     patch({ search: "", state: "all", unitType: "all", scope: "all" });
   }
   function selectInventoryUnit(id: string, navigate = false) {
-    setInspectorOpen(navigate || id !== selectedId || !inspectorOpen);
+    if (!navigate && id === selectedId && inspectorOpen) {
+      closeInventoryInspector();
+      return;
+    }
+    setInspectorOpen(true);
     setSelectedId(id);
     if (id !== selectedId)
       patch({
@@ -325,6 +329,7 @@ export function ServicesPane({
 
   function closeInventoryInspector() {
     setInspectorOpen(false);
+    setSelectedId(null);
     const row = [
       ...(inventoryRef.current?.querySelectorAll<HTMLButtonElement>(".dense-row") ?? []),
     ].find((element) => element.getAttribute("aria-pressed") === "true");
@@ -376,8 +381,8 @@ export function ServicesPane({
         failed={counts.failed}
         snapshot={snapshot}
         loading={cache.loading}
-        canGraph={!!selectedId}
-        selectedUnit={selectedId}
+        canGraph={!!selectedId || (state.mode === "graph" && !!rootId)}
+        selectedUnit={selectedId ?? (state.mode === "graph" ? rootId : null)}
         types={types}
         states={states}
         onChange={patch}
@@ -570,7 +575,7 @@ export function ServicesPane({
                 state.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
               ])}
               onSelect={(id) => {
-                if (id) setSelectedId(id);
+                setSelectedId(id);
                 setInspectorOpen(!!id);
               }}
               onRefocus={refocus}

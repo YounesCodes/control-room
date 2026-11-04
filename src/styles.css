@@ -3991,6 +3991,7 @@ dd {
 }
 
 .systemd-page {
+  --systemd-inspector-width: 400px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4354,7 +4355,7 @@ dd {
   transition: padding-right var(--motion-med) var(--ease);
 }
 .systemd-explorer-stage.inspecting .systemd-inventory {
-  padding-right: 344px;
+  padding-right: calc(var(--systemd-inspector-width) + 24px);
 }
 .systemd-filter-result {
   display: flex;
@@ -4439,7 +4440,7 @@ dd {
   text-overflow: ellipsis;
 }
 .systemd-inspector.arch-detail {
-  width: min(320px, calc(100% - 24px));
+  width: min(var(--systemd-inspector-width), calc(100% - 24px));
   bottom: auto;
   max-height: calc(100% - 24px);
   animation: systemd-inspector-in var(--motion-slow) var(--ease) both;
