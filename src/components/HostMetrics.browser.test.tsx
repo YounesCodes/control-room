@@ -133,3 +133,75 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
   expect(visual("gpu").textContent).toBe("20%");
   expect(frames.size).toBe(0);
 });
+
+it("anchors rate labels, neighboring values, and percent signs across animated updates", () => {
+  let now = 0,
+    id = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    frames.set(++id, callback);
+    return id;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation((key) => {
+    frames.delete(key);
+  });
+  reading.sample = { ...sample(10), diskReadBytesPerSecond: 0, diskWriteBytesPerSecond: 0 };
+  const pane = () => (
+    <HostMetrics
+      target="rates"
+      name="rates"
+      metrics={["cpu", "ram", "gpu", "diskIo", "uptime"]}
+      seconds={5}
+      onSettings={vi.fn()}
+    />
+  );
+  const view = render(pane());
+  const cell = document.querySelector('[data-metric="diskIo"]')!;
+  fireEvent.click(screen.getByRole("button", { name: "Live: Host metrics for rates" }));
+  const panel = document.querySelector(".host-metrics-panel")!;
+  panel.getAnimations({ subtree: true }).forEach((animation) => animation.finish());
+  const rates = panel.querySelector(".host-metric-detail-value:has(.host-metric-direction)")!;
+  const fixed = [
+    cell.querySelectorAll(".host-metric-direction")[1],
+    cell.querySelectorAll(".animated-number")[1],
+    document.querySelector('[data-metric="uptime"]')!,
+    rates.querySelectorAll(".host-metric-direction")[1],
+    rates.querySelectorAll(".animated-number")[1],
+    document.querySelector('[data-metric="gpu"]')!,
+  ];
+  const positions = () => {
+    const text = document.querySelector(
+      '[data-metric="cpu"] .animated-number > [aria-hidden]',
+    )!.firstChild!;
+    const suffix = document.createRange();
+    suffix.setStart(text, text.textContent!.length - 1);
+    suffix.setEnd(text, text.textContent!.length);
+    return [
+      ...fixed.map((item) => item.getBoundingClientRect().left),
+      suffix.getBoundingClientRect().right,
+    ];
+  };
+  const before = positions();
+  for (const rate of [1023, 1024, 1023 * 1048576, 1024 * 1048576, 0]) {
+    reading.sample = {
+      ...sample(rate === 1023 ? 100 : 0),
+      gpuPercent: rate === 1024 ? null : 20,
+      diskReadBytesPerSecond: rate,
+      diskWriteBytesPerSecond: 0,
+    };
+    reading.history = rate === 1024 ? [] : [reading.sample];
+    view.rerender(pane());
+    for (let step = 0; step < 16; step++) {
+      now += 16;
+      const pending = [...frames.values()];
+      frames.clear();
+      pending.forEach((callback) => callback(now));
+      // Glyph kerning may move the percent sign's ink by a fraction of a pixel;
+      // the actual layout boxes must stay fixed.
+      positions().forEach((position, index) =>
+        expect(position).toBeCloseTo(before[index], index === before.length - 1 ? 0 : 1),
+      );
+    }
+  }
+});

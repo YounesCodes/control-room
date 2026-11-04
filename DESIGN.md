@@ -603,8 +603,12 @@ pauses, and never invent points for missing readings. Trends use a fixed
 0–100 range. Disk I/O shows separate read and write speeds without a graph. Interpolate
 numeric readings briefly with the same motion as service runtime values, including
 percentages, transfer rates, and uptime in the header and details. Keep labels and
-opacity steady. Use measured samples for trends, accessible names, and tooltips;
-animation frames never become samples. Show first readings, new targets, unavailable
+opacity steady. Use measured samples for trends, accessible names, and tooltips.
+Give disk read and write rates separate fixed slots with right-aligned values so
+digit and unit changes cannot push the direction labels or neighboring readings.
+Reserve percentage and trend slots even when a chart is unavailable. Right-align
+percentage readouts so their percent signs stay anchored as digits change.
+Animation frames never become samples. Show first readings, new targets, unavailable
 values, and reduced-motion updates immediately. A refresh cue runs only while a reading is in progress;
 stale and paused charts rest. Respect reduced motion throughout.
 Use one compact status button to open reading details, separated from
