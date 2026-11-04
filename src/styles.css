@@ -589,7 +589,6 @@ code,
 }
 .host-metric-value {
   min-width: 4ch;
-  animation: metric-value-in var(--motion-med) var(--ease);
 }
 .host-metric-direction {
   color: var(--text-faint);
@@ -642,16 +641,6 @@ code,
 .host-metric-detail-value .host-metric-trend {
   width: 68px;
   height: 22px;
-}
-@keyframes metric-value-in {
-  from {
-    opacity: 0.5;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 @keyframes metric-reading {
   50% {
@@ -4513,7 +4502,7 @@ dd {
   overflow-wrap: anywhere;
   color: var(--text-muted);
 }
-.systemd-memory-value {
+.animated-number {
   font-variant-numeric: tabular-nums;
 }
 .systemd-inspector-state {

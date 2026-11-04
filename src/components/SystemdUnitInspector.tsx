@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { FileClock, Network, RefreshCw, Timer } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { useSystemdReads } from "../lib/systemd-inspection";
 import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
@@ -10,64 +11,13 @@ function formatMemory(bytes: number) {
   return resource(String(bytes), 1048576, " MiB");
 }
 
-function MemoryValue({ value }: { value: string }) {
-  const visual = useRef<HTMLSpanElement>(null);
-  const shown = useRef<number | null>(null);
-  const parsed = Number(value);
-  const target = Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-  useLayoutEffect(() => {
-    const element = visual.current;
-    if (!element) return;
-    let frame = 0;
-    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    const duration = parseFloat(getComputedStyle(element).getPropertyValue("--motion-slow")) || 0;
-    const paint = (bytes: number | null) => {
-      shown.current = bytes;
-      element.textContent = bytes === null ? "Unavailable" : formatMemory(bytes);
-    };
-    const finish = () => {
-      cancelAnimationFrame(frame);
-      paint(target);
-    };
-    const from = shown.current;
-    if (
-      from === null ||
-      target === null ||
-      from === target ||
-      media?.matches ||
-      document.hidden ||
-      !duration
-    ) {
-      finish();
-      return;
-    }
-    paint(from);
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, Math.max(0, (now - start) / duration));
-      paint(from + (target - from) * (1 - Math.pow(1 - progress, 3)));
-      if (progress < 1) frame = requestAnimationFrame(tick);
-      else paint(target);
-    };
-    const settle = () => {
-      if (media?.matches || document.hidden) finish();
-    };
-    frame = requestAnimationFrame(tick);
-    media?.addEventListener("change", settle);
-    document.addEventListener("visibilitychange", settle);
-    return () => {
-      cancelAnimationFrame(frame);
-      media?.removeEventListener("change", settle);
-      document.removeEventListener("visibilitychange", settle);
-    };
-  }, [target]);
-  return (
-    <span className="systemd-memory-value">
-      <span ref={visual} aria-hidden="true" />
-      <span className="sr-only">{target === null ? "Unavailable" : formatMemory(target)}</span>
-    </span>
-  );
-}
+const runtimeFormats: Record<string, (value: number) => string> = {
+  Memory: formatMemory,
+  "CPU time": (value) => resource(String(value), 1e9, " s"),
+  Tasks: (value) => Math.round(value).toLocaleString(),
+  Restarts: (value) => Math.round(value).toLocaleString(),
+  Uptime: duration,
+};
 
 function Fields({ rows }: { rows: [string, string | undefined][] }) {
   return (
@@ -84,8 +34,12 @@ function Fields({ rows }: { rows: [string, string | undefined][] }) {
           <div key={label} className={code ? "inspector-wide-field" : undefined}>
             <dt>{label}</dt>
             <dd>
-              {label === "Memory" ? (
-                <MemoryValue value={formatted} />
+              {runtimeFormats[label] ? (
+                <AnimatedNumber
+                  value={formatted === "Unavailable" ? null : Number(formatted)}
+                  format={runtimeFormats[label]}
+                  className={label === "Memory" ? "systemd-memory-value" : undefined}
+                />
               ) : code ? (
                 <SystemdCode text={formatted} label={label} command />
               ) : path ? (
@@ -202,7 +156,7 @@ export function SystemdUnitInspector({
   const failed = active === "failed";
   const uptime =
     active === "active" && p.ActiveEnterTimestamp && p.ControlRoomRealtimeSeconds
-      ? duration(Number(p.ControlRoomRealtimeSeconds) - Date.parse(p.ActiveEnterTimestamp) / 1000)
+      ? String(Number(p.ControlRoomRealtimeSeconds) - Date.parse(p.ActiveEnterTimestamp) / 1000)
       : undefined;
   const code = p.ExecMainCode;
   const execution =
@@ -258,7 +212,7 @@ export function SystemdUnitInspector({
           ["Last exit", p.ExecMainExitTimestamp],
           ["Restart policy", p.Restart],
           ["Restarts", p.NRestarts],
-          ["CPU time", p.CPUUsageNSec ? resource(p.CPUUsageNSec, 1e9, " s") : undefined],
+          ["CPU time", p.CPUUsageNSec],
           ["Tasks", p.TasksCurrent],
           ["ExecStart", p.ExecStart],
         ]

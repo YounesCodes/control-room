@@ -345,7 +345,8 @@ Refresh runtime properties for the inspected service periodically without insert
 loading text or resetting open sections. Pause reads in hidden windows and stop
 when the inspector closes. Keep the last reading with an error if refresh fails;
 never replace unavailable memory with zero.
-Interpolate memory numbers briefly between readings with tabular digits, starting
+Interpolate service memory, CPU time, task and restart counts, and uptime briefly
+between readings with tabular digits, starting
 from the displayed value if a newer reading arrives mid-transition. Show the first
 reading immediately. Reduced motion uses the latest value directly, and assistive
 technology reads the collected value rather than intermediate animation frames.
@@ -593,8 +594,12 @@ graph in one group, with a subtle divider and a larger gap before the next metri
 Preserve this grouping at narrow widths rather than squeezing the metrics together. Trends hold
 at most twenty measured samples in memory, reset on host changes and monitoring
 pauses, and never invent points for missing readings. Trends use a fixed
-0–100 range. Disk I/O shows separate read and write speeds without a graph. Animate value changes
-briefly. A refresh cue runs only while a reading is in progress;
+0–100 range. Disk I/O shows separate read and write speeds without a graph. Interpolate
+numeric readings briefly with the same motion as service runtime values, including
+percentages, transfer rates, and uptime in the header and details. Keep labels and
+opacity steady. Use measured samples for trends, accessible names, and tooltips;
+animation frames never become samples. Show first readings, new targets, unavailable
+values, and reduced-motion updates immediately. A refresh cue runs only while a reading is in progress;
 stale and paused charts rest. Respect reduced motion throughout.
 Use one compact status button to open reading details, separated from
 the numeric readings. Keep Live compact and let longer status labels use only

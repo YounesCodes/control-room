@@ -1675,12 +1675,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
       element: element.querySelector(".app-bar")!,
       path: "../test-results/live-metrics-header.png",
     });
-    const motion = parseFloat(
-      getComputedStyle(io.querySelector(".host-metric-value")!).animationDuration,
-    );
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-      expect(motion).toBeLessThanOrEqual(0.00001);
-    else expect(motion).toBeGreaterThan(0.01);
+    expect(getComputedStyle(io.querySelector(".host-metric-value")!).animationName).toBe("none");
+    expect(io.querySelectorAll(".animated-number")).toHaveLength(2);
     const lastPath = path.getAttribute("d");
     failures.set("sample_header_metrics", "Fixture offline");
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();

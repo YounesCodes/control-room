@@ -65,7 +65,23 @@ it("computes uptime from the host collection time rather than the local wall clo
       ControlRoomRealtimeSeconds: String(Date.parse("2026-11-01T10:01:00Z") / 1000),
     }),
   );
-  expect(screen.getByText("1h 1m")).toBeTruthy();
+  expect(screen.getByText("1h 1m", { selector: ".sr-only" })).toBeTruthy();
+});
+
+it("formats animated runtime readings while leaving process identifiers exact", async () => {
+  inspector(
+    systemdInspection("worker.service", {
+      ActiveState: "active",
+      MainPID: "4321",
+      CPUUsageNSec: "2500000000",
+      TasksCurrent: "12",
+      NRestarts: "3",
+    }),
+  );
+  expect(screen.getByText("4321").closest(".animated-number")).toBeNull();
+  await userEvent.setup().click(screen.getByText("Advanced", { selector: "summary" }));
+  for (const value of [(2.5).toLocaleString() + " s", "12", "3"])
+    expect(screen.getByText(value, { selector: ".animated-number > .sr-only" })).toBeTruthy();
 });
 
 it.each(["-.mount", "backup.timer", "system.slice", "deploy.path"])(
