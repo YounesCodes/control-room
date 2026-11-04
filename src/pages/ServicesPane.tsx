@@ -243,11 +243,6 @@ export function ServicesPane({
       setInspectorOpen(false);
     setState((current) => ({
       ...current,
-      ...((next.rootId && next.rootId !== current.rootId) ||
-      (next.relationshipGroup && next.relationshipGroup !== current.relationshipGroup) ||
-      (next.dependencySearch !== undefined && next.dependencySearch !== current.dependencySearch)
-        ? { expansionHistory: [] }
-        : {}),
       ...next,
     }));
   }
@@ -256,23 +251,7 @@ export function ServicesPane({
       ...current,
       expanded,
       visibleLimit,
-      expansionHistory: [
-        ...(current.expansionHistory ?? []),
-        {
-          expanded: current.expanded,
-          visibleLimit: current.visibleLimit ?? SYSTEMD_INITIAL_VISIBLE,
-        },
-      ].slice(-32),
     }));
-  }
-  function undoExpansion() {
-    setState((current) => {
-      const history = current.expansionHistory ?? [];
-      const previous = history.at(-1);
-      return previous
-        ? { ...current, ...previous, expansionHistory: history.slice(0, -1) }
-        : current;
-    });
   }
   function toggleExpansion(id: string) {
     const collapsing = state.expanded.includes(id);
@@ -300,11 +279,14 @@ export function ServicesPane({
     );
   }
   function keepExpansionFocus(control: HTMLButtonElement) {
+    const keyboardFocus = control.matches(":focus-visible");
     requestAnimationFrame(() => {
-      if (!control.isConnected)
-        graphContextRef.current
-          ?.querySelector<HTMLButtonElement>(".systemd-root-label")
-          ?.focus({ preventScroll: true });
+      if (keyboardFocus && !control.isConnected)
+        (
+          graphContextRef.current?.querySelector<HTMLButtonElement>(
+            ".systemd-expansion-actions button:not(:disabled)",
+          ) ?? graphContextRef.current?.querySelector<HTMLButtonElement>(".systemd-root-label")
+        )?.focus({ preventScroll: true });
     });
   }
   function clearFilters() {
@@ -409,7 +391,6 @@ export function ServicesPane({
       rootId: id,
       expanded: [],
       visibleLimit: SYSTEMD_INITIAL_VISIBLE,
-      expansionHistory: [],
     });
   }
 
@@ -627,19 +608,6 @@ export function ServicesPane({
               {rootId}
             </button>
             <div className="systemd-expansion-actions" role="group" aria-label="Graph expansion">
-              {!!state.expansionHistory?.length && (
-                <button
-                  type="button"
-                  className="systemd-more"
-                  title="Undo last expansion change"
-                  onClick={(event) => {
-                    undoExpansion();
-                    keepExpansionFocus(event.currentTarget);
-                  }}
-                >
-                  Undo
-                </button>
-              )}
               {(neighborhood?.ids.length ?? 0) > SYSTEMD_INITIAL_VISIBLE && (
                 <button
                   type="button"

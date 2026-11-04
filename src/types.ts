@@ -127,7 +127,6 @@ export interface SystemdExplorerState {
   scope?: "focused" | "all";
   relationshipGroup: "dependencies" | "ordering" | "activation";
   visibleLimit?: number;
-  expansionHistory?: { expanded: string[]; visibleLimit: number }[];
 }
 
 export interface WindowsService {

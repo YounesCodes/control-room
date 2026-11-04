@@ -298,7 +298,7 @@ and deterministic columns, placing incoming units left and outgoing units right.
 Include reported reverse and activation dependencies, without deriving links from unit
 names. Start at one unit and up to six neighbors. Show more or expand a node on
 request, up to 25 visible units. Preserve layout slots and smoothly refit zoom and
-position after Show more, Show less, Undo, and branch expansion or collapse. Rebase
+position after Show more, Show less, and branch expansion or collapse. Rebase
 scene coordinates before the camera transition so the root does not jump. Include
 nodes arriving from pending reads, but let manual pan/zoom cancel that adjustment
 until the next expansion action. Reserve inspector space when fitting an expanded
@@ -311,10 +311,11 @@ neither the inspector nor graph content may cover its controls or legend.
 Late inspector data must not replace that focus; an expansion action resumes fitting.
 Initial focused framing keeps nodes readable at 85% or larger; expansion and Fit to view may zoom out further.
 Search retains paths to matches.
-Pair Show more with Show less and a bounded Undo history for expansion changes.
+Pair Show more with Show less for expansion changes.
+When an expansion control disappears, restore keyboard focus to a nearby expansion
+control. Mouse actions must not move focus to the root and reveal its tooltip.
 Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
-expanded descendants while keeping shared branches; Undo restores both the expanded
-units and visible limit. Clear history when refocusing, searching, or changing category.
+expanded descendants while keeping shared branches. Restore a collapsed branch with Expand.
 Reveal connectors in their arrow direction while nodes move 8px into place over 240ms.
 Keep removed nodes and edges as inert,
 visual-only snapshots for a 240ms fade and slight movement, cancel ghosts when nodes reappear, and skip

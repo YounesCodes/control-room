@@ -545,8 +545,7 @@ describe("ServicesPane failed units view", () => {
     await user.click(screen.getByRole("button", { name: "Collapse d.service" }));
     expect(screen.queryByRole("button", { name: /^leaf.service/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Collapse c.service" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Undo" }));
-    expect(await screen.findByRole("button", { name: /^leaf.service/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
   it("does not select the first unit when an inventory request completes", async () => {
     const items = [unit("a.service", "service", "active", "running")];
@@ -698,11 +697,11 @@ describe("ServicesPane failed units view", () => {
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(19);
     await user.click(screen.getByRole("button", { name: "Show less" }));
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getByRole("button", { name: /Show more/ }));
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(19);
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getByRole("button", { name: "Show less" }));
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(13);
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getByRole("button", { name: "Show less" }));
     expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7);
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     await user.click(screen.getByRole("button", { name: /Show more/ }));
@@ -878,7 +877,7 @@ describe("ServicesPane failed units view", () => {
     expect(await within(graph).findByRole("button", { name: /^c.service/ })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Collapse b.service" }));
     expect(within(graph).queryByRole("button", { name: /^c.service/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getByRole("button", { name: "Expand b.service" }));
     expect(await within(graph).findByRole("button", { name: /^c.service/ })).toBeTruthy();
     await user.dblClick(within(graph).getByRole("button", { name: /^b.service/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");

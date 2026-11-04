@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import axe from "axe-core";
 import { ServicesPane } from "./ServicesPane";
+import { TooltipLayer } from "../components/TooltipLayer";
 import { useState } from "react";
 import { SystemdGraph } from "../components/SystemdGraph";
 import { systemdEdges } from "../lib/systemd-units";
@@ -1175,7 +1176,7 @@ it("toggles the selected node back to a fitted overview without changing graph f
   }
 });
 
-it("refits and zooms in both directions on show more, show less and undo, including inspector space", async () => {
+it("refits and zooms in both directions on show more and show less, including inspector space", async () => {
   await page.viewport(1280, 800);
   const neighbors = Array.from({ length: 20 }, (_, index) => "neighbor-" + index + ".service");
   api.inspectSystemdUnit.mockImplementation((_host, id) =>
@@ -1224,7 +1225,7 @@ it("refits and zooms in both directions on show more, show less and undo, includ
   await page.getByRole("button", { name: "Show less" }).click();
   await contained();
   expect(scale()).toBeGreaterThan(second);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: /Show more/ }).click();
   await contained();
   expect(scale()).toBeCloseTo(second);
   await page.getByRole("button", { name: /^neighbor-0.service/ }).click();
@@ -1318,6 +1319,31 @@ it("keeps a manual pan when a pending expansion finishes, until the next expansi
   expect(Math.abs(after.top - before.top)).toBeLessThan(1);
 });
 
+it("keeps mouse collapse from focusing the opposite-side root tooltip and restores keyboard focus nearby", async () => {
+  await page.viewport(1280, 800);
+  api.inspectSystemdUnit.mockImplementation((_host, id) =>
+    Promise.resolve(
+      systemdInspection(id, {
+        Requires: Array.from({ length: 20 }, (_, i) => `neighbor-${i}.service`).join(" "),
+      }),
+    ),
+  );
+  render(<TooltipLayer />);
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: /Show more/ }).click();
+  await page.getByRole("button", { name: "Show less" }).click();
+  await settleMotion();
+  expect(document.activeElement?.classList.contains("systemd-root-label")).toBe(false);
+  expect(screen.queryByRole("tooltip", { name: "Refocus on current unit" })).toBeNull();
+  await page.getByRole("button", { name: /Show more/ }).click();
+  screen.getByRole("button", { name: "Show less" }).focus();
+  await userEvent.keyboard("{Enter}");
+  await waitFor(() => expect(document.activeElement?.textContent).toMatch(/Show more/));
+  expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+});
+
 it("reverses show-more and branch expansion with animated, noninteractive exits", async () => {
   await page.viewport(1280, 800);
   const neighbors = Array.from(
@@ -1369,7 +1395,7 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
   }
   await page.getByRole("button", { name: "Show less" }).click();
   expect(count()).toBe(7);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: /Show more/ }).click();
   expect(count()).toBe(13);
   await page.getByRole("button", { name: "Expand " + neighbors[0] }).click();
   await waitFor(() => expect(count()).toBe(14));
@@ -1397,16 +1423,16 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
     fade.finish();
     expect(ghost.closest("[inert][aria-hidden=true]")).toBeTruthy();
   }
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Expand " + neighbors[0] }).click();
   expect(count()).toBe(14);
   expect(document.querySelector('.systemd-graph-ghost[data-unit="leaf.service"]')).toBeNull();
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Collapse " + neighbors[0] }).click();
   expect(count()).toBe(13);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Show less" }).click();
   expect(count()).toBe(7);
   expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   await waitFor(() =>
-    expect(document.activeElement).toBe(screen.getByTitle("Refocus on current unit")),
+    expect(document.activeElement).not.toBe(screen.getByTitle("Refocus on current unit")),
   );
   await waitFor(() => expect(document.querySelectorAll(".systemd-graph-ghost")).toHaveLength(0));
 });
