@@ -358,7 +358,8 @@ and width do not change during navigation. Put scope and relationship controls i
 one fixed-size, clipped toolbar slot. Anchor inert exits inside that slot so they
 never paint across the heading or view switch. Keep the slot on its own centered
 row at narrow widths in both modes. Incoming controls start in their final
-slot and never jump when the exit ends. Opening Relationships focuses
+slot and never jump when the exit ends. Reserve a usable width for expanded search;
+wrap its action row before the input can collapse. Opening Relationships focuses
 the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,

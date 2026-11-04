@@ -244,12 +244,16 @@ export function App() {
   const [systemdPortFocus, setSystemdPortFocus] = useState<{
     workspaceId: string;
     unit: string;
+    target: string;
   } | null>(null);
   useEffect(() => {
+    const workspace = workspaces.find((item) => item.id === systemdPortFocus?.workspaceId);
     if (
       systemdPortFocus &&
-      workspaces.find((workspace) => workspace.id === systemdPortFocus.workspaceId)?.view !==
-        "ports"
+      (!workspace ||
+        !isRemoteWorkspace(workspace) ||
+        workspace.view !== "ports" ||
+        connectionTargetKey(workspace.connectionSnapshot) !== systemdPortFocus.target)
     )
       setSystemdPortFocus(null);
   }, [workspaces, systemdPortFocus]);
@@ -2592,7 +2596,11 @@ export function App() {
                           updateRemoteWorkspace(activeRemoteWorkspace.id, { systemdSelectionId })
                         }
                         onOpenPorts={(unit) => {
-                          setSystemdPortFocus({ workspaceId: activeRemoteWorkspace.id, unit });
+                          setSystemdPortFocus({
+                            workspaceId: activeRemoteWorkspace.id,
+                            unit,
+                            target: connectionTargetKey(activeConnection),
+                          });
                           updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
                         }}
                         onOpenBoot={() =>
@@ -2603,7 +2611,8 @@ export function App() {
                   {activeRemoteWorkspace.view === "ports" && (
                     <PortsPane
                       focusUnit={
-                        systemdPortFocus?.workspaceId === activeRemoteWorkspace.id
+                        systemdPortFocus?.workspaceId === activeRemoteWorkspace.id &&
+                        systemdPortFocus.target === connectionTargetKey(activeConnection)
                           ? systemdPortFocus.unit
                           : undefined
                       }

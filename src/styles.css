@@ -4194,6 +4194,9 @@ dd {
 .systemd-toolbar-actions > .icon-button {
   flex: none;
 }
+.systemd-toolbar-actions:has(.systemd-inline-search) {
+  min-width: min(100%, 280px);
+}
 .systemd-search-control {
   flex: 0 1 auto;
   min-width: 32px;

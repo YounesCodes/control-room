@@ -2160,11 +2160,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     async function checkList() {
       await vi.waitFor(() =>
         expect(
-          element.querySelectorAll(".list-panel .dense-row, .list-panel .docker-branch").length,
+          element.querySelectorAll(
+            ".systemd-inventory .dense-row, .list-panel .dense-row, .list-panel .docker-branch",
+          ).length,
         ).toBe(100),
       );
       const panel =
-        element.querySelector<HTMLElement>(".services-page .dense-list") ??
+        element.querySelector<HTMLElement>(".systemd-inventory .dense-list") ??
         element.querySelector<HTMLElement>(".list-panel")!;
       expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
         element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
@@ -2431,6 +2433,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await userEvent.wheel(list, { delta: { y: 700 } });
       await vi.waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
       await page.getByRole("button", { name: "Find units", exact: true }).click();
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector<HTMLInputElement>('[aria-label="Search units"]')!
+            .getBoundingClientRect().width,
+        ).toBeGreaterThanOrEqual(120),
+      );
       await expect.element(page.getByPlaceholder("Search units")).toBeVisible();
       await userEvent.keyboard("{Escape}");
       list.focus();
@@ -2440,10 +2449,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(list.scrollTop + list.clientHeight).toBeGreaterThanOrEqual(list.scrollHeight - 1),
       );
       await userEvent.click(page.getByRole("button", { name: /example-99.service/ }));
-      expect(element.querySelector(".detail-panel h2")?.textContent).toBe("example-99.service");
+      expect(element.querySelector(".systemd-inspector h2")?.textContent).toBe(
+        "example-99.service",
+      );
       await expect.element(page.getByRole("button", { name: "View journal" })).toBeVisible();
       expect(
-        (await axe.run(element.querySelector<HTMLElement>(".services-page")!)).violations,
+        (await axe.run(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
       ).toEqual([]);
       await page.screenshot({ path: `../test-results/linux-service-list-${width}.png` });
     },
@@ -2511,6 +2522,32 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(
       native.invoke.mock.calls.filter(([command]) => command === "start_session"),
     ).toHaveLength(1);
+  });
+
+  it("clears a Systemd port filter when its Saved Connection changes SSH target", async () => {
+    overrides.set("update_connection", ({ input }) => ({ ...fixtures.connection(), ...input }));
+    await mount();
+    await navigate("Systemd");
+    await page.getByRole("button", { name: /^fixture.service Fixture service/ }).click();
+    await page.getByText("Advanced", { exact: true }).click();
+    await page.getByRole("button", { name: "Ports", exact: true }).last().click();
+    await expect.element(page.getByRole("button", { name: "Clear unit filter" })).toBeVisible();
+    await userEvent.hover(
+      page
+        .getByRole("button", { name: "Open actions for Fixture Alpha" })
+        .element()
+        .closest(".host-row")!,
+    );
+    await page.getByRole("button", { name: "Open actions for Fixture Alpha" }).click();
+    await page.getByRole("menuitem", { name: /Edit connection/ }).click();
+    await page.getByRole("textbox", { name: "SSH destination" }).fill("changed.example.invalid");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect
+      .element(page.getByRole("dialog", { name: "Edit Saved Connection" }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Clear unit filter" }))
+      .not.toBeInTheDocument();
   });
 
   it("filters Systemd, selects a unit, follows its journal and cleans up its stream on navigation", async () => {
