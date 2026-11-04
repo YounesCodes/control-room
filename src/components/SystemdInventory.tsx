@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { EmptyState } from "./PanelState";
 import { observeLayoutFallback } from "./ResizablePanels";
-import type { SystemdUnit } from "../types";
+import type { SystemdExplorerState, SystemdUnit } from "../types";
 import { systemdStateLabel } from "../lib/systemd-units";
 
 const ROW_HEIGHT = 44;
@@ -14,14 +14,19 @@ export function SystemdInventory({
   onSelect,
   onNavigate,
   emptyTitle,
+  scope = "focused",
 }: {
   units: SystemdUnit[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onNavigate: (id: string) => void;
   emptyTitle: string;
+  scope?: SystemdExplorerState["scope"];
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const previousScope = useRef(scope);
+  const scopeAnimation = useRef<Animation | null>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
   const pendingFocus = useRef<string | null>(null);
   const [window, setWindow] = useState({ top: 0, height: 500 });
@@ -79,6 +84,32 @@ export function SystemdInventory({
     pendingFocus.current = null;
     row.focus({ preventScroll: true });
   });
+  useLayoutEffect(() => {
+    if (previousScope.current === scope) return;
+    previousScope.current = scope;
+    const element = content.current;
+    if (!element) return;
+    const style = getComputedStyle(element);
+    const interrupted = scopeAnimation.current?.playState === "running";
+    // Retarget from the rendered pose when the user switches back mid-reveal.
+    const from = {
+      opacity: interrupted ? style.opacity : style.getPropertyValue("--scope-opacity").trim(),
+      transform: interrupted
+        ? style.transform
+        : `translateY(${style.getPropertyValue("--scope-offset").trim()})`,
+    };
+    scopeAnimation.current?.cancel();
+    if (
+      globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+      typeof element.animate !== "function"
+    )
+      return;
+    scopeAnimation.current = element.animate([from, { opacity: 1, transform: "translateY(0)" }], {
+      duration: parseFloat(style.getPropertyValue("--motion-slow")),
+      easing: style.getPropertyValue("--ease").trim(),
+    });
+  }, [scope]);
+  useLayoutEffect(() => () => scopeAnimation.current?.cancel(), []);
 
   function focus(index: number, select: boolean) {
     const element = ref.current;
@@ -134,7 +165,7 @@ export function SystemdInventory({
         focus(next, event.key === "ArrowUp" || event.key === "ArrowDown");
       }}
     >
-      <div className="systemd-inventory-rows">
+      <div className="systemd-inventory-rows" ref={content}>
         {selectedIndex >= 0 && (
           <div
             className="systemd-selection-indicator"

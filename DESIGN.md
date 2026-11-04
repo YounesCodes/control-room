@@ -271,7 +271,10 @@ Default the inventory to Focused: services, timers, sockets, and paths, excludin
 routine systemd, D-Bus, login-session, and module-loader units. Always include
 failed units of every type. Keep unknown application services visible, including
 stopped and disabled services. Offer a visible Focused / All units switch with a
-sliding selection fill and reduced-motion fallback. Show visible and total counts
+sliding selection fill and reduced-motion fallback. Reveal the updated inventory
+with a short fade and vertical slide in either direction, preserving its live rows,
+scrolling, and focus. Retarget an interrupted reveal from its rendered position;
+skip the reveal under reduced motion. Show visible and total counts
 when they differ. Search and explicit type filters reach the whole inventory;
 dependency graphs always retain all reported unit types. Keep the scope with the
 workspace and let a filtered selection reveal itself in All units.

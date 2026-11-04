@@ -4355,6 +4355,8 @@ dd {
   border-radius: var(--radius-lg);
 }
 .systemd-inventory-rows {
+  --scope-opacity: 0.45;
+  --scope-offset: 8px;
   position: relative;
   isolation: isolate;
 }

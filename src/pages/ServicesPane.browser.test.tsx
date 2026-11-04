@@ -147,6 +147,79 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("reveals the inventory on scope changes and continues an interrupted reveal without remounting rows", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  await page.getByRole("button", { name: /database.service Database/ }).click();
+  await settleMotion();
+  const rows = document.querySelector<HTMLElement>(".systemd-inventory-rows")!;
+  const database = screen.getByRole("button", { name: /database.service Database/ });
+  const all = screen.getByRole("button", { name: "All units" });
+  const focused = screen.getByRole("button", { name: "Focused" });
+  const reveal = () =>
+    rows
+      .getAnimations()
+      .find(
+        (animation) =>
+          (animation.effect as KeyframeEffect).target === rows &&
+          !(animation instanceof CSSAnimation) &&
+          !(animation instanceof CSSTransition),
+      );
+  expect(reveal()).toBeUndefined();
+  all.focus();
+  all.click();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /data.mount Application data/ })).toBeTruthy(),
+  );
+  expect(document.activeElement).toBe(all);
+  expect(screen.getByRole("button", { name: /database.service Database/ })).toBe(database);
+  expect(database.getAttribute("aria-pressed")).toBe("true");
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    expect(reveal()).toBeUndefined();
+    focused.click();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /data.mount Application data/ })).toBeNull(),
+    );
+    expect(reveal()).toBeUndefined();
+    return;
+  }
+  const animation = await waitFor(() => {
+    expect(reveal()).toBeTruthy();
+    return reveal()!;
+  });
+  animation.pause();
+  animation.currentTime = 0;
+  expect(Number(getComputedStyle(rows).opacity)).toBeCloseTo(0.45);
+  expect(new DOMMatrixReadOnly(getComputedStyle(rows).transform).m42).toBe(8);
+  animation.currentTime = 120;
+  const midway = getComputedStyle(rows);
+  expect(Number(midway.opacity)).toBeGreaterThan(0.45);
+  expect(Number(midway.opacity)).toBeLessThan(1);
+  expect(new DOMMatrixReadOnly(midway.transform).m42).toBeGreaterThan(0);
+  expect(new DOMMatrixReadOnly(midway.transform).m42).toBeLessThan(8);
+  animation.play();
+  focused.focus();
+  focused.click();
+  const returning = await waitFor(() => {
+    expect(reveal()).toBeTruthy();
+    expect(reveal()).not.toBe(animation);
+    return reveal()!;
+  });
+  expect(animation.playState).toBe("idle");
+  const start = (returning.effect as KeyframeEffect).getKeyframes()[0];
+  expect(Number(start.opacity)).toBeGreaterThan(0.45);
+  expect(new DOMMatrixReadOnly(start.transform as string).m42).toBeLessThan(8);
+  returning.finish();
+  expect(Number(getComputedStyle(rows).opacity)).toBe(1);
+  expect(getComputedStyle(rows).transform).toBe("none");
+  expect(document.activeElement).toBe(focused);
+  expect(screen.getByRole("button", { name: /database.service Database/ })).toBe(database);
+  expect(screen.queryByRole("button", { name: /data.mount Application data/ })).toBeNull();
+  await page.getByRole("button", { name: "Find units", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search units" }).fill("database");
+  expect(reveal()).toBeUndefined();
+});
+
 it("keeps the scope switch accessible at narrow widths and preserves complete graph evidence", async () => {
   await page.viewport(640, 720);
   renderPane();

@@ -446,6 +446,7 @@ export function ServicesPane({
             )}
             <SystemdInventory
               units={filtered}
+              scope={state.scope}
               selectedId={selectedId}
               onSelect={(id) => {
                 selectionFocus.current = "inspector";
