@@ -43,6 +43,59 @@ describe("Systemd unit filtering", () => {
     expect(countSystemdUnits([])).toEqual({ active: 0, failed: 0, inactive: 0, other: 0 });
   });
 
+  it("focuses on operational types, preserves unknown and stopped services, and never hides failures", () => {
+    const items = [
+      unit("custom.service", "service", "inactive"),
+      unit("ssh.service", "service", "active"),
+      unit("backup.timer", "timer", "active"),
+      unit("deploy.path", "path", "active"),
+      unit("api.socket", "socket", "active"),
+      unit("systemd-udevd.service", "service", "active"),
+      unit("dbus.socket", "socket", "active"),
+      unit("getty@tty1.service", "service", "active"),
+      unit("serial-getty@ttyS0.service", "service", "active"),
+      unit("user@1000.service", "service", "active"),
+      unit("user-runtime-dir@1000.service", "service", "active"),
+      unit("modprobe@drm.service", "service", "inactive"),
+      unit("data.mount", "mount", "active"),
+      unit("multi-user.target", "target", "active"),
+      unit("disk.device", "device", "active"),
+      unit("session.scope", "scope", "active"),
+      unit("system.slice", "slice", "active"),
+      unit("systemd-networkd.service", "service", "failed"),
+      unit("broken.mount", "mount", "failed"),
+    ];
+    const filters = { search: "", state: "all", unitType: "all", scope: "focused" as const };
+    expect(filterSystemdUnits(items, filters).map((item) => item.id)).toEqual([
+      "broken.mount",
+      "systemd-networkd.service",
+      "deploy.path",
+      "custom.service",
+      "ssh.service",
+      "api.socket",
+      "backup.timer",
+    ]);
+    expect(filterSystemdUnits(items, { ...filters, scope: "all" })).toHaveLength(items.length);
+    expect(
+      filterSystemdUnits(items, { ...filters, search: "udevd" }).map((item) => item.id),
+    ).toEqual(["systemd-udevd.service"]);
+    expect(
+      filterSystemdUnits(items, { ...filters, unitType: "mount" }).map((item) => item.id),
+    ).toEqual(["broken.mount", "data.mount"]);
+    expect(filterSystemdUnits(items, { ...filters, state: "failed" })).toHaveLength(2);
+    expect(
+      filterSystemdUnits(
+        [
+          unit("systemd-networkd.service", "service", "active"),
+          unit("systemd-resolved.service", "service", "active"),
+          unit("systemd-journald.service", "service", "active"),
+          unit("dbus-app.service", "service", "failed"),
+        ],
+        filters,
+      ),
+    ).toHaveLength(4);
+  });
+
   it("sorts failures first and then uses stable type and identity ordering", () => {
     const result = filterSystemdUnits(fixtures, {
       search: "",

@@ -124,6 +124,7 @@ export interface SystemdExplorerState {
   state: string;
   unitType: string;
   sort: "priority" | "name" | "state" | "type";
+  scope?: "focused" | "all";
   relationshipGroup: "dependencies" | "ordering" | "activation";
   visibleLimit?: number;
   expansionHistory?: { expanded: string[]; visibleLimit: number }[];

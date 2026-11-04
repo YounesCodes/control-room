@@ -267,6 +267,14 @@ into view. Skip these transitions under reduced motion.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.
+Default the inventory to Focused: services, timers, sockets, and paths, excluding
+routine systemd, D-Bus, login-session, and module-loader units. Always include
+failed units of every type. Keep unknown application services visible, including
+stopped and disabled services. Offer a visible Focused / All units switch with a
+sliding selection fill and reduced-motion fallback. Show visible and total counts
+when they differ. Search and explicit type filters reach the whole inventory;
+dependency graphs always retain all reported unit types. Keep the scope with the
+workspace and let a filtered selection reveal itself in All units.
 Show one category at a time: Dependencies (Requires/Wants), Ordering (After/Before),
 or Activation (Triggers). Consolidate relationships with the same direction into
 one connector. Keep opposite requirements separate. Ordering arrows run from the

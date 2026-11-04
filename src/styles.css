@@ -4010,6 +4010,7 @@ dd {
   animation: systemd-slide-out 180ms var(--ease) both;
 }
 .systemd-presence:not([data-leaving]) > .systemd-relationship-groups,
+.systemd-presence:not([data-leaving]) > .systemd-scope-switch,
 .systemd-presence:not([data-leaving]) > .systemd-tools-panel,
 .systemd-presence:not([data-leaving]) > .icon-button {
   animation: systemd-controls-in 180ms var(--ease) both;
@@ -4105,6 +4106,38 @@ dd {
 .systemd-relationship-groups [aria-pressed="true"] {
   color: var(--text);
   background: var(--fill-active);
+}
+.systemd-scope-switch {
+  position: relative;
+  isolation: isolate;
+  margin-left: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.systemd-scope-switch::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 2px auto 2px 2px;
+  width: calc(50% - 3px);
+  border-radius: var(--radius-sm);
+  background: var(--fill-active);
+  transition: transform 180ms var(--ease);
+}
+.systemd-scope-switch:has(button:last-child[aria-pressed="true"])::before {
+  transform: translateX(calc(100% + 2px));
+}
+.systemd-scope-switch button {
+  justify-content: center;
+  white-space: nowrap;
+}
+.systemd-scope-switch [aria-pressed="true"] {
+  background: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .systemd-scope-switch::before {
+    transition: none;
+  }
 }
 .systemd-toolbar-actions {
   margin-left: auto;

@@ -57,6 +57,63 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it("defaults to focused, restores its scope, and reveals a hidden selection without losing it", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn();
+    const props = {
+      connection,
+      cache: cache([
+        unit("ssh.service", "service", "active", "running"),
+        unit("systemd-udevd.service", "service", "active", "running"),
+        unit("data.mount", "mount", "active", "mounted"),
+        unit("broken.device", "device", "failed", "failed"),
+      ]),
+      onCacheChange: vi.fn(),
+      onViewLogs: vi.fn(),
+      onStateChange,
+    };
+    const view = render(<ServicesPane {...props} />);
+    expect(screen.getByRole("button", { name: "Focused", pressed: true })).toBeTruthy();
+    expect(screen.getByText("2 / 4 units")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /data.mount description/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /broken.device description/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "All units" }));
+    expect(screen.getByText("4 units")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /data.mount description/ }));
+    await user.click(screen.getByRole("button", { name: "Focused" }));
+    expect(screen.queryByRole("heading", { name: "data.mount" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show selected unit" }));
+    expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All units", pressed: true })).toBeTruthy();
+    const saved = onStateChange.mock.lastCall![0];
+    view.unmount();
+    render(<ServicesPane {...props} initialState={saved} />);
+    expect(screen.getByRole("button", { name: "All units", pressed: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /systemd-udevd.service description/ })).toBeTruthy();
+  });
+
+  it("searches hidden units and includes every failed type from the failure shortcut", async () => {
+    const user = userEvent.setup();
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([
+          unit("systemd-udevd.service", "service", "active", "running"),
+          unit("broken.mount", "mount", "failed", "failed"),
+        ])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Find units" }));
+    await user.type(screen.getByRole("textbox", { name: "Search units" }), "udevd");
+    expect(
+      await screen.findByRole("button", { name: /systemd-udevd.service description/ }),
+    ).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "1 failed" }));
+    expect(screen.getByRole("button", { name: /broken.mount description/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /systemd-udevd.service description/ })).toBeNull();
+  });
   it("collapses unreachable descendants while retaining dependencies shared by an expanded branch", async () => {
     const user = userEvent.setup();
     const requirements: Record<string, string> = {
@@ -316,6 +373,7 @@ describe("ServicesPane failed units view", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: "All units" }));
     await user.click(screen.getByRole("button", { name: /data.mount description/ }));
     expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Find units" }));

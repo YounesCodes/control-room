@@ -36,6 +36,7 @@ const DEFAULT: SystemdExplorerState = {
   state: "all",
   unitType: "all",
   sort: "priority",
+  scope: "focused",
   relationshipGroup: "dependencies",
   visibleLimit: SYSTEMD_INITIAL_VISIBLE,
 };
@@ -267,6 +268,9 @@ export function ServicesPane({
   function clearFilters() {
     patch({ search: "", state: "all", unitType: "all" });
   }
+  function revealSelection() {
+    patch({ search: "", state: "all", unitType: "all", scope: "all" });
+  }
   function selectInventoryUnit(id: string, navigate = false) {
     setInspectorOpen(navigate || id !== selectedId || !inspectorOpen);
     setSelectedId(id);
@@ -369,6 +373,7 @@ export function ServicesPane({
       <SystemdToolbar
         state={state}
         total={cache.items.length}
+        visible={filtered.length}
         failed={counts.failed}
         snapshot={snapshot}
         loading={cache.loading}
@@ -434,7 +439,7 @@ export function ServicesPane({
             {selectedId && selected && !selectedVisible && (
               <div className="systemd-filter-result" role="status">
                 Selected unit is outside this filter{" "}
-                <button type="button" className="link-button" onClick={clearFilters}>
+                <button type="button" className="link-button" onClick={revealSelection}>
                   Show selected unit
                 </button>
               </div>

@@ -5,6 +5,17 @@ export interface SystemdUnitFilters {
   state: string;
   unitType: string;
   sort?: SystemdExplorerState["sort"];
+  scope?: SystemdExplorerState["scope"];
+}
+
+// Keep this exclusion narrow: unfamiliar application services belong in the
+// focused view, even when disabled or stopped. Never hide a failed unit.
+export function isFocusedSystemdUnit(unit: SystemdUnit) {
+  if (unit.activeState === "failed") return true;
+  if (!["service", "timer", "socket", "path"].includes(unit.unitType)) return false;
+  return !/^(?:systemd-(?:ask-password|backlight|binfmt|fsck|hibernate|hybrid-sleep|journal-flush|journal-catalog-update|modules-load|random-seed|remount-fs|rfkill|sleep|suspend|sysctl|sysusers|tmpfiles|udevd|udev|update-utmp|user-sessions|vconsole-setup)[.@-]|dbus[.@-]|(?:serial-)?getty@|user(?:-runtime-dir)?@|modprobe@)/.test(
+    unit.id,
+  );
 }
 
 function compareText(left: string, right: string) {
@@ -41,6 +52,14 @@ export function filterSystemdUnits(units: SystemdUnit[], filters: SystemdUnitFil
   const query = filters.search.trim().toLowerCase();
   return units
     .filter((unit) => {
+      // Searching and explicit type choices always reach the complete inventory.
+      if (
+        filters.scope === "focused" &&
+        !query &&
+        filters.unitType === "all" &&
+        !isFocusedSystemdUnit(unit)
+      )
+        return false;
       if (filters.state !== "all" && unit.activeState !== filters.state) return false;
       if (filters.unitType !== "all" && unit.unitType !== filters.unitType) return false;
       if (!query) return true;

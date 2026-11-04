@@ -8,6 +8,7 @@ import { SYSTEMD_INITIAL_VISIBLE } from "../lib/systemd-units";
 export function SystemdToolbar({
   state,
   total,
+  visible,
   failed,
   snapshot,
   loading,
@@ -21,6 +22,7 @@ export function SystemdToolbar({
 }: {
   state: SystemdExplorerState;
   total: number;
+  visible: number;
   failed: number;
   snapshot: string;
   loading: boolean;
@@ -124,7 +126,9 @@ export function SystemdToolbar({
         <h2 title={snapshot} tabIndex={0}>
           Systemd
         </h2>
-        <span className="systemd-unit-count">{total} units</span>
+        <span className="systemd-unit-count" title={total + " units collected"}>
+          {!graph && visible !== total ? visible + " / " + total + " units" : total + " units"}
+        </span>
         {failed > 0 && (
           <button
             type="button"
@@ -163,6 +167,30 @@ export function SystemdToolbar({
             Explore <span className="systemd-explore-unit">{selectedUnit ?? "selected unit"}</span>
           </button>
         </div>
+        <SystemdPresence open={!graph}>
+          <div
+            className="systemd-scope-switch systemd-view-switch"
+            role="group"
+            aria-label="Unit scope"
+          >
+            <button
+              type="button"
+              aria-pressed={state.scope !== "all"}
+              title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
+              onClick={() => onChange({ scope: "focused" })}
+            >
+              Focused
+            </button>
+            <button
+              type="button"
+              aria-pressed={state.scope === "all"}
+              title="Include every unit type and system service"
+              onClick={() => onChange({ scope: "all" })}
+            >
+              All units
+            </button>
+          </div>
+        </SystemdPresence>
         <SystemdPresence open={graph}>
           <div
             className="systemd-relationship-groups"

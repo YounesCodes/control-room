@@ -147,6 +147,53 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("keeps the scope switch accessible at narrow widths and preserves complete graph evidence", async () => {
+  await page.viewport(640, 720);
+  renderPane();
+  const focused = page.getByRole("button", { name: "Focused" });
+  const all = page.getByRole("button", { name: "All units" });
+  expect(screen.queryByRole("button", { name: /data.mount Application data/ })).toBeNull();
+  await all.click();
+  await page.getByRole("button", { name: /data.mount Application data/ }).click();
+  await focused.click();
+  expect(screen.getByRole("status").textContent).toContain("Selected unit is outside this filter");
+  await page.getByRole("button", { name: "Show selected unit" }).click();
+  expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
+  await focused.click();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Explore worker.service" }).click();
+  const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+  expect(await within(graph).findByRole("button", { name: /^data.mount/ })).toBeTruthy();
+  await page.getByRole("button", { name: "Explorer" }).click();
+  await settleMotion();
+  const scope = screen.getByRole("group", { name: "Unit scope" });
+  const bounds = scope.getBoundingClientRect();
+  expect(bounds.left).toBeGreaterThanOrEqual(0);
+  expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
+  const selectedFill = getComputedStyle(scope, "::before");
+  const duration = parseFloat(selectedFill.transitionDuration);
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    expect(duration).toBeLessThanOrEqual(0.001);
+  else expect(duration).toBe(0.18);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // Sample the rendered fill between the two options, including reversal.
+    screen.getByRole("button", { name: "All units" }).click();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const offset = new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41;
+    expect(offset).toBeGreaterThan(0);
+    expect(offset).toBeLessThan(bounds.width / 2);
+    screen.getByRole("button", { name: "Focused" }).click();
+    await settleMotion();
+    expect(new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41).toBe(0);
+  }
+  screen.getByRole("button", { name: "Focused" }).focus();
+  await userEvent.keyboard("{Tab}{Enter}");
+  expect(screen.getByRole("button", { name: "All units", pressed: true })).toBeTruthy();
+  expect((await audit()).violations).toEqual([]);
+});
+
 it("glides one shared service highlight and retargets it during rapid switching", async () => {
   await page.viewport(1280, 800);
   renderPane(["a", "b", "c"].map((name) => ({ ...units[1], id: name + ".service" })));
