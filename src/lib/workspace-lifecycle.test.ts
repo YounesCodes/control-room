@@ -68,12 +68,23 @@ describe("Saved Connection workspace removal", () => {
     const remote = workspace("remote", "connection-a");
     remote.remoteShell = { id: "powershell", label: "PowerShell" };
     remote.portsCache = { ...emptyCachedList(), fetchedAt: Date.now() };
+    remote.systemdExplorer = {
+      mode: "graph",
+      rootId: "worker.service",
+      expanded: [],
+      search: "",
+      state: "all",
+      unitType: "all",
+      sort: "priority",
+      relationshipGroup: "dependencies",
+    };
     const updated = updateWorkspaceConnectionSnapshots([remote], {
       ...remote.connectionSnapshot,
       destination: "different-host",
     })[0] as RemoteWorkspace;
     expect(updated.portsCache.fetchedAt).toBeNull();
     expect(updated.remoteShell).toBeNull();
+    expect(updated.systemdExplorer).toBeUndefined();
     expect(updated.sessionId).toBe(remote.sessionId);
     expect(updated.connectRequested).toBe(remote.connectRequested);
     const renamed = updateWorkspaceConnectionSnapshots([remote], {
@@ -82,6 +93,7 @@ describe("Saved Connection workspace removal", () => {
     })[0] as RemoteWorkspace;
     expect(renamed.portsCache).toBe(remote.portsCache);
     expect(renamed.remoteShell).toBe(remote.remoteShell);
+    expect(renamed.systemdExplorer).toBe(remote.systemdExplorer);
   });
 
   it("selects and preserves an unrelated Workspace when the active connection is deleted", () => {

@@ -22,6 +22,9 @@ guardrails, not every choice described below.
   brand color on a hovered or selected tab or host row to identify the target;
   the color is identity, never health, and it never shows at rest. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
+  Read-only configuration and command blocks may use a small syntax palette for
+  sections, keys, strings, paths, and variables. Keep those colors inside code;
+  they describe syntax and do not signal service health.
   Local shell logos reveal their own colors on hover, keyboard focus, or selection:
   Git orange and PowerShell blue. Command Prompt and the generic local-terminal
   launcher use muted gray at rest and white on hover, keyboard focus, or selection.
@@ -212,6 +215,14 @@ to its node. The Close button, Escape, clicking the selected node again, and
 clicking empty canvas space all close it. Dragging the canvas pans without
 closing the inspector.
 
+Inspector panels keep their normal surface border without an outer focus outline.
+Keep visible keyboard focus indicators on their buttons, fields, and disclosures.
+All four arrows on a graph node or the focused inspector select a nearby node
+in that direction using canvas positions, favoring aligned nodes. Use stable layout
+coordinates so camera transitions do not change the destination. Stay put when no
+node exists in that direction. Frame the selection immediately. Keep Home/End as focus-only navigation. Leave inspector
+controls and scrollable evidence to their native keys; Escape returns to the selected node.
+
 Docker shares the Ports canvas, camera controls, selection behavior, and inspector
 layout. Fit the full container graph before a selection is made. Group container
 nodes by validated Compose project by default, with an Ungrouped branch for
@@ -228,6 +239,173 @@ The container inspector repeats the selected image logo beside its title, using
 the same generic fallback for unknown images. Docker and Ports inspector sections
 share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
 behavior and show section content immediately when reduced motion is requested.
+
+Systemd starts with a compact unit inventory: name, description, and one meaningful
+state. Start without a selected unit; loading or refreshing never picks one.
+Restore an explicit selection when returning to an existing workspace or following
+a unit link. Keep enablement and other metadata in the inspector. Show a failed count
+only when nonzero; keep other counts and collection time in the heading tooltip.
+Search, filtering, and sorting open from one toolbar.
+Search moves its icon left to reserve toolbar space, then reveals the input in
+that space. Enclose the icon and input in one control with a single thin focus
+border and no extra ring. Align its contents within the same height.
+Retract from the current width and opacity so early dismissal does not flash.
+Use a full-width toolbar row when needed at narrow widths. Anchor filters below
+their icon and toolbar edge, clamp them inside the pane, and reposition on resize.
+Failed rows use failure color; inactive and disabled units remain neutral. Preserve the selected identity through
+refreshes and show a reveal action when filters hide it. Large inventories render
+only the visible rows while retaining keyboard access to every unit.
+Keep the inventory vertical-only. Truncate long unit names and descriptions inside
+their row, with complete values available in the tooltip and inspector.
+Outline the whole selected Systemd row rather than marking only its left edge.
+Use one shared rounded highlight that glides between nearby selections. Retarget
+from its current position during rapid navigation. Snap on filter changes or
+distant virtual-list jumps so the selected unit is never waiting for a long sweep.
+Up/Down selects adjacent units in the filtered, sorted inventory and updates the
+open inspector immediately. Keep keyboard focus on the row and scroll it into
+view, including in virtual inventories. The inspector itself also accepts Up/Down;
+leave its fields, disclosures, and scrollable evidence to their native keys.
+Keep the panel in place while its new identity and content briefly fade and slide
+into view. Skip these transitions under reduced motion.
+
+The dependency view uses the shared graph controls, pan/zoom camera behavior, and
+closable inspector. Its links represent systemd evidence rather than host grouping.
+Default the inventory to Focused: services, timers, sockets, and paths, excluding
+routine systemd, D-Bus, login-session, and module-loader units. Always include
+failed units of every type. Keep unknown application services visible, including
+stopped and disabled services. Offer a visible Focused / All units switch with a
+sliding selection fill and reduced-motion fallback. Reveal the updated inventory
+with a short fade and vertical slide in either direction, preserving its live rows,
+scrolling, and focus. Retarget an interrupted reveal from its rendered position;
+skip the reveal under reduced motion. Show visible and total counts
+when they differ. Search and explicit type filters reach the whole inventory;
+dependency graphs always retain all reported unit types. Keep the scope with the
+workspace and let a filtered selection reveal itself in All units.
+Show one category at a time: Dependencies (Requires/Wants), Ordering (After/Before),
+or Activation (Triggers). Consolidate relationships with the same direction into
+one connector. Keep opposite requirements separate. Ordering arrows run from the
+earlier unit to the later unit, combining equivalent After/Before constraints.
+Keep edges free of text and show exact reported evidence on hover
+or keyboard focus. Explain arrow direction once for the active category. Use
+solid strokes in Ordering and Activation. In Dependencies, use solid strokes
+when Requires is present and dashed strokes for Wants-only links. Show matching
+line samples and their meanings beside the direction key.
+End each line at the base of its arrowhead, leaving the tip clear of the target card. Never use
+label boxes or relationship nodes. Pair line patterns with directed arrows, keep
+arrowheads crisp, and route connectors outside cards. Use consistent node sizes
+and deterministic columns, placing incoming units left and outgoing units right.
+
+Include reported reverse and activation dependencies, without deriving links from unit
+names. Start at one unit and up to six neighbors. Show more or expand a node on
+request, up to 25 visible units. Preserve layout slots and smoothly refit zoom and
+position after Show more, Show less, and branch expansion or collapse. Rebase
+scene coordinates before the camera transition so the root does not jump. Include
+nodes arriving from pending reads, but let manual pan/zoom cancel that adjustment
+until the next expansion action. Reserve inspector space when fitting an expanded
+overview and return to that overview when the inspector closes.
+Selecting a node always zooms directly to it, including in an expanded graph.
+Clicking the selected node again closes inspection and fits all visible nodes to
+the available plot. Keep the direction key and zoom controls in a separate footer
+row outside the clipped, pannable viewport. Let that row wrap at narrow widths;
+neither the inspector nor graph content may cover its controls or legend.
+Late inspector data must not replace that focus; an expansion action resumes fitting.
+Initial framing centers the whole visible scene while keeping nodes readable at
+85% or larger; expansion and Fit to view may zoom out further. One-sided incoming
+or outgoing relationships must not pin the root to the plot center.
+Search retains paths to matches.
+Pair Show more with Show less for expansion changes.
+When an expansion control disappears, restore keyboard focus to a nearby expansion
+control. Mouse actions must not move focus to the root and reveal its tooltip.
+Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
+expanded descendants while keeping shared branches. Restore a collapsed branch with Expand.
+Reveal connectors in their arrow direction while nodes move 8px into place over 240ms.
+Keep removed nodes and edges as inert,
+visual-only snapshots for a 240ms fade and slight movement, cancel ghosts when nodes reappear, and skip
+exit retention under reduced motion. Preserve layout slots during collapse as well.
+Double-click or Shift+Enter refocuses
+the graph. Selection, filters, root, and expansion stay with the workspace during
+navigation. Changed SSH targets discard that context and use separate detail caches.
+
+Keep inspectors closed until selection.
+Remember open inspector state separately for Explorer and Dependency graph while
+switching views. Returning to a view restores its inspector for the current selection.
+Remember disclosure sections and body/code scroll positions per unit, view, and SSH
+target. Restore scroll after lazy evidence arrives, without overriding user input.
+Explicitly closing either inspector through Close details, Escape, or clicking its
+selected item clears both open states, the inspected selection,
+and its highlight. Keep graph roots and expansion context separate from that selection.
+Use a compact, content-height panel with
+a visible 32px slide on entry and a slide on exit. Graph selection opens the inspector
+and starts camera framing immediately,
+without a click timer or waiting for remote details. Keep that inspector visible from
+its first frame with a short 160ms entrance. Center the graph inspector vertically
+at the right of the canvas, including while its content changes.
+Keep exiting controls inert and hidden from assistive
+technology, cancel exits when reopened, and remove them immediately under reduced
+motion. Use the same transitions for relationship categories and filter panels.
+Keep view switching in one visible toolbar control; do not repeat the graph action in the inspector.
+Slide one selection fill between Explorer and Dependency graph with the same motion
+as Focused / All units. Use symmetric easing so expansion and contraction feel equally quick.
+Measure its position and width so it fits the unequal
+labels, follows window-size changes, and reverses from its current
+pose on rapid switching. Apply the same sliding fill to Dependencies, Ordering,
+and Activation. Place the initial fill immediately and skip motion when reduced motion is requested.
+Refresh runtime properties for the inspected service periodically without inserting
+loading text or resetting open sections. Pause reads in hidden windows and stop
+when the inspector closes. Keep the last reading with an error if refresh fails;
+never replace unavailable memory with zero.
+Interpolate service memory, CPU time, task and restart counts, and uptime briefly
+between readings with tabular digits, starting
+from the displayed value if a newer reading arrives mid-transition. Show the first
+reading immediately. Reduced motion uses the latest value directly, and assistive
+technology reads the collected value rather than intermediate animation frames.
+Name the graph action Dependency graph. Keep the full target in its accessible
+name and tooltip, and show it beside the action and in the graph heading. Cap the
+visible name at 24 characters. Let the card fit its text. Keep scope and relationship
+category controls in the right-hand tools group before search and refresh, independently
+of name length. Keep refresh at the far-right edge.
+Keep search directly before refresh in both views. Remove the inventory filter from
+layout immediately when entering the graph so retained exits cannot shift the icons later.
+Before selection, show a disabled Dependency graph action.
+Keep the inventory count identical in both views so its text
+and width do not change during navigation. Put scope and relationship controls in
+one fixed-size, clipped toolbar slot. Anchor inert exits inside that slot so they
+never paint across the heading or view switch. Keep the slot on its own centered
+row at narrow widths in both modes. Incoming controls start in their final
+slot and never jump when the exit ends. Reserve a usable width for expanded search.
+At intermediate widths, keep actions beside the view switch and put scope/category controls
+on their own row instead of dropping action icons into an otherwise empty row.
+Keep search inline whenever the controls fit, and wrap before the input can collapse.
+Reserve search space in both states so opening it does not resize or move the view
+switch or refresh action. Scope/category controls may move with the field's expansion.
+Truncate names based on available pane
+width, independently of search visibility. Animate only the search field within
+that space; skip its motion when reduced motion is requested.
+Opening Dependency graph focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
+row clicks only toggle inspection; double-clicks must not change views.
+Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
+timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
+and failure results. Configuration and Advanced start collapsed. Keep relationship
+browsing in the graph instead of duplicating its dependency list in the inspector.
+Keep Configuration directly accessible for unit files and drop-ins. Put conditions,
+assertions, runtime details, and effective properties under Advanced. Keep journal
+reading in the full Logs view, reached through View journal in the fixed footer.
+Unit files and full effective properties load when opened, with separate
+unavailable and truncated states. Keep file contents distinct from the manager's
+effective properties. Render code with selectable, wrapping monospace text and
+restrained syntax colors. Give long command and schedule fields the full inspector
+width. Preserve the original host text, including whitespace, quotes, and escapes;
+command metadata may gain visual line breaks without rewriting copied content.
+Reuse inspector disclosure motion. Reduced motion removes camera, node, and
+disclosure animation. Show Ports navigation only for services or sockets with a
+fresh, known listener ownership match to that exact unit. Opening Advanced may read
+listeners without elevation, sharing the Ports view's workspace cache. Hide the
+shortcut while ownership is unknown or its read is unavailable. Show Boot only
+when fresh current-boot diagnostics contain a matching slow-unit or failed-unit
+entry from a readable section. Opening Advanced may collect current boot evidence
+without elevation, sharing the Boot view's workspace snapshot. Hide unrelated,
+historical, or unavailable evidence. Current Boot
+unit rows link back to Systemd without attributing a cause.
 
 ## Visual language
 
@@ -351,9 +529,9 @@ firewall profiles describe policy without claiming a port is reachable.
 
 Use host marks and session presence to help users find a connection or
 Workspace. Put session indicators after labels, separate from OS and shell marks.
-When the sidebar is visible, connected tabs do not repeat its normal connection
-dots. Tabs retain connecting, disconnected, and error indicators; in Focus Mode,
-they also show normal connection state because the sidebar is hidden. Keep session
+Hide idle connection and session dots in host rows, tabs, and Focus Mode.
+Do not show gray unread-output badges on terminal tabs or groups. Keep bell alerts.
+Show indicators for connecting, busy, and error states. Keep session
 state accessible in every mode. Local shells use running, stopped, and restarted;
 remote sessions use connected, disconnected, and reconnected.
 
@@ -438,8 +616,16 @@ graph in one group, with a subtle divider and a larger gap before the next metri
 Preserve this grouping at narrow widths rather than squeezing the metrics together. Trends hold
 at most twenty measured samples in memory, reset on host changes and monitoring
 pauses, and never invent points for missing readings. Trends use a fixed
-0–100 range. Disk I/O shows separate read and write speeds without a graph. Animate value changes
-briefly. A refresh cue runs only while a reading is in progress;
+0–100 range. Disk I/O shows separate read and write speeds without a graph. Interpolate
+numeric readings briefly with the same motion as service runtime values, including
+percentages, transfer rates, and uptime in the header and details. Keep labels and
+opacity steady. Use measured samples for trends, accessible names, and tooltips.
+Give disk read and write rates separate fixed slots with right-aligned values so
+digit and unit changes cannot push the direction labels or neighboring readings.
+Reserve percentage and trend slots even when a chart is unavailable. Right-align
+percentage readouts so their percent signs stay anchored as digits change.
+Animation frames never become samples. Show first readings, new targets, unavailable
+values, and reduced-motion updates immediately. A refresh cue runs only while a reading is in progress;
 stale and paused charts rest. Respect reduced motion throughout.
 Use one compact status button to open reading details, separated from
 the numeric readings. Keep Live compact and let longer status labels use only

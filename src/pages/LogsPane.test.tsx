@@ -126,6 +126,32 @@ describe("LogsPane reading position", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps an explicitly opened dependency as the journal source when it is outside the inventory", async () => {
+    const onSourceChange = vi.fn();
+    render(
+      <LogsPane
+        connection={connection}
+        settings={settings}
+        logTailOptions={[200]}
+        servicesCache={servicesCache}
+        containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+        selectedSource={{ type: "systemd", id: "network-online.target" }}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={onSourceChange}
+      />,
+    );
+    expect((screen.getByRole("combobox", { name: "Unit" }) as HTMLSelectElement).value).toBe(
+      "network-online.target",
+    );
+    expect(onSourceChange).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(api.startJournalStream.mock.calls.at(-1)?.slice(0, 2)).toEqual([
+      "connection-a",
+      "network-online.target",
+    ]);
+  });
+
   it("offers only Docker logs on Windows and keeps access failures free of sudo prompts", async () => {
     api.startDockerLogStream.mockRejectedValueOnce(new Error("Permission denied by Docker"));
     render(

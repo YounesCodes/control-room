@@ -38,6 +38,8 @@ import type {
   BaselineSectionKind,
   BaselineTrace,
   SystemdUnit,
+  SystemdInspection,
+  SystemdReadSection,
   PendingUpdateNotice,
   UpdateProgress,
 } from "../types";
@@ -207,6 +209,12 @@ export const api = {
     ),
   sampleHostResources: (connectionId: string) =>
     invokeRemoteInspection<HostResources>("sample_host_resources", { connectionId }),
+  inspectSystemdUnit: (connectionId: string, unit: string, section: SystemdReadSection) =>
+    invokeRemoteInspection<SystemdInspection>("inspect_systemd_unit", {
+      connectionId,
+      unit,
+      section,
+    }),
   listServices: (connectionId: string) =>
     invokeRemoteInspection<SystemdUnit[]>("list_services", { connectionId }),
   listWindowsServices: (connectionId: string) =>

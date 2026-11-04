@@ -786,7 +786,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .poll(() => element.querySelector(".host-row.active .presence-busy"))
         .not.toBeNull();
       finishServices([fixtures.service]);
-      await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+      await expect.element(page.getByRole("button", { name: /^fixture.service/ })).toBeVisible();
       await expect.poll(() => element.querySelector(".host-row.active .presence-busy")).toBeNull();
     } finally {
       finishServices?.([]);
@@ -1127,6 +1127,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .getByRole("button", { name: /Command Prompt/ })
       .click();
     const remoteSession = "session-1";
+    remote.onmessage(new TextEncoder().encode("Background output\r\n").buffer);
+    await expect.element(group).toHaveAccessibleDescription(/new output/);
+    expect(element.querySelector(".terminal-activity-output")).toBeNull();
     remote.onmessage(new TextEncoder().encode("\x07Background build complete\r\n").buffer);
     await expect.element(group).toHaveAccessibleDescription(/terminal bell/);
     expect(group.element().querySelector(".terminal-activity-bell")).not.toBeNull();
@@ -1594,9 +1597,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const mark = host.querySelector<HTMLElement>(".target-mark")!;
     const presence = host.querySelector<HTMLElement>(".presence-connected")!;
     expect(mark.contains(presence)).toBe(false);
-    expect(presence.getBoundingClientRect().left).toBeGreaterThan(
-      mark.getBoundingClientRect().right,
-    );
+    expect(getComputedStyle(presence).display).toBe("none");
     expect(tab.querySelector(".presence")).toBeNull();
     expect(tab.querySelector(".sr-only")?.textContent).toBe("Terminal connected");
     await page.screenshot({ element: host, path: "../test-results/host-status-placement.png" });
@@ -1607,9 +1608,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const focusMark = tab.querySelector<HTMLElement>(".target-mark")!;
     const focusPresence = tab.querySelector<HTMLElement>(".presence-connected")!;
     expect(focusMark.contains(focusPresence)).toBe(false);
-    expect(focusPresence.getBoundingClientRect().left).toBeGreaterThan(
-      focusMark.getBoundingClientRect().right,
-    );
+    expect(getComputedStyle(focusPresence).display).toBe("none");
     await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
     await expect.poll(() => tab.querySelector(".presence")).toBeNull();
   });
@@ -1676,12 +1675,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
       element: element.querySelector(".app-bar")!,
       path: "../test-results/live-metrics-header.png",
     });
-    const motion = parseFloat(
-      getComputedStyle(io.querySelector(".host-metric-value")!).animationDuration,
-    );
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-      expect(motion).toBeLessThanOrEqual(0.00001);
-    else expect(motion).toBeGreaterThan(0.01);
+    expect(getComputedStyle(io.querySelector(".host-metric-value")!).animationName).toBe("none");
+    expect(io.querySelectorAll(".animated-number")).toHaveLength(2);
     const lastPath = path.getAttribute("d");
     failures.set("sample_header_metrics", "Fixture offline");
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
@@ -2165,11 +2160,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     async function checkList() {
       await vi.waitFor(() =>
         expect(
-          element.querySelectorAll(".list-panel .dense-row, .list-panel .docker-branch").length,
+          element.querySelectorAll(
+            ".systemd-inventory .dense-row, .list-panel .dense-row, .list-panel .docker-branch",
+          ).length,
         ).toBe(100),
       );
       const panel =
-        element.querySelector<HTMLElement>(".services-page .dense-list") ??
+        element.querySelector<HTMLElement>(".systemd-inventory .dense-list") ??
         element.querySelector<HTMLElement>(".list-panel")!;
       expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
         element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
@@ -2207,6 +2204,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(graph.bottom).toBeLessThanOrEqual(viewport.bottom - 48);
       };
       await vi.waitFor(expectEntireGraph);
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector(".arch-content")!
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0),
+      );
       const fittedHeight = element.querySelector(".arch-content")!.getBoundingClientRect().height;
       await page.getByRole("button", { name: "Zoom in", exact: true }).click();
       await vi.waitFor(() =>
@@ -2216,6 +2221,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       );
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(expectEntireGraph);
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector(".arch-content")!
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0),
+      );
       expect(element.querySelector(".arch-content")!.getBoundingClientRect().height).toBeCloseTo(
         fittedHeight,
         1,
@@ -2420,7 +2433,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
   });
 
   it.each([960, 1600])(
-    "scrolls Linux service rows while keeping the filters visible at %s px",
+    "scrolls Linux service rows while keeping the toolbar available at %s px",
     async (width) => {
       await page.viewport(width, 600);
       overrides.set("list_services", () =>
@@ -2431,13 +2444,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
       );
       await mount();
       await navigate("Systemd");
-      await expect
-        .element(page.getByRole("button", { name: /example-99.service/ }))
-        .toBeInTheDocument();
+      await expect.element(page.getByRole("region", { name: "Systemd units" })).toBeVisible();
       const list = element.querySelector<HTMLElement>(".dense-list")!;
       await userEvent.wheel(list, { delta: { y: 700 } });
       await vi.waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+      await page.getByRole("button", { name: "Find units", exact: true }).click();
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector<HTMLInputElement>('[aria-label="Search units"]')!
+            .getBoundingClientRect().width,
+        ).toBeGreaterThanOrEqual(120),
+      );
       await expect.element(page.getByPlaceholder("Search units")).toBeVisible();
+      await userEvent.keyboard("{Escape}");
       list.focus();
       expect(document.activeElement).toBe(list);
       await userEvent.keyboard("{End}");
@@ -2445,10 +2465,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(list.scrollTop + list.clientHeight).toBeGreaterThanOrEqual(list.scrollHeight - 1),
       );
       await userEvent.click(page.getByRole("button", { name: /example-99.service/ }));
-      expect(element.querySelector(".detail-panel h2")?.textContent).toBe("example-99.service");
+      expect(element.querySelector(".systemd-inspector h2")?.textContent).toBe(
+        "example-99.service",
+      );
       await expect.element(page.getByRole("button", { name: "View journal" })).toBeVisible();
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector(".systemd-inspector")!
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0),
+      );
       expect(
-        (await axe.run(element.querySelector<HTMLElement>(".services-page")!)).violations,
+        (await axe.run(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
       ).toEqual([]);
       await page.screenshot({ path: `../test-results/linux-service-list-${width}.png` });
     },
@@ -2518,11 +2548,38 @@ describe("complete app journeys with typed IPC fixtures", () => {
     ).toHaveLength(1);
   });
 
+  it("clears a Systemd port filter when its Saved Connection changes SSH target", async () => {
+    overrides.set("update_connection", ({ input }) => ({ ...fixtures.connection(), ...input }));
+    await mount();
+    await navigate("Systemd");
+    await page.getByRole("button", { name: /^fixture.service Fixture service/ }).click();
+    await page.getByText("Advanced", { exact: true }).click();
+    await page.getByRole("button", { name: "Ports", exact: true }).last().click();
+    await expect.element(page.getByRole("button", { name: "Clear unit filter" })).toBeVisible();
+    await userEvent.hover(
+      page
+        .getByRole("button", { name: "Open actions for Fixture Alpha" })
+        .element()
+        .closest(".host-row")!,
+    );
+    await page.getByRole("button", { name: "Open actions for Fixture Alpha" }).click();
+    await page.getByRole("menuitem", { name: /Edit connection/ }).click();
+    await page.getByRole("textbox", { name: "SSH destination" }).fill("changed.example.invalid");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect
+      .element(page.getByRole("dialog", { name: "Edit Saved Connection" }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Clear unit filter" }))
+      .not.toBeInTheDocument();
+  });
+
   it("filters Systemd, selects a unit, follows its journal and cleans up its stream on navigation", async () => {
     await mount();
     await navigate("Systemd");
+    await page.getByRole("button", { name: "Filter and sort units" }).click();
     await page.getByRole("combobox", { name: "Unit state" }).selectOptions("failed");
-    await page.getByRole("button", { name: /failed.service/ }).click();
+    await page.getByRole("button", { name: /^failed.service/ }).click();
     await page.getByRole("button", { name: "View journal" }).click();
     await expect
       .element(page.getByRole("combobox", { name: "Unit", exact: true }))
@@ -2824,6 +2881,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Ports");
     await page.getByRole("button", { name: /443.*Listening/ }).click();
     await page.getByRole("button", { name: /Open unit/ }).click();
+    const selectedUnit = page.getByRole("button", { name: new RegExp("^" + fixtures.service.id) });
+    await expect.element(selectedUnit).toHaveAttribute("aria-pressed", "true");
+    await expect.element(page.getByRole("complementary", { name: "Unit details" })).toBeVisible();
     await expect
       .element(page.getByRole("heading", { name: fixtures.service.id, exact: true }))
       .toBeVisible();
@@ -2851,11 +2911,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("reports refresh failure, keeps existing Systemd data and recovers", async () => {
     await mount();
     await navigate("Systemd");
-    await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: /^fixture.service/ })).toBeVisible();
     failures.set("list_services", "Fixture network failure");
     await page.getByRole("button", { name: "Refresh systemd units", exact: true }).click();
     await expect.element(page.getByText(/Refresh failed: Fixture network failure/)).toBeVisible();
-    await expect.element(page.getByRole("button", { name: /fixture.service/ })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: /^fixture.service/ })).toBeVisible();
     failures.delete("list_services");
     await page.getByRole("button", { name: "Refresh systemd units", exact: true }).click();
     await expect

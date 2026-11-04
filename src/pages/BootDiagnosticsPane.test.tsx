@@ -105,6 +105,24 @@ describe("BootDiagnosticsPane", () => {
     vi.restoreAllMocks();
   });
 
+  it("opens current failed and slow units directly in Systemd", async () => {
+    const onOpenSystemd = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot()}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenSystemd={onOpenSystemd}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "backup.service" }));
+    expect(onOpenSystemd).toHaveBeenLastCalledWith("backup.service");
+    await user.click(screen.getByRole("button", { name: "network-online.target" }));
+    expect(onOpenSystemd).toHaveBeenLastCalledWith("network-online.target");
+  });
+
   it("collects current boot facts and routes a failed unit to its journal", async () => {
     const user = userEvent.setup();
     const onSnapshotChange = vi.fn();

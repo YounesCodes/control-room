@@ -145,6 +145,40 @@ afterEach(() => {
   document.getElementById("camera-motion-override")?.remove();
 });
 
+it("switches graph selection and inspector with arrows and returns focus on Escape", async () => {
+  await page.viewport(1280, 800);
+  renderPane(null, {
+    ...sockets,
+    items: [80, 443, 3000].map((port) => ({
+      ...sockets.items[0],
+      id: "tcp:0.0.0.0:" + port,
+      port,
+    })),
+  });
+  const nodes = await waitFor(() => {
+    const items = [...document.querySelectorAll<HTMLButtonElement>(".arch-chip")];
+    expect(items.length).toBeGreaterThan(2);
+    return items;
+  });
+  nodes[0].focus();
+  expect(getComputedStyle(nodes[0]).outlineStyle).toBe("none");
+  expect(getComputedStyle(nodes[0]).boxShadow).not.toBe("none");
+  await userEvent.keyboard("{ArrowRight}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  const inspector = screen.getByRole("complementary");
+  expect(document.activeElement).toBe(inspector);
+  await userEvent.keyboard("{ArrowDown}");
+  expect(nodes[2].getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("complementary")).toBe(inspector);
+  await userEvent.keyboard("{ArrowUp}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{ArrowLeft}");
+  expect(nodes[0].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(document.activeElement).toBe(nodes[0]);
+});
+
 it("selects the requested container binding without confusing the same port on another owner", async () => {
   await page.viewport(1280, 800);
   const target = {
@@ -160,6 +194,12 @@ it("selects the requested container binding without confusing the same port on a
     { containerId: target.id, hostAddress: "::", hostPort: 443, containerPort: "53/udp" },
   );
   const inspector = await screen.findByRole("complementary");
+  inspector.focus();
+  expect(getComputedStyle(inspector).outlineStyle).toBe("none");
+  await userEvent.keyboard("{Tab}");
+  const close = within(inspector).getByRole("button", { name: "Close details" });
+  expect(document.activeElement).toBe(close);
+  expect(getComputedStyle(close).outlineStyle).toBe("solid");
   expect(within(inspector).getByRole("heading", { name: "443 / UDP" })).toBeTruthy();
   expect(within(inspector).getByText("[::]:443 → 53/udp")).toBeTruthy();
   expect(within(inspector).getByText("dns")).toBeTruthy();

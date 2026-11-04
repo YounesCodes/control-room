@@ -10,6 +10,7 @@ mod models;
 mod remote;
 mod session;
 mod ssh;
+mod systemd;
 mod updater;
 mod windows_inspection;
 mod windows_ssh;
@@ -130,6 +131,7 @@ pub fn run() {
             commands::sample_host_resources,
             commands::sample_header_metrics,
             commands::list_services,
+            commands::inspect_systemd_unit,
             commands::list_windows_services,
             commands::list_containers,
             commands::list_ports,

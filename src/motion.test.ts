@@ -19,8 +19,12 @@ function rule(selector: string): string {
 
 describe("motion guardrails", () => {
   it("kills every animation and transition under reduced motion", () => {
-    const reduced = stylesSource.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/);
-    expect(reduced, "the reduced-motion block is missing").toBeTruthy();
+    const reduced = [
+      ...stylesSource.matchAll(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/g),
+    ]
+      .map(([block]) => block)
+      .join("\n");
+    expect(reduced, "the reduced-motion block is missing").not.toBe("");
     for (const declaration of [
       "animation-duration: 0.01ms !important",
       "animation-delay: 0s !important",
@@ -28,7 +32,7 @@ describe("motion guardrails", () => {
       "transition-duration: 0.01ms !important",
       "transition-delay: 0s !important",
     ]) {
-      expect(reduced?.[0]).toContain(declaration);
+      expect(reduced).toContain(declaration);
     }
   });
 

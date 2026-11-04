@@ -131,6 +131,29 @@ function renderPane(
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
+it("switches graph selection and inspector with arrows and returns focus on Escape", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  const nodes = await waitFor(() => {
+    const items = [...document.querySelectorAll<HTMLButtonElement>(".arch-chip")];
+    expect(items.length).toBeGreaterThan(2);
+    return items;
+  });
+  nodes[0].focus();
+  await userEvent.keyboard("{ArrowDown}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  const inspector = screen.getByRole("complementary");
+  expect(document.activeElement).toBe(inspector);
+  await userEvent.keyboard("{ArrowDown}");
+  expect(nodes[2].getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("complementary")).toBe(inspector);
+  await userEvent.keyboard("{ArrowUp}");
+  expect(nodes[1].getAttribute("aria-pressed")).toBe("true");
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(document.activeElement).toBe(nodes[1]);
+});
+
 it("aligns circular markers and reserves failure color for failed or dead containers", async () => {
   await page.viewport(1280, 800);
   const states = ["running", "exited", "failed", "dead", "created"];

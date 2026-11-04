@@ -395,6 +395,20 @@ pub fn list_services(
 }
 
 #[tauri::command(async)]
+pub fn inspect_systemd_unit(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+    unit: String,
+    section: crate::systemd::UnitReadSection,
+) -> Result<crate::systemd::UnitInspection, String> {
+    crate::ssh::validate_systemd_unit_id(&unit)?;
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    crate::systemd::inspect(&connection, &unit, section)
+}
+
+#[tauri::command(async)]
 pub fn list_windows_services(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
@@ -997,6 +1011,7 @@ mod tests {
             "refresh_capabilities",
             "sample_header_metrics",
             "list_services",
+            "inspect_systemd_unit",
             "list_windows_services",
             "list_containers",
             "list_ports",

@@ -1,11 +1,71 @@
 import { describe, expect, it } from "vitest";
 
-import { bootLabel, durationToMillis, sampleHint, splitJournalLine } from "./boot-diagnostics";
+import {
+  bootLabel,
+  durationToMillis,
+  sampleHint,
+  splitJournalLine,
+  hasUnitBootEvidence,
+  isCurrentBootSnapshotFresh,
+} from "./boot-diagnostics";
 import type { BootRecord } from "../types";
+import { bootDiagnostics } from "../test/boot-fixtures";
 
 function boot(overrides: Partial<BootRecord> = {}): BootRecord {
   return { index: 0, id: "a".repeat(32), range: "Sun 2026-08-31", current: true, ...overrides };
 }
+
+describe("unit-specific boot evidence", () => {
+  it("requires a fresh current boot and an exact readable unit match", () => {
+    const snapshot = bootDiagnostics();
+    snapshot.slowUnits.data = [{ unit: "worker.service", duration: "2s" }];
+    expect(hasUnitBootEvidence(snapshot, "worker.service")).toBe(true);
+    expect(hasUnitBootEvidence(snapshot, "other.service")).toBe(false);
+    expect(hasUnitBootEvidence(snapshot, "worker")).toBe(false);
+    expect(
+      hasUnitBootEvidence(
+        { ...snapshot, collectedAt: new Date(Date.now() - 31_000).toISOString() },
+        "worker.service",
+      ),
+    ).toBe(false);
+    expect(
+      hasUnitBootEvidence({ ...snapshot, selectedBootId: "b".repeat(32) }, "worker.service"),
+    ).toBe(false);
+    expect(hasUnitBootEvidence({ ...snapshot, collectedAt: "invalid" }, "worker.service")).toBe(
+      false,
+    );
+    expect(isCurrentBootSnapshotFresh({ ...snapshot, selectedBootId: null })).toBe(true);
+  });
+  it("uses failed-unit records independently of unavailable slow-unit data", () => {
+    const snapshot = bootDiagnostics();
+    snapshot.slowUnits.error = "Unavailable";
+    snapshot.failedUnits.data = [
+      {
+        id: "worker.service",
+        unitType: "service",
+        description: "Worker",
+        loadState: "loaded",
+        activeState: "failed",
+        subState: "failed",
+        unitFileState: "enabled",
+      },
+    ];
+    expect(hasUnitBootEvidence(snapshot, "worker.service")).toBe(true);
+    snapshot.failedUnits.permissionRequired = true;
+    expect(hasUnitBootEvidence(snapshot, "worker.service")).toBe(false);
+    snapshot.failedUnits.permissionRequired = false;
+    snapshot.failedUnits.error = "Permission denied";
+    expect(hasUnitBootEvidence(snapshot, "worker.service")).toBe(false);
+  });
+  it("does not infer unit evidence from overall timing or journal text", () => {
+    const snapshot = bootDiagnostics();
+    snapshot.journal.data = ["worker.service warning"];
+    expect(hasUnitBootEvidence(snapshot, "worker.service")).toBe(false);
+    expect(hasUnitBootEvidence(null, "worker.service")).toBe(false);
+    snapshot.slowUnits.data = [{ unit: "-.mount", duration: "1s" }];
+    expect(hasUnitBootEvidence(snapshot, "-.mount")).toBe(true);
+  });
+});
 
 describe("durationToMillis", () => {
   it("reads the duration shapes systemd-analyze actually prints", () => {

@@ -91,9 +91,11 @@ export function PortsGraph({
   onOpenContainer,
   onViewLogs,
   focusEndpoint,
+  focusUnit,
   loading = false,
   loadingLabel,
 }: {
+  focusUnit?: string;
   focusEndpoint?: PublishedPortSelection;
   loading?: boolean;
   loadingLabel?: string;
@@ -129,8 +131,29 @@ export function PortsGraph({
         kind,
         sort,
         showConnections,
-      ),
-    [sockets, containers, connections, search, protocol, exposure, kind, sort, showConnections],
+      )
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) =>
+              !focusUnit ||
+              item.sockets.some((socket) => socket.systemdUnit === focusUnit) ||
+              item.connections.some((connection) => connection.systemdUnit === focusUnit),
+          ),
+        }))
+        .filter((group) => group.items.length),
+    [
+      sockets,
+      containers,
+      connections,
+      search,
+      protocol,
+      exposure,
+      kind,
+      sort,
+      showConnections,
+      focusUnit,
+    ],
   );
   const selected = groups.flatMap((group) => group.items).find((item) => item.id === selectedId);
 

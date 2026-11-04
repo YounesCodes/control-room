@@ -46,6 +46,7 @@
   --font-ui: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
   --font-display:
     "Space Grotesk", "Inter Variable", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
   font-family: var(--font-ui);
   font-feature-settings:
     "liga" 1,
@@ -544,7 +545,7 @@ code,
   border-left: 1px solid var(--border-subtle);
   display: flex;
   flex: 1;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -558,7 +559,7 @@ code,
   flex-direction: column;
   gap: 1px;
   min-width: 82px;
-  padding-right: 14px;
+  padding-right: 12px;
   border-right: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
@@ -588,7 +589,12 @@ code,
 }
 .host-metric-value {
   min-width: 4ch;
-  animation: metric-value-in var(--motion-med) var(--ease);
+  text-align: right;
+}
+.host-metric:is([data-metric="cpu"], [data-metric="ram"], [data-metric="gpu"])
+  .host-metric-reading {
+  display: grid;
+  grid-template-columns: 4.5ch 34px;
 }
 .host-metric-direction {
   color: var(--text-faint);
@@ -600,6 +606,36 @@ code,
 }
 .host-metric[data-metric="diskIo"] {
   min-width: 166px;
+}
+.host-metric[data-metric="diskIo"] .host-metric-value {
+  display: inline-grid;
+  grid-template-columns: 1ch 9ch 1ch 9ch;
+  column-gap: 4px;
+  align-items: baseline;
+}
+.host-metric[data-metric="diskIo"] .host-metric-direction {
+  margin-left: 0;
+}
+.host-metric[data-metric="diskIo"] .animated-number {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+.host-metric-detail-value > strong:has(.host-metric-direction) {
+  display: inline-grid;
+  grid-template-columns: 4ch 9ch 7ch 9ch;
+  column-gap: 4px;
+  align-items: baseline;
+}
+.host-metric-detail-value .host-metric-direction {
+  margin-left: 0;
+}
+.host-metric-detail-value > strong:has(.host-metric-direction) .animated-number {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 .host-metric[data-metric="uptime"] {
   min-width: 56px;
@@ -641,16 +677,6 @@ code,
 .host-metric-detail-value .host-metric-trend {
   width: 68px;
   height: 22px;
-}
-@keyframes metric-value-in {
-  from {
-    opacity: 0.5;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 @keyframes metric-reading {
   50% {
@@ -2081,6 +2107,9 @@ code,
 
 .presence-disconnected {
   --presence-color: #6a6a6a;
+}
+.presence:not(.presence-busy):not(.presence-connecting):not(.presence-error) {
+  display: none;
 }
 
 .presence.presence-busy,
@@ -3908,6 +3937,10 @@ dd {
 .list-panel {
   border-right: 1px solid var(--border);
 }
+.detail-panel:focus-visible,
+.arch-detail:focus-visible {
+  outline: none;
+}
 
 .list-panel > .search-field {
   min-height: 37px;
@@ -3947,10 +3980,6 @@ dd {
   grid-template-columns: minmax(120px, 1fr) minmax(0, 110px);
 }
 
-.windows-services-page .detail-panel:focus-visible {
-  outline-offset: -2px;
-}
-
 .port-list-controls {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) auto auto;
@@ -3986,6 +4015,1103 @@ dd {
   font-size: 11px;
 }
 
+.systemd-page {
+  --systemd-inspector-width: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  container-type: inline-size;
+}
+.systemd-toolbar {
+  --systemd-switch-ease: cubic-bezier(0.4, 0, 0.6, 1);
+  --search-layout-duration: 180ms;
+  --search-layout-ease: ease-in;
+  --search-actions-min-width: 280px;
+  position: relative;
+  flex: none;
+  z-index: 5;
+}
+.systemd-presence {
+  display: contents;
+}
+.systemd-presence[data-leaving] > *,
+.systemd-presence[data-leaving] > .systemd-inspector,
+.systemd-presence[data-leaving] > .systemd-tools-panel {
+  pointer-events: none;
+  animation: systemd-slide-out 180ms var(--ease) both;
+}
+.systemd-presence:not([data-leaving]) > .systemd-relationship-groups,
+.systemd-presence:not([data-leaving]) > .systemd-scope-switch,
+.systemd-presence:not([data-leaving]) > .systemd-tools-panel,
+.systemd-presence:not([data-leaving]) > .icon-button {
+  animation: systemd-controls-in 180ms var(--ease) both;
+}
+@keyframes systemd-slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+@keyframes systemd-controls-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.systemd-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 50px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.systemd-heading h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.systemd-toolbar[data-search-open] {
+  --search-layout-duration: 320ms;
+  --search-layout-ease: ease-out;
+}
+.systemd-view-slot {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
+.systemd-view-slot > .systemd-mode-switch {
+  width: max-content;
+  max-width: 100%;
+  margin-left: 0;
+}
+.systemd-view-slot .systemd-mode-switch > button {
+  flex-shrink: 0;
+}
+.systemd-view-slot .systemd-mode-switch > button:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.systemd-mode-tools {
+  position: relative;
+  display: grid;
+  align-items: center;
+  flex: 0 0 240px;
+  min-width: 0;
+  height: 38px;
+  padding: 2px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.systemd-mode-tools > .systemd-presence > * {
+  grid-area: 1 / 1;
+  justify-self: end;
+}
+/* Both modes share one bounded slot, including their visual-only exits. */
+.systemd-mode-tools > .systemd-presence[data-leaving] > * {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  right: 2px;
+}
+.systemd-unit-count {
+  display: inline-grid;
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.systemd-unit-count::before {
+  content: attr(data-count-width);
+  visibility: hidden;
+}
+.systemd-unit-count::before,
+.systemd-unit-count > span {
+  grid-area: 1 / 1;
+}
+.systemd-failures {
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--failure);
+  font-size: 11px;
+}
+.systemd-failures:hover {
+  background: var(--fill-hover);
+}
+.systemd-view-switch,
+.systemd-relationship-groups {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.systemd-view-switch {
+  margin-left: 8px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.systemd-view-switch button,
+.systemd-relationship-groups button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.systemd-view-switch button > svg,
+.systemd-relationship-groups button > svg {
+  flex-shrink: 0;
+}
+.systemd-view-switch button:hover,
+.systemd-relationship-groups button:hover {
+  background: var(--fill-hover);
+}
+.systemd-unit-target {
+  min-width: 0;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-family: var(--font-mono);
+}
+@container (max-width: 640px) {
+  .systemd-heading .systemd-view-switch {
+    min-width: 0;
+  }
+}
+.systemd-view-switch [aria-pressed="true"],
+.systemd-view-switch [aria-current="page"],
+.systemd-relationship-groups [aria-pressed="true"] {
+  color: var(--text);
+  background: var(--fill-active);
+}
+.systemd-scope-switch {
+  position: relative;
+  isolation: isolate;
+  margin-left: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.systemd-mode-switch {
+  position: relative;
+  isolation: isolate;
+}
+.systemd-mode-switch::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 2px auto 2px 0;
+  width: var(--view-fill-width, 0px);
+  transform: translateX(var(--view-fill-x, 2px));
+  border-radius: var(--radius-sm);
+  background: var(--fill-active);
+}
+.systemd-relationship-groups.systemd-mode-switch::before {
+  inset-block: 0;
+}
+.systemd-mode-switch[data-animated]::before {
+  transition:
+    transform 180ms var(--systemd-switch-ease),
+    width 180ms var(--systemd-switch-ease);
+}
+.systemd-mode-switch [aria-pressed="true"] {
+  background: transparent;
+}
+.systemd-scope-switch::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 2px auto 2px 2px;
+  width: calc(50% - 3px);
+  border-radius: var(--radius-sm);
+  background: var(--fill-active);
+  transition: transform 180ms var(--systemd-switch-ease);
+}
+.systemd-scope-switch:has(button:last-child[aria-pressed="true"])::before {
+  transform: translateX(calc(100% + 2px));
+}
+.systemd-scope-switch button {
+  justify-content: center;
+  white-space: nowrap;
+}
+.systemd-scope-switch [aria-pressed="true"] {
+  background: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .systemd-mode-switch[data-animated]::before,
+  .systemd-scope-switch::before {
+    transition: none;
+  }
+}
+.systemd-toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 90px;
+  min-width: 90px;
+  justify-content: flex-end;
+}
+.systemd-toolbar-actions > .icon-button {
+  flex: none;
+}
+.systemd-toolbar .systemd-toolbar-actions {
+  min-width: 0;
+  flex: 0 1 auto;
+  margin-left: 0;
+}
+.systemd-toolbar-actions > .systemd-presence[data-leaving] {
+  display: none;
+}
+.systemd-toolbar-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 1 1 528px;
+  min-width: 528px;
+}
+@container (min-width: 961px) {
+  .systemd-heading {
+    flex-wrap: nowrap;
+  }
+}
+@container (min-width: 641px) and (max-width: 960px) {
+  .systemd-mode-tools {
+    order: 4;
+    flex-basis: 100%;
+  }
+}
+@container (max-width: 960px) {
+  .systemd-toolbar-tools {
+    display: contents;
+  }
+  .systemd-toolbar .systemd-toolbar-actions {
+    order: 2;
+    min-width: min(100%, var(--search-actions-min-width));
+    flex: 1 1 90px;
+    margin-left: auto;
+  }
+}
+.systemd-search-control {
+  flex: 0 1 auto;
+  min-width: 32px;
+  max-width: 452px;
+  height: 32px;
+  min-height: 32px;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.systemd-search-control > .icon-button {
+  flex: none;
+  width: 30px;
+  height: 30px;
+}
+.systemd-search-control:has(.systemd-inline-search) {
+  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+}
+.systemd-search-control:focus-within {
+  box-shadow: none;
+}
+.systemd-search-control:not(:has(.systemd-inline-search)) {
+  border-color: transparent;
+}
+.systemd-search-control:has(.systemd-inline-search):focus-within {
+  border-color: var(--accent);
+}
+.systemd-search-control:has(.systemd-inline-search) > .icon-button {
+  background: transparent;
+}
+.systemd-inline-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 420px;
+  width: 420px;
+  min-width: 0;
+  max-width: 420px;
+  height: 30px;
+  padding-right: 2px;
+  overflow: hidden;
+}
+.systemd-inline-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  font-size: 12px;
+}
+.systemd-inline-search .icon-button {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+.systemd-presence:not([data-leaving]) > .systemd-inline-search {
+  animation: systemd-search-in var(--search-layout-duration) var(--search-layout-ease) both;
+}
+.systemd-presence[data-leaving] > .systemd-inline-search {
+  animation: systemd-search-out var(--search-layout-duration) var(--search-layout-ease) both;
+}
+@keyframes systemd-search-in {
+  from {
+    max-width: var(--search-enter-width, 0px);
+    opacity: var(--search-enter-opacity, 0);
+  }
+  55% {
+    max-width: 420px;
+    opacity: var(--search-enter-opacity, 0);
+  }
+  to {
+    max-width: 420px;
+    opacity: 1;
+  }
+}
+@keyframes systemd-search-out {
+  from {
+    max-width: var(--search-exit-width, 420px);
+    opacity: var(--search-exit-opacity, 1);
+  }
+  35% {
+    max-width: var(--search-exit-width, 420px);
+    opacity: 0;
+  }
+  to {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+@container (max-width: 640px) {
+  .systemd-toolbar[data-search-open] .systemd-toolbar-actions {
+    flex-basis: 100%;
+    order: 5;
+  }
+}
+.systemd-toolbar-actions [aria-pressed="true"],
+.systemd-toolbar-actions [aria-expanded="true"] {
+  background: var(--fill-active);
+}
+.systemd-toolbar .systemd-tools-panel {
+  right: auto;
+  z-index: 6;
+  width: min(330px, calc(100% - 24px));
+}
+.systemd-toolbar .systemd-presence:not([data-leaving]) > .systemd-tools-panel {
+  animation: systemd-filters-in 180ms var(--ease) both;
+}
+.systemd-toolbar .systemd-presence[data-leaving] > .systemd-tools-panel {
+  animation: systemd-filters-out 180ms var(--ease) both;
+}
+@keyframes systemd-filters-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes systemd-filters-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.systemd-tools-panel .search-field {
+  padding: 4px 6px 4px 10px;
+}
+.systemd-filter-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.systemd-filter-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 0;
+}
+.systemd-filter-fields select {
+  width: 100%;
+  min-height: 32px;
+  font-size: 12px;
+}
+.systemd-filter-fields label:last-child {
+  grid-column: 1 / -1;
+}
+.systemd-page > .inline-warning {
+  flex: none;
+  margin: 0;
+  padding: 8px 14px;
+}
+.systemd-explorer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.systemd-inventory {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  overflow: hidden;
+  transition: padding-right var(--motion-med) var(--ease);
+}
+.systemd-explorer-stage.inspecting .systemd-inventory {
+  padding-right: calc(var(--systemd-inspector-width) + 24px);
+}
+.systemd-filter-result {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.systemd-inventory .dense-list {
+  min-height: 0;
+  flex: 1;
+  border-top: 0;
+  overflow-x: hidden;
+}
+.systemd-inventory .dense-row {
+  height: 44px;
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 9px;
+  border-bottom-color: transparent;
+  border-radius: var(--radius-lg);
+}
+.systemd-inventory-rows {
+  --scope-opacity: 0.45;
+  --scope-offset: 8px;
+  position: relative;
+  isolation: isolate;
+}
+.systemd-selection-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--fill-selected);
+  pointer-events: none;
+}
+.systemd-selection-indicator[data-glide] {
+  transition: transform var(--motion-slow) cubic-bezier(0.22, 1, 0.36, 1);
+}
+.systemd-inventory .dense-row {
+  z-index: 1;
+}
+.systemd-inventory .selected-row,
+.systemd-inventory .selected-row:hover {
+  background: transparent;
+}
+.systemd-inventory .selected-row:focus-visible {
+  outline: none;
+}
+.systemd-inventory .selected-row::before {
+  content: none;
+}
+.systemd-inventory .row-main {
+  gap: 2px;
+}
+.systemd-inventory .row-main small,
+.systemd-inventory .row-main strong {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.systemd-inventory .unit-row-state {
+  flex: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 36%;
+}
+.systemd-inventory .unit-row-state > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.systemd-inspector.arch-detail {
+  width: min(var(--systemd-inspector-width), calc(100% - 24px));
+  bottom: auto;
+  max-height: calc(100% - 24px);
+  animation: systemd-inspector-in var(--motion-slow) var(--ease) both;
+}
+.systemd-canvas .systemd-presence:not([data-leaving]) > .systemd-inspector {
+  animation: systemd-graph-inspector-in var(--motion-med) var(--ease) both;
+}
+.systemd-canvas .systemd-inspector.arch-detail {
+  top: 50%;
+  translate: 0 -50%;
+}
+@keyframes systemd-graph-inspector-in {
+  from {
+    opacity: 0.65;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.systemd-inspector > header {
+  padding: 14px 42px 12px 16px;
+}
+.systemd-unit-reveal {
+  animation: systemd-unit-in var(--motion-med) var(--ease) both;
+}
+@keyframes systemd-unit-in {
+  from {
+    opacity: 0.7;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.systemd-inspector > header h2 {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.systemd-inspector > header p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
+.animated-number {
+  font-variant-numeric: tabular-nums;
+}
+.systemd-inspector-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.systemd-inspector .port-inspector-body {
+  overflow-anchor: none;
+  padding: 12px 16px;
+}
+.systemd-inspector .detail-list > div {
+  padding: 5px 0;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+}
+.systemd-inspector .port-disclosure {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+.systemd-inspector .port-disclosure summary {
+  font-size: 12px;
+}
+.systemd-inspector .detail-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.systemd-inspector .detail-actions .secondary-button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+.systemd-inspector .detail-actions .icon-button {
+  margin-left: auto;
+}
+.systemd-failure-evidence {
+  margin: 0 0 10px;
+}
+.systemd-failure-evidence h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--failure);
+}
+.systemd-read-status {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.systemd-inspector-links {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+}
+.systemd-inspector-links:empty {
+  display: none;
+}
+.systemd-inspector-links button {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+}
+.systemd-code {
+  --syntax-section: #b4befe;
+  --syntax-key: #8bc5e8;
+  --syntax-string: #c4d7b2;
+  --syntax-variable: #e3c58d;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 280px;
+  margin: 8px 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.7;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.systemd-code code {
+  font: inherit;
+}
+.systemd-code .systemd-code-section {
+  color: var(--syntax-section);
+  font-weight: 600;
+}
+.systemd-code .systemd-code-key {
+  color: var(--syntax-key);
+}
+.systemd-code .systemd-code-string,
+.systemd-code .systemd-code-path {
+  color: var(--syntax-string);
+}
+.systemd-code .systemd-code-variable {
+  color: var(--syntax-variable);
+}
+.systemd-code .systemd-code-comment,
+.systemd-code .systemd-code-operator {
+  color: var(--text-muted);
+}
+.systemd-code-break::after {
+  content: "";
+  display: block;
+}
+.systemd-inline-code {
+  font-family: var(--font-mono);
+  font-size: inherit;
+  font-weight: 400;
+}
+.systemd-evidence-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+.systemd-graph-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.systemd-graph-context {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+.systemd-root-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 75%;
+  overflow-wrap: anywhere;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  pointer-events: auto;
+}
+.systemd-more {
+  margin-left: auto;
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-muted);
+  font-size: 11px;
+  pointer-events: auto;
+}
+.systemd-expansion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  pointer-events: auto;
+}
+.systemd-expansion-actions .systemd-more {
+  margin-left: 0;
+}
+.systemd-graph-context {
+  flex-wrap: wrap;
+}
+.systemd-graph-exits,
+.systemd-graph-exit-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.systemd-graph-exits * {
+  pointer-events: none !important;
+}
+.systemd-graph-exit-scene {
+  animation: systemd-node-out var(--motion-slow) ease-in-out both;
+}
+.systemd-graph-ghost > .arch-chip {
+  animation: systemd-node-content-out var(--motion-slow) ease-in-out both;
+}
+@keyframes systemd-node-content-out {
+  to {
+    transform: translateY(8px) scale(0.96);
+  }
+}
+.systemd-graph-ghost {
+  position: absolute;
+}
+@keyframes systemd-node-out {
+  to {
+    opacity: 0;
+  }
+}
+.systemd-connection {
+  animation: systemd-edge-in var(--motion-slow) ease-out both;
+}
+.systemd-connection.edge-reverse {
+  animation-name: systemd-edge-in-reverse;
+}
+@keyframes systemd-edge-in {
+  from {
+    opacity: 0;
+    clip-path: inset(-8px 100% -8px -8px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(-8px);
+  }
+}
+@keyframes systemd-edge-in-reverse {
+  from {
+    opacity: 0;
+    clip-path: inset(-8px -8px -8px 100%);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(-8px);
+  }
+}
+.systemd-graph-content {
+  position: absolute;
+  transform-origin: 0 0;
+}
+.systemd-canvas {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.systemd-canvas > .arch-viewport {
+  position: relative;
+  grid-area: 1 / 1;
+  inset: auto;
+  min-height: 0;
+}
+.systemd-graph-footer {
+  grid-area: 2 / 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  z-index: 2;
+}
+.systemd-canvas .systemd-graph-footer .graph-toolbar[role="toolbar"] {
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  transition: none;
+  order: 2;
+  flex: none;
+  margin-left: auto;
+  visibility: visible;
+  pointer-events: auto;
+}
+.systemd-graph-footer .systemd-direction-key {
+  position: static;
+  max-width: none;
+  flex: 1 1 220px;
+}
+.systemd-graph-inspector-layer {
+  grid-area: 1 / 1;
+  position: relative;
+  min-height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.systemd-graph-inspector-layer .systemd-inspector {
+  pointer-events: auto;
+}
+.systemd-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--text-faint);
+}
+.systemd-edge-path {
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  pointer-events: stroke;
+  cursor: help;
+}
+.systemd-arrowhead {
+  fill: var(--text-faint);
+  stroke: none;
+}
+.systemd-connection.edge-active .systemd-arrowhead,
+.systemd-connection:focus-visible .systemd-arrowhead {
+  fill: var(--text);
+}
+.systemd-direction-key {
+  display: grid;
+  gap: 6px;
+  position: absolute;
+  z-index: 1;
+  bottom: 22px;
+  left: 16px;
+  max-width: calc(100% - 190px);
+  font-size: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.systemd-line-key,
+.systemd-line-key > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.systemd-line-key {
+  flex-wrap: wrap;
+  column-gap: 14px;
+}
+.systemd-line-key i {
+  width: 22px;
+  border-top: 1.5px solid currentColor;
+}
+.systemd-line-key .wants-line {
+  border-top-style: dashed;
+}
+.systemd-connection.relationship-wants .systemd-edge-path {
+  stroke-dasharray: 6 4;
+}
+.systemd-connection.edge-active .systemd-edge-path {
+  stroke: var(--text);
+}
+.systemd-connection:focus {
+  outline: none;
+}
+.systemd-connection:focus-visible .systemd-edge-path {
+  stroke: var(--text);
+  stroke-width: 2.5;
+}
+.systemd-graph-node {
+  position: absolute;
+  animation: systemd-node-in var(--motion-slow) ease-out both;
+}
+.systemd-graph-node > .arch-chip,
+.systemd-graph-ghost > .arch-chip {
+  width: 100%;
+  height: 100%;
+  padding: 10px 30px 10px 12px;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-overlay);
+}
+.systemd-graph-node.graph-root > .arch-chip {
+  border-color: var(--text-muted);
+}
+.systemd-graph-node .arch-chip-title strong,
+.systemd-graph-ghost .arch-chip-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.systemd-graph-node .arch-chip-kind,
+.systemd-graph-ghost .arch-chip-kind {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.systemd-expand {
+  position: absolute;
+  right: 4px;
+  top: calc(50% - 14px);
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+.systemd-graph-node:hover .systemd-expand,
+.systemd-graph-node:focus-within .systemd-expand {
+  opacity: 1;
+}
+.systemd-expand.expanded {
+  opacity: 1;
+}
+.systemd-graph-status {
+  position: absolute;
+  bottom: 96px;
+  left: 16px;
+  padding: 5px 8px;
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  pointer-events: none;
+}
+.systemd-graph-notice {
+  position: absolute;
+  z-index: 3;
+  bottom: 58px;
+  left: 12px;
+  max-width: min(500px, calc(100% - 24px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.systemd-port-scope {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+@keyframes systemd-node-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes systemd-inspector-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@container (max-width: 640px) {
+  .systemd-heading {
+    gap: 6px;
+    padding: 7px 10px;
+  }
+  .systemd-unit-count {
+    display: none;
+  }
+  .systemd-mode-tools {
+    order: 4;
+    flex-basis: 100%;
+  }
+  .systemd-toolbar .systemd-toolbar-actions {
+    order: 5;
+  }
+  .systemd-mode-tools > .systemd-presence > * {
+    justify-self: center;
+  }
+  .systemd-mode-tools > .systemd-presence[data-leaving] > * {
+    left: 0;
+    right: 0;
+    width: max-content;
+    margin-inline: auto;
+  }
+  .systemd-explorer-stage.inspecting .systemd-inventory {
+    padding-right: 12px;
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .systemd-graph-exit-scene {
+    display: none;
+  }
+  .systemd-connection,
+  .systemd-connection.edge-reverse {
+    animation: none;
+  }
+  .systemd-presence > * {
+    animation: none !important;
+  }
+  .systemd-graph-node,
+  .systemd-unit-reveal,
+  .systemd-inspector.arch-detail {
+    animation: none;
+  }
+  .systemd-inventory {
+    transition: none;
+  }
+  .systemd-selection-indicator[data-glide] {
+    transition: none;
+  }
+}
+
 .unit-scope-note {
   display: block;
   margin-top: 3px;
@@ -4005,6 +5131,8 @@ dd {
   position: relative;
   display: flex;
   width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
   min-height: 52px;
   align-items: center;
   gap: 11px;
@@ -6691,8 +7819,9 @@ kbd {
 }
 
 .arch-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .arch-chip-meta.faint {

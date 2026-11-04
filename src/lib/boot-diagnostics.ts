@@ -1,4 +1,26 @@
-import type { BootRecord } from "../types";
+import type { BootDiagnostics, BootRecord } from "../types";
+import { isCacheFresh } from "./workspace-cache";
+
+export function isCurrentBootSnapshotFresh(snapshot: BootDiagnostics | null | undefined) {
+  if (!snapshot || !isCacheFresh({ fetchedAt: Date.parse(snapshot.collectedAt) })) return false;
+  return (
+    snapshot.selectedBootId === null ||
+    !!snapshot.boots.data?.some((boot) => boot.id === snapshot.selectedBootId && boot.current)
+  );
+}
+
+export function hasUnitBootEvidence(snapshot: BootDiagnostics | null | undefined, unit: string) {
+  if (!snapshot || !isCurrentBootSnapshotFresh(snapshot)) return false;
+  const { slowUnits, failedUnits } = snapshot;
+  return (
+    (!slowUnits.error &&
+      !slowUnits.permissionRequired &&
+      !!slowUnits.data?.some((row) => row.unit === unit)) ||
+    (!failedUnits.error &&
+      !failedUnits.permissionRequired &&
+      !!failedUnits.data?.some((row) => row.id === unit))
+  );
+}
 
 // systemd writes durations as a compact human string rather than a number:
 // "1min 2.345s", "4.523s", "532ms". Drawing one row against another needs a

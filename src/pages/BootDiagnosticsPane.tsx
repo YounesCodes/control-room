@@ -43,11 +43,13 @@ export function BootDiagnosticsPane({
   snapshot,
   onSnapshotChange,
   onViewLogs,
+  onOpenSystemd,
 }: {
   connection: SavedConnection;
   snapshot: BootDiagnostics | null;
   onSnapshotChange: (snapshot: BootDiagnostics) => void;
   onViewLogs: (source: LogSourceSelection) => void;
+  onOpenSystemd?: (unit: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -245,7 +247,17 @@ export function BootDiagnosticsPane({
                         millis !== null && slowest > 0 ? (millis / slowest) * 100 : null;
                       return (
                         <div key={unit.unit}>
-                          <span title={unit.unit}>{unit.unit}</span>
+                          {onOpenSystemd && currentSelected ? (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() => onOpenSystemd(unit.unit)}
+                            >
+                              {unit.unit}
+                            </button>
+                          ) : (
+                            <span title={unit.unit}>{unit.unit}</span>
+                          )}
                           <strong>{unit.duration}</strong>
                           <span className="boot-unit-track" aria-hidden="true">
                             {share !== null && (
@@ -274,7 +286,17 @@ export function BootDiagnosticsPane({
                     {failedUnits.map((unit) => (
                       <div key={unit.id}>
                         <span>
-                          <strong>{unit.id}</strong>
+                          {onOpenSystemd && currentSelected ? (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() => onOpenSystemd(unit.id)}
+                            >
+                              {unit.id}
+                            </button>
+                          ) : (
+                            <strong>{unit.id}</strong>
+                          )}
                           <small>{unit.description || "No description"}</small>
                         </span>
                         <span>

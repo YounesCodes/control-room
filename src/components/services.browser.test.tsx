@@ -6,7 +6,22 @@ import { ServicesPane } from "../pages/ServicesPane";
 import * as fixtures from "../test/app-fixtures";
 import "../styles.css";
 
-vi.mock("../lib/api", () => ({ api: { listServices: vi.fn() }, errorMessage: String }));
+vi.mock("../lib/api", () => ({
+  api: {
+    listServices: vi.fn(),
+    inspectSystemdUnit: vi.fn().mockImplementation((_connection, id) =>
+      Promise.resolve({
+        id,
+        properties: {},
+        text: "",
+        warnings: [],
+        truncated: false,
+        collectedAt: "2026-11-01T10:00:00Z",
+      }),
+    ),
+  },
+  errorMessage: String,
+}));
 let root: Root;
 let host: HTMLDivElement;
 afterEach(() => {
@@ -44,10 +59,12 @@ describe("Linux service scrolling with a refresh warning", () => {
       .toBeInTheDocument();
     const list = page.getByRole("region", { name: "Systemd units" });
     const rows = list.element();
-    expect(rows.clientHeight).toBeGreaterThanOrEqual(52);
+    expect(rows.clientHeight).toBeGreaterThanOrEqual(44);
     await userEvent.wheel(list, { delta: { y: 500 } });
     await vi.waitFor(() => expect(rows.scrollTop).toBeGreaterThan(0));
+    await page.getByRole("button", { name: "Find units", exact: true }).click();
     await expect.element(page.getByPlaceholder("Search units")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
     rows.focus();
     await userEvent.keyboard("{End}");
     await vi.waitFor(() =>

@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut } from "./MagnifierIcon";
+import { GraphControls } from "./GraphControls";
 import { observeLayoutFallback } from "./ResizablePanels";
 import {
   useCallback,
@@ -9,9 +9,14 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Scan, Server, X } from "lucide-react";
+import { Server, X } from "lucide-react";
 import { EmptyState, LoadingState } from "./PanelState";
 import { usePanZoom } from "../lib/use-pan-zoom";
+import {
+  isGraphDirection,
+  spatialGraphNeighbor,
+  type GraphDirection,
+} from "../lib/graph-navigation";
 
 export interface InspectionGraphItem {
   id: string;
@@ -213,6 +218,25 @@ export function InspectionGraph({
       selectionTrigger.current.focus({ preventScroll: true });
   }
 
+  function navigateSelection(key: GraphDirection, currentId: string | null) {
+    const positions = [...nodeRefs.current].map(([id, node]) => {
+      let x = node.offsetWidth / 2,
+        y = node.offsetHeight / 2;
+      let ancestor: HTMLElement | null = node;
+      while (ancestor && ancestor !== contentRef.current) {
+        x += ancestor.offsetLeft;
+        y += ancestor.offsetTop;
+        ancestor = ancestor.offsetParent as HTMLElement | null;
+      }
+      return { id, x, y };
+    });
+    const next = spatialGraphNeighbor(key, currentId, positions);
+    if (!next) return;
+    const node = nodeRefs.current.get(next);
+    if (node) selectionTrigger.current = node;
+    onSelectionChange(next);
+  }
+
   function commitSelection(item: InspectionGraphItem, element: HTMLButtonElement) {
     selectionTrigger.current = element;
     if (item.id === selectedId) closeDetail();
@@ -279,42 +303,17 @@ export function InspectionGraph({
       <div className="ports-canvas-controls" ref={controlsRef}>
         {toolbar}
       </div>
-      <div className="graph-toolbar" role="toolbar" aria-label="Graph controls">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Zoom out"
-          onClick={() => {
-            setFocusing(false);
-            panZoom.zoomBy(1 / 1.2);
-          }}
-        >
-          <ZoomOut size={15} />
-        </button>
-        <span className="zoom-level">{Math.round(view.scale * 100)}%</span>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Zoom in"
-          onClick={() => {
-            setFocusing(false);
-            panZoom.zoomBy(1.2);
-          }}
-        >
-          <ZoomIn size={15} />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Fit to view"
-          onClick={() => {
-            setFocusing(false);
-            fit();
-          }}
-        >
-          <Scan size={15} />
-        </button>
-      </div>
+      <GraphControls
+        scale={view.scale}
+        onZoom={(factor) => {
+          setFocusing(false);
+          panZoom.zoomBy(factor);
+        }}
+        onFit={() => {
+          setFocusing(false);
+          fit();
+        }}
+      />
       <div
         className="arch-viewport"
         role="region"
@@ -404,21 +403,17 @@ export function InspectionGraph({
                           else nodeRefs.current.delete(item.id);
                         }}
                         onKeyDown={(event) => {
-                          if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+                            return;
+                          if (isGraphDirection(event.key)) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            navigateSelection(event.key, item.id);
+                            return;
+                          }
+                          if (!["Home", "End"].includes(event.key)) return;
                           const nodes = [...nodeRefs.current.values()];
-                          const index = nodes.indexOf(event.currentTarget);
-                          const next =
-                            event.key === "Home"
-                              ? 0
-                              : event.key === "End"
-                                ? nodes.length - 1
-                                : Math.max(
-                                    0,
-                                    Math.min(
-                                      nodes.length - 1,
-                                      index + (event.key === "ArrowDown" ? 1 : -1),
-                                    ),
-                                  );
+                          const next = event.key === "Home" ? 0 : nodes.length - 1;
                           event.preventDefault();
                           nodes[next]?.focus();
                           if (nodes[next]) revealNode(nodes[next]);
@@ -466,6 +461,18 @@ export function InspectionGraph({
           tabIndex={-1}
           ref={detailRef}
           onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.shiftKey &&
+              isGraphDirection(event.key)
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              navigateSelection(event.key, selectedId);
+            }
             if (event.key === "Escape") {
               event.stopPropagation();
               closeDetail();

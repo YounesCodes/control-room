@@ -1,0 +1,560 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Expand, Minimize2, X } from "lucide-react";
+import { flushSync } from "react-dom";
+import { SystemdGraphExits } from "./SystemdGraphExits";
+import { SystemdPresence } from "./SystemdPresence";
+import { GraphControls } from "./GraphControls";
+import { usePanZoom } from "../lib/use-pan-zoom";
+import { observeLayoutFallback } from "./ResizablePanels";
+import { SYSTEMD_INITIAL_VISIBLE, systemdStateLabel, type SystemdEdge } from "../lib/systemd-units";
+import type { SystemdUnit } from "../types";
+import { layoutSystemdGraph } from "../lib/systemd-graph-layout";
+import {
+  isGraphDirection,
+  spatialGraphNeighbor,
+  type GraphDirection,
+} from "../lib/graph-navigation";
+
+export function SystemdGraph({
+  ids,
+  edges,
+  units,
+  rootId,
+  selectedId,
+  expanded,
+  onSelect,
+  onRefocus,
+  onExpand,
+  inspector,
+  frameKey = "",
+  expansionKey = "",
+}: {
+  ids: string[];
+  edges: SystemdEdge[];
+  units: SystemdUnit[];
+  rootId: string;
+  selectedId: string | null;
+  expanded: string[];
+  onSelect: (id: string | null) => void;
+  onRefocus: (id: string) => void;
+  onExpand: (id: string) => void;
+  inspector: ReactNode;
+  frameKey?: string;
+  expansionKey?: string;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const overview = useRef(false);
+  const interrupted = useRef(false);
+  const fitFrame = useRef<number | null>(null);
+  const nodes = useRef(new Map<string, HTMLButtonElement>());
+  const wasInspecting = useRef(!!selectedId);
+  const pan = usePanZoom(viewportRef);
+  const { setView } = pan;
+  const [moving, setMoving] = useState(false);
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const lastNodeClick = useRef<{ id: string; x: number; y: number; time: number } | null>(null);
+  const consumeClick = useRef(false);
+  const previous = useRef<{
+    root: string;
+    frame: string;
+    expansion: string;
+    layout: ReturnType<typeof layoutSystemdGraph>;
+  } | null>(null);
+  const [activeEdge, setActiveEdge] = useState<string | null>(null);
+  const layout = useMemo(() => {
+    const old = previous.current;
+    const sameContext = old?.root === rootId && old.frame === frameKey;
+    return layoutSystemdGraph(ids, edges, rootId, sameContext ? old.layout.placements : undefined);
+  }, [ids, edges, rootId, frameKey]);
+
+  const fit = useCallback(
+    (animate = true, entire = false) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const width = Math.max(
+        100,
+        viewport.clientWidth - (selectedId ? (detailRef.current?.offsetWidth ?? 0) : 0) - 48,
+      );
+      const height = Math.max(100, viewport.clientHeight - 108);
+      const natural = Math.min(1, width / layout.width, height / layout.height);
+      const scale = Math.max(entire ? 0.01 : 0.85, natural);
+      const root = layout.positions.get(rootId)!;
+      const focusRoot = !!selectedId && natural < scale;
+      const centerX = focusRoot ? root.x + root.width / 2 : layout.width / 2;
+      const centerY = focusRoot ? root.y + root.height / 2 : layout.height / 2;
+      setMoving(animate);
+      setView({ scale, x: 24 + width / 2 - centerX * scale, y: 48 + height / 2 - centerY * scale });
+    },
+    [layout, rootId, selectedId, setView],
+  );
+
+  useLayoutEffect(() => {
+    const old = previous.current;
+    if (old && old.root === rootId && old.frame === frameKey) {
+      const before = old.layout.positions.get(rootId)!;
+      const after = layout.positions.get(rootId)!;
+      const expansionChanged = old.expansion !== expansionKey;
+      const shapeChanged =
+        old.layout.width !== layout.width ||
+        old.layout.height !== layout.height ||
+        old.layout.positions.size !== layout.positions.size ||
+        ids.some((id) => !old.layout.positions.has(id));
+      if (expansionChanged) {
+        overview.current = true;
+        interrupted.current = false;
+      }
+      if (expansionChanged || (shapeChanged && !interrupted.current)) {
+        cancelFitFrame();
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+          fit(true, overview.current);
+        } else {
+          // Normalize the new scene without moving its root on screen, then
+          // animate from that pose on the next frame instead of jumping first.
+          const view = renderedView();
+          setMoving(false);
+          setView({
+            ...view,
+            x: view.x + (before.x - after.x) * view.scale,
+            y: view.y + (before.y - after.y) * view.scale,
+          });
+          fitFrame.current = requestAnimationFrame(() => {
+            fitFrame.current = null;
+            fitRef.current(true, overview.current);
+          });
+        }
+      } else if (before.x !== after.x || before.y !== after.y) {
+        setView((view) => ({
+          ...view,
+          x: view.x + (before.x - after.x) * view.scale,
+          y: view.y + (before.y - after.y) * view.scale,
+        }));
+      }
+    } else {
+      cancelFitFrame();
+      overview.current = expanded.length > 0 || ids.length > SYSTEMD_INITIAL_VISIBLE;
+      interrupted.current = false;
+      fit(true, overview.current);
+    }
+    previous.current = { root: rootId, frame: frameKey, expansion: expansionKey, layout };
+  }, [layout, rootId, frameKey, expansionKey, fit, setView, ids, expanded]);
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
+  const frameSelected = useCallback(
+    (animate: boolean) => {
+      const viewport = viewportRef.current;
+      const node = selectedId ? layout.positions.get(selectedId) : undefined;
+      if (!viewport || !node) return false;
+      const width = viewport.clientWidth - (detailRef.current?.offsetWidth ?? 0) - 48;
+      if (width < 240) return false;
+      const height = Math.max(100, viewport.clientHeight - 108);
+      const scale = Math.max(
+        0.85,
+        Math.min(1.1, width / (node.width + 48), height / (node.height + 64)),
+      );
+      setMoving(animate);
+      setView({
+        scale,
+        x: 24 + width / 2 - (node.x + node.width / 2) * scale,
+        y: 48 + height / 2 - (node.y + node.height / 2) * scale,
+      });
+      return true;
+    },
+    [selectedId, layout, setView],
+  );
+  const frameSelectedRef = useRef(frameSelected);
+  frameSelectedRef.current = frameSelected;
+  useEffect(() => () => cancelFitFrame(), []);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    let width = viewport.clientWidth,
+      height = viewport.clientHeight;
+    const resize = () => {
+      if (width === viewport.clientWidth && height === viewport.clientHeight) return;
+      width = viewport.clientWidth;
+      height = viewport.clientHeight;
+      cancelFitFrame();
+      if (!interrupted.current || !frameSelectedRef.current(false))
+        fitRef.current(false, overview.current);
+    };
+    if (typeof ResizeObserver === "undefined") return observeLayoutFallback(viewport, resize);
+    const observer = new ResizeObserver(resize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    cancelFitFrame();
+    if (selectedId) {
+      detailRef.current?.focus({ preventScroll: true });
+      wasInspecting.current = true;
+      // Selection focuses this node; late inspection data must not replace
+      // that framing. The next expansion action resumes automatic fitting.
+      interrupted.current = true;
+      frameSelectedRef.current(true);
+    } else if (wasInspecting.current) {
+      wasInspecting.current = false;
+      interrupted.current = false;
+      overview.current = true;
+      fit(true, true);
+    }
+  }, [selectedId]);
+
+  function cancelFitFrame() {
+    if (fitFrame.current !== null) cancelAnimationFrame(fitFrame.current);
+    fitFrame.current = null;
+  }
+  function renderedView() {
+    const transform = contentRef.current && getComputedStyle(contentRef.current).transform;
+    if (transform && transform !== "none" && typeof DOMMatrix !== "undefined") {
+      const matrix = new DOMMatrix(transform);
+      return { scale: matrix.a, x: matrix.e, y: matrix.f };
+    }
+    return pan.view;
+  }
+  function stopCamera() {
+    cancelFitFrame();
+    lastNodeClick.current = null;
+    interrupted.current = true;
+    setView(renderedView());
+    setMoving(false);
+  }
+
+  function navigateSelection(direction: GraphDirection, currentId: string | null) {
+    const next = spatialGraphNeighbor(
+      direction,
+      currentId,
+      ids.flatMap((id) => {
+        const position = layout.positions.get(id);
+        return position
+          ? [{ id, x: position.x + position.width / 2, y: position.y + position.height / 2 }]
+          : [];
+      }),
+    );
+    if (next) onSelect(next);
+  }
+  function close() {
+    onSelect(null);
+    const node = nodes.current.get(selectedId ?? rootId) ?? nodes.current.get(rootId);
+    requestAnimationFrame(() => node?.focus({ preventScroll: true }));
+  }
+
+  function reveal(element: HTMLButtonElement) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const node = element.getBoundingClientRect();
+    const right = rect.right - (detailRef.current?.offsetWidth ?? 0) - 24;
+    const dx =
+      node.left < rect.left + 24
+        ? rect.left + 24 - node.left
+        : node.right > right
+          ? right - node.right
+          : 0;
+    const dy =
+      node.top < rect.top + 24
+        ? rect.top + 24 - node.top
+        : node.bottom > rect.bottom - 64
+          ? rect.bottom - 64 - node.bottom
+          : 0;
+    if (dx || dy) {
+      setMoving(true);
+      setView((view) => ({ ...view, x: view.x + dx, y: view.y + dy }));
+    }
+  }
+
+  return (
+    <div
+      className={"arch-canvas systemd-canvas" + (selectedId ? " inspecting" : "")}
+      onPointerDownCapture={(event) => {
+        const last = lastNodeClick.current;
+        // The camera may move the node out from under the second click.
+        // Recognize that gesture before it reaches the canvas or inspector.
+        if (
+          event.button === 0 &&
+          last &&
+          event.timeStamp - last.time < 300 &&
+          Math.hypot(event.clientX - last.x, event.clientY - last.y) < 5
+        ) {
+          lastNodeClick.current = null;
+          consumeClick.current = true;
+          event.preventDefault();
+          event.stopPropagation();
+          setMoving(false);
+          onRefocus(last.id);
+        } else consumeClick.current = false;
+      }}
+      onClickCapture={(event) => {
+        if (consumeClick.current) {
+          consumeClick.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (
+          event.target === detailRef.current &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey &&
+          isGraphDirection(event.key)
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          navigateSelection(event.key, selectedId);
+        }
+        if (event.key === "Escape" && selectedId) {
+          event.stopPropagation();
+          close();
+        }
+      }}
+    >
+      <footer className="systemd-graph-footer">
+        <GraphControls
+          scale={pan.view.scale}
+          onZoom={(factor) => {
+            stopCamera();
+            pan.zoomBy(factor);
+          }}
+          onFit={() => {
+            stopCamera();
+            overview.current = true;
+            interrupted.current = false;
+            fit(true, true);
+          }}
+        />
+        <div className="systemd-direction-key" aria-label="Arrow direction">
+          <span>
+            {frameKey.startsWith("ordering")
+              ? "A → B: A is ordered before B"
+              : frameKey.startsWith("activation")
+                ? "A → B: A activates B"
+                : "A → B: A requires or wants B"}
+          </span>
+          {!frameKey.startsWith("ordering") && !frameKey.startsWith("activation") && (
+            <span className="systemd-line-key" aria-label="Dependency line styles">
+              <span>
+                <i aria-hidden="true" /> Requires
+              </span>
+              <span>
+                <i className="wants-line" aria-hidden="true" /> Wants only
+              </span>
+            </span>
+          )}
+        </div>
+      </footer>
+      <div
+        className="arch-viewport"
+        ref={viewportRef}
+        role="region"
+        tabIndex={0}
+        aria-label="Systemd dependency graph"
+        onWheel={(event) => {
+          stopCamera();
+          pan.onWheel(event);
+        }}
+        onPointerDown={(event) => {
+          if (
+            event.button !== 0 ||
+            (event.target as Element).closest("button, .systemd-connection")
+          )
+            return;
+          press.current = { x: event.clientX, y: event.clientY, moved: false };
+          flushSync(stopCamera);
+          pan.onPointerDown(event);
+        }}
+        onPointerMove={(event) => {
+          if (
+            press.current &&
+            Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y) > 5
+          )
+            press.current.moved = true;
+          pan.onPointerMove(event);
+        }}
+        onPointerUp={(event) => {
+          pan.onPointerUp(event);
+          if (press.current && !press.current.moved && selectedId) close();
+          press.current = null;
+        }}
+        onPointerCancel={(event) => {
+          press.current = null;
+          pan.onPointerUp(event);
+        }}
+      >
+        <div
+          ref={contentRef}
+          className={"systemd-graph-content" + (moving ? " arch-focusing" : "")}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && event.propertyName === "transform")
+              setMoving(false);
+          }}
+          style={{
+            width: layout.width,
+            height: layout.height,
+            transform: `translate(${pan.view.x}px, ${pan.view.y}px) scale(${pan.view.scale})`,
+          }}
+        >
+          <svg
+            className="systemd-edges"
+            width={layout.width}
+            height={layout.height}
+            aria-label="Dependency relationships"
+          >
+            {layout.connections.map((connection) => {
+              const evidence = connection.edges
+                .map((edge) => edge.source + " " + edge.relationship + " " + edge.target)
+                .join("; ");
+              return (
+                <g
+                  key={connection.id}
+                  className={
+                    "systemd-connection relationship-" +
+                    connection.kind +
+                    (layout.positions.get(connection.source)!.x >
+                    layout.positions.get(connection.target)!.x
+                      ? " edge-reverse"
+                      : "") +
+                    (activeEdge === connection.id ? " edge-active" : "")
+                  }
+                  tabIndex={0}
+                  role="img"
+                  aria-label={evidence}
+                  onMouseEnter={() => setActiveEdge(connection.id)}
+                  onMouseLeave={() => setActiveEdge(null)}
+                  onFocus={() => setActiveEdge(connection.id)}
+                  onBlur={() => setActiveEdge(null)}
+                >
+                  <title>{evidence}</title>
+                  <path
+                    className="systemd-edge-path"
+                    d={connection.path}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <path className="systemd-arrowhead" d={connection.arrowhead} />
+                </g>
+              );
+            })}
+          </svg>
+          <SystemdGraphExits layout={layout} root={rootId} scope={frameKey} units={units} />
+          {ids.map((id) => {
+            const position = layout.positions.get(id)!;
+            const unit = units.find((candidate) => candidate.id === id);
+            return (
+              <div
+                key={id}
+                className={"systemd-graph-node" + (id === rootId ? " graph-root" : "")}
+                style={{
+                  left: position.x,
+                  top: position.y,
+                  width: position.width,
+                  height: position.height,
+                }}
+              >
+                <button
+                  type="button"
+                  className={"arch-chip" + (selectedId === id ? " selected" : "")}
+                  title={id}
+                  aria-pressed={selectedId === id}
+                  aria-controls={selectedId === id ? "systemd-graph-inspector" : undefined}
+                  ref={(element) => {
+                    if (element) nodes.current.set(id, element);
+                    else nodes.current.delete(id);
+                  }}
+                  onClick={(event) => {
+                    lastNodeClick.current =
+                      event.detail > 0
+                        ? { id, x: event.clientX, y: event.clientY, time: event.timeStamp }
+                        : null;
+                    if (selectedId === id) close();
+                    else onSelect(id);
+                  }}
+                  onDoubleClick={() => {
+                    stopCamera();
+                    onRefocus(id);
+                  }}
+                  onFocus={(event) => {
+                    if (event.currentTarget.matches(":focus-visible")) reveal(event.currentTarget);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && event.shiftKey) {
+                      event.preventDefault();
+                      onRefocus(id);
+                      return;
+                    }
+                    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+                    if (isGraphDirection(event.key)) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      navigateSelection(event.key, id);
+                      return;
+                    }
+                    if (!["Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    const next = event.key === "Home" ? 0 : ids.length - 1;
+                    nodes.current.get(ids[next])?.focus();
+                  }}
+                >
+                  <span className="arch-chip-title">
+                    <strong>{id}</strong>{" "}
+                  </span>
+                  <span className="arch-chip-kind">
+                    <span
+                      className={"service-indicator service-" + (unit?.activeState ?? "unknown")}
+                    />
+                    {systemdStateLabel(unit?.activeState, unit?.subState)}
+                  </span>
+                </button>
+                {id !== rootId && (
+                  <button
+                    className={
+                      "icon-button systemd-expand" + (expanded.includes(id) ? " expanded" : "")
+                    }
+                    type="button"
+                    aria-label={(expanded.includes(id) ? "Collapse " : "Expand ") + id}
+                    title={(expanded.includes(id) ? "Collapse " : "Expand ") + id}
+                    disabled={id === rootId || (!expanded.includes(id) && expanded.length >= 24)}
+                    aria-pressed={id === rootId || expanded.includes(id)}
+                    onClick={() => onExpand(id)}
+                  >
+                    {expanded.includes(id) ? <Minimize2 size={13} /> : <Expand size={13} />}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="systemd-graph-inspector-layer">
+        <SystemdPresence open={!!selectedId}>
+          <aside
+            className="detail-panel arch-detail systemd-inspector"
+            id="systemd-graph-inspector"
+            ref={detailRef}
+            aria-label="Unit details"
+            tabIndex={-1}
+          >
+            <button
+              className="icon-button inspector-close"
+              type="button"
+              aria-label="Close details"
+              onClick={close}
+            >
+              <X size={16} />
+            </button>
+            {inspector}
+          </aside>
+        </SystemdPresence>
+      </div>
+    </div>
+  );
+}

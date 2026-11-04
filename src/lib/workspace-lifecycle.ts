@@ -74,6 +74,7 @@ export function updateWorkspaceConnectionSnapshots(
                 containerDetailsCache: {},
                 bootDiagnostics: null,
                 systemdSelectionId: null,
+                systemdExplorer: undefined,
                 containerSelectionId: null,
                 logSource: null,
               }

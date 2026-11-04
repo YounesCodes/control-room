@@ -39,6 +39,7 @@ const semanticUiColors = [
   "#f80000",
   "#ff9900",
 ];
+const syntaxColors = ["#b4befe", "#8bc5e8", "#c4d7b2", "#e3c58d"];
 
 function hexChannels(value: string) {
   const digits = value.slice(1);
@@ -77,7 +78,7 @@ function paletteValue(name: string) {
 }
 
 describe("monochrome application palette", () => {
-  it("allows only status colors and identity brand hues outside neutral UI colors", () => {
+  it("allows only status, identity, and code syntax hues outside neutral UI colors", () => {
     const nonNeutralColors: string[] = [];
 
     for (const match of stylesSource.matchAll(/#[0-9a-f]{3}(?:[0-9a-f]{3})?\b/gi)) {
@@ -88,7 +89,19 @@ describe("monochrome application palette", () => {
       if (!isNeutral(channels)) nonNeutralColors.push(match[0].toLowerCase());
     }
 
-    expect([...new Set(nonNeutralColors)].sort()).toEqual([...semanticUiColors].sort());
+    expect([...new Set(nonNeutralColors)].sort()).toEqual(
+      [...semanticUiColors, ...syntaxColors].sort(),
+    );
+  });
+
+  it("scopes syntax colors to readable code surfaces", () => {
+    const code = stylesSource.match(/\.systemd-code\s*\{([^}]*)\}/)?.[1];
+    expect(code).toBeTruthy();
+    for (const color of syntaxColors) {
+      expect(code).toContain(color);
+      expect(stylesSource.split(color)).toHaveLength(2);
+      expect(contrastRatio(color, paletteValue("surface-sunken"))).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("preserves ANSI colors for remote terminal content", () => {

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Circle, CircleAlert, CircleDashed, Clock3, ChevronDown, Pause, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
 import { usePopoverExit } from "../hooks/use-popover-exit";
+import { AnimatedNumber } from "./AnimatedNumber";
 import {
   HEADER_METRIC_LABELS,
   formatReadingTime,
@@ -9,9 +10,56 @@ import {
   headerMetricValue,
   headerMetricNumber,
   formatByteRate,
+  formatPercent,
+  formatUptime,
   metricTrend,
 } from "../lib/header-metrics";
 import type { HeaderMetric, HeaderMetrics } from "../types";
+
+function MetricValue({
+  metric,
+  sample,
+  animate,
+  compact = false,
+  fallback = "Unavailable",
+}: {
+  metric: HeaderMetric;
+  sample: HeaderMetrics | null;
+  animate: boolean;
+  compact?: boolean;
+  fallback?: string;
+}) {
+  const number = headerMetricNumber(metric, sample);
+  const shared = { animate, accessible: !compact, dragRegion: compact, fallback };
+  if (metric === "diskIo" && number !== null)
+    return (
+      <>
+        <span className="host-metric-direction" data-tauri-drag-region={compact || undefined}>
+          {compact ? "R" : "Read"}
+        </span>{" "}
+        <AnimatedNumber
+          {...shared}
+          value={sample?.diskReadBytesPerSecond}
+          format={formatByteRate}
+        />{" "}
+        <span className="host-metric-direction" data-tauri-drag-region={compact || undefined}>
+          {compact ? "W" : "· Write"}
+        </span>{" "}
+        <AnimatedNumber
+          {...shared}
+          value={sample?.diskWriteBytesPerSecond}
+          format={formatByteRate}
+        />
+      </>
+    );
+  return (
+    <AnimatedNumber
+      {...shared}
+      value={metric === "uptime" ? sample?.uptimeSeconds : number}
+      format={metric === "uptime" ? formatUptime : formatPercent}
+    />
+  );
+}
 
 function MetricTrace({ metric, history }: { metric: HeaderMetric; history: HeaderMetrics[] }) {
   const path = metricTrend(metric, history);
@@ -28,14 +76,15 @@ function MetricCell({
   sample,
   history,
   failed,
+  animate,
 }: {
   metric: HeaderMetric;
   sample: HeaderMetrics | null;
   history: HeaderMetrics[];
   failed: boolean;
+  animate: boolean;
 }) {
   const value = sample ? headerMetricValue(metric, sample) : failed ? "Unavailable" : "Reading";
-  const available = sample && headerMetricNumber(metric, sample) !== null;
   const compact = value === "Unavailable" ? "—" : value === "Reading" ? "…" : value;
   return (
     <span
@@ -51,21 +100,14 @@ function MetricCell({
         {HEADER_METRIC_LABELS[metric]}
       </span>
       <strong className="host-metric-reading" aria-hidden="true" data-tauri-drag-region>
-        <span className="host-metric-value" key={value} aria-hidden="true" data-tauri-drag-region>
-          {metric === "diskIo" && available ? (
-            <>
-              <span className="host-metric-direction" data-tauri-drag-region>
-                R
-              </span>{" "}
-              {formatByteRate(sample!.diskReadBytesPerSecond)}{" "}
-              <span className="host-metric-direction" data-tauri-drag-region>
-                W
-              </span>{" "}
-              {formatByteRate(sample!.diskWriteBytesPerSecond)}
-            </>
-          ) : (
+        <span className="host-metric-value" aria-hidden="true" data-tauri-drag-region>
+          <MetricValue
+            metric={metric}
+            sample={sample}
+            animate={animate}
             compact
-          )}
+            fallback={compact}
+          />
         </span>
         <MetricTrace metric={metric} history={history} />
       </strong>
@@ -194,11 +236,12 @@ export function HostMetrics({
       >
         {metrics.map((metric) => (
           <MetricCell
-            key={metric}
+            key={`${target}:${metric}`}
             metric={metric}
             sample={reading.sample}
             history={reading.history}
             failed={!!reading.error}
+            animate={status === "Live"}
           />
         ))}
       </div>
@@ -235,11 +278,17 @@ export function HostMetrics({
           </p>
           <dl>
             {metrics.map((metric) => (
-              <div key={metric}>
+              <div key={`${target}:${metric}`}>
                 <dt>{HEADER_METRIC_LABELS[metric]}</dt>
                 <dd>
                   <div className="host-metric-detail-value">
-                    <strong>{headerMetricValue(metric, reading.sample)}</strong>
+                    <strong>
+                      <MetricValue
+                        metric={metric}
+                        sample={reading.sample}
+                        animate={status === "Live"}
+                      />
+                    </strong>
                     <MetricTrace metric={metric} history={reading.history} />
                   </div>
                   <small>{headerMetricDetail(metric, reading.sample)}</small>

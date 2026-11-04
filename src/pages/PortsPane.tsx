@@ -43,7 +43,9 @@ export function PortsPane({
   onOpenContainer,
   onViewLogs,
   focusEndpoint,
+  focusUnit,
 }: {
+  focusUnit?: string;
   focusEndpoint?: PublishedPortSelection;
   connection: SavedConnection;
   capabilities: HostCapabilities | null;
@@ -63,6 +65,10 @@ export function PortsPane({
   const toolsRef = useRef<HTMLDivElement>(null);
   const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useState("");
+  const [unitScope, setUnitScope] = useState(focusUnit);
+  useEffect(() => {
+    setUnitScope(focusUnit);
+  }, [focusUnit]);
   const [protocol, setProtocol] = useState("all");
   const [exposure, setExposure] = useState<Exposure | "all">("all");
   const filtersActive =
@@ -277,6 +283,7 @@ export function PortsPane({
   return (
     <section className="feature-page ports-page">
       <PortsGraph
+        focusUnit={unitScope}
         focusEndpoint={focusEndpoint}
         loading={cache.loading || containersCache.loading || containersCache.fetchedAt === null}
         loadingLabel={
@@ -323,6 +330,25 @@ export function PortsPane({
         onViewLogs={onViewLogs}
         toolbar={
           <div className="ports-controls" ref={toolsRef}>
+            {unitScope && (
+              <div className="systemd-port-scope">
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => onOpenSystemd(unitScope)}
+                >
+                  {unitScope}
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear unit filter"
+                  onClick={() => setUnitScope(undefined)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
             <header className="ports-heading" data-tooltip-boundary>
               <h2
                 tabIndex={0}
