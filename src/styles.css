@@ -4097,7 +4097,6 @@ dd {
   min-width: 0;
 }
 .systemd-mode-tools {
-  order: 3;
   position: relative;
   display: grid;
   align-items: center;
@@ -4257,7 +4256,6 @@ dd {
   }
 }
 .systemd-toolbar-actions {
-  order: 2;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -4270,7 +4268,17 @@ dd {
   flex: none;
 }
 .systemd-toolbar .systemd-toolbar-actions {
-  min-width: min(100%, var(--search-actions-min-width));
+  min-width: 90px;
+  flex: 0 1 auto;
+  margin-left: 0;
+}
+.systemd-toolbar-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 1 1 528px;
+  min-width: 528px;
 }
 @container (min-width: 961px) {
   .systemd-heading {
@@ -4281,6 +4289,17 @@ dd {
   .systemd-mode-tools {
     order: 4;
     flex-basis: 100%;
+  }
+}
+@container (max-width: 960px) {
+  .systemd-toolbar-tools {
+    display: contents;
+  }
+  .systemd-toolbar .systemd-toolbar-actions {
+    order: 2;
+    min-width: min(100%, var(--search-actions-min-width));
+    flex: 1 1 90px;
+    margin-left: auto;
   }
 }
 .systemd-search-control {
@@ -5049,7 +5068,7 @@ dd {
     order: 4;
     flex-basis: 100%;
   }
-  .systemd-toolbar-actions {
+  .systemd-toolbar .systemd-toolbar-actions {
     order: 5;
   }
   .systemd-mode-tools > .systemd-presence > * {

@@ -362,7 +362,8 @@ technology reads the collected value rather than intermediate animation frames.
 Name the graph action Dependency graph. Keep the full target in its accessible
 name and tooltip, and show it beside the action and in the graph heading. Cap the
 visible name at 24 characters. Let the card fit its text. Keep scope and relationship
-category controls at the far right beside search and refresh, independently of name length.
+category controls in the right-hand tools group before search and refresh, independently
+of name length. Keep refresh at the far-right edge.
 Before selection, show a disabled Dependency graph action.
 Keep the inventory count identical in both views so its text
 and width do not change during navigation. Put scope and relationship controls in
@@ -374,7 +375,8 @@ At intermediate widths, keep actions beside the view switch and put scope/catego
 on their own row instead of dropping action icons into an otherwise empty row.
 Keep search inline whenever the controls fit, and wrap before the input can collapse.
 Reserve search space in both states so opening it does not resize or move the view
-switch or category controls. Truncate names based on available pane
+switch or refresh action. Scope/category controls may move with the field's expansion.
+Truncate names based on available pane
 width, independently of search visibility. Animate only the search field within
 that space; skip its motion when reduced motion is requested.
 Opening Dependency graph focuses the selected unit, including a selected neighbor of a previously explored root. Inventory

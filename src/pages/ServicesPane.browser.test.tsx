@@ -582,10 +582,15 @@ it.each([1000, 1280])(
       const scope = screen.getByRole("group", { name: "Unit scope" });
       left ??= scope.getBoundingClientRect().left;
       expect(scope.getBoundingClientRect().left).toBeCloseTo(left, 2);
+      const refresh = screen
+        .getByRole("button", { name: "Refresh systemd units" })
+        .getBoundingClientRect();
       expect(
-        document.querySelector(".systemd-heading")!.getBoundingClientRect().right -
-          scope.getBoundingClientRect().right,
-      ).toBeLessThanOrEqual(20);
+        document.querySelector(".systemd-heading")!.getBoundingClientRect().right - refresh.right,
+      ).toBeLessThanOrEqual(16);
+      const search = screen.getByRole("button", { name: "Find units" }).getBoundingClientRect();
+      expect(search.left - scope.getBoundingClientRect().right).toBeGreaterThanOrEqual(0);
+      expect(search.left - scope.getBoundingClientRect().right).toBeLessThan(20);
       const action = screen.getByRole("button", { name: "Dependency graph " + id });
       const target = action.querySelector<HTMLElement>(".systemd-unit-target")!;
       expect(target.textContent).toBe(id.length > 24 ? id.slice(0, 23) + "…" : id);
@@ -803,7 +808,11 @@ it.each([360, 1000, 1280])(
       const group = screen.getByRole("group", { name: "Systemd view" });
       const explorer = within(group).getByRole("button", { name: "Explorer" });
       const relationships = group.querySelectorAll("button")[1];
-      const fixed = [group, relationships, document.querySelector(".systemd-mode-tools")!];
+      const fixed = [
+        group,
+        relationships,
+        screen.getByRole("button", { name: "Refresh systemd units" }),
+      ];
       const boxes = fixed.map((item) => item.getBoundingClientRect());
       const steady = () =>
         fixed.forEach((item, index) => {

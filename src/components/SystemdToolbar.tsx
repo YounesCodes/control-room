@@ -222,139 +222,144 @@ export function SystemdToolbar({
             </button>
           </div>
         </div>
-        <div className="systemd-toolbar-actions">
-          <div className="systemd-search-control search-field">
-            <button
-              type="button"
-              className="icon-button"
-              title={graph ? "Find dependencies" : "Find units"}
-              aria-label={graph ? "Find dependencies" : "Find units"}
-              aria-expanded={tools === "search"}
-              aria-pressed={!!search}
-              aria-controls="systemd-search"
-              onClick={(event) => toggle("search", event.currentTarget)}
-            >
-              <Search size={16} />
-            </button>
-            <SystemdPresence open={tools === "search"}>
+        <div className="systemd-toolbar-tools">
+          <div className="systemd-mode-tools">
+            <SystemdPresence open={!graph}>
               <div
-                ref={searchField}
-                id="systemd-search"
-                className="systemd-inline-search"
-                role="region"
-                aria-label={graph ? "Find dependencies" : "Find units"}
+                className="systemd-scope-switch systemd-view-switch"
+                role="group"
+                aria-label="Unit scope"
               >
-                <input
-                  aria-label={graph ? "Search dependencies" : "Search units"}
-                  placeholder={graph ? "Search dependencies" : "Search units"}
-                  value={search}
-                  onChange={(event) =>
-                    onChange(
-                      graph
-                        ? { dependencySearch: event.target.value }
-                        : { search: event.target.value },
-                    )
-                  }
-                />
                 <button
                   type="button"
-                  className="icon-button"
-                  aria-label={search ? "Clear search" : "Hide search"}
-                  title={search ? "Clear search" : "Hide search"}
-                  onClick={() => {
-                    if (search) {
-                      onChange(graph ? { dependencySearch: "" } : { search: "" });
-                      searchField.current?.querySelector("input")?.focus();
-                    } else {
-                      setTools(null);
-                      trigger.current?.focus();
-                    }
-                  }}
+                  aria-pressed={state.scope !== "all"}
+                  title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
+                  onClick={() => onChange({ scope: "focused" })}
                 >
-                  <X size={14} />
+                  Focused
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={state.scope === "all"}
+                  title="Include every unit type and system service"
+                  onClick={() => onChange({ scope: "all" })}
+                >
+                  All units
                 </button>
               </div>
             </SystemdPresence>
+            <SystemdPresence open={graph}>
+              <div
+                className="systemd-relationship-groups systemd-mode-switch"
+                ref={categorySwitch}
+                role="group"
+                aria-label="Relationship category"
+              >
+                {(["dependencies", "ordering", "activation"] as const).map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    aria-pressed={state.relationshipGroup === category}
+                    title={
+                      category === "dependencies"
+                        ? "Requires and Wants, including reverse dependencies"
+                        : category === "ordering"
+                          ? "Before and After ordering constraints"
+                          : "Triggers and TriggeredBy activation evidence"
+                    }
+                    onClick={() =>
+                      onChange({
+                        relationshipGroup: category,
+                        visibleLimit: SYSTEMD_INITIAL_VISIBLE,
+                      })
+                    }
+                  >
+                    {category[0].toUpperCase() + category.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </SystemdPresence>
           </div>
-          <SystemdPresence open={!graph}>
+          <div className="systemd-toolbar-actions">
+            <div className="systemd-search-control search-field">
+              <button
+                type="button"
+                className="icon-button"
+                title={graph ? "Find dependencies" : "Find units"}
+                aria-label={graph ? "Find dependencies" : "Find units"}
+                aria-expanded={tools === "search"}
+                aria-pressed={!!search}
+                aria-controls="systemd-search"
+                onClick={(event) => toggle("search", event.currentTarget)}
+              >
+                <Search size={16} />
+              </button>
+              <SystemdPresence open={tools === "search"}>
+                <div
+                  ref={searchField}
+                  id="systemd-search"
+                  className="systemd-inline-search"
+                  role="region"
+                  aria-label={graph ? "Find dependencies" : "Find units"}
+                >
+                  <input
+                    aria-label={graph ? "Search dependencies" : "Search units"}
+                    placeholder={graph ? "Search dependencies" : "Search units"}
+                    value={search}
+                    onChange={(event) =>
+                      onChange(
+                        graph
+                          ? { dependencySearch: event.target.value }
+                          : { search: event.target.value },
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={search ? "Clear search" : "Hide search"}
+                    title={search ? "Clear search" : "Hide search"}
+                    onClick={() => {
+                      if (search) {
+                        onChange(graph ? { dependencySearch: "" } : { search: "" });
+                        searchField.current?.querySelector("input")?.focus();
+                      } else {
+                        setTools(null);
+                        trigger.current?.focus();
+                      }
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </SystemdPresence>
+            </div>
+            <SystemdPresence open={!graph}>
+              <button
+                type="button"
+                className="icon-button"
+                ref={filterTrigger}
+                title="Filter and sort units"
+                aria-label="Filter and sort units"
+                aria-expanded={tools === "filters"}
+                aria-pressed={filtered}
+                aria-controls="systemd-filters"
+                onClick={(event) => toggle("filters", event.currentTarget)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
+            </SystemdPresence>
             <button
               type="button"
               className="icon-button"
-              ref={filterTrigger}
-              title="Filter and sort units"
-              aria-label="Filter and sort units"
-              aria-expanded={tools === "filters"}
-              aria-pressed={filtered}
-              aria-controls="systemd-filters"
-              onClick={(event) => toggle("filters", event.currentTarget)}
+              title="Refresh systemd units"
+              aria-label="Refresh systemd units"
+              disabled={loading}
+              onClick={onRefresh}
             >
-              <SlidersHorizontal size={16} />
+              <RefreshCw size={16} className={loading ? "spinning" : ""} />
             </button>
-          </SystemdPresence>
-          <button
-            type="button"
-            className="icon-button"
-            title="Refresh systemd units"
-            aria-label="Refresh systemd units"
-            disabled={loading}
-            onClick={onRefresh}
-          >
-            <RefreshCw size={16} className={loading ? "spinning" : ""} />
-          </button>
-        </div>
-        <div className="systemd-mode-tools">
-          <SystemdPresence open={!graph}>
-            <div
-              className="systemd-scope-switch systemd-view-switch"
-              role="group"
-              aria-label="Unit scope"
-            >
-              <button
-                type="button"
-                aria-pressed={state.scope !== "all"}
-                title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
-                onClick={() => onChange({ scope: "focused" })}
-              >
-                Focused
-              </button>
-              <button
-                type="button"
-                aria-pressed={state.scope === "all"}
-                title="Include every unit type and system service"
-                onClick={() => onChange({ scope: "all" })}
-              >
-                All units
-              </button>
-            </div>
-          </SystemdPresence>
-          <SystemdPresence open={graph}>
-            <div
-              className="systemd-relationship-groups systemd-mode-switch"
-              ref={categorySwitch}
-              role="group"
-              aria-label="Relationship category"
-            >
-              {(["dependencies", "ordering", "activation"] as const).map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  aria-pressed={state.relationshipGroup === category}
-                  title={
-                    category === "dependencies"
-                      ? "Requires and Wants, including reverse dependencies"
-                      : category === "ordering"
-                        ? "Before and After ordering constraints"
-                        : "Triggers and TriggeredBy activation evidence"
-                  }
-                  onClick={() =>
-                    onChange({ relationshipGroup: category, visibleLimit: SYSTEMD_INITIAL_VISIBLE })
-                  }
-                >
-                  {category[0].toUpperCase() + category.slice(1)}
-                </button>
-              ))}
-            </div>
-          </SystemdPresence>
+          </div>
         </div>
       </header>
       <SystemdPresence open={tools === "filters"}>
