@@ -444,6 +444,36 @@ it("glides one shared service highlight and retargets it during rapid switching"
   await waitFor(() => expect(document.querySelector(".systemd-selection-indicator")).toBeNull());
 });
 
+it.each(["inventory", "graph"])(
+  "clears a query before hiding search with X in %s",
+  async (mode) => {
+    renderPane();
+    if (mode === "graph") {
+      await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+      await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+    }
+    const name = mode === "graph" ? "Find dependencies" : "Find units";
+    const inputName = mode === "graph" ? "Search dependencies" : "Search units";
+    await page.getByRole("button", { name }).click();
+    const input = screen.getByRole("textbox", { name: inputName });
+    await page.getByRole("textbox", { name: inputName }).fill("database");
+    await page.getByRole("button", { name: "Clear search" }).click();
+    expect(input).toHaveValue("");
+    expect(document.activeElement).toBe(input);
+    expect(screen.getByRole("textbox", { name: inputName })).toBe(input);
+    await page.getByRole("button", { name: "Hide search" }).click();
+    expect(screen.queryByRole("textbox", { name: inputName })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name }));
+    if (input.isConnected) expect(input.closest("[inert][aria-hidden=true]")).toBeTruthy();
+    await waitFor(() => expect(document.querySelector(".systemd-inline-search")).toBeNull());
+    await page.getByRole("button", { name }).click();
+    expect(screen.getByRole("textbox", { name: inputName })).toHaveValue("");
+    await page.getByRole("button", { name: "Hide search" }).click();
+    expect(screen.queryByRole("textbox", { name: inputName })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name }));
+  },
+);
+
 it("removes the search field outline after clicking its magnifier to collapse", async () => {
   renderPane();
   const magnifier = page.getByRole("button", { name: "Find units", exact: true });
@@ -656,7 +686,7 @@ it.each([360, 960, 1400])(
     const control = search.closest<HTMLElement>(".systemd-search-control")!;
     const icon = screen.getByRole("button", { name: "Find units" });
     expect(control.contains(icon)).toBe(true);
-    expect(control.contains(screen.getByRole("button", { name: "Clear search" }))).toBe(true);
+    expect(control.contains(screen.getByRole("button", { name: "Hide search" }))).toBe(true);
     const iconBounds = icon.getBoundingClientRect();
     const controlBounds = control.getBoundingClientRect();
     expect(box.height).toBe(iconBounds.height);

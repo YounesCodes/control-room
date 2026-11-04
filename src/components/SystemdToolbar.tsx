@@ -267,9 +267,17 @@ export function SystemdToolbar({
                 <button
                   type="button"
                   className="icon-button"
-                  aria-label="Clear search"
-                  disabled={!search}
-                  onClick={() => onChange(graph ? { dependencySearch: "" } : { search: "" })}
+                  aria-label={search ? "Clear search" : "Hide search"}
+                  title={search ? "Clear search" : "Hide search"}
+                  onClick={() => {
+                    if (search) {
+                      onChange(graph ? { dependencySearch: "" } : { search: "" });
+                      searchField.current?.querySelector("input")?.focus();
+                    } else {
+                      setTools(null);
+                      trigger.current?.focus();
+                    }
+                  }}
                 >
                   <X size={14} />
                 </button>

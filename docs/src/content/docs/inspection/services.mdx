@@ -7,7 +7,7 @@ Systemd lists the host's loaded system services, timers, mounts, and sockets. Ro
 
 **Focused** starts with services, timers, sockets, and path watchers, hiding routine systemd, D-Bus, login-session, and module-loader units. Failed units of every type remain visible. Choose **All units** beside it to include system services, mounts, devices, targets, and every other collected type. The count shows visible units out of the total when they differ. Search and specific type filters include the full inventory. This choice stays with the workspace; dependency graphs always include all reported unit types.
 
-Select the failed count to find failures. **Find units** expands search inside the toolbar; **Filter and sort units** opens state, type, and sort controls below its icon. The heading tooltip shows all counts and collection time for the collected system scope.
+Select the failed count to find failures. **Find units** expands search inside the toolbar. Its X clears a query; with an empty field, it hides search. **Filter and sort units** opens state, type, and sort controls below its icon. The heading tooltip shows all counts and collection time for the collected system scope.
 
 Select a row or graph node to open its inspector. In the inventory, use **Up** and **Down** to switch units and update the inspector, following the current filters and sort order. These keys also work when the inspector itself has focus. It shows essential runtime details for the unit type, or failure evidence for a failed unit. Expand **Dependencies**, **Recent journal**, or **Advanced** when needed. Close the inspector with **Close details** or **Escape**. Missing or unsupported values appear as **Unavailable**.
 
