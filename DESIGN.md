@@ -326,8 +326,11 @@ Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during
 navigation. Changed SSH targets discard that context and use separate detail caches.
 
-Keep inspectors closed until selection. Explicitly closing an inspector through
-Close details, Escape, or clicking its selected item clears the inspected selection
+Keep inspectors closed until selection.
+Remember open inspector state separately for Explorer and Relationships while
+switching views. Returning to a view restores its inspector for the current selection.
+Explicitly closing either inspector through Close details, Escape, or clicking its
+selected item clears both open states, the inspected selection,
 and its highlight. Keep graph roots and expansion context separate from that selection.
 Use a compact, content-height panel with
 a visible 32px slide on entry and a slide on exit. Graph selection opens the inspector

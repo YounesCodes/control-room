@@ -67,6 +67,33 @@ function cache<T>(items: T[]): CachedList<T> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it("restores each view's inspector state when switching between Explorer and Relationships", async () => {
+    const user = userEvent.setup();
+    render(
+      <ServicesPane
+        connection={connection}
+        cache={cache([unit("worker.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Relationships worker.service" }));
+    expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Explorer" }));
+    expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Relationships worker.service" }));
+    const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
+    await user.click(within(graph).getByRole("button", { name: /^worker.service/ }));
+    expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Explorer" }));
+    await user.click(screen.getByRole("button", { name: "Relationships worker.service" }));
+    expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+    await user.click(screen.getByRole("button", { name: "Explorer" }));
+    expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+  });
   it("updates memory while the service inspector is open and stops after closing it", async () => {
     vi.useFakeTimers();
     try {

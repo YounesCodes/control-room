@@ -1319,6 +1319,21 @@ it("keeps a manual pan when a pending expansion finishes, until the next expansi
   expect(Math.abs(after.top - before.top)).toBeLessThan(1);
 });
 
+it("restores Explorer details after visiting Relationships and still deselects on explicit close", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  const row = page.getByRole("button", { name: /worker.service Queue worker/ });
+  await row.click();
+  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+  await page.getByRole("button", { name: "Explorer" }).click();
+  expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
+  expect(row.element().getAttribute("aria-pressed")).toBe("true");
+  await row.click();
+  expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
+  expect(row.element().getAttribute("aria-pressed")).toBe("false");
+});
+
 it.each(["After", "Before"])(
   "centers the whole one-sided Ordering scene for %s evidence",
   async (property) => {
@@ -1670,7 +1685,7 @@ it("opens graph without an inspector, separates categories and keeps selection a
   expect(
     screen.getByRole("button", { name: /database.service Database/ }).getAttribute("aria-pressed"),
   ).toBe("true");
-  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
   await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
   expect(screen.getByRole("button", { name: "Ordering" }).getAttribute("aria-pressed")).toBe(
     "true",

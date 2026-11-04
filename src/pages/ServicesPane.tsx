@@ -79,7 +79,11 @@ export function ServicesPane({
     focusId && isSystemdUnitName(focusId) ? focusId : null,
   );
   const [state, setState] = useState<SystemdExplorerState>(() => ({ ...DEFAULT, ...initialState }));
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectors, setInspectors] = useState({ inventory: false, graph: false });
+  const inspectorOpen = inspectors[state.mode];
+  function setInspectorOpen(open: boolean) {
+    setInspectors((current) => ({ ...current, [state.mode]: open }));
+  }
   const inspectorRef = useRef<HTMLElement>(null);
   const inventoryRef = useRef<HTMLDivElement>(null);
   const selectionFocus = useRef<"inventory" | "inspector">("inspector");
@@ -384,7 +388,7 @@ export function ServicesPane({
   }
   function refocus(id: string) {
     setSelectedId(id);
-    setInspectorOpen(false);
+    setInspectors((current) => ({ ...current, graph: false }));
     setGraphSearch("");
     patch({
       mode: "graph",
@@ -417,7 +421,7 @@ export function ServicesPane({
   }, [selectedId, visibleInspector, state.mode]);
 
   function closeInventoryInspector() {
-    setInspectorOpen(false);
+    setInspectors({ inventory: false, graph: false });
     setSelectedId(null);
     const row = [
       ...(inventoryRef.current?.querySelectorAll<HTMLButtonElement>(".dense-row") ?? []),
@@ -494,7 +498,6 @@ export function ServicesPane({
         states={states}
         onChange={patch}
         onMode={(mode) => {
-          setInspectorOpen(false);
           if (mode === "graph" && selectedId && selectedId !== rootId) refocus(selectedId);
           else patch({ mode, rootId });
         }}
@@ -670,7 +673,8 @@ export function ServicesPane({
               ])}
               onSelect={(id) => {
                 setSelectedId(id);
-                setInspectorOpen(!!id);
+                if (id) setInspectorOpen(true);
+                else setInspectors({ inventory: false, graph: false });
               }}
               onRefocus={refocus}
               onExpand={toggleExpansion}

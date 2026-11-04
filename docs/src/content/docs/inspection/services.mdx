@@ -13,6 +13,8 @@ Select a row or graph node to open its inspector. In the inventory, use **Up** a
 
 **Configuration** reads unit files and drop-ins directly from the inspector. **Advanced** contains enablement, conditions, assertions, and further runtime details. Its **Effective properties** section reads the manager's current properties. These can differ from files awaiting a daemon reload. Both reads happen on demand.
 
+Switching between **Explorer** and **Relationships** remembers whether each view's inspector was open. Returning restores details for the current selection. Explicitly closing details clears the selection and both views' open states.
+
 An open service inspector refreshes memory and runtime details every three seconds. Updates pause when the app window is hidden and stop when the inspector closes. If a read fails, the last collected values stay visible with the error.
 
 Unit files and effective properties use syntax colors to distinguish sections, keys, quoted values, paths, and variables. Long commands such as **ExecStart** use the full inspector width. The original host text remains intact when selected and copied.
