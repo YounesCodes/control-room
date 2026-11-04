@@ -364,6 +364,8 @@ name and tooltip, and show it beside the action and in the graph heading. Cap th
 visible name at 24 characters. Let the card fit its text. Keep scope and relationship
 category controls in the right-hand tools group before search and refresh, independently
 of name length. Keep refresh at the far-right edge.
+Keep search directly before refresh in both views. Remove the inventory filter from
+layout immediately when entering the graph so retained exits cannot shift the icons later.
 Before selection, show a disabled Dependency graph action.
 Keep the inventory count identical in both views so its text
 and width do not change during navigation. Put scope and relationship controls in

@@ -156,6 +156,23 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it("keeps search aligned and tightly spaced when switching into the dependency graph", async () => {
+  await page.viewport(1280, 800);
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await settleMotion();
+  const before = screen.getByRole("button", { name: "Find units" }).getBoundingClientRect();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
+  await settleMotion();
+  const search = screen.getByRole("button", { name: "Find dependencies" });
+  const box = search.getBoundingClientRect();
+  expect(box.left).toBeCloseTo(before.left, 2);
+  expect(box.width).toBe(30);
+  expect(search.querySelector("svg")!.getBoundingClientRect().width).toBe(16);
+  const activation = screen.getByRole("button", { name: "Activation" }).getBoundingClientRect();
+  expect(box.left - activation.right).toBeLessThanOrEqual(14);
+});
+
 it.each([360, 1280])("slides the relationship category selection fill at %ipx", async (width) => {
   await page.viewport(width, 800);
   renderPane();
@@ -588,7 +605,9 @@ it.each([1000, 1280])(
       expect(
         document.querySelector(".systemd-heading")!.getBoundingClientRect().right - refresh.right,
       ).toBeLessThanOrEqual(16);
-      const search = screen.getByRole("button", { name: "Find units" }).getBoundingClientRect();
+      const search = screen
+        .getByRole("button", { name: "Filter and sort units" })
+        .getBoundingClientRect();
       expect(search.left - scope.getBoundingClientRect().right).toBeGreaterThanOrEqual(0);
       expect(search.left - scope.getBoundingClientRect().right).toBeLessThan(20);
       const action = screen.getByRole("button", { name: "Dependency graph " + id });

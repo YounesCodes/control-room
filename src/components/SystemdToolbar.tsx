@@ -281,6 +281,21 @@ export function SystemdToolbar({
             </SystemdPresence>
           </div>
           <div className="systemd-toolbar-actions">
+            <SystemdPresence open={!graph}>
+              <button
+                type="button"
+                className="icon-button"
+                ref={filterTrigger}
+                title="Filter and sort units"
+                aria-label="Filter and sort units"
+                aria-expanded={tools === "filters"}
+                aria-pressed={filtered}
+                aria-controls="systemd-filters"
+                onClick={(event) => toggle("filters", event.currentTarget)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
+            </SystemdPresence>
             <div className="systemd-search-control search-field">
               <button
                 type="button"
@@ -334,21 +349,6 @@ export function SystemdToolbar({
                 </div>
               </SystemdPresence>
             </div>
-            <SystemdPresence open={!graph}>
-              <button
-                type="button"
-                className="icon-button"
-                ref={filterTrigger}
-                title="Filter and sort units"
-                aria-label="Filter and sort units"
-                aria-expanded={tools === "filters"}
-                aria-pressed={filtered}
-                aria-controls="systemd-filters"
-                onClick={(event) => toggle("filters", event.currentTarget)}
-              >
-                <SlidersHorizontal size={16} />
-              </button>
-            </SystemdPresence>
             <button
               type="button"
               className="icon-button"

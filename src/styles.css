@@ -4268,9 +4268,12 @@ dd {
   flex: none;
 }
 .systemd-toolbar .systemd-toolbar-actions {
-  min-width: 90px;
+  min-width: 0;
   flex: 0 1 auto;
   margin-left: 0;
+}
+.systemd-toolbar-actions > .systemd-presence[data-leaving] {
+  display: none;
 }
 .systemd-toolbar-tools {
   display: flex;
