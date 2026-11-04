@@ -57,4 +57,11 @@ describe("container image identities", () => {
       }
     }
   });
+  it("keeps the Simple Icons license and disclaimer next to the bundled SVGs", () => {
+    const directory = new URL("../assets/container-logos/", import.meta.url);
+    const license = readFileSync(new URL("simple-icons-LICENSE.txt", directory), "utf8");
+    const disclaimer = readFileSync(new URL("simple-icons-DISCLAIMER.txt", directory), "utf8");
+    expect(license).toContain("CC0 1.0 Universal");
+    expect(disclaimer).toContain("Disclaimer");
+  });
 });

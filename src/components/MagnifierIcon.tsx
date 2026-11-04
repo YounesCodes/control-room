@@ -2,7 +2,7 @@ import type { SVGProps } from "react";
 
 // Phosphor Icons, bold magnifying-glass family (MIT).
 // https://github.com/phosphor-icons/core
-// License ships in public/third-party/phosphor-LICENSE.txt.
+// License ships in phosphor-LICENSE.txt next to this component.
 type MagnifierProps = SVGProps<SVGSVGElement> & { size?: number | string };
 const paths = {
   search:
