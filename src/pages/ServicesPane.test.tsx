@@ -101,7 +101,7 @@ describe("ServicesPane failed units view", () => {
       );
     },
   );
-  it("restores each view's inspector state when switching between Explorer and Relationships", async () => {
+  it("restores each view's inspector state when switching between Explorer and Dependency graph", async () => {
     const user = userEvent.setup();
     render(
       <ServicesPane
@@ -113,16 +113,16 @@ describe("ServicesPane failed units view", () => {
     );
     await user.click(screen.getByRole("button", { name: /worker.service description/ }));
     expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Relationships worker.service" }));
+    await user.click(screen.getByRole("button", { name: "Dependency graph worker.service" }));
     expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Explorer" }));
     expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Relationships worker.service" }));
+    await user.click(screen.getByRole("button", { name: "Dependency graph worker.service" }));
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     await user.click(within(graph).getByRole("button", { name: /^worker.service/ }));
     expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Explorer" }));
-    await user.click(screen.getByRole("button", { name: "Relationships worker.service" }));
+    await user.click(screen.getByRole("button", { name: "Dependency graph worker.service" }));
     expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Close details" }));
     await user.click(screen.getByRole("button", { name: "Explorer" }));
@@ -523,7 +523,7 @@ describe("ServicesPane failed units view", () => {
       expect(document.querySelector(".systemd-selection-indicator")).toBeNull();
       expect(onSelectionChange).toHaveBeenLastCalledWith(null);
       expect(
-        (screen.getByRole("button", { name: "Relationships" }) as HTMLButtonElement).disabled,
+        (screen.getByRole("button", { name: "Dependency graph" }) as HTMLButtonElement).disabled,
       ).toBe(true);
       await user.click(row);
       expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
@@ -607,7 +607,7 @@ describe("ServicesPane failed units view", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /a.service description/ }));
-    await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+    await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
     await user.click(await screen.findByRole("button", { name: "Expand b.service" }));
     await user.click(await screen.findByRole("button", { name: "Expand c.service" }));
     await screen.findByRole("button", { name: /^leaf.service/ });
@@ -643,7 +643,8 @@ describe("ServicesPane failed units view", () => {
     );
     expect(onSelectionChange.mock.calls.every(([id]) => id === null)).toBe(true);
     expect(
-      (screen.getByRole("button", { name: /^Relationships(?: |$)/ }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
     expect(api.inspectSystemdUnit).not.toHaveBeenCalled();
   });
@@ -666,7 +667,7 @@ describe("ServicesPane failed units view", () => {
         />,
       );
       await user.click(screen.getByRole("button", { name: /a.service description/ }));
-      await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+      await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
       const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
       const node = await within(graph).findByRole("button", { name: /^b.service/ });
       const content = graph.querySelector<HTMLElement>(".systemd-graph-content")!;
@@ -692,9 +693,9 @@ describe("ServicesPane failed units view", () => {
     );
     const row = screen.getByRole("button", { name: /a.service description/ });
     await user.click(row);
-    const relationships = screen.getByRole("button", { name: "Relationships a.service" });
-    expect(relationships.textContent).toContain("a.service");
-    expect(relationships.textContent).toContain("Relationships");
+    const relationships = screen.getByRole("button", { name: "Dependency graph a.service" });
+    expect(relationships.title).toContain("a.service");
+    expect(relationships.textContent).toContain("Dependency graph");
     await user.dblClick(row);
     expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
     expect(screen.getByRole("region", { name: "Systemd units" })).toBeTruthy();
@@ -728,7 +729,8 @@ describe("ServicesPane failed units view", () => {
     const row = screen.getByRole("button", { name: /old.service description/ });
     expect(row.getAttribute("aria-pressed")).toBe("false");
     expect(
-      (screen.getByRole("button", { name: /^Relationships(?: |$)/ }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
     expect(row.textContent).toContain("Inactive");
     expect(row.textContent).not.toMatch(/dead|disabled/);
@@ -760,7 +762,7 @@ describe("ServicesPane failed units view", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /a.service description/ }));
-    await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+    await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     expect(screen.queryByRole("complementary")).toBeNull();
@@ -882,7 +884,7 @@ describe("ServicesPane failed units view", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /b.service description/ }));
-    expect(screen.getByRole("button", { name: "Relationships b.service" }).textContent).toContain(
+    expect(screen.getByRole("button", { name: "Dependency graph b.service" }).title).toContain(
       "b.service",
     );
     await user.click(screen.getByRole("button", { name: "Refresh systemd units" }));
@@ -910,11 +912,11 @@ describe("ServicesPane failed units view", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /a.service description/ }));
-    await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+    await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("a.service");
     await user.click(screen.getByRole("button", { name: "Explorer" }));
     await user.click(screen.getByRole("button", { name: /b.service description/ }));
-    await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+    await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");
   });
 
@@ -939,7 +941,7 @@ describe("ServicesPane failed units view", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /a.service description/ }));
-    await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+    await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     expect(await within(graph).findByRole("button", { name: /^b.service/ })).toBeTruthy();
     expect(api.inspectSystemdUnit).not.toHaveBeenCalledWith(
@@ -963,7 +965,7 @@ describe("ServicesPane failed units view", () => {
     expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
     await user.click(within(graph).getByRole("button", { name: /^c.service/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("b.service");
-    await user.click(screen.getByRole("button", { name: /^Relationships(?: |$)/ }));
+    await user.click(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }));
     expect(screen.getByTitle("Refocus on current unit").textContent).toBe("c.service");
   });
 });

@@ -160,7 +160,7 @@ it.each([360, 1280])("slides the relationship category selection fill at %ipx", 
   await page.viewport(width, 800);
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await settleMotion();
   const group = screen.getByRole("group", { name: "Relationship category" });
   const pose = () => {
@@ -208,7 +208,9 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
   await settleMotion();
   const view = screen.getByRole("group", { name: "Systemd view" });
   const explorer = within(view).getByRole("button", { name: "Explorer" });
-  const relationships = within(view).getByRole("button", { name: "Relationships worker.service" });
+  const relationships = within(view).getByRole("button", {
+    name: "Dependency graph worker.service",
+  });
   const scopeStyle = getComputedStyle(
     screen.getByRole("group", { name: "Unit scope" }),
     "::before",
@@ -280,7 +282,7 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
     await waitFor(() => expect(explorer.getAttribute("aria-pressed")).toBe("true"));
   }
   aligned(explorer);
-  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await settleMotion();
   aligned(relationships);
   await page.viewport(width === 360 ? 1280 : 360, 800);
@@ -456,7 +458,9 @@ it.each([360, 640, 960, 1280])(
     const poses = protectedText.map((label) => label.getBoundingClientRect());
     for (const mode of ["relationships", "inventory"]) {
       screen
-        .getByRole("button", { name: mode === "inventory" ? "Explorer" : /^Relationships(?: |$)/ })
+        .getByRole("button", {
+          name: mode === "inventory" ? "Explorer" : /^Dependency graph(?: |$)/,
+        })
         .click();
       await screen.findByRole("group", {
         name: mode === "inventory" ? "Unit scope" : "Relationship category",
@@ -502,7 +506,7 @@ it.each([360, 640, 960, 1280])(
     await settleMotion();
     const count = document.querySelector<HTMLElement>(".systemd-unit-count")!;
     const inventoryCount = count.textContent;
-    screen.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+    screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
     const group = await screen.findByRole("group", { name: "Relationship category" });
     async function stableLayout(element: HTMLElement) {
       const samples: number[][] = [];
@@ -529,15 +533,15 @@ it.each([360, 640, 960, 1280])(
     }
     await stableLayout(group);
     expect(
-      screen.getByRole("button", { name: /^Relationships(?: |$)/, pressed: true }),
+      screen.getByRole("button", { name: /^Dependency graph(?: |$)/, pressed: true }),
     ).toBeTruthy();
     screen.getByRole("button", { name: "Explorer" }).click();
     await stableLayout(await screen.findByRole("group", { name: "Unit scope" }));
-    screen.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+    screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     screen.getByRole("button", { name: "Explorer" }).click();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    screen.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+    screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
     await stableLayout(await screen.findByRole("group", { name: "Relationship category" }));
   },
 );
@@ -547,19 +551,17 @@ it.each([360, 960])("names the relationship target without overflowing at %ipx",
   const id = "application-with-a-very-long-service-name-".repeat(3) + ".service";
   renderPane([{ ...units[1], id }]);
   expect(
-    (screen.getByRole("button", { name: "Relationships" }) as HTMLButtonElement).disabled,
+    (screen.getByRole("button", { name: "Dependency graph" }) as HTMLButtonElement).disabled,
   ).toBe(true);
   await page.getByRole("button", { name: new RegExp("^" + id) }).click();
-  const action = screen.getByRole("button", { name: "Relationships " + id });
-  expect(action.textContent).toContain(id);
+  const action = screen.getByRole("button", { name: "Dependency graph " + id });
+  expect(action.querySelector(".systemd-unit-target")!.textContent).toBe(id.slice(0, 23) + "…");
   expect(action.title).toContain(id);
-  expect(action.textContent).toContain("Relationships");
-  const target = action.querySelector<HTMLElement>(".systemd-unit-target")!;
-  expect(target.scrollWidth).toBeGreaterThan(target.clientWidth);
+  expect(action.textContent).toContain("Dependency graph");
   const bounds = action.getBoundingClientRect();
   expect(bounds.left).toBeGreaterThanOrEqual(0);
   expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
-  await page.getByRole("button", { name: "Relationships " + id }).click();
+  await page.getByRole("button", { name: "Dependency graph " + id }).click();
   expect(screen.getByTitle("Refocus on current unit").textContent).toBe(id);
 });
 
@@ -580,10 +582,14 @@ it.each([1000, 1280])(
       const scope = screen.getByRole("group", { name: "Unit scope" });
       left ??= scope.getBoundingClientRect().left;
       expect(scope.getBoundingClientRect().left).toBeCloseTo(left, 2);
-      const action = screen.getByRole("button", { name: "Relationships " + id });
-      expect(action.querySelector(".systemd-unit-target")!.textContent!.length).toBeLessThanOrEqual(
-        24,
-      );
+      expect(
+        document.querySelector(".systemd-heading")!.getBoundingClientRect().right -
+          scope.getBoundingClientRect().right,
+      ).toBeLessThanOrEqual(20);
+      const action = screen.getByRole("button", { name: "Dependency graph " + id });
+      const target = action.querySelector<HTMLElement>(".systemd-unit-target")!;
+      expect(target.textContent).toBe(id.length > 24 ? id.slice(0, 23) + "…" : id);
+      if (id === "a.service") expect(target.clientWidth).toBeLessThan(100);
       expect(action.title).toContain(id);
     }
   },
@@ -691,7 +697,7 @@ it("keeps the scope switch accessible at narrow widths and preserves complete gr
   expect(screen.getByRole("heading", { name: "data.mount" })).toBeTruthy();
   await focused.click();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
   expect(await within(graph).findByRole("button", { name: /^data.mount/ })).toBeTruthy();
   await page.getByRole("button", { name: "Explorer" }).click();
@@ -781,7 +787,7 @@ it("glides one shared service highlight and retargets it during rapid switching"
 });
 
 it.each([360, 1000, 1280])(
-  "keeps Relationships stationary throughout search toggles at %ipx",
+  "keeps Dependency graph stationary throughout search toggles at %ipx",
   async (width) => {
     await page.viewport(width, 800);
     for (const id of [
@@ -871,7 +877,7 @@ it.each([900, 960, 1000, 1100, 1280])(
     const heading = document.querySelector<HTMLElement>(".systemd-heading")!;
     for (const graph of [false, true]) {
       if (graph) {
-        await page.getByRole("button", { name: "Relationships " + id }).click();
+        await page.getByRole("button", { name: "Dependency graph " + id }).click();
         await settleMotion();
       }
       const height = heading.getBoundingClientRect().height;
@@ -890,7 +896,7 @@ it.each([900, 960, 1000, 1100, 1280])(
       expect(actions.getBoundingClientRect().right).toBeLessThanOrEqual(
         heading.getBoundingClientRect().right,
       );
-      expect(screen.getByRole("button", { name: "Relationships " + id }).title).toContain(id);
+      expect(screen.getByRole("button", { name: "Dependency graph " + id }).title).toContain(id);
       await page.getByRole("button", { name: "Hide search", exact: true }).click();
       await settleMotion();
     }
@@ -903,7 +909,7 @@ it.each(["inventory", "graph"])(
     renderPane();
     if (mode === "graph") {
       await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-      await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+      await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
     }
     const name = mode === "graph" ? "Find dependencies" : "Find units";
     const inputName = mode === "graph" ? "Search dependencies" : "Search units";
@@ -1063,7 +1069,7 @@ it.each([360, 960, 1400])(
     const id = "actions.runner.YounesCodes-control-room.desktop-build-runner.service";
     renderPane([{ ...units[1], id }]);
     await page.getByRole("button", { name: id + " Database Running" }).click();
-    const relationship = screen.getByRole("button", { name: "Relationships " + id });
+    const relationship = screen.getByRole("button", { name: "Dependency graph " + id });
     const assertIcons = () => {
       for (const button of [relationship, screen.getByRole("button", { name: "Explorer" })]) {
         const bounds = button.querySelector("svg")!.getBoundingClientRect();
@@ -1234,7 +1240,7 @@ it("toggles the selected node back to a fitted overview without changing graph f
   await page.viewport(960, 800);
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   await page.getByRole("button", { name: /^database.service Running/ }).click();
   await settleMotion();
   expect(new DOMMatrix(camera()).a).toBeCloseTo(1.1);
@@ -1264,7 +1270,7 @@ it("refits and zooms in both directions on show more and show less, including in
   );
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
   await waitFor(() => expect(graph.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
   await settleMotion();
@@ -1338,7 +1344,7 @@ it("keeps selected-node focus when a pending expanded neighborhood arrives", asy
   );
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   await page.getByRole("button", { name: "Expand database.service" }).click();
   await waitFor(() => expect(resolve).toBeTruthy());
   await page.getByRole("button", { name: /^database.service/ }).click();
@@ -1373,7 +1379,7 @@ it("keeps a manual pan when a pending expansion finishes, until the next expansi
   );
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   await page.getByRole("button", { name: "Expand database.service" }).click();
   await waitFor(() => expect(resolve).toBeTruthy());
   const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
@@ -1430,7 +1436,7 @@ it("restores inspector sections and nested scroll positions separately for each 
   code.scrollTop = 120;
   expect(body.scrollTop).toBe(170);
   expect(code.scrollTop).toBe(120);
-  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await page
     .getByRole("region", { name: "Systemd dependency graph" })
     .getByRole("button", { name: /^worker.service/ })
@@ -1444,7 +1450,7 @@ it("restores inspector sections and nested scroll positions separately for each 
     expect(document.querySelector<HTMLElement>(".port-inspector-body")!.scrollTop).toBe(170),
   );
   await waitFor(() => expect(screen.getByLabelText("Unit files").scrollTop).toBe(120));
-  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   expect(document.querySelectorAll(".systemd-inspector details[open]")).toHaveLength(0);
   expect(document.querySelector<HTMLElement>(".port-inspector-body")!.scrollTop).toBe(0);
   await page.getByRole("button", { name: "Explorer" }).click();
@@ -1459,12 +1465,12 @@ it("restores inspector sections and nested scroll positions separately for each 
   );
 });
 
-it("restores Explorer details after visiting Relationships and still deselects on explicit close", async () => {
+it("restores Explorer details after visiting Dependency graph and still deselects on explicit close", async () => {
   await page.viewport(1280, 800);
   renderPane();
   const row = page.getByRole("button", { name: /worker.service Queue worker/ });
   await row.click();
-  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   expect(screen.queryByRole("complementary", { name: "Unit details" })).toBeNull();
   await page.getByRole("button", { name: "Explorer" }).click();
   expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
@@ -1489,7 +1495,7 @@ it.each(["After", "Before"])(
     );
     renderPane();
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-    await page.getByRole("button", { name: "Relationships worker.service" }).click();
+    await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
     await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     await settleMotion();
@@ -1522,7 +1528,7 @@ it("keeps mouse collapse from focusing the opposite-side root tooltip and restor
   render(<TooltipLayer />);
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await page.getByRole("button", { name: /Show more/ }).click();
   await page.getByRole("button", { name: "Show less" }).click();
   await settleMotion();
@@ -1551,7 +1557,7 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
   );
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   const count = () => document.querySelectorAll(".systemd-graph-node").length;
   await waitFor(() => expect(count()).toBe(7));
   await page.getByRole("button", { name: /Show more/ }).click();
@@ -1640,7 +1646,7 @@ it("explains meaningful dependency line styles and keeps ordering and activation
   );
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/ }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/ }).click();
   const requires = await waitFor(() => {
     const element = document.querySelector<SVGPathElement>(
       ".relationship-requires .systemd-edge-path",
@@ -1680,11 +1686,12 @@ it("slides relationship controls and filter panels out without leaving focusable
   renderPane();
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   expect(
-    (screen.getByRole("button", { name: /^Relationships(?: |$)/ }) as HTMLButtonElement).disabled,
+    (screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }) as HTMLButtonElement)
+      .disabled,
   ).toBe(true);
   expect(document.querySelectorAll(".systemd-inventory .selected-row")).toHaveLength(0);
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();
   const group = screen.getByRole("group", { name: "Relationship category" });
   expect(getComputedStyle(group).animationName).toBe(reduced ? "none" : "systemd-controls-in");
   await page.getByRole("button", { name: "Explorer", exact: true }).click();
@@ -1700,7 +1707,7 @@ it("slides relationship controls and filter panels out without leaving focusable
   if (!reduced) expect(panel.parentElement?.hasAttribute("inert")).toBe(true);
   await waitFor(() => expect(document.querySelectorAll("[data-leaving]")).toHaveLength(0));
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  expect(screen.getAllByRole("button", { name: /^Relationships(?: |$)/ })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: /^Dependency graph(?: |$)/ })).toHaveLength(1);
 });
 
 it.each([1, 1000])(
@@ -1767,10 +1774,10 @@ it.each(["button", "item", "escape"])(
     expect(row.classList.contains("selected-row")).toBe(false);
     expect(document.querySelector(".systemd-selection-indicator")).toBeNull();
     expect(
-      (screen.getByRole("button", { name: "Relationships" }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: "Dependency graph" }) as HTMLButtonElement).disabled,
     ).toBe(true);
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-    await page.getByRole("button", { name: "Relationships worker.service" }).click();
+    await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
     const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
     const node = within(graph).getByRole("button", { name: /^worker.service/ });
     await page
@@ -1808,10 +1815,10 @@ it("opens graph without an inspector, separates categories and keeps selection a
   await page.getByRole("button", { name: "Close details" }).click();
   expect(screen.queryByRole("region", { name: "Systemd dependency graph" })).toBeNull();
   await page.getByRole("button", { name: /database.service Database/ }).click();
-  expect(screen.getByRole("button", { name: /^Relationships(?: |$)/ }).title).toContain(
+  expect(screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }).title).toContain(
     "database.service",
   );
-  await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();
   expect(screen.queryByRole("complementary")).toBeNull();
   expect(screen.getByTitle("Refocus on current unit").textContent).toBe("database.service");
   expect(screen.getByRole("button", { name: "Dependencies" }).getAttribute("aria-pressed")).toBe(
@@ -1826,7 +1833,7 @@ it("opens graph without an inspector, separates categories and keeps selection a
     screen.getByRole("button", { name: /database.service Database/ }).getAttribute("aria-pressed"),
   ).toBe("true");
   expect(screen.getByRole("complementary", { name: "Unit details" })).toBeTruthy();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();
   expect(screen.getByRole("button", { name: "Ordering" }).getAttribute("aria-pressed")).toBe(
     "true",
   );
@@ -1836,7 +1843,7 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   await page.viewport(1280, 800);
   renderPane();
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-  await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
+  await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();
   const graph = screen.getByRole("region", { name: "Systemd dependency graph" });
   await waitFor(() =>
     expect(within(graph).getByRole("button", { name: /^database.service/ })).toBeTruthy(),
@@ -2051,7 +2058,7 @@ it.each([360, 960, 1400])(
     }
     await page.viewport(width, 800);
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
-    await page.getByRole("button", { name: /^Relationships(?: |$)/, exact: true }).click();
+    await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();
     await waitFor(() =>
       expect(document.querySelectorAll(".systemd-graph-node").length).toBeGreaterThan(1),
     );

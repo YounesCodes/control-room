@@ -67,43 +67,6 @@ export function SystemdToolbar({
   const categorySwitch = useSwitchFill(state.relationshipGroup, state.mode);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const searchField = useRef<HTMLDivElement>(null);
-  function measureSearchSpace() {
-    const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
-    const mode = viewSwitch.current;
-    if (!heading || !mode) return;
-    const style = getComputedStyle(heading);
-    const outerWidth = (item: Element) => {
-      const itemStyle = getComputedStyle(item);
-      return (
-        item.getBoundingClientRect().width +
-        parseFloat(itemStyle.marginLeft) +
-        parseFloat(itemStyle.marginRight)
-      );
-    };
-    const context = heading.querySelector(".systemd-mode-tools");
-    const separateRows = !!context && getComputedStyle(context).flexBasis === "100%";
-    const fixed = [...heading.children].filter(
-      (item) =>
-        item !== mode &&
-        !item.classList.contains("systemd-toolbar-actions") &&
-        (!separateRows || item !== context) &&
-        getComputedStyle(item).display !== "none",
-    );
-    const available =
-      heading.clientWidth -
-      parseFloat(style.paddingLeft) -
-      parseFloat(style.paddingRight) -
-      (fixed.length + (separateRows ? 0 : 1)) * parseFloat(style.columnGap) -
-      fixed.reduce((sum, item) => sum + outerWidth(item), 0) -
-      parseFloat(getComputedStyle(mode).marginLeft) -
-      (separateRows ? 0 : parseFloat(style.getPropertyValue("--search-actions-min-width")));
-    const minimum = parseFloat(style.getPropertyValue("--view-search-min-width"));
-    if (Number.isFinite(available) && Number.isFinite(minimum))
-      ref.current?.style.setProperty(
-        "--view-search-max-width",
-        Math.max(minimum, available) + "px",
-      );
-  }
   function setTools(next: "search" | "filters" | null) {
     if (next === "search" && tools !== "search" && searchField.current) {
       const field = searchField.current;
@@ -125,27 +88,6 @@ export function SystemdToolbar({
   useEffect(() => {
     setTools(null);
   }, [state.mode]);
-  useLayoutEffect(measureSearchSpace, [state.mode, selectedUnit, total, visible, failed]);
-  useEffect(() => {
-    const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
-    let width = heading?.clientWidth;
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(() => {
-            if (heading?.clientWidth !== width) {
-              width = heading?.clientWidth;
-              measureSearchSpace();
-            }
-          });
-    if (heading) observer?.observe(heading);
-    window.addEventListener("resize", measureSearchSpace);
-    return () => {
-      window.removeEventListener("resize", measureSearchSpace);
-      observer?.disconnect();
-      measureSearchSpace();
-    };
-  }, []);
   useLayoutEffect(() => {
     if (tools !== "filters") return;
     const position = () => {
@@ -238,99 +180,47 @@ export function SystemdToolbar({
             {failed} failed
           </button>
         )}
-        <div
-          className="systemd-view-switch systemd-mode-switch"
-          ref={viewSwitch}
-          role="group"
-          aria-label="Systemd view"
-        >
-          <button
-            type="button"
-            aria-label="Explorer"
-            aria-pressed={!graph}
-            title="Unit inventory"
-            onClick={() => onMode("inventory")}
+        <div className="systemd-view-slot">
+          <div
+            className="systemd-view-switch systemd-mode-switch"
+            ref={viewSwitch}
+            role="group"
+            aria-label="Systemd view"
           >
-            <List size={14} />
-            Explorer
-          </button>
-          <button
-            type="button"
-            aria-pressed={graph}
-            aria-label={selectedUnit ? "Relationships " + selectedUnit : "Relationships"}
-            title={
-              selectedUnit
-                ? "Show relationships for " + selectedUnit
-                : "Select a unit to view its relationships"
-            }
-            disabled={!canGraph}
-            onClick={() => onMode("graph")}
-          >
-            <GitBranch size={14} />
-            Relationships{" "}
-            {selectedUnit && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="systemd-unit-target">
-                  {selectedUnit.length > 24 ? selectedUnit.slice(0, 23) + "…" : selectedUnit}
-                </span>
-              </>
-            )}
-          </button>
-        </div>
-        <div className="systemd-mode-tools">
-          <SystemdPresence open={!graph}>
-            <div
-              className="systemd-scope-switch systemd-view-switch"
-              role="group"
-              aria-label="Unit scope"
+            <button
+              type="button"
+              aria-label="Explorer"
+              aria-pressed={!graph}
+              title="Unit inventory"
+              onClick={() => onMode("inventory")}
             >
-              <button
-                type="button"
-                aria-pressed={state.scope !== "all"}
-                title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
-                onClick={() => onChange({ scope: "focused" })}
-              >
-                Focused
-              </button>
-              <button
-                type="button"
-                aria-pressed={state.scope === "all"}
-                title="Include every unit type and system service"
-                onClick={() => onChange({ scope: "all" })}
-              >
-                All units
-              </button>
-            </div>
-          </SystemdPresence>
-          <SystemdPresence open={graph}>
-            <div
-              className="systemd-relationship-groups systemd-mode-switch"
-              ref={categorySwitch}
-              role="group"
-              aria-label="Relationship category"
+              <List size={14} />
+              Explorer
+            </button>
+            <button
+              type="button"
+              aria-pressed={graph}
+              aria-label={selectedUnit ? "Dependency graph " + selectedUnit : "Dependency graph"}
+              title={
+                selectedUnit
+                  ? "Dependencies, ordering, and activation for " + selectedUnit
+                  : "Select a unit to view its dependency map"
+              }
+              disabled={!canGraph}
+              onClick={() => onMode("graph")}
             >
-              {(["dependencies", "ordering", "activation"] as const).map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  aria-pressed={state.relationshipGroup === category}
-                  title={
-                    category === "dependencies"
-                      ? "Requires and Wants, including reverse dependencies"
-                      : category === "ordering"
-                        ? "Before and After ordering constraints"
-                        : "Triggers and TriggeredBy activation evidence"
-                  }
-                  onClick={() =>
-                    onChange({ relationshipGroup: category, visibleLimit: SYSTEMD_INITIAL_VISIBLE })
-                  }
-                >
-                  {category[0].toUpperCase() + category.slice(1)}
-                </button>
-              ))}
-            </div>
-          </SystemdPresence>
+              <GitBranch size={14} />
+              Dependency graph
+              {selectedUnit && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="systemd-unit-target">
+                    {selectedUnit.length > 24 ? selectedUnit.slice(0, 23) + "…" : selectedUnit}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
         <div className="systemd-toolbar-actions">
           <div className="systemd-search-control search-field">
@@ -411,6 +301,60 @@ export function SystemdToolbar({
           >
             <RefreshCw size={16} className={loading ? "spinning" : ""} />
           </button>
+        </div>
+        <div className="systemd-mode-tools">
+          <SystemdPresence open={!graph}>
+            <div
+              className="systemd-scope-switch systemd-view-switch"
+              role="group"
+              aria-label="Unit scope"
+            >
+              <button
+                type="button"
+                aria-pressed={state.scope !== "all"}
+                title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
+                onClick={() => onChange({ scope: "focused" })}
+              >
+                Focused
+              </button>
+              <button
+                type="button"
+                aria-pressed={state.scope === "all"}
+                title="Include every unit type and system service"
+                onClick={() => onChange({ scope: "all" })}
+              >
+                All units
+              </button>
+            </div>
+          </SystemdPresence>
+          <SystemdPresence open={graph}>
+            <div
+              className="systemd-relationship-groups systemd-mode-switch"
+              ref={categorySwitch}
+              role="group"
+              aria-label="Relationship category"
+            >
+              {(["dependencies", "ordering", "activation"] as const).map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  aria-pressed={state.relationshipGroup === category}
+                  title={
+                    category === "dependencies"
+                      ? "Requires and Wants, including reverse dependencies"
+                      : category === "ordering"
+                        ? "Before and After ordering constraints"
+                        : "Triggers and TriggeredBy activation evidence"
+                  }
+                  onClick={() =>
+                    onChange({ relationshipGroup: category, visibleLimit: SYSTEMD_INITIAL_VISIBLE })
+                  }
+                >
+                  {category[0].toUpperCase() + category.slice(1)}
+                </button>
+              ))}
+            </div>
+          </SystemdPresence>
         </div>
       </header>
       <SystemdPresence open={tools === "filters"}>

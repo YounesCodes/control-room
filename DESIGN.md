@@ -327,7 +327,7 @@ the graph. Selection, filters, root, and expansion stay with the workspace durin
 navigation. Changed SSH targets discard that context and use separate detail caches.
 
 Keep inspectors closed until selection.
-Remember open inspector state separately for Explorer and Relationships while
+Remember open inspector state separately for Explorer and Dependency graph while
 switching views. Returning to a view restores its inspector for the current selection.
 Remember disclosure sections and body/code scroll positions per unit, view, and SSH
 target. Restore scroll after lazy evidence arrives, without overriding user input.
@@ -344,10 +344,10 @@ Keep exiting controls inert and hidden from assistive
 technology, cancel exits when reopened, and remove them immediately under reduced
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat the graph action in the inspector.
-Slide one selection fill between Explorer and Relationships with the same motion
+Slide one selection fill between Explorer and Dependency graph with the same motion
 as Focused / All units. Use symmetric easing so expansion and contraction feel equally quick.
 Measure its position and width so it fits the unequal
-labels, follows target-name and window-size changes, and reverses from its current
+labels, follows window-size changes, and reverses from its current
 pose on rapid switching. Apply the same sliding fill to Dependencies, Ordering,
 and Activation. Place the initial fill immediately and skip motion when reduced motion is requested.
 Refresh runtime properties for the inspected service periodically without inserting
@@ -359,12 +359,12 @@ between readings with tabular digits, starting
 from the displayed value if a newer reading arrives mid-transition. Show the first
 reading immediately. Reduced motion uses the latest value directly, and assistive
 technology reads the collected value rather than intermediate animation frames.
-Name the graph action Relationships followed by the selected unit, separated by
-a quiet dot. Keep the full target in its accessible name and tooltip, and truncate
-only the visible unit name when space is limited. Cap it at 24 characters including
-the ellipsis and reserve a fixed name slot so changing selections cannot move scope controls.
-Before selection, show a disabled
-Relationships action. Keep the inventory count identical in both views so its text
+Name the graph action Dependency graph. Keep the full target in its accessible
+name and tooltip, and show it beside the action and in the graph heading. Cap the
+visible name at 24 characters. Let the card fit its text. Keep scope and relationship
+category controls at the far right beside search and refresh, independently of name length.
+Before selection, show a disabled Dependency graph action.
+Keep the inventory count identical in both views so its text
 and width do not change during navigation. Put scope and relationship controls in
 one fixed-size, clipped toolbar slot. Anchor inert exits inside that slot so they
 never paint across the heading or view switch. Keep the slot on its own centered
@@ -372,13 +372,12 @@ row at narrow widths in both modes. Incoming controls start in their final
 slot and never jump when the exit ends. Reserve a usable width for expanded search.
 At intermediate widths, keep actions beside the view switch and put scope/category controls
 on their own row instead of dropping action icons into an otherwise empty row.
-Truncate the selected unit name before wrapping the action row; keep search inline
-whenever the controls fit, and wrap before the input can collapse.
+Keep search inline whenever the controls fit, and wrap before the input can collapse.
 Reserve search space in both states so opening it does not resize or move the view
-switch, service name, or category controls. Truncate names based on available pane
+switch or category controls. Truncate names based on available pane
 width, independently of search visibility. Animate only the search field within
 that space; skip its motion when reduced motion is requested.
-Opening Relationships focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
+Opening Dependency graph focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
 timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
