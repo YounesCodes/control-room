@@ -563,6 +563,32 @@ it.each([360, 960])("names the relationship target without overflowing at %ipx",
   expect(screen.getByTitle("Refocus on current unit").textContent).toBe(id);
 });
 
+it.each([1000, 1280])(
+  "keeps the relationship name slot and scope controls steady across selections at %ipx",
+  async (width) => {
+    await page.viewport(width, 800);
+    const ids = [
+      "a.service",
+      "database.service",
+      "actions.runner.YounesCodes-control-room.production-worker.service",
+    ];
+    renderPane(ids.map((id) => ({ ...units[1], id })));
+    let left: number | undefined;
+    for (const id of ids) {
+      await page.getByRole("button", { name: id + " Database Running" }).click();
+      await settleMotion();
+      const scope = screen.getByRole("group", { name: "Unit scope" });
+      left ??= scope.getBoundingClientRect().left;
+      expect(scope.getBoundingClientRect().left).toBeCloseTo(left, 2);
+      const action = screen.getByRole("button", { name: "Relationships " + id });
+      expect(action.querySelector(".systemd-unit-target")!.textContent!.length).toBeLessThanOrEqual(
+        24,
+      );
+      expect(action.title).toContain(id);
+    }
+  },
+);
+
 it("keeps the unit count width and view switch position stable across scopes", async () => {
   await page.viewport(1280, 800);
   renderPane();

@@ -361,7 +361,9 @@ reading immediately. Reduced motion uses the latest value directly, and assistiv
 technology reads the collected value rather than intermediate animation frames.
 Name the graph action Relationships followed by the selected unit, separated by
 a quiet dot. Keep the full target in its accessible name and tooltip, and truncate
-only the visible unit name when space is limited. Before selection, show a disabled
+only the visible unit name when space is limited. Cap it at 24 characters including
+the ellipsis and reserve a fixed name slot so changing selections cannot move scope controls.
+Before selection, show a disabled
 Relationships action. Keep the inventory count identical in both views so its text
 and width do not change during navigation. Put scope and relationship controls in
 one fixed-size, clipped toolbar slot. Anchor inert exits inside that slot so they

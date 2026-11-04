@@ -257,6 +257,7 @@ export function SystemdToolbar({
           <button
             type="button"
             aria-pressed={graph}
+            aria-label={selectedUnit ? "Relationships " + selectedUnit : "Relationships"}
             title={
               selectedUnit
                 ? "Show relationships for " + selectedUnit
@@ -270,7 +271,9 @@ export function SystemdToolbar({
             {selectedUnit && (
               <>
                 <span aria-hidden="true">·</span>
-                <span className="systemd-unit-target">{selectedUnit}</span>
+                <span className="systemd-unit-target">
+                  {selectedUnit.length > 24 ? selectedUnit.slice(0, 23) + "…" : selectedUnit}
+                </span>
               </>
             )}
           </button>
