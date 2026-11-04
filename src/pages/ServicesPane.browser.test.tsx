@@ -147,6 +147,48 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it.each([360, 1280])(
+  "keeps configuration directly accessible and the full journal action fixed at %ipx",
+  async (width) => {
+    await page.viewport(width, 500);
+    renderPane();
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    const inspector = screen.getByRole("complementary", { name: "Unit details" });
+    expect(within(inspector).queryByText("Recent journal")).toBeNull();
+    expect(
+      [...inspector.querySelectorAll("summary")].map((summary) => summary.textContent),
+    ).toEqual(["Dependencies", "Configuration", "Advanced"]);
+    expect(
+      api.inspectSystemdUnit.mock.calls.some(([, , section]) => section === "configuration"),
+    ).toBe(false);
+    await page.getByText("Configuration", { exact: true }).click();
+    await waitFor(() =>
+      expect(api.inspectSystemdUnit).toHaveBeenCalledWith(
+        host.id,
+        "worker.service",
+        "configuration",
+      ),
+    );
+    expect(await screen.findByText(/Restart=on-failure/)).toBeTruthy();
+    expect(screen.getByText("Advanced").closest("details")?.open).toBe(false);
+    await settleMotion();
+    const journal = within(inspector).getByRole("button", { name: "View journal" });
+    const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
+    expect(journal.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      body.getBoundingClientRect().bottom - 1,
+    );
+    expect(journal.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      inspector.getBoundingClientRect().bottom,
+    );
+    expect(inspector.getBoundingClientRect().bottom).toBeLessThanOrEqual(500);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    expect(api.inspectSystemdUnit.mock.calls.some(([, , section]) => section === "journal")).toBe(
+      false,
+    );
+    expect((await audit()).violations).toEqual([]);
+  },
+);
+
 it.each([360, 640, 960, 1280])(
   "keeps exiting controls clear of the heading text at %ipx",
   async (width) => {

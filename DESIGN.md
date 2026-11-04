@@ -343,9 +343,11 @@ the selected unit, including a selected neighbor of a previously explored root. 
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
 timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
-and failure results. Dependencies, Recent journal, and Advanced start collapsed.
-Put conditions, assertions, configuration, and effective properties under Advanced.
-Journal, unit files, and full effective properties load when opened, with separate
+and failure results. Dependencies, Configuration, and Advanced start collapsed.
+Keep Configuration directly accessible for unit files and drop-ins. Put conditions,
+assertions, runtime details, and effective properties under Advanced. Keep journal
+reading in the full Logs view, reached through View journal in the fixed footer.
+Unit files and full effective properties load when opened, with separate
 unavailable and truncated states. Keep file contents distinct from the manager's
 effective properties. Reuse inspector disclosure motion. Reduced motion removes camera, node, and
 disclosure animation. Ports navigation uses explicit unit evidence; current Boot

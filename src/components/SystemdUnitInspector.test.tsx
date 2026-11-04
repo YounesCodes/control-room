@@ -12,14 +12,8 @@ beforeEach(() => {
   invalidateSystemdReads("host");
   api.inspectSystemdUnit
     .mockReset()
-    .mockImplementation((_host, id, section) =>
-      Promise.resolve(
-        systemdInspection(
-          id,
-          {},
-          section === "journal" ? "Process exited with status 1" : "[Service]\nRestart=on-failure",
-        ),
-      ),
+    .mockImplementation((_host, id) =>
+      Promise.resolve(systemdInspection(id, {}, "[Service]\nRestart=on-failure")),
     );
 });
 afterEach(cleanup);
@@ -96,7 +90,7 @@ it.each([
   expect(screen.getByText(expected)).toBeTruthy();
 });
 
-it("loads configuration, effective properties and failure journal only when opened", async () => {
+it("keeps configuration directly accessible, reads it on demand, and opens the full journal", async () => {
   const user = userEvent.setup();
   const props = inspector(
     systemdInspection("worker.service", {
@@ -106,11 +100,17 @@ it("loads configuration, effective properties and failure journal only when open
     }),
   );
   expect(api.inspectSystemdUnit).not.toHaveBeenCalled();
-  await user.click(screen.getByText("Advanced", { selector: "summary" }));
+  expect(screen.queryByText("Recent journal")).toBeNull();
+  expect([...document.querySelectorAll("summary")].map((summary) => summary.textContent)).toEqual([
+    "Dependencies",
+    "Configuration",
+    "Advanced",
+  ]);
   await user.click(screen.getByText("Configuration", { selector: "summary" }));
   await waitFor(() =>
     expect(api.inspectSystemdUnit).toHaveBeenCalledWith("host", "worker.service", "configuration"),
   );
+  await user.click(screen.getByText("Advanced", { selector: "summary" }));
   await user.click(screen.getByText("Effective properties", { selector: "summary" }));
   await waitFor(() =>
     expect(api.inspectSystemdUnit).toHaveBeenCalledWith(
@@ -119,10 +119,11 @@ it("loads configuration, effective properties and failure journal only when open
       "effectiveConfiguration",
     ),
   );
-  await user.click(screen.getByText("Recent journal", { selector: "summary" }));
-  expect(await screen.findByText("Process exited with status 1")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "View journal" }));
   expect(props.onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "worker.service" });
+  expect(api.inspectSystemdUnit.mock.calls.some(([, , section]) => section === "journal")).toBe(
+    false,
+  );
   await user.click(screen.getByText("Dependencies", { selector: "summary" }));
   await user.click(screen.getByRole("button", { name: /database.service.*Requires/ }));
   expect(props.onNavigate).toHaveBeenCalledWith("database.service");
@@ -130,4 +131,9 @@ it("loads configuration, effective properties and failure journal only when open
   expect(props.onOpenPorts).toHaveBeenCalledWith("worker.service");
   await user.click(screen.getByRole("button", { name: "Boot" }));
   expect(props.onOpenBoot).toHaveBeenCalled();
+  await user.click(screen.getByText("Advanced", { selector: "summary" }));
+  expect(screen.getByText("Configuration", { selector: "summary" }).closest("details")?.open).toBe(
+    true,
+  );
+  expect(screen.getByText(/Restart=on-failure/).closest("details")?.open).toBe(true);
 });

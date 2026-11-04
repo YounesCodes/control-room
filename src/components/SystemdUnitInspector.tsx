@@ -45,16 +45,15 @@ function Evidence({
   connectionId: string;
   cacheScope?: string;
   unit: string;
-  section: "journal" | "configuration" | "effectiveConfiguration";
+  section: "configuration" | "effectiveConfiguration";
   revision: number;
 }) {
   const [retry, setRetry] = useState(0);
   const result = useSystemdReads(connectionId, [unit], revision + retry, section, cacheScope)[unit];
+  const content = section === "configuration" ? "unit files" : "effective properties";
   return (
     <>
-      {result?.loading && (
-        <p role="status">Reading {section === "journal" ? "journal" : "unit files"}…</p>
-      )}
+      {result?.loading && <p role="status">Reading {content}…</p>}
       {result?.error && (
         <p className="inline-warning" role="status">
           {result.value ? "Saved evidence. " : ""}
@@ -72,10 +71,7 @@ function Evidence({
       {result?.value?.truncated && <p className="inline-warning">Showing the first 128 KiB.</p>}
       {result?.value && (
         <pre className="systemd-evidence" tabIndex={0}>
-          {result.value.text ||
-            (section === "journal"
-              ? "No journal entries visible to this account."
-              : "No unit files returned.")}
+          {result.value.text || `No ${content} returned.`}
         </pre>
       )}
     </>
@@ -109,7 +105,6 @@ export function SystemdUnitInspector({
 }) {
   const [configuration, setConfiguration] = useState(false);
   const [effective, setEffective] = useState(false);
-  const [journal, setJournal] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const p = result?.value?.properties ?? {};
   const type = unitId.split(".").at(-1);
@@ -288,15 +283,28 @@ export function SystemdUnitInspector({
             </p>
           )}
         </InspectorDisclosure>
-        <InspectorDisclosure title="Recent journal" open={journal} onToggle={setJournal}>
-          {journal && (
-            <Evidence
-              connectionId={connectionId}
-              cacheScope={cacheScope}
-              unit={unitId}
-              section="journal"
-              revision={revision}
-            />
+        <InspectorDisclosure title="Configuration" open={configuration} onToggle={setConfiguration}>
+          {configuration && (
+            <>
+              <Fields
+                rows={[
+                  ["Unit file", p.FragmentPath],
+                  ["Source file", p.SourcePath],
+                  ["Drop-ins", p.DropInPaths === "" ? "None reported" : p.DropInPaths],
+                  ["Reload needed", p.NeedDaemonReload],
+                ]}
+              />
+              <p className="systemd-evidence-note">
+                Files on disk may differ from loaded properties until a daemon reload.
+              </p>
+              <Evidence
+                connectionId={connectionId}
+                cacheScope={cacheScope}
+                unit={unitId}
+                section="configuration"
+                revision={revision}
+              />
+            </>
           )}
         </InspectorDisclosure>
         <InspectorDisclosure
@@ -304,7 +312,6 @@ export function SystemdUnitInspector({
           onToggle={(open) => {
             setAdvanced(open);
             if (!open) {
-              setConfiguration(false);
               setEffective(false);
             }
           }}
@@ -332,30 +339,6 @@ export function SystemdUnitInspector({
                   ...runtime,
                 ].filter((row): row is [string, string] => row[1] !== undefined)}
               />
-              <InspectorDisclosure title="Configuration" onToggle={setConfiguration}>
-                <Fields
-                  rows={[
-                    ["Unit file", p.FragmentPath],
-                    ["Source file", p.SourcePath],
-                    ["Drop-ins", p.DropInPaths === "" ? "None reported" : p.DropInPaths],
-                    ["Reload needed", p.NeedDaemonReload],
-                  ]}
-                />
-                {configuration && (
-                  <>
-                    <p className="systemd-evidence-note">
-                      Files on disk may differ from loaded properties until a daemon reload.
-                    </p>
-                    <Evidence
-                      connectionId={connectionId}
-                      cacheScope={cacheScope}
-                      unit={unitId}
-                      section="configuration"
-                      revision={revision}
-                    />
-                  </>
-                )}
-              </InspectorDisclosure>
               <InspectorDisclosure title="Effective properties" onToggle={setEffective}>
                 {effective && (
                   <Evidence
