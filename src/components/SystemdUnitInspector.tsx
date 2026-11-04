@@ -110,6 +110,7 @@ export function SystemdUnitInspector({
   onRefresh,
   onViewLogs,
   onOpenPorts,
+  onRequestPorts,
   onOpenBoot,
 }: {
   connectionId: string;
@@ -121,6 +122,7 @@ export function SystemdUnitInspector({
   onRefresh: () => void;
   onViewLogs: (source: LogSourceSelection) => void;
   onOpenPorts?: (unit: string) => void;
+  onRequestPorts?: () => void;
   onOpenBoot?: () => void;
 }) {
   const [configuration, setConfiguration] = useState(false);
@@ -287,6 +289,7 @@ export function SystemdUnitInspector({
           title="Advanced"
           onToggle={(open) => {
             setAdvanced(open);
+            if (open && (type === "service" || type === "socket")) onRequestPorts?.();
             if (!open) {
               setEffective(false);
             }
@@ -327,7 +330,7 @@ export function SystemdUnitInspector({
                 )}
               </InspectorDisclosure>
               <div className="systemd-inspector-links">
-                {onOpenPorts && (
+                {onOpenPorts && (type === "service" || type === "socket") && (
                   <button type="button" className="link-button" onClick={() => onOpenPorts(unitId)}>
                     <Network size={13} />
                     Ports

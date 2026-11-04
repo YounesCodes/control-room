@@ -2571,6 +2571,10 @@ export function App() {
                         key={activeRemoteWorkspace.id}
                         connection={activeConnection}
                         cache={activeRemoteWorkspace.servicesCache}
+                        portsCache={activeRemoteWorkspace.portsCache}
+                        onPortsCacheChange={(cache) =>
+                          updatePortsCache(activeRemoteWorkspace.id, cache)
+                        }
                         onCacheChange={(cache) =>
                           updateServicesCache(activeRemoteWorkspace.id, cache)
                         }

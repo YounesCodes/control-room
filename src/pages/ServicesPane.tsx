@@ -23,6 +23,7 @@ import { isCacheFresh } from "../lib/workspace-cache";
 import type {
   CachedList,
   LogSourceSelection,
+  ListeningSocket,
   SavedConnection,
   SystemdExplorerState,
   SystemdUnit,
@@ -51,6 +52,8 @@ export function ServicesPane({
   onStateChange,
   onSelectionChange,
   onOpenPorts,
+  portsCache,
+  onPortsCacheChange,
   onOpenBoot,
 }: {
   connection: SavedConnection;
@@ -62,6 +65,8 @@ export function ServicesPane({
   onStateChange?: (state: SystemdExplorerState) => void;
   onSelectionChange?: (id: string | null) => void;
   onOpenPorts?: (unit: string) => void;
+  portsCache?: CachedList<ListeningSocket>;
+  onPortsCacheChange?: (cache: CachedList<ListeningSocket>) => void;
   onOpenBoot?: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
@@ -81,6 +86,16 @@ export function ServicesPane({
   const [revision, setRevision] = useState(0);
   const cacheRef = useRef(cache);
   const requestRef = useRef(0);
+  const portsRequestRef = useRef(0);
+  const portsLoadingRef = useRef(false);
+  const portsCacheRef = useRef(portsCache);
+  const targetRef = useRef(connectionTargetKey(connection));
+  portsCacheRef.current = portsCache;
+  if (targetRef.current !== connectionTargetKey(connection)) {
+    portsRequestRef.current += 1;
+    portsLoadingRef.current = false;
+    targetRef.current = connectionTargetKey(connection);
+  }
   const selectionCallback = useRef(onSelectionChange);
   const stateCallback = useRef(onStateChange);
   cacheRef.current = cache;
@@ -114,6 +129,7 @@ export function ServicesPane({
     void load();
     return () => {
       requestRef.current += 1;
+      portsRequestRef.current += 1;
     };
   }, [connection.id]);
   useEffect(() => {
@@ -289,6 +305,41 @@ export function ServicesPane({
   function refreshDetails() {
     invalidateSystemdReads(connection.id);
     setRevision((n) => n + 1);
+    const portsSnapshot = portsCacheRef.current;
+    if (portsSnapshot && portsSnapshot.fetchedAt !== null) void loadUnitPorts(true);
+  }
+  async function loadUnitPorts(force = false) {
+    const current = portsCacheRef.current;
+    const target = connectionTargetKey(connection);
+    if (
+      target !== targetRef.current ||
+      !selectedId ||
+      !/\.(service|socket)$/.test(selectedId) ||
+      !current ||
+      !onPortsCacheChange ||
+      portsLoadingRef.current ||
+      (!force && !current.loading && isCacheFresh(current) && !current.error)
+    )
+      return;
+    const request = ++portsRequestRef.current;
+    portsLoadingRef.current = true;
+    const loading = { ...current, loading: true, error: null };
+    portsCacheRef.current = loading;
+    onPortsCacheChange(loading);
+    try {
+      const items = await api.listPorts(connection.id);
+      if (request !== portsRequestRef.current || target !== targetRef.current) return;
+      const next = { items, fetchedAt: Date.now(), loading: false, error: null };
+      portsCacheRef.current = next;
+      onPortsCacheChange(next);
+    } catch (caught) {
+      if (request !== portsRequestRef.current || target !== targetRef.current) return;
+      const next = { ...current, loading: false, error: errorMessage(caught) };
+      portsCacheRef.current = next;
+      onPortsCacheChange(next);
+    } finally {
+      if (request === portsRequestRef.current) portsLoadingRef.current = false;
+    }
   }
   function refocus(id: string) {
     setSelectedId(id);
@@ -350,7 +401,19 @@ export function ServicesPane({
       revision={revision}
       onRefresh={refreshDetails}
       onViewLogs={onViewLogs}
-      onOpenPorts={onOpenPorts}
+      onRequestPorts={onOpenPorts ? () => void loadUnitPorts() : undefined}
+      onOpenPorts={
+        portsCache &&
+        !portsCache.loading &&
+        !portsCache.error &&
+        isCacheFresh(portsCache) &&
+        /\.(service|socket)$/.test(selectedId) &&
+        portsCache.items.some(
+          (socket) => socket.ownership === "known" && socket.systemdUnit === selectedId,
+        )
+          ? onOpenPorts
+          : undefined
+      }
       onOpenBoot={onOpenBoot}
     />
   );

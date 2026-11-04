@@ -35,7 +35,7 @@ Use **Show less** to reduce the visible set, or **Undo** to reverse the last exp
 
 Select the failed count, then a unit. **Failure evidence** shows the systemd result and recorded exit status or signal. **View journal** in the inspector footer opens the full Logs view for that unit. Journal entries and related units are evidence, not a diagnosis.
 
-**Ports** and **Boot** are under **Advanced**. Ports shows endpoints with an explicit link to the unit; its unit label returns to Systemd. Boot diagnostics links current failed and slow units back to Systemd. Selection, filters, and graph expansion survive switching views, workspace navigation, and refreshes. A filtered selection offers a way to reveal it.
+**Ports** and **Boot** are under **Advanced**. **Ports** appears only for a service or socket with a confirmed listening port owned by that unit. Opening Advanced checks the shared listener inventory when needed. Mounts, timers, and units without confirmed port ownership omit the shortcut. Ports shows endpoints linked to the unit; its unit label returns to Systemd. Boot diagnostics links current failed and slow units back to Systemd. Selection, filters, and graph expansion survive switching views, workspace navigation, and refreshes. A filtered selection offers a way to reveal it.
 
 Systemd reads system units with `systemctl`; it does not include user units or change service state. Details and evidence show permission errors separately. Evidence reads are limited to 128 KiB, with truncation reported. Refresh retries failed reads and keeps saved evidence visible when available.
 

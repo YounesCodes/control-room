@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   listServices: vi.fn(),
   inspectSystemdUnit: vi.fn(),
+  listPorts: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -14,7 +16,7 @@ vi.mock("../lib/api", () => ({
   errorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
-import type { CachedList, SavedConnection, SystemdUnit } from "../types";
+import type { CachedList, ListeningSocket, SavedConnection, SystemdUnit } from "../types";
 import { ServicesPane } from "./ServicesPane";
 import { invalidateSystemdReads } from "../lib/systemd-inspection";
 import { systemdInspection } from "../test/systemd-fixtures";
@@ -47,7 +49,7 @@ function unit(id: string, unitType: string, activeState: string, subState: strin
   };
 }
 
-function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
+function cache<T>(items: T[]): CachedList<T> {
   return {
     items,
     fetchedAt: Date.now(),
@@ -57,6 +59,184 @@ function cache(items: SystemdUnit[]): CachedList<SystemdUnit> {
 }
 
 describe("ServicesPane failed units view", () => {
+  const listener: ListeningSocket = {
+    id: "tcp:8080",
+    protocol: "tcp",
+    addressFamily: "ipv4",
+    localAddress: "0.0.0.0",
+    port: 8080,
+    processId: 42,
+    processName: "worker",
+    systemdUnit: "worker.service",
+    ownership: "known",
+  };
+
+  it.each([
+    ["worker.service", "known", true],
+    ["another.service", "known", false],
+    [null, "unavailable", false],
+    ["worker.service", "ambiguous", false],
+  ] as const)(
+    "shows Ports only for a confirmed matching listener: %s / %s",
+    async (systemdUnit, ownership, visible) => {
+      const user = userEvent.setup();
+      const onOpenPorts = vi.fn();
+      render(
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          portsCache={cache([{ ...listener, systemdUnit, ownership }])}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenPorts={onOpenPorts}
+        />,
+      );
+      await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+      await user.click(screen.getByText("Advanced", { selector: "summary" }));
+      expect(!!screen.queryByRole("button", { name: "Ports" })).toBe(visible);
+      if (visible) {
+        await user.click(screen.getByRole("button", { name: "Ports" }));
+        expect(onOpenPorts).toHaveBeenCalledWith("worker.service");
+      }
+      expect(api.listPorts).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reads listeners only when Advanced opens, shares the cache, and removes Ports after a refresh finds none", async () => {
+    const user = userEvent.setup();
+    const updates = vi.fn();
+    api.listPorts.mockResolvedValueOnce([listener]).mockResolvedValueOnce([]);
+    function Pane() {
+      const [portsCache, setPortsCache] = useState<CachedList<ListeningSocket>>({
+        items: [],
+        fetchedAt: null,
+        loading: false,
+        error: null,
+      });
+      return (
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          portsCache={portsCache}
+          onPortsCacheChange={(next) => {
+            updates(next);
+            setPortsCache(next);
+          }}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenPorts={vi.fn()}
+        />
+      );
+    }
+    render(<Pane />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    expect(api.listPorts).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    expect(await screen.findByRole("button", { name: "Ports" })).toBeTruthy();
+    expect(api.listPorts).toHaveBeenCalledWith(connection.id);
+    await user.click(screen.getByRole("button", { name: "Refresh unit details" }));
+    await waitFor(() => expect(api.listPorts).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(updates).toHaveBeenLastCalledWith(
+        expect.objectContaining({ items: [], loading: false, error: null }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Ports" })).toBeNull());
+  });
+
+  it("discards a listener read after the SSH target changes, including changing back", async () => {
+    const user = userEvent.setup();
+    let resolve!: (items: ListeningSocket[]) => void;
+    api.listPorts.mockImplementation(
+      () =>
+        new Promise<ListeningSocket[]>((done) => {
+          resolve = done;
+        }),
+    );
+    const onPortsCacheChange = vi.fn();
+    const props = {
+      cache: cache([unit("worker.service", "service", "active", "running")]),
+      portsCache: {
+        items: [],
+        fetchedAt: null,
+        loading: false,
+        error: null,
+      } as CachedList<ListeningSocket>,
+      onPortsCacheChange,
+      onCacheChange: vi.fn(),
+      onViewLogs: vi.fn(),
+      onOpenPorts: vi.fn(),
+    };
+    const view = render(<ServicesPane {...props} connection={connection} />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    await waitFor(() => expect(api.listPorts).toHaveBeenCalledTimes(1));
+    view.rerender(
+      <ServicesPane {...props} connection={{ ...connection, destination: "another-host" }} />,
+    );
+    view.rerender(<ServicesPane {...props} connection={connection} />);
+    await act(async () => {
+      resolve([listener]);
+    });
+    expect(onPortsCacheChange).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Ports" })).toBeNull();
+  });
+
+  it("hides Ports when the listener read fails", async () => {
+    const user = userEvent.setup();
+    api.listPorts.mockRejectedValue(new Error("ss unavailable"));
+    function Pane() {
+      const [portsCache, setPortsCache] = useState<CachedList<ListeningSocket>>({
+        items: [],
+        fetchedAt: null,
+        loading: false,
+        error: null,
+      });
+      return (
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          portsCache={portsCache}
+          onPortsCacheChange={setPortsCache}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenPorts={vi.fn()}
+        />
+      );
+    }
+    render(<Pane />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    await waitFor(() => expect(api.listPorts).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Ports" })).toBeNull();
+  });
+
+  it("recovers a listener cache left loading by an earlier view", async () => {
+    const user = userEvent.setup();
+    api.listPorts.mockResolvedValue([listener]);
+    function Pane() {
+      const [portsCache, setPortsCache] = useState<CachedList<ListeningSocket>>({
+        ...cache([listener]),
+        loading: true,
+      });
+      return (
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          portsCache={portsCache}
+          onPortsCacheChange={setPortsCache}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+          onOpenPorts={vi.fn()}
+        />
+      );
+    }
+    render(<Pane />);
+    await user.click(screen.getByRole("button", { name: /worker.service description/ }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    expect(await screen.findByRole("button", { name: "Ports" })).toBeTruthy();
+    expect(api.listPorts).toHaveBeenCalledTimes(1);
+  });
   it.each(["button", "row", "escape"])(
     "clears the selection when closing the inspector by %s",
     async (method) => {
@@ -265,6 +445,7 @@ describe("ServicesPane failed units view", () => {
   });
   afterEach(cleanup);
   beforeEach(() => {
+    api.listPorts.mockReset();
     invalidateSystemdReads(connection.id);
     api.inspectSystemdUnit
       .mockReset()

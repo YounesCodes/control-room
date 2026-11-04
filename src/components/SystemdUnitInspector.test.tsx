@@ -28,6 +28,7 @@ function inspector(value: SystemdInspection) {
     onRefresh: vi.fn(),
     onViewLogs: vi.fn(),
     onOpenPorts: vi.fn(),
+    onRequestPorts: vi.fn(),
     onOpenBoot: vi.fn(),
   };
   render(<SystemdUnitInspector {...props} />);
@@ -66,6 +67,18 @@ it("computes uptime from the host collection time rather than the local wall clo
   );
   expect(screen.getByText("1h 1m")).toBeTruthy();
 });
+
+it.each(["-.mount", "backup.timer", "system.slice", "deploy.path"])(
+  "omits Ports for non-network unit %s",
+  async (id) => {
+    const user = userEvent.setup();
+    const props = inspector(systemdInspection(id, { ActiveState: "active" }));
+    await user.click(screen.getByText("Advanced", { selector: "summary" }));
+    expect(screen.queryByRole("button", { name: "Ports" })).toBeNull();
+    expect(props.onRequestPorts).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Boot" })).toBeTruthy();
+  },
+);
 
 it.each([
   [

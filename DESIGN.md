@@ -361,7 +361,10 @@ restrained syntax colors. Give long command and schedule fields the full inspect
 width. Preserve the original host text, including whitespace, quotes, and escapes;
 command metadata may gain visual line breaks without rewriting copied content.
 Reuse inspector disclosure motion. Reduced motion removes camera, node, and
-disclosure animation. Ports navigation uses explicit unit evidence; current Boot
+disclosure animation. Show Ports navigation only for services or sockets with a
+fresh, known listener ownership match to that exact unit. Opening Advanced may read
+listeners without elevation, sharing the Ports view's workspace cache. Hide the
+shortcut while ownership is unknown or its read is unavailable. Current Boot
 unit rows link back to Systemd without attributing a cause.
 
 ## Visual language

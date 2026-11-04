@@ -13,7 +13,11 @@ import { invalidateSystemdReads } from "../lib/systemd-inspection";
 import type { SystemdInspection, SystemdUnit } from "../types";
 import "../styles.css";
 
-const api = vi.hoisted(() => ({ listServices: vi.fn(), inspectSystemdUnit: vi.fn() }));
+const api = vi.hoisted(() => ({
+  listServices: vi.fn(),
+  inspectSystemdUnit: vi.fn(),
+  listPorts: vi.fn(),
+}));
 vi.mock("../lib/api", () => ({ api, errorMessage: String }));
 const host = connection();
 const unitConfiguration =
@@ -148,6 +152,53 @@ async function audit() {
 function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
+
+it("shows Ports only on the unit with known listener ownership", async () => {
+  await page.viewport(1280, 800);
+  const onOpenPorts = vi.fn();
+  render(
+    <ConnectionSection section="services">
+      <ServicesPane
+        connection={host}
+        cache={{ items: units, fetchedAt: Date.now(), loading: false, error: null }}
+        portsCache={{
+          items: [
+            {
+              id: "tcp:5432",
+              protocol: "tcp",
+              addressFamily: "ipv4",
+              localAddress: "127.0.0.1",
+              port: 5432,
+              processId: 42,
+              processName: "database",
+              systemdUnit: "database.service",
+              ownership: "known",
+            },
+          ],
+          fetchedAt: Date.now(),
+          loading: false,
+          error: null,
+        }}
+        onPortsCacheChange={vi.fn()}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenPorts={onOpenPorts}
+        onOpenBoot={vi.fn()}
+      />
+    </ConnectionSection>,
+  );
+  await page.getByRole("button", { name: "All units" }).click();
+  for (const id of ["data.mount", "worker.service", "database.service"]) {
+    await page.getByRole("button", { name: new RegExp("^" + id) }).click();
+    await page.getByText("Advanced", { exact: true }).click();
+    expect(!!screen.queryByRole("button", { name: "Ports" })).toBe(id === "database.service");
+    expect(screen.getByRole("button", { name: "Boot" })).toBeTruthy();
+  }
+  await page.getByRole("button", { name: "Ports", exact: true }).click();
+  expect(onOpenPorts).toHaveBeenCalledWith("database.service");
+  expect(api.listPorts).not.toHaveBeenCalled();
+  expect((await audit()).violations).toEqual([]);
+});
 
 it.each([360, 1280])(
   "keeps configuration directly accessible and the full journal action fixed at %ipx",
