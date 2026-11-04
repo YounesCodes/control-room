@@ -1,19 +1,37 @@
 import { useState } from "react";
-import { FileClock, GitBranch, Network, RefreshCw, Timer } from "lucide-react";
+import { FileClock, Network, RefreshCw, Timer } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
+import { SystemdCode } from "./SystemdCode";
 import { useSystemdReads } from "../lib/systemd-inspection";
-import { systemdEdges, systemdValue, systemdStateLabel } from "../lib/systemd-units";
+import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
 
 function Fields({ rows }: { rows: [string, string | undefined][] }) {
   return (
     <dl className="detail-list">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{systemdValue(value)}</dd>
-        </div>
-      ))}
+      {rows.map(([label, value]) => {
+        const formatted = systemdValue(value);
+        const code =
+          formatted !== "Unavailable" &&
+          ["ExecStart", "Calendar", "Monotonic schedule", "Options"].includes(label);
+        const path =
+          formatted !== "Unavailable" &&
+          ["Unit file", "Source file", "Drop-ins", "Mount point", "Source"].includes(label);
+        return (
+          <div key={label} className={code ? "inspector-wide-field" : undefined}>
+            <dt>{label}</dt>
+            <dd>
+              {code ? (
+                <SystemdCode text={formatted} label={label} command />
+              ) : path ? (
+                <code className="systemd-inline-code">{formatted}</code>
+              ) : (
+                formatted
+              )}
+            </dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }
@@ -69,11 +87,15 @@ function Evidence({
         </p>
       ))}
       {result?.value?.truncated && <p className="inline-warning">Showing the first 128 KiB.</p>}
-      {result?.value && (
-        <pre className="systemd-evidence" tabIndex={0}>
-          {result.value.text || `No ${content} returned.`}
-        </pre>
-      )}
+      {result?.value &&
+        (result.value.text ? (
+          <SystemdCode
+            text={result.value.text}
+            label={section === "configuration" ? "Unit files" : "Effective properties"}
+          />
+        ) : (
+          <p className="systemd-evidence-note">No {content} returned.</p>
+        ))}
     </>
   );
 }
@@ -86,7 +108,6 @@ export function SystemdUnitInspector({
   result,
   revision,
   onRefresh,
-  onNavigate,
   onViewLogs,
   onOpenPorts,
   onOpenBoot,
@@ -98,7 +119,6 @@ export function SystemdUnitInspector({
   result?: CachedValue<SystemdInspection>;
   revision: number;
   onRefresh: () => void;
-  onNavigate: (id: string) => void;
   onViewLogs: (source: LogSourceSelection) => void;
   onOpenPorts?: (unit: string) => void;
   onOpenBoot?: () => void;
@@ -115,7 +135,6 @@ export function SystemdUnitInspector({
     active === "active" && p.ActiveEnterTimestamp && p.ControlRoomRealtimeSeconds
       ? duration(Number(p.ControlRoomRealtimeSeconds) - Date.parse(p.ActiveEnterTimestamp) / 1000)
       : undefined;
-  const edges = result?.value ? systemdEdges([result.value]) : [];
   const code = p.ExecMainCode;
   const execution =
     code === "1"
@@ -127,23 +146,6 @@ export function SystemdUnitInspector({
           : code === "0"
             ? "Not recorded"
             : code;
-  const related = new Map<string, string[]>();
-  for (const edge of edges) {
-    const outgoing = edge.source === unitId;
-    const id = outgoing ? edge.target : edge.source;
-    const label = outgoing
-      ? edge.relationship
-      : edge.relationship === "Requires"
-        ? "Required by"
-        : edge.relationship === "Wants"
-          ? "Wanted by"
-          : edge.relationship === "Triggers"
-            ? "Triggered by"
-            : edge.relationship === "After"
-              ? "Before"
-              : "After";
-    related.set(id, [...(related.get(id) ?? []), label]);
-  }
   const essentials: [string, string | undefined][] =
     type === "service"
       ? [
@@ -257,32 +259,6 @@ export function SystemdUnitInspector({
           </section>
         )}
         {!!essentials.length && <Fields rows={essentials} />}
-        <InspectorDisclosure title="Dependencies">
-          {related.size ? (
-            <div className="systemd-related">
-              {[...related].map(([id, labels]) => (
-                <button
-                  type="button"
-                  className="systemd-related-unit"
-                  key={id}
-                  onClick={() => onNavigate(id)}
-                >
-                  <span>
-                    <strong>{id}</strong>
-                    <small>{[...new Set(labels)].join(" · ")}</small>
-                  </span>
-                  <GitBranch size={13} />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="systemd-evidence-note">
-              {result?.value
-                ? "No dependency evidence returned."
-                : "Dependency evidence unavailable."}
-            </p>
-          )}
-        </InspectorDisclosure>
         <InspectorDisclosure title="Configuration" open={configuration} onToggle={setConfiguration}>
           {configuration && (
             <>

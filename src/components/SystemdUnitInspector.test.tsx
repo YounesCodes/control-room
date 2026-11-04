@@ -26,7 +26,6 @@ function inspector(value: SystemdInspection) {
     revision: 0,
     result: { value, fetchedAt: Date.now(), loading: false, error: null },
     onRefresh: vi.fn(),
-    onNavigate: vi.fn(),
     onViewLogs: vi.fn(),
     onOpenPorts: vi.fn(),
     onOpenBoot: vi.fn(),
@@ -101,8 +100,8 @@ it("keeps configuration directly accessible, reads it on demand, and opens the f
   );
   expect(api.inspectSystemdUnit).not.toHaveBeenCalled();
   expect(screen.queryByText("Recent journal")).toBeNull();
+  expect(screen.queryByText("Dependencies")).toBeNull();
   expect([...document.querySelectorAll("summary")].map((summary) => summary.textContent)).toEqual([
-    "Dependencies",
     "Configuration",
     "Advanced",
   ]);
@@ -124,9 +123,6 @@ it("keeps configuration directly accessible, reads it on demand, and opens the f
   expect(api.inspectSystemdUnit.mock.calls.some(([, , section]) => section === "journal")).toBe(
     false,
   );
-  await user.click(screen.getByText("Dependencies", { selector: "summary" }));
-  await user.click(screen.getByRole("button", { name: /database.service.*Requires/ }));
-  expect(props.onNavigate).toHaveBeenCalledWith("database.service");
   await user.click(screen.getByRole("button", { name: "Ports" }));
   expect(props.onOpenPorts).toHaveBeenCalledWith("worker.service");
   await user.click(screen.getByRole("button", { name: "Boot" }));
@@ -135,5 +131,6 @@ it("keeps configuration directly accessible, reads it on demand, and opens the f
   expect(screen.getByText("Configuration", { selector: "summary" }).closest("details")?.open).toBe(
     true,
   );
-  expect(screen.getByText(/Restart=on-failure/).closest("details")?.open).toBe(true);
+  expect(screen.getByLabelText("Unit files").textContent).toBe("[Service]\nRestart=on-failure");
+  expect(screen.getByLabelText("Unit files").closest("details")?.open).toBe(true);
 });

@@ -22,6 +22,9 @@ guardrails, not every choice described below.
   brand color on a hovered or selected tab or host row to identify the target;
   the color is identity, never health, and it never shows at rest. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
+  Read-only configuration and command blocks may use a small syntax palette for
+  sections, keys, strings, paths, and variables. Keep those colors inside code;
+  they describe syntax and do not signal service health.
   Local shell logos reveal their own colors on hover, keyboard focus, or selection:
   Git orange and PowerShell blue. Command Prompt and the generic local-terminal
   launcher use muted gray at rest and white on hover, keyboard focus, or selection.
@@ -343,13 +346,18 @@ the selected unit, including a selected neighbor of a previously explored root. 
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
 timers, sockets, and mounts. Prioritize identity, state, essential runtime details,
-and failure results. Dependencies, Configuration, and Advanced start collapsed.
+and failure results. Configuration and Advanced start collapsed. Keep relationship
+browsing in the graph instead of duplicating its dependency list in the inspector.
 Keep Configuration directly accessible for unit files and drop-ins. Put conditions,
 assertions, runtime details, and effective properties under Advanced. Keep journal
 reading in the full Logs view, reached through View journal in the fixed footer.
 Unit files and full effective properties load when opened, with separate
 unavailable and truncated states. Keep file contents distinct from the manager's
-effective properties. Reuse inspector disclosure motion. Reduced motion removes camera, node, and
+effective properties. Render code with selectable, wrapping monospace text and
+restrained syntax colors. Give long command and schedule fields the full inspector
+width. Preserve the original host text, including whitespace, quotes, and escapes;
+command metadata may gain visual line breaks without rewriting copied content.
+Reuse inspector disclosure motion. Reduced motion removes camera, node, and
 disclosure animation. Ports navigation uses explicit unit evidence; current Boot
 unit rows link back to Systemd without attributing a cause.
 

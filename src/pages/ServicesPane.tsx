@@ -344,7 +344,6 @@ export function ServicesPane({
       result={details[selectedId]}
       revision={revision}
       onRefresh={refreshDetails}
-      onNavigate={refocus}
       onViewLogs={onViewLogs}
       onOpenPorts={onOpenPorts}
       onOpenBoot={onOpenBoot}

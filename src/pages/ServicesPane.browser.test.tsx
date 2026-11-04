@@ -16,6 +16,8 @@ import "../styles.css";
 const api = vi.hoisted(() => ({ listServices: vi.fn(), inspectSystemdUnit: vi.fn() }));
 vi.mock("../lib/api", () => ({ api, errorMessage: String }));
 const host = connection();
+const unitConfiguration =
+  '# /etc/systemd/system/worker.service\n[Unit]\nDescription=Queue worker\n\n[Service]\nEnvironment="QUEUE=priority"\nExecStart=/usr/local/bin/worker --queue ${QUEUE} %i\nRestart=on-failure\n';
 const units: SystemdUnit[] = [
   {
     id: "worker.service",
@@ -96,6 +98,8 @@ beforeEach(() => {
               NRestarts: "3",
               MemoryCurrent: "18446744073709551615",
               FragmentPath: "/etc/systemd/system/" + id,
+              ExecStart:
+                '{ path=/usr/local/bin/worker ; argv[]=/usr/local/bin/worker --queue "priority jobs" ; ignore_errors=no ; }',
               ...(id === "worker.service"
                 ? {
                     Requires: "database.service data.mount",
@@ -109,9 +113,7 @@ beforeEach(() => {
                   : {}),
             }
           : {},
-        section === "journal"
-          ? "2026-11-01T10:00:00+0000 worker: Main process exited, status=1/FAILURE"
-          : "[Service]\nRestart=on-failure",
+        section === "configuration" ? unitConfiguration : "Restart=on-failure\nMainPID=0\n",
       ),
     ),
   );
@@ -157,7 +159,7 @@ it.each([360, 1280])(
     expect(within(inspector).queryByText("Recent journal")).toBeNull();
     expect(
       [...inspector.querySelectorAll("summary")].map((summary) => summary.textContent),
-    ).toEqual(["Dependencies", "Configuration", "Advanced"]);
+    ).toEqual(["Configuration", "Advanced"]);
     expect(
       api.inspectSystemdUnit.mock.calls.some(([, , section]) => section === "configuration"),
     ).toBe(false);
@@ -169,8 +171,38 @@ it.each([360, 1280])(
         "configuration",
       ),
     );
-    expect(await screen.findByText(/Restart=on-failure/)).toBeTruthy();
+    const code = await screen.findByLabelText("Unit files");
+    expect(code.textContent).toBe(unitConfiguration);
+    expect(getComputedStyle(code).fontFamily).toContain("monospace");
+    expect(getComputedStyle(code.querySelector("code")!).fontFamily).toBe(
+      getComputedStyle(code).fontFamily,
+    );
+    expect(
+      [...code.querySelectorAll(".systemd-code-section")].map((section) => section.textContent),
+    ).toEqual(["[Unit]", "[Service]"]);
+    expect(code.querySelector(".systemd-code-key")?.textContent).toBe("Description");
+    expect(getComputedStyle(code.querySelector(".systemd-code-section")!).color).not.toBe(
+      getComputedStyle(code.querySelector(".systemd-code-key")!).color,
+    );
+    expect(within(inspector).queryByText("Dependencies", { selector: "summary" })).toBeNull();
     expect(screen.getByText("Advanced").closest("details")?.open).toBe(false);
+    await page.getByText("Advanced", { exact: true }).click();
+    const command = await screen.findByLabelText("ExecStart");
+    expect(command.closest(".inspector-wide-field")).toBeTruthy();
+    expect(command.textContent).toContain('argv[]=/usr/local/bin/worker --queue "priority jobs"');
+    expect(command.querySelectorAll(".systemd-code-break")).toHaveLength(3);
+    expect(command.getBoundingClientRect().width).toBeGreaterThan(200);
+    const selection = document.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(command);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const clipboardData = new DataTransfer();
+    command.dispatchEvent(
+      new ClipboardEvent("copy", { clipboardData, bubbles: true, cancelable: true }),
+    );
+    expect(clipboardData.getData("text/plain")).toBe(command.textContent);
+    selection.removeAllRanges();
     await settleMotion();
     const journal = within(inspector).getByRole("button", { name: "View journal" });
     const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
