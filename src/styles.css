@@ -4268,6 +4268,20 @@ dd {
 .systemd-toolbar .systemd-toolbar-actions {
   min-width: min(100%, var(--search-actions-min-width));
 }
+@container (min-width: 961px) {
+  .systemd-heading {
+    flex-wrap: nowrap;
+  }
+  .systemd-toolbar .systemd-toolbar-actions {
+    min-width: 220px;
+  }
+}
+@container (min-width: 641px) and (max-width: 960px) {
+  .systemd-mode-tools {
+    order: 4;
+    flex-basis: 100%;
+  }
+}
 .systemd-search-control {
   flex: 0 1 auto;
   min-width: 32px;

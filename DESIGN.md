@@ -368,6 +368,8 @@ one fixed-size, clipped toolbar slot. Anchor inert exits inside that slot so the
 never paint across the heading or view switch. Keep the slot on its own centered
 row at narrow widths in both modes. Incoming controls start in their final
 slot and never jump when the exit ends. Reserve a usable width for expanded search.
+At intermediate widths, keep actions beside the view switch and put scope/category controls
+on their own row instead of dropping action icons into an otherwise empty row.
 Truncate the selected unit name before wrapping the action row; keep search inline
 whenever the controls fit, and wrap before the input can collapse.
 Reserve search space in both states so opening it does not resize or move the view

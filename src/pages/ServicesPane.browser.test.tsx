@@ -831,12 +831,15 @@ it.each([360, 1000, 1280])(
   },
 );
 
-it.each([1000, 1280])(
+it.each([900, 960, 1000, 1100, 1280])(
   "keeps search inline beside a long relationship target at %ipx",
   async (width) => {
     await page.viewport(width, 800);
     const id = "actions.runner.YounesCodes-control-room.production-worker.service";
-    renderPane([{ ...units[0], id, activeState: "active", subState: "running" }]);
+    renderPane([
+      { ...units[0], id, activeState: "active", subState: "running" },
+      ...Array.from({ length: 247 }, (_, index) => ({ ...units[4], id: `data-${index}.mount` })),
+    ]);
     await page.getByRole("button", { name: new RegExp(id + " Queue worker") }).click();
     await settleMotion();
     const heading = document.querySelector<HTMLElement>(".systemd-heading")!;
@@ -1175,7 +1178,13 @@ it.each([360, 960, 1400])(
     const panelBox = panel.getBoundingClientRect(),
       iconBox = filterIcon.getBoundingClientRect();
     expect(panelBox.top - iconBox.bottom).toBeGreaterThanOrEqual(8);
-    expect(panelBox.top - iconBox.bottom).toBeLessThanOrEqual(26);
+    expect(
+      panelBox.top -
+        Math.max(
+          iconBox.bottom,
+          document.querySelector(".systemd-heading")!.getBoundingClientRect().bottom,
+        ),
+    ).toBeLessThanOrEqual(26);
     expect(panelBox.left).toBeGreaterThanOrEqual(0);
     expect(panelBox.right).toBeLessThanOrEqual(width);
     expect(iconBox.left).toBeLessThanOrEqual(panelBox.right);
