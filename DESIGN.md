@@ -336,6 +336,10 @@ Keep exiting controls inert and hidden from assistive
 technology, cancel exits when reopened, and remove them immediately under reduced
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat the graph action in the inspector.
+Slide one selection fill between Explorer and Relationships with the same motion
+as Focused / All units. Measure its position and width so it fits the unequal
+labels, follows target-name and window-size changes, and reverses from its current
+pose on rapid switching. Place the initial fill immediately and skip motion when reduced motion is requested.
 Name the graph action Relationships followed by the selected unit, separated by
 a quiet dot. Keep the full target in its accessible name and tooltip, and truncate
 only the visible unit name when space is limited. Before selection, show a disabled

@@ -36,6 +36,8 @@ export function SystemdToolbar({
 }) {
   const [tools, setToolsState] = useState<"search" | "filters" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const viewSwitch = useRef<HTMLDivElement>(null);
+  const previousMode = useRef(state.mode);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const searchField = useRef<HTMLDivElement>(null);
   function setTools(next: "search" | "filters" | null) {
@@ -59,6 +61,27 @@ export function SystemdToolbar({
   useEffect(() => {
     setTools(null);
   }, [state.mode]);
+  useLayoutEffect(() => {
+    const element = viewSwitch.current;
+    if (!element) return;
+    if (previousMode.current !== state.mode) element.dataset.animated = "true";
+    previousMode.current = state.mode;
+    const measure = () => {
+      const active = element.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
+      if (!active) return;
+      element.style.setProperty("--view-fill-x", active.offsetLeft + "px");
+      element.style.setProperty("--view-fill-width", active.offsetWidth + "px");
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    element.querySelectorAll("button").forEach((button) => observer.observe(button));
+    return () => observer.disconnect();
+  }, [state.mode, selectedUnit]);
   useLayoutEffect(() => {
     if (tools !== "filters") return;
     const position = () => {
@@ -145,7 +168,12 @@ export function SystemdToolbar({
             {failed} failed
           </button>
         )}
-        <div className="systemd-view-switch" role="group" aria-label="Systemd view">
+        <div
+          className="systemd-view-switch systemd-mode-switch"
+          ref={viewSwitch}
+          role="group"
+          aria-label="Systemd view"
+        >
           <button
             type="button"
             aria-label="Explorer"

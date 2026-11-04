@@ -155,6 +155,87 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async (width) => {
+  await page.viewport(width, 800);
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await settleMotion();
+  const view = screen.getByRole("group", { name: "Systemd view" });
+  const explorer = within(view).getByRole("button", { name: "Explorer" });
+  const relationships = within(view).getByRole("button", { name: "Relationships worker.service" });
+  const scopeStyle = getComputedStyle(
+    screen.getByRole("group", { name: "Unit scope" }),
+    "::before",
+  );
+  const duration = scopeStyle.transitionDuration;
+  const easing = scopeStyle.transitionTimingFunction;
+  const pose = () => {
+    const style = getComputedStyle(view, "::before");
+    return { x: new DOMMatrixReadOnly(style.transform).m41, width: parseFloat(style.width) };
+  };
+  const transitions = () =>
+    view
+      .getAnimations({ subtree: true })
+      .filter(
+        (animation) =>
+          animation instanceof CSSTransition &&
+          (animation.effect as KeyframeEffect).target === view,
+      ) as CSSTransition[];
+  function aligned(button: HTMLElement) {
+    expect(pose().x).toBeCloseTo(button.offsetLeft, 2);
+    expect(pose().width).toBeCloseTo(button.offsetWidth, 2);
+  }
+  aligned(explorer);
+  expect(transitions()).toHaveLength(0);
+  relationships.click();
+  await waitFor(() => expect(relationships.getAttribute("aria-pressed")).toBe("true"));
+  const style = getComputedStyle(view, "::before");
+  expect(style.transitionDuration.split(",")[0]).toBe(duration);
+  expect(style.transitionTimingFunction.startsWith(easing)).toBe(true);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const forward = await waitFor(() => {
+      expect(transitions()).toHaveLength(2);
+      return transitions();
+    });
+    for (const animation of forward) {
+      animation.pause();
+      animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+    }
+    const midway = pose();
+    expect(midway.x).toBeGreaterThan(explorer.offsetLeft);
+    expect(midway.x).toBeLessThan(relationships.offsetLeft);
+    expect(midway.width).toBeGreaterThan(explorer.offsetWidth);
+    expect(midway.width).toBeLessThan(relationships.offsetWidth);
+    explorer.click();
+    const reversed = await waitFor(() => {
+      const next = transitions();
+      expect(next).toHaveLength(2);
+      expect(next.every((animation) => !forward.includes(animation))).toBe(true);
+      return next;
+    });
+    for (const animation of reversed) {
+      const first = (animation.effect as KeyframeEffect).getKeyframes()[0];
+      if (animation.transitionProperty === "transform")
+        expect(new DOMMatrixReadOnly(first.transform as string).m41).toBeCloseTo(midway.x, 2);
+      if (animation.transitionProperty === "width")
+        expect(parseFloat(first.width as string)).toBeCloseTo(midway.width, 2);
+      animation.finish();
+    }
+  } else {
+    aligned(relationships);
+    expect(transitions()).toHaveLength(0);
+    explorer.click();
+    await waitFor(() => expect(explorer.getAttribute("aria-pressed")).toBe("true"));
+  }
+  aligned(explorer);
+  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await settleMotion();
+  aligned(relationships);
+  await page.viewport(width === 360 ? 1280 : 360, 800);
+  await waitFor(() => aligned(relationships));
+  expect((await audit()).violations).toEqual([]);
+});
+
 it("shows Ports only on the unit with known listener ownership", async () => {
   await page.viewport(1280, 800);
   const onOpenPorts = vi.fn();
