@@ -3987,6 +3987,8 @@ dd {
   container-type: inline-size;
 }
 .systemd-toolbar {
+  --search-layout-duration: 180ms;
+  --search-layout-ease: ease-in;
   position: relative;
   flex: none;
   z-index: 5;
@@ -4035,7 +4037,25 @@ dd {
   margin: 0;
   font-size: 14px;
 }
-.systemd-heading:has(.systemd-inline-search) > .systemd-mode-switch {
+.systemd-toolbar[data-search-open] {
+  --search-layout-duration: 320ms;
+  --search-layout-ease: ease-out;
+}
+.systemd-heading[data-resizing] {
+  position: relative;
+  min-height: 0;
+}
+.systemd-heading[data-resizing] > * {
+  position: absolute;
+  margin: 0;
+  min-width: 0;
+  max-width: none;
+  flex: none;
+}
+.systemd-heading[data-resizing] .systemd-mode-switch::before {
+  transition: none;
+}
+.systemd-toolbar[data-search-open] .systemd-heading > .systemd-mode-switch {
   flex: 1 1 220px;
   min-width: 220px;
   max-width: max-content;
@@ -4206,7 +4226,7 @@ dd {
 .systemd-toolbar-actions > .icon-button {
   flex: none;
 }
-.systemd-toolbar-actions:has(.systemd-inline-search) {
+.systemd-toolbar[data-search-open] .systemd-toolbar-actions {
   min-width: min(100%, 280px);
 }
 .systemd-search-control {
@@ -4264,10 +4284,10 @@ dd {
   height: 28px;
 }
 .systemd-presence:not([data-leaving]) > .systemd-inline-search {
-  animation: systemd-search-in 320ms ease-out both;
+  animation: systemd-search-in var(--search-layout-duration) var(--search-layout-ease) both;
 }
 .systemd-presence[data-leaving] > .systemd-inline-search {
-  animation: systemd-search-out 180ms ease-in both;
+  animation: systemd-search-out var(--search-layout-duration) var(--search-layout-ease) both;
 }
 @keyframes systemd-search-in {
   from {
@@ -4298,7 +4318,7 @@ dd {
   }
 }
 @container (max-width: 640px) {
-  .systemd-toolbar-actions:has(.systemd-inline-search) {
+  .systemd-toolbar[data-search-open] .systemd-toolbar-actions {
     flex-basis: 100%;
     order: 5;
   }

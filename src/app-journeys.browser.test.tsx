@@ -2204,6 +2204,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(graph.bottom).toBeLessThanOrEqual(viewport.bottom - 48);
       };
       await vi.waitFor(expectEntireGraph);
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector(".arch-content")!
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0),
+      );
       const fittedHeight = element.querySelector(".arch-content")!.getBoundingClientRect().height;
       await page.getByRole("button", { name: "Zoom in", exact: true }).click();
       await vi.waitFor(() =>
@@ -2213,6 +2221,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       );
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(expectEntireGraph);
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector(".arch-content")!
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0),
+      );
       expect(element.querySelector(".arch-content")!.getBoundingClientRect().height).toBeCloseTo(
         fittedHeight,
         1,
@@ -2453,6 +2469,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         "example-99.service",
       );
       await expect.element(page.getByRole("button", { name: "View journal" })).toBeVisible();
+      await vi.waitFor(() =>
+        expect(
+          element
+            .querySelector(".systemd-inspector")!
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0),
+      );
       expect(
         (await axe.run(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
       ).toEqual([]);

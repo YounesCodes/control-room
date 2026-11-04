@@ -360,8 +360,12 @@ never paint across the heading or view switch. Keep the slot on its own centered
 row at narrow widths in both modes. Incoming controls start in their final
 slot and never jump when the exit ends. Reserve a usable width for expanded search.
 Truncate the selected unit name before wrapping the action row; keep search inline
-whenever the controls fit, and wrap before the input can collapse. Opening Relationships focuses
-the selected unit, including a selected neighbor of a previously explored root. Inventory
+whenever the controls fit, and wrap before the input can collapse.
+Animate the toolbar's measured control widths, positions, and height with search
+entry and exit, so truncation and wrapping do not snap. Preserve text size, reverse
+from the rendered layout when interrupted, and restore natural layout on completion,
+window resize, or a reduced-motion change.
+Opening Relationships focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
 timers, sockets, and mounts. Prioritize identity, state, essential runtime details,

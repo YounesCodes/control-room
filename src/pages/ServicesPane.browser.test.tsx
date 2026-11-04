@@ -732,6 +732,98 @@ it("glides one shared service highlight and retargets it during rapid switching"
   await waitFor(() => expect(document.querySelector(".systemd-selection-indicator")).toBeNull());
 });
 
+it.each([700, 1000])(
+  "smoothly resizes the toolbar and reverses search layout at %ipx",
+  async (width) => {
+    await page.viewport(width, 800);
+    const id = "actions.runner.YounesCodes-control-room.production-worker.service";
+    renderPane([{ ...units[0], id, activeState: "active", subState: "running" }]);
+    await page.getByRole("button", { name: new RegExp(id + " Queue worker") }).click();
+    await settleMotion();
+    const heading = document.querySelector<HTMLElement>(".systemd-heading")!;
+    const mode = screen.getByRole("group", { name: "Systemd view" });
+    const actions = document.querySelector<HTMLElement>(".systemd-toolbar-actions")!;
+    const before = {
+      mode: mode.getBoundingClientRect().width,
+      actions: actions.getBoundingClientRect().width,
+      height: heading.getBoundingClientRect().height,
+    };
+    const layouts = () =>
+      heading.getAnimations({ subtree: true }).filter((animation) => {
+        const target = (animation.effect as KeyframeEffect).target as HTMLElement;
+        return (
+          !(animation instanceof CSSAnimation) &&
+          !(animation instanceof CSSTransition) &&
+          (target === heading || target.parentElement === heading)
+        );
+      });
+    screen.getByRole("button", { name: "Find units" }).click();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: "Search units" })).toBeTruthy(),
+      );
+      expect(layouts()).toHaveLength(0);
+      expect(heading.hasAttribute("data-resizing")).toBe(false);
+      screen.getByRole("button", { name: "Hide search" }).click();
+    } else {
+      const opening = await waitFor(() => {
+        expect(layouts().length).toBeGreaterThan(1);
+        return layouts();
+      });
+      const modeAnimation = opening.find(
+        (animation) => (animation.effect as KeyframeEffect).target === mode,
+      )!;
+      const targetWidth = parseFloat(
+        (modeAnimation.effect as KeyframeEffect).getKeyframes().at(-1)!.width as string,
+      );
+      const duration = Number(modeAnimation.effect!.getTiming().duration);
+      for (const animation of opening) {
+        animation.pause();
+        animation.currentTime = 0;
+      }
+      expect(mode.getBoundingClientRect().width).toBeCloseTo(before.mode, 1);
+      expect(actions.getBoundingClientRect().width).toBeCloseTo(before.actions, 1);
+      expect(heading.getBoundingClientRect().height).toBeCloseTo(before.height, 1);
+      for (const animation of opening) animation.currentTime = duration / 2;
+      const midway = mode.getBoundingClientRect().width;
+      expect(getComputedStyle(mode).transform).toBe("none");
+      if (Math.abs(targetWidth - before.mode) > 1) {
+        expect(midway).toBeGreaterThan(Math.min(targetWidth, before.mode));
+        expect(midway).toBeLessThan(Math.max(targetWidth, before.mode));
+      }
+      await userEvent.keyboard("{Escape}");
+      const closing = await waitFor(() => {
+        const next = layouts();
+        expect(next.length).toBeGreaterThan(1);
+        expect(next.every((animation) => !opening.includes(animation))).toBe(true);
+        return next;
+      });
+      for (const animation of closing) {
+        animation.pause();
+        animation.currentTime = 0;
+      }
+      expect(mode.getBoundingClientRect().width).toBeCloseTo(midway, 1);
+      for (const animation of closing) animation.finish();
+    }
+    await settleMotion();
+    await waitFor(() => expect(document.querySelector(".systemd-inline-search")).toBeNull());
+    expect(mode.getBoundingClientRect().width).toBeCloseTo(before.mode, 1);
+    expect(heading.getBoundingClientRect().height).toBeCloseTo(before.height, 1);
+    expect(heading.hasAttribute("data-resizing")).toBe(false);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      screen.getByRole("button", { name: "Find units" }).click();
+      await waitFor(() => expect(heading.hasAttribute("data-resizing")).toBe(true));
+      await page.viewport(width + 40, 800);
+      await waitFor(() => expect(heading.hasAttribute("data-resizing")).toBe(false));
+      expect(layouts()).toHaveLength(0);
+      await settleMotion();
+      expect(
+        screen.getByRole("textbox", { name: "Search units" }).getBoundingClientRect().width,
+      ).toBeGreaterThanOrEqual(120);
+    }
+  },
+);
+
 it.each([1000, 1280])(
   "keeps search inline beside a long relationship target at %ipx",
   async (width) => {
@@ -813,6 +905,7 @@ it("removes the search field outline after clicking its magnifier to collapse", 
   expect(getComputedStyle(control).boxShadow).toBe("none");
   await magnifier.click();
   await userEvent.keyboard("{Escape}");
+  await waitFor(() => expect(control.querySelector(".systemd-inline-search")).toBeNull());
   await settleMotion();
   expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)");
   const button = screen.getByRole("button", { name: "Find units" });
