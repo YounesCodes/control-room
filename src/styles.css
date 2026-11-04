@@ -3989,6 +3989,8 @@ dd {
 .systemd-toolbar {
   --search-layout-duration: 180ms;
   --search-layout-ease: ease-in;
+  --search-actions-min-width: 280px;
+  --view-search-min-width: 220px;
   position: relative;
   flex: none;
   z-index: 5;
@@ -4056,9 +4058,9 @@ dd {
   transition: none;
 }
 .systemd-toolbar[data-search-open] .systemd-heading > .systemd-mode-switch {
-  flex: 1 1 220px;
-  min-width: 220px;
-  max-width: max-content;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: var(--view-search-max-width, var(--view-search-min-width));
 }
 .systemd-heading > .systemd-mode-switch > button {
   flex-shrink: 0;
@@ -4227,7 +4229,7 @@ dd {
   flex: none;
 }
 .systemd-toolbar[data-search-open] .systemd-toolbar-actions {
-  min-width: min(100%, 280px);
+  min-width: min(100%, var(--search-actions-min-width));
 }
 .systemd-search-control {
   flex: 0 1 auto;

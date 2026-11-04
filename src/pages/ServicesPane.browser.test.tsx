@@ -732,6 +732,64 @@ it("glides one shared service highlight and retargets it during rapid switching"
   await waitFor(() => expect(document.querySelector(".systemd-selection-indicator")).toBeNull());
 });
 
+it.each([360, 1000, 1280])(
+  "does not enlarge or crowd Relationships when search opens at %ipx",
+  async (width) => {
+    await page.viewport(width, 800);
+    for (const id of [
+      null,
+      "worker.service",
+      "actions.runner.YounesCodes-control-room.production-worker.service",
+    ]) {
+      const view = renderPane(
+        id ? [{ ...units[0], id, activeState: "active", subState: "running" }] : [],
+      );
+      if (id) await page.getByRole("button", { name: new RegExp(id + " Queue worker") }).click();
+      await settleMotion();
+      const group = screen.getByRole("group", { name: "Systemd view" });
+      const explorer = within(group).getByRole("button", { name: "Explorer" });
+      const relationships = group.querySelectorAll("button")[1];
+      const before = {
+        group: group.getBoundingClientRect().width,
+        button: relationships.getBoundingClientRect().width,
+      };
+      screen.getByRole("button", { name: "Find units" }).click();
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: "Search units" })).toBeTruthy(),
+      );
+      const animations = document
+        .querySelector(".systemd-heading")!
+        .getAnimations({ subtree: true })
+        .filter(
+          (animation) =>
+            !(animation instanceof CSSAnimation) && !(animation instanceof CSSTransition),
+        );
+      for (const animation of animations) animation.pause();
+      for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+        for (const animation of animations)
+          animation.currentTime = Number(animation.effect!.getTiming().duration) * fraction;
+        expect(group.getBoundingClientRect().width).toBeLessThanOrEqual(before.group + 0.1);
+        expect(relationships.getBoundingClientRect().width).toBeLessThanOrEqual(
+          before.button + 0.1,
+        );
+        expect(
+          relationships.getBoundingClientRect().left - explorer.getBoundingClientRect().right,
+        ).toBeCloseTo(2, 1);
+      }
+      for (const animation of animations) animation.finish();
+      await settleMotion();
+      expect(group.getBoundingClientRect().width).toBeLessThanOrEqual(before.group + 0.1);
+      expect(
+        screen.getByRole("textbox", { name: "Search units" }).getBoundingClientRect().width,
+      ).toBeGreaterThanOrEqual(120);
+      const context = document.querySelector(".systemd-mode-tools")!.getBoundingClientRect();
+      const rect = group.getBoundingClientRect();
+      if (context.top < rect.bottom) expect(context.left - rect.right).toBeGreaterThanOrEqual(8);
+      view.unmount();
+    }
+  },
+);
+
 it.each([700, 1000])(
   "smoothly resizes the toolbar and reverses search layout at %ipx",
   async (width) => {

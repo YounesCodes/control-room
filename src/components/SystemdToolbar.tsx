@@ -69,10 +69,48 @@ export function SystemdToolbar({
   const searchField = useRef<HTMLDivElement>(null);
   const resizeFrom = useRef<{ heading: DOMRect; items: Map<HTMLElement, DOMRect> } | null>(null);
   const resizeAnimations = useRef<Animation[]>([]);
+  function measureSearchSpace() {
+    const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
+    const mode = viewSwitch.current;
+    if (!heading || !mode) return;
+    const style = getComputedStyle(heading);
+    const outerWidth = (item: Element) => {
+      const itemStyle = getComputedStyle(item);
+      return (
+        item.getBoundingClientRect().width +
+        parseFloat(itemStyle.marginLeft) +
+        parseFloat(itemStyle.marginRight)
+      );
+    };
+    const context = heading.querySelector(".systemd-mode-tools");
+    const separateRows = !!context && getComputedStyle(context).flexBasis === "100%";
+    const fixed = [...heading.children].filter(
+      (item) =>
+        item !== mode &&
+        !item.classList.contains("systemd-toolbar-actions") &&
+        (!separateRows || item !== context) &&
+        getComputedStyle(item).display !== "none",
+    );
+    const available =
+      heading.clientWidth -
+      parseFloat(style.paddingLeft) -
+      parseFloat(style.paddingRight) -
+      (fixed.length + (separateRows ? 0 : 1)) * parseFloat(style.columnGap) -
+      fixed.reduce((sum, item) => sum + outerWidth(item), 0) -
+      parseFloat(getComputedStyle(mode).marginLeft) -
+      (separateRows ? 0 : parseFloat(style.getPropertyValue("--search-actions-min-width")));
+    const minimum = parseFloat(style.getPropertyValue("--view-search-min-width"));
+    if (Number.isFinite(available) && Number.isFinite(minimum))
+      ref.current?.style.setProperty(
+        "--view-search-max-width",
+        Math.max(minimum, available) + "px",
+      );
+  }
   function stopResize() {
     resizeAnimations.current.forEach((animation) => animation.cancel());
     resizeAnimations.current = [];
     ref.current?.querySelector(".systemd-heading")?.removeAttribute("data-resizing");
+    measureSearchSpace();
   }
   function setTools(next: "search" | "filters" | null, animateLayout = true) {
     if (animateLayout && (tools === "search") !== (next === "search")) {
@@ -167,13 +205,27 @@ export function SystemdToolbar({
     stopResize();
     resizeFrom.current = null;
   }, [state.mode, selectedUnit]);
+  useLayoutEffect(measureSearchSpace, [total, visible, failed]);
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
+    let width = heading?.clientWidth;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            if (heading?.clientWidth !== width) {
+              width = heading?.clientWidth;
+              stopResize();
+            }
+          });
+    if (heading) observer?.observe(heading);
     window.addEventListener("resize", stopResize);
     media?.addEventListener("change", stopResize);
     return () => {
       window.removeEventListener("resize", stopResize);
       media?.removeEventListener("change", stopResize);
+      observer?.disconnect();
       stopResize();
     };
   }, []);

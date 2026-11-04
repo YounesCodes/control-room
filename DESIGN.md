@@ -361,6 +361,8 @@ row at narrow widths in both modes. Incoming controls start in their final
 slot and never jump when the exit ends. Reserve a usable width for expanded search.
 Truncate the selected unit name before wrapping the action row; keep search inline
 whenever the controls fit, and wrap before the input can collapse.
+Keep the view switch at its natural width when search opens. Give spare space to
+search, shrink the unit name only as needed, and preserve gaps between controls.
 Animate the toolbar's measured control widths, positions, and height with search
 entry and exit, so truncation and wrapping do not snap. Preserve text size, reverse
 from the rendered layout when interrupted, and restore natural layout on completion,
