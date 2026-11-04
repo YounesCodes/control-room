@@ -3,6 +3,8 @@ import { Container } from "lucide-react";
 import { containerImageLogo } from "../lib/container-image-logo";
 
 // Emit local SVG assets rather than inlining the entire catalog into the JS bundle.
+// Artwork is unmodified Simple Icons; catalog.json carries the per-logo provenance
+// and licenses, and the Simple Icons license and disclaimer sit next to the SVGs.
 const assets = import.meta.glob<string>("../assets/container-logos/*.svg", {
   eager: true,
   query: "?url&no-inline",
