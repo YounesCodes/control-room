@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,6 +67,43 @@ function cache<T>(items: T[]): CachedList<T> {
 }
 
 describe("ServicesPane failed units view", () => {
+  it("updates memory while the service inspector is open and stops after closing it", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+      api.inspectSystemdUnit.mockResolvedValue(
+        systemdInspection("worker.service", { MemoryCurrent: "1048576" }),
+      );
+      render(
+        <ServicesPane
+          connection={connection}
+          cache={cache([unit("worker.service", "service", "active", "running")])}
+          onCacheChange={vi.fn()}
+          onViewLogs={vi.fn()}
+        />,
+      );
+      const row = screen.getByRole("button", { name: /worker.service description/ });
+      fireEvent.click(row);
+      await act(async () => {});
+      expect(screen.getByText("1 MiB")).toBeTruthy();
+      api.inspectSystemdUnit.mockResolvedValue(
+        systemdInspection("worker.service", { MemoryCurrent: "2097152" }),
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByText("2 MiB")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Close details" }));
+      const count = api.inspectSystemdUnit.mock.calls.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9000);
+      });
+      expect(api.inspectSystemdUnit).toHaveBeenCalledTimes(count);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
   it.each(["slow", "failed", "unrelated", "historical"])(
     "gates Boot using current unit evidence: %s",
     async (kind) => {

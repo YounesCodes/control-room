@@ -155,6 +155,51 @@ function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;
 }
 
+it.each([360, 1280])("slides the relationship category selection fill at %ipx", async (width) => {
+  await page.viewport(width, 800);
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await settleMotion();
+  const group = screen.getByRole("group", { name: "Relationship category" });
+  const pose = () => {
+    const style = getComputedStyle(group, "::before");
+    return { x: new DOMMatrixReadOnly(style.transform).m41, width: parseFloat(style.width) };
+  };
+  let previous = within(group).getByRole("button", { name: "Dependencies" });
+  expect(pose().x).toBeCloseTo(previous.offsetLeft, 2);
+  expect(pose().width).toBeCloseTo(previous.offsetWidth, 2);
+  for (const name of ["Ordering", "Activation", "Dependencies"]) {
+    const next = within(group).getByRole("button", { name });
+    next.click();
+    await waitFor(() => expect(next.getAttribute("aria-pressed")).toBe("true"));
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const animations = await waitFor(() => {
+        const active = group
+          .getAnimations({ subtree: true })
+          .filter(
+            (animation) =>
+              animation instanceof CSSTransition &&
+              (animation.effect as KeyframeEffect).target === group,
+          );
+        expect(active).toHaveLength(2);
+        return active;
+      });
+      for (const animation of animations) {
+        animation.pause();
+        animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+      }
+      expect(pose().x).toBeGreaterThan(Math.min(previous.offsetLeft, next.offsetLeft));
+      expect(pose().x).toBeLessThan(Math.max(previous.offsetLeft, next.offsetLeft));
+      for (const animation of animations) animation.finish();
+    }
+    expect(pose().x).toBeCloseTo(next.offsetLeft, 2);
+    expect(pose().width).toBeCloseTo(next.offsetWidth, 2);
+    previous = next;
+  }
+  expect((await audit()).violations).toEqual([]);
+});
+
 it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async (width) => {
   await page.viewport(width, 800);
   renderPane();

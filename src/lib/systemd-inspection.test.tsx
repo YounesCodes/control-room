@@ -11,7 +11,96 @@ beforeEach(() => {
   invalidateSystemdReads("other");
   api.inspectSystemdUnit.mockReset();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+it("refreshes only the inspected service, keeps saved memory on failure, and pauses when hidden", async () => {
+  vi.useFakeTimers();
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  api.inspectSystemdUnit.mockImplementation((_host, id) =>
+    Promise.resolve(systemdInspection(id, { MemoryCurrent: "1048576" })),
+  );
+  const hook = renderHook(
+    ({ live }) =>
+      useSystemdReads("host", ["a.service", "b.service"], 0, "properties", "target", live),
+    { initialProps: { live: "a.service" as string | null } },
+  );
+  await act(async () => {});
+  api.inspectSystemdUnit.mockResolvedValueOnce(
+    systemdInspection("a.service", { MemoryCurrent: "2097152" }),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  expect(hook.result.current["a.service"].value?.properties.MemoryCurrent).toBe("2097152");
+  expect(api.inspectSystemdUnit.mock.calls.map((call) => call[1])).toEqual([
+    "a.service",
+    "b.service",
+    "a.service",
+  ]);
+  api.inspectSystemdUnit.mockRejectedValueOnce(new Error("Disconnected"));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  expect(hook.result.current["a.service"].value?.properties.MemoryCurrent).toBe("2097152");
+  expect(hook.result.current["a.service"].error).toContain("Disconnected");
+  hidden.mockReturnValue(true);
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(9000);
+  });
+  expect(api.inspectSystemdUnit).toHaveBeenCalledTimes(4);
+  hidden.mockReturnValue(false);
+  await act(async () => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(api.inspectSystemdUnit).toHaveBeenCalledTimes(5);
+  expect(hook.result.current["a.service"].error).toBeNull();
+  hook.rerender({ live: null });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(9000);
+  });
+  expect(api.inspectSystemdUnit).toHaveBeenCalledTimes(5);
+});
+
+it("does not overlap slow live reads or apply them after the target changes", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  api.inspectSystemdUnit.mockResolvedValueOnce(
+    systemdInspection("a.service", { MemoryCurrent: "1" }),
+  );
+  const hook = renderHook(
+    ({ scope }) => useSystemdReads("host", ["a.service"], 0, "properties", scope, "a.service"),
+    { initialProps: { scope: "first" } },
+  );
+  await act(async () => {});
+  let finish!: (value: ReturnType<typeof systemdInspection>) => void;
+  api.inspectSystemdUnit.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        finish = done;
+      }),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(12000);
+  });
+  expect(api.inspectSystemdUnit).toHaveBeenCalledTimes(2);
+  api.inspectSystemdUnit.mockResolvedValueOnce(
+    systemdInspection("a.service", { MemoryCurrent: "2" }),
+  );
+  hook.rerender({ scope: "second" });
+  await act(async () => {});
+  await act(async () => finish(systemdInspection("a.service", { MemoryCurrent: "retired" })));
+  expect(hook.result.current["a.service"].value?.properties.MemoryCurrent).toBe("2");
+  hook.unmount();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(9000);
+  });
+  expect(api.inspectSystemdUnit).toHaveBeenCalledTimes(3);
+});
 
 it("keeps a changed SSH target separate even when its Saved Connection ID is unchanged", async () => {
   api.inspectSystemdUnit

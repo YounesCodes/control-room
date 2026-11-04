@@ -166,7 +166,22 @@ export function ServicesPane({
     [selectedId, inspectorOpen, rootId, state.mode, state.expanded],
   );
   const cacheScope = connectionTargetKey(connection);
-  const details = useSystemdReads(connection.id, readIds, revision, "properties", cacheScope);
+  const filtered = useMemo(
+    () => filterSystemdUnits(cache.items, { ...state, search: deferredSearch }),
+    [cache.items, state, deferredSearch],
+  );
+  const selectedVisible = filtered.some((unit) => unit.id === selectedId);
+  const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
+  const visibleInspector =
+    inspectorOpen && !!selectedId && (state.mode === "graph" || !selected || selectedVisible);
+  const details = useSystemdReads(
+    connection.id,
+    readIds,
+    revision,
+    "properties",
+    cacheScope,
+    visibleInspector && selectedId?.endsWith(".service") ? selectedId : null,
+  );
   const edges = useMemo(
     () =>
       systemdEdges(
@@ -189,11 +204,6 @@ export function ServicesPane({
     [rootId, state.expanded, edges, state.relationshipGroup, state.visibleLimit, graphSearch],
   );
   const counts = useMemo(() => countSystemdUnits(cache.items), [cache.items]);
-  const filtered = useMemo(
-    () => filterSystemdUnits(cache.items, { ...state, search: deferredSearch }),
-    [cache.items, state, deferredSearch],
-  );
-  const selected = cache.items.find((unit) => unit.id === selectedId) ?? null;
   const graphUnits = useMemo(() => {
     const units = new Map(cache.items.map((unit) => [unit.id, unit]));
     for (const result of Object.values(details)) {
@@ -211,7 +221,6 @@ export function ServicesPane({
     }
     return [...units.values()];
   }, [cache.items, details]);
-  const selectedVisible = filtered.some((unit) => unit.id === selectedId);
   const failedGraphRead = readIds.find(
     (id) => (!inspectorOpen || id !== selectedId) && details[id]?.error,
   );
@@ -404,8 +413,6 @@ export function ServicesPane({
     });
   }
 
-  const visibleInspector =
-    inspectorOpen && !!selectedId && (state.mode === "graph" || !selected || selectedVisible);
   useEffect(() => {
     if (
       state.mode === "graph" &&

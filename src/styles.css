@@ -4156,6 +4156,9 @@ dd {
   border-radius: var(--radius-sm);
   background: var(--fill-active);
 }
+.systemd-relationship-groups.systemd-mode-switch::before {
+  inset-block: 0;
+}
 .systemd-mode-switch[data-animated]::before {
   transition:
     transform 180ms var(--ease),

@@ -339,7 +339,12 @@ Keep view switching in one visible toolbar control; do not repeat the graph acti
 Slide one selection fill between Explorer and Relationships with the same motion
 as Focused / All units. Measure its position and width so it fits the unequal
 labels, follows target-name and window-size changes, and reverses from its current
-pose on rapid switching. Place the initial fill immediately and skip motion when reduced motion is requested.
+pose on rapid switching. Apply the same sliding fill to Dependencies, Ordering,
+and Activation. Place the initial fill immediately and skip motion when reduced motion is requested.
+Refresh runtime properties for the inspected service periodically without inserting
+loading text or resetting open sections. Pause reads in hidden windows and stop
+when the inspector closes. Keep the last reading with an error if refresh fails;
+never replace unavailable memory with zero.
 Name the graph action Relationships followed by the selected unit, separated by
 a quiet dot. Keep the full target in its accessible name and tooltip, and truncate
 only the visible unit name when space is limited. Before selection, show a disabled

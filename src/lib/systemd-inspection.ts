@@ -23,11 +23,17 @@ export function invalidateSystemdReads(connection: string) {
   for (const key of pending.keys()) if (JSON.parse(key)[0] === connection) pending.delete(key);
 }
 
-async function read(connection: string, unit: string, section: SystemdReadSection, scope: string) {
+async function read(
+  connection: string,
+  unit: string,
+  section: SystemdReadSection,
+  scope: string,
+  force = false,
+) {
   const key = keyFor(connection, unit, section, scope);
   const current = reads.get(key) ?? EMPTY;
-  if (isCacheFresh(current)) return current;
   if (pending.has(key)) return pending.get(key)!;
+  if (!force && isCacheFresh(current)) return current;
   const generation = generations.get(connection) ?? 0;
   const promise = (async () => {
     let next: CachedValue<SystemdInspection>;
@@ -58,6 +64,7 @@ export function useSystemdReads(
   revision: number,
   section: SystemdReadSection = "properties",
   scope: string = connection,
+  liveUnit: string | null = null,
 ) {
   const ids = [...new Set(units)].slice(0, 26).join("\n");
   const [snapshot, setSnapshot] = useState<{
@@ -108,6 +115,40 @@ export function useSystemdReads(
       cancelled = true;
     };
   }, [connection, ids, revision, section, scope]);
+  useEffect(() => {
+    if (!liveUnit || !ids.split("\n").includes(liveUnit) || section !== "properties") return;
+    let cancelled = false;
+    let running = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (!cancelled && !document.hidden) timer = setTimeout(() => void refresh(), 3000);
+    };
+    const refresh = async () => {
+      if (cancelled || running || document.hidden) return;
+      running = true;
+      const result = await read(connection, liveUnit, section, scope, true);
+      running = false;
+      if (cancelled) return;
+      setSnapshot((previous) => ({
+        connection,
+        section,
+        scope,
+        values: { ...previous.values, [liveUnit]: result },
+      }));
+      schedule();
+    };
+    const visibility = () => {
+      clearTimeout(timer);
+      if (!document.hidden) void refresh();
+    };
+    schedule();
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, [connection, ids, revision, section, scope, liveUnit]);
   return snapshot.connection === connection &&
     snapshot.section === section &&
     snapshot.scope === scope
