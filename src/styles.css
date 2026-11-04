@@ -4044,10 +4044,27 @@ dd {
   margin: 0;
   font-size: 14px;
 }
-/* Departing controls must not reserve a second slot beside the incoming mode. */
-.systemd-heading > .systemd-presence[data-leaving] > .systemd-scope-switch,
-.systemd-heading > .systemd-presence[data-leaving] > .systemd-relationship-groups {
+.systemd-mode-tools {
+  position: relative;
+  display: grid;
+  align-items: center;
+  flex: 0 0 240px;
+  min-width: 0;
+  height: 38px;
+  padding: 2px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.systemd-mode-tools > .systemd-presence > * {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+/* Both modes share one bounded slot, including their visual-only exits. */
+.systemd-mode-tools > .systemd-presence[data-leaving] > * {
   position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  left: 2px;
 }
 .systemd-unit-count {
   flex-shrink: 0;
@@ -4913,10 +4930,21 @@ dd {
   .systemd-unit-count {
     display: none;
   }
-  .systemd-relationship-groups {
+  .systemd-mode-tools {
     order: 4;
     flex-basis: 100%;
-    justify-content: center;
+  }
+  .systemd-toolbar-actions {
+    order: 5;
+  }
+  .systemd-mode-tools > .systemd-presence > * {
+    justify-self: center;
+  }
+  .systemd-mode-tools > .systemd-presence[data-leaving] > * {
+    left: 0;
+    right: 0;
+    width: max-content;
+    margin-inline: auto;
   }
   .systemd-explorer-stage.inspecting .systemd-inventory {
     padding-right: 12px;

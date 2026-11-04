@@ -148,6 +148,57 @@ function camera() {
 }
 
 it.each([360, 640, 960, 1280])(
+  "keeps exiting controls clear of the heading text at %ipx",
+  async (width) => {
+    await page.viewport(width, 800);
+    renderPane();
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    await settleMotion();
+    const heading = screen.getByRole("heading", { name: "Systemd" });
+    const count = document.querySelector<HTMLElement>(".systemd-unit-count")!;
+    const view = screen.getByRole("group", { name: "Systemd view" });
+    const protectedText = [heading, count, ...view.querySelectorAll("button")];
+    const poses = protectedText.map((label) => label.getBoundingClientRect());
+    for (const mode of ["relationships", "inventory"]) {
+      screen
+        .getByRole("button", { name: mode === "inventory" ? "Explorer" : /^Relationships(?: |$)/ })
+        .click();
+      await screen.findByRole("group", {
+        name: mode === "inventory" ? "Unit scope" : "Relationship category",
+      });
+      const started = performance.now();
+      do {
+        protectedText.forEach((label, index) => {
+          const pose = label.getBoundingClientRect();
+          for (const coordinate of ["x", "y", "width", "height"] as const)
+            expect(pose[coordinate], label.textContent + " " + coordinate).toBeCloseTo(
+              poses[index][coordinate],
+              1,
+            );
+          expect(getComputedStyle(label).opacity).toBe("1");
+          expect(getComputedStyle(label).transform).toBe("none");
+        });
+        const leaving = document.querySelectorAll<HTMLElement>(
+          ".systemd-heading .systemd-presence[data-leaving] > :is(.systemd-scope-switch, .systemd-relationship-groups)",
+        );
+        for (const control of leaving) {
+          if (Number(getComputedStyle(control).opacity) < 0.02) continue;
+          const bounds = control.getBoundingClientRect();
+          for (const label of [heading, count, view]) {
+            const text = label.getBoundingClientRect();
+            const overlap =
+              Math.min(bounds.right, text.right) > Math.max(bounds.left, text.left) &&
+              Math.min(bounds.bottom, text.bottom) > Math.max(bounds.top, text.top);
+            expect(overlap, control.className + " covers " + label.textContent).toBe(false);
+          }
+        }
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      } while (performance.now() - started < 220);
+    }
+  },
+);
+
+it.each([360, 640, 960, 1280])(
   "keeps relationship controls in their final layout throughout view switching at %ipx",
   async (width) => {
     await page.viewport(width, 800);

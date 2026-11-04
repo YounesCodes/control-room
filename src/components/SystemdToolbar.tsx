@@ -177,57 +177,59 @@ export function SystemdToolbar({
             )}
           </button>
         </div>
-        <SystemdPresence open={!graph}>
-          <div
-            className="systemd-scope-switch systemd-view-switch"
-            role="group"
-            aria-label="Unit scope"
-          >
-            <button
-              type="button"
-              aria-pressed={state.scope !== "all"}
-              title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
-              onClick={() => onChange({ scope: "focused" })}
+        <div className="systemd-mode-tools">
+          <SystemdPresence open={!graph}>
+            <div
+              className="systemd-scope-switch systemd-view-switch"
+              role="group"
+              aria-label="Unit scope"
             >
-              Focused
-            </button>
-            <button
-              type="button"
-              aria-pressed={state.scope === "all"}
-              title="Include every unit type and system service"
-              onClick={() => onChange({ scope: "all" })}
-            >
-              All units
-            </button>
-          </div>
-        </SystemdPresence>
-        <SystemdPresence open={graph}>
-          <div
-            className="systemd-relationship-groups"
-            role="group"
-            aria-label="Relationship category"
-          >
-            {(["dependencies", "ordering", "activation"] as const).map((category) => (
               <button
-                key={category}
                 type="button"
-                aria-pressed={state.relationshipGroup === category}
-                title={
-                  category === "dependencies"
-                    ? "Requires and Wants, including reverse dependencies"
-                    : category === "ordering"
-                      ? "Before and After ordering constraints"
-                      : "Triggers and TriggeredBy activation evidence"
-                }
-                onClick={() =>
-                  onChange({ relationshipGroup: category, visibleLimit: SYSTEMD_INITIAL_VISIBLE })
-                }
+                aria-pressed={state.scope !== "all"}
+                title="Services, timers, sockets, and paths, excluding routine system units. Failed units always appear. Search includes all units."
+                onClick={() => onChange({ scope: "focused" })}
               >
-                {category[0].toUpperCase() + category.slice(1)}
+                Focused
               </button>
-            ))}
-          </div>
-        </SystemdPresence>
+              <button
+                type="button"
+                aria-pressed={state.scope === "all"}
+                title="Include every unit type and system service"
+                onClick={() => onChange({ scope: "all" })}
+              >
+                All units
+              </button>
+            </div>
+          </SystemdPresence>
+          <SystemdPresence open={graph}>
+            <div
+              className="systemd-relationship-groups"
+              role="group"
+              aria-label="Relationship category"
+            >
+              {(["dependencies", "ordering", "activation"] as const).map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  aria-pressed={state.relationshipGroup === category}
+                  title={
+                    category === "dependencies"
+                      ? "Requires and Wants, including reverse dependencies"
+                      : category === "ordering"
+                        ? "Before and After ordering constraints"
+                        : "Triggers and TriggeredBy activation evidence"
+                  }
+                  onClick={() =>
+                    onChange({ relationshipGroup: category, visibleLimit: SYSTEMD_INITIAL_VISIBLE })
+                  }
+                >
+                  {category[0].toUpperCase() + category.slice(1)}
+                </button>
+              ))}
+            </div>
+          </SystemdPresence>
+        </div>
         <div className="systemd-toolbar-actions">
           <div className="systemd-search-control search-field">
             <button

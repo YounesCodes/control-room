@@ -334,9 +334,10 @@ Name the graph action Relationships followed by the selected unit, separated by
 a quiet dot. Keep the full target in its accessible name and tooltip, and truncate
 only the visible unit name when space is limited. Before selection, show a disabled
 Relationships action. Keep the inventory count identical in both views so its text
-and width do not change during navigation. Departing scope and relationship controls
-leave toolbar layout immediately
-while their inert exit animation finishes, so incoming controls start in their final
+and width do not change during navigation. Put scope and relationship controls in
+one fixed-size, clipped toolbar slot. Anchor inert exits inside that slot so they
+never paint across the heading or view switch. Keep the slot on its own centered
+row at narrow widths in both modes. Incoming controls start in their final
 slot and never jump when the exit ends. Opening Relationships focuses
 the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
