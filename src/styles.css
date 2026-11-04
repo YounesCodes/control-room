@@ -4043,21 +4043,7 @@ dd {
   --search-layout-duration: 320ms;
   --search-layout-ease: ease-out;
 }
-.systemd-heading[data-resizing] {
-  position: relative;
-  min-height: 0;
-}
-.systemd-heading[data-resizing] > * {
-  position: absolute;
-  margin: 0;
-  min-width: 0;
-  max-width: none;
-  flex: none;
-}
-.systemd-heading[data-resizing] .systemd-mode-switch::before {
-  transition: none;
-}
-.systemd-toolbar[data-search-open] .systemd-heading > .systemd-mode-switch {
+.systemd-heading > .systemd-mode-switch {
   flex: 0 1 auto;
   min-width: 0;
   max-width: var(--view-search-max-width, var(--view-search-min-width));
@@ -4228,7 +4214,7 @@ dd {
 .systemd-toolbar-actions > .icon-button {
   flex: none;
 }
-.systemd-toolbar[data-search-open] .systemd-toolbar-actions {
+.systemd-toolbar .systemd-toolbar-actions {
   min-width: min(100%, var(--search-actions-min-width));
 }
 .systemd-search-control {

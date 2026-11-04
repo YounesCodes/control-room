@@ -67,8 +67,6 @@ export function SystemdToolbar({
   const categorySwitch = useSwitchFill(state.relationshipGroup, state.mode);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const searchField = useRef<HTMLDivElement>(null);
-  const resizeFrom = useRef<{ heading: DOMRect; items: Map<HTMLElement, DOMRect> } | null>(null);
-  const resizeAnimations = useRef<Animation[]>([]);
   function measureSearchSpace() {
     const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
     const mode = viewSwitch.current;
@@ -106,26 +104,7 @@ export function SystemdToolbar({
         Math.max(minimum, available) + "px",
       );
   }
-  function stopResize() {
-    resizeAnimations.current.forEach((animation) => animation.cancel());
-    resizeAnimations.current = [];
-    ref.current?.querySelector(".systemd-heading")?.removeAttribute("data-resizing");
-    measureSearchSpace();
-  }
-  function setTools(next: "search" | "filters" | null, animateLayout = true) {
-    if (animateLayout && (tools === "search") !== (next === "search")) {
-      const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
-      if (heading)
-        resizeFrom.current = {
-          heading: heading.getBoundingClientRect(),
-          items: new Map(
-            [...heading.children].map((item) => [
-              item as HTMLElement,
-              item.getBoundingClientRect(),
-            ]),
-          ),
-        };
-    }
+  function setTools(next: "search" | "filters" | null) {
     if (next === "search" && tools !== "search" && searchField.current) {
       const field = searchField.current;
       field.style.setProperty("--search-enter-width", field.getBoundingClientRect().width + "px");
@@ -144,70 +123,10 @@ export function SystemdToolbar({
   const search = graph ? (state.dependencySearch ?? "") : state.search;
   const filtered = state.state !== "all" || state.unitType !== "all" || state.sort !== "priority";
   useEffect(() => {
-    setTools(null, false);
+    setTools(null);
   }, [state.mode]);
-  useLayoutEffect(() => {
-    const from = resizeFrom.current;
-    resizeFrom.current = null;
-    stopResize();
-    const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
-    if (
-      !from ||
-      !heading ||
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
-      !heading.animate
-    )
-      return;
-    const style = getComputedStyle(heading);
-    const duration = parseFloat(style.getPropertyValue("--search-layout-duration"));
-    if (!duration) return;
-    const bounds = heading.getBoundingClientRect();
-    const items = [...heading.children].map((item) => ({
-      element: item as HTMLElement,
-      bounds: item.getBoundingClientRect(),
-    }));
-    const timing = {
-      duration,
-      easing: style.getPropertyValue("--search-layout-ease").trim(),
-      fill: "both" as const,
-    };
-    // Move and resize the real boxes without scaling text. Restore normal flex
-    // layout when all controls settle, or capture these rendered boxes on reversal.
-    heading.dataset.resizing = "true";
-    const animations = [
-      heading.animate(
-        [{ height: from.heading.height + "px" }, { height: bounds.height + "px" }],
-        timing,
-      ),
-    ];
-    for (const item of items) {
-      const before = from.items.get(item.element) ?? item.bounds;
-      const pose = (rect: DOMRect, parent: DOMRect) => ({
-        left: rect.left - parent.left - heading.clientLeft + "px",
-        top: rect.top - parent.top - heading.clientTop + "px",
-        width: rect.width + "px",
-        minWidth: rect.width + "px",
-        maxWidth: rect.width + "px",
-        height: rect.height + "px",
-      });
-      animations.push(
-        item.element.animate([pose(before, from.heading), pose(item.bounds, bounds)], timing),
-      );
-    }
-    resizeAnimations.current = animations;
-    void Promise.all(animations.map((animation) => animation.finished))
-      .then(() => {
-        if (resizeAnimations.current === animations) stopResize();
-      })
-      .catch(() => {});
-  }, [tools]);
-  useLayoutEffect(() => {
-    stopResize();
-    resizeFrom.current = null;
-  }, [state.mode, selectedUnit]);
-  useLayoutEffect(measureSearchSpace, [total, visible, failed]);
+  useLayoutEffect(measureSearchSpace, [state.mode, selectedUnit, total, visible, failed]);
   useEffect(() => {
-    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     const heading = ref.current?.querySelector<HTMLElement>(".systemd-heading");
     let width = heading?.clientWidth;
     const observer =
@@ -216,17 +135,15 @@ export function SystemdToolbar({
         : new ResizeObserver(() => {
             if (heading?.clientWidth !== width) {
               width = heading?.clientWidth;
-              stopResize();
+              measureSearchSpace();
             }
           });
     if (heading) observer?.observe(heading);
-    window.addEventListener("resize", stopResize);
-    media?.addEventListener("change", stopResize);
+    window.addEventListener("resize", measureSearchSpace);
     return () => {
-      window.removeEventListener("resize", stopResize);
-      media?.removeEventListener("change", stopResize);
+      window.removeEventListener("resize", measureSearchSpace);
       observer?.disconnect();
-      stopResize();
+      measureSearchSpace();
     };
   }, []);
   useLayoutEffect(() => {

@@ -361,12 +361,10 @@ row at narrow widths in both modes. Incoming controls start in their final
 slot and never jump when the exit ends. Reserve a usable width for expanded search.
 Truncate the selected unit name before wrapping the action row; keep search inline
 whenever the controls fit, and wrap before the input can collapse.
-Keep the view switch at its natural width when search opens. Give spare space to
-search, shrink the unit name only as needed, and preserve gaps between controls.
-Animate the toolbar's measured control widths, positions, and height with search
-entry and exit, so truncation and wrapping do not snap. Preserve text size, reverse
-from the rendered layout when interrupted, and restore natural layout on completion,
-window resize, or a reduced-motion change.
+Reserve search space in both states so opening it does not resize or move the view
+switch, service name, or category controls. Truncate names based on available pane
+width, independently of search visibility. Animate only the search field within
+that space; skip its motion when reduced motion is requested.
 Opening Relationships focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
