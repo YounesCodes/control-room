@@ -3,7 +3,7 @@ title: Systemd
 description: Find services and other systemd units on a Linux host.
 ---
 
-Systemd lists the host's loaded system services, timers, mounts, and sockets. Rows show the unit name, description, and state. No unit is selected initially; select one to inspect it or enable **Graph**. Refresh keeps your choice. Failed units appear first; inactive and disabled units are not failures.
+Systemd lists the host's loaded system services, timers, mounts, and sockets. Rows show the unit name, description, and state. No unit is selected initially; select one to inspect it or enable **Relationships**. Refresh keeps your choice. Failed units appear first; inactive and disabled units are not failures.
 
 **Focused** starts with services, timers, sockets, and path watchers, hiding routine systemd, D-Bus, login-session, and module-loader units. Failed units of every type remain visible. Choose **All units** beside it to include system services, mounts, devices, targets, and every other collected type. The count shows visible units out of the total when they differ. Search and specific type filters include the full inventory. This choice stays with the workspace; dependency graphs always include all reported unit types.
 
@@ -15,7 +15,7 @@ Select a row or graph node to open its inspector. In the inventory, use **Up** a
 
 ## Explore dependencies
 
-Choose **Graph** beside **Explorer** to open the selected unit's dependency graph with up to six neighbors. The root label names the unit being graphed. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood, or **Show more** to reveal more known neighbors.
+Choose **Relationships** beside **Explorer** to open a dependency graph with up to six neighbors. The action names its target, such as **Relationships · nginx.service**. The root label names the unit being graphed. The inventory count stays the same in both views. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node, or press **Shift+Enter** on a focused node, to refocus. Use its **Expand** button to read another neighborhood, or **Show more** to reveal more known neighbors.
 
 Choose one relationship category:
 

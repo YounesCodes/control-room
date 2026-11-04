@@ -4050,8 +4050,11 @@ dd {
   position: absolute;
 }
 .systemd-unit-count {
+  flex-shrink: 0;
+  white-space: nowrap;
   color: var(--text-faint);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .systemd-failures {
   padding: 3px 5px;
@@ -4091,7 +4094,18 @@ dd {
 .systemd-relationship-groups button:hover {
   background: var(--fill-hover);
 }
+.systemd-unit-target {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
 @container (max-width: 640px) {
+  .systemd-unit-target {
+    max-width: 90px;
+  }
   .systemd-heading .systemd-view-switch {
     min-width: 0;
   }

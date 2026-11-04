@@ -126,8 +126,11 @@ export function SystemdToolbar({
         <h2 title={snapshot} tabIndex={0}>
           Systemd
         </h2>
-        <span className="systemd-unit-count" title={total + " units collected"}>
-          {!graph && visible !== total ? visible + " / " + total + " units" : total + " units"}
+        <span
+          className="systemd-unit-count"
+          title={visible + " units in inventory; " + total + " collected"}
+        >
+          {visible !== total ? visible + " / " + total + " units" : total + " units"}
         </span>
         {failed > 0 && (
           <button
@@ -159,13 +162,19 @@ export function SystemdToolbar({
             title={
               selectedUnit
                 ? "Show relationships for " + selectedUnit
-                : "Select a unit to view its graph"
+                : "Select a unit to view its relationships"
             }
             disabled={!canGraph}
             onClick={() => onMode("graph")}
           >
             <GitBranch size={14} />
-            Graph
+            Relationships{" "}
+            {selectedUnit && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="systemd-unit-target">{selectedUnit}</span>
+              </>
+            )}
           </button>
         </div>
         <SystemdPresence open={!graph}>
