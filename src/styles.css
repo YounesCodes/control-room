@@ -4044,6 +4044,11 @@ dd {
   margin: 0;
   font-size: 14px;
 }
+/* Departing controls must not reserve a second slot beside the incoming mode. */
+.systemd-heading > .systemd-presence[data-leaving] > .systemd-scope-switch,
+.systemd-heading > .systemd-presence[data-leaving] > .systemd-relationship-groups {
+  position: absolute;
+}
 .systemd-unit-count {
   color: var(--text-faint);
   font-size: 11px;
@@ -4086,17 +4091,7 @@ dd {
 .systemd-relationship-groups button:hover {
   background: var(--fill-hover);
 }
-.systemd-explore-unit {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-}
 @container (max-width: 640px) {
-  .systemd-explore-unit {
-    max-width: 110px;
-  }
   .systemd-heading .systemd-view-switch {
     min-width: 0;
   }

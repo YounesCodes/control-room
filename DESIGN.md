@@ -330,7 +330,10 @@ Keep exiting controls inert and hidden from assistive
 technology, cancel exits when reopened, and remove them immediately under reduced
 motion. Use the same transitions for relationship categories and filter panels.
 Keep view switching in one visible toolbar control; do not repeat Graph in the inspector.
-Name the graph action Explore followed by the selected unit. Opening it focuses
+Name the views Explorer and Graph. Keep the graph target in its tooltip and root
+label. Departing scope and relationship controls leave toolbar layout immediately
+while their inert exit animation finishes, so incoming controls start in their final
+slot and never jump when the exit ends. Opening Graph focuses
 that unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,

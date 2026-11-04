@@ -155,16 +155,17 @@ export function SystemdToolbar({
           </button>
           <button
             type="button"
-            aria-label={selectedUnit ? "Explore " + selectedUnit : "Explore selected unit"}
-            aria-current={graph && state.rootId === selectedUnit ? "page" : undefined}
+            aria-pressed={graph}
             title={
-              selectedUnit ? "Explore dependencies of " + selectedUnit : "Select a unit to explore"
+              selectedUnit
+                ? "Show relationships for " + selectedUnit
+                : "Select a unit to view its graph"
             }
             disabled={!canGraph}
             onClick={() => onMode("graph")}
           >
             <GitBranch size={14} />
-            Explore <span className="systemd-explore-unit">{selectedUnit ?? "selected unit"}</span>
+            Graph
           </button>
         </div>
         <SystemdPresence open={!graph}>
