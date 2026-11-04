@@ -1,7 +1,10 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, X } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
-import { SystemdUnitInspector } from "../components/SystemdUnitInspector";
+import {
+  SystemdUnitInspector,
+  type SystemdInspectorViewState,
+} from "../components/SystemdUnitInspector";
 import { SystemdInventory } from "../components/SystemdInventory";
 import { SystemdGraph } from "../components/SystemdGraph";
 import { SystemdPresence } from "../components/SystemdPresence";
@@ -80,6 +83,7 @@ export function ServicesPane({
   );
   const [state, setState] = useState<SystemdExplorerState>(() => ({ ...DEFAULT, ...initialState }));
   const [inspectors, setInspectors] = useState({ inventory: false, graph: false });
+  const inspectorViews = useRef(new Map<string, SystemdInspectorViewState>());
   const inspectorOpen = inspectors[state.mode];
   function setInspectorOpen(open: boolean) {
     setInspectors((current) => ({ ...current, [state.mode]: open }));
@@ -432,9 +436,17 @@ export function ServicesPane({
       }),
     );
   }
+  const inspectorViewKey = JSON.stringify([cacheScope, state.mode, selectedId]);
   const inspector = selectedId && (
     <SystemdUnitInspector
-      key={selectedId}
+      key={inspectorViewKey}
+      initialViewState={inspectorViews.current.get(inspectorViewKey)}
+      onViewStateChange={(view) => {
+        inspectorViews.current.delete(inspectorViewKey);
+        inspectorViews.current.set(inspectorViewKey, view);
+        while (inspectorViews.current.size > 64)
+          inspectorViews.current.delete(inspectorViews.current.keys().next().value!);
+      }}
       connectionId={connection.id}
       cacheScope={cacheScope}
       unitId={selectedId}

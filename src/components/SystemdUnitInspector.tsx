@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { FileClock, Network, RefreshCw, Timer } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
@@ -6,6 +6,13 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { useSystemdReads } from "../lib/systemd-inspection";
 import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
+
+export interface SystemdInspectorViewState {
+  configuration: boolean;
+  advanced: boolean;
+  effective: boolean;
+  scroll: Record<string, { top: number; left: number }>;
+}
 
 function formatMemory(bytes: number) {
   return resource(String(bytes), 1048576, " MiB");
@@ -132,6 +139,8 @@ export function SystemdUnitInspector({
   onRequestPorts,
   onOpenBoot,
   onRequestBoot,
+  initialViewState,
+  onViewStateChange,
 }: {
   connectionId: string;
   cacheScope?: string;
@@ -145,10 +154,69 @@ export function SystemdUnitInspector({
   onRequestPorts?: () => void;
   onOpenBoot?: () => void;
   onRequestBoot?: () => void;
+  initialViewState?: SystemdInspectorViewState;
+  onViewStateChange?: (state: SystemdInspectorViewState) => void;
 }) {
-  const [configuration, setConfiguration] = useState(false);
-  const [effective, setEffective] = useState(false);
-  const [advanced, setAdvanced] = useState(false);
+  const [configuration, setConfiguration] = useState(initialViewState?.configuration ?? false);
+  const [effective, setEffective] = useState(initialViewState?.effective ?? false);
+  const [advanced, setAdvanced] = useState(initialViewState?.advanced ?? false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const latestView = useRef({ configuration, effective, advanced, onViewStateChange });
+  latestView.current = { configuration, effective, advanced, onViewStateChange };
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const elements = () =>
+      new Map<string, HTMLElement>([
+        ...[...body.querySelectorAll<HTMLElement>(".systemd-code")].map(
+          (element): [string, HTMLElement] => [
+            element.getAttribute("aria-label") ?? "code",
+            element,
+          ],
+        ),
+        ["body", body],
+      ]);
+    const pending = new Map(Object.entries(initialViewState?.scroll ?? {}));
+    const restore = () => {
+      for (const [key, element] of elements()) {
+        const position = pending.get(key);
+        if (!position) continue;
+        element.scrollTop = position.top;
+        element.scrollLeft = position.left;
+        if (
+          Math.abs(element.scrollTop - position.top) < 1 &&
+          Math.abs(element.scrollLeft - position.left) < 1 &&
+          (key !== "body" || pending.size === 1)
+        )
+          pending.delete(key);
+      }
+      if (!pending.size) observer.disconnect();
+    };
+    // Evidence can arrive after mount; restore again once its scroll range exists.
+    const observer = new MutationObserver(restore);
+    if (pending.size) observer.observe(body, { childList: true, subtree: true });
+    restore();
+    const cancel = () => {
+      pending.clear();
+      observer.disconnect();
+    };
+    for (const event of ["wheel", "pointerdown", "keydown"])
+      body.addEventListener(event, cancel, { capture: true, passive: true });
+    return () => {
+      observer.disconnect();
+      for (const event of ["wheel", "pointerdown", "keydown"])
+        body.removeEventListener(event, cancel, true);
+      const { onViewStateChange: save, ...sections } = latestView.current;
+      const scroll = Object.fromEntries(pending);
+      for (const [key, element] of elements()) {
+        if (!pending.has(key)) scroll[key] = { top: element.scrollTop, left: element.scrollLeft };
+      }
+      save?.({
+        ...sections,
+        scroll,
+      });
+    };
+  }, []);
   const p = result?.value?.properties ?? {};
   const type = unitId.split(".").at(-1);
   const active = p.ActiveState ?? summary?.activeState;
@@ -245,7 +313,7 @@ export function SystemdUnitInspector({
           {systemdStateLabel(active, sub)}
         </span>
       </header>
-      <div className="port-inspector-body systemd-unit-reveal">
+      <div ref={bodyRef} className="port-inspector-body systemd-unit-reveal">
         {result?.loading && (
           <p className="systemd-read-status" role="status">
             {result.value ? "Refreshing saved details…" : "Reading unit details…"}
@@ -308,7 +376,9 @@ export function SystemdUnitInspector({
         </InspectorDisclosure>
         <InspectorDisclosure
           title="Advanced"
+          open={advanced}
           onToggle={(open) => {
+            if (open === advanced) return;
             setAdvanced(open);
             if (open && (type === "service" || type === "socket")) onRequestPorts?.();
             if (open) onRequestBoot?.();
@@ -340,7 +410,11 @@ export function SystemdUnitInspector({
                   ...runtime,
                 ].filter((row): row is [string, string] => row[1] !== undefined)}
               />
-              <InspectorDisclosure title="Effective properties" onToggle={setEffective}>
+              <InspectorDisclosure
+                title="Effective properties"
+                open={effective}
+                onToggle={setEffective}
+              >
                 {effective && (
                   <Evidence
                     connectionId={connectionId}

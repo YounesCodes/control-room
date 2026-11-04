@@ -1319,6 +1319,68 @@ it("keeps a manual pan when a pending expansion finishes, until the next expansi
   expect(Math.abs(after.top - before.top)).toBeLessThan(1);
 });
 
+it("restores inspector sections and nested scroll positions separately for each view", async () => {
+  await page.viewport(1280, 500);
+  api.inspectSystemdUnit.mockImplementation((_host, id, section) =>
+    Promise.resolve(
+      systemdInspection(
+        id,
+        section === "properties"
+          ? {
+              ActiveState: "active",
+              Description: "Queue worker",
+              MainPID: "42",
+              Restart: "always",
+              TasksCurrent: "12",
+            }
+          : {},
+        section === "configuration" ? unitConfiguration.repeat(50) : "Property=value\n".repeat(100),
+      ),
+    ),
+  );
+  renderPane();
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await page.getByText("Configuration", { exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByText("Effective properties", { exact: true }).click();
+  await waitFor(() =>
+    expect(screen.getByLabelText("Effective properties").textContent).toContain("Property=value"),
+  );
+  const body = document.querySelector<HTMLElement>(".port-inspector-body")!;
+  const code = screen.getByLabelText("Unit files");
+  body.scrollTop = 170;
+  code.scrollTop = 120;
+  expect(body.scrollTop).toBe(170);
+  expect(code.scrollTop).toBe(120);
+  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  await page
+    .getByRole("region", { name: "Systemd dependency graph" })
+    .getByRole("button", { name: /^worker.service/ })
+    .click();
+  expect([...document.querySelectorAll(".systemd-inspector details[open]")]).toHaveLength(0);
+  await page.getByRole("button", { name: "Explorer" }).click();
+  await waitFor(() =>
+    expect(document.querySelectorAll(".systemd-inspector details[open]")).toHaveLength(3),
+  );
+  await waitFor(() =>
+    expect(document.querySelector<HTMLElement>(".port-inspector-body")!.scrollTop).toBe(170),
+  );
+  await waitFor(() => expect(screen.getByLabelText("Unit files").scrollTop).toBe(120));
+  await page.getByRole("button", { name: "Relationships worker.service" }).click();
+  expect(document.querySelectorAll(".systemd-inspector details[open]")).toHaveLength(0);
+  expect(document.querySelector<HTMLElement>(".port-inspector-body")!.scrollTop).toBe(0);
+  await page.getByRole("button", { name: "Explorer" }).click();
+  await page.getByRole("button", { name: /database.service Database/ }).click();
+  expect(document.querySelectorAll(".systemd-inspector details[open]")).toHaveLength(0);
+  await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+  await waitFor(() =>
+    expect(document.querySelectorAll(".systemd-inspector details[open]")).toHaveLength(3),
+  );
+  await waitFor(() =>
+    expect(document.querySelector<HTMLElement>(".port-inspector-body")!.scrollTop).toBe(170),
+  );
+});
+
 it("restores Explorer details after visiting Relationships and still deselects on explicit close", async () => {
   await page.viewport(1280, 800);
   renderPane();

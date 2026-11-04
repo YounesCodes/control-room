@@ -329,6 +329,8 @@ navigation. Changed SSH targets discard that context and use separate detail cac
 Keep inspectors closed until selection.
 Remember open inspector state separately for Explorer and Relationships while
 switching views. Returning to a view restores its inspector for the current selection.
+Remember disclosure sections and body/code scroll positions per unit, view, and SSH
+target. Restore scroll after lazy evidence arrives, without overriding user input.
 Explicitly closing either inspector through Close details, Escape, or clicking its
 selected item clears both open states, the inspected selection,
 and its highlight. Keep graph roots and expansion context separate from that selection.
