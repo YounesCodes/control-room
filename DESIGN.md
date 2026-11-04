@@ -309,7 +309,9 @@ the available plot. Keep the direction key and zoom controls in a separate foote
 row outside the clipped, pannable viewport. Let that row wrap at narrow widths;
 neither the inspector nor graph content may cover its controls or legend.
 Late inspector data must not replace that focus; an expansion action resumes fitting.
-Initial focused framing keeps nodes readable at 85% or larger; expansion and Fit to view may zoom out further.
+Initial framing centers the whole visible scene while keeping nodes readable at
+85% or larger; expansion and Fit to view may zoom out further. One-sided incoming
+or outgoing relationships must not pin the root to the plot center.
 Search retains paths to matches.
 Pair Show more with Show less for expansion changes.
 When an expansion control disappears, restore keyboard focus to a nearby expansion

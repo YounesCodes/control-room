@@ -89,8 +89,9 @@ export function SystemdGraph({
       const natural = Math.min(1, width / layout.width, height / layout.height);
       const scale = Math.max(entire ? 0.01 : 0.85, natural);
       const root = layout.positions.get(rootId)!;
-      const centerX = natural < scale ? root.x + root.width / 2 : layout.width / 2;
-      const centerY = natural < scale ? root.y + root.height / 2 : layout.height / 2;
+      const focusRoot = !!selectedId && natural < scale;
+      const centerX = focusRoot ? root.x + root.width / 2 : layout.width / 2;
+      const centerY = focusRoot ? root.y + root.height / 2 : layout.height / 2;
       setMoving(animate);
       setView({ scale, x: 24 + width / 2 - centerX * scale, y: 48 + height / 2 - centerY * scale });
     },

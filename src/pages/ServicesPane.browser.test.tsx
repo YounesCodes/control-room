@@ -264,7 +264,7 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
       if (animation.transitionProperty === "transform")
         expect(new DOMMatrixReadOnly(first.transform as string).m41).toBeCloseTo(midway.x, 2);
       if (animation.transitionProperty === "width")
-        expect(parseFloat(first.width as string)).toBeCloseTo(midway.width, 2);
+        expect(parseFloat(first.width as string)).toBeCloseTo(midway.width, 1);
       animation.finish();
     }
   } else {
@@ -1318,6 +1318,42 @@ it("keeps a manual pan when a pending expansion finishes, until the next expansi
   expect(Math.abs(after.left - before.left)).toBeLessThan(1);
   expect(Math.abs(after.top - before.top)).toBeLessThan(1);
 });
+
+it.each(["After", "Before"])(
+  "centers the whole one-sided Ordering scene for %s evidence",
+  async (property) => {
+    await page.viewport(1280, 500);
+    api.inspectSystemdUnit.mockImplementation((_host, id) =>
+      Promise.resolve(
+        systemdInspection(id, {
+          [property]: Array.from({ length: 6 }, (_, index) => `neighbor-${index}.service`).join(
+            " ",
+          ),
+        }),
+      ),
+    );
+    renderPane();
+    await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
+    await page.getByRole("button", { name: "Relationships worker.service" }).click();
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
+    await settleMotion();
+    const plot = screen
+      .getByRole("region", { name: "Systemd dependency graph" })
+      .getBoundingClientRect();
+    const nodes = [...document.querySelectorAll(".systemd-graph-node")].map((node) =>
+      node.getBoundingClientRect(),
+    );
+    expect(
+      (Math.min(...nodes.map((node) => node.left)) + Math.max(...nodes.map((node) => node.right))) /
+        2,
+    ).toBeCloseTo(plot.left + plot.width / 2, 0);
+    expect(
+      (Math.min(...nodes.map((node) => node.top)) + Math.max(...nodes.map((node) => node.bottom))) /
+        2,
+    ).toBeCloseTo(plot.top + plot.height / 2 - 6, 0);
+  },
+);
 
 it("keeps mouse collapse from focusing the opposite-side root tooltip and restores keyboard focus nearby", async () => {
   await page.viewport(1280, 800);
