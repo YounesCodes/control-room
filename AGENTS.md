@@ -35,6 +35,7 @@ Start with the smallest relevant validation, then expand according to the surfac
 
 Run only tests relevant to the changes; skip validation for trivial or documentation-only edits. Avoid rerunning checks already passed for unchanged code or enforced by Git hooks/CI. Run the full suite only when explicitly requested or when changes affect multiple independent subsystems.
 
+- If you lack vision capabilities, delegate UI/UX visual verification to an available vision-capable subagent.
 - **Frontend-only changes:** Run the relevant frontend tests and static checks.
 - **Rust/backend changes:** Run the relevant Rust tests and checks.
 - **Changes crossing the Tauri boundary:** Validate both frontend and Rust layers.
@@ -47,6 +48,7 @@ Fix failures introduced by the requested change and rerun the affected checks.
 
 ## Completion
 
+- After related PRs are merged or closed, reconcile the linked issue: close it if resolved; otherwise leave it open.
 - Review the final diff for accidental or unrelated changes.
 - Confirm behavior changes are covered by focused tests where appropriate.
 - Update documentation only when the documented behavior changed. See `docs/AGENTS.md` for documentation guidelines.
