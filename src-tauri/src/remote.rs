@@ -22,10 +22,11 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        BootDiagnostics, BootRecord, BootSection, BootTiming, ConnectionRemote, ConnectionSummary,
-        DockerContainer, DockerContainerDetails, DockerMount, DockerNetworkAttachment,
-        DockerPublishedPort, EstablishedConnections, Filesystem, FirewallRule, FirewallStatus,
-        HostCapabilities, HostIdentity, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
+        BaselineCronJob, BaselinePackage, BootDiagnostics, BootRecord, BootSection, BootTiming,
+        ConnectionRemote, ConnectionSummary, CronInventory, DockerContainer,
+        DockerContainerDetails, DockerMount, DockerNetworkAttachment, DockerPublishedPort,
+        EstablishedConnections, Filesystem, FirewallRule, FirewallStatus, HostCapabilities,
+        HostIdentity, HostResources, LOG_TAIL_OPTIONS, ListeningSocket, PackageInventory,
         SavedConnection, SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
@@ -548,6 +549,263 @@ pub fn list_filesystems(connection: &SavedConnection) -> Result<Vec<Filesystem>,
     let text =
         RemoteCommandExecutor::execute(connection, "list_filesystems", &command)?.success_text()?;
     parse_filesystems(&text)
+}
+
+/// Reads the stable hardware facts a baseline records beside the identity:
+/// CPU model and count, total memory, and the host's timezone. Each fact is
+/// keyed and absent when the host cannot report it.
+pub fn list_host_facts(connection: &SavedConnection) -> Result<Vec<(String, String)>, String> {
+    let command = r#"LC_ALL=C
+model=""
+if test -r /proc/cpuinfo; then model=$(grep -m1 -E '^(model name|Model)[[:space:]]*:' /proc/cpuinfo 2>/dev/null | cut -d: -f2-); fi
+printf 'cpuModel=%s\n' "$model"
+count=$(getconf _NPROCESSORS_ONLN 2>/dev/null); test -n "$count" || count=$(nproc 2>/dev/null); test -n "$count" || count=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+printf 'cpuCount=%s\n' "$count"
+if test -r /proc/meminfo; then printf 'memoryTotalKib=%s\n' "$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)"; fi
+tz=$(readlink /etc/localtime 2>/dev/null)
+test -n "$tz" || if command -v timedatectl >/dev/null 2>&1; then tz=$(timedatectl show -p Timezone --value 2>/dev/null); fi
+test -n "$tz" || if test -r /etc/timezone; then tz=$(tr -d ' \t\r\n' < /etc/timezone); fi
+printf 'timezone=%s\n' "$tz""#;
+    let text = RemoteCommandExecutor::execute(connection, "baseline_host_facts", command)?
+        .success_text()?;
+    let values = parse_key_values(&text);
+    let mut facts = Vec::new();
+    let model = values
+        .get("cpuModel")
+        .map(|value| bounded_text(value, 96))
+        .filter(|value| !value.is_empty());
+    if let Some(model) = model {
+        facts.push(("cpuModel".into(), model));
+    }
+    if let Some(count) = values
+        .get("cpuCount")
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|count| (1..=65536).contains(count))
+    {
+        facts.push(("cpuCount".into(), count.to_string()));
+    }
+    if let Some(memory) = values
+        .get("memoryTotalKib")
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|memory| *memory > 0)
+    {
+        facts.push(("memoryTotalKib".into(), memory.to_string()));
+    }
+    // /etc/localtime is a relative path on several distributions; only the
+    // zone under zoneinfo is the stable observation.
+    let timezone = values
+        .get("timezone")
+        .map(|value| {
+            let value = bounded_text(value, 64);
+            let zone = value.rsplit("zoneinfo/").next().unwrap_or(&value);
+            zone.trim_start_matches('/').to_string()
+        })
+        .filter(|value: &String| !value.is_empty());
+    if let Some(timezone) = timezone {
+        facts.push(("timezone".into(), timezone));
+    }
+    Ok(facts)
+}
+
+const CRON_JOB_MARKER: &str = "__CR_JOB__\t";
+const CRON_SPPOOL_MARKER: &str = "__CR_SPPOOL__\t";
+const CRON_SPOOL_UNREADABLE: &str = "unread";
+const MAX_CRON_JOBS: usize = 400;
+
+/// Reads cron entries from the sources a baseline can inspect: the system
+/// crontab, /etc/cron.d, and — when permissions allow — personal crontabs.
+/// The emitted descriptor never carries a raw command line, because cron
+/// commands routinely embed credentials.
+pub fn list_cron_jobs(
+    connection: &SavedConnection,
+    elevation: Elevation,
+) -> Result<CronInventory, String> {
+    let command = r#"LC_ALL=C
+for f in /etc/crontab /etc/cron.d/*; do
+  test -f "$f" || continue
+  test -r "$f" || continue
+  case "$f" in /etc/crontab) src=crontab ;; *) src="cron.d/${f##*/}" ;; esac
+  awk -v src="$src" '
+    /^[[:space:]]*($|#)/ { next }
+    /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ { next }
+    NF >= 7 {
+      name = $7
+      sub(/^.*\//, "", name)
+      printf "%s%s\t%d\t%s\t%s\t%s\t%d\n", "__CR_JOB__\t", src, NR, ($1" "$2" "$3" "$4" "$5), $6, name, NF-6
+    }
+  ' "$f" 2>/dev/null
+done
+if test -d /var/spool/cron/crontabs && ! test -r /var/spool/cron/crontabs; then printf '%s%s\n' "__CR_SPPOOL__\t" unread; fi
+if test -d /var/spool/cron/crontabs && test -r /var/spool/cron/crontabs; then
+  for f in /var/spool/cron/crontabs/*; do
+    test -f "$f" || continue
+    test -r "$f" || { printf '%s%s\n' "__CR_SPPOOL__\t" unread; continue; }
+    awk -v user="${f##*/}" '
+      /^[[:space:]]*($|#)/ { next }
+      /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ { next }
+      NF >= 6 {
+        name = $6
+        sub(/^.*\//, "", name)
+        printf "%suser:%s\t%d\t%s\t%s\t%s\t%d\n", "__CR_JOB__\t", user, NR, ($1" "$2" "$3" "$4" "$5), user, name, NF-5
+      }
+    ' "$f" 2>/dev/null
+  done
+fi
+if test -d /var/spool/cron && ! test -d /var/spool/cron/crontabs; then
+  if ! test -r /var/spool/cron; then printf '%s%s\n' "__CR_SPPOOL__\t" unread; fi
+  if test -r /var/spool/cron; then
+    for f in /var/spool/cron/*; do
+      test -f "$f" || continue
+      test -r "$f" || { printf '%s%s\n' "__CR_SPPOOL__\t" unread; continue; }
+      awk -v user="${f##*/}" '
+        /^[[:space:]]*($|#)/ { next }
+        /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ { next }
+        NF >= 6 {
+          name = $6
+          sub(/^.*\//, "", name)
+          printf "%suser:%s\t%d\t%s\t%s\t%s\t%d\n", "__CR_JOB__\t", user, NR, ($1" "$2" "$3" "$4" "$5), user, name, NF-5
+        }
+      ' "$f" 2>/dev/null
+    done
+  fi
+fi"#;
+    let output =
+        RemoteCommandExecutor::execute_elevated(connection, "list_cron_jobs", command, &elevation)?;
+    Ok(parse_cron_inventory(&output.success_text()?))
+}
+
+fn parse_cron_inventory(text: &str) -> CronInventory {
+    let mut jobs = Vec::new();
+    let mut spool_unreadable = false;
+    let mut truncated = false;
+    for line in text.lines() {
+        if let Some(flag) = line.strip_prefix(CRON_SPPOOL_MARKER) {
+            if flag.trim() == CRON_SPOOL_UNREADABLE {
+                spool_unreadable = true;
+            }
+            continue;
+        }
+        let Some(record) = line.strip_prefix(CRON_JOB_MARKER) else {
+            continue;
+        };
+        if jobs.len() >= MAX_CRON_JOBS {
+            truncated = true;
+            break;
+        }
+        if let Some(job) = parse_cron_job(record) {
+            jobs.push(job);
+        }
+    }
+    CronInventory {
+        jobs,
+        spool_unreadable,
+        truncated,
+    }
+}
+
+fn parse_cron_job(record: &str) -> Option<BaselineCronJob> {
+    let mut fields = record.trim_end_matches('\r').split('\t');
+    let source = bounded_text(fields.next()?, 64);
+    let line = fields.next()?.parse::<u32>().ok()?;
+    let schedule = bounded_text(fields.next()?, 40);
+    let user = bounded_text(fields.next()?, 32);
+    let name = bounded_text(fields.next()?, 48);
+    let words = fields.next()?.parse::<u32>().ok()?;
+    if source.is_empty() || schedule.is_empty() || user.is_empty() || name.is_empty() {
+        return None;
+    }
+    let command = format!("{name} ({words} words)");
+    Some(BaselineCronJob {
+        source,
+        line,
+        schedule,
+        user,
+        command,
+    })
+}
+
+const PACKAGE_MANAGER_MARKER: &str = "__CR_PKGMGR__\t";
+const PACKAGE_COUNT_MARKER: &str = "__CR_PKGCOUNT__\t";
+const MAX_PACKAGES: usize = 5000;
+
+/// Reads the installed-package inventory from the first package manager the
+/// host provides. The list is sorted on the host, so the kept bound is the
+/// same range every time rather than whatever the database laptop decides.
+pub fn list_packages(connection: &SavedConnection) -> Result<PackageInventory, String> {
+    let awk = format!(
+        r#"awk -F'\t' -v limit={MAX_PACKAGES} '{{ if (n < limit) {{ print; n++ }} total++ }} END {{ printf "%s%d\n", "__CR_PKGCOUNT__\t", total }}'"#
+    );
+    let command = format!(
+        r#"LC_ALL=C
+if command -v dpkg-query >/dev/null 2>&1; then
+  printf '{PACKAGE_MANAGER_MARKER}dpkg\n'
+  dpkg-query -W -f='${{binary:Package}}\t${{Architecture}}\t${{Version}}\n' 2>/dev/null | LC_ALL=C sort | {awk}
+elif command -v rpm >/dev/null 2>&1; then
+  printf '{PACKAGE_MANAGER_MARKER}rpm\n'
+  rpm -qa --qf '%{{NAME}}\t%{{ARCH}}\t%{{VERSION}}\n' 2>/dev/null | LC_ALL=C sort | {awk}
+else
+  printf '{PACKAGE_MANAGER_MARKER}none\n'
+fi"#
+    );
+    let text =
+        RemoteCommandExecutor::execute(connection, "list_packages", &command)?.success_text()?;
+    parse_package_inventory(&text)
+}
+
+fn parse_package_inventory(text: &str) -> Result<PackageInventory, String> {
+    let mut manager: Option<String> = None;
+    let mut sources_reported: Option<u32> = None;
+    let mut packages = Vec::new();
+    for line in text.lines() {
+        if let Some(claimed) = line.strip_prefix(PACKAGE_MANAGER_MARKER) {
+            manager = Some(claimed.trim().to_string());
+            continue;
+        }
+        if let Some(count) = line.strip_prefix(PACKAGE_COUNT_MARKER) {
+            sources_reported = count.trim().parse::<u32>().ok();
+            continue;
+        }
+        if packages.len() < MAX_PACKAGES
+            && let Some(package) = parse_package(line)
+        {
+            packages.push(package);
+        }
+    }
+    let Some(manager) = manager else {
+        return Err("The package read returned no manager marker".into());
+    };
+    if manager == "none" {
+        return Err("The host has no package manager Control Room reads (dpkg or rpm)".into());
+    }
+    if manager != "dpkg" && manager != "rpm" {
+        return Err("The package manager reported an unknown identity".into());
+    }
+    let reported = sources_reported.unwrap_or(packages.len() as u32);
+    // Truncated means the keeping bound cut the list, not that stray invalid
+    // rows thinned it: the count is only reported as cut when the parser is
+    // holding exactly as many rows as it keeps.
+    let truncated = packages.len() >= MAX_PACKAGES && (reported as usize) > packages.len();
+    Ok(PackageInventory {
+        manager,
+        packages,
+        sources_reported: reported,
+        truncated,
+    })
+}
+
+fn parse_package(line: &str) -> Option<BaselinePackage> {
+    let mut fields = line.trim_end_matches('\r').splitn(3, '\t');
+    let name = bounded_text(fields.next()?, 128);
+    let architecture = bounded_text(fields.next()?, 16);
+    let version = bounded_text(fields.next()?, 64);
+    if name.is_empty() || architecture.is_empty() || version.is_empty() {
+        return None;
+    }
+    Some(BaselinePackage {
+        name,
+        architecture,
+        version,
+    })
 }
 
 fn parse_filesystems(text: &str) -> Result<Vec<Filesystem>, String> {
@@ -3090,6 +3348,67 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert_eq!(status.rules[1].protocol, None);
         assert_eq!(status.rules[2].from, "192.168.0.0/16");
         assert!(status.rules[3].ipv6);
+    }
+
+    #[test]
+    fn cron_records_carry_no_raw_command_text() {
+        let job = parse_cron_job("cron.d/backup\t12\t30 2 * * *\troot\tbackup\t3\t")
+            .expect("parseable cron record");
+        assert_eq!(job.source, "cron.d/backup");
+        assert_eq!(job.line, 12);
+        assert_eq!(job.schedule, "30 2 * * *");
+        assert_eq!(job.user, "root");
+        // The descriptor names the binary and its word count; the arguments
+        // they carried on the host stay on the host.
+        assert_eq!(job.command, "backup (3 words)");
+        assert!(!job.command.contains("password"));
+        // Incomplete records are dropped rather than half-recorded.
+        assert!(parse_cron_job("cron.d/short\t1\troot").is_none());
+    }
+
+    #[test]
+    fn cron_output_marks_sourced_limits_and_unreadable_spools() {
+        let text = "__CR_JOB__\tcrontab\t5\t0 3 * * *\troot\tlogrotate\t1\n\
+                    __CR_SPPOOL__\tunread\n";
+        let inventory = parse_cron_inventory(text);
+        assert!(inventory.spool_unreadable);
+        assert_eq!(inventory.jobs.len(), 1);
+        assert_eq!(inventory.jobs[0].source, "crontab");
+        assert!(!inventory.truncated);
+    }
+
+    #[test]
+    fn package_reading_keeps_only_typed_three_field_rows() {
+        let text = "__CR_PKGMGR__\tdpkg\n\
+                    libc6\tamd64\t2.36-9\n\
+                    _ypbind:i386__broken row\n\
+                    __CR_PKGCOUNT__\t1200\n";
+        let inventory = parse_package_inventory(text).unwrap();
+        assert_eq!(inventory.manager, "dpkg");
+        assert_eq!(inventory.sources_reported, 1200);
+        assert_eq!(inventory.packages.len(), 1);
+        assert_eq!(inventory.packages[0].name, "libc6");
+        assert!(!inventory.truncated);
+    }
+
+    #[test]
+    fn a_package_count_over_the_bound_reports_true_completeness() {
+        let mut text = String::from("__CR_PKGMGR__\trpm\n");
+        for index in 0..MAX_PACKAGES {
+            text.push_str(&format!("pkg{index}\tx86_64\t1.0\n"));
+        }
+        text.push_str(&format!("__CR_PKGCOUNT__\t{}\n", MAX_PACKAGES + 10));
+        let inventory = parse_package_inventory(&text).unwrap();
+        assert_eq!(inventory.packages.len(), MAX_PACKAGES);
+        assert_eq!(inventory.sources_reported as usize, MAX_PACKAGES + 10);
+        assert!(inventory.truncated);
+    }
+
+    #[test]
+    fn a_host_without_a_supported_package_manager_is_an_error_not_an_empty_list() {
+        let error = parse_package_inventory("__CR_PKGMGR__\tnone\n")
+            .expect_err("no manager is no inventory");
+        assert!(error.contains("no package manager"));
     }
 
     #[test]

@@ -302,10 +302,21 @@ export interface HostIdentity {
 }
 
 export type BaselineSectionKind =
-  "host" | "systemdUnits" | "containers" | "listeners" | "filesystems";
+  | "host"
+  | "systemdUnits"
+  | "containers"
+  | "listeners"
+  | "firewall"
+  | "filesystems"
+  | "scheduledJobs"
+  | "packages";
 
 export type BaselineSectionStatus =
   "collected" | "partial" | "unsupported" | "unavailable" | "skipped";
+
+/** How loudly a fact change speaks: routine facts move on a healthy host and
+ * are counted separately; meaningful changes stay in the default view. */
+export type BaselineChangeClassification = "meaningful" | "routine";
 
 export interface BaselineFact {
   name: string;
@@ -369,7 +380,10 @@ export interface HostBaselineSummary {
   pinned: boolean;
   identity: HostIdentity;
   sections: BaselineSectionSummary[];
+  /** Meaningful differences against the next older capture: routine churn is
+   * counted separately so these two numbers stay consistent everywhere. */
   changesSincePrevious: number | null;
+  routineSincePrevious: number | null;
 }
 
 export interface BaselineCaptureRequest {
@@ -392,6 +406,9 @@ export interface BaselineFactChange {
   name: string;
   baseValue: string | null;
   targetValue: string | null;
+  classification: BaselineChangeClassification;
+  /** Deterministic sentence explaining a routine classification. */
+  reason: string | null;
 }
 
 export interface BaselineEntryChange {
@@ -410,6 +427,10 @@ export interface BaselineSectionDiff {
   removed: BaselineEntry[];
   changed: BaselineEntryChange[];
   unchangedCount: number;
+  /** Routine fact changes recorded here, hidden from the meaningful counts. */
+  routineCount: number;
+  /** A partial read on either side cannot assert a resource was removed. */
+  removalsIndeterminate: boolean;
 }
 
 export interface BaselineComparison {

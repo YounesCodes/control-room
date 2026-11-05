@@ -114,9 +114,12 @@ describe("application hierarchy", () => {
     expect(baselinesSource).toContain("api.captureHostBaseline");
     expect(baselinesSource).not.toContain("setInterval");
     expect(baselinesSource).not.toContain("setTimeout");
+    // The redesigned pane keeps the same manual-capture promise in its
+    // command-header action and empty state.
     expect(baselinesSource).toContain(
-      "Captured only when you ask. Control Room never collects in the background.",
+      "Capture now. Control Room never collects in the background.",
     );
+    expect(baselinesSource).toContain("Control Room never collects in the background.");
   });
 
   it("keeps one offerable list of local terminals behind Settings", () => {

@@ -289,10 +289,14 @@ export const api = {
       connectionId,
     ),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
-  captureHostBaseline: (request: BaselineCaptureRequest, progress: Channel<BaselineProgress>) =>
+  captureHostBaseline: (
+    request: BaselineCaptureRequest,
+    progress: Channel<BaselineProgress>,
+    sudoPassword: string | null = null,
+  ) =>
     invokeHostOperation<HostBaselineSummary>(
       "capture_host_baseline",
-      { request, progress },
+      { request, progress, sudoPassword },
       request.connectionId,
     ),
   cancelHostBaseline: (captureId: string) => invoke<void>("cancel_host_baseline", { captureId }),
@@ -304,6 +308,12 @@ export const api = {
   setHostBaselinePinned: (id: string, pinned: boolean) =>
     invoke<HostBaselineSummary>("set_host_baseline_pinned", { id, pinned }),
   deleteHostBaseline: (id: string) => invoke<void>("delete_host_baseline", { id }),
+  getHostBaselineReference: (connectionId: string) =>
+    invoke<HostBaselineSummary | null>("get_host_baseline_reference", { connectionId }),
+  setHostBaselineReference: (id: string) =>
+    invoke<HostBaselineSummary>("set_host_baseline_reference", { id }),
+  clearHostBaselineReference: (connectionId: string) =>
+    invoke<boolean>("clear_host_baseline_reference", { connectionId }),
   traceHostBaselineEntry: (connectionId: string, kind: BaselineSectionKind, identity: string) =>
     invokeHostOperation<BaselineTrace>(
       "trace_host_baseline_entry",
@@ -319,6 +329,7 @@ export const api = {
     captureId: string,
     progress: Channel<BaselineProgress>,
     connectionId?: string,
+    sudoPassword: string | null = null,
   ) =>
     invokeHostOperation<BaselineComparison>(
       "compare_host_baseline_with_live",
@@ -326,6 +337,7 @@ export const api = {
         baseId,
         captureId,
         progress,
+        sudoPassword,
       },
       connectionId,
     ),

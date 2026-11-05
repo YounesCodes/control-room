@@ -2677,15 +2677,519 @@ code,
    Host baselines
    ========================================================================== */
 
-.baseline-capture {
+/* Command header: one row, the host's capture story in one line, and the
+   single action that starts a capture. */
+.baselines-command-header {
   display: flex;
-  padding: 0 16px 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 4px 0 10px;
+  gap: 12px;
+}
+
+.baselines-command-header h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.baselines-command-header p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.baselines-command-actions {
+  display: flex;
+  flex-shrink: 0;
   gap: 8px;
 }
 
-.baseline-capture input {
+/* Timeline ribbon: the primary navigation. It scrolls on its own and the
+   selected node is always scrolled fully into view. */
+.baseline-timeline-wrap {
+  display: flex;
+  margin-bottom: 10px;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.baseline-timeline-side {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.baseline-timeline {
+  position: relative;
+  display: flex;
   min-width: 0;
   flex: 1;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  align-items: stretch;
+  padding: 2px;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-low);
+}
+
+.baseline-timeline:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.baseline-timeline-selection {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  z-index: 0;
+  width: 0;
+  height: 0;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  opacity: 0;
+  transition:
+    transform var(--motion-med) var(--ease),
+    width var(--motion-med) var(--ease),
+    height var(--motion-med) var(--ease);
+  pointer-events: none;
+}
+
+.baseline-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 104px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 7px 9px;
+  border: 0;
+  background: none;
+  color: inherit;
+  gap: 2px;
+  text-align: left;
+}
+
+.baseline-node:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.baseline-node-date {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.baseline-node-title {
+  overflow: hidden;
+  max-width: 180px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baseline-node-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.baseline-node-meta svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.baseline-node-ref {
+  color: var(--accent);
+}
+
+/* Snapshot context: the selected capture's identity above the workspace. */
+.baseline-context {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.baseline-context-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.baseline-context-heading h3 {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.baseline-context-heading p {
+  margin: 2px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.baseline-context-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.baseline-context-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.baseline-mode-tabs {
+  display: flex;
+  padding: 1px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-low);
+}
+
+.baseline-mode-tab {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.baseline-mode-tab.selected {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.baseline-mode-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.baseline-compare-field {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.baseline-compare-field span {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.baseline-compare-field select {
+  min-width: 0;
+}
+
+.baseline-search-field {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  max-width: 220px;
+  align-items: center;
+  margin-left: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  color: var(--text-faint);
+  gap: 6px;
+}
+
+.baseline-search-field input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.baseline-search-field:focus-within {
+  border-color: var(--focus);
+}
+
+.baseline-workspace {
+  min-height: 0;
+}
+
+/* Directional navigation motion: content moves toward the present for a newer
+   capture and back for an older one, then rests. The captures stay samples;
+   the slides express navigation, not host activity. */
+.baseline-workspace-slide {
+  animation: baseline-slide 160ms var(--ease);
+}
+
+.baseline-slide-newer {
+  animation-name: baseline-slide-newer;
+}
+
+.baseline-slide-older {
+  animation-name: baseline-slide-older;
+}
+
+@keyframes baseline-slide-newer {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes baseline-slide-older {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes baseline-slide {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Inspector: the right half when something is selected, an honest empty state
+   when nothing is. */
+.baseline-inspector-pane {
+  min-width: 0;
+}
+
+.baseline-inspector {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 10px;
+  animation: baseline-inspector-in var(--motion-med) var(--ease);
+}
+
+@keyframes baseline-inspector-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.baseline-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.baseline-inspector-header h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+}
+
+.baseline-inspector-header p {
+  margin: 2px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.baseline-inspector-type {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.baseline-inspector-changes ul {
+  display: flex;
+  margin: 6px 0 0;
+  flex-direction: column;
+  padding: 0;
+  gap: 8px;
+  list-style: none;
+}
+
+.baseline-inspector-changes li {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.baseline-inspector-changes h4,
+.baseline-inspector-entry h4 {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.baseline-inspector-fact-name {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  gap: 6px;
+}
+
+.baseline-inspector-values {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  align-items: baseline;
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.baseline-inspector-reason {
+  margin: 4px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.baseline-routine-mark {
+  padding: 0 5px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.baseline-inspector-fact-routine .baseline-inspector-values {
+  color: var(--text-muted);
+}
+
+/* The differing target value gets one brief emphasis when it arrives: motion
+   points at the fact that moved, and then rests. */
+.baseline-change-emphasis {
+  animation: baseline-change-flash 480ms var(--ease);
+}
+
+@keyframes baseline-change-flash {
+  from {
+    background: color-mix(in srgb, var(--warning) 24%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.baseline-inspector-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.baseline-inspector-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* Change rows: keeps a Git-review feel, one row one fact story, with the
+   mark, the resource, and the leading difference. */
+.baseline-change-row {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  gap: 8px;
+  text-align: left;
+}
+
+.baseline-change-row:hover {
+  background: var(--surface-low);
+}
+
+.baseline-change-row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.baseline-change-row-selected {
+  background: var(--surface-low);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.baseline-change-lead {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baseline-change-routine {
+  color: var(--text-faint);
+  border-color: var(--border-subtle);
+}
+
+.baseline-capture-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 320px;
+}
+
+.baseline-capture-label span {
+  display: block;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.baseline-capture-sections {
+  display: flex;
+  flex-wrap: wrap;
+  border: 0;
+  padding-top: 8px;
+  gap: 6px 14px;
+}
+
+.baseline-capture-sections legend {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.baseline-capture-hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 
 .baseline-progress {
@@ -2753,29 +3257,7 @@ code,
   color: var(--text-faint);
 }
 
-/* Proximity does the grouping here. The gap inside one option has to read as
-   clearly smaller than the gap between options, or each label drifts toward
-   the checkbox to its right. 7px inside against 18px between.
-   The padding-top is what separates the rendered legend from the row; a
-   margin on the legend itself sits outside the fieldset's content box. */
-.baseline-section-choice {
-  display: flex;
-  flex-wrap: wrap;
-  margin: 0 16px 12px;
-  padding: 9px 0 0;
-  border: 0;
-  gap: 9px 18px;
-}
-
-.baseline-section-choice legend {
-  padding: 0;
-  color: var(--text-faint);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.baseline-section-choice label {
+.baseline-capture-section-choice {
   display: flex;
   min-height: 22px;
   align-items: center;
@@ -2784,7 +3266,7 @@ code,
   gap: 7px;
 }
 
-.baseline-section-choice input {
+.baseline-capture-section-choice input {
   margin: 0;
 }
 
@@ -2906,19 +3388,6 @@ code,
   font-style: italic;
 }
 
-/* Scoped to this list: making every dense row a flex container would break the
-   ellipsis those rows rely on. */
-.baseline-row-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.baseline-row-title svg {
-  flex-shrink: 0;
-  color: var(--text-faint);
-}
-
 .baseline-comparison-tools {
   display: flex;
   flex-wrap: wrap;
@@ -2939,23 +3408,6 @@ code,
   margin: 0;
 }
 
-.baseline-detail-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.baseline-detail-header > div:first-child {
-  min-width: 0;
-}
-
-.baseline-detail-actions {
-  display: flex;
-  flex-shrink: 0;
-  gap: 4px;
-}
-
 .baseline-rename {
   display: flex;
   min-width: 0;
@@ -2964,26 +3416,6 @@ code,
 }
 
 .baseline-rename input {
-  min-width: 0;
-  flex: 1;
-}
-
-.baseline-compare-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 16px 0 18px;
-}
-
-.baseline-compare-field {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 10px;
-}
-
-.baseline-compare-field select {
   min-width: 0;
   flex: 1;
 }
@@ -3064,8 +3496,7 @@ code,
   font-size: 11.5px;
 }
 
-.baseline-change-list,
-.baseline-fact-list {
+.baseline-change-list {
   display: flex;
   margin: 8px 0 0;
   flex-direction: column;
@@ -3078,18 +3509,6 @@ code,
   display: flex;
   align-items: baseline;
   font-size: 11.5px;
-  gap: 6px;
-}
-
-.baseline-fact-list {
-  margin: 4px 0 0 12px;
-}
-
-.baseline-fact-list li {
-  display: flex;
-  align-items: baseline;
-  color: var(--text-faint);
-  font-size: 11px;
   gap: 6px;
 }
 
@@ -3107,6 +3526,22 @@ code,
 
 .baseline-change-removed {
   color: var(--failure);
+}
+
+/* Reduced motion: navigation, inspection, and change emphasis all become
+   immediate state changes. Every behavior above still works without them. */
+@media (prefers-reduced-motion: reduce) {
+  .baseline-workspace-slide,
+  .baseline-slide-newer,
+  .baseline-slide-older,
+  .baseline-inspector,
+  .baseline-change-emphasis {
+    animation: none;
+  }
+
+  .baseline-timeline-selection {
+    transition: none;
+  }
 }
 
 .workspace-content {

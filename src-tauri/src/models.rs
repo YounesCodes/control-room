@@ -326,10 +326,10 @@ pub struct Filesystem {
     pub used_percent: u8,
 }
 
-/// Version of the normalized host state written into stored baselines. Bump it
-/// whenever a section's identity or fact names change, so an older baseline is
-/// reported as incomparable instead of silently mis-diffed.
-pub const BASELINE_SCHEMA_VERSION: u32 = 1;
+/// Version of the normalized host state written into stored baselines. Only a
+/// whole-capture version; comparison itself is decided per section below, so a
+/// capture from another version still compares in every section both record.
+pub const BASELINE_SCHEMA_VERSION: u32 = 2;
 
 /// Stable evidence about which Remote Host a baseline came from. The machine
 /// fingerprint is a truncated SHA-256 computed on the host, so the raw
@@ -364,7 +364,8 @@ pub struct BaselineEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BaselineSection {
-    /// `host`, `systemdUnits`, `containers`, `listeners`, or `filesystems`.
+    /// `host`, `systemdUnits`, `containers`, `listeners`, `firewall`,
+    /// `filesystems`, `scheduledJobs`, or `packages`.
     pub kind: String,
     /// `collected`, `partial`, `unsupported`, `unavailable`, or `skipped`.
     /// These are distinct: an absent subsystem is not the same as one this
@@ -442,9 +443,14 @@ pub struct HostBaselineSummary {
     pub pinned: bool,
     pub identity: HostIdentity,
     pub sections: Vec<BaselineSectionSummary>,
-    /// Entries that differ from the next older capture of the same connection.
-    /// None when there is no older capture, or when nothing could be compared.
+    /// Entries that differ from the next older capture of the same connection,
+    /// counting only differences that survive routine-change filtering. None
+    /// when there is no older capture, or when nothing could be compared.
     pub changes_since_previous: Option<u32>,
+    /// Routine fact changes hidden from that count. Shown beside it, so the
+    /// timeline never claims a quieter host than the full diff supports.
+    #[serde(default)]
+    pub routine_since_previous: Option<u32>,
 }
 
 /// What the user asked one capture to do. Sections is None for every section,
@@ -476,6 +482,13 @@ pub struct BaselineFactChange {
     pub name: String,
     pub base_value: Option<String>,
     pub target_value: Option<String>,
+    /// `meaningful` or `routine`. Routine changes are facts that move on a
+    /// healthy host — a restarted container, a busier disk. They stay recorded
+    /// and inspectable; the default view only counts them separately.
+    pub classification: String,
+    /// A short deterministic sentence explaining a routine classification, so
+    /// "hidden" never has to mean "unexplained". None for meaningful changes.
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -500,6 +513,14 @@ pub struct BaselineSectionDiff {
     pub removed: Vec<BaselineEntry>,
     pub changed: Vec<BaselineEntryChange>,
     pub unchanged_count: u32,
+    /// How many routine fact changes this section recorded, on entries that
+    /// also changed meaningfully and on entries hidden until asked for.
+    #[serde(default)]
+    pub routine_count: u32,
+    /// True when at least one side was read partially, so a resource missing
+    /// from the other capture cannot be asserted as confidently removed.
+    #[serde(default)]
+    pub removals_indeterminate: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -514,6 +535,52 @@ pub struct BaselineComparison {
     /// never saved, so the UI can name it as live rather than as a capture.
     pub target_is_live: bool,
     pub sections: Vec<BaselineSectionDiff>,
+}
+
+/// One scheduled-cron observation. The command is a redacted descriptor of the
+/// binary name and its word count: raw cron lines can embed credentials, so
+/// the raw text never leaves the host.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselineCronJob {
+    /// `crontab`, `cron.d/<file>`, or `user:<owner>` for a personal crontab.
+    pub source: String,
+    pub line: u32,
+    /// The five schedule fields exactly as written.
+    pub schedule: String,
+    /// The user the entry runs as, or the spool owner for personal crontabs.
+    pub user: String,
+    /// A privacy-safe descriptor, e.g. `backup (3 words)`.
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CronInventory {
+    pub jobs: Vec<BaselineCronJob>,
+    /// True when personal crontabs exist but this account cannot read them.
+    pub spool_unreadable: bool,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BaselinePackage {
+    /// The manager's own reported name, including any architecture qualifier.
+    pub name: String,
+    pub architecture: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageInventory {
+    /// `dpkg` or `rpm`.
+    pub manager: String,
+    pub packages: Vec<BaselinePackage>,
+    /// How many packages the manager reported, even above the kept bound.
+    pub sources_reported: u32,
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -40,6 +40,7 @@ let element: HTMLDivElement;
 let currentSettings: AppSettings;
 let persisted: PersistedWorkspaceState;
 let captures: HostBaseline[];
+let referenceCapture: HostBaseline | null;
 let sequence: number;
 let streamOutput: { onmessage: (message: ArrayBuffer) => void } | null;
 const failures = new Map<string, string>();
@@ -218,7 +219,16 @@ async function respond(command: string, args: any = {}) {
     }
     case "delete_host_baseline":
       captures = captures.filter((capture) => capture.id !== args.id);
+      if (referenceCapture?.id === args.id) referenceCapture = null;
       return;
+    case "get_host_baseline_reference":
+      return referenceCapture ? fixtures.summary(referenceCapture) : null;
+    case "set_host_baseline_reference":
+      referenceCapture = captures.find((capture) => capture.id === args.id)!;
+      return fixtures.summary(referenceCapture);
+    case "clear_host_baseline_reference":
+      referenceCapture = null;
+      return true;
     case "compare_host_baselines":
       return fixtures.comparison(
         captures.find((capture) => capture.id === args.baseId)!,
@@ -265,6 +275,7 @@ beforeEach(async () => {
   streamOutput = null;
   currentSettings = { ...fixtures.settings };
   captures = [fixtures.baseline("stored", "Stored baseline")];
+  referenceCapture = null;
   persisted = { workspaces: [], activeWorkspaceId: null, terminalGroups: [], terminalLayout: null };
   native.invoke.mockImplementation(respond);
   element = document.createElement("div");
@@ -2266,7 +2277,35 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
     for (const view of ["Systemd", "Baselines"]) {
       await navigate(view);
-      await checkList();
+      if (view === "Systemd") {
+        await checkList();
+        continue;
+      }
+      // The timeline holds any number of captures horizontally: every node
+      // stays reachable, the selected one is scrolled fully into view, and the
+      // ribbon never grows the page vertically.
+      await vi.waitFor(() =>
+        expect(element.querySelectorAll(".baseline-timeline .baseline-node").length).toBe(100),
+      );
+      const timeline = element.querySelector<HTMLElement>(".baseline-timeline")!;
+      const content = element.querySelector<HTMLElement>(".connection-section-content")!;
+      expect(timeline.getBoundingClientRect().height).toBeLessThanOrEqual(content.clientHeight);
+      const latest = timeline.querySelectorAll<HTMLElement>(".baseline-node")[99]!;
+      await vi.waitFor(() => {
+        const ribbon = timeline.getBoundingClientRect();
+        const node = latest.getBoundingClientRect();
+        expect(node.right).toBeLessThanOrEqual(ribbon.right + 1);
+        expect(node.left).toBeGreaterThanOrEqual(ribbon.left - 1);
+      });
+      timeline.focus();
+      await userEvent.keyboard("{Home}");
+      const oldest = timeline.querySelectorAll<HTMLElement>(".baseline-node")[0]!;
+      await vi.waitFor(() => {
+        const ribbon = timeline.getBoundingClientRect();
+        const node = oldest.getBoundingClientRect();
+        expect(node.left).toBeGreaterThanOrEqual(ribbon.left - 1);
+        expect(node.right).toBeLessThanOrEqual(ribbon.right + 1);
+      });
     }
     for (const kind of ["containers", "listeners", "connections"]) {
       await navigate(kind === "containers" ? "Docker" : "Ports");
@@ -3037,44 +3076,55 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(currentSettings.globalSudoEnabled).toBe(false);
   });
 
-  it("captures, renames with cancellation and save recovery, pins and compares before deleting a baseline", async () => {
+  it("captures, renames with cancellation and save recovery, pins and compares before deleting a capture", async () => {
     await mount();
     await navigate("Baselines");
-    await page.getByRole("textbox", { name: "Baseline label" }).fill("Browser capture");
     await page.getByRole("button", { name: "Capture baseline", exact: true }).click();
-    await expect.element(page.getByRole("button", { name: "Pin baseline" })).toBeVisible();
-    await page.getByRole("button", { name: "Rename baseline", exact: true }).click();
-    await page.getByRole("textbox", { name: "Baseline label" }).nth(1).fill("Discarded rename");
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox", { name: "Baseline label" }).fill("Browser capture");
+    await dialog.getByRole("button", { name: "Start capture" }).click();
+    await expect.element(page.getByRole("button", { name: "Pin capture" })).toBeVisible();
+    await page.getByRole("button", { name: "Rename capture" }).click();
+    await page.getByRole("textbox", { name: "Capture label" }).fill("Discarded rename");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect
       .element(page.getByRole("heading", { name: "Browser capture", exact: true }))
       .toBeVisible();
-    await page.getByRole("button", { name: "Rename baseline", exact: true }).click();
-    await page.getByRole("textbox", { name: "Baseline label" }).nth(1).fill("Renamed capture");
+    await page.getByRole("button", { name: "Rename capture" }).click();
+    await page.getByRole("textbox", { name: "Capture label" }).fill("Renamed capture");
     failures.set("rename_host_baseline", "fixture rename failed");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect.element(page.getByText("fixture rename failed", { exact: true })).toBeVisible();
     await expect
-      .element(page.getByRole("textbox", { name: "Baseline label" }).nth(1))
+      .element(page.getByRole("textbox", { name: "Capture label" }))
       .toHaveValue("Renamed capture");
     failures.delete("rename_host_baseline");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect
       .element(page.getByRole("heading", { name: "Renamed capture", exact: true }))
       .toBeVisible();
-    await page.getByRole("button", { name: "Pin baseline" }).click();
-    await expect.element(page.getByRole("button", { name: "Unpin baseline" })).toBeVisible();
+    await page.getByRole("button", { name: "Pin capture" }).click();
+    await expect.element(page.getByRole("button", { name: "Unpin capture" })).toBeVisible();
+    await page.getByRole("button", { name: "Mark as reference" }).click();
+    await expect.element(page.getByRole("button", { name: "Clear reference" })).toBeVisible();
+    await page.getByRole("button", { name: "Clear reference" }).click();
+    const referenceDialog = page.getByRole("dialog");
+    await referenceDialog.getByRole("button", { name: "Keep reference", exact: true }).click();
+    await expect.element(page.getByRole("button", { name: "Clear reference" })).toBeVisible();
+    await page.getByRole("button", { name: "Clear reference" }).click();
+    await referenceDialog.getByRole("button", { name: "Clear reference", exact: true }).click();
+    await expect.element(page.getByRole("button", { name: "Mark as reference" })).toBeVisible();
     const count = captures.length;
     await page.getByRole("combobox").selectOptions("live");
     await expect.element(page.getByText(/This read was not saved/)).toBeVisible();
     expect(captures).toHaveLength(count);
-    await page.getByRole("button", { name: "Delete baseline", exact: true }).click();
+    await page.getByRole("button", { name: "Delete capture", exact: true }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(captures).toHaveLength(count);
-    await page.getByRole("button", { name: "Delete baseline", exact: true }).click();
+    await page.getByRole("button", { name: "Delete capture", exact: true }).click();
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: "Delete baseline", exact: true })
+      .getByRole("button", { name: "Delete capture", exact: true })
       .click();
     await vi.waitFor(() => expect(captures).toHaveLength(count - 1));
   });
