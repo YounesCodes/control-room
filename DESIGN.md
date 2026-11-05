@@ -613,6 +613,10 @@ behavior separate from appearance and local shell availability.
 Arrange colors in a compact grid; stack the preview above its controls on narrow
 windows. Category changes reveal the whole form together with the Systemd unit fade and
 vertical motion, preserving draft controls and respecting reduced motion.
+Terminal subsection links smoothly scroll only the Settings body, aligning each
+heading below the fixed navigation with the normal content gutter. Allow the
+final subsection to align there too. Repeated clicks retarget the scroll; reduced
+motion jumps immediately.
 
 Automatic terminal titles default to on. Use only shell-reported executable or
 title metadata, reduced to a bounded executable name without arguments or paths.

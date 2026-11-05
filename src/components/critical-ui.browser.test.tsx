@@ -726,6 +726,88 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it.each([768, 1200])(
+    "animates subsection jumps into the Settings viewport at %ipx",
+    async (width) => {
+      await page.viewport(width, 640);
+      mount(<SettingsFixture />);
+      await expect.element(page.getByRole("searchbox", { name: "Search settings" })).toBeVisible();
+      if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
+      else
+        await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
+      const original = window.matchMedia.bind(window);
+      let reduced = false;
+      const media = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+        const result = original(query);
+        if (query.includes("prefers-reduced-motion"))
+          Object.defineProperty(result, "matches", { value: reduced });
+        return result;
+      });
+      try {
+        const body = container!.querySelector<HTMLElement>(".settings-body")!;
+        const nav = container!.querySelector(".settings-subnavigation")!;
+        const navTop = nav.getBoundingClientRect().top;
+        for (const [id, name] of [
+          ["shells", "Local shells"],
+          ["behavior", "Tabs & naming"],
+          ["appearance", "Appearance"],
+        ]) {
+          const before = body.scrollTop;
+          (page.getByRole("button", { name, exact: true }).element() as HTMLButtonElement).click();
+          const samples: number[] = [];
+          for (let i = 0; i < 45; i++) {
+            await new Promise(requestAnimationFrame);
+            samples.push(body.scrollTop);
+          }
+          const after = body.scrollTop;
+          expect(Math.abs(after - before)).toBeGreaterThan(20);
+          expect(
+            samples.some(
+              (value) => value > Math.min(before, after) + 1 && value < Math.max(before, after) - 1,
+            ),
+          ).toBe(true);
+          const heading = container!
+            .querySelector(`#settings-${id} legend`)!
+            .getBoundingClientRect();
+          expect(
+            Math.abs(
+              heading.top -
+                body.getBoundingClientRect().top -
+                parseFloat(getComputedStyle(body).paddingTop),
+            ),
+          ).toBeLessThanOrEqual(2);
+          expect(heading.bottom).toBeLessThan(body.getBoundingClientRect().bottom);
+          expect(nav.getBoundingClientRect().top).toBe(navTop);
+          if (id === "shells")
+            await page.screenshot({ path: `../../test-results/settings-subsection-${width}.png` });
+        }
+        (
+          page
+            .getByRole("button", { name: "Local shells", exact: true })
+            .element() as HTMLButtonElement
+        ).click();
+        (
+          page
+            .getByRole("button", { name: "Appearance", exact: true })
+            .element() as HTMLButtonElement
+        ).click();
+        await vi.waitFor(() => expect(body.scrollTop).toBe(0));
+        reduced = true;
+        (
+          page
+            .getByRole("button", { name: "Local shells", exact: true })
+            .element() as HTMLButtonElement
+        ).click();
+        const immediate = body.scrollTop;
+        await new Promise(requestAnimationFrame);
+        expect(body.scrollTop).toBe(immediate);
+        expect(immediate).toBeGreaterThan(100);
+      } finally {
+        media.mockRestore();
+      }
+    },
+  );
+
   it("rounds the open dropdown and preserves option selection and keyboard dismissal", async () => {
     await page.viewport(960, 640);
     mount(<SettingsFixture />);

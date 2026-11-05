@@ -196,6 +196,45 @@ export function SettingsPane({
   const bodyRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const previousCategory = useRef(category);
+  const categoryScrollFrame = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const measure = () => {
+      const styles = getComputedStyle(body);
+      const height =
+        body.clientHeight -
+        (parseFloat(styles.paddingTop) || 0) -
+        (parseFloat(styles.paddingBottom) || 0);
+      body.style.setProperty("--settings-section-height", `${Math.max(0, height)}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(body);
+    return () => {
+      observer?.disconnect();
+      if (categoryScrollFrame.current !== null) cancelAnimationFrame(categoryScrollFrame.current);
+    };
+  }, []);
+
+  function scrollToSection(id: string) {
+    if (categoryScrollFrame.current !== null) {
+      cancelAnimationFrame(categoryScrollFrame.current);
+      categoryScrollFrame.current = null;
+    }
+    const body = bodyRef.current;
+    const form = formRef.current;
+    const section = form?.querySelector<HTMLElement>(`#settings-${id}`);
+    if (!body || !form || !section) return;
+    const top =
+      form.offsetTop + section.offsetTop - (parseFloat(getComputedStyle(body).paddingTop) || 0);
+    body.scrollTo({
+      top,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+  }
   useLayoutEffect(() => {
     if (previousCategory.current === category) return;
     previousCategory.current = category;
@@ -228,7 +267,9 @@ export function SettingsPane({
     if (bodyRef.current && !query) positions.current[category] = bodyRef.current.scrollTop;
     setSearch("");
     setCategory(next);
-    requestAnimationFrame(() => {
+    if (categoryScrollFrame.current !== null) cancelAnimationFrame(categoryScrollFrame.current);
+    categoryScrollFrame.current = requestAnimationFrame(() => {
+      categoryScrollFrame.current = null;
       if (bodyRef.current) bodyRef.current.scrollTop = positions.current[next] ?? 0;
     });
   }
@@ -415,9 +456,7 @@ export function SettingsPane({
                   type="button"
                   disabled={fontBusy || saving}
                   aria-controls={`settings-${id}`}
-                  onClick={() =>
-                    document.getElementById(`settings-${id}`)?.scrollIntoView({ block: "start" })
-                  }
+                  onClick={() => scrollToSection(id)}
                 >
                   {label}
                 </button>
@@ -434,6 +473,7 @@ export function SettingsPane({
               ref={formRef}
               id="settings-form"
               className="settings-form"
+              data-category={query ? undefined : category}
               onSubmit={submit}
               onInvalid={(event) => {
                 const input = event.target as HTMLInputElement;
