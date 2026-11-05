@@ -677,6 +677,9 @@ describe("critical UI in Chromium", () => {
     async (width) => {
       await page.viewport(width, 900);
       mount(<SettingsFixture />);
+      if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
+      else
+        await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
       const mode = page.getByRole("checkbox", { name: "Local Terminal Mode", exact: true });
       await expect.element(mode).toBeInTheDocument();
       const row = mode.element().closest("label")!;
@@ -713,10 +716,54 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
-  it("keeps appearance controls with their preview while Settings scrolls", async () => {
+  it.each([768, 960, 1600])(
+    "navigates and searches Settings without losing validation at %ipx",
+    async (width) => {
+      await page.viewport(width, 640);
+      mount(<SettingsFixture />);
+      const choose = async (value: string, label: string) => {
+        if (width > 900) await page.getByRole("button", { name: label, exact: true }).click();
+        else await page.getByRole("combobox", { name: "Settings category" }).selectOptions(value);
+      };
+      await choose("terminal", "Terminal");
+      await page.getByRole("button", { name: "Tabs & naming", exact: true }).click();
+      await expect
+        .element(
+          page.getByRole("checkbox", {
+            name: "Show current command/process in terminal tab titles",
+          }),
+        )
+        .toBeVisible();
+      await page.getByRole("button", { name: "Appearance", exact: true }).click();
+      await page.getByLabelText("Font size", { exact: true }).fill("1");
+      await choose("logs", "Logs & History");
+      await page.getByRole("button", { name: "Save settings", exact: true }).click();
+      await expect.element(page.getByLabelText("Font size", { exact: true })).toHaveFocus();
+      await page.getByLabelText("Font size", { exact: true }).fill("16");
+      const search = page.getByRole("searchbox", { name: "Search settings" });
+      await search.fill("sudo");
+      await expect.element(page.getByRole("group", { name: "Elevated commands" })).toBeVisible();
+      await expect
+        .element(page.getByText("Connections & Permissions", { exact: true }).last())
+        .toBeVisible();
+      await search.fill("no-such-setting");
+      await expect.element(page.getByText('No settings match "no-such-setting".')).toBeVisible();
+      await search.fill("");
+      await expect.element(page.getByLabelText("Font size", { exact: true })).toHaveValue(16);
+      expect(container!.scrollWidth).toBeLessThanOrEqual(width);
+      const result = await axe.run(container!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(result.violations.map(({ id }) => id)).toEqual([]);
+      await page.screenshot({ path: `../../test-results/settings-${width}.png` });
+    },
+  );
+
+  it("stacks the preview above appearance controls in narrow Settings", async () => {
     await page.viewport(960, 640);
     mount(<SettingsFixture />);
     container!.style.width = "708px";
+    await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
     await expect.element(page.getByRole("group", { name: "Terminal appearance" })).toBeVisible();
     const appearance = page.getByRole("group", { name: "Terminal appearance" }).element();
     const preview = appearance.querySelector<HTMLElement>(".terminal-appearance-preview")!;
@@ -727,8 +774,8 @@ describe("critical UI in Chromium", () => {
     )!;
     expect(appearance.contains(font)).toBe(true);
     expect(colorInput).not.toBeNull();
-    expect(preview.getBoundingClientRect().left).toBeGreaterThan(
-      font.getBoundingClientRect().right,
+    expect(preview.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      font.getBoundingClientRect().top,
     );
     expect(
       Number.parseFloat(getComputedStyle(appearance.querySelector("legend")!).fontSize),
@@ -745,7 +792,7 @@ describe("critical UI in Chromium", () => {
       ),
     );
     const body = container!.querySelector<HTMLElement>(".settings-body")!;
-    body.scrollTop = 160;
+    body.scrollTop = 0;
     await vi.waitFor(() =>
       expect(preview.getBoundingClientRect().top).toBeGreaterThanOrEqual(
         body.getBoundingClientRect().top,
@@ -753,7 +800,9 @@ describe("critical UI in Chromium", () => {
     );
     expect(container!.scrollWidth).toBeLessThanOrEqual(708);
     await page.screenshot({ path: "../../test-results/settings-minimum.png" });
-    expect(container!.querySelector(".settings-navigation")).toBeNull();
+    expect(getComputedStyle(container!.querySelector(".settings-navigation")!).display).toBe(
+      "none",
+    );
     body.scrollTop = body.scrollHeight;
     await expect.element(page.getByRole("button", { name: "Save settings" })).toBeVisible();
     await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
@@ -776,10 +825,19 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     const form = container!.querySelector(".settings-form")!.getBoundingClientRect();
     const heading = container!.querySelector(".settings-heading-inner")!.getBoundingClientRect();
-    expect(form.width).toBeGreaterThan(1500);
-    expect(Math.abs(form.left - (1600 - form.right))).toBeLessThan(24);
-    expect(Math.abs(heading.left - form.left)).toBeLessThan(24);
-    expect(Math.abs(heading.right - form.right)).toBeLessThan(24);
+    expect(form.width).toBeGreaterThan(1000);
+    const nav = container!.querySelector(".settings-navigation")!.getBoundingClientRect();
+    expect(form.left).toBeGreaterThan(nav.right);
+    expect(heading.right).toBeGreaterThan(form.right);
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    body.scrollTop = 160;
+    const preview = container!
+      .querySelector(".terminal-appearance-preview")!
+      .getBoundingClientRect();
+    expect(preview.top).toBeGreaterThanOrEqual(body.getBoundingClientRect().top);
+    expect(preview.bottom).toBeLessThanOrEqual(body.getBoundingClientRect().bottom);
+    body.scrollTop = 0;
     if (import.meta.env.VITE_CAPTURE_DOCS === "1") {
       await page.screenshot({ path: "../../docs/src/assets/screenshots/settings.png" });
     }

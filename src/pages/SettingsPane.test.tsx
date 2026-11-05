@@ -82,6 +82,7 @@ function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {})
     ...overrides,
   };
   const view = render(<SettingsPane {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Terminal" }));
   return { ...props, ...view };
 }
 
@@ -100,6 +101,50 @@ describe("Settings actions", () => {
     });
     api.previewCatalogFont.mockResolvedValue(new ArrayBuffer(8));
     api.installCatalogFont.mockResolvedValue("JetBrains Mono");
+  });
+
+  it("searches across categories, reports no matches and preserves unsaved drafts", async () => {
+    renderPane();
+    fireEvent.change(screen.getByLabelText("Font size"), { target: { value: "18" } });
+    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    for (const [query, group] of [
+      ["font", "Terminal appearance"],
+      ["refresh", "Host metrics"],
+      ["sudo", "Elevated commands"],
+      ["terminal names", "Tabs & naming"],
+      ["SSH", "SSH environment"],
+      ["update", "Control Room updates"],
+    ]) {
+      fireEvent.change(search, { target: { value: query } });
+      expect(screen.getByRole("group", { name: group })).toBeTruthy();
+    }
+    fireEvent.change(search, { target: { value: "no-such-preference" } });
+    expect(screen.getByRole("status").textContent).toContain("No settings match");
+    expect(screen.queryByRole("group")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Logs & History" }));
+    expect(screen.getByRole("group", { name: "Logs and History" })).toBeTruthy();
+    expect((search as HTMLInputElement).value).toBe("");
+    fireEvent.change(screen.getByRole("combobox", { name: "Settings category" }), {
+      target: { value: "terminal" },
+    });
+    expect((screen.getByLabelText("Font size") as HTMLInputElement).value).toBe("18");
+    expect(saveButton().disabled).toBe(false);
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Terminal" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+  });
+
+  it("defaults automatic titles to on and saves an explicit opt-out", async () => {
+    renderPane();
+    const preference = screen.getByRole("checkbox", {
+      name: "Show current command/process in terminal tab titles",
+    }) as HTMLInputElement;
+    expect(preference.checked).toBe(true);
+    expect(saveButton().disabled).toBe(true);
+    await userEvent.click(preference);
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith({ ...settings, automaticTerminalTitles: false });
   });
 
   it("identifies local shells and administrator profiles with their shell marks", () => {
@@ -137,6 +182,7 @@ describe("Settings actions", () => {
     renderPane();
     expect(saveButton().disabled).toBe(true);
     expect(screen.queryByRole("checkbox", { name: "Storage" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "General & Monitoring" }));
     const enabled = screen.getByRole("checkbox", { name: "Show host metrics in header" });
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
@@ -436,6 +482,7 @@ describe("Settings actions", () => {
     expect(preference.checked).toBe(false);
 
     // Turning the schedule off is not the same as refusing to look.
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("You're up to date.")).toBeTruthy();
@@ -446,6 +493,7 @@ describe("Settings actions", () => {
     renderPane({
       onCheckForUpdates: vi.fn(async () => ({ outcome: "available", version: "0.7.0" }) as const),
     });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(await screen.findByText("Version 0.7.0 is available.")).toBeTruthy();
   });
@@ -461,6 +509,7 @@ describe("Settings actions", () => {
           }) as const,
       ),
     });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(await screen.findByText(/Could not check for updates\./)).toBeTruthy();
     expect(screen.getByText("Could not reach the update endpoint.")).toBeTruthy();

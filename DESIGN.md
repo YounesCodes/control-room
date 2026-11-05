@@ -589,9 +589,22 @@ Settings fills the window below a draggable titlebar with native window controls
 Hide Connections and Workspace tabs while Settings is open, and restore the
 existing workspace and focus mode when it closes. Use the available page width
 for its form and keep Back and Save visible while its body scrolls.
-Settings uses readable section titles and short scope descriptions. Group
+Use a slim category rail on wide windows and a category selector at narrow widths.
+Search across categories by setting names and keywords, with category context on
+results. Preserve drafts and useful category scroll positions. Keep numeric fields
+compact and save explicitly, with dirty, saving, saved, and error feedback.
+Settings uses readable section titles. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.
+Arrange colors in a compact grid; stack the preview above its controls on narrow
+windows. Category changes use a short entrance that respects reduced motion.
+
+Automatic terminal titles default to on. Use only shell-reported executable or
+title metadata, reduced to a bounded executable name without arguments or paths.
+Keep the shell or host identity and duplicate numbering in the display title.
+Manual names take priority. Clear activity on command completion, prompt return,
+disconnect, or session replacement. Titles stay in memory and never change saved
+workspace names. Unsupported metadata falls back to the normal identity.
 
 Select the current font value on focus or when reopening the field so typing
 starts a new search without deleting the saved family. Preserve cursor editing

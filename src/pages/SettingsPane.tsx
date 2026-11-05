@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { LocalShellIcon } from "../components/LocalShellIcon";
@@ -14,6 +14,75 @@ import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
 import { contrastRatio } from "../lib/color-contrast";
 import { TERMINAL_BACKGROUND } from "../lib/terminal-theme";
+import { Search } from "../components/MagnifierIcon";
+
+const categories = [
+  ["general", "General & Monitoring"],
+  ["terminal", "Terminal"],
+  ["logs", "Logs & History"],
+  ["connections", "Connections & Permissions"],
+  ["app", "App & Diagnostics"],
+] as const;
+type Category = (typeof categories)[number][0];
+const sections = {
+  metrics: [
+    "general",
+    "Host metrics",
+    "header cpu ram gpu disk io uptime refresh polling interval monitoring",
+  ],
+  appearance: [
+    "terminal",
+    "Terminal appearance",
+    "font family size colors ansi palette preview contrast",
+  ],
+  behavior: [
+    "terminal",
+    "Tabs & naming",
+    "automatic current command process terminal names titles scrollback lines output history",
+  ],
+  shells: [
+    "terminal",
+    "Local terminal",
+    "shell startup default offered powershell cmd git bash administrator elevated focus mode",
+  ],
+  logs: ["logs", "Logs and History", "default log tail enhanced command history ssh"],
+  permissions: [
+    "connections",
+    "Elevated commands",
+    "sudo permissions root passwordless structured operations",
+  ],
+  updates: ["app", "Control Room updates", "version automatic check download restart"],
+  ssh: ["app", "SSH environment", "ssh.exe openssh config agent paths diagnostics"],
+} satisfies Record<string, [Category, string, string]>;
+
+function SettingsSection({
+  id,
+  category,
+  query,
+  children,
+  className = "",
+}: {
+  id: keyof typeof sections;
+  category: Category;
+  query: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [group, title, keywords] = sections[id];
+  const context = categories.find(([key]) => key === group)![1];
+  const matches = query
+    ? query
+        .split(/\s+/)
+        .every((word) => `${context} ${title} ${keywords}`.toLowerCase().includes(word))
+    : category === group;
+  return (
+    <fieldset id={`settings-${id}`} className={className} hidden={!matches}>
+      <legend>{title}</legend>
+      {query && <small className="settings-result-category">{context}</small>}
+      {children}
+    </fieldset>
+  );
+}
 
 const terminalAnsiColors = [
   ["terminalRed", "ANSI 1", "Errors"],
@@ -117,6 +186,26 @@ export function SettingsPane({
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
+  const [category, setCategory] = useState<Category>("general");
+  const [search, setSearch] = useState("");
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const positions = useRef<Partial<Record<Category, number>>>({});
+  const query = search.trim().toLowerCase();
+  const sectionProps = { category, query };
+  const hasResults = Object.values(sections).some(([group, title, keywords]) => {
+    const context = categories.find(([key]) => key === group)![1];
+    return query
+      .split(/\s+/)
+      .every((word) => `${context} ${title} ${keywords}`.toLowerCase().includes(word));
+  });
+  function navigate(next: Category) {
+    if (bodyRef.current && !query) positions.current[category] = bodyRef.current.scrollTop;
+    setSearch("");
+    setCategory(next);
+    requestAnimationFrame(() => {
+      if (bodyRef.current) bodyRef.current.scrollTop = positions.current[next] ?? 0;
+    });
+  }
   const lowContrastColors = terminalColorFields
     .filter(([field]) => contrastRatio(draft[field], TERMINAL_BACKGROUND) < 4.5)
     .map(([, label]) => label);
@@ -223,7 +312,20 @@ export function SettingsPane({
           </button>
           <div className="settings-heading-text">
             <h2>Settings</h2>
-            <p>Host metrics, terminals, logs, SSH access, and updates.</p>
+          </div>
+          <div className="search-field settings-search">
+            <Search size={15} />
+            <input
+              type="search"
+              aria-label="Search settings"
+              placeholder="Search settings"
+              value={search}
+              disabled={fontBusy || saving}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                if (bodyRef.current) bodyRef.current.scrollTop = 0;
+              }}
+            />
           </div>
           <div className="settings-heading-actions">
             {message ? (
@@ -249,385 +351,453 @@ export function SettingsPane({
           </div>
         </div>
       </header>
-      <div className="settings-body">
-        <form id="settings-form" className="settings-form" onSubmit={submit}>
-          <fieldset className="host-metrics-settings">
-            <legend>Host metrics</legend>
-            <small>Live readings in the top bar for the active local machine or SSH host.</small>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={draft.hostMetricsEnabled ?? false}
-                onChange={(event) =>
-                  setDraft({ ...draft, hostMetricsEnabled: event.target.checked })
-                }
-              />
-              Show host metrics in header
-            </label>
-            <fieldset className="host-metrics-options" disabled={!draft.hostMetricsEnabled}>
-              <legend>Displayed metrics</legend>
-              <div className="host-metrics-choices">
-                {DEFAULT_HEADER_METRICS.map((metric) => (
-                  <label className="checkbox-label" key={metric}>
-                    <input
-                      type="checkbox"
-                      checked={(draft.hostMetrics ?? DEFAULT_HEADER_METRICS).includes(metric)}
-                      onChange={(event) => {
-                        const selected = new Set(draft.hostMetrics ?? DEFAULT_HEADER_METRICS);
-                        if (event.target.checked) selected.add(metric);
-                        else selected.delete(metric);
-                        setDraft({
-                          ...draft,
-                          hostMetrics: DEFAULT_HEADER_METRICS.filter((value) =>
-                            selected.has(value),
-                          ),
-                        });
-                      }}
-                    />
-                    {HEADER_METRIC_LABELS[metric]}
-                  </label>
-                ))}
-              </div>
-              <label>
-                <span>Host metrics refresh interval</span>
-                <select
-                  value={draft.hostMetricsIntervalSeconds ?? 5}
-                  onChange={(event) =>
-                    setDraft({ ...draft, hostMetricsIntervalSeconds: Number(event.target.value) })
+      <div className="settings-layout">
+        <nav className="settings-navigation" aria-label="Settings categories">
+          {categories.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={!query && category === id ? "page" : undefined}
+              disabled={fontBusy || saving}
+              onClick={() => navigate(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <label className="settings-category-select">
+          <span className="sr-only">Settings category</span>
+          <select
+            value={category}
+            disabled={fontBusy || saving}
+            onChange={(event) => navigate(event.target.value as Category)}
+          >
+            {categories.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="settings-content">
+          {category === "terminal" && !query && (
+            <nav className="settings-subnavigation" aria-label="Terminal settings">
+              {[
+                ["appearance", "Appearance"],
+                ["behavior", "Tabs & naming"],
+                ["shells", "Local shells"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={fontBusy || saving}
+                  aria-controls={`settings-${id}`}
+                  onClick={() =>
+                    document.getElementById(`settings-${id}`)?.scrollIntoView({ block: "start" })
                   }
                 >
-                  {[2, 5, 10, 30].map((seconds) => (
-                    <option value={seconds} key={seconds}>
-                      Every {seconds} seconds
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </fieldset>
-            <small>Monitoring pauses while Settings is open or the window is hidden.</small>
-            {draft.hostMetricsEnabled && displayedHeaderMetrics(draft.hostMetrics).length === 0 && (
-              <small>Select a metric to display the header.</small>
+                  {label}
+                </button>
+              ))}
+            </nav>
+          )}
+          <div className="settings-body" ref={bodyRef}>
+            {query && !hasResults && (
+              <p className="settings-empty" role="status">
+                No settings match "{search.trim()}".
+              </p>
             )}
-          </fieldset>
-          <fieldset>
-            <legend>Terminal appearance</legend>
-            <small>
-              Font and colors for every local and SSH terminal. Preview your choices together before
-              saving.
-            </small>
-            <div className="terminal-appearance-layout">
-              <div className="terminal-appearance-controls">
-                <FontCatalogPicker
-                  value={draft.terminalFontFamily}
-                  onChange={(terminalFontFamily) =>
-                    setDraft((current) => ({ ...current, terminalFontFamily }))
-                  }
-                  disabled={saving}
-                  onBusyChange={setFontBusy}
-                  onPreview={setPreviewFont}
-                  onUse={async (family) => {
-                    const updated = {
-                      ...savedSettings.current,
-                      terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
-                    };
-                    await api.saveSettings(updated);
-                    onSaved(updated);
-                    setDraft((current) => ({
-                      ...current,
-                      terminalFontFamily: updated.terminalFontFamily,
-                    }));
-                  }}
-                />
+            <form
+              id="settings-form"
+              className="settings-form"
+              onSubmit={submit}
+              onInvalid={(event) => {
+                const input = event.target as HTMLInputElement;
+                const section = input
+                  .closest<HTMLElement>("fieldset[id]")
+                  ?.id.replace("settings-", "") as keyof typeof sections | undefined;
+                if (section) {
+                  setSearch("");
+                  setCategory(sections[section][0]);
+                  requestAnimationFrame(() => input.focus());
+                }
+              }}
+            >
+              <SettingsSection id="metrics" {...sectionProps} className="host-metrics-settings">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.hostMetricsEnabled ?? false}
+                    onChange={(event) =>
+                      setDraft({ ...draft, hostMetricsEnabled: event.target.checked })
+                    }
+                  />
+                  Show host metrics in header
+                </label>
+                <fieldset className="host-metrics-options" disabled={!draft.hostMetricsEnabled}>
+                  <legend>Displayed metrics</legend>
+                  <div className="host-metrics-choices">
+                    {DEFAULT_HEADER_METRICS.map((metric) => (
+                      <label className="checkbox-label" key={metric}>
+                        <input
+                          type="checkbox"
+                          checked={(draft.hostMetrics ?? DEFAULT_HEADER_METRICS).includes(metric)}
+                          onChange={(event) => {
+                            const selected = new Set(draft.hostMetrics ?? DEFAULT_HEADER_METRICS);
+                            if (event.target.checked) selected.add(metric);
+                            else selected.delete(metric);
+                            setDraft({
+                              ...draft,
+                              hostMetrics: DEFAULT_HEADER_METRICS.filter((value) =>
+                                selected.has(value),
+                              ),
+                            });
+                          }}
+                        />
+                        {HEADER_METRIC_LABELS[metric]}
+                      </label>
+                    ))}
+                  </div>
+                  <label>
+                    <span>Host metrics refresh interval</span>
+                    <select
+                      value={draft.hostMetricsIntervalSeconds ?? 5}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          hostMetricsIntervalSeconds: Number(event.target.value),
+                        })
+                      }
+                    >
+                      {[2, 5, 10, 30].map((seconds) => (
+                        <option value={seconds} key={seconds}>
+                          Every {seconds} seconds
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </fieldset>
+                <small>Monitoring pauses while Settings is open or the window is hidden.</small>
+                {draft.hostMetricsEnabled &&
+                  displayedHeaderMetrics(draft.hostMetrics).length === 0 && (
+                    <small>Select a metric to display the header.</small>
+                  )}
+              </SettingsSection>
+              <SettingsSection id="appearance" {...sectionProps}>
+                <div className="terminal-appearance-layout">
+                  <div className="terminal-appearance-controls">
+                    <FontCatalogPicker
+                      value={draft.terminalFontFamily}
+                      onChange={(terminalFontFamily) =>
+                        setDraft((current) => ({ ...current, terminalFontFamily }))
+                      }
+                      disabled={saving}
+                      onBusyChange={setFontBusy}
+                      onPreview={setPreviewFont}
+                      onUse={async (family) => {
+                        const updated = {
+                          ...savedSettings.current,
+                          terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
+                        };
+                        await api.saveSettings(updated);
+                        onSaved(updated);
+                        setDraft((current) => ({
+                          ...current,
+                          terminalFontFamily: updated.terminalFontFamily,
+                        }));
+                      }}
+                    />
+                    <label>
+                      <span>Font size</span>
+                      <input
+                        type="number"
+                        min="9"
+                        max="32"
+                        value={draft.terminalFontSize}
+                        onChange={(event) =>
+                          setDraft({ ...draft, terminalFontSize: Number(event.target.value) })
+                        }
+                      />
+                    </label>
+                    <div className="terminal-color-heading">
+                      <div>
+                        <strong>Terminal colors</strong>
+                      </div>
+                      <button
+                        className="secondary-button compact-button"
+                        type="button"
+                        onClick={() => {
+                          setDraft({
+                            ...draft,
+                            terminalForeground: defaults.terminalForeground,
+                            terminalRed: defaults.terminalRed,
+                            terminalGreen: defaults.terminalGreen,
+                            terminalYellow: defaults.terminalYellow,
+                            terminalBlue: defaults.terminalBlue,
+                            terminalMagenta: defaults.terminalMagenta,
+                            terminalCyan: defaults.terminalCyan,
+                          });
+                        }}
+                      >
+                        <RotateCcw size={13} /> Reset colors
+                      </button>
+                    </div>
+                    <div className="terminal-color-grid">
+                      {terminalColorFields.map(([field, label, example]) => (
+                        <label className="terminal-color-control" key={field}>
+                          <TerminalColorPicker
+                            label={label}
+                            descriptionId={example ? `${field}-example` : undefined}
+                            value={draft[field]}
+                            onCommit={(color) => setColor(field, color)}
+                          />
+                          <span>{label}</span>
+                          {example && (
+                            <small className="terminal-color-example" id={`${field}-example`}>
+                              {example}
+                            </small>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                    {lowContrastColors.length > 0 && (
+                      <p className="inline-warning terminal-color-warning" role="status">
+                        Hard to read on the terminal background: {lowContrastColors.join(", ")}.
+                        Choose a brighter color or reset the colors.
+                      </p>
+                    )}
+                  </div>
+                  <div className="terminal-appearance-preview">
+                    <strong>Live preview</strong>
+                    <div
+                      className="ansi-preview"
+                      style={{
+                        color: draft.terminalForeground,
+                        fontFamily: previewFont ?? draft.terminalFontFamily,
+                        fontSize: draft.terminalFontSize,
+                      }}
+                      aria-hidden="true"
+                    >
+                      <div>
+                        <span style={{ color: draft.terminalGreen }}>user@host:~$</span> echo sample
+                      </div>
+                      <div>sample</div>
+                      <div className="ansi-preview-slots">
+                        {terminalAnsiColors.map(([field, label]) => (
+                          <span key={field} style={{ color: draft[field] }}>
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </SettingsSection>
+              <SettingsSection id="behavior" {...sectionProps}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.automaticTerminalTitles ?? true}
+                    onChange={(event) =>
+                      setDraft({ ...draft, automaticTerminalTitles: event.target.checked })
+                    }
+                  />
+                  Show current command/process in terminal tab titles
+                </label>
                 <label>
-                  <span>Font size</span>
+                  <span>Scrollback lines</span>
                   <input
                     type="number"
-                    min="9"
-                    max="32"
-                    value={draft.terminalFontSize}
+                    min="100"
+                    max="100000"
+                    value={draft.terminalScrollback}
                     onChange={(event) =>
-                      setDraft({ ...draft, terminalFontSize: Number(event.target.value) })
+                      setDraft({ ...draft, terminalScrollback: Number(event.target.value) })
                     }
                   />
                 </label>
-                <div className="terminal-color-heading">
-                  <div>
-                    <strong>Terminal colors</strong>
-                    <small>Programs choose how to use each ANSI slot.</small>
-                  </div>
-                  <button
-                    className="secondary-button compact-button"
-                    type="button"
-                    onClick={() => {
-                      setDraft({
-                        ...draft,
-                        terminalForeground: defaults.terminalForeground,
-                        terminalRed: defaults.terminalRed,
-                        terminalGreen: defaults.terminalGreen,
-                        terminalYellow: defaults.terminalYellow,
-                        terminalBlue: defaults.terminalBlue,
-                        terminalMagenta: defaults.terminalMagenta,
-                        terminalCyan: defaults.terminalCyan,
-                      });
-                    }}
-                  >
-                    <RotateCcw size={13} /> Reset colors
-                  </button>
+              </SettingsSection>
+              <SettingsSection id="shells" {...sectionProps}>
+                <div className="local-terminal-mode-option">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={draft.localTerminalMode}
+                      onChange={(event) =>
+                        setDraft({ ...draft, localTerminalMode: event.target.checked })
+                      }
+                    />
+                    Local Terminal Mode
+                  </label>
+                  <small>Start the default local terminal in Focus Mode on launch.</small>
                 </div>
-                <div className="terminal-color-grid">
-                  {terminalColorFields.map(([field, label, example]) => (
-                    <label className="terminal-color-control" key={field}>
-                      <TerminalColorPicker
-                        label={label}
-                        descriptionId={example ? `${field}-example` : undefined}
-                        value={draft[field]}
-                        onCommit={(color) => setColor(field, color)}
-                      />
-                      <span>{label}</span>
-                      {example && (
-                        <small className="terminal-color-example" id={`${field}-example`}>
-                          {example}
-                        </small>
-                      )}
-                    </label>
-                  ))}
-                </div>
-                {lowContrastColors.length > 0 && (
-                  <p className="inline-warning terminal-color-warning" role="status">
-                    Hard to read on the terminal background: {lowContrastColors.join(", ")}. Choose
-                    a brighter color or reset the colors.
-                  </p>
-                )}
-              </div>
-              <div className="terminal-appearance-preview">
-                <strong>Live preview</strong>
-                <small>Font, size, and colors</small>
-                <div
-                  className="ansi-preview"
-                  style={{
-                    color: draft.terminalForeground,
-                    fontFamily: previewFont ?? draft.terminalFontFamily,
-                    fontSize: draft.terminalFontSize,
-                  }}
-                  aria-hidden="true"
-                >
-                  <div>
-                    <span style={{ color: draft.terminalGreen }}>user@host:~$</span> echo sample
+                <label>
+                  <span>Default local terminal</span>
+                  <div className="local-shell-default">
+                    {defaultProfile && <LocalShellIcon kind={defaultProfile.kind} />}
+                    <select
+                      value={draft.defaultLocalShellId ?? ""}
+                      onChange={(event) =>
+                        setDraft({ ...draft, defaultLocalShellId: event.target.value || null })
+                      }
+                    >
+                      <option value="">First enabled terminal</option>
+                      {draft.defaultLocalShellId &&
+                        !enabledStandardProfiles.some(
+                          (shell) => shell.id === draft.defaultLocalShellId,
+                        ) && (
+                          <option value={draft.defaultLocalShellId} disabled>
+                            Saved terminal unavailable or disabled
+                          </option>
+                        )}
+                      {enabledStandardProfiles.map((shell) => (
+                        <option key={shell.id} value={shell.id}>
+                          {shell.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <div>sample</div>
-                  <div className="ansi-preview-slots">
-                    {terminalAnsiColors.map(([field, label]) => (
-                      <span key={field} style={{ color: draft[field] }}>
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>Terminal behavior</legend>
-            <small>Output history retained for local and SSH terminals.</small>
-            <label>
-              <span>Scrollback lines</span>
-              <input
-                type="number"
-                min="100"
-                max="100000"
-                value={draft.terminalScrollback}
-                onChange={(event) =>
-                  setDraft({ ...draft, terminalScrollback: Number(event.target.value) })
-                }
-              />
-            </label>
-          </fieldset>
-          <fieldset>
-            <legend>Local terminal</legend>
-            <div className="local-terminal-mode-option">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={draft.localTerminalMode}
-                  onChange={(event) =>
-                    setDraft({ ...draft, localTerminalMode: event.target.checked })
-                  }
-                />
-                Local Terminal Mode
-              </label>
-              <small>Start the default local terminal in Focus Mode on launch.</small>
-            </div>
-            <label>
-              <span>Default local terminal</span>
-              <div className="local-shell-default">
-                {defaultProfile && <LocalShellIcon kind={defaultProfile.kind} />}
-                <select
-                  value={draft.defaultLocalShellId ?? ""}
-                  onChange={(event) =>
-                    setDraft({ ...draft, defaultLocalShellId: event.target.value || null })
-                  }
-                >
-                  <option value="">First enabled terminal</option>
-                  {draft.defaultLocalShellId &&
-                    !enabledStandardProfiles.some(
-                      (shell) => shell.id === draft.defaultLocalShellId,
-                    ) && (
-                      <option value={draft.defaultLocalShellId} disabled>
-                        Saved terminal unavailable or disabled
-                      </option>
-                    )}
-                  {enabledStandardProfiles.map((shell) => (
-                    <option key={shell.id} value={shell.id}>
-                      {shell.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </label>
-            {localShells.length === 0 ? (
-              <small>No local shells are installed on this machine.</small>
-            ) : (
-              <>
-                <div className="local-shell-toggle-group">
-                  <div className="local-shell-toggle-heading">
-                    <strong>Local terminals</strong>
-                  </div>
-                  {standardProfiles.map(toggleRow)}
-                </div>
-                {administratorProfiles.length > 0 && (
-                  <div className="local-shell-toggle-group">
-                    <div className="local-shell-toggle-heading">
-                      <strong>Run as administrator</strong>
+                </label>
+                {localShells.length === 0 ? (
+                  <small>No local shells are installed on this machine.</small>
+                ) : (
+                  <>
+                    <div className="local-shell-toggle-group">
+                      <div className="local-shell-toggle-heading">
+                        <strong>Local terminals</strong>
+                      </div>
+                      {standardProfiles.map(toggleRow)}
                     </div>
-                    {administratorProfiles.map(toggleRow)}
-                  </div>
+                    {administratorProfiles.length > 0 && (
+                      <div className="local-shell-toggle-group">
+                        <div className="local-shell-toggle-heading">
+                          <strong>Run as administrator</strong>
+                        </div>
+                        {administratorProfiles.map(toggleRow)}
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </fieldset>
-          <fieldset>
-            <legend>Logs and History</legend>
-            <small>Log viewer defaults and command history across SSH connections.</small>
-            <label>
-              <span>Default log tail</span>
-              <select
-                value={draft.defaultLogTail}
-                onChange={(event) =>
-                  setDraft({ ...draft, defaultLogTail: Number(event.target.value) })
-                }
-              >
-                {logTailOptions.map((count) => (
-                  <option key={count}>{count}</option>
-                ))}
-              </select>
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={draft.globalHistoryEnabled}
-                onChange={(event) =>
-                  setDraft({ ...draft, globalHistoryEnabled: event.target.checked })
-                }
-              />{" "}
-              Enable Enhanced History globally
-            </label>
-          </fieldset>
-          <fieldset>
-            <legend>Elevated commands</legend>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={draft.globalSudoEnabled}
-                onChange={(event) =>
-                  setDraft({ ...draft, globalSudoEnabled: event.target.checked })
-                }
-              />{" "}
-              Allow sudo for Structured Operations on every Saved Connection
-            </label>
-            <small>
-              Reads that need root, such as socket ownership and firewall policy, run under sudo
-              wherever the account has passwordless sudo, and run unelevated everywhere else. This
-              overrides the per-connection setting while it is on. Control Room never stores a sudo
-              password, and elevation never turns a read into a change.
-            </small>
-          </fieldset>
-          <fieldset>
-            {/* Control Room updating itself. Named "Control Room updates" rather
+              </SettingsSection>
+              <SettingsSection id="logs" {...sectionProps}>
+                <label>
+                  <span>Default log tail</span>
+                  <select
+                    value={draft.defaultLogTail}
+                    onChange={(event) =>
+                      setDraft({ ...draft, defaultLogTail: Number(event.target.value) })
+                    }
+                  >
+                    {logTailOptions.map((count) => (
+                      <option key={count}>{count}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.globalHistoryEnabled}
+                    onChange={(event) =>
+                      setDraft({ ...draft, globalHistoryEnabled: event.target.checked })
+                    }
+                  />{" "}
+                  Enable Enhanced History globally
+                </label>
+              </SettingsSection>
+              <SettingsSection id="permissions" {...sectionProps}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.globalSudoEnabled}
+                    onChange={(event) =>
+                      setDraft({ ...draft, globalSudoEnabled: event.target.checked })
+                    }
+                  />{" "}
+                  Allow sudo for Structured Operations on every Saved Connection
+                </label>
+                <small>
+                  Reads that need root, such as socket ownership and firewall policy, run under sudo
+                  wherever the account has passwordless sudo, and run unelevated everywhere else.
+                  This overrides the per-connection setting while it is on. Control Room never
+                  stores a sudo password, and elevation never turns a read into a change.
+                </small>
+              </SettingsSection>
+              <SettingsSection id="updates" {...sectionProps}>
+                {/* Control Room updating itself. Named "Control Room updates" rather
                 than "Updates" so it can never be read as updating packages on a
                 Remote Host, which Control Room does not do. */}
-            <legend>Control Room updates</legend>
-            <dl className="detail-list settings-version">
-              <div>
-                <dt>Current version</dt>
-                <dd>{appVersion ? `v${appVersion}` : "Unknown"}</dd>
-              </div>
-            </dl>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={draft.automaticUpdateChecks}
-                onChange={(event) =>
-                  setDraft({ ...draft, automaticUpdateChecks: event.target.checked })
-                }
-              />{" "}
-              Automatically check for updates
-            </label>
-            <div className="settings-update-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => void runManualCheck()}
-                disabled={checking}
-              >
-                <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
-              </button>
-              {checkResult && (
-                <p
-                  className={
-                    checkResult.outcome === "failed"
-                      ? "settings-update-status failed"
-                      : "settings-update-status"
-                  }
-                  role="status"
-                >
-                  {checkResult.outcome === "current" && "You're up to date."}
-                  {checkResult.outcome === "available" &&
-                    `Version ${checkResult.version} is available.`}
-                  {checkResult.outcome === "failed" && (
-                    <>
-                      Could not check for updates.
-                      <span className="settings-update-reason">{checkResult.failure.message}</span>
-                    </>
+                <dl className="detail-list settings-version">
+                  <div>
+                    <dt>Current version</dt>
+                    <dd>{appVersion ? `v${appVersion}` : "Unknown"}</dd>
+                  </div>
+                </dl>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.automaticUpdateChecks}
+                    onChange={(event) =>
+                      setDraft({ ...draft, automaticUpdateChecks: event.target.checked })
+                    }
+                  />{" "}
+                  Automatically check for updates
+                </label>
+                <div className="settings-update-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void runManualCheck()}
+                    disabled={checking}
+                  >
+                    <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
+                  </button>
+                  {checkResult && (
+                    <p
+                      className={
+                        checkResult.outcome === "failed"
+                          ? "settings-update-status failed"
+                          : "settings-update-status"
+                      }
+                      role="status"
+                    >
+                      {checkResult.outcome === "current" && "You're up to date."}
+                      {checkResult.outcome === "available" &&
+                        `Version ${checkResult.version} is available.`}
+                      {checkResult.outcome === "failed" && (
+                        <>
+                          Could not check for updates.
+                          <span className="settings-update-reason">
+                            {checkResult.failure.message}
+                          </span>
+                        </>
+                      )}
+                    </p>
                   )}
-                </p>
-              )}
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>SSH environment</legend>
-            <small>
-              Detected Windows SSH tools and configuration. These details are read-only.
-            </small>
-            <dl className="detail-list">
-              <div>
-                <dt>ssh.exe</dt>
-                <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
-              </div>
-              <div>
-                <dt>OpenSSH config</dt>
-                <dd className="technical">{environment.sshConfigPath}</dd>
-              </div>
-              <div>
-                <dt>ssh-agent</dt>
-                <dd>
-                  {environment.sshAgentAvailable
-                    ? "Available, identity loaded"
-                    : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
-                </dd>
-              </div>
-            </dl>
-          </fieldset>
-        </form>
+                </div>
+              </SettingsSection>
+              <SettingsSection id="ssh" {...sectionProps}>
+                <dl className="detail-list">
+                  <div>
+                    <dt>ssh.exe</dt>
+                    <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
+                  </div>
+                  <div>
+                    <dt>OpenSSH config</dt>
+                    <dd className="technical">{environment.sshConfigPath}</dd>
+                  </div>
+                  <div>
+                    <dt>ssh-agent</dt>
+                    <dd>
+                      {environment.sshAgentAvailable
+                        ? "Available, identity loaded"
+                        : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
+                    </dd>
+                  </div>
+                </dl>
+              </SettingsSection>
+            </form>
+          </div>
+        </div>
       </div>
     </section>
   );

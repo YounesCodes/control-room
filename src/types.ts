@@ -462,6 +462,7 @@ export interface HeaderMetrics {
 }
 
 export interface AppSettings {
+  automaticTerminalTitles?: boolean;
   hostMetricsEnabled?: boolean;
   hostMetrics?: HeaderMetric[];
   hostMetricsIntervalSeconds?: number;

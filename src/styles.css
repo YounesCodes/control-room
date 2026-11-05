@@ -5702,6 +5702,7 @@ dd {
    of the fields it applies to, so the bar keeps Back, the page identity, and
    Save on screen the whole way down. */
 .settings-page {
+  container: settings / inline-size;
   --settings-measure: none;
   --settings-gutter: 30px;
   /* The classic scrollbar Chromium gives the body, sized by the
@@ -5733,6 +5734,93 @@ dd {
   align-items: center;
   margin-inline: auto;
   gap: 13px;
+}
+
+.settings-search {
+  width: clamp(160px, 28vw, 320px);
+  flex: 0 1 320px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 204px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+
+.settings-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 12px;
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.settings-navigation button {
+  min-height: 38px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+  transition:
+    background var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.settings-navigation button:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.settings-navigation button[aria-current="page"] {
+  background: var(--fill-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-strong);
+}
+
+.settings-category-select {
+  display: none;
+}
+
+.settings-content {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.settings-subnavigation {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px var(--settings-gutter);
+}
+
+.settings-subnavigation button {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-subnavigation button:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.settings-result-category {
+  color: var(--text-faint);
+}
+
+.settings-empty {
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .settings-heading-text {
@@ -5797,8 +5885,8 @@ dd {
 
 .settings-form {
   display: flow-root;
-  max-width: var(--settings-measure);
-  margin-inline: auto;
+  max-width: 1180px;
+  margin-right: auto;
   padding-bottom: 8px;
 }
 
@@ -5807,10 +5895,50 @@ dd {
   flex-direction: column;
   gap: 14px;
   border: 0;
-  border-top: 1px solid var(--border);
-  margin: 0 0 32px;
-  padding: 18px 0 0;
+  margin: 0 0 28px;
+  padding: 12px 0 0;
   min-width: 0;
+}
+
+.settings-form fieldset[hidden] {
+  display: none;
+}
+
+.settings-form > fieldset:not([hidden]) {
+  animation: settings-section-in var(--motion-med) var(--ease);
+}
+
+@keyframes settings-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.settings-form > fieldset > label:not(.checkbox-label) {
+  max-width: 640px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.settings-form input[type="number"] {
+  width: 88px;
+}
+.settings-form select {
+  max-width: 320px;
+}
+.settings-form .detail-list {
+  max-width: 800px;
+}
+.settings-form .technical {
+  user-select: text;
+  overflow-wrap: anywhere;
 }
 
 .settings-form legend {
@@ -5936,6 +6064,10 @@ dd {
 
 .terminal-color-warning {
   margin-top: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
 }
 
 .settings-save:disabled {
@@ -8027,10 +8159,72 @@ details[open] > .inspector-disclosure-body {
   font-size: 12px;
 }
 .terminal-appearance-controls .terminal-color-grid {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .terminal-appearance-preview .ansi-preview {
-  min-height: 190px;
+  min-height: 124px;
+}
+
+.terminal-appearance-controls .terminal-color-example {
+  display: none;
+}
+.terminal-appearance-controls .terminal-color-control {
+  min-height: 38px;
+}
+.settings-form .local-shell-toggle-group {
+  max-width: 640px;
+}
+
+@container settings (max-width: 900px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-navigation {
+    display: none;
+  }
+  .settings-category-select {
+    display: block;
+    padding: 12px var(--settings-gutter) 0;
+  }
+  .settings-category-select select {
+    width: 100%;
+  }
+  .settings-heading-inner {
+    flex-wrap: wrap;
+  }
+  .settings-heading-text {
+    flex: 1;
+  }
+  .settings-search {
+    flex: 1 1 auto;
+    width: auto;
+    order: 1;
+  }
+  .settings-heading-actions {
+    margin-left: auto;
+  }
+  .settings-status {
+    max-width: 24ch;
+  }
+}
+
+@container settings (max-width: 760px) {
+  .terminal-appearance-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .terminal-appearance-preview {
+    order: -1;
+    position: static;
+  }
+  .settings-form > fieldset > label:not(.checkbox-label) {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .settings-form .local-shell-default {
+    max-width: 100%;
+  }
 }
 
 /* Saved panel widths and keyboard-operable dividers. */

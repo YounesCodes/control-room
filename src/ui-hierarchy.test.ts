@@ -125,7 +125,7 @@ describe("application hierarchy", () => {
     // than in each menu. The catalog itself stays unfiltered because restoring
     // a Workspace checks against it: hiding a shell must never cost the user a
     // Workspace that was already running it.
-    expect(settingsSource).toContain("<legend>Local terminal</legend>");
+    expect(settingsSource).toContain('"Local terminal"');
     expect(settingsSource).toContain("localShells: LocalShellProfile[]");
     expect(appSource).toContain("offeredLocalShells(");
     expect(appSource).not.toContain("localShells.filter((shell) => !shell.elevated)");
@@ -151,7 +151,7 @@ describe("application hierarchy", () => {
   });
 
   it("puts the global elevation switch in Settings and keeps one-shot sudo per pane", () => {
-    expect(settingsSource).toContain("<legend>Elevated commands</legend>");
+    expect(settingsSource).toContain('"Elevated commands"');
     expect(settingsSource).toContain("draft.globalSudoEnabled");
     // Turning elevation on must not remove the per-request escape hatch: a host
     // without passwordless sudo still falls back to an unelevated read, and the

@@ -523,6 +523,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
     await userEvent.keyboard("{Escape}");
     await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
     const checkbox = page.getByRole("checkbox", {
       name: "Offer PowerShell 7, run as administrator",
     });
@@ -1997,7 +1998,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(settings.right).toBe(shell.right - 1);
       expect(settings.top).toBe(titlebar.bottom);
       expect(settings.bottom).toBe(shell.bottom - 1);
-      expect(form.width).toBeGreaterThan(width - 100);
+      expect(form.width).toBeGreaterThan(width - 450);
       expect(getComputedStyle(element.querySelector(".sidebar")!).display).toBe("none");
       expect(getComputedStyle(workspace).display).toBe("none");
       for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
@@ -2041,6 +2042,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(960, 640);
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await page.getByLabelText("Font size", { exact: true }).fill("18");
     failures.set("save_settings", "fixture disk full");
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
@@ -2055,6 +2057,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("applies hidden shell settings to new terminal, split menu and palette", async () => {
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await page.getByRole("checkbox", { name: /Command Prompt/ }).click();
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
     await vi.waitFor(() => expect(currentSettings.hiddenLocalShells).toEqual(["command-prompt"]));
