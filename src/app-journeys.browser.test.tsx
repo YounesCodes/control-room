@@ -1864,6 +1864,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }));
     await mount();
     await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
     await page.getByRole("button", { name: "Check for updates" }).click();
     await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     await page.getByRole("button", { name: /Control Room 9.9.9/ }).click();
