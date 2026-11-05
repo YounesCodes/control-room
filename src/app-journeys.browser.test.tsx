@@ -345,9 +345,28 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(panes[0].getBoundingClientRect().width).toBeGreaterThan(590);
       expect(panes[0].getBoundingClientRect().width).toBeLessThan(1180);
       expect(getComputedStyle(panes[0]).transform).toBe("none");
+      expect(panes[0].querySelector<HTMLElement>(".terminal-pane")!.offsetWidth).toBe(
+        Number.parseFloat(panes[0].style.width),
+      );
       expect(panes.map((pane) => pane.querySelector(".xterm"))).toEqual(xterms);
       animations.forEach((animation) => animation.finish());
       await page.screenshot({ path: "../test-results/terminal-stacked.png" });
+      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await page
+        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+        .click();
+      await expect
+        .poll(
+          () =>
+            native.invoke.mock.calls.filter(([command]) => command === "start_local_session")
+              .length,
+        )
+        .toBe(2);
+      const started = native.invoke.mock.calls
+        .filter(([command]) => command === "start_local_session")
+        .at(-1)![1];
+      expect(started.cols).toBeGreaterThan(20);
+      expect(started.rows).toBeGreaterThan(5);
     } finally {
       media.mockRestore();
     }

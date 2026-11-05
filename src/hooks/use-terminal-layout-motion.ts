@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 
-/** Animate flat, keyed live panes. ResizeObserver fits once after the motion settles. */
+/** Keep terminal dimensions final while animating flat, keyed pane shells. */
 export function useTerminalLayoutMotion(
   container: RefObject<HTMLDivElement | null>,
   topology: string,
@@ -13,6 +13,7 @@ export function useTerminalLayoutMotion(
     boxes: Map<string, { left: number; top: number; width: number; height: number }>;
   } | null>(null);
   const animations = useRef<Animation[]>([]);
+  const releases = useRef<(() => void)[]>([]);
   useLayoutEffect(() => {
     const nodes = [
       ...(container.current?.querySelectorAll<HTMLElement>(
@@ -20,7 +21,9 @@ export function useTerminalLayoutMotion(
       ) ?? []),
     ];
     animations.current.forEach((animation) => animation.cancel());
+    releases.current.forEach((release) => release());
     animations.current = [];
+    releases.current = [];
     const boxes = new Map(
       nodes.map((node) => [
         (node.dataset.terminalMotionId ?? node.dataset.workspaceId)!,
@@ -63,13 +66,43 @@ export function useTerminalLayoutMotion(
       if (JSON.stringify(start) === JSON.stringify(next)) continue;
       const pixels = (box: typeof next) =>
         Object.fromEntries(Object.entries(box).map(([key, value]) => [key, `${value}px`]));
-      animations.current.push(
-        node.animate([pixels(start), pixels(next)], {
-          duration: 200,
-          easing: "cubic-bezier(.2,.8,.2,1)",
-        }),
-      );
+      // Clip the moving shell around a terminal already sized for its destination.
+      // In particular a new ConPTY must never start at the animation's zero width.
+      const terminal = node.querySelector<HTMLElement>(":scope > .terminal-pane");
+      let release = () => {};
+      if (terminal) {
+        const previousStyle = {
+          width: terminal.style.width,
+          height: terminal.style.height,
+          flex: terminal.style.flex,
+        };
+        const size = { width: terminal.offsetWidth, height: terminal.offsetHeight };
+        Object.assign(terminal.style, {
+          width: `${size.width}px`,
+          height: `${size.height}px`,
+          flex: "none",
+        });
+        let released = false;
+        release = () => {
+          if (released) return;
+          released = true;
+          Object.assign(terminal.style, previousStyle);
+        };
+        releases.current.push(release);
+      }
+      const animation = node.animate([pixels(start), pixels(next)], {
+        duration: 200,
+        easing: "cubic-bezier(.2,.8,.2,1)",
+      });
+      animations.current.push(animation);
+      void animation.finished.then(release, release);
     }
   }, [container, topology, viewportKey, geometryKey]);
-  useLayoutEffect(() => () => animations.current.forEach((animation) => animation.cancel()), []);
+  useLayoutEffect(
+    () => () => {
+      animations.current.forEach((animation) => animation.cancel());
+      releases.current.forEach((release) => release());
+    },
+    [],
+  );
 }
