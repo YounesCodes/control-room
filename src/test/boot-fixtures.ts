@@ -1,4 +1,4 @@
-import type { BootDiagnostics, BootSection } from "../types";
+import type { BootDiagnostics, BootReplayEntry, BootReplayPage, BootSection } from "../types";
 
 export function bootDiagnostics(overrides: Partial<BootDiagnostics> = {}): BootDiagnostics {
   const collectedAt = new Date().toISOString();
@@ -22,6 +22,37 @@ export function bootDiagnostics(overrides: Partial<BootDiagnostics> = {}): BootD
     slowUnits: section([]),
     failedUnits: section([]),
     journal: section([]),
+    ...overrides,
+  };
+}
+
+export function replayEntry(overrides: Partial<BootReplayEntry> = {}): BootReplayEntry {
+  return {
+    id: "cursor-1",
+    monotonicUs: 1_000_000,
+    realtimeUs: 1_730_000_000_000_000,
+    priority: null,
+    source: null,
+    unit: null,
+    message: "journal record",
+    ...overrides,
+  };
+}
+
+export function bootReplayPage(overrides: Partial<BootReplayPage> = {}): BootReplayPage {
+  return {
+    collectedAt: new Date().toISOString(),
+    bootId: "a".repeat(32),
+    managerEvents: [],
+    alertEvents: [],
+    managerNextCursor: null,
+    alertNextCursor: null,
+    managerTruncated: false,
+    alertTruncated: false,
+    earliestMonotonicUs: 0,
+    latestMonotonicUs: 90_000_000,
+    permissionRequired: false,
+    errors: [],
     ...overrides,
   };
 }

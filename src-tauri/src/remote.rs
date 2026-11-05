@@ -673,7 +673,7 @@ pub fn collect_boot_diagnostics(
     })
 }
 
-fn validate_boot_id(boot_id: &str) -> Result<(), String> {
+pub(crate) fn validate_boot_id(boot_id: &str) -> Result<(), String> {
     if boot_id.len() == 32
         && boot_id
             .chars()
@@ -726,7 +726,7 @@ printf '__CR_END__\n'"#
     format!("env LC_ALL=C sh -c {}", shell_single_quote(&script))
 }
 
-fn shell_single_quote(value: &str) -> String {
+pub(crate) fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 

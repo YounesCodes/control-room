@@ -181,6 +181,54 @@ pub struct BootSection<T> {
     pub permission_required: bool,
 }
 
+/// One bounded journal record, kept exactly as the host reported it. Times
+/// are microseconds since the epoch (`realtime`) and since the start of the
+/// entry's own boot (`monotonic`, boot-relative and never stitched across
+/// boots); both are `None` when journald did not record them.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BootReplayEntry {
+    /// The journal's `__CURSOR`, or a derived fallback when it is absent.
+    pub id: String,
+    pub monotonic_us: Option<u64>,
+    pub realtime_us: Option<u64>,
+    pub priority: Option<u8>,
+    pub source: Option<String>,
+    pub unit: Option<String>,
+    pub message: String,
+}
+
+/// One bounded read of a boot's journal, built from two capped streams:
+/// systemd's own manager messages (milestones and unit lifecycle) and the
+/// warning-and-above filter. A read failure is reported as a partial page,
+/// never as "no failures".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BootReplayPage {
+    pub collected_at: String,
+    pub boot_id: String,
+    /// Manager stream entries, in journal order.
+    pub manager_events: Vec<BootReplayEntry>,
+    /// Warning-and-above stream entries, in journal order.
+    pub alert_events: Vec<BootReplayEntry>,
+    /// The next `--after-cursor` value for each capped stream, when more
+    /// retained entries may exist.
+    pub manager_next_cursor: Option<String>,
+    pub alert_next_cursor: Option<String>,
+    /// A stream stopped at its page cap; more retained entries may exist.
+    pub manager_truncated: bool,
+    pub alert_truncated: bool,
+    /// Monotonic offset of the oldest and newest entry retained for this
+    /// boot, from an independent bounded read; `None` when not readable.
+    pub earliest_monotonic_us: Option<u64>,
+    pub latest_monotonic_us: Option<u64>,
+    /// The journal is there but the connecting account cannot read it; the
+    /// retry is a one-shot elevation, never an implicit one.
+    pub permission_required: bool,
+    /// Per-stream or coverage failures that still produced a usable page.
+    pub errors: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainerDetails {

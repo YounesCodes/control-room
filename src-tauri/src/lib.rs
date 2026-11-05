@@ -1,4 +1,5 @@
 mod baselines;
+mod boot_replay;
 mod commands;
 mod database;
 mod documentation;
@@ -139,6 +140,7 @@ pub fn run() {
             commands::inspect_connections,
             commands::inspect_container,
             commands::collect_boot_diagnostics,
+            commands::collect_boot_replay,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

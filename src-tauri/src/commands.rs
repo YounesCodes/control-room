@@ -7,7 +7,8 @@ use crate::{
     header_metrics, history, local_shell,
     models::{
         AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
-        BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
+        BaselineTrace, BootDiagnostics, BootReplayPage, ConnectionGroup, ConnectionTag,
+        DockerContainer,
         DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
         HeaderMetric, HeaderMetrics, HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary,
         HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted,
@@ -529,6 +530,28 @@ pub fn collect_boot_diagnostics(
     let connection = database.get_connection(&connection_id)?;
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     remote::collect_boot_diagnostics(&connection, boot_id.as_deref(), elevation)
+}
+
+#[tauri::command(async)]
+pub fn collect_boot_replay(
+    database: State<'_, Database>,
+    limiter: State<'_, RemoteOperationLimiter>,
+    connection_id: String,
+    boot_id: String,
+    manager_cursor: Option<String>,
+    alert_cursor: Option<String>,
+    sudo_password: Option<String>,
+) -> Result<BootReplayPage, String> {
+    let _permit = limiter.acquire(&connection_id)?;
+    let connection = database.get_connection(&connection_id)?;
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
+    crate::boot_replay::collect_boot_replay(
+        &connection,
+        &boot_id,
+        manager_cursor.as_deref(),
+        alert_cursor.as_deref(),
+        &elevation,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

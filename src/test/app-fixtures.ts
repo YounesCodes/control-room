@@ -2,6 +2,7 @@ import type {
   AppSettings,
   BaselineComparison,
   BootDiagnostics,
+  BootReplayPage,
   DockerContainer,
   DockerContainerDetails,
   HostBaseline,
@@ -186,6 +187,52 @@ export function boot(): BootDiagnostics {
       permissionRequired: false,
       data: ["warning: fixture boot evidence"],
     },
+  };
+}
+export function bootReplay(): BootReplayPage {
+  const collectedAt = new Date().toISOString();
+  return {
+    collectedAt,
+    bootId: "a".repeat(32),
+    managerEvents: [
+      {
+        id: "cursor-milestone",
+        monotonicUs: 1_000_000,
+        realtimeUs: 1_730_000_000_000_000,
+        priority: 6,
+        source: "systemd",
+        unit: null,
+        message: "Reached target Basic System.",
+      },
+      {
+        id: "cursor-unit",
+        monotonicUs: 5_000_000,
+        realtimeUs: 1_730_000_005_000_000,
+        priority: 6,
+        source: "systemd",
+        unit: null,
+        message: `Started ${service.id}.`,
+      },
+    ],
+    alertEvents: [
+      {
+        id: "cursor-warning",
+        monotonicUs: 12_000_000,
+        realtimeUs: 1_730_000_012_000_000,
+        priority: 4,
+        source: "fixture",
+        unit: service.id,
+        message: "fixture boot warning",
+      },
+    ],
+    managerNextCursor: null,
+    alertNextCursor: null,
+    managerTruncated: false,
+    alertTruncated: false,
+    earliestMonotonicUs: 0,
+    latestMonotonicUs: 18_000_000,
+    permissionRequired: false,
+    errors: [],
   };
 }
 export function baseline(id: string, label = id): HostBaseline {

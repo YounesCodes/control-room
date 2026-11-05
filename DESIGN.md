@@ -407,6 +407,25 @@ without elevation, sharing the Boot view's workspace snapshot. Hide unrelated,
 historical, or unavailable evidence. Current Boot
 unit rows link back to Systemd without attributing a cause.
 
+Boot Timeline is a replay theater, not a dashboard. One header carries the
+boot selector, a bounded replay window, and a persistent recorded-replay note
+that names the rule: the host is never rebooted. A restrained summary strip
+keeps at most three facts, and coverage wording distinguishes what was loaded
+from what the journal merely retained. The hero is one shared time axis with
+up to three evidence-backed lanes — milestones, unit events, warnings and
+failures — and only lanes with loaded evidence render. Playback is
+deterministic and local: play, pause, restart, previous and next notable
+markers, a scrubbable position, speeds that never refetch, and an explicit
+completion state. Markers appear when the clock reaches their recorded
+offsets, collapse repeats into counted clusters, and open a contextual
+inspector showing provenance and the raw journal message. Historical boots
+replay only their own journal evidence; current-system facts such as
+systemd-analyze and failed units stay in a separate disclosure and are never
+merged into a replay. An opt-in journal lane lists the loaded records in
+window order, time-aligned with the same playhead. Reduced motion removes
+the marker and inspector entrance animation while playback stays operable.
+Replay evidence stays in memory for the session only and is never persisted.
+
 ## Visual language
 
 ### Color and surfaces

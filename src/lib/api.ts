@@ -37,6 +37,7 @@ import type {
   BaselineProgress,
   BaselineSectionKind,
   BaselineTrace,
+  BootReplayPage,
   SystemdUnit,
   SystemdInspection,
   SystemdReadSection,
@@ -245,6 +246,20 @@ export const api = {
     invokeRemoteInspection<BootDiagnostics>("collect_boot_diagnostics", {
       connectionId,
       bootId,
+      sudoPassword,
+    }),
+  collectBootReplay: (
+    connectionId: string,
+    bootId: string,
+    managerCursor: string | null,
+    alertCursor: string | null,
+    sudoPassword: string | null = null,
+  ) =>
+    invokeRemoteInspection<BootReplayPage>("collect_boot_replay", {
+      connectionId,
+      bootId,
+      managerCursor,
+      alertCursor,
       sudoPassword,
     }),
   startJournalStream: (

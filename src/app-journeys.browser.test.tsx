@@ -170,6 +170,11 @@ async function respond(command: string, args: any = {}) {
       };
     case "collect_boot_diagnostics":
       return { ...fixtures.boot(), selectedBootId: args.bootId ?? "a".repeat(32) };
+    case "collect_boot_replay":
+      return {
+        ...fixtures.bootReplay(),
+        bootId: args.bootId ?? "a".repeat(32),
+      };
     case "start_journal_stream":
     case "start_docker_log_stream":
       streamOutput = args.output;
@@ -2095,14 +2100,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       dockerAvailable: false,
       dockerAccessible: false,
     }));
-    overrides.set("collect_boot_diagnostics", () => ({
-      ...fixtures.boot(),
-      journal: {
-        data: null,
-        collectedAt: "",
-        error: "permission denied",
-        permissionRequired: true,
-      },
+    overrides.set("collect_boot_replay", () => ({
+      ...fixtures.bootReplay(),
+      managerEvents: [],
+      alertEvents: [],
+      permissionRequired: true,
+      errors: ["Boot journal requires permission"],
     }));
     failures.set("list_containers", "Docker is not installed on this host");
     await mount();
@@ -2111,7 +2114,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByText(/Docker.*not.*(?:installed|available|detected)/i))
       .toBeVisible();
     await navigate("Boot");
-    await expect.element(page.getByText(/permission denied/)).toBeVisible();
+    // The status and the coverage tile both explain the wall; the retry is
+    // the single actionable control.
+    await expect
+      .element(page.getByText(/cannot read this boot's journal/i).first())
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Retry with sudo", exact: true }))
+      .toBeVisible();
   });
 
   it.each([960, 1600])("keeps long inspection lists scrollable at %s px", async (width) => {
@@ -2277,16 +2287,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
           shell: "bash",
         })),
       );
-      overrides.set("collect_boot_diagnostics", () => {
-        const snapshot = fixtures.boot();
-        return {
-          ...snapshot,
-          journal: {
-            ...snapshot.journal,
-            data: records.slice(0, 30).map((index) => `warning: example-${index}`),
-          },
-        };
-      });
+      overrides.set("collect_boot_replay", () => ({
+        ...fixtures.bootReplay(),
+        alertEvents: records.map((index) => ({
+          id: `cursor-alert-${index}`,
+          monotonicUs: index * 1_000_000,
+          realtimeUs: 1_730_000_000_000_000 + index * 1_000_000,
+          priority: 4,
+          source: "fixture",
+          unit: null,
+          message: `warning: example-${index}`,
+        })),
+      }));
       overrides.set("get_scratchpad_note", () => ({
         id: "example-note",
         scope: "connection",
@@ -2298,6 +2310,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await mount();
       for (const view of ["History", "Boot"]) {
         await navigate(view);
+        if (view === "Boot") {
+          await page.getByText("Current-boot diagnostics").click();
+          await page.getByText("Show loaded events").click();
+        }
         await expect
           .element(
             page.getByText(view === "History" ? "printf example-99" : "warning: example-29", {
@@ -2533,7 +2549,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ["Systemd", "Systemd"],
       ["Docker", "Containers"],
       ["Ports", "Ports"],
-      ["Boot", "Boot Diagnostics"],
+      ["Boot", "Boot Timeline"],
       ["Logs", "Logs"],
       ["Baselines", "Baselines"],
       ["History", "Enhanced History"],
@@ -2903,7 +2919,15 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect.objectContaining({ bootId: "b".repeat(32) }),
       ),
     );
+    await vi.waitFor(() =>
+      expect(native.invoke).toHaveBeenCalledWith(
+        "collect_boot_replay",
+        expect.objectContaining({ bootId: "b".repeat(32) }),
+      ),
+    );
     await page.getByRole("combobox", { name: "Boot", exact: true }).selectOptions("a".repeat(32));
+    // The contemporaneous unit state is a disclosure now, not a wall of cards.
+    await page.getByText("Current-boot diagnostics").click();
     await page.getByRole("button", { name: /View journal/ }).click();
     await expect.element(page.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
   });
