@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 15;
+const LATEST_SCHEMA_VERSION: i64 = 16;
 const MAX_DISPLAY_NAME_CHARS: usize = 80;
 const MAX_DESTINATION_CHARS: usize = 255;
 const MAX_USERNAME_CHARS: usize = 64;
@@ -656,7 +656,10 @@ impl Database {
             .map_err(|error| error.to_string())?;
         transaction
             .execute(
-                "DELETE FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT id FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
+                // Pinned and referenced captures both survive eviction: a pin
+                // keeps a capture the user chose, a reference is the anchor its
+                // comparisons point at.
+                "DELETE FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT baseline_id FROM host_baseline_references WHERE connection_id = ?1) AND id NOT IN (SELECT id FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
                 params![baseline.connection_id, MAX_BASELINES_PER_CONNECTION as i64],
             )
             .map_err(|error| error.to_string())?;
@@ -671,7 +674,8 @@ impl Database {
         let stored = self.read_host_baselines(connection_id)?;
         // Each row reports how far it moved from the capture below it, so the
         // list itself says where something happened instead of making the user
-        // diff pairs until they find it.
+        // diff pairs until they find it. The visible count is meaningful
+        // differences; the routine one travels beside it.
         let mut summaries: Vec<HostBaselineSummary> =
             stored.iter().map(baselines::summarize).collect();
         for index in 0..summaries.len() {
@@ -680,6 +684,7 @@ impl Database {
             };
             let comparison = baselines::compare(previous, &stored[index]);
             summaries[index].changes_since_previous = baselines::total_changes(&comparison);
+            summaries[index].routine_since_previous = baselines::total_routine(&comparison);
         }
         Ok(summaries)
     }
@@ -782,15 +787,85 @@ impl Database {
     }
 
     pub fn delete_host_baseline(&self, id: &str) -> Result<(), String> {
-        let removed = self
-            .connection
-            .lock()
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        let removed = transaction
             .execute("DELETE FROM host_baselines WHERE id = ?1", [id])
             .map_err(|error| error.to_string())?;
         if removed == 0 {
             return Err("That baseline no longer exists".into());
         }
+        // The foreign key clears a reference pointing at the deleted capture
+        // in the same transaction, so no pointer ever outlives its target.
+        transaction.commit().map_err(|error| error.to_string())?;
         Ok(())
+    }
+
+    /// The capture this connection's comparisons anchor to, when the user has
+    /// marked one. The reference travels with the connection, not the capture.
+    pub fn get_host_baseline_reference(
+        &self,
+        connection_id: &str,
+    ) -> Result<Option<HostBaselineSummary>, String> {
+        let baseline_id: Option<String> = self
+            .connection
+            .lock()
+            .query_row(
+                "SELECT baseline_id FROM host_baseline_references WHERE connection_id = ?1",
+                [connection_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let Some(baseline_id) = baseline_id else {
+            return Ok(None);
+        };
+        match self.get_host_baseline(&baseline_id) {
+            Ok(baseline) => Ok(Some(baselines::summarize(&baseline))),
+            Err(_) => {
+                // A pointer whose capture vanished: clear it rather than
+                // reporting a reference that cannot be read.
+                self.clear_host_baseline_reference(connection_id)?;
+                Ok(None)
+            }
+        }
+    }
+
+    pub fn set_host_baseline_reference(&self, id: &str) -> Result<HostBaselineSummary, String> {
+        let baseline = self.get_host_baseline(id)?;
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        // One reference per connection: an upsert replaces the previous anchor
+        // without rewriting either capture.
+        transaction
+            .execute(
+                "INSERT INTO host_baseline_references (connection_id, baseline_id, created_at) VALUES (?1, ?2, ?3)
+                 ON CONFLICT(connection_id) DO UPDATE SET baseline_id = ?2, created_at = ?3",
+                params![
+                    baseline.connection_id,
+                    baseline.id,
+                    chrono::Utc::now().to_rfc3339()
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(baselines::summarize(&baseline))
+    }
+
+    pub fn clear_host_baseline_reference(&self, connection_id: &str) -> Result<bool, String> {
+        let changed = self
+            .connection
+            .lock()
+            .execute(
+                "DELETE FROM host_baseline_references WHERE connection_id = ?1",
+                [connection_id],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(changed > 0)
     }
 
     pub fn get_settings(&self) -> Result<AppSettings, String> {
@@ -1823,6 +1898,32 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    // One reference capture per Saved Connection: the comparison anchor the
+    // timeline and target picker point at. The pointer is a separate row, so
+    // deleting the capture clears the reference transactionally through the
+    // foreign key, and replacing it never rewrites either capture.
+    if version < 16 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS host_baseline_references (
+                    connection_id TEXT PRIMARY KEY REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    baseline_id TEXT NOT NULL REFERENCES host_baselines(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_host_baseline_references_baseline
+                ON host_baseline_references(baseline_id);
+
+                PRAGMA user_version = 16;
+                "#,
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 
@@ -2340,6 +2441,84 @@ mod tests {
         assert!(database.get_host_baseline("baseline").is_err());
     }
 
+    /// One connection has at most one reference: the capture its comparisons
+    /// anchor to. It neither rewrites captures nor survives its own deletion.
+    #[test]
+    fn a_reference_is_one_per_connection_and_follows_its_capture() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "second", "2026-09-02T10:00:00Z"))
+            .unwrap();
+
+        assert_eq!(
+            database.get_host_baseline_reference(&saved.id).unwrap(),
+            None
+        );
+        database.set_host_baseline_reference("first").unwrap();
+        let reference = database
+            .get_host_baseline_reference(&saved.id)
+            .unwrap()
+            .expect("one reference");
+        assert_eq!(reference.id, "first");
+
+        // Marking another capture replaces the anchor instead of stacking.
+        database.set_host_baseline_reference("second").unwrap();
+        assert_eq!(
+            database
+                .get_host_baseline_reference(&saved.id)
+                .unwrap()
+                .map(|s| s.id),
+            Some("second".to_string())
+        );
+
+        // Clearing is explicit and reports whether it had anything to clear.
+        assert!(database.clear_host_baseline_reference(&saved.id).unwrap());
+        assert_eq!(
+            database.get_host_baseline_reference(&saved.id).unwrap(),
+            None
+        );
+        assert!(!database.clear_host_baseline_reference(&saved.id).unwrap());
+
+        // Deleting a referenced capture clears the pointer in the same
+        // transaction rather than leaving a reference to nothing.
+        database.set_host_baseline_reference("second").unwrap();
+        database.delete_host_baseline("second").unwrap();
+        assert_eq!(
+            database.get_host_baseline_reference(&saved.id).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_reference_capture_survives_retention_like_a_pinned_one() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "anchor", "2026-08-31T00:00:00Z"))
+            .unwrap();
+        database.set_host_baseline_reference("anchor").unwrap();
+        for index in 0..MAX_BASELINES_PER_CONNECTION + 3 {
+            database
+                .save_host_baseline(&baseline_for(
+                    &saved.id,
+                    &format!("baseline-{index:02}"),
+                    &format!("2026-09-01T{index:02}:00:00Z"),
+                ))
+                .unwrap();
+        }
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+        // The unpinned cap still applies to the rest; the reference stays
+        // outside it without occupying one of the twenty slots.
+        assert_eq!(stored.len(), MAX_BASELINES_PER_CONNECTION + 1);
+        assert!(stored.iter().any(|summary| summary.id == "anchor"));
+    }
+
     #[test]
     fn each_row_reports_how_far_it_moved_from_the_capture_below_it() {
         let directory = tempfile::tempdir().unwrap();
@@ -2356,7 +2535,33 @@ mod tests {
 
         assert_eq!(stored[0].id, "second");
         assert_eq!(stored[0].changes_since_previous, Some(1));
+        assert_eq!(stored[0].routine_since_previous, Some(0));
         assert_eq!(stored[1].changes_since_previous, None);
+    }
+
+    #[test]
+    fn each_row_counts_routine_churn_away_from_meaningful_moves() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(&saved.id, "first", "2026-09-01T10:00:00Z"))
+            .unwrap();
+        let mut second = baseline_for(&saved.id, "second", "2026-09-02T10:00:00Z");
+        second.sections[0].entries[0]
+            .facts
+            .push(crate::models::BaselineFact {
+                name: "subState".into(),
+                value: "dead".into(),
+            });
+        database.save_host_baseline(&second).unwrap();
+
+        let stored = database.list_host_baselines(&saved.id).unwrap();
+
+        // A sub-state move is routine churn, so the meaningful count stays at
+        // zero and the routine count carries the observation instead.
+        assert_eq!(stored[0].changes_since_previous, Some(0));
+        assert_eq!(stored[0].routine_since_previous, Some(1));
     }
 
     #[test]
@@ -3850,7 +4055,7 @@ mod tests {
                 "migration step {released} disappeared"
             );
         }
-        assert_eq!(LATEST_SCHEMA_VERSION, 15);
+        assert_eq!(LATEST_SCHEMA_VERSION, 16);
     }
 
     /// A Saved Connection owns everything collected about that host. Deleting

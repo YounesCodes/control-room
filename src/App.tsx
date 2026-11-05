@@ -2702,6 +2702,14 @@ export function App() {
                       onSelect={(baselineSelectionId) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
                       }
+                      globalSudoEnabled={settings.globalSudoEnabled}
+                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
+                      onOpenContainer={(containerId) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
+                          view: "docker",
+                          containerSelectionId: containerId,
+                        })
+                      }
                     />
                   )}
                   {activeRemoteWorkspace.view === "history" && (

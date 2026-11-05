@@ -407,6 +407,39 @@ without elevation, sharing the Boot view's workspace snapshot. Hide unrelated,
 historical, or unavailable evidence. Current Boot
 unit rows link back to Systemd without attributing a cause.
 
+Baselines is a time machine, not a dashboard. A compact command header carries
+the host's capture story and the single Capture action; a horizontal timeline
+ribbon is the primary navigation, with the oldest capture on the left, keyboard
+arrows and Home/End, a jump-to-latest control, and one node per capture showing
+its date, label, readable coverage, meaningful-change count, and pin or
+reference marks. The selected node is always scrolled fully into view and
+carries a shared selection indicator that travels between nodes. Selecting a
+node updates the snapshot context, view, and inspector as one coordinated
+interaction; content briefly slides toward the present when navigating to a
+newer capture and back for an older one. The timeline only plots recorded
+observations: it never draws a line that implies the host was watched between
+captures, and it never infers when a change actually happened.
+The default view leads with changes against the previous capture, computed
+from stored data with no host read; State and Changes are one tab pair, and
+comparisons may target the previous capture, one marked reference, any saved
+capture, or an explicitly requested unsaved live read. Routine churn —
+sub-states, container states and re-created IDs, small disk-usage moves — is
+classified, explained, and counted separately from meaningful differences,
+never deleted; the default view hides it, names how many changes are hidden,
+and reveals them with their reasons on request. Sections that could not be read
+are reported as not comparable rather than unchanged, and removals from a
+partial read are labelled unverified. The contextual inspector beside the
+workspace shows exact before/after facts, the classification and its reason,
+the resource's recorded facts, and its trace across saved captures; it links
+to an exact Systemd unit or Docker container only when the capture recorded
+the evidence to resolve it, and explains why a deep link is unavailable
+otherwise. Captures start from a focused dialog with real per-section progress
+and stop-after-section; captured evidence — cron commands, package inventories,
+firewall rules — stays privacy-safe, redacted where commands are involved, and
+large inventories render through a window with the true count reported.
+Reduced motion settles all navigation, inspector, and change emphasis
+immediately.
+
 ## Visual language
 
 ### Color and surfaces

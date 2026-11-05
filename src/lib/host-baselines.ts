@@ -3,8 +3,10 @@ import type {
   BaselineComparison,
   BaselineEntryChange,
   BaselineSectionDiff,
+  BaselineEntry,
   BaselineSectionKind,
   BaselineSectionStatus,
+  BaselineFactChange,
 } from "../types";
 
 const SECTION_LABELS: Record<BaselineSectionKind, string> = {
@@ -12,19 +14,21 @@ const SECTION_LABELS: Record<BaselineSectionKind, string> = {
   systemdUnits: "Systemd units",
   containers: "Containers",
   listeners: "Ports",
+  firewall: "Firewall",
   filesystems: "Filesystems",
+  scheduledJobs: "Scheduled jobs",
+  packages: "Packages",
 };
 
-// The capture fieldset is five checkboxes across one narrow panel, where the
-// heading-length names do not fit and the last option drops to a line of its
-// own. Under a "Sections" legend the shorter names lose nothing. Headings and
-// the exported Markdown keep the full ones.
 const SECTION_SHORT_LABELS: Record<BaselineSectionKind, string> = {
   host: "Host",
   systemdUnits: "Systemd",
   containers: "Containers",
   listeners: "Ports",
+  firewall: "Firewall",
   filesystems: "Filesystems",
+  scheduledJobs: "Cron",
+  packages: "Packages",
 };
 
 const STATUS_LABELS: Record<BaselineSectionStatus, string> = {
@@ -50,56 +54,105 @@ export const SECTION_KINDS: BaselineSectionKind[] = [
   "systemdUnits",
   "containers",
   "listeners",
+  "firewall",
   "filesystems",
+  "scheduledJobs",
+  "packages",
 ];
-
-// Facts that move on a healthy host. Left in, they bury the changes that matter
-// under normal churn, so a comparison hides them until the user asks.
-const VOLATILE_FACTS: Partial<Record<BaselineSectionKind, string[]>> = {
-  systemdUnits: ["subState"],
-  containers: ["state"],
-};
 
 export function statusHint(status: BaselineSectionStatus): string {
   return STATUS_HINTS[status] ?? "";
 }
 
-export function volatileFacts(kind: BaselineSectionKind): string[] {
-  return VOLATILE_FACTS[kind] ?? [];
+export function isRoutineChange(change: BaselineFactChange): boolean {
+  return change.classification === "routine";
 }
 
-export function hasVolatileChanges(comparison: BaselineComparison): boolean {
-  return comparison.sections.some((section) =>
-    section.changed.some((entry) =>
-      entry.changes.some((change) => volatileFacts(section.kind).includes(change.name)),
-    ),
+// An entry whose every changed fact is routine is routine as a whole: it stays
+// recorded, but the default view carries it as a count rather than a row.
+export function isRoutineEntry(entry: BaselineEntryChange): boolean {
+  return entry.changes.length > 0 && entry.changes.every(isRoutineChange);
+}
+
+export function meaningfulChangeCount(section: BaselineSectionDiff): number {
+  return (
+    section.added.length +
+    section.removed.length +
+    section.changed.filter((entry) => !isRoutineEntry(entry)).length
   );
 }
 
-// Dropping a muted fact can empty an entry's change list. Such an entry is
-// removed rather than shown as changed with nothing to show.
-export function applyVolatileFilter(
+export function entrySearchText(entry: BaselineEntry, term: string): boolean {
+  const needle = term.trim().toLowerCase();
+  if (!needle) return true;
+  return (
+    entry.label.toLowerCase().includes(needle) ||
+    entry.facts.some(
+      (fact) =>
+        fact.name.toLowerCase().includes(needle) || fact.value.toLowerCase().includes(needle),
+    )
+  );
+}
+
+export function changeSearchText(entry: BaselineEntryChange, term: string): boolean {
+  const needle = term.trim().toLowerCase();
+  if (!needle) return true;
+  return (
+    entry.label.toLowerCase().includes(needle) ||
+    entry.changes.some(
+      (change) =>
+        change.name.toLowerCase().includes(needle) ||
+        (change.baseValue ?? "").toLowerCase().includes(needle) ||
+        (change.targetValue ?? "").toLowerCase().includes(needle) ||
+        (change.reason ?? "").toLowerCase().includes(needle),
+    )
+  );
+}
+
+export interface ComparisonViewOptions {
+  /** False hides routine churn (the default review); true shows everything. */
+  showRoutine: boolean;
+  search: string;
+}
+
+export interface ComparisonSectionView extends BaselineSectionDiff {
+  meaningfulCount: number;
+}
+
+/** This view carries both the hidden churn count and the search position, so
+ * the summary line, the timeline, and the detail rows can never disagree. */
+export function comparisonView(
   comparison: BaselineComparison,
-  hideVolatile: boolean,
-): BaselineComparison {
-  if (!hideVolatile) return comparison;
+  options: ComparisonViewOptions,
+): ComparisonSectionView[] {
+  return comparison.sections.map((section) => {
+    const meaningfulCount = section.comparable ? meaningfulChangeCount(section) : 0;
+    if (!section.comparable) {
+      return { ...section, added: [], removed: [], changed: [], meaningfulCount };
+    }
+    const changed = options.showRoutine
+      ? section.changed
+      : section.changed.filter((entry) => !isRoutineEntry(entry));
+    return {
+      ...section,
+      added: section.added.filter((entry) => entrySearchText(entry, options.search)),
+      removed: section.removed.filter((entry) => entrySearchText(entry, options.search)),
+      changed: changed.filter((entry) => changeSearchText(entry, options.search)),
+      meaningfulCount,
+    };
+  });
+}
+
+export function comparisonTotals(comparison: BaselineComparison): {
+  meaningful: number;
+  routine: number;
+  incomparable: number;
+} {
+  const comparable = comparison.sections.filter((section) => section.comparable);
   return {
-    ...comparison,
-    sections: comparison.sections.map((section) => {
-      const muted = volatileFacts(section.kind);
-      if (!muted.length) return section;
-      const changed = section.changed
-        .map((entry) => ({
-          ...entry,
-          changes: entry.changes.filter((change) => !muted.includes(change.name)),
-        }))
-        .filter((entry: BaselineEntryChange) => entry.changes.length > 0);
-      return {
-        ...section,
-        changed,
-        unchangedCount: section.unchangedCount + (section.changed.length - changed.length),
-      };
-    }),
+    meaningful: comparable.reduce((total, section) => total + meaningfulChangeCount(section), 0),
+    routine: comparable.reduce((total, section) => total + section.routineCount, 0),
+    incomparable: comparison.sections.length - comparable.length,
   };
 }
 
@@ -125,21 +178,41 @@ export function formatCapturedAt(value: string): string {
   return captured.toLocaleString();
 }
 
-export function changeCount(diff: BaselineSectionDiff): number {
-  return diff.added.length + diff.removed.length + diff.changed.length;
+// A capture's readable coverage, so the timeline node can say how much of the
+// host it actually saw without inventing a health verdict.
+export function coverageText(baseline: HostBaselineSummary): string {
+  const total = baseline.sections.length || SECTION_KINDS.length;
+  const read = baseline.sections.filter(
+    (section) => section.status === "collected" || section.status === "partial",
+  ).length;
+  return `${read}/${total} read`;
 }
 
 // A section that could not be compared is never counted as unchanged, so the
 // summary line cannot imply a quiet host when evidence is missing.
-export function comparisonSummary(comparison: BaselineComparison): string {
-  const comparable = comparison.sections.filter((section) => section.comparable);
-  const skipped = comparison.sections.length - comparable.length;
-  const changes = comparable.reduce((total, section) => total + changeCount(section), 0);
-  const changeText = changes === 1 ? "1 change" : `${changes} changes`;
-  if (!skipped) return changeText;
-  const skippedText =
-    skipped === 1 ? "1 section could not be compared" : `${skipped} sections could not be compared`;
-  return `${changeText}, ${skippedText}`;
+export function comparisonSummary(
+  comparison: BaselineComparison,
+  options?: ComparisonViewOptions,
+): string {
+  const { meaningful, routine, incomparable } = comparisonTotals(comparison);
+  const showingRoutine = options?.showRoutine ?? false;
+  const parts: string[] = [
+    meaningful === 1 ? "1 meaningful difference" : `${meaningful} meaningful differences`,
+  ];
+  if (routine > 0) {
+    const noun = routine === 1 ? " routine change" : " routine changes";
+    // The counts stay identical in every state; only the claim about where the
+    // routine changes go changes with what the view is showing.
+    parts.push(showingRoutine ? `${routine}${noun}` : `${routine}${noun} hidden`);
+  }
+  if (incomparable > 0) {
+    parts.push(
+      incomparable === 1
+        ? "1 section could not be compared"
+        : `${incomparable} sections could not be compared`,
+    );
+  }
+  return parts.join(" · ");
 }
 
 // The live side is read for the comparison and never saved, so it is named for
@@ -174,7 +247,7 @@ export function sortBaselines(baselines: HostBaselineSummary[]): HostBaselineSum
   });
 }
 
-// The comparison always reads earlier to later, whichever row the user picked.
+// The comparison always reads earlier to later, whichever capture is selected.
 export function orderForComparison(
   selected: HostBaselineSummary,
   other: HostBaselineSummary,
@@ -189,11 +262,14 @@ export function orderForComparison(
 
 // Export writes what the panel shows and nothing more: the same normalized
 // facts, already filtered the same way, so a pasted diff matches the screen.
-export function comparisonToMarkdown(comparison: BaselineComparison): string {
+export function comparisonToMarkdown(
+  comparison: BaselineComparison,
+  options: ComparisonViewOptions = { showRoutine: true, search: "" },
+): string {
   const lines: string[] = [
     `# ${baselineTitle(comparison.base)} → ${comparisonTargetTitle(comparison)}`,
     "",
-    comparisonSummary(comparison),
+    comparisonSummary(comparison, options),
     "",
   ];
   const warning = identityWarning(comparison);
@@ -204,7 +280,13 @@ export function comparisonToMarkdown(comparison: BaselineComparison): string {
       "",
     );
   }
-  for (const section of comparison.sections) {
+  if (!comparison.schemaCompatible) {
+    lines.push(
+      "> These captures were saved by different versions of Control Room. Sections still compare wherever both recorded them in the same shape.",
+      "",
+    );
+  }
+  for (const section of comparisonView(comparison, options)) {
     lines.push(`## ${sectionLabel(section.kind)}`, "");
     lines.push(`${statusLabel(section.baseStatus)} → ${statusLabel(section.targetStatus)}`, "");
     if (!section.comparable) {
@@ -212,18 +294,40 @@ export function comparisonToMarkdown(comparison: BaselineComparison): string {
       continue;
     }
     if (section.note) lines.push(section.note, "");
-    const changes = changeCount(section);
+    if (section.removalsIndeterminate) {
+      lines.push(
+        "> One side was read partially, so removals here are unverified rather than confirmed gone.",
+        "",
+      );
+    }
+    const changes = section.added.length + section.removed.length + section.changed.length;
     if (!changes) {
-      lines.push(`No change across ${section.unchangedCount} compared entries.`, "");
+      lines.push(
+        `No change across ${section.unchangedCount} compared entries${
+          section.routineCount > 0 && !options.showRoutine
+            ? `, ${section.routineCount} routine hidden`
+            : ""
+        }.`,
+        "",
+      );
       continue;
     }
     for (const entry of section.added) lines.push(`- Added \`${entry.label}\``);
     for (const entry of section.removed) lines.push(`- Removed \`${entry.label}\``);
     for (const entry of section.changed) {
       lines.push(`- Changed \`${entry.label}\``);
-      for (const change of entry.changes) {
+      // The export shows exactly the facts the view shows: hidden routine is
+      // counted in the header, never silently included.
+      const facts = options.showRoutine
+        ? entry.changes
+        : entry.changes.filter((fact) => !isRoutineChange(fact));
+      for (const change of facts) {
+        const suffix =
+          change.classification === "routine"
+            ? ` *(routine: ${change.reason ?? "this value moves on its own"})*`
+            : "";
         lines.push(
-          `  - ${change.name}: \`${change.baseValue ?? "not recorded"}\` → \`${change.targetValue ?? "not recorded"}\``,
+          `  - ${change.name}: \`${change.baseValue ?? "not recorded"}\` → \`${change.targetValue ?? "not recorded"}\`${suffix}`,
         );
       }
     }

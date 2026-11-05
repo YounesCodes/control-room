@@ -220,6 +220,7 @@ export function summary(value: HostBaseline): HostBaselineSummary {
   return {
     ...value,
     changesSincePrevious: null,
+    routineSincePrevious: null,
     sections: value.sections.map((section) => ({
       kind: section.kind,
       status: section.status,
@@ -249,6 +250,8 @@ export function comparison(
         removed: [],
         changed: [],
         unchangedCount: 1,
+        routineCount: 0,
+        removalsIndeterminate: false,
       },
     ],
   };

@@ -32,15 +32,21 @@ pub const SECTION_HOST: &str = "host";
 pub const SECTION_SYSTEMD_UNITS: &str = "systemdUnits";
 pub const SECTION_CONTAINERS: &str = "containers";
 pub const SECTION_LISTENERS: &str = "listeners";
+pub const SECTION_FIREWALL: &str = "firewall";
 pub const SECTION_FILESYSTEMS: &str = "filesystems";
+pub const SECTION_SCHEDULED_JOBS: &str = "scheduledJobs";
+pub const SECTION_PACKAGES: &str = "packages";
 
 /// The capture order, which is also the display order of a comparison.
-pub const SECTION_KINDS: [&str; 5] = [
+pub const SECTION_KINDS: [&str; 8] = [
     SECTION_HOST,
     SECTION_SYSTEMD_UNITS,
     SECTION_CONTAINERS,
     SECTION_LISTENERS,
+    SECTION_FIREWALL,
     SECTION_FILESYSTEMS,
+    SECTION_SCHEDULED_JOBS,
+    SECTION_PACKAGES,
 ];
 
 pub const STATUS_COLLECTED: &str = "collected";
@@ -52,6 +58,9 @@ pub const STATUS_UNAVAILABLE: &str = "unavailable";
 /// and could not answer.
 pub const STATUS_SKIPPED: &str = "skipped";
 
+pub const CLASSIFICATION_MEANINGFUL: &str = "meaningful";
+pub const CLASSIFICATION_ROUTINE: &str = "routine";
+
 /// Each section's fact shape carries its own version. Bump only the section you
 /// changed: an older capture stays comparable in every section you did not
 /// touch, which matters because captures are manual and retention is bounded.
@@ -61,6 +70,20 @@ pub fn section_schema_version(kind: &str) -> u32 {
         SECTION_SYSTEMD_UNITS => 1,
         SECTION_CONTAINERS => 1,
         SECTION_LISTENERS => 1,
+        SECTION_FIREWALL => 1,
+        SECTION_FILESYSTEMS => 1,
+        SECTION_SCHEDULED_JOBS => 1,
+        SECTION_PACKAGES => 1,
+        _ => 1,
+    }
+}
+
+/// The whole-capture version a section first appeared in. A capture older than
+/// this could not have recorded the section, so a missing one is the capture's
+/// vintage rather than a failed read.
+pub fn section_introduced_in(kind: &str) -> u32 {
+    match kind {
+        SECTION_FIREWALL | SECTION_SCHEDULED_JOBS | SECTION_PACKAGES => 2,
         _ => 1,
     }
 }
@@ -200,11 +223,14 @@ fn collect_section(
     identity: &HostIdentity,
 ) -> BaselineSection {
     match kind {
-        SECTION_HOST => host_section(identity),
+        SECTION_HOST => host_section(connection, identity),
         SECTION_SYSTEMD_UNITS => systemd_section(connection),
         SECTION_CONTAINERS => containers_section(connection, elevation),
         SECTION_LISTENERS => listeners_section(connection, elevation),
-        _ => filesystems_section(connection),
+        SECTION_FIREWALL => firewall_section(connection, elevation),
+        SECTION_FILESYSTEMS => filesystems_section(connection),
+        SECTION_SCHEDULED_JOBS => scheduled_jobs_section(connection, elevation),
+        _ => packages_section(connection),
     }
 }
 
@@ -224,8 +250,8 @@ fn section(
     }
 }
 
-fn host_section(identity: &HostIdentity) -> BaselineSection {
-    let facts = vec![
+fn host_section(connection: &SavedConnection, identity: &HostIdentity) -> BaselineSection {
+    let mut facts = vec![
         fact("hostname", identity.hostname.clone()),
         fact("operatingSystem", identity.os_id.clone()),
         fact("osVersion", identity.os_version.clone()),
@@ -236,7 +262,19 @@ fn host_section(identity: &HostIdentity) -> BaselineSection {
     .into_iter()
     .flatten()
     .collect::<Vec<_>>();
-    let status = if facts.len() == 6 {
+    let identity_complete = facts.len() == 6;
+    // Hardware facts are additive: a capture that could not read one simply
+    // does not record it, the same way an older capture did not. They never
+    // degrade the identity facts the fingerprint check depends on.
+    for extra in remote::list_host_facts(connection).unwrap_or_default() {
+        if !facts.iter().any(|existing| existing.name == extra.0) {
+            facts.push(BaselineFact {
+                name: extra.0,
+                value: extra.1,
+            });
+        }
+    }
+    let status = if identity_complete {
         STATUS_COLLECTED
     } else {
         STATUS_PARTIAL
@@ -327,6 +365,13 @@ fn containers_section(connection: &SavedConnection, elevation: &Elevation) -> Ba
                             name: "composeService".into(),
                             value: container.compose_service.unwrap_or_else(|| "none".into()),
                         },
+                        // The runtime ID is what Docker deep links resolve, so
+                        // it is recorded as evidence even though it becomes a
+                        // new one whenever the container is recreated.
+                        BaselineFact {
+                            name: "containerId".into(),
+                            value: container.id,
+                        },
                     ],
                 })
                 .collect();
@@ -401,6 +446,105 @@ fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> Bas
     }
 }
 
+/// Firewall evidence reuses the same read Ports shows, so the two panes can
+/// never disagree about the same moment on a host.
+fn firewall_section(connection: &SavedConnection, elevation: &Elevation) -> BaselineSection {
+    match remote::list_firewall(connection, elevation.clone()) {
+        Ok(status) => {
+            if !status.available {
+                let message = match status.backend.as_deref() {
+                    Some(_backend) => "The firewall front-end reported nothing readable.",
+                    None => "Neither UFW nor firewalld was readable on this host.",
+                };
+                return section(
+                    SECTION_FIREWALL,
+                    STATUS_UNSUPPORTED,
+                    Some(message.into()),
+                    Vec::new(),
+                );
+            }
+            let backend = status.backend.clone().unwrap_or_else(|| "unknown".into());
+            let mut facts = vec![BaselineFact {
+                name: "backend".into(),
+                value: backend.clone(),
+            }];
+            if let Some(active) = status.active {
+                facts.push(BaselineFact {
+                    name: "active".into(),
+                    value: if active { "yes" } else { "no" }.into(),
+                });
+            }
+            if let Some(policy) = status.default_incoming.clone() {
+                facts.push(BaselineFact {
+                    name: "defaultIncomingPolicy".into(),
+                    value: policy,
+                });
+            }
+            let mut entries = vec![BaselineEntry {
+                identity: "configuration".into(),
+                label: format!("{backend} configuration"),
+                facts,
+            }];
+            for rule in &status.rules {
+                // Rules are keyed by their content, not their position in the
+                // front-end's report: inserting one rule must not churn every
+                // identity below it into an add/remove pair.
+                let from = if rule.from == "Anywhere" {
+                    "anywhere".to_string()
+                } else {
+                    rule.from.clone()
+                };
+                let port = rule
+                    .port
+                    .map(|port| port.to_string())
+                    .unwrap_or_else(|| "any".into());
+                let protocol = rule.protocol.clone().unwrap_or_else(|| "any".into());
+                entries.push(BaselineEntry {
+                    identity: format!("rule/{}/{}/{}", rule.action, rule.to, from),
+                    label: format!("{}/{}", rule.to, rule.action),
+                    facts: vec![
+                        BaselineFact {
+                            name: "action".into(),
+                            value: rule.action.clone(),
+                        },
+                        BaselineFact {
+                            name: "from".into(),
+                            value: from,
+                        },
+                        BaselineFact {
+                            name: "port".into(),
+                            value: port,
+                        },
+                        BaselineFact {
+                            name: "protocol".into(),
+                            value: protocol,
+                        },
+                    ],
+                });
+            }
+            // The front-end answered, so the read was complete whether the
+            // firewall is on or off. Only an answer it never gave is partial.
+            let status_word = if status.active.is_some() {
+                STATUS_COLLECTED
+            } else {
+                STATUS_PARTIAL
+            };
+            let message = match status.active {
+                Some(false) => Some("The firewall is not active.".to_string()),
+                None => Some("The front-end did not report whether it is active.".to_string()),
+                _ => None,
+            };
+            section(SECTION_FIREWALL, status_word, message, entries)
+        }
+        Err(error) => section(
+            SECTION_FIREWALL,
+            STATUS_UNAVAILABLE,
+            Some(error),
+            Vec::new(),
+        ),
+    }
+}
+
 fn filesystems_section(connection: &SavedConnection) -> BaselineSection {
     match remote::list_filesystems(connection) {
         Ok(filesystems) => {
@@ -438,6 +582,129 @@ fn filesystems_section(connection: &SavedConnection) -> BaselineSection {
     }
 }
 
+/// Cron evidence: schedules and a privacy-safe command descriptor per source
+/// line. Raw command lines never leave the host — cron commands routinely
+/// embed credentials, and a fingerprint of the binary name with its word count
+/// is enough to tell a changed job from the same one.
+fn scheduled_jobs_section(connection: &SavedConnection, elevation: &Elevation) -> BaselineSection {
+    match remote::list_cron_jobs(connection, elevation.clone()) {
+        Ok(jobs) => {
+            let mut entries = jobs
+                .jobs
+                .iter()
+                .map(|job| BaselineEntry {
+                    identity: format!("{}#{}", job.source, job.line),
+                    label: format!("{} line {} · {}", job.source, job.line, job.command),
+                    facts: vec![
+                        BaselineFact {
+                            name: "schedule".into(),
+                            value: job.schedule.clone(),
+                        },
+                        BaselineFact {
+                            name: "user".into(),
+                            value: job.user.clone(),
+                        },
+                        BaselineFact {
+                            name: "command".into(),
+                            value: job.command.clone(),
+                        },
+                    ],
+                })
+                .collect::<Vec<_>>();
+            entries.sort_by(|left, right| left.identity.cmp(&right.identity));
+            let status = if jobs.spool_unreadable || jobs.truncated {
+                STATUS_PARTIAL
+            } else {
+                STATUS_COLLECTED
+            };
+            let mut message = None;
+            if jobs.spool_unreadable {
+                message = Some(
+                    "Per-user crontabs could not be read by this account. System sources are complete."
+                        .to_string(),
+                );
+            }
+            if jobs.truncated {
+                let truncation = format!(
+                    "The host has more cron entries than Control Room records; kept the first {} of them.",
+                    jobs.jobs.len()
+                );
+                message = Some(match message {
+                    Some(existing) => format!("{existing} {truncation}"),
+                    None => truncation,
+                });
+            }
+            section(SECTION_SCHEDULED_JOBS, status, message, entries)
+        }
+        Err(error) => section(
+            SECTION_SCHEDULED_JOBS,
+            STATUS_UNAVAILABLE,
+            Some(error),
+            Vec::new(),
+        ),
+    }
+}
+
+/// Package inventories are the largest section on most hosts. The collector
+/// bounds itself and says so, rather than freezing the read or silently
+/// trimming an honest-looking list.
+fn packages_section(connection: &SavedConnection) -> BaselineSection {
+    match remote::list_packages(connection) {
+        Ok(inventory) => {
+            let (name, count) = match inventory.manager.as_str() {
+                "dpkg" => ("dpkg", inventory.sources_reported),
+                "rpm" => ("rpm", inventory.sources_reported),
+                _ => {
+                    return section(
+                        SECTION_PACKAGES,
+                        STATUS_UNSUPPORTED,
+                        Some("No dpkg or rpm package database was readable.".into()),
+                        Vec::new(),
+                    );
+                }
+            };
+            let entries = inventory
+                .packages
+                .into_iter()
+                .map(|package| BaselineEntry {
+                    identity: format!("{}:{}", package.name, package.architecture),
+                    label: package.name,
+                    facts: vec![
+                        BaselineFact {
+                            name: "architecture".into(),
+                            value: package.architecture,
+                        },
+                        BaselineFact {
+                            name: "version".into(),
+                            value: package.version,
+                        },
+                    ],
+                })
+                .collect::<Vec<_>>();
+            let capped = entries.len();
+            let status = if inventory.truncated {
+                STATUS_PARTIAL
+            } else {
+                STATUS_COLLECTED
+            };
+            let message = inventory.truncated.then(|| {
+                format!(
+                    "{name} reported {count} packages; this capture keeps the first {capped} of them."
+                )
+            });
+            section(SECTION_PACKAGES, status, message, entries)
+        }
+        Err(error) => {
+            let status = if error.contains("no package manager") {
+                STATUS_UNSUPPORTED
+            } else {
+                STATUS_UNAVAILABLE
+            };
+            section(SECTION_PACKAGES, status, Some(error), Vec::new())
+        }
+    }
+}
+
 fn fact(name: &str, value: Option<String>) -> Option<BaselineFact> {
     value.map(|value| BaselineFact {
         name: name.into(),
@@ -470,12 +737,15 @@ pub fn summarize(baseline: &HostBaseline) -> HostBaselineSummary {
             })
             .collect(),
         changes_since_previous: None,
+        routine_since_previous: None,
     }
 }
 
-/// Total entries that differ between two captures, counting only the sections
-/// both sides could read. None when nothing was comparable, so a row can say
-/// "not comparable" rather than showing a reassuring zero.
+/// Entries that differ between two captures with a meaningful difference,
+/// counting only the sections both sides could read. None when nothing was
+/// comparable, so a row can say "not comparable" rather than showing a
+/// reassuring zero. Routine fact churn is not part of this count; its own
+/// number keeps the visible promise separate from the hidden one.
 pub fn total_changes(comparison: &BaselineComparison) -> Option<u32> {
     let comparable: Vec<&BaselineSectionDiff> = comparison
         .sections
@@ -489,10 +759,34 @@ pub fn total_changes(comparison: &BaselineComparison) -> Option<u32> {
         comparable
             .iter()
             .map(|section| {
-                (section.added.len() + section.removed.len() + section.changed.len()) as u32
+                let changed = section
+                    .changed
+                    .iter()
+                    .filter(|entry| {
+                        entry
+                            .changes
+                            .iter()
+                            .any(|change| change.classification == CLASSIFICATION_MEANINGFUL)
+                    })
+                    .count() as u32;
+                (section.added.len() + section.removed.len()) as u32 + changed
             })
             .sum(),
     )
+}
+
+/// Routine fact changes the visible count hides, so the timeline can say how
+/// much churn it suppressed instead of implying the host stood still.
+pub fn total_routine(comparison: &BaselineComparison) -> Option<u32> {
+    let comparable: Vec<&BaselineSectionDiff> = comparison
+        .sections
+        .iter()
+        .filter(|section| section.comparable)
+        .collect();
+    if comparable.is_empty() {
+        return None;
+    }
+    Some(comparable.iter().map(|section| section.routine_count).sum())
 }
 
 /// Reads one entry across every capture given, newest first. This answers when
@@ -554,49 +848,107 @@ fn compare_inner(
     target: &HostBaseline,
     target_is_live: bool,
 ) -> BaselineComparison {
-    let schema_compatible = base.schema_version == target.schema_version;
     let sections = SECTION_KINDS
         .iter()
-        .map(|kind| compare_section(kind, base, target, schema_compatible))
+        .map(|kind| compare_section(kind, base, target))
         .collect();
     BaselineComparison {
         base: summarize(base),
         target: summarize(target),
         identity_match: identity_match(&base.identity, &target.identity).into(),
-        schema_compatible,
+        // Advisory only: sections compare by their own shape, so a capture
+        // written by another whole-capture version still yields every
+        // comparison both sides recorded in the same section shape.
+        schema_compatible: base.schema_version == target.schema_version,
         target_is_live,
         sections,
     }
 }
 
-fn identity_match(base: &HostIdentity, target: &HostIdentity) -> &'static str {
-    match (&base.machine_fingerprint, &target.machine_fingerprint) {
-        (Some(left), Some(right)) if left == right => "same",
-        (Some(_), Some(_)) => "different",
-        _ => "unknown",
+/// Classifies one fact change. Routine means the fact moves on a healthy
+/// host — a restarted container, a busier disk, a recreated ID — never that
+/// the change is safe or approved. Every classification is deterministic and
+/// explainable, and nothing is deleted to achieve it.
+fn classify_fact_change(
+    kind: &str,
+    name: &str,
+    base: Option<&str>,
+    target: Option<&str>,
+) -> (String, Option<String>) {
+    let routine = |reason: &str| (CLASSIFICATION_ROUTINE.to_string(), Some(reason.to_string()));
+    match (kind, name) {
+        (SECTION_SYSTEMD_UNITS, "subState") => {
+            routine("Sub-states move on their own between captures.")
+        }
+        (SECTION_CONTAINERS, "state") => {
+            routine("Container states move on their own between captures.")
+        }
+        (SECTION_CONTAINERS, "containerId") => routine(
+            "Containers get a new ID whenever they are recreated; the workload was matched by name.",
+        ),
+        (SECTION_FILESYSTEMS, "usedPercent") => {
+            // Small swings are a busy disk, not drift: space is meant to move.
+            // Only a large swing keeps the fact in the meaningful count.
+            let parsed = (
+                base.unwrap_or_default().parse::<i32>().ok(),
+                target.unwrap_or_default().parse::<i32>().ok(),
+            );
+            match parsed {
+                (Some(base), Some(target)) => {
+                    let delta = (base - target).abs();
+                    if delta <= ROUTINE_USAGE_DELTA {
+                        routine(&format!("Space in use moved from {base}% to {target}%."))
+                    } else {
+                        (
+                            CLASSIFICATION_MEANINGFUL.to_string(),
+                            Some(format!("Space in use moved from {base}% to {target}%.")),
+                        )
+                    }
+                }
+                _ => (CLASSIFICATION_MEANINGFUL.to_string(), None),
+            }
+        }
+        _ => (CLASSIFICATION_MEANINGFUL.to_string(), None),
     }
 }
 
-fn compare_section(
-    kind: &str,
-    base: &HostBaseline,
-    target: &HostBaseline,
-    schema_compatible: bool,
-) -> BaselineSectionDiff {
+/// How far disk use can move between two captures before the change is worth
+/// a meaningful-difference mention. Above it, a jump is a story worth telling.
+const ROUTINE_USAGE_DELTA: i32 = 20;
+
+fn compare_section(kind: &str, base: &HostBaseline, target: &HostBaseline) -> BaselineSectionDiff {
     let base_section = base.sections.iter().find(|section| section.kind == kind);
     let target_section = target.sections.iter().find(|section| section.kind == kind);
+    // A section a capture's whole version could not have recorded is that
+    // capture's vintage, not a failed read: say so instead of inventing an
+    // error. A recorded skipped section is still the user's own choice.
+    let base_predates = base_section.is_none() && base.schema_version < section_introduced_in(kind);
+    let target_predates =
+        target_section.is_none() && target.schema_version < section_introduced_in(kind);
     let base_status = base_section
         .map(|section| section.status.clone())
-        .unwrap_or_else(|| STATUS_UNAVAILABLE.into());
+        .unwrap_or_else(|| {
+            if base_predates {
+                STATUS_SKIPPED.into()
+            } else {
+                STATUS_UNAVAILABLE.into()
+            }
+        });
     let target_status = target_section
         .map(|section| section.status.clone())
-        .unwrap_or_else(|| STATUS_UNAVAILABLE.into());
+        .unwrap_or_else(|| {
+            if target_predates {
+                STATUS_SKIPPED.into()
+            } else {
+                STATUS_UNAVAILABLE.into()
+            }
+        });
     let readable = |status: &str| status == STATUS_COLLECTED || status == STATUS_PARTIAL;
     // Each section carries its own version, so a change to one section's facts
-    // never blocks comparison of the sections that did not change.
-    let section_schema_compatible = schema_compatible
-        && base_section.map(|section| section.schema_version)
-            == target_section.map(|section| section.schema_version);
+    // never blocks comparison of the sections that did not change. The old
+    // whole-capture version check stays advisory on the comparison only.
+    let section_schema_compatible = base_section.map(|section| section.schema_version)
+        == target_section.map(|section| section.schema_version);
     let comparable =
         section_schema_compatible && readable(&base_status) && readable(&target_status);
     if !comparable {
@@ -604,6 +956,9 @@ fn compare_section(
             kind: kind.into(),
             note: Some(incomparable_note(
                 section_schema_compatible,
+                kind,
+                base_predates,
+                target_predates,
                 &base_status,
                 &target_status,
             )),
@@ -614,22 +969,32 @@ fn compare_section(
             removed: Vec::new(),
             changed: Vec::new(),
             unchanged_count: 0,
+            routine_count: 0,
+            removals_indeterminate: false,
         };
     }
+    let base_partial = base_status == STATUS_PARTIAL;
+    let target_partial = target_status == STATUS_PARTIAL;
+    let partial = base_partial || target_partial;
     let base_entries = index_entries(base_section);
     let target_entries = index_entries(target_section);
     let mut added = Vec::new();
     let mut removed = Vec::new();
     let mut changed = Vec::new();
+    let mut routine_count = 0u32;
     let mut unchanged_count = 0;
     for (identity, entry) in &target_entries {
         match base_entries.get(identity) {
             None => added.push((*entry).clone()),
             Some(previous) => {
-                let changes = compare_facts(previous, entry);
+                let changes = compare_facts(kind, previous, entry);
                 if changes.is_empty() {
                     unchanged_count += 1;
                 } else {
+                    routine_count += changes
+                        .iter()
+                        .filter(|change| change.classification == CLASSIFICATION_ROUTINE)
+                        .count() as u32;
                     changed.push(BaselineEntryChange {
                         identity: identity.clone(),
                         label: entry.label.clone(),
@@ -644,7 +1009,6 @@ fn compare_section(
             removed.push((*entry).clone());
         }
     }
-    let partial = base_status == STATUS_PARTIAL || target_status == STATUS_PARTIAL;
     BaselineSectionDiff {
         kind: kind.into(),
         base_status,
@@ -658,13 +1022,37 @@ fn compare_section(
         removed,
         changed,
         unchanged_count,
+        routine_count,
+        // With a partial read on one side, a resource missing from the other
+        // capture is unverified, never confidently removed.
+        removals_indeterminate: partial,
     }
 }
 
-fn incomparable_note(schema_compatible: bool, base_status: &str, target_status: &str) -> String {
-    if !schema_compatible {
+fn incomparable_note(
+    section_schema_compatible: bool,
+    kind: &str,
+    base_predates: bool,
+    target_predates: bool,
+    base_status: &str,
+    target_status: &str,
+) -> String {
+    if !section_schema_compatible {
         return "These captures recorded this section in different shapes, so it cannot be compared. Other sections are unaffected."
             .into();
+    }
+    if base_predates && target_predates {
+        return format!("Not comparable: neither capture records the {kind} section.");
+    }
+    if base_predates {
+        return format!(
+            "Not comparable: the base capture was saved before Control Room recorded the {kind} section."
+        );
+    }
+    if target_predates {
+        return format!(
+            "Not comparable: the target capture was saved before Control Room recorded the {kind} section."
+        );
     }
     let describe = |status: &str| match status {
         STATUS_UNSUPPORTED => "the subsystem was not present",
@@ -682,6 +1070,14 @@ fn incomparable_note(schema_compatible: bool, base_status: &str, target_status: 
     }
 }
 
+fn identity_match(base: &HostIdentity, target: &HostIdentity) -> &'static str {
+    match (&base.machine_fingerprint, &target.machine_fingerprint) {
+        (Some(left), Some(right)) if left == right => "same",
+        (Some(_), Some(_)) => "different",
+        _ => "unknown",
+    }
+}
+
 fn index_entries(section: Option<&BaselineSection>) -> BTreeMap<String, &BaselineEntry> {
     section
         .map(|section| {
@@ -694,7 +1090,11 @@ fn index_entries(section: Option<&BaselineSection>) -> BTreeMap<String, &Baselin
         .unwrap_or_default()
 }
 
-fn compare_facts(base: &BaselineEntry, target: &BaselineEntry) -> Vec<BaselineFactChange> {
+fn compare_facts(
+    kind: &str,
+    base: &BaselineEntry,
+    target: &BaselineEntry,
+) -> Vec<BaselineFactChange> {
     let mut names: Vec<&str> = Vec::new();
     for entry in [base, target] {
         for fact in &entry.facts {
@@ -708,10 +1108,20 @@ fn compare_facts(base: &BaselineEntry, target: &BaselineEntry) -> Vec<BaselineFa
         .filter_map(|name| {
             let base_value = find_fact(base, name);
             let target_value = find_fact(target, name);
-            (base_value != target_value).then(|| BaselineFactChange {
-                name: name.to_string(),
-                base_value,
-                target_value,
+            (base_value != target_value).then(|| {
+                let (classification, reason) = classify_fact_change(
+                    kind,
+                    name,
+                    base_value.as_deref(),
+                    target_value.as_deref(),
+                );
+                BaselineFactChange {
+                    name: name.to_string(),
+                    base_value,
+                    target_value,
+                    classification,
+                    reason,
+                }
             })
         })
         .collect()
@@ -845,6 +1255,8 @@ mod tests {
                 name: "activeState".into(),
                 base_value: Some("active".into()),
                 target_value: Some("failed".into()),
+                classification: CLASSIFICATION_MEANINGFUL.into(),
+                reason: None,
             }]
         );
         assert_eq!(diff.unchanged_count, 0);
@@ -872,6 +1284,8 @@ mod tests {
                 name: "activeState".into(),
                 base_value: None,
                 target_value: Some("active".into()),
+                classification: CLASSIFICATION_MEANINGFUL.into(),
+                reason: None,
             }]
         );
     }
@@ -967,21 +1381,32 @@ mod tests {
     }
 
     #[test]
-    fn an_incompatible_schema_blocks_every_section() {
+    fn a_newer_whole_capture_version_still_compares_every_recorded_section() {
         let base = baseline(
             "base",
             Some("aaaa"),
-            vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry("ssh.service", &[("activeState", "active")])],
+            )],
         );
         let mut target = baseline(
             "target",
             Some("aaaa"),
-            vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry("ssh.service", &[("activeState", "failed")])],
+            )],
         );
         target.schema_version = BASELINE_SCHEMA_VERSION + 1;
         let comparison = compare(&base, &target);
+        // The whole-capture version is advisory. Older snapshots still yield
+        // useful comparisons in every section both captures recorded in the
+        // same shape; the property is enforced per section below.
         assert!(!comparison.schema_compatible);
-        assert!(comparison.sections.iter().all(|diff| !diff.comparable));
+        let units_diff = find(comparison, SECTION_SYSTEMD_UNITS);
+        assert!(units_diff.comparable);
+        assert_eq!(units_diff.changed.len(), 1);
     }
 
     #[test]
@@ -1141,6 +1566,7 @@ mod tests {
             vec![units(STATUS_UNAVAILABLE, Vec::new())],
         );
         assert_eq!(total_changes(&compare(&base, &target)), None);
+        assert_eq!(total_routine(&compare(&base, &target)), None);
 
         let readable = baseline(
             "readable",
@@ -1148,6 +1574,244 @@ mod tests {
             vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
         );
         assert_eq!(total_changes(&compare(&readable, &readable)), Some(0));
+        assert_eq!(total_routine(&compare(&readable, &readable)), Some(0));
+    }
+
+    #[test]
+    fn routine_facts_are_explained_not_hidden() {
+        let base = baseline(
+            "base",
+            Some("aaaa"),
+            vec![section(
+                SECTION_SYSTEMD_UNITS,
+                STATUS_COLLECTED,
+                None,
+                vec![entry(
+                    "nginx.service",
+                    &[("subState", "running"), ("unitFileState", "enabled")],
+                )],
+            )],
+        );
+        let target = baseline(
+            "target",
+            Some("aaaa"),
+            vec![section(
+                SECTION_SYSTEMD_UNITS,
+                STATUS_COLLECTED,
+                None,
+                vec![entry(
+                    "nginx.service",
+                    &[("subState", "dead"), ("unitFileState", "disabled")],
+                )],
+            )],
+        );
+        let diff = find(compare(&base, &target), SECTION_SYSTEMD_UNITS);
+        assert_eq!(diff.changed.len(), 1);
+        let sub_state = &diff.changed[0].changes[0];
+        assert_eq!(sub_state.name, "subState");
+        assert_eq!(sub_state.classification, CLASSIFICATION_ROUTINE);
+        assert!(sub_state.reason.as_deref().is_some());
+        let enablement = &diff.changed[0].changes[1];
+        assert_eq!(enablement.name, "unitFileState");
+        assert_eq!(enablement.classification, CLASSIFICATION_MEANINGFUL);
+        assert_eq!(diff.routine_count, 1);
+    }
+
+    #[test]
+    fn routine_only_entries_leave_the_meaningful_count_but_stay_counted() {
+        let base = baseline(
+            "base",
+            Some("aaaa"),
+            vec![
+                section(
+                    SECTION_SYSTEMD_UNITS,
+                    STATUS_COLLECTED,
+                    None,
+                    vec![entry("nginx.service", &[("subState", "running")])],
+                ),
+                section(
+                    SECTION_CONTAINERS,
+                    STATUS_COLLECTED,
+                    None,
+                    vec![entry("api", &[("image", "nginx:1")])],
+                ),
+            ],
+        );
+        let target = baseline(
+            "target",
+            Some("aaaa"),
+            vec![
+                section(
+                    SECTION_SYSTEMD_UNITS,
+                    STATUS_COLLECTED,
+                    None,
+                    vec![entry("nginx.service", &[("subState", "dead")])],
+                ),
+                section(
+                    SECTION_CONTAINERS,
+                    STATUS_COLLECTED,
+                    None,
+                    vec![entry("api", &[("image", "nginx:2")])],
+                ),
+            ],
+        );
+        let comparison = compare(&base, &target);
+        // The unit sub-state churn is routine on its own, so it is reported as
+        // hidden routine churn rather than a meaningful change; the image tag
+        // change is meaningful.
+        assert_eq!(total_changes(&comparison), Some(1));
+        assert_eq!(total_routine(&comparison), Some(1));
+        let units_diff = find(comparison.clone(), SECTION_SYSTEMD_UNITS);
+        assert_eq!(units_diff.changed.len(), 1);
+        assert_eq!(units_diff.routine_count, 1);
+    }
+
+    #[test]
+    fn container_recreation_is_routine_but_the_image_is_meaningful() {
+        let base = baseline(
+            "base",
+            Some("aaaa"),
+            vec![section(
+                SECTION_CONTAINERS,
+                STATUS_COLLECTED,
+                None,
+                vec![entry(
+                    "api",
+                    &[
+                        ("containerId", "1111"),
+                        ("image", "api:1"),
+                        ("state", "running"),
+                    ],
+                )],
+            )],
+        );
+        let target = baseline(
+            "target",
+            Some("aaaa"),
+            vec![section(
+                SECTION_CONTAINERS,
+                STATUS_COLLECTED,
+                None,
+                vec![entry(
+                    "api",
+                    &[
+                        ("containerId", "2222"),
+                        ("image", "api:2"),
+                        ("state", "exited"),
+                    ],
+                )],
+            )],
+        );
+        let diff = find(compare(&base, &target), SECTION_CONTAINERS);
+        let classifications: Vec<&str> = diff.changed[0]
+            .changes
+            .iter()
+            .map(|change| change.classification.as_str())
+            .collect();
+        assert_eq!(classifications, vec!["routine", "meaningful", "routine"]);
+        assert_eq!(diff.routine_count, 2);
+    }
+
+    #[test]
+    fn small_disk_moves_are_routine_and_large_moves_are_meaningful() {
+        let moved = |base: &str, target: &str| {
+            let section_kind = SECTION_FILESYSTEMS;
+            let base = baseline(
+                "base",
+                Some("aaaa"),
+                vec![section(
+                    section_kind,
+                    STATUS_COLLECTED,
+                    None,
+                    vec![entry("/", &[("usedPercent", base)])],
+                )],
+            );
+            let target = baseline(
+                "target",
+                Some("aaaa"),
+                vec![section(
+                    section_kind,
+                    STATUS_COLLECTED,
+                    None,
+                    vec![entry("/", &[("usedPercent", target)])],
+                )],
+            );
+            find(compare(&base, &target), SECTION_FILESYSTEMS).changed[0].changes[0].clone()
+        };
+        let churn = moved("31", "32");
+        assert_eq!(churn.classification, CLASSIFICATION_ROUTINE);
+        assert!(churn.reason.as_deref().unwrap().contains("31% to 32%"));
+        let surge = moved("12", "94");
+        assert_eq!(surge.classification, CLASSIFICATION_MEANINGFUL);
+        assert!(surge.reason.as_deref().unwrap().contains("12% to 94%"));
+    }
+
+    #[test]
+    fn a_partial_side_never_asserts_confident_removal() {
+        let base = baseline(
+            "base",
+            Some("aaaa"),
+            vec![section(
+                SECTION_LISTENERS,
+                STATUS_COLLECTED,
+                None,
+                vec![entry("tcp/ipv4/0.0.0.0:80", &[("process", "nginx")])],
+            )],
+        );
+        let target = baseline(
+            "target",
+            Some("aaaa"),
+            vec![section(SECTION_LISTENERS, STATUS_PARTIAL, None, Vec::new())],
+        );
+        let diff = find(compare(&base, &target), SECTION_LISTENERS);
+        assert!(diff.comparable);
+        assert_eq!(diff.removed.len(), 1);
+        // The removal is evidence, but a partial read cannot assert the
+        // resource is gone: the comparison says the removal is unverified.
+        assert!(diff.removals_indeterminate);
+        let clean = find(compare(&base, &base), SECTION_LISTENERS);
+        assert!(!clean.removals_indeterminate);
+    }
+
+    #[test]
+    fn a_legacy_capture_never_records_sections_it_predates() {
+        let mut legacy = baseline(
+            "legacy",
+            Some("aaaa"),
+            vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
+        );
+        legacy.schema_version = 1;
+        let mut current = baseline(
+            "current",
+            Some("aaaa"),
+            vec![units(STATUS_COLLECTED, vec![entry("ssh.service", &[])])],
+        );
+        current.schema_version = BASELINE_SCHEMA_VERSION;
+        let comparison = compare(&legacy, &current);
+        // Every capture reports every section, so the timeline can trust the
+        // shape, and the legacy side says which sections it predates.
+        let added_sections = comparison
+            .sections
+            .iter()
+            .filter(|diff| {
+                diff.kind == SECTION_FIREWALL
+                    || diff.kind == SECTION_SCHEDULED_JOBS
+                    || diff.kind == SECTION_PACKAGES
+            })
+            .count();
+        assert_eq!(added_sections, 3);
+        let firewall = find(comparison.clone(), SECTION_FIREWALL);
+        assert!(!firewall.comparable);
+        assert_eq!(firewall.base_status, STATUS_SKIPPED);
+        assert!(
+            firewall
+                .note
+                .as_deref()
+                .unwrap()
+                .contains("before Control Room recorded")
+        );
+        // The section both captures recorded still compares.
+        assert!(find(comparison, SECTION_SYSTEMD_UNITS).comparable);
     }
 
     #[test]
