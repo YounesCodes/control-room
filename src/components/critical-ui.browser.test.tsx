@@ -726,6 +726,29 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("adds vertical breathing room on tall windows without widening controls or making short categories scroll", async () => {
+    await page.viewport(1200, 640);
+    mount(<SettingsFixture />);
+    const refresh = page.getByRole("combobox", { name: "Refresh host metrics" });
+    await expect.element(refresh).toBeVisible();
+    const before = refresh.element().getBoundingClientRect();
+    const metrics = container!.querySelector(".host-metrics-settings")!;
+    const compactHeight = metrics.getBoundingClientRect().height;
+    await page.viewport(1200, 900);
+    await vi.waitFor(() =>
+      expect(metrics.getBoundingClientRect().height).toBeGreaterThan(compactHeight + 20),
+    );
+    expect(refresh.element().getBoundingClientRect().width).toBe(before.width);
+    expect(refresh.element().getBoundingClientRect().left).toBe(before.left);
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
+    await page.screenshot({ path: "../../test-results/settings-vertical-spacing.png" });
+    for (const name of ["Logs & History", "Connections & Permissions", "App & Diagnostics"]) {
+      await page.getByRole("button", { name, exact: true }).click();
+      expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
+    }
+  });
+
   it("navigates Settings categories with arrows without taking keys from form fields", async () => {
     await page.viewport(1200, 720);
     mount(<SettingsFixture />);

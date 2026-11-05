@@ -884,7 +884,7 @@ code,
 .host-metrics-choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: 16px 24px;
 }
 .settings-form .host-metrics-settings {
   gap: 10px;
@@ -6136,6 +6136,23 @@ dd {
   color: var(--text);
   font-size: 18px;
   font-weight: 700;
+}
+
+@media (min-height: 700px) {
+  .settings-form > fieldset {
+    gap: 20px;
+    padding-top: 18px;
+    margin-bottom: 36px;
+  }
+
+  .settings-form .host-metrics-settings,
+  .settings-form .host-metrics-options {
+    gap: 20px;
+  }
+
+  .settings-form .checkbox-label {
+    min-height: 40px;
+  }
 }
 
 .settings-form label:not(.checkbox-label),
