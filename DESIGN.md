@@ -487,6 +487,10 @@ Interactive controls need clear default, hover, selected, focus-visible, and
 disabled states. Use the established button hierarchy: one primary action for
 the main decision, secondary actions for alternatives, danger styling for
 confirmed destructive work, and labelled icon buttons for compact controls.
+Checkboxes use a compact dark square, a quiet gray outline, and a white tick
+when selected. Keep a dark selected fill, a lighter hover border, and a clear
+keyboard focus ring. Retain native checkbox semantics, disabled and mixed states,
+and the native rendering in Windows high-contrast mode.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.

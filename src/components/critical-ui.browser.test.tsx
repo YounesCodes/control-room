@@ -726,6 +726,44 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("keeps dark-outline checkboxes native, keyboard-operable and consistent across states", async () => {
+    mount(
+      <form className="form-stack">
+        <label className="checkbox-label">
+          <input type="checkbox" name="enabled" />
+          Enabled
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" defaultChecked disabled />
+          Locked
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" />
+          Mixed
+        </label>
+      </form>,
+    );
+    const enabled = page.getByRole("checkbox", { name: "Enabled", exact: true });
+    await expect.element(enabled).toBeVisible();
+    await page.getByText("Enabled", { exact: true }).click();
+    await expect.element(enabled).toBeChecked();
+    const input = enabled.element() as HTMLInputElement;
+    expect(getComputedStyle(input).backgroundImage).not.toBe("none");
+    expect(input.getBoundingClientRect().width).toBe(16);
+    input.focus();
+    await userEvent.keyboard(" ");
+    await expect.element(enabled).not.toBeChecked();
+    expect(getComputedStyle(input).backgroundImage).toBe("none");
+    const locked = page.getByRole("checkbox", { name: "Locked" });
+    await expect.element(locked).toBeDisabled();
+    await expect.element(locked).toBeChecked();
+    const mixed = page.getByRole("checkbox", { name: "Mixed" }).element() as HTMLInputElement;
+    mixed.indeterminate = true;
+    expect(getComputedStyle(mixed).backgroundImage).not.toBe("none");
+    await expect.element(enabled).toHaveFocus();
+    expect(getComputedStyle(input).outlineStyle).toBe("solid");
+  });
+
   it("reveals Settings categories as one form, cancels interrupted motion and respects reduced motion", async () => {
     await page.viewport(1200, 720);
     mount(<SettingsFixture />);

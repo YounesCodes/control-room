@@ -288,7 +288,61 @@ textarea:focus-visible {
 }
 
 input[type="checkbox"] {
-  accent-color: var(--accent);
+  appearance: none;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid #686868;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 11px 10px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+  border-color: #909090;
+  background-color: #151515;
+}
+
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M1 5 4.5 8.5 11 1.5' fill='none' stroke='%23eee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M2 5h8' fill='none' stroke='%23eee' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:hover:not(:disabled),
+label:hover > input[type="checkbox"]:not(:disabled) {
+  border-color: #aaa;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  input[type="checkbox"],
+  input[type="checkbox"]:checked,
+  input[type="checkbox"]:indeterminate {
+    appearance: auto;
+    background: none;
+    border: revert;
+  }
 }
 
 input::placeholder,
@@ -5528,8 +5582,8 @@ dd {
 }
 
 .checkbox-label input {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .log-search {
