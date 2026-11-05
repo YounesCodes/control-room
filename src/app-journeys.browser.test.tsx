@@ -2536,7 +2536,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ["Boot", "Boot Diagnostics"],
       ["Logs", "Logs"],
       ["Baselines", "Baselines"],
-      ["History", "Enhanced History"],
+      ["History", "Command History"],
     ]) {
       await navigate(view);
       await expect.element(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();

@@ -38,6 +38,44 @@ const connection: SavedConnection = {
   lastConnectedAt: null,
 };
 
+const historyEntry = {
+  id: "entry-a",
+  connectionId: connection.id,
+  sessionId: "session-a",
+  command: "docker ps",
+  cwd: "/srv",
+  startedAt: "2026-08-27T10:00:00Z",
+  finishedAt: "2026-08-27T10:00:01Z",
+  exitCode: 0,
+  shell: "bash",
+};
+
+const MENU_ACTIONS = new Set([
+  "Clear saved history",
+  "Disable on this connection",
+  "Enable on this connection",
+  "Remove from remote Bash",
+]);
+
+async function clickAction(name: string) {
+  if (MENU_ACTIONS.has(name)) {
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name }));
+  } else {
+    await userEvent.click(screen.getByRole("button", { name }));
+  }
+}
+
+function stubClipboard() {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+    writable: true,
+  });
+  return writeText;
+}
+
 afterEach(cleanup);
 function props() {
   return {
@@ -54,19 +92,7 @@ function props() {
 describe("HistoryPane", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    api.history.mockResolvedValue([
-      {
-        id: "entry-a",
-        connectionId: connection.id,
-        sessionId: "session-a",
-        command: "docker ps",
-        cwd: "/srv",
-        startedAt: "2026-08-27T10:00:00Z",
-        finishedAt: "2026-08-27T10:00:01Z",
-        exitCode: 0,
-        shell: "bash",
-      },
-    ]);
+    api.history.mockResolvedValue([{ ...historyEntry }]);
     api.historyIntegrationStatus.mockRejectedValue(new Error("Host is offline"));
   });
 
@@ -76,11 +102,11 @@ describe("HistoryPane", () => {
       .mockResolvedValue(undefined);
     render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
-    await userEvent.click(screen.getByRole("button", { name: "Clear saved history" }));
+    await clickAction("Clear saved history");
     await userEvent.click(screen.getByRole("button", { name: "Clear history" }));
     await screen.findByText("database locked");
     expect(screen.getByText("docker ps")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Clear saved history" }));
+    await clickAction("Clear saved history");
     await userEvent.click(screen.getByRole("button", { name: "Clear history" }));
     await waitFor(() => expect(screen.queryByText("docker ps")).toBeNull());
   });
@@ -139,11 +165,11 @@ describe("HistoryPane", () => {
     api.clearHistory.mockResolvedValue(undefined);
     render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
-    await userEvent.click(screen.getByRole("button", { name: "Clear saved history" }));
+    await clickAction("Clear saved history");
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(api.clearHistory).not.toHaveBeenCalled();
     expect(screen.getByText("docker ps")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Clear saved history" }));
+    await clickAction("Clear saved history");
     await userEvent.click(screen.getByRole("button", { name: "Clear history" }));
     await waitFor(() => expect(screen.queryByText("docker ps")).toBeNull());
     expect(api.clearHistory).toHaveBeenCalledExactlyOnceWith(connection.id);
@@ -177,7 +203,7 @@ describe("HistoryPane", () => {
     render(<HistoryPane {...props()} globalEnabled={false} />);
     await screen.findByText("docker ps");
     expect(screen.getByRole("button", { name: "Pause" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/disabled globally/)).toBeTruthy();
+    expect(screen.getByText("Disabled globally")).toBeTruthy();
   });
 
   it("changes only the selected connection's capture setting", async () => {
@@ -186,7 +212,7 @@ describe("HistoryPane", () => {
     api.setConnectionHistoryEnabled.mockResolvedValue({ ...connection, historyEnabled: false });
     render(<HistoryPane {...options} />);
     await screen.findByText("docker ps");
-    await userEvent.click(screen.getByRole("button", { name: "Disable on this connection" }));
+    await clickAction("Disable on this connection");
     expect(api.setConnectionHistoryEnabled).toHaveBeenCalledExactlyOnceWith(connection.id, false);
     expect(options.onConnectionChanged).toHaveBeenCalledWith(
       expect.objectContaining({ id: connection.id, historyEnabled: false }),
@@ -247,9 +273,7 @@ describe("HistoryPane", () => {
         delete: "Delete history entry",
         clear: "Clear saved history",
       };
-      await userEvent.click(
-        screen.getByRole("button", { name: labels[operation as keyof typeof labels] }),
-      );
+      await clickAction(labels[operation as keyof typeof labels]);
       if (operation === "uninstall")
         await userEvent.click(screen.getByRole("button", { name: "Remove integration" }));
       if (operation === "clear")
@@ -284,5 +308,149 @@ describe("HistoryPane", () => {
     expect(button.hasAttribute("disabled")).toBe(false);
     await act(async () => fail(new Error("OLD_HOST_ERROR")));
     expect(screen.queryByText("OLD_HOST_ERROR")).toBeNull();
+  });
+
+  describe("entry rows", () => {
+    it("shows the exit status on the row with the exact nonzero code and no badge", async () => {
+      const failedEntry = { ...historyEntry, id: "entry-f", command: "npx t3 pair", exitCode: 130 };
+      const unknownEntry = { ...historyEntry, id: "entry-u", command: "weird", exitCode: null };
+      api.history.mockResolvedValue([{ ...historyEntry }, failedEntry, unknownEntry]);
+      render(<HistoryPane {...props()} />);
+      await screen.findByText("npx t3 pair");
+      expect(screen.getByLabelText("Command succeeded")).toBeTruthy();
+      expect(screen.getByText("130")).toBeTruthy();
+      expect(screen.getByLabelText("Command failed, exit code 130")).toBeTruthy();
+      expect(screen.getByLabelText("Exit code unknown")).toBeTruthy();
+      expect(document.querySelector(".exit-code")).toBeNull();
+      const commands = [...document.querySelectorAll("code.history-command")];
+      expect(commands.map((element) => element.textContent)).toContain("npx t3 pair");
+    });
+
+    it("preserves multiline command text exactly and copies the complete original", async () => {
+      const command = 'git add -A\ngit commit -m "two lines"';
+      api.history.mockResolvedValue([{ ...historyEntry, command }]);
+      const writeText = stubClipboard();
+      const view = render(<HistoryPane {...props()} />);
+      await screen.findByText(/git commit/);
+      expect(view.container.querySelector("code.history-command")?.textContent).toBe(command);
+      await userEvent.click(screen.getByRole("button", { name: "Copy command" }));
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(command);
+    });
+
+    it("confirms a copy and returns the button to its resting label", async () => {
+      const writeText = stubClipboard();
+      render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      await userEvent.click(screen.getByRole("button", { name: "Copy command" }));
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("docker ps");
+      expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+      await waitFor(
+        () => expect(screen.getByRole("button", { name: "Copy command" })).toBeTruthy(),
+        { timeout: 2500 },
+      );
+    });
+
+    it("announces a copy failure instead of a false success", async () => {
+      Object.defineProperty(navigator, "clipboard", {
+        value: {
+          writeText: vi.fn().mockRejectedValue(new Error("clipboard unavailable")),
+        },
+        configurable: true,
+        writable: true,
+      });
+      render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      await userEvent.click(screen.getByRole("button", { name: "Copy command" }));
+      expect(await screen.findByText(/clipboard unavailable/)).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Copy command" })).toBeTruthy();
+    });
+
+    it("shows the working directory and names it unavailable when absent", async () => {
+      api.history.mockResolvedValue([
+        { ...historyEntry },
+        { ...historyEntry, id: "entry-n", command: "cd ~", cwd: null },
+      ]);
+      render(<HistoryPane {...props()} />);
+      await screen.findByText("cd ~");
+      expect(screen.getByText("/srv")).toBeTruthy();
+      expect(screen.getByText("Directory unavailable")).toBeTruthy();
+    });
+  });
+
+  describe("search", () => {
+    it("separates a search with no matches from an empty history", async () => {
+      const user = userEvent.setup();
+      api.history.mockImplementation((id: string, query?: string) =>
+        query ? Promise.resolve([]) : Promise.resolve([{ ...historyEntry }]),
+      );
+      api.historyIntegrationStatus.mockResolvedValue(true);
+      render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      await user.type(screen.getByPlaceholderText("Search commands"), "zzz");
+      expect(await screen.findByText("No matching commands")).toBeTruthy();
+      expect(screen.queryByText("No commands recorded yet")).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+      await screen.findByText("docker ps");
+      expect((screen.getByPlaceholderText("Search commands") as HTMLInputElement).value).toBe("");
+    });
+
+    it("highlights matched text without changing the stored command or copy payload", async () => {
+      const user = userEvent.setup();
+      api.historyIntegrationStatus.mockResolvedValue(true);
+      const writeText = stubClipboard();
+      const view = render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      await user.type(screen.getByPlaceholderText("Search commands"), "dock");
+      await waitFor(() => expect(view.container.querySelector("mark")?.textContent).toBe("dock"));
+      await userEvent.click(screen.getByRole("button", { name: "Copy command" }));
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("docker ps");
+    });
+  });
+
+  describe("capture state and management menu", () => {
+    it("reads the capture state from actual signals", async () => {
+      api.historyIntegrationStatus.mockResolvedValue(true);
+      const options = props();
+      const view = render(<HistoryPane {...options} />);
+      expect(await screen.findByText("Recording")).toBeTruthy();
+      view.rerender(<HistoryPane {...options} paused />);
+      expect(screen.getByText("Paused in this workspace")).toBeTruthy();
+      view.rerender(
+        <HistoryPane {...options} connection={{ ...connection, historyEnabled: false }} />,
+      );
+      expect(screen.getByText("Disabled for this connection")).toBeTruthy();
+      view.rerender(<HistoryPane {...options} globalEnabled={false} />);
+      expect(screen.getByText("Disabled globally")).toBeTruthy();
+      api.historyIntegrationStatus.mockResolvedValue(false);
+      view.rerender(
+        <HistoryPane {...options} connection={{ ...connection, id: "connection-b" }} />,
+      );
+      expect(await screen.findByText("Integration not installed")).toBeTruthy();
+      api.historyIntegrationStatus.mockRejectedValue(new Error("Host is offline"));
+      view.rerender(
+        <HistoryPane {...options} connection={{ ...connection, id: "connection-c" }} />,
+      );
+      expect(await screen.findByText("Status unavailable")).toBeTruthy();
+    });
+
+    it("keeps de-emphasized management actions in a labeled, dismissible menu", async () => {
+      api.historyIntegrationStatus.mockResolvedValue(true);
+      render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      const trigger = screen.getByRole("button", { name: "More actions" });
+      expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      await userEvent.click(trigger);
+      expect(screen.getByRole("menu")).toBeTruthy();
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getAllByRole("menuitem")).toHaveLength(3);
+      expect(screen.getByRole("menuitem", { name: "Disable on this connection" })).toBeTruthy();
+      expect(screen.getByRole("menuitem", { name: "Clear saved history" })).toBeTruthy();
+      expect(screen.getByRole("menuitem", { name: "Remove from remote Bash" })).toBeTruthy();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(screen.queryByRole("menuitem")).toBeNull();
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    });
   });
 });

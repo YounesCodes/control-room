@@ -26,7 +26,9 @@ Only sessions opened after the integration is enabled report entries. The integr
 - start and finish times
 - exit code
 
-Entries are stored on your Windows machine. You can search, copy, or delete them, and paste a command into the terminal without running it. **Pause** stops capture for the current tab. **Remove from remote Bash** removes the marked block and script. If several connections use the same remote account, removal affects all of them.
+Entries are stored on your Windows machine. You can search, copy, or delete them, and paste a command into the terminal without running it. The header shows the current capture state: **Recording**, **Paused in this workspace**, **Disabled for this connection**, **Disabled globally**, or **Integration not installed**. **Pause** stops capture for the current tab. Open the **More actions** menu at the top right for **Disable on this connection**, **Clear saved history**, and **Remove from remote Bash**.
+
+**Remove from remote Bash** removes the marked block and script. If several connections use the same remote account, removal affects all of them. **Clear saved history** deletes only this connection's saved entries on your machine.
 
 Command lines may contain secrets. The local database is not encrypted secret storage, so enable History only if saving those commands is appropriate. Local shells are not recorded.
 
