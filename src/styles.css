@@ -3582,9 +3582,12 @@ dd {
 
 .boot-heading-actions label {
   display: flex;
-  width: 360px;
+  /* Two selectors and a refresh live in one heading now, so the labels
+     flex instead of pinning: they grow to the old 360px cap when there is
+     room and shrink under mid widths rather than overflowing the pane. */
+  flex: 1 1 260px;
+  max-width: 360px;
   min-width: 0;
-  max-width: 100%;
   flex-direction: column;
   gap: 5px;
 }
@@ -3607,6 +3610,13 @@ dd {
   padding-top: 0;
   padding-bottom: 0;
   text-overflow: ellipsis;
+}
+
+.boot-heading-actions input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 33px;
+  padding: 0 8px;
 }
 
 .boot-sections {
@@ -3800,48 +3810,615 @@ dd {
   white-space: nowrap;
 }
 
-.boot-journal-sample {
-  max-height: 250px;
+/* ==========================================================================
+   Boot timeline theater
+   ========================================================================== */
+
+.boot-replay-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.boot-replay-note span {
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.boot-theater {
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-base);
+  padding: 14px 16px 16px;
+}
+
+.boot-at-playhead {
+  min-height: 1.3em;
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.boot-inline-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.boot-timeline {
+  /* Written every frame by the pane both through React and directly on the
+     element, so the playhead moves without re-rendering the lanes. The label
+     column width is shared by lanes, playhead, and tick axis, so markers,
+     playhead, and "0s..120s" all measure the same span. 156px keeps
+     "WARNINGS & FAILURES" on one line at rest. */
+  --replay-progress: 0;
+  --lane-label-width: 156px;
+}
+
+.boot-timeline-plot {
+  position: relative;
+  overflow: visible;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  cursor: pointer;
+}
+
+.boot-lane {
+  display: grid;
+  grid-template-columns: var(--lane-label-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  padding: 2px 0;
+}
+
+.boot-lane + .boot-lane {
+  border-top: 1px solid var(--border-faint);
+}
+
+.boot-lane-label {
+  padding-left: 10px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Dense records share one counted marker at the available track width. */
+.boot-lane-track {
+  position: relative;
+  height: 30px;
+}
+
+/* Markers keep one shape per severity, so color never carries the meaning
+   alone: milestone = filled dot, unit = hollow dot, warning = triangle,
+   failure = diamond. */
+.boot-marker {
+  position: absolute;
+  top: 6px;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  margin-left: -5px;
+  border: 0;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: translate var(--motion-fast) var(--ease);
+}
+
+.boot-marker:hover {
+  translate: 0 -1px;
+}
+
+.boot-marker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.boot-marker-unit {
+  background: transparent;
+  border: 1px solid var(--text-faint);
+}
+
+.boot-marker-warning {
+  width: 11px;
+  height: 10px;
+  margin-left: -6px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.boot-marker-warning::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--warning);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.boot-marker-error {
+  border-radius: 0;
+  background: transparent;
+}
+
+.boot-marker-error::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--failure);
+  rotate: 45deg;
+}
+
+.boot-marker.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A cluster shows its count instead of stacking clones. */
+.boot-marker-count {
+  position: absolute;
+  top: -9px;
+  left: 8px;
+  padding: 1px 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  background: var(--fill-control);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.boot-playhead {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  /* The playhead measures the track span (the area right of the lane-label
+     column), not the whole plot, so it always sits exactly on the markers and
+     the percentage the pane writes. */
+  left: calc(
+    var(--lane-label-width) + 12px + (100% - var(--lane-label-width) - 12px) *
+      var(--replay-progress)
+  );
+  width: 1px;
+  background: var(--accent);
+  opacity: 1;
+}
+
+.boot-playhead::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -3px;
+  border: solid var(--accent);
+  border-width: 0 1px 1px 0;
+  padding: 2px;
+  rotate: 45deg;
+  border-bottom-right-radius: 2px;
+}
+
+.boot-timeline-axis {
+  display: grid;
+  grid-template-columns: var(--lane-label-width) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.boot-axis-track {
+  position: relative;
+  height: 16px;
+}
+
+.boot-axis-track span {
+  position: absolute;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  translate: -50% 0;
+}
+
+.boot-axis-track span:first-child {
+  translate: 0 0;
+}
+
+.boot-axis-track span:last-child {
+  translate: -100% 0;
+}
+
+.boot-transport {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.boot-transport-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.boot-transport-controls button,
+.boot-transport-play {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.boot-transport-controls button:hover:not(:disabled),
+.boot-transport-play:hover:not(:disabled) {
+  background: var(--fill-control-hover);
+}
+
+.boot-transport-seek {
+  flex: 1;
+  min-width: 120px;
+  /* The app chroma stays neutral: the scrubber uses the same light accent as
+     every other control instead of a browser-default blue. */
+  accent-color: var(--accent);
+}
+
+.boot-transport-time {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.boot-transport-time strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.boot-transport-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.boot-transport-speed select {
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+}
+
+.boot-transport-complete {
+  flex-basis: 100%;
   margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.boot-event-inspector {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  padding: 12px 14px;
+  animation: boot-inspector-reveal var(--motion-med) var(--ease);
+}
+
+@keyframes boot-inspector-reveal {
+  from {
+    translate: 0 6px;
+    opacity: 0;
+  }
+  to {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+
+.boot-event-inspector > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.boot-event-inspector h3 {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.boot-event-inspector h3 span {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.boot-event-summary {
+  margin: 8px 0 10px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.boot-event-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin: 0 0 10px;
+}
+
+.boot-event-fields dt {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.boot-event-fields dd {
+  margin: 1px 0 0;
+  color: var(--text);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.boot-event-message {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  background: var(--terminal-bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.boot-event-cluster p {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.boot-event-cluster ul {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  padding: 4px 0;
+  list-style: none;
+}
+
+.boot-event-cluster li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.boot-event-inspector footer {
+  display: flex;
+  gap: 8px;
+}
+
+.boot-journal-lane {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.boot-journal-lane > summary,
+.boot-current-diagnostics > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.boot-current-diagnostics > summary {
+  padding: 14px 2px 10px;
+  font-size: 12.5px;
+}
+
+.boot-journal-lane > summary span:first-child,
+.boot-current-diagnostics > summary span:first-child {
+  margin-right: auto;
+}
+
+.boot-journal-lane > summary span:last-child,
+.boot-current-diagnostics > summary span:last-child {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 400;
+  text-align: right;
+}
+
+.boot-journal-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.boot-journal-controls input[type="search"] {
+  flex: 1;
+  min-width: 160px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.boot-journal-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.boot-journal-controls select {
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  color: var(--text);
+}
+
+.boot-journal-rows {
+  max-height: 280px;
+  margin: 0 0 10px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   padding: 6px 0;
-  color: var(--text-muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.55;
   list-style: none;
 }
 
-/* One row per entry with the clock in its own column, so the messages line up
-   instead of starting wherever the timestamp happened to end. */
-.boot-journal-sample li {
+.boot-journal-rows button {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+  grid-template-columns: 74px 76px minmax(0, 130px) minmax(0, 1fr);
+  align-items: baseline;
   gap: 10px;
   padding: 3px 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
 }
 
-.boot-journal-sample li:hover {
+/* The category text label stays; the tinted edge only makes scanning faster.
+   Failures and warnings carry status hues, records stay neutral. */
+.boot-journal-row-error {
+  border-left-color: var(--failure);
+}
+
+.boot-journal-row-warning {
+  border-left-color: var(--warning);
+}
+
+.boot-journal-rows button:hover {
   background: var(--fill-hover);
 }
 
-.boot-journal-sample time {
+.boot-journal-rows button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The row the playhead is over reads as the current moment in both views. */
+.boot-journal-rows button.at-playhead {
+  background: var(--fill-selected);
+  color: var(--text);
+}
+
+.boot-journal-rows time {
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
-.boot-journal-sample span {
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+.boot-journal-category {
+  color: var(--text-faint);
+  font-size: 10px;
 }
 
-/* An entry journalctl wrote without a parsable timestamp keeps the full width
-   rather than being indented under an empty clock column. */
-.boot-journal-sample li > span:only-child {
-  grid-column: 1 / -1;
+.boot-journal-source {
+  color: var(--text-faint);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boot-journal-message {
+  overflow-wrap: anywhere;
+}
+
+/* Freshly revealed markers acknowledge themselves once, quietly. */
+.boot-marker {
+  animation: boot-marker-reveal var(--motion-med) var(--ease);
+}
+
+@keyframes boot-marker-reveal {
+  from {
+    scale: 0.5;
+    opacity: 0.4;
+  }
+  to {
+    scale: 1;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-marker,
+  .boot-event-inspector {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* One column at narrow widths: labels stay reachable, transport wraps, and
+   the inspector fields stack rather than clipping. */
+@container (max-width: 720px) {
+  .boot-timeline {
+    --lane-label-width: 88px;
+  }
+
+  .boot-lane {
+    gap: 8px;
+  }
+
+  .boot-event-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .boot-journal-rows button {
+    grid-template-columns: 74px 76px minmax(0, 1fr);
+  }
+
+  .boot-journal-rows .boot-journal-source {
+    display: none;
+  }
 }
 
 .boot-refreshing {
@@ -7208,6 +7785,12 @@ kbd {
   .boot-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  /* The narrow heading stacks; the title's flex basis would otherwise inflate
+     it to 280px of empty height above the selectors. */
+  .boot-heading > div:first-child {
+    flex: 0 0 auto;
   }
 
   .boot-heading-actions label {

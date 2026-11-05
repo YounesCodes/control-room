@@ -12,6 +12,7 @@ import {
 } from "./helpers";
 import type {
   BootDiagnostics,
+  BootReplayPage,
   DockerContainer,
   HostBaselineSummary,
   HostCapabilities,
@@ -150,7 +151,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await $("aria/Close port tools").click();
     await expect($("aria/Ports graph")).toBeDisplayed();
   });
-  it("reads current and discovered previous boot evidence without sudo", async () => {
+  it("reads current and previous boot replay evidence without sudo", async () => {
     const { saved } = await connect();
     const current = await ipc<BootDiagnostics>("collect_boot_diagnostics", {
       connectionId: saved.id,
@@ -159,9 +160,24 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     });
     expect(current.collectedAt).toBeTruthy();
     await feature("Boot");
-    await expect($("h2=Boot Diagnostics")).toBeDisplayed();
-    if (current.boots.permissionRequired || current.journal.permissionRequired)
-      console.log("Optional journal evidence: limited account access; permission state verified");
+    await expect($("h2=Boot Timeline")).toBeDisplayed();
+    if (!current.selectedBootId) throw new Error("The fixture host reported no current boot id");
+    const replay = await ipc<BootReplayPage>("collect_boot_replay", {
+      connectionId: saved.id,
+      bootId: current.selectedBootId,
+      managerCursor: null,
+      alertCursor: null,
+      sudoPassword: null,
+    });
+    if (replay.permissionRequired) {
+      console.log(
+        "Optional boot replay evidence: limited account access; permission state verified",
+      );
+    } else {
+      expect(replay.bootId).toBe(current.selectedBootId);
+      expect(Array.isArray(replay.managerEvents)).toBe(true);
+      expect(Array.isArray(replay.alertEvents)).toBe(true);
+    }
     const previous = current.boots.data?.find((boot) => !boot.current);
     if (previous) {
       const evidence = await ipc<BootDiagnostics>("collect_boot_diagnostics", {
@@ -170,6 +186,20 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
         sudoPassword: null,
       });
       expect(evidence.selectedBootId).toBe(previous.id);
+      const replayed = await ipc<BootReplayPage>("collect_boot_replay", {
+        connectionId: saved.id,
+        bootId: previous.id,
+        managerCursor: null,
+        alertCursor: null,
+        sudoPassword: null,
+      });
+      if (replayed.permissionRequired) {
+        expect(replayed.errors.some((error) => /permission|sudo/i.test(error))).toBe(true);
+      } else {
+        expect(replayed.errors).toEqual([]);
+      }
+      // Boot-relative offsets only ever concern this boot's own evidence.
+      expect(replayed.bootId).toBe(previous.id);
     } else console.log("Optional previous boot evidence: no retained previous boot available");
   });
   it("starts and stops journal streaming and tears down on navigation", async function () {

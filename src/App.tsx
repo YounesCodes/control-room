@@ -2667,6 +2667,11 @@ export function App() {
                       key={activeRemoteWorkspace.id}
                       connection={activeConnection}
                       snapshot={activeRemoteWorkspace.bootDiagnostics}
+                      connected={activeRemoteWorkspace.state === "connected"}
+                      replayPreferences={activeRemoteWorkspace.bootReplayPreferences}
+                      onReplayPreferencesChange={(bootReplayPreferences) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { bootReplayPreferences })
+                      }
                       onSnapshotChange={(snapshot) =>
                         updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
                       }

@@ -1,30 +1,20 @@
 ---
-title: Boot diagnostics
-description: Check boot timing, failed services, and journal warnings.
+title: Boot timeline
+description: Replay a boot's journal evidence on an interactive timeline.
 ---
 
-import bootScreenshot from "../../../assets/screenshots/boot.png";
+Boot Timeline replays the journal evidence a Linux host retained for one boot. Choose the current boot or one of up to ten recent boots, press **Play**, and recorded events appear at the times the journal observed them.
 
-Boot Diagnostics reads information when you open it. You can choose the current boot or one of up to ten recent boots reported by journald.
+The replay never reboots or changes the host. It is a reconstruction of retained evidence, not a recording of the entire boot: the journal may have rotated, kept nothing, or been only partially readable, and every such state is labeled instead of silently shown as empty.
 
-<figure class="docs-screenshot">
-  <a href={bootScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={bootScreenshot.src}
-      alt="Boot Diagnostics with boot timing, a failed backup service, slow units, and journal warnings."
-    />
-  </a>
-  <figcaption>Boot timing and the available evidence. Example data shown.</figcaption>
-</figure>
+The replay window covers the first 2 minutes of the boot by default. Choose 30 seconds, 1, 2, 5, or 10 minutes, or pick **Custom…** for any length from 10 seconds to 30 minutes. Play back at 1×, 2×, 5×, or 10× (or half speed); changing speed never re-reads the host. Use the slider or click the timeline to seek, and **Previous notable event** / **Next notable event** to jump between failures, warnings, and milestones.
 
-For the current boot, it can show:
+The timeline shows three lanes at most — milestones, unit events, and warnings or failures — and only the lanes that have evidence. Click a marker to see its timestamp, source, unit, the raw journal message, and how many similar events a cluster stands for. **Show loaded events** opens a searchable list of everything loaded in the window, with **Load more** when the journal still has retained pages.
 
-- boot id and time range
-- total boot time, kernel time, and userspace time
-- up to 20 slow-unit observations from `systemd-analyze blame`
-- current failed system-scope units
-- up to 30 warning-through-alert journal entries
+Nearby markers combine when they would overlap. Open the counted marker, then choose an event to inspect its own message and unit. Records without a boot-relative timestamp remain available in **Show loaded events**. Shortened or omitted messages are labeled.
 
-Boot timing, slow units, and failed-unit status are available for the current boot only. Choosing an older boot shows its journal sample and marks those other parts unavailable. Use **View journal** beside a failed unit to open its logs, or **Refresh** to read again.
+Each investigation holds at most 5,000 records in memory. **Limit reached** means more evidence may exist. Partial reads and permission failures keep their explanation and retry action. Leaving Boot Timeline or selecting another boot cancels an unfinished journal read.
 
-The view labels missing or permission-limited information instead of treating it as an empty result. A slow unit is a clue, not proof of the cause. This information stays in memory and is not saved.
+**Current-boot diagnostics** below the timeline keeps the contemporaneous reads for the running boot: total, kernel, and userspace timing, the slowest units, and current failed units. These describe the system now, so they are not part of historical replays.
+
+Replay evidence stays in memory and clears when you leave the view or disconnect. The tab remembers your selected boot, replay window, and speed until it closes. Reads follow the connection's sudo setting; **Retry with sudo** supplies a password for that read only.

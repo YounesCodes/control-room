@@ -2,6 +2,7 @@ import type {
   AppSettings,
   BaselineComparison,
   BootDiagnostics,
+  BootReplayPage,
   DockerContainer,
   DockerContainerDetails,
   HostBaseline,
@@ -163,8 +164,18 @@ export function boot(): BootDiagnostics {
       error: null,
       permissionRequired: false,
       data: [
-        { id: "a".repeat(32), index: 0, range: "Current boot", current: true },
-        { id: "b".repeat(32), index: -1, range: "Previous boot", current: false },
+        {
+          id: "a".repeat(32),
+          index: 0,
+          range: "Sun 2026-08-31 09:41:12 — Sun 2026-08-31 17:04:44",
+          current: true,
+        },
+        {
+          id: "b".repeat(32),
+          index: -1,
+          range: "Sat 2026-08-30 08:02:57 — Sun 2026-08-31 09:39:02",
+          current: false,
+        },
       ],
     },
     timing: {
@@ -186,6 +197,55 @@ export function boot(): BootDiagnostics {
       permissionRequired: false,
       data: ["warning: fixture boot evidence"],
     },
+  };
+}
+export function bootReplay(): BootReplayPage {
+  const collectedAt = new Date().toISOString();
+  return {
+    collectedAt,
+    bootId: "a".repeat(32),
+    managerEvents: [
+      {
+        id: "cursor-milestone",
+        monotonicUs: 1_000_000,
+        realtimeUs: 1_730_000_000_000_000,
+        priority: 6,
+        source: "systemd",
+        unit: null,
+        message: "Reached target Basic System.",
+        messageTruncated: false,
+      },
+      {
+        id: "cursor-unit",
+        monotonicUs: 5_000_000,
+        realtimeUs: 1_730_000_005_000_000,
+        priority: 6,
+        source: "systemd",
+        unit: null,
+        message: `Started ${service.id}.`,
+        messageTruncated: false,
+      },
+    ],
+    alertEvents: [
+      {
+        id: "cursor-warning",
+        monotonicUs: 12_000_000,
+        realtimeUs: 1_730_000_012_000_000,
+        priority: 4,
+        source: "fixture",
+        unit: service.id,
+        message: "fixture boot warning",
+        messageTruncated: false,
+      },
+    ],
+    managerNextCursor: null,
+    alertNextCursor: null,
+    managerTruncated: false,
+    alertTruncated: false,
+    earliestMonotonicUs: 0,
+    latestMonotonicUs: 18_000_000,
+    permissionRequired: false,
+    errors: [],
   };
 }
 export function baseline(id: string, label = id): HostBaseline {

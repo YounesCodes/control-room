@@ -273,6 +273,38 @@ export interface BootSection<T> {
   permissionRequired: boolean;
 }
 
+/** One retained journal record, bounded by the Rust reader. Both timestamps
+ * are microseconds: `monotonicUs` is boot-relative (never stitched across
+ * boots), `realtimeUs` is wall clock; `null` means journald did not record it. */
+export interface BootReplayEntry {
+  id: string;
+  monotonicUs: number | null;
+  realtimeUs: number | null;
+  priority: number | null;
+  source: string | null;
+  unit: string | null;
+  message: string;
+  messageTruncated: boolean;
+}
+
+/** One bounded read of a boot's journal evidence, from two capped streams:
+ * systemd manager messages (milestones and unit lifecycle) and warning-and-
+ * above entries. Partial reads stay partial; none of this is persisted. */
+export interface BootReplayPage {
+  collectedAt: string;
+  bootId: string;
+  managerEvents: BootReplayEntry[];
+  alertEvents: BootReplayEntry[];
+  managerNextCursor: string | null;
+  alertNextCursor: string | null;
+  managerTruncated: boolean;
+  alertTruncated: boolean;
+  earliestMonotonicUs: number | null;
+  latestMonotonicUs: number | null;
+  permissionRequired: boolean;
+  errors: string[];
+}
+
 export interface BootRecord {
   index: number;
   id: string;
@@ -610,6 +642,7 @@ export interface RemoteWorkspace extends WorkspaceBase {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   bootDiagnostics: BootDiagnostics | null;
+  bootReplayPreferences?: { windowSeconds: number; speed: number };
   logSource: LogSourceSelection | null;
   baselineSelectionId: string | null;
 }
