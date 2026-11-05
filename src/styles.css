@@ -5990,6 +5990,10 @@ dd {
   pointer-events: none;
 }
 
+.settings-subnavigation button:focus-visible {
+  outline: none;
+}
+
 .settings-subnavigation button[aria-selected="true"] {
   font-weight: 700;
 }

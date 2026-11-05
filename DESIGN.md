@@ -617,7 +617,8 @@ windows. Category changes reveal the whole form together with the Systemd unit f
 vertical motion, preserving draft controls and respecting reduced motion.
 Terminal uses a persistent row of Appearance, Tabs & naming, and Local shells tabs.
 Separate tabs with thin vertical bars and mark the selected tab with bold text
-without outlines or filled backgrounds. Show only its panel, starting at the normal content gutter. Left/Right
+without outlines or filled backgrounds. These automatically selected tabs use
+the bold label as their keyboard focus cue instead of a rectangular focus ring. Show only its panel, starting at the normal content gutter. Left/Right
 wraps between tabs; Home/End selects the first or last. Preserve mounted draft
 controls and use the category reveal motion when switching panels. Search still
 shows matching sections across all panels.
