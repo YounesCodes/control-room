@@ -603,6 +603,8 @@ Hide Connections and Workspace tabs while Settings is open, and restore the
 existing workspace and focus mode when it closes. Use the available page width
 for its form and keep Back and Save visible while its body scrolls.
 Use a slim category rail on wide windows and a category selector at narrow widths.
+In the category rail, Up/Down changes category and moves focus with it. Home/End
+selects the first or last category. Tab enters the rail at its selected item.
 Search across categories by setting names and keywords, with category context on
 results. Preserve drafts and useful category scroll positions. Keep numeric fields
 compact, with readable values in short, quietly bordered inputs and selectors.

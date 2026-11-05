@@ -726,6 +726,40 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("navigates Settings categories with arrows without taking keys from form fields", async () => {
+    await page.viewport(1200, 720);
+    mount(<SettingsFixture />);
+    const general = page.getByRole("button", { name: "General & Monitoring", exact: true });
+    await expect.element(general).toBeVisible();
+    general.element().focus();
+    await userEvent.keyboard("{ArrowDown}");
+    const terminal = page.getByRole("button", { name: "Terminal", exact: true });
+    await expect.element(terminal).toHaveFocus();
+    await expect.element(terminal).toHaveAttribute("aria-current", "page");
+    const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
+    await size.fill("18");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(19);
+    await expect.element(terminal).toHaveAttribute("aria-current", "page");
+    terminal.element().focus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect
+      .element(page.getByRole("button", { name: "Logs & History", exact: true }))
+      .toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(19);
+    await userEvent.keyboard("{End}");
+    const app = page.getByRole("button", { name: "App & Diagnostics", exact: true });
+    await expect.element(app).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(app).toHaveFocus();
+    await userEvent.keyboard("{Home}{ArrowUp}");
+    await expect.element(general).toHaveFocus();
+    expect(container!.querySelectorAll('.settings-navigation button[tabindex="0"]')).toHaveLength(
+      1,
+    );
+  });
+
   it("keeps number fields clean on hover while retaining keyboard steps and limits", async () => {
     await page.viewport(1200, 720);
     mount(<SettingsFixture />);

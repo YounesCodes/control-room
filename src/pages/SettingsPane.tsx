@@ -417,13 +417,36 @@ export function SettingsPane({
       </header>
       <div className="settings-layout">
         <nav className="settings-navigation" aria-label="Settings categories">
-          {categories.map(([id, label]) => (
+          {categories.map(([id, label], index) => (
             <button
               key={id}
               type="button"
               aria-current={!query && category === id ? "page" : undefined}
+              tabIndex={category === id ? 0 : -1}
               disabled={fontBusy || saving}
               onClick={() => navigate(id)}
+              onKeyDown={(event) => {
+                if (event.altKey || event.ctrlKey || event.metaKey) return;
+                const next =
+                  event.key === "ArrowDown"
+                    ? Math.min(index + 1, categories.length - 1)
+                    : event.key === "ArrowUp"
+                      ? Math.max(index - 1, 0)
+                      : event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? categories.length - 1
+                          : null;
+                if (next === null) return;
+                event.preventDefault();
+                const button =
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button")[
+                    next
+                  ];
+                if (!button || button.disabled) return;
+                button.focus();
+                navigate(categories[next][0]);
+              }}
             >
               {label}
             </button>
