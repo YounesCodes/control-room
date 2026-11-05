@@ -726,6 +726,25 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("keeps number fields clean on hover while retaining keyboard steps and limits", async () => {
+    await page.viewport(1200, 720);
+    mount(<SettingsFixture />);
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
+    await userEvent.hover(size);
+    await size.click();
+    expect(getComputedStyle(size.element()).appearance).toBe("textfield");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(15);
+    await size.fill("32");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(32);
+    await size.fill("9");
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(size).toHaveValue(9);
+    await size.screenshot({ path: "../../test-results/number-field.png" });
+  });
+
   it.each([768, 1200])(
     "animates subsection jumps into the Settings viewport at %ipx",
     async (width) => {
