@@ -5688,12 +5688,14 @@ dd {
 
 .history-list {
   max-width: 980px;
+}
+
+.history-list:not([data-loading]) {
   animation: history-results-in var(--motion-med) var(--ease);
 }
 
-/* Brief content transition when search or refresh delivers new results. The
-   list key remounts on each delivered result set, so the whole column settles
-   once instead of flickering per row. */
+/* Restart the result transition after a read without remounting rows or
+   resetting keyboard focus, text selection, and command scroll positions. */
 @keyframes history-results-in {
   from {
     opacity: 0.45;
@@ -5743,7 +5745,15 @@ dd {
   overflow: hidden;
   border-bottom: 1px solid var(--border-subtle);
   padding: 10px 5px;
-  transition: background-color var(--motion-fast) var(--ease);
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    padding-block var(--motion-med) var(--ease),
+    border-bottom-width var(--motion-med) var(--ease);
+}
+
+.history-row[data-removing] .history-row-inner {
+  padding-block: 0;
+  border-bottom-width: 0;
 }
 
 .history-row:hover .history-row-inner,
@@ -5834,6 +5844,13 @@ dd {
 .history-row:focus-within .row-actions {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (hover: none) {
+  .history-row .row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .history-row .row-actions .icon-button.copied {

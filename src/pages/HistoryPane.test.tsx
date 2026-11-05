@@ -362,6 +362,7 @@ describe("HistoryPane", () => {
       await screen.findByText("docker ps");
       await userEvent.click(screen.getByRole("button", { name: "Copy command" }));
       expect(await screen.findByText(/clipboard unavailable/)).toBeTruthy();
+      expect(screen.getByRole("alert").textContent).toContain("clipboard unavailable");
       expect(screen.getByRole("button", { name: "Copy command" })).toBeTruthy();
     });
 
@@ -452,5 +453,143 @@ describe("HistoryPane", () => {
       expect(screen.queryByRole("menuitem")).toBeNull();
       expect(trigger.getAttribute("aria-expanded")).toBe("false");
     });
+  });
+  it("keeps a deleted row mounted until its successful collapse completes", async () => {
+    api.historyIntegrationStatus.mockResolvedValue(true);
+    let finish!: () => void;
+    api.deleteHistory.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const view = render(<HistoryPane {...props()} />);
+    await screen.findByText("docker ps");
+    await userEvent.click(screen.getByRole("button", { name: "Delete history entry" }));
+    expect(view.container.querySelector(".history-row")?.hasAttribute("data-removing")).toBe(false);
+    await act(async () => finish());
+    expect(view.container.querySelector(".history-row[data-removing]")).not.toBeNull();
+    expect(screen.getByText("docker ps")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("docker ps")).toBeNull());
+  });
+
+  it("preserves row identity, keyboard focus and command scroll when refresh settles", async () => {
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("docker ps");
+    let finish!: (entries: (typeof historyEntry)[]) => void;
+    api.history.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    const copy = screen.getByRole("button", { name: "Copy command" });
+    const code = document.querySelector<HTMLElement>(".history-command")!;
+    code.scrollTop = 50;
+    copy.focus();
+    await act(async () => finish([{ ...historyEntry }]));
+    expect(document.activeElement).toBe(copy);
+    expect(document.querySelector(".history-command")).toBe(code);
+    expect(code.scrollTop).toBe(50);
+  });
+
+  it("returns keyboard focus to More after Escape dismisses its focused menu", async () => {
+    api.historyIntegrationStatus.mockResolvedValue(true);
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("docker ps");
+    const more = screen.getByRole("button", { name: "More actions" });
+    await userEvent.click(more);
+    screen.getByRole("menuitem", { name: "Disable on this connection" }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(more);
+  });
+
+  it("reports unavailable after a failed refresh of a previously missing integration", async () => {
+    api.historyIntegrationStatus.mockResolvedValueOnce(false);
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("Integration not installed");
+    api.historyIntegrationStatus.mockRejectedValueOnce(new Error("SSH unavailable"));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await screen.findByText(/could not check the remote Bash integration/);
+    expect(screen.getByText("Status unavailable")).toBeTruthy();
+  });
+  it("keeps refresh busy until the remote integration check also settles", async () => {
+    api.historyIntegrationStatus.mockResolvedValueOnce(true);
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("Recording");
+    let finish!: (value: boolean) => void;
+    api.historyIntegrationStatus.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(screen.getByRole("button", { name: "Refresh" }).hasAttribute("disabled")).toBe(true);
+    expect(document.querySelector(".spinning")).not.toBeNull();
+    await act(async () => finish(true));
+    expect(screen.getByRole("button", { name: "Refresh" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it.each([
+    {
+      globalEnabled: false,
+      paused: false,
+      enabled: true,
+      guidance: "Enable Enhanced History globally in Settings to record new commands.",
+    },
+    {
+      globalEnabled: true,
+      paused: false,
+      enabled: false,
+      guidance: "Enable on this connection from More actions to record new commands.",
+    },
+    {
+      globalEnabled: true,
+      paused: true,
+      enabled: true,
+      guidance: "Resume recording in this workspace to record new commands.",
+    },
+  ])(
+    "gives actionable empty-history guidance for $guidance",
+    async ({ globalEnabled, paused, enabled, guidance }) => {
+      api.history.mockResolvedValue([]);
+      api.historyIntegrationStatus.mockResolvedValue(true);
+      render(
+        <HistoryPane
+          {...props()}
+          globalEnabled={globalEnabled}
+          paused={paused}
+          connection={{ ...connection, historyEnabled: enabled }}
+        />,
+      );
+      await screen.findByText("No commands recorded yet");
+      expect(screen.getByText(guidance)).toBeTruthy();
+    },
+  );
+
+  it("ignores a stale clipboard completion after a newer copy", async () => {
+    api.history.mockResolvedValue([
+      { ...historyEntry },
+      { ...historyEntry, id: "entry-b", command: "git status" },
+    ]);
+    const writeText = stubClipboard();
+    let finish!: () => void;
+    writeText.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("git status");
+    await userEvent.click(screen.getAllByRole("button", { name: "Copy command" })[0]);
+    await userEvent.click(screen.getAllByRole("button", { name: "Copy command" })[1]);
+    await act(async () => finish());
+    expect(
+      screen.getByRole("button", { name: "Copied" }).closest("article")?.textContent,
+    ).toContain("git status");
   });
 });

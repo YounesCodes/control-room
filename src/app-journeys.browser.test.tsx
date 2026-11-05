@@ -3010,4 +3010,149 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
     expect(result.violations.map((violation) => violation.id)).toEqual([]);
   });
+  it.each([640, 1180])(
+    "keeps History readable and keyboard-operable at %s pixels",
+    async (width) => {
+      await page.viewport(width, 760);
+      const commands = [
+        "git status --short",
+        "systemctl restart example.service",
+        "git log --oneline -5",
+        Array.from({ length: 35 }, (_, index) => 'printf "example line ' + index + '\\n"').join(
+          "\n",
+        ),
+      ];
+      const records = commands.map((command, index) => ({
+        id: "history-" + index,
+        connectionId: "host-a",
+        sessionId: "old-session",
+        command,
+        cwd: index === 3 ? "/srv/" + "example/".repeat(70) : "/srv/example",
+        startedAt: "2026-11-05T10:00:0" + index + "Z",
+        finishedAt: null,
+        exitCode: index === 1 ? 130 : index === 2 ? null : 0,
+        shell: "bash",
+      }));
+      overrides.set("get_history", () => records.map((record) => ({ ...record })));
+      await mount();
+      await navigate("History");
+      await expect.element(page.getByText("git status --short", { exact: true })).toBeVisible();
+      const panel = element.querySelector<HTMLElement>(".history-page")!;
+      expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+      expect(page.getByLabelText("Command failed, exit code 130").element().textContent).toBe(
+        "130",
+      );
+      const statuses = panel.querySelectorAll<HTMLElement>(".exit-status");
+      for (const status of statuses) {
+        expect(getComputedStyle(status).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+        expect(getComputedStyle(status).borderTopWidth).toBe("0px");
+      }
+      if (width === 640) {
+        expect(getComputedStyle(panel.querySelector(".row-actions")!).opacity).toBe("1");
+      }
+      const more = page.getByRole("button", { name: "More actions" });
+      await more.click();
+      expect(document.activeElement).toBe(
+        page.getByRole("menuitem", { name: "Disable on this connection" }).element(),
+      );
+      await userEvent.keyboard("{End}");
+      expect(document.activeElement).toBe(
+        page.getByRole("menuitem", { name: "Remove from remote Bash" }).element(),
+      );
+      await userEvent.keyboard("{Home}{ArrowDown}");
+      expect(document.activeElement).toBe(
+        page.getByRole("menuitem", { name: "Clear saved history" }).element(),
+      );
+      await userEvent.keyboard("{Escape}");
+      expect(document.activeElement).toBe(more.element());
+      await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+
+      let finish!: (value: typeof records) => void;
+      overrides.set(
+        "get_history",
+        () =>
+          new Promise<typeof records>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      await page.getByRole("button", { name: "Refresh" }).click();
+      const copy = page.getByRole("button", { name: "Copy command" }).first().element();
+      const code = panel.querySelectorAll<HTMLElement>(".history-command")[3];
+      expect(code.textContent).toBe(commands[3]);
+      code.scrollTop = 80;
+      copy.focus();
+      finish(records.map((record) => ({ ...record })));
+      await vi.waitFor(() =>
+        expect(
+          page.getByRole("button", { name: "Refresh" }).element().hasAttribute("disabled"),
+        ).toBe(false),
+      );
+      expect(document.activeElement).toBe(copy);
+      expect(panel.querySelectorAll(".history-command")[3]).toBe(code);
+      expect(code.scrollTop).toBe(80);
+      await Promise.all(
+        panel
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished.catch(() => {})),
+      );
+      const audit = await axe.run(panel);
+      expect(
+        audit.violations.map(({ id, nodes }) => ({
+          id,
+          nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })),
+        })),
+      ).toEqual([]);
+      panel.scrollTop = 0;
+      if (width === 1180) {
+        overrides.set("get_history", () => records.slice(0, 3));
+        await page.getByRole("button", { name: "Refresh" }).click();
+        await vi.waitFor(() => expect(panel.querySelectorAll(".history-row")).toHaveLength(3));
+        await more.click();
+        await expect
+          .element(page.getByRole("menuitem", { name: "Clear saved history" }))
+          .toBeVisible();
+        await page.screenshot({ path: "../test-results/history-command-journal.png" });
+      }
+    },
+  );
+  it("collapses History entries only after deletion succeeds", async () => {
+    const record = {
+      id: "delete-example",
+      connectionId: "host-a",
+      sessionId: "old-session",
+      command: "printf removable",
+      cwd: "/srv/example",
+      startedAt: "2026-11-05T10:00:00Z",
+      finishedAt: null,
+      exitCode: 0,
+      shell: "bash",
+    };
+    overrides.set("get_history", () => [
+      record,
+      { ...record, id: "keep-example", command: "printf retained" },
+    ]);
+    let finish!: () => void;
+    overrides.set(
+      "delete_history_entry",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await mount();
+    await navigate("History");
+    const command = page.getByText("printf removable", { exact: true });
+    await expect.element(command).toBeVisible();
+    const row = command.element().closest<HTMLElement>(".history-row")!;
+    await userEvent.hover(command);
+    await page.getByRole("button", { name: "Delete history entry" }).first().click();
+    expect(row.isConnected).toBe(true);
+    expect(row.hasAttribute("data-removing")).toBe(false);
+    finish();
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await vi.waitFor(() => expect(row.hasAttribute("data-removing")).toBe(true));
+    }
+    await vi.waitFor(() => expect(row.isConnected).toBe(false));
+    await expect.element(page.getByText("printf retained", { exact: true })).toBeVisible();
+  });
 });

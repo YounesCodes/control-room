@@ -34,7 +34,8 @@ const CAPTURE_LABELS: Record<CaptureState, string> = {
 const MORE_MENU_WIDTH = 240;
 const MORE_MENU_HEIGHT = 132;
 const COPY_FEEDBACK_MS = 1500;
-const REMOVE_COLLAPSE_MS = 150;
+// Matches --motion-med; reduced motion removes the row immediately.
+const REMOVE_COLLAPSE_MS = 160;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -52,6 +53,7 @@ function ExitStatus({ exitCode }: { exitCode: number | null }) {
   if (exitCode === 0) {
     return (
       <span
+        role="img"
         className="exit-status exit-success"
         title="Command succeeded (exit code 0)"
         aria-label="Command succeeded"
@@ -63,6 +65,7 @@ function ExitStatus({ exitCode }: { exitCode: number | null }) {
   if (exitCode == null) {
     return (
       <span
+        role="img"
         className="exit-status exit-unknown"
         title="Exit code unknown"
         aria-label="Exit code unknown"
@@ -73,6 +76,7 @@ function ExitStatus({ exitCode }: { exitCode: number | null }) {
   }
   return (
     <span
+      role="img"
       className="exit-status exit-failure"
       title={`Command failed (exit code ${exitCode})`}
       aria-label={`Command failed, exit code ${exitCode}`}
@@ -114,7 +118,7 @@ function HistoryEntryRow({
         </time>
         <ExitStatus exitCode={entry.exitCode} />
         <div className="history-entry-main">
-          <code className="history-command">
+          <code className="history-command" tabIndex={0}>
             <CommandText command={entry.command} search={search} />
           </code>
           <small className="history-cwd" title={entry.cwd ?? undefined}>
@@ -181,10 +185,10 @@ export function HistoryPane({
   const [removingIds, setRemovingIds] = useState<ReadonlySet<string>>(new Set());
   const [integrationInstalled, setIntegrationInstalled] = useState<boolean | null>(null);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
+  const [integrationLoading, setIntegrationLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [resultsEpoch, setResultsEpoch] = useState(0);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -199,7 +203,10 @@ export function HistoryPane({
   const loadRequestRef = useRef(0);
   const integrationRequestRef = useRef(0);
   const copyTimerRef = useRef<number | null>(null);
+  const copyRequestRef = useRef(0);
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const removalTimersRef = useRef(new Map<string, number>());
 
   const mutationGeneration = useRef(0);
   useEffect(() => {
@@ -216,17 +223,23 @@ export function HistoryPane({
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
     return () => {
       mutationGeneration.current += 1;
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      for (const timer of removalTimersRef.current.values()) window.clearTimeout(timer);
+      removalTimersRef.current.clear();
     };
   }, [connection.id]);
 
   async function loadIntegration() {
     const request = ++integrationRequestRef.current;
+    setIntegrationLoading(true);
     setIntegrationError(null);
     try {
       const installed = await api.historyIntegrationStatus(connection.id);
       if (request === integrationRequestRef.current) setIntegrationInstalled(installed);
     } catch (caught) {
       if (request === integrationRequestRef.current) setIntegrationError(errorMessage(caught));
+    } finally {
+      if (request === integrationRequestRef.current) setIntegrationLoading(false);
     }
   }
 
@@ -239,7 +252,6 @@ export function HistoryPane({
       if (request === loadRequestRef.current) {
         setEntries(history);
         setHasLoaded(true);
-        setResultsEpoch((epoch) => epoch + 1);
       }
     } catch (caught) {
       if (request === loadRequestRef.current) setError(errorMessage(caught));
@@ -266,6 +278,7 @@ export function HistoryPane({
 
   useEffect(() => {
     if (!menuOpen) return;
+    moreMenuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     function dismissMenu(event: PointerEvent) {
       if (event.target instanceof Element && event.target.closest("[data-history-menu]")) {
         return;
@@ -273,41 +286,49 @@ export function HistoryPane({
       setMenuOpen(false);
     }
     function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMenuOpen(false);
+        moreMenuTriggerRef.current?.focus();
+      }
+    }
+    function dismissOnViewportChange() {
+      setMenuOpen(false);
     }
     document.addEventListener("pointerdown", dismissMenu);
     document.addEventListener("keydown", dismissMenuWithKeyboard);
+    window.addEventListener("resize", dismissOnViewportChange);
+    document.addEventListener("scroll", dismissOnViewportChange, true);
     return () => {
       document.removeEventListener("pointerdown", dismissMenu);
       document.removeEventListener("keydown", dismissMenuWithKeyboard);
+      window.removeEventListener("resize", dismissOnViewportChange);
+      document.removeEventListener("scroll", dismissOnViewportChange, true);
     };
   }, [menuOpen]);
 
   const capture = useMemo<CaptureState | null>(() => {
     if (!globalEnabled) return "global-disabled";
-    if (integrationInstalled === false) return "not-installed";
     if (integrationError) return "unknown";
+    if (integrationInstalled === false) return "not-installed";
     if (integrationInstalled === null) return null;
     if (!connection.historyEnabled) return "connection-disabled";
     if (paused) return "paused";
     return "recording";
   }, [globalEnabled, integrationInstalled, integrationError, connection.historyEnabled, paused]);
 
-  const visibleEntries = useMemo(
-    () => entries.filter((entry) => !removingIds.has(entry.id)),
-    [entries, removingIds],
-  );
-
   const grouped = useMemo(() => {
     const groups = new Map<string, HistoryEntry[]>();
-    for (const entry of visibleEntries) {
+    for (const entry of entries) {
       const label = new Date(entry.startedAt).toLocaleDateString(undefined, {
         dateStyle: "medium",
       });
-      groups.set(label, [...(groups.get(label) ?? []), entry]);
+      const group = groups.get(label);
+      if (group) group.push(entry);
+      else groups.set(label, [entry]);
     }
     return [...groups.entries()];
-  }, [visibleEntries]);
+  }, [entries]);
 
   function refresh() {
     void loadHistory();
@@ -354,6 +375,7 @@ export function HistoryPane({
 
   function removeIntegration() {
     setMenuOpen(false);
+    moreMenuTriggerRef.current?.focus();
     setConfirmState({
       title: "Remove integration",
       message:
@@ -398,14 +420,22 @@ export function HistoryPane({
   }
 
   function copyEntry(entry: HistoryEntry) {
+    const generation = mutationGeneration.current;
+    const request = ++copyRequestRef.current;
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    setCopiedId(null);
     navigator.clipboard
       .writeText(entry.command)
       .then(() => {
+        if (generation !== mutationGeneration.current || request !== copyRequestRef.current) return;
         setCopiedId(entry.id);
         if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
         copyTimerRef.current = window.setTimeout(() => setCopiedId(null), COPY_FEEDBACK_MS);
       })
-      .catch((caught) => setError(`Copy failed: ${errorMessage(caught)}`));
+      .catch((caught) => {
+        if (generation === mutationGeneration.current && request === copyRequestRef.current)
+          setError(`Copy failed: ${errorMessage(caught)}`);
+      });
   }
 
   function remove(entry: HistoryEntry) {
@@ -416,7 +446,11 @@ export function HistoryPane({
         await api.deleteHistory(entry.id);
         if (generation !== mutationGeneration.current) return;
         setRemovingIds((current) => new Set(current).add(entry.id));
-        window.setTimeout(() => {
+        const delay = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+          ? 0
+          : REMOVE_COLLAPSE_MS;
+        const timer = window.setTimeout(() => {
+          removalTimersRef.current.delete(entry.id);
           if (generation !== mutationGeneration.current) return;
           setEntries((current) => current.filter((item) => item.id !== entry.id));
           setRemovingIds((current) => {
@@ -424,7 +458,10 @@ export function HistoryPane({
             next.delete(entry.id);
             return next;
           });
-        }, REMOVE_COLLAPSE_MS);
+        }, delay);
+        const previousTimer = removalTimersRef.current.get(entry.id);
+        if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+        removalTimersRef.current.set(entry.id, timer);
       } catch (caught) {
         if (generation === mutationGeneration.current) setError(errorMessage(caught));
       }
@@ -433,6 +470,7 @@ export function HistoryPane({
 
   function clear() {
     setMenuOpen(false);
+    moreMenuTriggerRef.current?.focus();
     setConfirmState({
       title: "Clear history",
       message: `Clear all Enhanced History for ${connection.displayName}? This cannot be undone.`,
@@ -477,8 +515,17 @@ export function HistoryPane({
             {paused ? <Play size={14} /> : <Pause size={14} />}
             {paused ? "Resume" : "Pause"}
           </button>
-          <button className="toolbar-button" type="button" onClick={refresh} disabled={loading}>
-            <RefreshCw size={14} className={loading ? "spinning" : undefined} /> Refresh
+          <button
+            className="toolbar-button"
+            type="button"
+            onClick={refresh}
+            disabled={loading || integrationLoading}
+          >
+            <RefreshCw
+              size={14}
+              className={loading || integrationLoading ? "spinning" : undefined}
+            />{" "}
+            Refresh
           </button>
           <div className="history-more" data-history-menu="">
             <button
@@ -487,6 +534,7 @@ export function HistoryPane({
               type="button"
               onClick={toggleMoreMenu}
               aria-label="More actions"
+              title="More actions"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -494,8 +542,29 @@ export function HistoryPane({
             </button>
             {menuOpen && (
               <div
+                ref={moreMenuRef}
                 className="history-menu"
                 role="menu"
+                aria-label="History actions"
+                onKeyDown={(event) => {
+                  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                  event.preventDefault();
+                  const buttons = [
+                    ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                      "button:not(:disabled)",
+                    ),
+                  ];
+                  if (!buttons.length) return;
+                  const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                  const next =
+                    event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? buttons.length - 1
+                        : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                          buttons.length;
+                  buttons[next]?.focus();
+                }}
                 style={menuPosition ?? undefined}
                 data-app-popover=""
               >
@@ -505,6 +574,7 @@ export function HistoryPane({
                     role="menuitem"
                     onClick={() => {
                       setMenuOpen(false);
+                      moreMenuTriggerRef.current?.focus();
                       void toggleCapture();
                     }}
                     disabled={working}
@@ -546,7 +616,7 @@ export function HistoryPane({
           integration: {integrationError}
         </p>
       )}
-      {integrationInstalled === false && (
+      {integrationInstalled === false && !integrationError && (
         <section className="history-opt-in">
           <h3>Enable exact Bash command history</h3>
           <p>
@@ -596,8 +666,12 @@ export function HistoryPane({
           )}
         </label>
       </div>
-      {error && <ErrorState message={error} />}
-      <div className="history-list" key={`${connection.id}-${resultsEpoch}`}>
+      {error && (
+        <div role="alert">
+          <ErrorState message={error} />
+        </div>
+      )}
+      <div className="history-list" data-loading={loading ? "" : undefined}>
         {search && hasLoaded && !loading && !error && !grouped.length && (
           <EmptyState title="No matching commands">
             <p>
@@ -607,8 +681,13 @@ export function HistoryPane({
         )}
         {!search && integrationInstalled === true && !error && hasLoaded && !grouped.length && (
           <EmptyState title="No commands recorded yet">
-            Reconnect this connection or open a new terminal, then run a command. Sessions opened
-            before you enabled capture are not integrated.
+            {!globalEnabled
+              ? "Enable Enhanced History globally in Settings to record new commands."
+              : !connection.historyEnabled
+                ? "Enable on this connection from More actions to record new commands."
+                : paused
+                  ? "Resume recording in this workspace to record new commands."
+                  : "Reconnect this connection or open a new terminal, then run a command. Sessions opened before you enabled capture are not integrated."}
           </EmptyState>
         )}
         {grouped.map(([date, items]) => (
