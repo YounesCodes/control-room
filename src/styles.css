@@ -840,6 +840,19 @@ code,
   white-space: nowrap;
 }
 
+.update-indicator-label {
+  display: inline-block;
+  width: 17ch;
+  text-align: left;
+}
+
+.update-indicator-percent {
+  display: inline-block;
+  width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .update-indicator-button:hover,
 .update-indicator-button.active {
   background: var(--fill-hover);
