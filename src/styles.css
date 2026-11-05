@@ -5907,7 +5907,7 @@ dd {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: clamp(160px, 28vw, 320px);
+  width: min(380px, calc(100% - 600px));
   flex: 0 1 320px;
 }
 

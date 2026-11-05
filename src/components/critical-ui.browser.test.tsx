@@ -784,6 +784,10 @@ describe("critical UI in Chromium", () => {
         if (width > 900) {
           const searchBounds = search.element().closest(".search-field")!.getBoundingClientRect();
           expect(textBounds.left - searchBounds.right).toBeGreaterThan(24);
+          expect(status.getBoundingClientRect().left - searchBounds.right).toBeGreaterThanOrEqual(
+            24,
+          );
+          expect(searchBounds.width).toBeGreaterThan(width === 960 ? 280 : 320);
         }
         await page.screenshot({ path: `../../test-results/save-group-unsaved-${width}.png` });
         await page.getByRole("button", { name: "Save settings", exact: true }).click();
