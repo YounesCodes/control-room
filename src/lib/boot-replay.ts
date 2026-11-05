@@ -11,6 +11,7 @@ export const DEFAULT_BOOT_REPLAY_WINDOW_SECONDS = 120;
 /** Auto-paged reads allowed per selection before the user has to ask for the
  * rest. Keeps one boot selection from walking a chatty journal forever. */
 export const MAX_AUTO_REPLAY_PAGES = 4;
+export const MAX_REPLAY_EVENTS = 5000;
 
 /** A page whose streams both stop at the cap stays resumable through the
  * journal cursors; nothing pretends the loaded slice was the whole story. */
@@ -44,6 +45,7 @@ export interface ReplayEvent {
   source: string | null;
   unit: string | null;
   message: string;
+  messageTruncated: boolean;
   category: ReplayEventCategory;
   provenance: "journal";
   classification: "observed";
@@ -81,8 +83,8 @@ export function classifyReplayEntry(entry: BootReplayEntry): ReplayEventCategory
   const message = entry.message.trimStart();
   if (entry.priority !== null && entry.priority <= 3) return "error";
   if (entry.priority === 4) return "warning";
-  if (FAILING_MESSAGES.some((pattern) => pattern.test(message))) return "error";
   if (isSystemdSource(entry.source)) {
+    if (FAILING_MESSAGES.some((pattern) => pattern.test(message))) return "error";
     if (MILESTONE_MESSAGES.some((pattern) => pattern.test(message))) return "milestone";
     if (UNIT_LIFECYCLE_MESSAGES.some((pattern) => pattern.test(message))) return "unit";
   }
@@ -98,6 +100,7 @@ export function toReplayEvent(entry: BootReplayEntry): ReplayEvent {
     source: entry.source,
     unit: entry.unit,
     message: entry.message,
+    messageTruncated: entry.messageTruncated,
     category: classifyReplayEntry(entry),
     provenance: "journal",
     classification: "observed",
@@ -125,6 +128,9 @@ export interface ReplayEvidence {
   errors: string[];
   /** Highest offset loaded so far, or `null` before any timed evidence. */
   lastLoadedOffsetUs: number | null;
+  managerLastOffsetUs: number | null;
+  alertLastOffsetUs: number | null;
+  limitReached: boolean;
   loadedCount: number;
 }
 
@@ -141,6 +147,9 @@ export function emptyReplayEvidence(): ReplayEvidence {
     permissionRequired: false,
     errors: [],
     lastLoadedOffsetUs: null,
+    managerLastOffsetUs: null,
+    alertLastOffsetUs: null,
+    limitReached: false,
     loadedCount: 0,
   };
 }
@@ -169,17 +178,26 @@ export function mergeReplayEvidence(
         ...previous,
         timedEvents: [...previous.timedEvents],
         untimedEvents: [...previous.untimedEvents],
-        errors: [...previous.errors, ...page.errors],
       }
     : emptyReplayEvidence();
+  merged.errors = [...new Set([...(previous?.errors ?? []), ...page.errors])].slice(0, 20);
+  const ids = new Set([...merged.timedEvents, ...merged.untimedEvents].map((event) => event.id));
   for (const entry of [...page.managerEvents, ...page.alertEvents]) {
+    if (ids.has(entry.id)) continue;
+    if (ids.size >= MAX_REPLAY_EVENTS) {
+      merged.limitReached = true;
+      break;
+    }
+    ids.add(entry.id);
     const event = toReplayEvent(entry);
     if (event.offsetUs === null) {
-      pushUnique(merged.untimedEvents, event);
+      merged.untimedEvents.push(event);
     } else {
-      pushUnique(merged.timedEvents, event);
+      merged.timedEvents.push(event);
     }
   }
+  merged.timedEvents.sort(compareTimedEvents);
+  merged.untimedEvents.sort(compareTimedEvents);
   merged.managerCursor = page.managerNextCursor;
   merged.alertCursor = page.alertNextCursor;
   merged.managerTruncated = page.managerTruncated;
@@ -188,33 +206,19 @@ export function mergeReplayEvidence(
   merged.latestMonotonicUs = previous?.latestMonotonicUs ?? page.latestMonotonicUs ?? null;
   merged.permissionRequired = page.permissionRequired;
   merged.loadedCount = merged.timedEvents.length + merged.untimedEvents.length;
+  merged.limitReached ||= merged.loadedCount >= MAX_REPLAY_EVENTS;
+  const lastOffset = (events: BootReplayEntry[]) =>
+    events.reduce<number | null>(
+      (last, event) => (event.monotonicUs === null ? last : Math.max(last ?? 0, event.monotonicUs)),
+      null,
+    );
+  merged.managerLastOffsetUs =
+    lastOffset(page.managerEvents) ?? previous?.managerLastOffsetUs ?? null;
+  merged.alertLastOffsetUs = lastOffset(page.alertEvents) ?? previous?.alertLastOffsetUs ?? null;
   merged.lastLoadedOffsetUs = merged.timedEvents.length
     ? merged.timedEvents[merged.timedEvents.length - 1].offsetUs
     : null;
   return merged;
-}
-
-function pushUnique(events: ReplayEvent[], event: ReplayEvent) {
-  // Pages are read in journal order, so a repeated cursor sits near the tail;
-  // deduped inserts keep the list sorted without re-sorting per page.
-  if (events.some((existing) => existing.id === event.id)) return;
-  const insertAt = sortedInsertIndex(events, event);
-  events.splice(insertAt, 0, event);
-}
-
-/** Index where `event` belongs in an offset-sorted list. */
-function sortedInsertIndex(events: ReplayEvent[], event: ReplayEvent): number {
-  let low = 0;
-  let high = events.length;
-  while (low < high) {
-    const middle = (low + high) >> 1;
-    if (compareTimedEvents(events[middle], event) <= 0) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low;
 }
 
 /** Number of loaded events at or before `positionUs`. The list stays sorted,
@@ -280,6 +284,7 @@ export interface ReplayMarker {
   /** Offsets of every clustered event, first to last. */
   spanUs: [number, number];
   events: ReplayEvent[];
+  similar?: boolean;
 }
 
 /** Repetitive records collapse into one marker: same lane, near-identical
@@ -309,6 +314,7 @@ export function groupReplayMarkers(events: ReplayEvent[], windowUs: number): Rep
       offsetUs: offsets[0],
       spanUs: [offsets[0], offsets[offsets.length - 1]],
       events: [...cluster],
+      similar: true,
     });
     cluster = [];
   };
@@ -333,7 +339,30 @@ export function groupReplayMarkers(events: ReplayEvent[], windowUs: number): Rep
 
 export function markerGroupLabel(marker: ReplayMarker): string {
   if (marker.count === 1) return marker.label;
-  return `${marker.count} similar events`;
+  return `${marker.count}${marker.similar === false ? "" : " similar"} events`;
+}
+
+/** Combine markers whose glyphs would overlap at this actual track width. */
+export function layoutReplayMarkers(
+  markers: ReplayMarker[],
+  windowUs: number,
+  width: number,
+): ReplayMarker[] {
+  const groups: ReplayMarker[] = [];
+  for (const marker of markers) {
+    const previous = groups.at(-1);
+    if (!previous || ((marker.offsetUs - previous.offsetUs) / windowUs) * width >= 18) {
+      groups.push({ ...marker, spanUs: [...marker.spanUs], events: [...marker.events] });
+      continue;
+    }
+    previous.events.push(...marker.events);
+    previous.count += marker.count;
+    previous.spanUs[1] = Math.max(previous.spanUs[1], marker.spanUs[1]);
+    previous.similar = false;
+    if (marker.category === "error") previous.category = "error";
+    previous.key = `cluster:${previous.events[0].id}`;
+  }
+  return groups;
 }
 
 /** Coverage =============================== */
@@ -356,8 +385,8 @@ export function describeReplayCoverage(
 ): ReplayCoverage {
   if (fetchError) {
     return {
-      kind: "unavailable",
-      label: "Unavailable",
+      kind: evidence?.loadedCount ? "partial" : "unavailable",
+      label: evidence?.loadedCount ? "Partial" : "Unavailable",
       explanation: `The boot journal could not be read: ${fetchError}`,
     };
   }
@@ -371,28 +400,52 @@ export function describeReplayCoverage(
       explanation: "The connecting account cannot read this boot's journal. Retry with sudo.",
     };
   }
+  if (evidence.errors.length) {
+    return { kind: "partial", label: "Partial", explanation: evidence.errors.join(" ") };
+  }
+  if (evidence.limitReached) {
+    return {
+      kind: "partial",
+      label: "Limit reached",
+      explanation: `Loaded the session limit of ${MAX_REPLAY_EVENTS.toLocaleString()} records; more may exist. Refresh to start again.`,
+    };
+  }
+  if (hasPendingReplayStreams(evidence, windowUs)) {
+    return {
+      kind: "partial",
+      label: "Partial",
+      explanation: "More events are retained in this window than were loaded; use Load more.",
+    };
+  }
   if (evidence.earliestMonotonicUs !== null && evidence.earliestMonotonicUs > 0) {
     return {
       kind: "partial",
       label: "Partial",
-      explanation: `The earliest retained record starts at ${formatTPlus(evidence.earliestMonotonicUs)}; earlier startup evidence was not retained.`,
+      explanation: `The first retained event is at ${formatTPlus(evidence.earliestMonotonicUs)}; no earlier journal evidence is available.`,
     };
   }
   if (!evidence.loadedCount) {
     return {
       kind: "empty",
-      label: "No records",
-      explanation: "The journal kept no entries for this boot.",
+      label: evidence.latestMonotonicUs === null ? "No records" : "No matches",
+      explanation:
+        evidence.latestMonotonicUs === null
+          ? "The journal returned no entries for this boot."
+          : "No retained systemd or warning records matched the replay filters.",
     };
   }
-  const truncatedStreams = evidence.managerTruncated || evidence.alertTruncated;
   const windowExhausted =
     evidence.lastLoadedOffsetUs !== null && evidence.lastLoadedOffsetUs >= windowUs;
-  if (truncatedStreams && !windowExhausted) {
+  if (
+    evidence.earliestMonotonicUs === null ||
+    evidence.latestMonotonicUs === null ||
+    evidence.untimedEvents.length
+  ) {
     return {
       kind: "partial",
       label: "Partial",
-      explanation: "More events are retained for this boot than were loaded; use Load more.",
+      explanation:
+        "Some journal coverage or boot-relative timestamps are unavailable. Untimed records are available in Show loaded events.",
     };
   }
   if (
@@ -409,7 +462,7 @@ export function describeReplayCoverage(
   return {
     kind: "complete",
     label: "Loaded window",
-    explanation: "Every retained event in the replay window is loaded.",
+    explanation: "Retained systemd and warning records in the replay window are loaded.",
   };
 }
 
@@ -421,10 +474,19 @@ export function shouldContinueReplayPagination(
   pagesFetched: number,
 ): boolean {
   if (pagesFetched >= MAX_AUTO_REPLAY_PAGES) return false;
-  if (!(evidence.managerTruncated || evidence.alertTruncated)) return false;
-  if (evidence.managerCursor === null && evidence.alertCursor === null) return false;
-  if (evidence.lastLoadedOffsetUs !== null && evidence.lastLoadedOffsetUs >= windowUs) return false;
-  return true;
+  if (evidence.limitReached || evidence.permissionRequired || evidence.errors.length) return false;
+  return hasPendingReplayStreams(evidence, windowUs);
+}
+
+function hasPendingReplayStreams(evidence: ReplayEvidence, windowUs: number): boolean {
+  return (
+    (evidence.managerTruncated &&
+      evidence.managerCursor !== null &&
+      (evidence.managerLastOffsetUs === null || evidence.managerLastOffsetUs < windowUs)) ||
+    (evidence.alertTruncated &&
+      evidence.alertCursor !== null &&
+      (evidence.alertLastOffsetUs === null || evidence.alertLastOffsetUs < windowUs))
+  );
 }
 
 /** One sentence, sourced only from the record's own fields, that explains

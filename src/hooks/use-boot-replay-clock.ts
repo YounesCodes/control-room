@@ -38,9 +38,11 @@ export interface BootReplayClock {
 export function useBootReplayClock({
   durationUs,
   onTick,
+  initialSpeed = 1,
 }: {
   durationUs: number;
   onTick?: (positionUs: number) => void;
+  initialSpeed?: number;
 }): BootReplayClock {
   const positionRef = useRef(0);
   const lastWallMsRef = useRef(0);
@@ -49,7 +51,9 @@ export function useBootReplayClock({
   onTickRef.current = onTick;
   const [positionUs, setPositionUs] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeedState] = useState(1);
+  const [speed, setSpeedState] = useState(
+    BOOT_REPLAY_SPEEDS.some((option) => option === initialSpeed) ? initialSpeed : 1,
+  );
   const [complete, setComplete] = useState(false);
   const speedRef = useRef(speed);
   speedRef.current = speed;
@@ -122,6 +126,9 @@ export function useBootReplayClock({
       positionRef.current = durationUs;
       setPositionUs(durationUs);
     }
+    setComplete(durationUs > 0 && positionRef.current >= durationUs);
+    if (positionRef.current >= durationUs) setPlaying(false);
+    onTickRef.current?.(positionRef.current);
   }, [durationUs]);
 
   // Hidden windows cannot be watched, so playback suspends instead of

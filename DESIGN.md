@@ -425,6 +425,12 @@ merged into a replay. An opt-in journal lane lists the loaded records in
 window order, time-aligned with the same playhead. Reduced motion removes
 the marker and inspector entrance animation while playback stays operable.
 Replay evidence stays in memory for the session only and is never persisted.
+Bound each investigation's retained records. Combine markers at the track's
+actual width so dense evidence remains selectable, and let the inspector open
+each record in a cluster. Keep untimed records inspectable off the axis and
+label shortened messages. A failed stream remains partial; completing another
+stream cannot hide it. Switching boots or leaving the view cancels the native
+journal read as well as retiring its UI response.
 
 ## Visual language
 

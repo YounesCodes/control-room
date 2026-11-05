@@ -107,6 +107,23 @@ impl RemoteOperationLimiter {
         connection_id: &str,
         maximum_wait: Duration,
     ) -> Result<RemoteOperationPermit, String> {
+        self.acquire_cancellable_for(connection_id, maximum_wait, None)
+    }
+
+    pub fn acquire_cancellable(
+        &self,
+        connection_id: &str,
+        cancelled: &AtomicBool,
+    ) -> Result<RemoteOperationPermit, String> {
+        self.acquire_cancellable_for(connection_id, MAX_STRUCTURED_QUEUE_WAIT, Some(cancelled))
+    }
+
+    fn acquire_cancellable_for(
+        &self,
+        connection_id: &str,
+        maximum_wait: Duration,
+        cancelled: Option<&AtomicBool>,
+    ) -> Result<RemoteOperationPermit, String> {
         let connection_id = connection_id.to_owned();
         let mut hosts = self.hosts.lock();
         let host = hosts.entry(connection_id.clone()).or_default().clone();
@@ -125,11 +142,13 @@ impl RemoteOperationLimiter {
         // backstop fire before Rust could report why the operation failed.
         let deadline = Instant::now() + maximum_wait;
         let mut slots = host.slots.lock();
-        while slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
+        loop {
             // A deadline already in the past returns `timed_out` immediately,
             // so a spent budget never starts another wait.
-            if host.available.wait_until(&mut slots, deadline).timed_out()
-                && slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
+            let stopped = cancelled.is_some_and(|flag| flag.load(Ordering::SeqCst));
+            if stopped
+                || Instant::now() >= deadline
+                    && slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
             {
                 slots.arriving -= 1;
                 drop(slots);
@@ -140,11 +159,23 @@ impl RemoteOperationLimiter {
                 if remove {
                     hosts.remove(&connection_id);
                 }
+                if stopped {
+                    return Err("Boot replay read cancelled".into());
+                }
                 return Err(format!(
                     "Remote operation queue was busy for {} seconds",
                     MAX_STRUCTURED_QUEUE_WAIT.as_secs()
                 ));
             }
+            if slots.active < MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
+                break;
+            }
+            let wake = if cancelled.is_some() {
+                deadline.min(Instant::now() + Duration::from_millis(50))
+            } else {
+                deadline
+            };
+            host.available.wait_until(&mut slots, wake);
         }
         slots.active += 1;
         slots.arriving -= 1;
@@ -276,6 +307,21 @@ pub fn elevated_command(remote_command: &str, elevation: &Elevation) -> String {
 pub struct RemoteCommandExecutor;
 
 impl RemoteCommandExecutor {
+    pub fn execute_elevated_cancellable(
+        connection: &SavedConnection,
+        operation: &'static str,
+        remote_command: &str,
+        elevation: &Elevation,
+        cancelled: &AtomicBool,
+    ) -> Result<CommandOutput, String> {
+        let command = elevated_command(remote_command, elevation);
+        let input = match elevation {
+            Elevation::Password(password) => Some(password.as_bytes()),
+            _ => None,
+        };
+        run_ssh_cancellable(connection, operation, &command, input, Some(cancelled))
+    }
+
     pub fn execute(
         connection: &SavedConnection,
         operation: &'static str,
@@ -642,16 +688,35 @@ pub fn collect_boot_diagnostics(
     boot_id: Option<&str>,
     elevation: Elevation,
 ) -> Result<BootDiagnostics, String> {
+    collect_boot_diagnostics_cancellable(connection, boot_id, elevation, None)
+}
+
+pub fn collect_boot_diagnostics_cancellable(
+    connection: &SavedConnection,
+    boot_id: Option<&str>,
+    elevation: Elevation,
+    cancelled: Option<&AtomicBool>,
+) -> Result<BootDiagnostics, String> {
     if let Some(boot_id) = boot_id {
         validate_boot_id(boot_id)?;
     }
     let command = boot_diagnostics_command(boot_id);
-    let output = RemoteCommandExecutor::execute_elevated(
-        connection,
-        "collect_boot_diagnostics",
-        &command,
-        &elevation,
-    )?;
+    let output = if let Some(cancelled) = cancelled {
+        RemoteCommandExecutor::execute_elevated_cancellable(
+            connection,
+            "collect_boot_diagnostics",
+            &command,
+            &elevation,
+            cancelled,
+        )
+    } else {
+        RemoteCommandExecutor::execute_elevated(
+            connection,
+            "collect_boot_diagnostics",
+            &command,
+            &elevation,
+        )
+    }?;
     let text = output.success_text()?;
     let boots_result = parse_boot_records(&text);
     let selected_boot_id = boot_id.map(str::to_string).or_else(|| {
@@ -935,21 +1000,45 @@ fn run_ssh(
     remote_command: &str,
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
+    run_ssh_cancellable(connection, operation, remote_command, stdin, None)
+}
+
+fn run_ssh_cancellable(
+    connection: &SavedConnection,
+    operation: &'static str,
+    remote_command: &str,
+    stdin: Option<&[u8]>,
+    cancelled: Option<&AtomicBool>,
+) -> Result<CommandOutput, String> {
     let ssh_path =
         detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
     let mut command = background_command(ssh_path);
     command.args(arguments);
-    run_process(command, operation, stdin, COMMAND_TIMEOUT)
+    run_process_cancellable(command, operation, stdin, COMMAND_TIMEOUT, cancelled)
 }
 
+#[cfg(test)]
 fn run_process(
-    mut command: std::process::Command,
+    command: std::process::Command,
     operation: &'static str,
     stdin: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<CommandOutput, String> {
+    run_process_cancellable(command, operation, stdin, timeout, None)
+}
+
+fn run_process_cancellable(
+    mut command: std::process::Command,
+    operation: &'static str,
+    stdin: Option<&[u8]>,
+    timeout: Duration,
+    cancelled: Option<&AtomicBool>,
+) -> Result<CommandOutput, String> {
+    if cancelled.is_some_and(|flag| flag.load(Ordering::SeqCst)) {
+        return Err("Boot replay read cancelled".into());
+    }
     let started_at = Instant::now();
     let mut child = command
         .stdin(Stdio::piped())
@@ -976,21 +1065,8 @@ fn run_process(
     // Drain both output pipes concurrently to avoid a full-pipe deadlock.
     let child_stdin = child.stdin.take().expect("stdin was piped");
     let input_writer = stdin.map(|bytes| spawn_input_writer(child_stdin, bytes));
-    let status = match child.wait_timeout(timeout) {
-        Ok(Some(status)) => status,
-        Ok(None) => {
-            terminate_child(&mut child);
-            if let Some(writer) = input_writer {
-                let _ = writer.join();
-            }
-            let _ = stdout_reader.join();
-            let _ = stderr_reader.join();
-            log_operation_timing(operation, started_at, spawned_at, None, "timeout");
-            return Err(format!(
-                "Remote command timed out after {} seconds",
-                timeout.as_secs_f64()
-            ));
-        }
+    let status = match wait_for_process(&mut child, timeout, cancelled) {
+        Ok(status) => status,
         Err(error) => {
             terminate_child(&mut child);
             if let Some(writer) = input_writer {
@@ -998,7 +1074,8 @@ fn run_process(
             }
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
-            return Err(format!("Could not wait for SSH process: {error}"));
+            log_operation_timing(operation, started_at, spawned_at, None, "stopped");
+            return Err(error);
         }
     };
     let input_result = input_writer
@@ -1031,6 +1108,35 @@ fn run_process(
         stderr,
         exit_code: status.code().unwrap_or(255),
     })
+}
+
+fn wait_for_process(
+    child: &mut Child,
+    timeout: Duration,
+    cancelled: Option<&AtomicBool>,
+) -> Result<std::process::ExitStatus, String> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if cancelled.is_some_and(|flag| flag.load(Ordering::SeqCst)) {
+            return Err("Boot replay read cancelled".into());
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(format!(
+                "Remote command timed out after {} seconds",
+                timeout.as_secs_f64()
+            ));
+        }
+        match child.wait_timeout(if cancelled.is_some() {
+            remaining.min(Duration::from_millis(50))
+        } else {
+            remaining
+        }) {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => {}
+            Err(error) => return Err(format!("Could not wait for SSH process: {error}")),
+        }
+    }
 }
 
 fn terminate_child(child: &mut Child) {
@@ -2458,6 +2564,36 @@ swapfree=1048576\n";
 
     #[test]
     #[cfg(windows)]
+    fn cancelling_a_read_terminates_the_process_and_unblocks_its_input_writer() {
+        let mut command = background_command("powershell.exe");
+        command.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-Command",
+            "[Threading.Thread]::Sleep(30000)",
+        ]);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&cancelled);
+        let trigger = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            flag.store(true, Ordering::SeqCst);
+        });
+        let started = Instant::now();
+        let error = run_process_cancellable(
+            command,
+            "cancel_replay_test",
+            Some(&vec![b'x'; 1024 * 1024]),
+            Duration::from_secs(10),
+            Some(&cancelled),
+        )
+        .unwrap_err();
+        trigger.join().unwrap();
+        assert!(error.contains("cancelled"), "{error}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    #[cfg(windows)]
     fn process_input_and_output_pipes_are_drained_concurrently() {
         let mut command = background_command("powershell.exe");
         command.args(["-NoLogo", "-NoProfile", "-Command", "[Console]::Write('x' * 131072); $inputText=[Console]::In.ReadToEnd(); [Console]::Write($inputText.Length)"]);
@@ -3718,6 +3854,29 @@ esac
         assert_eq!(limiter.tracked_connections(), 0);
     }
 
+    #[test]
+    fn cancelling_a_queued_replay_does_not_wait_for_an_operation_slot() {
+        let limiter = Arc::new(RemoteOperationLimiter::default());
+        let first = limiter.acquire("connection-a").unwrap();
+        let second = limiter.acquire("connection-a").unwrap();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker_limiter = Arc::clone(&limiter);
+        let worker_flag = Arc::clone(&cancelled);
+        let started = Instant::now();
+        let worker = thread::spawn(move || {
+            worker_limiter
+                .acquire_cancellable("connection-a", &worker_flag)
+                .err()
+                .unwrap()
+        });
+        thread::sleep(Duration::from_millis(100));
+        cancelled.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().contains("cancelled"));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        drop((first, second));
+        assert_eq!(limiter.tracked_connections(), 0);
+    }
+
     /// A connection that timed out must not stay in the map once its permits
     /// are released, and reusing the id afterwards must not leak an entry.
     #[test]
@@ -4204,6 +4363,69 @@ esac
         );
         assert!(boot.timing.data.is_some() || boot.timing.error.is_some());
         assert!(boot.journal.data.is_some() || boot.journal.error.is_some());
+
+        for boot in boot
+            .boots
+            .data
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|item| item.current || item.index == -1)
+        {
+            let mut page = crate::boot_replay::collect_boot_replay(
+                &connection,
+                &boot.id,
+                None,
+                None,
+                &Elevation::None,
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+            assert_eq!(page.boot_id, boot.id);
+            if page.permission_required && capabilities.passwordless_sudo {
+                page = crate::boot_replay::collect_boot_replay(
+                    &connection,
+                    &boot.id,
+                    None,
+                    None,
+                    &Elevation::Allowed,
+                    &AtomicBool::new(false),
+                )
+                .unwrap();
+                assert!(!page.permission_required);
+            }
+            if !page.permission_required {
+                assert!(page.errors.is_empty(), "{:?}", page.errors);
+                assert!(
+                    !page.manager_events.is_empty()
+                        || !page.alert_events.is_empty()
+                        || page.latest_monotonic_us.is_none(),
+                    "Readable retained evidence must be represented"
+                );
+                if page.manager_next_cursor.is_some() || page.alert_next_cursor.is_some() {
+                    let next = crate::boot_replay::collect_boot_replay(
+                        &connection,
+                        &boot.id,
+                        page.manager_next_cursor.as_deref(),
+                        page.alert_next_cursor.as_deref(),
+                        &if capabilities.passwordless_sudo {
+                            Elevation::Allowed
+                        } else {
+                            Elevation::None
+                        },
+                        &AtomicBool::new(false),
+                    )
+                    .unwrap();
+                    assert!(next.errors.is_empty(), "{:?}", next.errors);
+                    if page.manager_next_cursor.is_some() && !next.manager_events.is_empty() {
+                        assert_ne!(
+                            page.manager_events.last().unwrap().id,
+                            next.manager_events.first().unwrap().id
+                        );
+                    }
+                }
+            }
+        }
 
         match list_firewall(&connection, Elevation::None) {
             Ok(firewall) => assert!(!firewall.available || firewall.active.is_some()),

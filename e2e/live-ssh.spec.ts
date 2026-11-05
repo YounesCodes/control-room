@@ -193,7 +193,11 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
         alertCursor: null,
         sudoPassword: null,
       });
-      expect(replayed.permissionRequired).toBe(false);
+      if (replayed.permissionRequired) {
+        expect(replayed.errors.some((error) => /permission|sudo/i.test(error))).toBe(true);
+      } else {
+        expect(replayed.errors).toEqual([]);
+      }
       // Boot-relative offsets only ever concern this boot's own evidence.
       expect(replayed.bootId).toBe(previous.id);
     } else console.log("Optional previous boot evidence: no retained previous boot available");

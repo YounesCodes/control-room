@@ -1,5 +1,18 @@
-import type { CSSProperties, MouseEvent, RefObject } from "react";
-import { formatTickLabel, replayAxisTicks, type ReplayMarker } from "../../lib/boot-replay";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type RefObject,
+} from "react";
+import {
+  formatTickLabel,
+  layoutReplayMarkers,
+  markerGroupLabel,
+  replayAxisTicks,
+  type ReplayMarker,
+} from "../../lib/boot-replay";
 
 export interface ReplayLane {
   id: string;
@@ -35,10 +48,27 @@ export function BootTimeline({
 }) {
   const progress = windowUs > 0 ? Math.min(1, Math.max(0, positionUs / windowUs)) : 0;
   const axisTicks = replayAxisTicks(windowUs);
-  const axisStyle = { "--replay-progress": `${progress * 100}%` } as CSSProperties;
+  const axisStyle = { "--replay-progress": progress } as CSSProperties;
+  const plotRef = useRef<HTMLDivElement | null>(null);
+  const [trackWidth, setTrackWidth] = useState(600);
+  useEffect(() => {
+    const plot = plotRef.current;
+    if (!plot) return;
+    const measure = () => {
+      const track = plot.querySelector(".boot-lane-track");
+      if (track) setTrackWidth(track.getBoundingClientRect().width || 600);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(plot);
+    return () => observer.disconnect();
+  }, [lanes]);
 
   const seekFromPointer = (event: MouseEvent<HTMLDivElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
+    const track = event.currentTarget.querySelector(".boot-lane-track");
+    if (!track) return;
+    const bounds = track.getBoundingClientRect();
     if (!bounds.width) return;
     const fraction = (event.clientX - bounds.left) / bounds.width;
     onSeek(Math.round(Math.min(1, Math.max(0, fraction)) * windowUs));
@@ -47,24 +77,40 @@ export function BootTimeline({
   return (
     <div className="boot-timeline" ref={axisRef} style={axisStyle}>
       <div
+        ref={plotRef}
         className="boot-timeline-plot"
         onClick={seekFromPointer}
         role="group"
         aria-label="Replay timeline plot"
       >
         {lanes.map((lane) => {
-          const revealed = lane.markers.filter((marker) => marker.offsetUs <= positionUs);
+          const revealed = layoutReplayMarkers(
+            lane.markers
+              .filter((marker) => marker.offsetUs <= positionUs)
+              .map((marker) => {
+                const events = marker.events.filter((event) => (event.offsetUs ?? 0) <= positionUs);
+                return {
+                  ...marker,
+                  events,
+                  count: events.length,
+                  spanUs: [marker.offsetUs, events.at(-1)?.offsetUs ?? marker.offsetUs] as [
+                    number,
+                    number,
+                  ],
+                };
+              }),
+            windowUs,
+            trackWidth,
+          );
           return (
             <div className="boot-lane" key={lane.id}>
               <span className="boot-lane-label">{lane.label}</span>
               <div className="boot-lane-track">
-                {revealed.map((marker, index) => (
+                {revealed.map((marker) => (
                   <button
                     type="button"
                     key={marker.key}
-                    className={`boot-marker boot-marker-${marker.category}${
-                      isCollision(lane.markers, index, windowUs) ? " boot-marker-staggered" : ""
-                    }${marker.key === selectedMarkerKey ? " selected" : ""}`}
+                    className={`boot-marker boot-marker-${marker.category}${marker.events.some((event) => event.id === selectedMarkerKey) ? " selected" : ""}`}
                     style={{ left: `${(marker.offsetUs / windowUs) * 100}%` }}
                     title={markerTitle(marker)}
                     aria-label={markerTitle(marker)}
@@ -98,15 +144,11 @@ export function BootTimeline({
 
 // Distinct markers closer together than one glyph width would paint on top of
 // each other; tight pairs take turns stepping down a lane row.
-function isCollision(laneMarkers: ReplayMarker[], revealedIndex: number, windowUs: number) {
-  const marker = laneMarkers[revealedIndex];
-  const previous = laneMarkers[revealedIndex - 1];
-  if (!marker || !previous) return false;
-  return (marker.offsetUs - previous.offsetUs) / windowUs < 0.012;
-}
-
 export function markerTitle(marker: ReplayMarker): string {
-  const similar = marker.count > 1 ? ` (${marker.count} similar events)` : "";
+  if (marker.count > 1 && marker.similar === false) {
+    return `${marker.count} events from ${formatTickLabel(marker.spanUs[0])} to ${formatTickLabel(marker.spanUs[1])}`;
+  }
+  const similar = marker.count > 1 ? ` (${markerGroupLabel(marker)})` : "";
   return `${categoryLabel(marker.category)} at ${formatTickLabel(marker.offsetUs)}: ${marker.label}${similar}`;
 }
 

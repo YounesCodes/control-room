@@ -73,26 +73,52 @@ export function BootDiagnosticsPane({
   onSnapshotChange,
   onViewLogs,
   onOpenSystemd,
+  connected = true,
+  replayPreferences,
+  onReplayPreferencesChange,
 }: {
   connection: SavedConnection;
   snapshot: BootDiagnostics | null;
   onSnapshotChange: (snapshot: BootDiagnostics) => void;
   onViewLogs: (source: LogSourceSelection) => void;
   onOpenSystemd?: (unit: string) => void;
+  connected?: boolean;
+  replayPreferences?: { windowSeconds: number; speed: number };
+  onReplayPreferencesChange?: (preferences: { windowSeconds: number; speed: number }) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sudoOpen, setSudoOpen] = useState(false);
-  const [windowSeconds, setWindowSeconds] = useState(DEFAULT_BOOT_REPLAY_WINDOW_SECONDS);
-  const [windowCustom, setWindowCustom] = useState(false);
+  const [windowSeconds, setWindowSeconds] = useState(
+    normalizeWindowSeconds(replayPreferences?.windowSeconds ?? DEFAULT_BOOT_REPLAY_WINDOW_SECONDS),
+  );
+  const [windowCustom, setWindowCustom] = useState(
+    replayPreferences !== undefined &&
+      !BOOT_REPLAY_WINDOW_OPTIONS.some((option) => option === replayPreferences.windowSeconds),
+  );
   const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ kind: "idle" });
   const [selectedMarker, setSelectedMarker] = useState<ReplayMarker | null>(null);
+  const [windowNotice, setWindowNotice] = useState<string | null>(null);
   const requestRef = useRef(0);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
 
   const windowUs = windowMicroseconds(windowSeconds);
   const replayRequestRef = useRef(0);
+  const activeReplayReadRef = useRef<string | null>(null);
+  const activeSummaryReadRef = useRef<string | null>(null);
+  const cancelSummaryRead = useCallback(() => {
+    const id = activeSummaryReadRef.current;
+    activeSummaryReadRef.current = null;
+    if (id) return api.cancelBootReplay(id).catch(() => {});
+    return Promise.resolve();
+  }, []);
+  const cancelReplayRead = useCallback(() => {
+    const id = activeReplayReadRef.current;
+    activeReplayReadRef.current = null;
+    if (id) return api.cancelBootReplay(id).catch(() => {});
+    return Promise.resolve();
+  }, []);
   const evidenceRef = useRef<ReplayEvidence | null>(null);
   const axisRef = useRef<HTMLDivElement | null>(null);
 
@@ -100,20 +126,40 @@ export function BootDiagnosticsPane({
     (positionUs: number) => {
       axisRef.current?.style.setProperty(
         "--replay-progress",
-        `${windowUs > 0 ? (positionUs / windowUs) * 100 : 0}%`,
+        String(windowUs > 0 ? positionUs / windowUs : 0),
       );
     },
     [windowUs],
   );
-  const clock = useBootReplayClock({ durationUs: windowUs, onTick: handleTick });
+  const clock = useBootReplayClock({
+    durationUs: windowUs,
+    onTick: handleTick,
+    initialSpeed: replayPreferences?.speed,
+  });
+  function changeWindowSeconds(next: number) {
+    setWindowNotice(
+      clock.position() > windowMicroseconds(next)
+        ? "Replay position moved to the end of the smaller window."
+        : null,
+    );
+    setWindowSeconds(next);
+    onReplayPreferencesChange?.({ windowSeconds: next, speed: clock.speed });
+  }
 
   async function collect(bootId: string | null = null, sudoPassword: string | null = null) {
+    if (!connected) return;
     const request = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
-      const next = await api.collectBootDiagnostics(connection.id, bootId, sudoPassword);
+      await cancelSummaryRead();
       if (request !== requestRef.current) return;
+      const requestId = crypto.randomUUID();
+      activeSummaryReadRef.current = requestId;
+      const next = await api.collectBootDiagnostics(connection.id, bootId, sudoPassword, requestId);
+      if (activeSummaryReadRef.current === requestId) activeSummaryReadRef.current = null;
+      if (request !== requestRef.current) return;
+      activeSummaryReadRef.current = null;
       onSnapshotChange(next);
       setSudoOpen(false);
     } catch (caught) {
@@ -129,7 +175,9 @@ export function BootDiagnosticsPane({
     base: ReplayEvidence | null,
     sudoPassword: string | null,
   ) {
+    if (!connected) return;
     const generation = ++replayRequestRef.current;
+    const cancellation = cancelReplayRead();
     let evidence = base;
     let pages = 0;
     let more = base === null || shouldContinueReplayPagination(base, windowUs, pages);
@@ -137,16 +185,26 @@ export function BootDiagnosticsPane({
       setReplayStatus({ kind: "ready", evidence: evidence ?? emptyReplayEvidence() });
       return;
     }
-    if (base) setReplayStatus({ kind: "loading", evidence: base });
+    setReplayStatus({ kind: "loading", evidence: base });
+    if (!base) {
+      evidenceRef.current = null;
+      setSelectedMarker(null);
+    }
     try {
+      await cancellation;
       while (more) {
+        if (replayRequestRef.current !== generation) return;
+        const requestId = crypto.randomUUID();
+        activeReplayReadRef.current = requestId;
         const page = await api.collectBootReplay(
           connection.id,
           bootId,
           evidence?.managerCursor ?? null,
           evidence?.alertCursor ?? null,
           sudoPassword,
+          requestId,
         );
+        if (activeReplayReadRef.current === requestId) activeReplayReadRef.current = null;
         if (replayRequestRef.current !== generation) return;
         evidence = mergeReplayEvidence(evidence, page);
         evidenceRef.current = evidence;
@@ -160,6 +218,7 @@ export function BootDiagnosticsPane({
       }
     } catch (caught) {
       if (replayRequestRef.current !== generation) return;
+      activeReplayReadRef.current = null;
       setReplayStatus({ kind: "error", fetchError: errorMessage(caught), evidence });
     }
   }
@@ -176,7 +235,7 @@ export function BootDiagnosticsPane({
   // window change only extends (or simply re-views) the evidence it already
   // has, preserving the playhead.
   useEffect(() => {
-    if (!selectedBootId) return;
+    if (!connected || !selectedBootId) return;
     const scope = bootScopeRef.current;
     const bootChanged = scope.connectionId !== connection.id || scope.bootId !== selectedBootId;
     const windowChanged = !bootChanged && windowRef.current !== windowSeconds;
@@ -186,21 +245,36 @@ export function BootDiagnosticsPane({
       clock.pause();
       clock.seek(0);
       setSelectedMarker(null);
+      setWindowNotice(null);
       evidenceRef.current = null;
       setReplayStatus({ kind: "loading", evidence: null });
       void runReplay(selectedBootId, null, null);
     } else if (windowChanged) {
       void runReplay(selectedBootId, evidenceRef.current, null);
     }
-  }, [selectedBootId, connection.id, windowSeconds, clock.pause, clock.seek]);
+  }, [selectedBootId, connection.id, windowSeconds, clock.pause, clock.seek, connected]);
 
   useEffect(() => {
-    void collect();
+    if (!connected) {
+      clock.pause();
+      evidenceRef.current = null;
+      bootScopeRef.current = { connectionId: connection.id, bootId: null };
+      setSelectedMarker(null);
+      setReplayStatus({
+        kind: "error",
+        fetchError: "Host disconnected. Reconnect to read boot evidence.",
+        evidence: null,
+      });
+      return;
+    }
+    void collect(snapshotRef.current?.selectedBootId ?? null);
     return () => {
       requestRef.current += 1;
       replayRequestRef.current += 1;
+      void cancelReplayRead();
+      void cancelSummaryRead();
     };
-  }, [connection.id]);
+  }, [connection.id, connected, cancelReplayRead, cancelSummaryRead, clock.pause]);
 
   // Everything below must run on every render: the loading and error early
   // returns come after the derived-hook block.
@@ -285,7 +359,17 @@ export function BootDiagnosticsPane({
         (event.offsetUs ?? 0) >= candidate.spanUs[0] &&
         (event.offsetUs ?? 0) <= candidate.spanUs[1],
     );
-    setSelectedMarker(marker ?? null);
+    setSelectedMarker(
+      marker ?? {
+        key: event.id,
+        category: event.category,
+        label: event.message,
+        count: 1,
+        offsetUs: event.offsetUs ?? 0,
+        spanUs: [event.offsetUs ?? 0, event.offsetUs ?? 0],
+        events: [event],
+      },
+    );
   }
 
   const replayLoading = replayStatus.kind === "loading" && !evidence;
@@ -299,7 +383,9 @@ export function BootDiagnosticsPane({
       : replayError
         ? replayError
         : !inWindowEvents.length
-          ? "No events were retained in this replay window."
+          ? evidence?.untimedEvents.length
+            ? "Loaded records have no boot-relative offset. Open Show loaded events to inspect them."
+            : "No matching events were returned in this replay window."
           : observedCount
             ? `At playhead: ${observedCount} events` +
               (observedFailures ? ` · ${observedFailures} failures` : "") +
@@ -345,8 +431,13 @@ export function BootDiagnosticsPane({
             <select
               aria-label="Boot"
               value={snapshot?.selectedBootId ?? ""}
-              disabled={loading || !boots.length}
-              onChange={(event) => void collect(event.target.value)}
+              disabled={!connected || loading || !boots.length}
+              onChange={(event) => {
+                clock.pause();
+                replayRequestRef.current += 1;
+                void cancelReplayRead();
+                void collect(event.target.value);
+              }}
             >
               {boots.map((boot) => (
                 <option value={boot.id} key={boot.id}>
@@ -365,7 +456,7 @@ export function BootDiagnosticsPane({
                 if (event.target.value === "custom") {
                   setWindowCustom(true);
                 } else {
-                  setWindowSeconds(normalizeWindowSeconds(Number(event.target.value)));
+                  changeWindowSeconds(normalizeWindowSeconds(Number(event.target.value)));
                   setWindowCustom(false);
                 }
               }}
@@ -394,7 +485,7 @@ export function BootDiagnosticsPane({
                 max={MAX_BOOT_REPLAY_WINDOW_SECONDS}
                 value={windowSeconds}
                 onChange={(event) =>
-                  setWindowSeconds(normalizeWindowSeconds(Number(event.target.value)))
+                  changeWindowSeconds(normalizeWindowSeconds(Number(event.target.value)))
                 }
               />
               <small>seconds, clamped to the supported range</small>
@@ -403,7 +494,7 @@ export function BootDiagnosticsPane({
           <button
             className="secondary-button"
             type="button"
-            disabled={loading}
+            disabled={!connected || loading}
             onClick={() => {
               clock.pause();
               void collect(snapshot?.selectedBootId ?? null);
@@ -453,46 +544,59 @@ export function BootDiagnosticsPane({
           </div>
 
           <section className="boot-theater" aria-label="Boot replay">
+            {windowNotice && (
+              <p className="boot-at-playhead" role="status">
+                {windowNotice}
+              </p>
+            )}
             {playheadStatus && (
               <p className="boot-at-playhead" role="status">
                 {playheadStatus}
               </p>
             )}
-            {(replayError || replayPermission) && selectedBootId && (
-              <p className="boot-inline-actions">
-                {replayError && (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => void runReplay(selectedBootId, evidenceRef.current, null)}
-                  >
-                    Retry reading the journal
-                  </button>
-                )}
-                {replayPermission && (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => setSudoOpen(true)}
-                  >
-                    Retry with sudo
-                  </button>
-                )}
-              </p>
-            )}
+            {connected &&
+              (replayError || replayPermission || !!evidence?.errors.length) &&
+              selectedBootId && (
+                <p className="boot-inline-actions">
+                  {(replayError || (!!evidence?.errors.length && !replayPermission)) && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void runReplay(selectedBootId, null, null)}
+                    >
+                      Retry reading the journal
+                    </button>
+                  )}
+                  {replayPermission && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => setSudoOpen(true)}
+                    >
+                      Retry with sudo
+                    </button>
+                  )}
+                </p>
+              )}
             <BootTimeline
               windowUs={windowUs}
               positionUs={clock.positionUs}
               lanes={lanes}
-              selectedMarkerKey={selectedMarker?.key ?? null}
+              selectedMarkerKey={selectedMarker?.events[0]?.id ?? null}
               onSeek={clock.seek}
               onSelectMarker={setSelectedMarker}
               axisRef={axisRef}
             />
             <BootTransport
-              clock={clock}
+              clock={{
+                ...clock,
+                setSpeed: (speed) => {
+                  clock.setSpeed(speed);
+                  onReplayPreferencesChange?.({ windowSeconds, speed });
+                },
+              }}
               windowUs={windowUs}
-              disabled={!selectedBootId || replayPermission || replayLoading}
+              disabled={!connected || !selectedBootId || replayPermission || replayLoading}
               onPrevious={() => goToMarker(previousNotableMarker(markers, clock.positionUs))}
               onNext={() => goToMarker(nextNotableMarker(markers, clock.positionUs))}
             />

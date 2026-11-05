@@ -45,6 +45,7 @@ export function replayEntry(overrides: Partial<BootReplayEntry> = {}): BootRepla
     source: null,
     unit: null,
     message: "journal record",
+    messageTruncated: false,
     ...overrides,
   };
 }

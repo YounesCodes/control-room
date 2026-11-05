@@ -52,6 +52,7 @@ pub fn run() {
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
         .manage(BaselineCaptureRegistry::default())
+        .manage(boot_replay::ReplayRequests::default())
         .setup(|app| {
             #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
             if let Some(window) = app.get_webview_window("main") {
@@ -141,6 +142,7 @@ pub fn run() {
             commands::inspect_container,
             commands::collect_boot_diagnostics,
             commands::collect_boot_replay,
+            commands::cancel_boot_replay,
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,

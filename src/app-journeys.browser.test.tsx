@@ -141,6 +141,7 @@ async function respond(command: string, args: any = {}) {
       return { sessionId, connectionId: args.connectionId, shellId: args.shellId };
     }
     case "resize_session":
+    case "cancel_boot_replay":
     case "acknowledge_session_output":
     case "close_session":
     case "write_session":
@@ -2116,9 +2117,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Boot");
     // The status and the coverage tile both explain the wall; the retry is
     // the single actionable control.
-    await expect
-      .element(page.getByText(/cannot read this boot's journal/i).first())
-      .toBeVisible();
+    await expect.element(page.getByText(/cannot read this boot's journal/i).first()).toBeVisible();
     await expect
       .element(page.getByRole("button", { name: "Retry with sudo", exact: true }))
       .toBeVisible();
@@ -2930,6 +2929,92 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByText("Current-boot diagnostics").click();
     await page.getByRole("button", { name: /View journal/ }).click();
     await expect.element(page.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
+  });
+
+  it("keeps Boot replay choices across navigation and supports keyboard seeking", async () => {
+    await mount();
+    await navigate("Boot");
+    await page.getByRole("combobox", { name: "Replay window", exact: true }).selectOptions("300");
+    await page.getByRole("combobox", { name: "Replay speed", exact: true }).selectOptions("5");
+    await page.getByRole("combobox", { name: "Boot", exact: true }).selectOptions("b".repeat(32));
+    await vi.waitFor(() =>
+      expect(native.invoke).toHaveBeenCalledWith(
+        "collect_boot_replay",
+        expect.objectContaining({ bootId: "b".repeat(32) }),
+      ),
+    );
+    await navigate("Systemd");
+    await navigate("Boot");
+    await expect
+      .element(page.getByRole("combobox", { name: "Boot", exact: true }))
+      .toHaveValue("b".repeat(32));
+    await expect
+      .element(page.getByRole("combobox", { name: "Replay window", exact: true }))
+      .toHaveValue("300");
+    await expect
+      .element(page.getByRole("combobox", { name: "Replay speed", exact: true }))
+      .toHaveValue("5");
+    const seek = element.querySelector<HTMLInputElement>(".boot-transport-seek")!;
+    seek.focus();
+    await userEvent.keyboard("{End}");
+    await vi.waitFor(() =>
+      expect(element.querySelector(".boot-transport-time")?.textContent).toContain("T+5:00.0"),
+    );
+    await page.getByRole("combobox", { name: "Replay window", exact: true }).selectOptions("30");
+    await expect
+      .element(page.getByText("Replay position moved to the end of the smaller window."))
+      .toBeVisible();
+    seek.focus();
+    await userEvent.keyboard("{Home}");
+    await vi.waitFor(() =>
+      expect(element.querySelector(".boot-transport-time")?.textContent).toContain("T+0:00.0"),
+    );
+  });
+
+  it.each([960, 1600])("keeps dense Boot evidence usable at %s px", async (width) => {
+    await page.viewport(width, 700);
+    overrides.set("collect_boot_replay", () => ({
+      ...fixtures.bootReplay(),
+      latestMonotonicUs: 90_000_000,
+      alertEvents: ["disk failure", "network failure", "database failure"].map(
+        (message, index) => ({
+          id: `failure-${index}`,
+          monotonicUs: 42_000_000,
+          realtimeUs: 1_730_000_042_000_000,
+          priority: 3,
+          source: "systemd",
+          unit: `example-${index}.service`,
+          message,
+          messageTruncated: false,
+        }),
+      ),
+    }));
+    await mount();
+    await navigate("Boot");
+    await expect
+      .element(page.getByRole("slider", { name: "Replay position in this window" }))
+      .toBeEnabled();
+    const seek = element.querySelector<HTMLInputElement>(".boot-transport-seek")!;
+    seek.focus();
+    await userEvent.keyboard("{End}");
+    await expect.element(page.getByRole("button", { name: /3 events from 42s/ })).toBeVisible();
+    const theater = element.querySelector<HTMLElement>(".boot-theater")!;
+    expect(theater.scrollWidth).toBeLessThanOrEqual(theater.clientWidth + 1);
+    const transport = element
+      .querySelector<HTMLElement>(".boot-transport")!
+      .getBoundingClientRect();
+    expect(transport.bottom).toBeLessThanOrEqual(700);
+    await page.screenshot({ path: `../test-results/boot-timeline-fixed-${width}.png` });
+    await page.getByRole("button", { name: /3 events from 42s/ }).click();
+    await expect.element(page.getByRole("region", { name: "Replay event details" })).toBeVisible();
+    await page.getByRole("button", { name: /T\+0:42.0 · database failure/ }).click();
+    await expect
+      .element(
+        page
+          .getByRole("region", { name: "Replay event details" })
+          .getByText("database failure", { exact: true }),
+      )
+      .toBeVisible();
   });
 
   it("reports refresh failure, keeps existing Systemd data and recovers", async () => {

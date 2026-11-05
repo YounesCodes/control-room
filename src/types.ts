@@ -284,6 +284,7 @@ export interface BootReplayEntry {
   source: string | null;
   unit: string | null;
   message: string;
+  messageTruncated: boolean;
 }
 
 /** One bounded read of a boot's journal evidence, from two capped streams:
@@ -641,6 +642,7 @@ export interface RemoteWorkspace extends WorkspaceBase {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   bootDiagnostics: BootDiagnostics | null;
+  bootReplayPreferences?: { windowSeconds: number; speed: number };
   logSource: LogSourceSelection | null;
   baselineSelectionId: string | null;
 }

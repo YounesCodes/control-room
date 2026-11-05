@@ -196,6 +196,8 @@ pub struct BootReplayEntry {
     pub source: Option<String>,
     pub unit: Option<String>,
     pub message: String,
+    #[serde(default)]
+    pub message_truncated: bool,
 }
 
 /// One bounded read of a boot's journal, built from two capped streams:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatOffsetClock, upperBound, type ReplayEvent } from "../../lib/boot-replay";
 import { categoryLabel } from "./BootTimeline";
 
@@ -38,17 +38,21 @@ export function BootJournalLane({
   const listRef = useRef<HTMLOListElement | null>(null);
 
   const needle = search.trim().toLowerCase();
-  const rows = inWindowEvents
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => {
-      if (category !== "all" && event.category !== category) return false;
-      if (!needle) return true;
-      return (
-        event.message.toLowerCase().includes(needle) ||
-        (event.unit?.toLowerCase().includes(needle) ?? false) ||
-        (event.source?.toLowerCase().includes(needle) ?? false)
-      );
-    });
+  const rows = useMemo(
+    () =>
+      [...inWindowEvents, ...untimedEvents]
+        .map((event, index) => ({ event, index }))
+        .filter(({ event }) => {
+          if (category !== "all" && event.category !== category) return false;
+          if (!needle) return true;
+          return (
+            event.message.toLowerCase().includes(needle) ||
+            (event.unit?.toLowerCase().includes(needle) ?? false) ||
+            (event.source?.toLowerCase().includes(needle) ?? false)
+          );
+        }),
+    [inWindowEvents, untimedEvents, category, needle],
+  );
   const atPlayheadIndex = upperBound(inWindowEvents, positionUs) - 1;
   const visibleRows = rows.slice(0, rowCap);
 
@@ -58,9 +62,13 @@ export function BootJournalLane({
   // to the lane's bottom edge.
   useEffect(() => {
     if (!open || atPlayheadIndex < 0) return;
-    const row = listRef.current?.querySelectorAll("li")[atPlayheadIndex];
-    row?.querySelector("button")?.scrollIntoView?.({ block: "center" });
-  }, [open, atPlayheadIndex]);
+    const filteredIndex = rows.findIndex(({ index }) => index === atPlayheadIndex);
+    if (filteredIndex >= rowCap) {
+      setRowCap(Math.ceil((filteredIndex + 1) / ROW_BATCH) * ROW_BATCH);
+      return;
+    }
+    listRef.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [open, atPlayheadIndex, rows, rowCap]);
 
   return (
     <details
@@ -106,7 +114,7 @@ export function BootJournalLane({
       {visibleRows.length ? (
         <ol className="boot-journal-rows" ref={listRef}>
           {visibleRows.map(({ event, index }) => {
-            const atPlayhead = index === atPlayheadIndex;
+            const atPlayhead = event.offsetUs !== null && index === atPlayheadIndex;
             return (
               <li key={event.id}>
                 <button

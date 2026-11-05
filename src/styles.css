@@ -3857,13 +3857,13 @@ dd {
      column width is shared by lanes, playhead, and tick axis, so markers,
      playhead, and "0s..120s" all measure the same span. 156px keeps
      "WARNINGS & FAILURES" on one line at rest. */
-  --replay-progress: 0%;
+  --replay-progress: 0;
   --lane-label-width: 156px;
 }
 
 .boot-timeline-plot {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
@@ -3892,7 +3892,7 @@ dd {
   text-transform: uppercase;
 }
 
-/* Tall enough that a staggered marker pair reads as two records. */
+/* Dense records share one counted marker at the available track width. */
 .boot-lane-track {
   position: relative;
   height: 30px;
@@ -3933,29 +3933,33 @@ dd {
   height: 10px;
   margin-left: -6px;
   border-radius: 0;
+  background: transparent;
+}
+
+.boot-marker-warning::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: var(--warning);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
 .boot-marker-error {
   border-radius: 0;
-  background: var(--failure);
-  rotate: 45deg;
+  background: transparent;
 }
 
-.boot-marker-error:hover {
+.boot-marker-error::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--failure);
   rotate: 45deg;
 }
 
 .boot-marker.selected {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-/* Distinct markers closer than one glyph width split the taller lane into two
- * visual rows, so a paired record stays readable instead of fusing. */
-.boot-marker-staggered {
-  top: 16px;
 }
 
 /* A cluster shows its count instead of stacking clones. */
@@ -3980,7 +3984,10 @@ dd {
   /* The playhead measures the track span (the area right of the lane-label
      column), not the whole plot, so it always sits exactly on the markers and
      the percentage the pane writes. */
-  left: calc(var(--lane-label-width) + (100% - var(--lane-label-width)) * var(--replay-progress));
+  left: calc(
+    var(--lane-label-width) + 12px + (100% - var(--lane-label-width) - 12px) *
+      var(--replay-progress)
+  );
   width: 1px;
   background: var(--accent);
   opacity: 1;

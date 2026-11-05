@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTerminalLayout, splitTerminalLayout, resizeTerminalLayout } from "./terminal-layout";
 import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
 import { createRemoteWorkspace } from "./workspace-target";
+import { bootDiagnostics } from "../test/boot-fixtures";
 import type {
   LocalShellProfile,
   PersistedWorkspaceState,
@@ -35,6 +36,19 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
+  it("keeps Boot choices and journal evidence out of persisted workspace state", () => {
+    const workspace = createRemoteWorkspace(connection("host"));
+    workspace.bootReplayPreferences = { windowSeconds: 300, speed: 5 };
+    workspace.bootDiagnostics = bootDiagnostics();
+    workspace.bootDiagnostics.journal.data = ["private boot journal"];
+    const saved = persistWorkspaceState([workspace], workspace.id, []);
+    expect(saved.workspaces[0]).not.toHaveProperty("bootReplayPreferences");
+    expect(JSON.stringify(saved)).not.toContain("private boot journal");
+    expect(
+      (restoreWorkspaceState([connection("host")], saved).workspaces[0] as RemoteWorkspace)
+        .bootDiagnostics,
+    ).toBeNull();
+  });
   it("round-trips independent nested split sizes in a mixed local and remote group", () => {
     const state: PersistedWorkspaceState = {
       workspaces: ["local", "remote", "logs"].map((id) => ({

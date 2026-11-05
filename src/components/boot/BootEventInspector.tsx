@@ -1,8 +1,10 @@
 import { X } from "lucide-react";
+import { useState } from "react";
 import {
   formatTPlus,
   replayEventSummary,
   replayPriorityLabel,
+  markerGroupLabel,
   type ReplayMarker,
 } from "../../lib/boot-replay";
 import { categoryLabel } from "./BootTimeline";
@@ -32,13 +34,15 @@ export function BootEventInspector({
   onOpenUnit?: (unit: string) => void;
   onViewUnitJournal?: (unit: string) => void;
 }) {
-  const lead = marker.events[0];
-  const unit = marker.events.find((event) => event.unit)?.unit ?? null;
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const lead = marker.events.find((event) => event.id === focusedId) ?? marker.events[0];
+  const unit = lead.unit;
   return (
     <section className="boot-event-inspector" aria-label="Replay event details">
       <header>
         <h3>
-          {categoryLabel(marker.category)} <span>· {formatTPlus(marker.offsetUs)}</span>
+          {categoryLabel(lead.category)}{" "}
+          <span>· {lead.offsetUs === null ? "Not recorded" : formatTPlus(lead.offsetUs)}</span>
         </h3>
         <button
           type="button"
@@ -53,7 +57,7 @@ export function BootEventInspector({
       <dl className="boot-event-fields">
         <div>
           <dt>Replay offset</dt>
-          <dd>{formatTPlus(marker.offsetUs)}</dd>
+          <dd>{lead.offsetUs === null ? "Not recorded" : formatTPlus(lead.offsetUs)}</dd>
         </div>
         <div>
           <dt>Wall-clock time</dt>
@@ -81,17 +85,26 @@ export function BootEventInspector({
         </div>
       </dl>
       <p className="boot-event-message">{lead.message}</p>
+      {lead.messageTruncated && (
+        <p className="boot-observation">Message shortened to the first 500 characters.</p>
+      )}
       {marker.count > 1 && (
         <div className="boot-event-cluster">
           <p>
-            {marker.count} similar events, from {formatTPlus(marker.spanUs[0])} to{" "}
+            {markerGroupLabel(marker)}, from {formatTPlus(marker.spanUs[0])} to{" "}
             {formatTPlus(marker.spanUs[1])}:
           </p>
           <ul>
             {marker.events.map((event) => (
               <li key={event.id}>
-                <span>{formatTPlus(event.offsetUs ?? 0)}</span>
-                <span>{event.message}</span>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => setFocusedId(event.id)}
+                >
+                  {event.offsetUs === null ? "Not recorded" : formatTPlus(event.offsetUs)} ·{" "}
+                  {event.message}
+                </button>
               </li>
             ))}
           </ul>

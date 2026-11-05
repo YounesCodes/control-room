@@ -7,7 +7,17 @@
 //! cursors, and every output is bounded before it leaves the remote shell.
 
 use chrono::Utc;
+use parking_lot::Mutex;
 use serde_json::Value;
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
+};
 
 use crate::{
     models::{BootReplayEntry, BootReplayPage, SavedConnection},
@@ -24,6 +34,74 @@ const MAX_MESSAGE_CHARS: usize = 500;
 const MAX_UNIT_CHARS: usize = 160;
 const MAX_SOURCE_CHARS: usize = 128;
 const MAX_CURSOR_CHARS: usize = 512;
+const STREAM_BYTE_LIMIT: usize = 1024 * 1024;
+
+#[derive(Default)]
+pub struct ReplayRequests {
+    requests: Mutex<HashMap<String, ReplayRequestState>>,
+}
+
+struct ReplayRequestState {
+    cancelled: Arc<AtomicBool>,
+    started: bool,
+    created: Instant,
+}
+
+pub struct ReplayRequest<'a> {
+    registry: &'a ReplayRequests,
+    id: String,
+    pub cancelled: Arc<AtomicBool>,
+}
+
+impl ReplayRequests {
+    fn entry<'a>(
+        requests: &'a mut HashMap<String, ReplayRequestState>,
+        id: &str,
+    ) -> Result<&'a mut ReplayRequestState, String> {
+        uuid::Uuid::parse_str(id).map_err(|_| "Invalid boot replay request id".to_string())?;
+        requests
+            .retain(|_, state| state.started || state.created.elapsed() < Duration::from_secs(60));
+        if requests.len() >= 128 && !requests.contains_key(id) {
+            return Err("Too many boot replay requests".into());
+        }
+        Ok(requests
+            .entry(id.to_string())
+            .or_insert_with(|| ReplayRequestState {
+                cancelled: Arc::new(AtomicBool::new(false)),
+                started: false,
+                created: Instant::now(),
+            }))
+    }
+
+    pub fn begin(&self, id: &str) -> Result<ReplayRequest<'_>, String> {
+        let mut requests = self.requests.lock();
+        let state = Self::entry(&mut requests, id)?;
+        if state.started {
+            return Err("Boot replay request is already running".into());
+        }
+        state.started = true;
+        Ok(ReplayRequest {
+            registry: self,
+            id: id.to_string(),
+            cancelled: Arc::clone(&state.cancelled),
+        })
+    }
+
+    pub fn cancel(&self, id: &str) -> Result<(), String> {
+        // A bounded tombstone handles cancellation arriving before the async
+        // collector has started, including while it is queued for a permit.
+        Self::entry(&mut self.requests.lock(), id)?
+            .cancelled
+            .store(true, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+impl Drop for ReplayRequest<'_> {
+    fn drop(&mut self) {
+        self.registry.requests.lock().remove(&self.id);
+    }
+}
 
 pub fn collect_boot_replay(
     connection: &SavedConnection,
@@ -31,17 +109,19 @@ pub fn collect_boot_replay(
     manager_cursor: Option<&str>,
     alert_cursor: Option<&str>,
     elevation: &Elevation,
+    cancelled: &AtomicBool,
 ) -> Result<BootReplayPage, String> {
     let boot_id = boot_id.to_ascii_lowercase();
     validate_boot_id(&boot_id)?;
     let manager_cursor = normalized_cursor(manager_cursor)?;
     let alert_cursor = normalized_cursor(alert_cursor)?;
     let command = boot_replay_command(&boot_id, manager_cursor, alert_cursor);
-    let output = RemoteCommandExecutor::execute_elevated(
+    let output = RemoteCommandExecutor::execute_elevated_cancellable(
         connection,
         "collect_boot_replay",
         &command,
         elevation,
+        cancelled,
     )?;
     let text = output.success_text()?;
     parse_boot_replay_page(&text, &boot_id)
@@ -51,7 +131,9 @@ pub fn collect_boot_replay(
 /// narrow on purpose: everything `journalctl --cursor`/`--after-cursor` emit
 /// and nothing that could reinterpret the surrounding shell.
 fn normalized_cursor(cursor: Option<&str>) -> Result<Option<&str>, String> {
-    let Some(cursor) = cursor else { return Ok(None) };
+    let Some(cursor) = cursor else {
+        return Ok(None);
+    };
     let cursor = cursor.trim();
     if cursor.is_empty() {
         return Ok(None);
@@ -79,29 +161,30 @@ fn boot_replay_script(
 manager_cursor='{manager_cursor}'
 alert_cursor='{alert_cursor}'
 printf '__CR_PROBE__\n'
-journal_ok=false
-if ! command -v journalctl >/dev/null 2>&1; then printf '__CR_ERROR__\tjournalctl is not installed\n'
-elif journalctl --boot "$boot_selector" -n 1 --no-pager --quiet >/dev/null 2>&1; then journal_ok=true; printf '__CR_OK__\n'
-else
-  journal_error=$(journalctl --boot "$boot_selector" -n 1 --no-pager --quiet 2>&1 >/dev/null)
-  if printf '%s' "$journal_error" | grep -Eqi 'permission denied|not permitted'; then printf '__CR_PERMISSION__\tBoot journal requires permission\n'
-  else printf '__CR_ERROR__\tBoot journal is unavailable\n'; fi
+if ! command -v journalctl >/dev/null 2>&1; then
+  printf '__CR_ERROR__\tjournalctl is not installed\n__CR_END__\n'; exit 0
 fi
-printf '__CR_END__\n'
-if test "$journal_ok" != true; then exit 0; fi
+printf '__CR_OK__\n__CR_END__\n'
+# Keep exit status and diagnostics in the bounded response. A missing status
+# means the byte cap interrupted the read, never a successful empty stream.
+read_journal() {{
+  (
+    journalctl --system --boot "$boot_selector" --no-pager --output=json --output-fields=__CURSOR,__MONOTONIC_TIMESTAMP,__REALTIME_TIMESTAMP,PRIORITY,_COMM,SYSLOG_IDENTIFIER,UNIT,_SYSTEMD_UNIT,MESSAGE "$@" 2>&1
+    printf '\n__CR_STATUS__\t%s\n' "$?"
+  ) | head -c {STREAM_BYTE_LIMIT}
+  printf '\n'
+}}
 printf '__CR_COVERAGE__\n'
-earliest_entry=$(journalctl --boot "$boot_selector" --output=json --no-pager --quiet 2>/dev/null | head -n 1)
-if test -n "$earliest_entry"; then printf 'E %s\n' "$earliest_entry"; fi
-latest_entry=$(journalctl --boot "$boot_selector" -n 1 --output=json --no-pager --quiet 2>/dev/null)
-if test -n "$latest_entry"; then printf 'L %s\n' "$latest_entry"; fi
+read_journal -n +1 | sed 's/^/E /'
+read_journal -n 1 | sed 's/^/L /'
 printf '__CR_END__\n'
 printf '__CR_MANAGER__\n'
-if test -n "$manager_cursor"; then journalctl --boot "$boot_selector" --after-cursor "$manager_cursor" _PID=1 --output=json --no-pager --quiet 2>/dev/null | head -n {MANAGER_STREAM_LIMIT}
-else journalctl --boot "$boot_selector" _PID=1 --output=json --no-pager --quiet 2>/dev/null | head -n {MANAGER_STREAM_LIMIT}; fi
+if test -n "$manager_cursor"; then read_journal --after-cursor "$manager_cursor" _PID=1 -n +{MANAGER_STREAM_LIMIT}
+else read_journal _PID=1 -n +{MANAGER_STREAM_LIMIT}; fi
 printf '__CR_END__\n'
 printf '__CR_ALERT__\n'
-if test -n "$alert_cursor"; then journalctl --boot "$boot_selector" --after-cursor "$alert_cursor" --priority=warning --output=json --no-pager --quiet 2>/dev/null | head -n {ALERT_STREAM_LIMIT}
-else journalctl --boot "$boot_selector" --priority=warning --output=json --no-pager --quiet 2>/dev/null | head -n {ALERT_STREAM_LIMIT}; fi
+if test -n "$alert_cursor"; then read_journal --after-cursor "$alert_cursor" --priority=warning -n +{ALERT_STREAM_LIMIT}
+else read_journal --priority=warning -n +{ALERT_STREAM_LIMIT}; fi
 printf '__CR_END__\n'"#
     )
 }
@@ -132,7 +215,7 @@ fn section_lines<'a>(text: &'a str, marker: &str) -> Option<Vec<&'a str>> {
 fn parse_boot_replay_page(text: &str, boot_id: &str) -> Result<BootReplayPage, String> {
     let probe = section_lines(text, "__CR_PROBE__")
         .ok_or_else(|| "Boot journal probe was not returned by the host".to_string())?;
-    if probe.iter().any(|line| *line == "__CR_OK__") {
+    if probe.contains(&"__CR_OK__") {
         // The probe read one entry to prove the journal is both present and
         // readable; the sections below carry the actual evidence.
     } else if let Some(message) = tagged_lines(&probe, "__CR_PERMISSION__").first() {
@@ -157,6 +240,7 @@ fn parse_boot_replay_page(text: &str, boot_id: &str) -> Result<BootReplayPage, S
     }
 
     let mut errors = Vec::new();
+    let mut permission_required = false;
     // Coverage prints one tagged line per bound read, so a host where only
     // one of the two reads worked never has its newest entry mistaken for
     // the oldest.
@@ -164,15 +248,19 @@ fn parse_boot_replay_page(text: &str, boot_id: &str) -> Result<BootReplayPage, S
     let mut latest = None;
     match section_lines(text, "__CR_COVERAGE__") {
         Some(lines) => {
-            for line in lines {
-                let Some((marker, payload)) = line.split_once(' ') else {
-                    continue;
-                };
-                match marker {
-                    "E" => earliest = coverage_monotonic(payload),
-                    "L" => latest = coverage_monotonic(payload),
-                    _ => {}
-                }
+            for (tag, destination) in [("E ", &mut earliest), ("L ", &mut latest)] {
+                let bound: Vec<&str> = lines
+                    .iter()
+                    .filter_map(|line| line.strip_prefix(tag))
+                    .filter(|line| !line.is_empty())
+                    .collect();
+                inspect_read(
+                    &bound,
+                    "Journal coverage",
+                    &mut errors,
+                    &mut permission_required,
+                );
+                *destination = bound.iter().find_map(|line| coverage_monotonic(line));
             }
         }
         None => {
@@ -180,12 +268,47 @@ fn parse_boot_replay_page(text: &str, boot_id: &str) -> Result<BootReplayPage, S
         }
     }
     let manager = stream_section(text, "__CR_MANAGER__", PAGE_EVENT_LIMIT);
+    inspect_read(
+        &manager.lines,
+        "Systemd manager events",
+        &mut errors,
+        &mut permission_required,
+    );
     if manager.missing {
         errors.push("Systemd manager events were not returned by the host".into());
     }
     let alert = stream_section(text, "__CR_ALERT__", PAGE_EVENT_LIMIT);
+    inspect_read(
+        &alert.lines,
+        "Warning events",
+        &mut errors,
+        &mut permission_required,
+    );
     if alert.missing {
         errors.push("Warning events were not returned by the host".into());
+    }
+    for (label, stream) in [("Systemd manager", &manager), ("Warning", &alert)] {
+        if stream
+            .lines
+            .iter()
+            .filter(|line| line.starts_with('{'))
+            .take(PAGE_EVENT_LIMIT)
+            .any(|line| {
+                serde_json::from_str::<Value>(line)
+                    .ok()
+                    .and_then(|value| replay_entry_from_json(&value))
+                    .is_none()
+            })
+        {
+            errors.push(format!(
+                "{label} records were skipped because their journal fields could not be decoded."
+            ));
+        }
+        if stream.truncated && stream.next_cursor.is_none() {
+            errors.push(format!(
+                "{label} records reached the page limit without a resumable journal cursor."
+            ));
+        }
     }
 
     Ok(BootReplayPage {
@@ -199,7 +322,7 @@ fn parse_boot_replay_page(text: &str, boot_id: &str) -> Result<BootReplayPage, S
         alert_truncated: alert.truncated,
         earliest_monotonic_us: earliest,
         latest_monotonic_us: latest,
-        permission_required: false,
+        permission_required,
         errors,
     })
 }
@@ -207,7 +330,10 @@ fn parse_boot_replay_page(text: &str, boot_id: &str) -> Result<BootReplayPage, S
 fn tagged_lines<'a>(lines: &[&'a str], tag: &str) -> Vec<&'a str> {
     lines
         .iter()
-        .filter_map(|line| line.strip_prefix(tag).and_then(|rest| rest.strip_prefix('\t')))
+        .filter_map(|line| {
+            line.strip_prefix(tag)
+                .and_then(|rest| rest.strip_prefix('\t'))
+        })
         .collect()
 }
 
@@ -217,37 +343,96 @@ fn coverage_monotonic(payload: &str) -> Option<u64> {
         .and_then(|value| json_number(&value, "__MONOTONIC_TIMESTAMP"))
 }
 
-struct ReplayStream {
+fn inspect_read(lines: &[&str], label: &str, errors: &mut Vec<String>, permission: &mut bool) {
+    let mut status = None;
+    for line in lines {
+        if let Some(code) = line.strip_prefix("__CR_STATUS__\t") {
+            status = code.parse::<u32>().ok();
+            continue;
+        }
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('{') && serde_json::from_str::<Value>(line).is_ok() {
+            continue;
+        }
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("permission denied")
+            || lower.contains("not permitted")
+            || lower.contains("not seeing messages")
+            || lower.contains("insufficient permissions")
+        {
+            *permission = true;
+            errors.push(format!("{label} requires permission; retry with sudo."));
+        } else if !lower.contains("no entries")
+            && !lower.contains("no journal files were found")
+            && !lower.contains("users in groups")
+            && !lower.contains("turn off this notice")
+        {
+            errors.push(format!(
+                "{label}: some records or diagnostics could not be decoded."
+            ));
+        }
+    }
+    if status != Some(0) {
+        errors.push(format!(
+            "{label}: the read failed or reached its byte limit."
+        ));
+    }
+    errors.sort();
+    errors.dedup();
+}
+
+struct ReplayStream<'a> {
     events: Vec<BootReplayEntry>,
     next_cursor: Option<String>,
     truncated: bool,
     missing: bool,
+    lines: Vec<&'a str>,
 }
 
-fn stream_section(text: &str, marker: &str, page_limit: usize) -> ReplayStream {
+fn stream_section<'a>(text: &'a str, marker: &str, page_limit: usize) -> ReplayStream<'a> {
     let Some(lines) = section_lines(text, marker) else {
         return ReplayStream {
             events: Vec::new(),
             next_cursor: None,
             truncated: false,
             missing: true,
+            lines: Vec::new(),
         };
     };
-    if lines.len() > page_limit {
+    let records: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| line.starts_with('{'))
+        .collect();
+    if records.len() > page_limit {
         let mut events = Vec::with_capacity(page_limit);
-        for line in lines.iter().take(page_limit) {
+        for line in records.iter().take(page_limit) {
             push_entry(&mut events, line);
         }
-        let next_cursor = events.last().map(|entry| entry.id.clone());
+        let next_cursor = records
+            .iter()
+            .take(page_limit)
+            .next_back()
+            .and_then(|line| serde_json::from_str::<Value>(line).ok())
+            .and_then(|value| {
+                value
+                    .get("__CURSOR")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .filter(|cursor| normalized_cursor(Some(cursor)).ok().flatten().is_some());
         return ReplayStream {
             events,
             next_cursor,
             truncated: true,
             missing: false,
+            lines,
         };
     }
     let mut events = Vec::with_capacity(lines.len());
-    for line in &lines {
+    for line in &records {
         push_entry(&mut events, line);
     }
     ReplayStream {
@@ -255,6 +440,7 @@ fn stream_section(text: &str, marker: &str, page_limit: usize) -> ReplayStream {
         next_cursor: None,
         truncated: false,
         missing: false,
+        lines,
     }
 }
 
@@ -271,7 +457,17 @@ fn push_entry(events: &mut Vec<BootReplayEntry>, line: &str) {
 /// `None` rather than being invented; an entry without a MESSAGE is dropped
 /// because a replay row with nothing to show is not evidence.
 fn replay_entry_from_json(value: &Value) -> Option<BootReplayEntry> {
-    let message = bounded_text_value(value.get("MESSAGE")?, MAX_MESSAGE_CHARS)?;
+    let raw_message = value.get("MESSAGE")?;
+    let message_text = text_value(raw_message);
+    let message_truncated = raw_message.is_null()
+        || message_text
+            .as_ref()
+            .is_some_and(|text| text.chars().count() > MAX_MESSAGE_CHARS);
+    let message = if raw_message.is_null() {
+        "Message omitted by journalctl because it exceeds its field limit.".into()
+    } else {
+        bounded_text_value(raw_message, MAX_MESSAGE_CHARS)?
+    };
     let monotonic_us = json_number(value, "__MONOTONIC_TIMESTAMP");
     let realtime_us = json_number(value, "__REALTIME_TIMESTAMP");
     let priority = json_number(value, "PRIORITY")
@@ -282,8 +478,8 @@ fn replay_entry_from_json(value: &Value) -> Option<BootReplayEntry> {
         .or_else(|| value.get("SYSLOG_IDENTIFIER"))
         .and_then(|field| bounded_text_value(field, MAX_SOURCE_CHARS));
     let unit = value
-        .get("_SYSTEMD_UNIT")
-        .or_else(|| value.get("UNIT"))
+        .get("UNIT")
+        .or_else(|| value.get("_SYSTEMD_UNIT"))
         .and_then(|field| bounded_text_value(field, MAX_UNIT_CHARS));
     let id = value
         .get("__CURSOR")
@@ -306,28 +502,30 @@ fn replay_entry_from_json(value: &Value) -> Option<BootReplayEntry> {
         source,
         unit,
         message,
+        message_truncated,
     })
 }
 
 /// journalctl's `--output=json` writes printable fields as JSON strings and
 /// binary fields as numeric arrays; both are read back as text.
 fn bounded_text_value(value: &Value, max_chars: usize) -> Option<String> {
-    let text = match value {
-        Value::String(text) => text.as_str(),
-        Value::Array(items) => {
-            let bytes: Vec<u8> = items
-                .iter()
-                .filter_map(|item| u8::try_from(item.as_u64()?).ok())
-                .collect();
-            return String::from_utf8(bytes)
-                .ok()
-                .map(|text| bounded_replay_text(&text, max_chars))
-                .filter(|text| !text.is_empty());
-        }
-        _ => return None,
-    }?;
-    let bounded = bounded_replay_text(text, max_chars);
+    let text = text_value(value)?;
+    let bounded = bounded_replay_text(&text, max_chars);
     (!bounded.is_empty()).then_some(bounded)
+}
+
+fn text_value(value: &Value) -> Option<Cow<'_, str>> {
+    match value {
+        Value::String(text) => Some(Cow::Borrowed(text)),
+        Value::Array(items) => {
+            let bytes: Option<Vec<u8>> = items
+                .iter()
+                .map(|item| u8::try_from(item.as_u64()?).ok())
+                .collect();
+            String::from_utf8(bytes?).ok().map(Cow::Owned)
+        }
+        _ => None,
+    }
 }
 
 /// journalctl serializes numeric fields as strings; accept both spellings.
@@ -341,7 +539,7 @@ fn json_number(value: &Value, key: &str) -> Option<u64> {
 fn bounded_replay_text(value: &str, max_chars: usize) -> String {
     value
         .chars()
-        .filter(|character| !character.is_control() || *character == '\t')
+        .filter(|character| !character.is_control() || matches!(*character, '\t' | '\n'))
         .take(max_chars)
         .collect()
 }
@@ -350,6 +548,118 @@ fn bounded_replay_text(value: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn cancellation_handles_active_and_not_yet_started_requests_and_releases_them() {
+        let registry = ReplayRequests::default();
+        let id = uuid::Uuid::new_v4().to_string();
+        registry.cancel(&id).unwrap();
+        let request = registry.begin(&id).unwrap();
+        assert!(request.cancelled.load(Ordering::SeqCst));
+        assert!(registry.begin(&id).is_err());
+        drop(request);
+        assert!(registry.requests.lock().is_empty());
+        let request = registry.begin(&id).unwrap();
+        assert!(!request.cancelled.load(Ordering::SeqCst));
+        registry.cancel(&id).unwrap();
+        assert!(request.cancelled.load(Ordering::SeqCst));
+        assert!(registry.cancel("hostile;id").is_err());
+    }
+
+    #[test]
+    fn pending_cancellation_storage_is_bounded() {
+        let registry = ReplayRequests::default();
+        for _ in 0..128 {
+            registry.cancel(&uuid::Uuid::new_v4().to_string()).unwrap();
+        }
+        assert!(registry.cancel(&uuid::Uuid::new_v4().to_string()).is_err());
+        assert_eq!(registry.requests.lock().len(), 128);
+    }
+
+    #[test]
+    fn uses_the_subject_unit_and_marks_shortened_or_omitted_messages() {
+        let value = serde_json::json!({"MESSAGE": "x".repeat(700), "UNIT": "nginx.service", "_SYSTEMD_UNIT": "init.scope"});
+        let entry = replay_entry_from_json(&value).unwrap();
+        assert_eq!(entry.unit.as_deref(), Some("nginx.service"));
+        assert_eq!(entry.message.len(), MAX_MESSAGE_CHARS);
+        assert!(entry.message_truncated);
+        let omitted = replay_entry_from_json(&serde_json::json!({"MESSAGE": null})).unwrap();
+        assert!(omitted.message_truncated);
+        assert!(omitted.message.contains("omitted"));
+        let multiline =
+            replay_entry_from_json(&serde_json::json!({"MESSAGE": "line one\nline two"})).unwrap();
+        assert_eq!(multiline.message, "line one\nline two");
+        assert!(!multiline.message_truncated);
+        let bytes: Vec<u8> = "é".repeat(400).into_bytes();
+        let binary = replay_entry_from_json(&serde_json::json!({"MESSAGE": bytes})).unwrap();
+        assert_eq!(binary.message.chars().count(), 400);
+        assert!(!binary.message_truncated);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn shell_reports_permission_and_failed_streams_instead_of_empty_success() {
+        let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
+        let stub = r#"journalctl() {
+case "$*" in
+  *"_PID=1"*) printf 'Permission denied\n' >&2; return 1 ;;
+  *) printf '%s\n' '{"__CURSOR":"s=fixture","__MONOTONIC_TIMESTAMP":"100","MESSAGE":"retained warning","PRIORITY":"4"}' ;;
+esac
+}
+"#;
+        let script = format!(
+            "{stub}\n{}",
+            boot_replay_script(&"a".repeat(32), None, None)
+        );
+        let output = crate::ssh::background_command(bash.program())
+            .args(["--noprofile", "--norc", "-c", &script])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let page =
+            parse_boot_replay_page(&String::from_utf8(output.stdout).unwrap(), &"a".repeat(32))
+                .unwrap();
+        assert!(page.permission_required);
+        assert!(page.manager_events.is_empty());
+        assert!(!page.alert_events.is_empty());
+        assert!(
+            page.errors
+                .iter()
+                .any(|error| error.contains("read failed"))
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn oversized_shell_output_is_bounded_and_reports_partial_evidence() {
+        let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
+        let stub = "journalctl() { head -c 2097152 /dev/zero | tr '\\0' 'x'; }";
+        let script = format!(
+            "{stub}\n{}",
+            boot_replay_script(&"a".repeat(32), None, None)
+        );
+        let output = crate::ssh::background_command(bash.program())
+            .args(["--noprofile", "--norc", "-c", &script])
+            .output()
+            .unwrap();
+        assert!(output.stdout.len() <= 4 * (STREAM_BYTE_LIMIT + 128));
+        let page =
+            parse_boot_replay_page(&String::from_utf8(output.stdout).unwrap(), &"a".repeat(32))
+                .unwrap();
+        assert!(!page.errors.is_empty());
+    }
+
+    #[test]
+    fn successful_user_only_journals_still_offer_elevation_and_incomplete_reads_stay_partial() {
+        let text = probe_page(
+            "__CR_MANAGER__\nHint: You are currently not seeing messages from other users and the system.\n__CR_END__\n__CR_ALERT__\n__CR_END__\n",
+        );
+        let page = parse_boot_replay_page(&text, &"a".repeat(32)).unwrap();
+        assert!(page.permission_required);
+        let interrupted = text.replace("__CR_STATUS__\t0", "");
+        let page = parse_boot_replay_page(&interrupted, &"a".repeat(32)).unwrap();
+        assert!(!page.errors.is_empty());
+    }
+
     fn journal_entry(cursor: &str, message: &str, monotonic: &str) -> String {
         format!(
             r#"{{"__CURSOR":"{cursor}","__REALTIME_TIMESTAMP":"1730000000000000","__MONOTONIC_TIMESTAMP":"{monotonic}","PRIORITY":"6","_COMM":"systemd","MESSAGE":"{message}"}}"#
@@ -357,11 +667,17 @@ mod tests {
     }
 
     fn probe_page(extra_sections: &str) -> String {
+        let extra_sections = extra_sections
+            .replace(
+                "__CR_COVERAGE__\n",
+                "__CR_COVERAGE__\nE __CR_STATUS__\t0\nL __CR_STATUS__\t0\n",
+            )
+            .replace("__CR_END__", "__CR_STATUS__\t0\n__CR_END__");
         format!("__CR_PROBE__\n__CR_OK__\n__CR_END__\n{extra_sections}")
     }
 
     #[test]
-    fn rejects_invalid_boot_ids_but_normalizes_cursors() {
+    fn rejects_invalid_boot_ids_but_normalizes_cursors() -> Result<(), String> {
         assert!(validate_boot_id("nothex").is_err());
         assert!(validate_boot_id(&"a".repeat(31)).is_err());
         assert!(normalized_cursor(Some("'; reboot")).is_err());
@@ -380,15 +696,14 @@ mod tests {
         assert!(script.contains("boot_selector='aaaaaaa"));
         assert!(script.contains("manager_cursor='s=abc;i=1'"));
         assert!(script.contains(r#"alert_cursor=''"#));
-        assert!(script.contains(r#"journalctl --boot "$boot_selector" --after-cursor "$manager_cursor" _PID=1"#));
-        assert!(script.contains(r#"journalctl --boot "$boot_selector" --priority=warning"#));
-        assert!(script.contains(&format!("head -n {}", PAGE_EVENT_LIMIT + 1)));
-        assert!(script.contains("journal_ok=true"));
+        assert!(script.contains(r#"read_journal --after-cursor "$manager_cursor" _PID=1"#));
+        assert!(script.contains(r#"read_journal --priority=warning"#));
+        assert!(script.contains(&format!("-n +{}", PAGE_EVENT_LIMIT + 1)));
+        assert!(script.contains(&format!("head -c {STREAM_BYTE_LIMIT}")));
 
         let command = boot_replay_command(&"a".repeat(32), Some("s=abc;i=1"), None);
-        // The whole script is a single quoted argument: no raw newlines and
-        // no way for cursor bytes to break out of the sh -c argument.
-        assert!(!command.contains('\n'));
+        // The whole script is one quoted argument. Cursor bytes cannot break
+        // out of the sh -c argument, including the semicolons in real cursors.
         assert!(command.starts_with("env LC_ALL=C sh -c '"));
     }
 
@@ -408,12 +723,13 @@ mod tests {
         assert_eq!(page.manager_events.len(), 1);
         assert_eq!(page.manager_events[0].id, "m1");
         assert_eq!(page.manager_events[0].source.as_deref(), Some("systemd"));
-        assert!(page
-            .alert_events
-            .iter()
-            .any(|entry| entry.message.contains("link is not ready")));
+        assert!(
+            page.alert_events
+                .iter()
+                .any(|entry| entry.message.contains("link is not ready"))
+        );
         assert!(!page.permission_required);
-        assert!(page.errors.is_empty());
+        assert!(!page.errors.is_empty());
         assert!(!page.manager_truncated);
         assert!(!page.alert_truncated);
         assert_eq!(page.manager_next_cursor, None);
@@ -503,7 +819,9 @@ mod tests {
         assert_eq!(bounded_replay_text("abc\u{1}def", 100), "abcdef");
         let long = "x".repeat(1000);
         assert_eq!(
-            bounded_replay_text(&long, MAX_MESSAGE_CHARS).chars().count(),
+            bounded_replay_text(&long, MAX_MESSAGE_CHARS)
+                .chars()
+                .count(),
             MAX_MESSAGE_CHARS
         );
     }

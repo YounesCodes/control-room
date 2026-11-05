@@ -5,6 +5,8 @@ import {
   BOOT_REPLAY_SPEEDS,
   DEFAULT_BOOT_REPLAY_WINDOW_SECONDS,
   MAX_AUTO_REPLAY_PAGES,
+  MAX_REPLAY_EVENTS,
+  layoutReplayMarkers,
   classifyReplayEntry,
   describeReplayCoverage,
   emptyReplayEvidence,
@@ -35,6 +37,7 @@ function entry(overrides: Partial<BootReplayEntry> = {}): BootReplayEntry {
     source: "systemd",
     unit: null,
     message: "Reached target Basic System.",
+    messageTruncated: false,
     ...overrides,
   };
 }
@@ -90,6 +93,11 @@ describe("replay classification", () => {
   });
 
   it("keeps manager failures as errors regardless of recorded priority", () => {
+    expect(
+      classifyReplayEntry(
+        entry({ source: "application", priority: 6, message: "Failed to start a previous job" }),
+      ),
+    ).toBe("journal");
     expect(
       classifyReplayEntry(entry({ priority: 6, message: "Failed to start app.service." })),
     ).toBe("error");
@@ -285,6 +293,7 @@ function toEvent(raw: BootReplayEntry) {
     source: raw.source,
     unit: raw.unit,
     message: raw.message,
+    messageTruncated: raw.messageTruncated,
     category: classifyReplayEntry(raw),
     provenance: "journal" as const,
     classification: "observed" as const,
@@ -292,6 +301,73 @@ function toEvent(raw: BootReplayEntry) {
 }
 
 describe("coverage descriptions", () => {
+  it("bounds retained evidence across repeated explicit loads", () => {
+    let evidence = emptyReplayEvidence();
+    for (let start = 0; start <= MAX_REPLAY_EVENTS; start += 250) {
+      evidence = mergeReplayEvidence(
+        evidence,
+        page({
+          managerEvents: Array.from({ length: 250 }, (_, index) =>
+            entry({ id: `m${start + index}`, monotonicUs: start + index }),
+          ),
+          managerTruncated: true,
+          managerNextCursor: `s=${start}`,
+        }),
+      );
+    }
+    expect(evidence.loadedCount).toBe(MAX_REPLAY_EVENTS);
+    expect(evidence.limitReached).toBe(true);
+    expect(shouldContinueReplayPagination(evidence, 120_000_000, 0)).toBe(false);
+    expect(describeReplayCoverage(evidence, 120_000_000, null).label).toBe("Limit reached");
+  });
+
+  it("groups by actual track width without changing the source markers", () => {
+    const markers = groupReplayMarkers(
+      [
+        toEvent(entry({ id: "one", monotonicUs: 1_000_000, message: "first" })),
+        toEvent(entry({ id: "two", monotonicUs: 2_000_000, message: "second" })),
+      ],
+      120_000_000,
+    );
+    expect(layoutReplayMarkers(markers, 120_000_000, 600)).toHaveLength(1);
+    expect(layoutReplayMarkers(markers, 120_000_000, 2400)).toHaveLength(2);
+    expect(markers[0].count).toBe(1);
+    expect(markers[0].spanUs).toEqual([1_000_000, 1_000_000]);
+  });
+  it("continues each stream independently when the other passes the window", () => {
+    const evidence = mergeReplayEvidence(
+      null,
+      page({
+        managerEvents: [entry({ id: "m", monotonicUs: 200_000_000 })],
+        alertEvents: [entry({ id: "a", monotonicUs: 5_000_000, priority: 4 })],
+        alertTruncated: true,
+        alertNextCursor: "s=next",
+      }),
+    );
+    expect(shouldContinueReplayPagination(evidence, 120_000_000, 1)).toBe(true);
+    expect(describeReplayCoverage(evidence, 120_000_000, null).kind).toBe("partial");
+  });
+
+  it("reports incomplete reads before empty or complete evidence", () => {
+    const loaded = mergeReplayEvidence(null, page({ managerEvents: [entry()] }));
+    expect(
+      describeReplayCoverage(loaded, 120_000_000, "Connection lost on the next page").kind,
+    ).toBe("partial");
+    for (const managerEvents of [[], [entry()]]) {
+      const evidence = mergeReplayEvidence(
+        null,
+        page({
+          managerEvents,
+          errors: ["Warning events were not returned by the host"],
+          latestMonotonicUs: 200_000_000,
+        }),
+      );
+      expect(describeReplayCoverage(evidence, 120_000_000, null).kind).toBe("partial");
+      expect(describeReplayCoverage(evidence, 120_000_000, null).explanation).toContain(
+        "Warning events",
+      );
+    }
+  });
   it("separates permission, failure, emptiness, and partial truth", () => {
     expect(describeReplayCoverage(null, 120_000_000, null).kind).toBe("loading");
     expect(describeReplayCoverage(emptyReplayEvidence(), 120_000_000, "ssh failed").kind).toBe(

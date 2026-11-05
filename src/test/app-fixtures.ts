@@ -213,6 +213,7 @@ export function bootReplay(): BootReplayPage {
         source: "systemd",
         unit: null,
         message: "Reached target Basic System.",
+        messageTruncated: false,
       },
       {
         id: "cursor-unit",
@@ -222,6 +223,7 @@ export function bootReplay(): BootReplayPage {
         source: "systemd",
         unit: null,
         message: `Started ${service.id}.`,
+        messageTruncated: false,
       },
     ],
     alertEvents: [
@@ -233,6 +235,7 @@ export function bootReplay(): BootReplayPage {
         source: "fixture",
         unit: service.id,
         message: "fixture boot warning",
+        messageTruncated: false,
       },
     ],
     managerNextCursor: null,

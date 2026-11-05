@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   collectBootDiagnostics: vi.fn(),
   collectBootReplay: vi.fn(),
+  cancelBootReplay: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -247,9 +248,43 @@ describe("BootDiagnosticsPane", () => {
       null,
       null,
       null,
+      expect.any(String),
     );
     expect(screen.getByRole("slider", { name: "Replay position in this window" })).toBeTruthy();
     expect(screen.getByLabelText("Replay speed")).toBeTruthy();
+  });
+
+  it("retries a failed refresh even after the previous replay finished loading", async () => {
+    await loadPane();
+    api.collectBootReplay.mockRejectedValueOnce(new Error("refresh failed"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await flushRendering();
+    expect(api.collectBootReplay).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Retry reading the journal" }));
+    await flushRendering();
+    expect(api.collectBootReplay).toHaveBeenCalledTimes(3);
+  });
+
+  it("opens the evidence for an untimed journal record", async () => {
+    await loadPane({
+      replay: replayEvidencePage({
+        managerEvents: [],
+        alertEvents: [
+          replayEntry({
+            id: "untimed",
+            monotonicUs: null,
+            priority: 3,
+            message: "untimed disk failure",
+          }),
+        ],
+      }),
+    });
+    fireEvent.click(screen.getByText("Show loaded events"));
+    fireEvent.click(screen.getByRole("button", { name: /untimed disk failure/ }));
+    expect(screen.getByRole("region", { name: "Replay event details" }).textContent).toContain(
+      "untimed disk failure",
+    );
+    expect(screen.getAllByText("Not recorded").length).toBeGreaterThan(0);
   });
 
   it("names boots by distance rather than by journalctl's negative index", async () => {
@@ -330,20 +365,120 @@ describe("BootDiagnosticsPane", () => {
     expect(clusterInspector.textContent).toContain("2 similar events, from T+0:10.0");
   });
 
-  it("steps distinct markers apart when they would paint over each other", async () => {
-    await loadPane();
-    // The two failure records land 0.8s apart — closer than one glyph width —
-    // so the second one takes a step down the lane instead of overlapping.
+  it("keeps three simultaneous failures accessible through one counted marker", async () => {
+    await loadPane({
+      replay: replayEvidencePage({
+        alertEvents: [
+          replayEntry({
+            id: "disk",
+            priority: 3,
+            monotonicUs: 42_000_000,
+            message: "disk failure",
+          }),
+          replayEntry({
+            id: "network",
+            priority: 3,
+            monotonicUs: 42_000_000,
+            message: "network failure",
+          }),
+          replayEntry({
+            id: "database",
+            priority: 3,
+            monotonicUs: 42_000_000,
+            message: "database failure",
+          }),
+        ],
+      }),
+    });
     fireEvent.change(screen.getByRole("slider", { name: "Replay position in this window" }), {
       target: { value: 44_000_000 },
     });
     await flushRendering(2);
-    const staggered = document.querySelector(".boot-marker-staggered");
-    expect(staggered).toBeTruthy();
-    expect(staggered?.getAttribute("aria-label")).toContain("Failed with result");
-    // The earlier failure of the pair keeps its default row center.
-    const bindMarker = screen.getByRole("button", { name: /Failure at 42s: bind\(\) failed/ });
-    expect(bindMarker.className).not.toContain("boot-marker-staggered");
+    expect(document.querySelectorAll(".boot-marker-error")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /3 events/ }));
+    const inspector = screen.getByRole("region", { name: "Replay event details" });
+    for (const message of ["disk failure", "network failure", "database failure"]) {
+      fireEvent.click(within(inspector).getByRole("button", { name: new RegExp(message) }));
+      expect(inspector.querySelector(".boot-event-message")?.textContent).toBe(message);
+    }
+  });
+
+  it("cancels an in-flight native read on unmount and ignores its late response", async () => {
+    let resolvePage!: (value: BootReplayPage) => void;
+    api.collectBootReplay.mockImplementation(
+      () =>
+        new Promise<BootReplayPage>((resolve) => {
+          resolvePage = resolve;
+        }),
+    );
+    const view = await loadPane();
+    const requestId = api.collectBootReplay.mock.calls[0][5];
+    view.unmount();
+    expect(api.cancelBootReplay).toHaveBeenCalledWith(requestId);
+    await act(async () => resolvePage(replayEvidencePage()));
+    expect(api.collectBootReplay).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels shortened evidence in the inspector", async () => {
+    await loadPane({
+      replay: replayEvidencePage({
+        alertEvents: [
+          replayEntry({
+            id: "short",
+            priority: 3,
+            monotonicUs: 1_000_000,
+            message: "shortened evidence",
+            messageTruncated: true,
+          }),
+        ],
+      }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next notable event" }));
+    expect(screen.getByText(/Message shortened/)).toBeTruthy();
+  });
+
+  it("clears replay evidence and stops playback when the host disconnects", async () => {
+    const view = await loadPane();
+    fireEvent.click(screen.getByRole("button", { name: "Next notable event" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play replay" }));
+    view.rerender(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot()}
+        connected={false}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("region", { name: "Replay event details" })).toBeNull();
+    expect(summaryTile("Notable issues")).toBe("—");
+    expect(summaryTile("Evidence")).toBe("Unavailable");
+    expect(
+      (screen.getByRole("button", { name: "Play replay" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(api.collectBootReplay).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores session window and speed choices without restoring journal data", async () => {
+    api.collectBootReplay.mockResolvedValue(replayEvidencePage());
+    const onChange = vi.fn();
+    render(
+      <BootDiagnosticsPane
+        connection={connection}
+        snapshot={snapshot()}
+        replayPreferences={{ windowSeconds: 300, speed: 5 }}
+        onReplayPreferencesChange={onChange}
+        onSnapshotChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    await flushRendering();
+    expect((screen.getByLabelText("Replay window") as HTMLSelectElement).value).toBe("300");
+    expect((screen.getByLabelText("Replay speed") as HTMLSelectElement).value).toBe("5");
+    fireEvent.change(screen.getByLabelText("Replay window"), { target: { value: "60" } });
+    expect(onChange).toHaveBeenCalledWith({ windowSeconds: 60, speed: 5 });
+    fireEvent.change(screen.getByLabelText("Replay speed"), { target: { value: "10" } });
+    expect(onChange).toHaveBeenLastCalledWith({ windowSeconds: 60, speed: 10 });
   });
 
   it("skips directly between notable events with previous and next", async () => {
@@ -439,6 +574,7 @@ describe("BootDiagnosticsPane", () => {
       "s=first",
       "s=alert",
       null,
+      expect.any(String),
     );
   });
 
@@ -536,7 +672,9 @@ describe("BootDiagnosticsPane", () => {
       latestMonotonicUs: null,
     });
     await loadPane({ replay: emptyPage });
-    expect(screen.getByText("No events were retained in this replay window.")).toBeTruthy();
+    expect(
+      screen.getByText("No matching events were returned in this replay window."),
+    ).toBeTruthy();
     expect(summaryTile("Notable issues")).toBe("—");
     expect(summaryTile("Evidence")).toBe("No records");
     await userEvent.click(screen.getByText("Show loaded events"));

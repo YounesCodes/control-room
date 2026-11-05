@@ -242,11 +242,13 @@ export const api = {
     connectionId: string,
     bootId: string | null,
     sudoPassword: string | null = null,
+    requestId: string | null = null,
   ) =>
     invokeRemoteInspection<BootDiagnostics>("collect_boot_diagnostics", {
       connectionId,
       bootId,
       sudoPassword,
+      requestId,
     }),
   collectBootReplay: (
     connectionId: string,
@@ -254,6 +256,7 @@ export const api = {
     managerCursor: string | null,
     alertCursor: string | null,
     sudoPassword: string | null = null,
+    requestId: string | null = null,
   ) =>
     invokeRemoteInspection<BootReplayPage>("collect_boot_replay", {
       connectionId,
@@ -261,7 +264,9 @@ export const api = {
       managerCursor,
       alertCursor,
       sudoPassword,
+      requestId,
     }),
+  cancelBootReplay: (requestId: string) => invoke<void>("cancel_boot_replay", { requestId }),
   startJournalStream: (
     connectionId: string,
     service: string,

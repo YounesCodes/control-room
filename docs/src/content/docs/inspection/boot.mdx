@@ -11,6 +11,10 @@ The replay window covers the first 2 minutes of the boot by default. Choose 30 s
 
 The timeline shows three lanes at most — milestones, unit events, and warnings or failures — and only the lanes that have evidence. Click a marker to see its timestamp, source, unit, the raw journal message, and how many similar events a cluster stands for. **Show loaded events** opens a searchable list of everything loaded in the window, with **Load more** when the journal still has retained pages.
 
+Nearby markers combine when they would overlap. Open the counted marker, then choose an event to inspect its own message and unit. Records without a boot-relative timestamp remain available in **Show loaded events**. Shortened or omitted messages are labeled.
+
+Each investigation holds at most 5,000 records in memory. **Limit reached** means more evidence may exist. Partial reads and permission failures keep their explanation and retry action. Leaving Boot Timeline or selecting another boot cancels an unfinished journal read.
+
 **Current-boot diagnostics** below the timeline keeps the contemporaneous reads for the running boot: total, kernel, and userspace timing, the slowest units, and current failed units. These describe the system now, so they are not part of historical replays.
 
-Nothing here is saved: replay evidence stays in memory for the session only, and the connecting account is never elevated without the one-time sudo retry it asks for.
+Replay evidence stays in memory and clears when you leave the view or disconnect. The tab remembers your selected boot, replay window, and speed until it closes. Reads follow the connection's sudo setting; **Retry with sudo** supplies a password for that read only.

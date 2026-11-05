@@ -8,13 +8,12 @@ use crate::{
     models::{
         AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
         BaselineTrace, BootDiagnostics, BootReplayPage, ConnectionGroup, ConnectionTag,
-        DockerContainer,
-        DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
-        HeaderMetric, HeaderMetrics, HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary,
-        HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted,
-        LocalShellCatalog, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
-        ScratchpadNote, ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted,
-        SystemdUnit,
+        DockerContainer, DockerContainerDetails, EnvironmentInfo, EstablishedConnections,
+        FirewallStatus, HeaderMetric, HeaderMetrics, HistoryEntry, HistoryInput, HostBaseline,
+        HostBaselineSummary, HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
+        LocalSessionStarted, LocalShellCatalog, PersistedWorkspaceState, SavedConnection,
+        SavedConnectionInput, ScratchpadNote, ScratchpadNoteInput, SessionStarted,
+        SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -522,27 +521,51 @@ pub fn inspect_container(
 pub fn collect_boot_diagnostics(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
+    requests: State<'_, crate::boot_replay::ReplayRequests>,
     connection_id: String,
     boot_id: Option<String>,
     sudo_password: Option<String>,
+    request_id: Option<String>,
 ) -> Result<BootDiagnostics, String> {
-    let _permit = limiter.acquire(&connection_id)?;
+    let request = request_id
+        .as_deref()
+        .map(|id| requests.begin(id))
+        .transpose()?;
+    let _permit = if let Some(request) = &request {
+        limiter.acquire_cancellable(&connection_id, &request.cancelled)
+    } else {
+        limiter.acquire(&connection_id)
+    }?;
     let connection = database.get_connection(&connection_id)?;
     let elevation = elevation_for(&database, &connection, sudo_password)?;
-    remote::collect_boot_diagnostics(&connection, boot_id.as_deref(), elevation)
+    if let Some(request) = &request {
+        remote::collect_boot_diagnostics_cancellable(
+            &connection,
+            boot_id.as_deref(),
+            elevation,
+            Some(&request.cancelled),
+        )
+    } else {
+        remote::collect_boot_diagnostics(&connection, boot_id.as_deref(), elevation)
+    }
 }
 
 #[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
 pub fn collect_boot_replay(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
+    requests: State<'_, crate::boot_replay::ReplayRequests>,
     connection_id: String,
     boot_id: String,
     manager_cursor: Option<String>,
     alert_cursor: Option<String>,
     sudo_password: Option<String>,
+    request_id: Option<String>,
 ) -> Result<BootReplayPage, String> {
-    let _permit = limiter.acquire(&connection_id)?;
+    let request_id = request_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let request = requests.begin(&request_id)?;
+    let _permit = limiter.acquire_cancellable(&connection_id, &request.cancelled)?;
     let connection = database.get_connection(&connection_id)?;
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     crate::boot_replay::collect_boot_replay(
@@ -551,7 +574,16 @@ pub fn collect_boot_replay(
         manager_cursor.as_deref(),
         alert_cursor.as_deref(),
         &elevation,
+        &request.cancelled,
     )
+}
+
+#[tauri::command]
+pub fn cancel_boot_replay(
+    requests: State<'_, crate::boot_replay::ReplayRequests>,
+    request_id: String,
+) -> Result<(), String> {
+    requests.cancel(&request_id)
 }
 
 #[allow(clippy::too_many_arguments)]
