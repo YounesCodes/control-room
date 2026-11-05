@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { LocalShellIcon } from "../components/LocalShellIcon";
@@ -12,8 +19,6 @@ import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
-import { contrastRatio } from "../lib/color-contrast";
-import { TERMINAL_BACKGROUND } from "../lib/terminal-theme";
 import { Search } from "../components/MagnifierIcon";
 
 const categories = [
@@ -189,6 +194,27 @@ export function SettingsPane({
   const [category, setCategory] = useState<Category>("general");
   const [search, setSearch] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const previousCategory = useRef(category);
+  useLayoutEffect(() => {
+    if (previousCategory.current === category) return;
+    previousCategory.current = category;
+    const form = formRef.current;
+    if (!form?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const styles = getComputedStyle(document.documentElement);
+    const time = /^(\d*\.?\d+)(ms|s)$/.exec(styles.getPropertyValue("--motion-med").trim());
+    const animation = form.animate(
+      [
+        { opacity: 0.7, transform: "translateY(4px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      {
+        duration: time ? Number(time[1]) * (time[2] === "s" ? 1000 : 1) : 180,
+        easing: styles.getPropertyValue("--ease").trim() || "ease-out",
+      },
+    );
+    return () => animation.cancel();
+  }, [category]);
   const positions = useRef<Partial<Record<Category, number>>>({});
   const query = search.trim().toLowerCase();
   const sectionProps = { category, query };
@@ -206,9 +232,6 @@ export function SettingsPane({
       if (bodyRef.current) bodyRef.current.scrollTop = positions.current[next] ?? 0;
     });
   }
-  const lowContrastColors = terminalColorFields
-    .filter(([field]) => contrastRatio(draft[field], TERMINAL_BACKGROUND) < 4.5)
-    .map(([, label]) => label);
 
   /* Manual checks stay available with the automatic preference off: turning the
      schedule off is not the same as refusing to look. */
@@ -408,6 +431,7 @@ export function SettingsPane({
               </p>
             )}
             <form
+              ref={formRef}
               id="settings-form"
               className="settings-form"
               onSubmit={submit}
@@ -560,12 +584,6 @@ export function SettingsPane({
                         </label>
                       ))}
                     </div>
-                    {lowContrastColors.length > 0 && (
-                      <p className="inline-warning terminal-color-warning" role="status">
-                        Hard to read on the terminal background: {lowContrastColors.join(", ")}.
-                        Choose a brighter color or reset the colors.
-                      </p>
-                    )}
                   </div>
                   <div className="terminal-appearance-preview">
                     <strong>Live preview</strong>

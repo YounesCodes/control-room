@@ -726,6 +726,39 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("reveals Settings categories as one form, cancels interrupted motion and respects reduced motion", async () => {
+    await page.viewport(1200, 720);
+    mount(<SettingsFixture />);
+    await expect.element(page.getByRole("searchbox", { name: "Search settings" })).toBeVisible();
+    const original = window.matchMedia.bind(window);
+    let reduced = false;
+    const media = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+      const result = original(query);
+      if (query.includes("prefers-reduced-motion"))
+        Object.defineProperty(result, "matches", { value: reduced });
+      return result;
+    });
+    try {
+      const form = container!.querySelector("form")!;
+      const font = form.querySelector('input[type="number"]');
+      await page.getByRole("button", { name: "Terminal", exact: true }).click();
+      const first = form.getAnimations()[0];
+      expect(first).toBeDefined();
+      first.pause();
+      first.currentTime = 60;
+      expect(Number(getComputedStyle(form).opacity)).toBeLessThan(1);
+      expect(getComputedStyle(form).transform).not.toBe("none");
+      await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+      expect(first.playState).toBe("idle");
+      expect(form.querySelector('input[type="number"]')).toBe(font);
+      reduced = true;
+      await page.getByRole("button", { name: "General & Monitoring", exact: true }).click();
+      expect(form.getAnimations()).toHaveLength(0);
+    } finally {
+      media.mockRestore();
+    }
+  });
+
   it.each([768, 1200])("integrates search and shell preferences at %ipx", async (width) => {
     await page.viewport(width, 720);
     mount(<SettingsFixture />);

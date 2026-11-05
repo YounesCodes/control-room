@@ -430,8 +430,7 @@ Defaults use classic CGA bright colors for prompts and ANSI output, with slightl
 text on black.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview
-and any readability warning when the picker closes, and let the user save a
-deliberate low-contrast choice.
+when the picker closes and save the chosen colors without readability warnings.
 
 Use borders and restrained fills to separate controls and surfaces. Make the
 selected state easy to locate without shifting nearby content. Selected Saved
@@ -457,6 +456,8 @@ wrap or truncate deliberately so they do not force a pane wider.
 
 Search fields use compact type and height, an inset icon with a clear gutter,
 a quiet surface border, and one visible focus border without an extra glow.
+Use the same compact proportions for ordinary form inputs and selectors across
+the app. Keep dropdown chevrons smaller than the values beside them.
 
 Use the existing spacing, radius, and motion tokens. Prefer layout gaps over
 one-off margins. Keep related controls grouped and leave enough room between
@@ -604,7 +605,8 @@ Settings uses readable section titles. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.
 Arrange colors in a compact grid; stack the preview above its controls on narrow
-windows. Category changes use a short entrance that respects reduced motion.
+windows. Category changes reveal the whole form together with the Systemd unit fade and
+vertical motion, preserving draft controls and respecting reduced motion.
 
 Automatic terminal titles default to on. Use only shell-reported executable or
 title metadata, reduced to a bounded executable name without arguments or paths.

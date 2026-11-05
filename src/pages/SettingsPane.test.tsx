@@ -373,37 +373,26 @@ describe("Settings actions", () => {
     expect(preference.checked).toBe(true);
   });
 
-  it("warns about a terminal colour that is hard to read", () => {
+  it("accepts low-contrast colors without warnings", async () => {
     renderPane({ settings: { ...settings, terminalBlue: "#111111" } });
-
-    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
-  });
-
-  it("does not move the active color picker when contrast drops", () => {
-    renderPane();
     const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
-    const controls = picker.closest(".terminal-color-grid") as HTMLElement;
-
-    fireEvent.change(picker, { target: { value: "#111111" } });
-
-    const warning = screen.getByText(/ANSI 4.*Choose a brighter color/);
+    expect(screen.queryByText(/Hard to read|Choose a brighter color/)).toBeNull();
+    fireEvent.change(picker, { target: { value: "#090909" } });
     expect(picker.isConnected).toBe(true);
-    expect(
-      controls.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalBlue: "#090909" }),
+    );
   });
 
-  it("waits until the native picker closes before showing a contrast warning", () => {
+  it("commits color changes only after the native picker closes", () => {
     renderPane();
     const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
-
     fireEvent.input(picker, { target: { value: "#111111" } });
-    expect(screen.queryByText(/ANSI 4.*Choose a brighter color/)).toBeNull();
     expect(saveButton().disabled).toBe(true);
-
     fireEvent.change(picker, { target: { value: "#111111" } });
-    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
     expect(saveButton().disabled).toBe(false);
+    expect(screen.queryByText(/Hard to read|Choose a brighter color/)).toBeNull();
   });
 
   it("uses swatches without hex fields or contrast numbers", () => {

@@ -279,7 +279,7 @@ export function FontCatalogPicker({
                 }
               }}
             />
-            <ChevronDown size={15} aria-hidden="true" />
+            <ChevronDown size={11} aria-hidden="true" />
           </div>
         </label>
         <ul
