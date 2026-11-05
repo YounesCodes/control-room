@@ -759,6 +759,7 @@ describe("critical UI in Chromium", () => {
     await userEvent.keyboard("{ArrowDown}");
     const terminal = page.getByRole("button", { name: "Terminal", exact: true });
     await expect.element(terminal).toHaveFocus();
+    expect(getComputedStyle(terminal.element()).outlineStyle).toBe("none");
     await expect.element(terminal).toHaveAttribute("aria-current", "page");
     const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
     await size.fill("18");

@@ -5937,6 +5937,10 @@ dd {
     color var(--motion-fast) var(--ease);
 }
 
+.settings-navigation button:focus-visible {
+  outline: none;
+}
+
 .settings-navigation button:hover {
   background: var(--fill-hover);
   color: var(--text);
