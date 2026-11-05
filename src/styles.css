@@ -5962,17 +5962,38 @@ dd {
 .settings-subnavigation {
   display: flex;
   flex: none;
-  gap: 4px;
+  gap: 6px;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 8px var(--settings-gutter);
+  padding: 10px var(--settings-gutter);
 }
 
 .settings-subnavigation button {
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
+  transition:
+    background var(--motion-fast) var(--ease),
+    border-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.settings-subnavigation button[aria-selected="true"] {
+  background: var(--fill-selected);
+  border-color: var(--border);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-terminal-panel {
+  min-width: 0;
+}
+
+.settings-terminal-panel[hidden] {
+  display: none;
 }
 
 .settings-subnavigation button:hover {
@@ -6068,16 +6089,11 @@ dd {
   min-width: 0;
 }
 
-.settings-form[data-category="terminal"] > #settings-shells:not([hidden]) {
-  min-height: var(--settings-section-height, 0px);
-  margin-bottom: 0;
-}
-
 .settings-form fieldset[hidden] {
   display: none;
 }
 
-.settings-form > fieldset > label:not(.checkbox-label) {
+.settings-form fieldset[id] > label:not(.checkbox-label) {
   max-width: 640px;
   flex-direction: row;
   align-items: center;
@@ -6139,7 +6155,7 @@ dd {
 }
 
 @media (min-height: 700px) {
-  .settings-form > fieldset {
+  .settings-form fieldset[id] {
     gap: 20px;
     padding-top: 18px;
     margin-bottom: 36px;
@@ -8447,7 +8463,7 @@ details[open] > .inspector-disclosure-body {
     order: -1;
     position: static;
   }
-  .settings-form > fieldset > label:not(.checkbox-label) {
+  .settings-form fieldset[id] > label:not(.checkbox-label) {
     flex-wrap: wrap;
     gap: 8px;
   }

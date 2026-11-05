@@ -143,6 +143,7 @@ describe("Settings and native window", () => {
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     await enterFont("Courier New");
+    await $('[role="tab"]=Tabs & naming').click();
     await $(
       "//label[contains(.,'Show current command/process in terminal tab titles')]/input",
     ).click();
@@ -177,6 +178,7 @@ describe("Settings and native window", () => {
   it("hides and restores Command Prompt in the launcher without uninstalling it", async () => {
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
+    await $('[role="tab"]=Local shells').click();
     await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();
@@ -186,6 +188,7 @@ describe("Settings and native window", () => {
     await restartApp();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
+    await $('[role="tab"]=Local shells').click();
     await $('input[aria-label="Offer Command Prompt"]').click();
     await $("button=Save settings").click();
     await $("aria/Close Settings").click();

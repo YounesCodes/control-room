@@ -530,6 +530,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.keyboard("{Escape}");
     await page.getByRole("button", { name: "Open Settings" }).click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
     const checkbox = page.getByRole("checkbox", {
       name: "Offer PowerShell 7, run as administrator",
     });
@@ -2066,6 +2067,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
     await page.getByRole("checkbox", { name: /Command Prompt/ }).click();
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
     await vi.waitFor(() => expect(currentSettings.hiddenLocalShells).toEqual(["command-prompt"]));

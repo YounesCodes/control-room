@@ -137,6 +137,7 @@ describe("Settings actions", () => {
 
   it("defaults automatic titles to on and saves an explicit opt-out", async () => {
     renderPane();
+    fireEvent.click(screen.getByRole("tab", { name: "Tabs & naming" }));
     const preference = screen.getByRole("checkbox", {
       name: "Show current command/process in terminal tab titles",
     }) as HTMLInputElement;
@@ -149,6 +150,7 @@ describe("Settings actions", () => {
 
   it("identifies local shells and administrator profiles with their shell marks", () => {
     renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     expect(
       screen
         .getByLabelText("Offer Git Bash")
@@ -172,6 +174,7 @@ describe("Settings actions", () => {
   it("updates the default shell mark when the selected profile changes", async () => {
     const user = userEvent.setup();
     renderPane({ localShells: [powershell, gitBash] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     const select = screen.getByRole("combobox", { name: "Default local terminal" });
     expect(select.parentElement?.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
     await user.selectOptions(select, "git-bash");
@@ -295,6 +298,7 @@ describe("Settings actions", () => {
   it("saves Local Terminal Mode and the selected enabled default", async () => {
     const user = userEvent.setup();
     renderPane({ localShells: [powershell, gitBash] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     await user.click(screen.getByRole("checkbox", { name: "Local Terminal Mode" }));
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Default local terminal" }),
@@ -308,6 +312,7 @@ describe("Settings actions", () => {
 
   it("excludes administrator shells from the startup selector while keeping their manual toggles", () => {
     renderPane({ localShells: [powershell, administratorPowerShell] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     expect(screen.queryByRole("option", { name: /Administrator/ })).toBeNull();
     expect(screen.getByRole("checkbox", { name: /PowerShell 7.*administrator/ })).toBeTruthy();
   });
@@ -317,6 +322,7 @@ describe("Settings actions", () => {
       settings: { ...settings, hiddenLocalShells: ["git-bash"] },
       localShells: [powershell, gitBash],
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     expect(screen.queryByRole("option", { name: "Git Bash" })).toBeNull();
     expect(screen.getByRole("option", { name: "PowerShell 7" })).toBeTruthy();
   });
@@ -530,6 +536,7 @@ describe("Settings actions", () => {
 
   it("offers each installed shell in the two groups the launcher uses", () => {
     renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
 
     expect(screen.getByText("Local terminals")).toBeTruthy();
     expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
@@ -542,6 +549,7 @@ describe("Settings actions", () => {
 
   it("says so plainly when this machine has no local shells", () => {
     renderPane({ localShells: [] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
 
     expect(screen.getByText("No local shells are installed on this machine.")).toBeTruthy();
     expect(screen.queryByLabelText("Offer Git Bash")).toBeNull();
@@ -570,6 +578,7 @@ describe("Settings actions", () => {
       settings: { ...settings, hiddenLocalShells: ["git-bash"] },
       localShells: [powershell, gitBash],
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
 
     const toggle = screen.getByLabelText("Offer Git Bash") as HTMLInputElement;
     expect(toggle.checked).toBe(false);

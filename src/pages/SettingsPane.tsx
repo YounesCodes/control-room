@@ -60,16 +60,25 @@ const sections = {
   ssh: ["app", "SSH environment", "ssh.exe openssh config agent paths diagnostics"],
 } satisfies Record<string, [Category, string, string]>;
 
+const terminalTabs = [
+  ["appearance", "Appearance"],
+  ["behavior", "Tabs & naming"],
+  ["shells", "Local shells"],
+] as const;
+type TerminalSection = (typeof terminalTabs)[number][0];
+
 function SettingsSection({
   id,
   category,
   query,
+  terminalSection,
   children,
   className = "",
 }: {
   id: keyof typeof sections;
   category: Category;
   query: string;
+  terminalSection: TerminalSection;
   children: ReactNode;
   className?: string;
 }) {
@@ -79,13 +88,26 @@ function SettingsSection({
     ? query
         .split(/\s+/)
         .every((word) => `${context} ${title} ${keywords}`.toLowerCase().includes(word))
-    : category === group;
-  return (
+    : category === group && (group !== "terminal" || id === terminalSection);
+  const fieldset = (
     <fieldset id={`settings-${id}`} className={className} hidden={!matches}>
       <legend>{title}</legend>
       {query && <small className="settings-result-category">{context}</small>}
       {children}
     </fieldset>
+  );
+  return group === "terminal" ? (
+    <div
+      className="settings-terminal-panel"
+      id={`settings-panel-${id}`}
+      role={!query && category === "terminal" ? "tabpanel" : undefined}
+      aria-labelledby={!query && category === "terminal" ? `settings-tab-${id}` : undefined}
+      hidden={!matches}
+    >
+      {fieldset}
+    </div>
+  ) : (
+    fieldset
   );
 }
 
@@ -192,52 +214,31 @@ export function SettingsPane({
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
   const [category, setCategory] = useState<Category>("general");
+  const [terminalSection, setTerminalSection] = useState<TerminalSection>("appearance");
   const [search, setSearch] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const previousCategory = useRef(category);
+  const view = `${category}:${category === "terminal" ? terminalSection : ""}`;
+  const previousView = useRef(view);
   const categoryScrollFrame = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    const body = bodyRef.current;
-    if (!body) return;
-    const measure = () => {
-      const styles = getComputedStyle(body);
-      const height =
-        body.clientHeight -
-        (parseFloat(styles.paddingTop) || 0) -
-        (parseFloat(styles.paddingBottom) || 0);
-      body.style.setProperty("--settings-section-height", `${Math.max(0, height)}px`);
-    };
-    measure();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    observer?.observe(body);
-    return () => {
-      observer?.disconnect();
+  useEffect(
+    () => () => {
       if (categoryScrollFrame.current !== null) cancelAnimationFrame(categoryScrollFrame.current);
-    };
-  }, []);
+    },
+    [],
+  );
 
-  function scrollToSection(id: string) {
+  function selectTerminalSection(next: TerminalSection) {
     if (categoryScrollFrame.current !== null) {
       cancelAnimationFrame(categoryScrollFrame.current);
       categoryScrollFrame.current = null;
     }
-    const body = bodyRef.current;
-    const form = formRef.current;
-    const section = form?.querySelector<HTMLElement>(`#settings-${id}`);
-    if (!body || !form || !section) return;
-    const top =
-      form.offsetTop + section.offsetTop - (parseFloat(getComputedStyle(body).paddingTop) || 0);
-    body.scrollTo({
-      top,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
-    });
+    setTerminalSection(next);
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
   }
   useLayoutEffect(() => {
-    if (previousCategory.current === category) return;
-    previousCategory.current = category;
+    if (previousView.current === view) return;
+    previousView.current = view;
     const form = formRef.current;
     if (!form?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const styles = getComputedStyle(document.documentElement);
@@ -253,10 +254,10 @@ export function SettingsPane({
       },
     );
     return () => animation.cancel();
-  }, [category]);
+  }, [view]);
   const positions = useRef<Partial<Record<Category, number>>>({});
   const query = search.trim().toLowerCase();
-  const sectionProps = { category, query };
+  const sectionProps = { category, query, terminalSection };
   const hasResults = Object.values(sections).some(([group, title, keywords]) => {
     const context = categories.find(([key]) => key === group)![1];
     return query
@@ -468,23 +469,44 @@ export function SettingsPane({
         </label>
         <div className="settings-content">
           {category === "terminal" && !query && (
-            <nav className="settings-subnavigation" aria-label="Terminal settings">
-              {[
-                ["appearance", "Appearance"],
-                ["behavior", "Tabs & naming"],
-                ["shells", "Local shells"],
-              ].map(([id, label]) => (
+            <div className="settings-subnavigation" role="tablist" aria-label="Terminal settings">
+              {terminalTabs.map(([id, label], index) => (
                 <button
                   key={id}
+                  id={`settings-tab-${id}`}
                   type="button"
+                  role="tab"
+                  aria-selected={terminalSection === id}
+                  tabIndex={terminalSection === id ? 0 : -1}
                   disabled={fontBusy || saving}
-                  aria-controls={`settings-${id}`}
-                  onClick={() => scrollToSection(id)}
+                  aria-controls={`settings-panel-${id}`}
+                  onClick={() => selectTerminalSection(id)}
+                  onKeyDown={(event) => {
+                    if (event.altKey || event.ctrlKey || event.metaKey) return;
+                    const next =
+                      event.key === "ArrowRight"
+                        ? (index + 1) % terminalTabs.length
+                        : event.key === "ArrowLeft"
+                          ? (index + terminalTabs.length - 1) % terminalTabs.length
+                          : event.key === "Home"
+                            ? 0
+                            : event.key === "End"
+                              ? terminalTabs.length - 1
+                              : null;
+                    if (next === null) return;
+                    event.preventDefault();
+                    const buttons =
+                      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                        "button",
+                      );
+                    buttons?.[next]?.focus();
+                    selectTerminalSection(terminalTabs[next][0]);
+                  }}
                 >
                   {label}
                 </button>
               ))}
-            </nav>
+            </div>
           )}
           <div className="settings-body" ref={bodyRef}>
             {query && !hasResults && (
@@ -506,6 +528,9 @@ export function SettingsPane({
                 if (section) {
                   setSearch("");
                   setCategory(sections[section][0]);
+                  if (section === "appearance" || section === "behavior" || section === "shells") {
+                    selectTerminalSection(section);
+                  }
                   requestAnimationFrame(() => input.focus());
                 }
               }}

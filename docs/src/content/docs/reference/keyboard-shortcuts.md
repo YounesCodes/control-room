@@ -21,4 +21,6 @@ Closing a tab with a running terminal asks for confirmation.
 
 In Settings, focus the category list and use `Up` / `Down` to switch categories.
 `Home` / `End` selects the first or last category. `Tab` moves into the page's
-controls. Arrow keys in fields keep their normal editing behavior.
+controls. In Terminal settings, `Left` / `Right` switches tabs and wraps at either
+end; `Home` / `End` selects Appearance or Local shells. Arrow keys in fields keep
+their normal editing behavior.
