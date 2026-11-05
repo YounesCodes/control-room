@@ -332,13 +332,12 @@ export function BootDiagnosticsPane({
       <header className="page-heading boot-heading">
         <div>
           <h2>Boot Timeline</h2>
-          <p>Replay what a boot's journal recorded, at the times it happened.</p>
+          {/* One persistent note carries the safety rule; the selected boot is
+              already named by the Boot selector and coverage by the Evidence
+              tile, so neither is repeated here. */}
           <p className="boot-replay-note">
             <span>Recorded journal replay — the host is never rebooted.</span>
-            <span>{currentSelected ? "Current boot" : "Historical boot"}</span>
-            <span>{coverage.label}</span>
           </p>
-          {snapshot && <small>Summary collected {collectedLabel(snapshot.collectedAt)}</small>}
         </div>
         <div className="boot-heading-actions">
           <label>
@@ -436,7 +435,12 @@ export function BootDiagnosticsPane({
             </div>
             <div className="overview-stat">
               <span className="overview-stat-label">Notable issues</span>
-              <strong className="overview-stat-value">{windowNotables.length}</strong>
+              {/* A zero over empty evidence would read as "no problems on the
+                  host"; with nothing loaded the dash defers to the Evidence
+                  tile's explanation instead. */}
+              <strong className="overview-stat-value">
+                {evidence?.loadedCount ? windowNotables.length : "—"}
+              </strong>
               <span className="overview-stat-hint">
                 failures and warnings in this window's loaded evidence
               </span>

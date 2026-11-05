@@ -153,6 +153,16 @@ function replayEvidencePage(overrides: Partial<BootReplayPage> = {}): BootReplay
         unit: "nginx.service",
         message: "bind() failed",
       }),
+      // systemd logs a second record moments after a unit fails, so failures
+      // arrive in near-overlapping pairs.
+      replayEntry({
+        id: "a-error-2",
+        monotonicUs: 43_100_000,
+        priority: 3,
+        source: "systemd",
+        unit: "nginx.service",
+        message: "Failed with result 'exit-code'.",
+      }),
     ],
     earliestMonotonicUs: 0,
     latestMonotonicUs: 42_000_000,
@@ -224,10 +234,9 @@ describe("BootDiagnosticsPane", () => {
     await loadPane();
     expect(screen.getByRole("heading", { name: "Boot Timeline" })).toBeTruthy();
     expect(screen.getByText("Recorded journal replay — the host is never rebooted.")).toBeTruthy();
-    expect(screen.getByText("Current boot")).toBeTruthy();
     // Measured time, loaded notables, and an honest coverage reading.
     expect(summaryTile("Boot time")).toBe("8.368s");
-    expect(summaryTile("Notable issues")).toBe("3");
+    expect(summaryTile("Notable issues")).toBe("4");
     // The fixture journal ends before the 2-minute window, and the tile says
     // that in words instead of implying the whole window was retained.
     expect(summaryTile("Evidence")).toBe("Sized to journal");
@@ -268,6 +277,7 @@ describe("BootDiagnosticsPane", () => {
     expect(screen.getByRole("button", { name: /Unit event at 3s/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /2 similar events/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Failure at 42s/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Failure at 43s/ })).toBeNull();
     // Seeking backward restores the earlier state deterministically.
     fireEvent.change(seek, { target: { value: 1_500_000 } });
     await flushRendering(2);
@@ -320,12 +330,33 @@ describe("BootDiagnosticsPane", () => {
     expect(clusterInspector.textContent).toContain("2 similar events, from T+0:10.0");
   });
 
+  it("steps distinct markers apart when they would paint over each other", async () => {
+    await loadPane();
+    // The two failure records land 0.8s apart — closer than one glyph width —
+    // so the second one takes a step down the lane instead of overlapping.
+    fireEvent.change(screen.getByRole("slider", { name: "Replay position in this window" }), {
+      target: { value: 44_000_000 },
+    });
+    await flushRendering(2);
+    const staggered = document.querySelector(".boot-marker-staggered");
+    expect(staggered).toBeTruthy();
+    expect(staggered?.getAttribute("aria-label")).toContain("Failed with result");
+    // The earlier failure of the pair keeps its default row center.
+    const bindMarker = screen.getByRole("button", { name: /Failure at 42s: bind\(\) failed/ });
+    expect(bindMarker.className).not.toContain("boot-marker-staggered");
+  });
+
   it("skips directly between notable events with previous and next", async () => {
     await loadPane();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Next notable event" }));
     expect(transportTime()).toContain("T+0:10.0");
     await user.click(screen.getByRole("button", { name: "Next notable event" }));
+    expect(transportTime()).toContain("T+0:42.0");
+    // The paired failure record is its own stop, not lost in the cluster pair.
+    await user.click(screen.getByRole("button", { name: "Next notable event" }));
+    expect(transportTime()).toContain("T+0:43.1");
+    await user.click(screen.getByRole("button", { name: "Previous notable event" }));
     expect(transportTime()).toContain("T+0:42.0");
     await user.click(screen.getByRole("button", { name: "Previous notable event" }));
     expect(transportTime()).toContain("T+0:10.0");
@@ -439,7 +470,6 @@ describe("BootDiagnosticsPane", () => {
     // were inherited from the running system.
     expect(screen.getByRole("button", { name: "Play replay" })).toBeTruthy();
     expect(summaryTile("Boot time")).toBe("Not measured");
-    expect(screen.getByText("Historical boot")).toBeTruthy();
     expect(document.querySelector(".boot-current-diagnostics")).toBeNull();
   });
 
@@ -466,6 +496,9 @@ describe("BootDiagnosticsPane", () => {
     await loadPane({ replay: permissionPage });
     expect(screen.getAllByText(/cannot read this boot's journal/).length).toBeGreaterThan(0);
     expect(summaryTile("Evidence")).toBe("Needs permission");
+    // With nothing loaded, "Notable issues" refuses to show a zero that could
+    // be misread as a clean bill of health.
+    expect(summaryTile("Notable issues")).toBe("—");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Retry with sudo" }));
     const password = screen.getByText("Password").closest("label")?.querySelector("input");
@@ -504,7 +537,7 @@ describe("BootDiagnosticsPane", () => {
     });
     await loadPane({ replay: emptyPage });
     expect(screen.getByText("No events were retained in this replay window.")).toBeTruthy();
-    expect(summaryTile("Notable issues")).toBe("0");
+    expect(summaryTile("Notable issues")).toBe("—");
     expect(summaryTile("Evidence")).toBe("No records");
     await userEvent.click(screen.getByText("Show loaded events"));
     expect(screen.getByText(/Everything retained for these filters has been loaded/)).toBeTruthy();

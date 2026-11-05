@@ -3853,8 +3853,12 @@ dd {
 
 .boot-timeline {
   /* Written every frame by the pane both through React and directly on the
-     element, so the playhead moves without re-rendering the lanes. */
+     element, so the playhead moves without re-rendering the lanes. The label
+     column width is shared by lanes, playhead, and tick axis, so markers,
+     playhead, and "0s..120s" all measure the same span. 156px keeps
+     "WARNINGS & FAILURES" on one line at rest. */
   --replay-progress: 0%;
+  --lane-label-width: 156px;
 }
 
 .boot-timeline-plot {
@@ -3868,11 +3872,11 @@ dd {
 
 .boot-lane {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: var(--lane-label-width) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  min-height: 26px;
-  padding: 2px 10px;
+  min-height: 34px;
+  padding: 2px 0;
 }
 
 .boot-lane + .boot-lane {
@@ -3880,6 +3884,7 @@ dd {
 }
 
 .boot-lane-label {
+  padding-left: 10px;
   color: var(--text-faint);
   font-size: 10px;
   font-weight: 650;
@@ -3887,9 +3892,10 @@ dd {
   text-transform: uppercase;
 }
 
+/* Tall enough that a staggered marker pair reads as two records. */
 .boot-lane-track {
   position: relative;
-  height: 14px;
+  height: 30px;
 }
 
 /* Markers keep one shape per severity, so color never carries the meaning
@@ -3897,11 +3903,11 @@ dd {
    failure = diamond. */
 .boot-marker {
   position: absolute;
-  top: 50%;
+  top: 6px;
   width: 9px;
   height: 9px;
   padding: 0;
-  margin: -5px 0 0 -5px;
+  margin-left: -5px;
   border: 0;
   background: var(--text-muted);
   border-radius: 50%;
@@ -3925,7 +3931,7 @@ dd {
 .boot-marker-warning {
   width: 11px;
   height: 10px;
-  margin: -5px 0 0 -6px;
+  margin-left: -6px;
   border-radius: 0;
   background: var(--warning);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
@@ -3944,6 +3950,12 @@ dd {
 .boot-marker.selected {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Distinct markers closer than one glyph width split the taller lane into two
+ * visual rows, so a paired record stays readable instead of fusing. */
+.boot-marker-staggered {
+  top: 16px;
 }
 
 /* A cluster shows its count instead of stacking clones. */
@@ -3965,10 +3977,13 @@ dd {
   position: absolute;
   top: 4px;
   bottom: 4px;
-  left: var(--replay-progress);
+  /* The playhead measures the track span (the area right of the lane-label
+     column), not the whole plot, so it always sits exactly on the markers and
+     the percentage the pane writes. */
+  left: calc(var(--lane-label-width) + (100% - var(--lane-label-width)) * var(--replay-progress));
   width: 1px;
   background: var(--accent);
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .boot-playhead::before {
@@ -3984,28 +3999,31 @@ dd {
 }
 
 .boot-timeline-axis {
-  position: relative;
-  height: 16px;
+  display: grid;
+  grid-template-columns: var(--lane-label-width) minmax(0, 1fr);
+  gap: 12px;
   margin-top: 6px;
 }
 
-.boot-timeline-axis span {
+.boot-axis-track {
+  position: relative;
+  height: 16px;
+}
+
+.boot-axis-track span {
   position: absolute;
   color: var(--text-faint);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-}
-
-.boot-timeline-axis span:first-child {
-  left: 0;
-}
-
-.boot-timeline-axis span:last-child {
-  right: 0;
-}
-
-.boot-timeline-axis span:not(:first-child):not(:last-child) {
   translate: -50% 0;
+}
+
+.boot-axis-track span:first-child {
+  translate: 0 0;
+}
+
+.boot-axis-track span:last-child {
+  translate: -100% 0;
 }
 
 .boot-transport {
@@ -4044,6 +4062,9 @@ dd {
 .boot-transport-seek {
   flex: 1;
   min-width: 120px;
+  /* The app chroma stays neutral: the scrubber uses the same light accent as
+     every other control instead of a browser-default blue. */
+  accent-color: var(--accent);
 }
 
 .boot-transport-time {
@@ -4291,10 +4312,21 @@ dd {
   gap: 10px;
   padding: 3px 12px;
   border: 0;
+  border-left: 3px solid transparent;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
   text-align: left;
+}
+
+/* The category text label stays; the tinted edge only makes scanning faster.
+   Failures and warnings carry status hues, records stay neutral. */
+.boot-journal-row-error {
+  border-left-color: var(--failure);
+}
+
+.boot-journal-row-warning {
+  border-left-color: var(--warning);
 }
 
 .boot-journal-rows button:hover {
@@ -4358,11 +4390,14 @@ dd {
   }
 }
 
-/* One column at narrow widths: labels stay readable, transport wraps, and
+/* One column at narrow widths: labels stay reachable, transport wraps, and
    the inspector fields stack rather than clipping. */
 @container (max-width: 720px) {
+  .boot-timeline {
+    --lane-label-width: 88px;
+  }
+
   .boot-lane {
-    grid-template-columns: 88px minmax(0, 1fr);
     gap: 8px;
   }
 
@@ -7743,6 +7778,12 @@ kbd {
   .boot-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  /* The narrow heading stacks; the title's flex basis would otherwise inflate
+     it to 280px of empty height above the selectors. */
+  .boot-heading > div:first-child {
+    flex: 0 0 auto;
   }
 
   .boot-heading-actions label {

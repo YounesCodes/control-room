@@ -12,7 +12,9 @@ export interface ReplayLane {
  * lane, and a playhead driven by a CSS variable so the pane can move it every
  * frame without re-rendering. Markers mount only once the playhead has
  * crossed their recorded offsets and unmount on a backward seek, so revealed
- * state is a pure function of the clock.
+ * state is a pure function of the clock. Labels, tracks, the playhead, and
+ * the tick axis all share one column split, so every readout measures the
+ * same width.
  */
 export function BootTimeline({
   windowUs,
@@ -56,13 +58,13 @@ export function BootTimeline({
             <div className="boot-lane" key={lane.id}>
               <span className="boot-lane-label">{lane.label}</span>
               <div className="boot-lane-track">
-                {revealed.map((marker) => (
+                {revealed.map((marker, index) => (
                   <button
                     type="button"
                     key={marker.key}
                     className={`boot-marker boot-marker-${marker.category}${
-                      marker.key === selectedMarkerKey ? " selected" : ""
-                    }`}
+                      isCollision(lane.markers, index, windowUs) ? " boot-marker-staggered" : ""
+                    }${marker.key === selectedMarkerKey ? " selected" : ""}`}
                     style={{ left: `${(marker.offsetUs / windowUs) * 100}%` }}
                     title={markerTitle(marker)}
                     aria-label={markerTitle(marker)}
@@ -81,14 +83,26 @@ export function BootTimeline({
         <div className="boot-playhead" aria-hidden="true" />
       </div>
       <div className="boot-timeline-axis" aria-hidden="true">
-        {axisTicks.map((tick) => (
-          <span key={tick} style={{ left: `${windowUs ? (tick / windowUs) * 100 : 0}%` }}>
-            {formatTickLabel(tick)}
-          </span>
-        ))}
+        <span className="boot-lane-label" />
+        <div className="boot-lane-track boot-axis-track">
+          {axisTicks.map((tick) => (
+            <span key={tick} style={{ left: `${windowUs ? (tick / windowUs) * 100 : 0}%` }}>
+              {formatTickLabel(tick)}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
+}
+
+// Distinct markers closer together than one glyph width would paint on top of
+// each other; tight pairs take turns stepping down a lane row.
+function isCollision(laneMarkers: ReplayMarker[], revealedIndex: number, windowUs: number) {
+  const marker = laneMarkers[revealedIndex];
+  const previous = laneMarkers[revealedIndex - 1];
+  if (!marker || !previous) return false;
+  return (marker.offsetUs - previous.offsetUs) / windowUs < 0.012;
 }
 
 export function markerTitle(marker: ReplayMarker): string {

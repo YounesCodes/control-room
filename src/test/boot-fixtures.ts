@@ -10,8 +10,18 @@ export function bootDiagnostics(overrides: Partial<BootDiagnostics> = {}): BootD
     collectedAt,
     selectedBootId: "a".repeat(32),
     boots: section([
-      { index: 0, id: "a".repeat(32), range: "Current boot", current: true },
-      { index: -1, id: "b".repeat(32), range: "Previous boot", current: false },
+      {
+        index: 0,
+        id: "a".repeat(32),
+        range: "Sun 2026-08-31 09:41:12 — Sun 2026-08-31 17:04:44",
+        current: true,
+      },
+      {
+        index: -1,
+        id: "b".repeat(32),
+        range: "Sat 2026-08-30 08:02:57 — Sun 2026-08-31 09:39:02",
+        current: false,
+      },
     ]),
     timing: section({
       total: "1s",

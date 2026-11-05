@@ -164,8 +164,18 @@ export function boot(): BootDiagnostics {
       error: null,
       permissionRequired: false,
       data: [
-        { id: "a".repeat(32), index: 0, range: "Current boot", current: true },
-        { id: "b".repeat(32), index: -1, range: "Previous boot", current: false },
+        {
+          id: "a".repeat(32),
+          index: 0,
+          range: "Sun 2026-08-31 09:41:12 — Sun 2026-08-31 17:04:44",
+          current: true,
+        },
+        {
+          id: "b".repeat(32),
+          index: -1,
+          range: "Sat 2026-08-30 08:02:57 — Sun 2026-08-31 09:39:02",
+          current: false,
+        },
       ],
     },
     timing: {

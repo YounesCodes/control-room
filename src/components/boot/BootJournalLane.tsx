@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatOffsetClock, upperBound, type ReplayEvent } from "../../lib/boot-replay";
 import { categoryLabel } from "./BootTimeline";
 
@@ -9,7 +9,8 @@ const ROW_BATCH = 100;
  * The opt-in journal lane under the theater: every loaded record in the
  * window, searchable and filterable, time-aligned with the same playhead.
  * A row seeks there and opens the same inspector a marker would; the row at
- * the playhead is marked so the two views never disagree about "now".
+ * the playhead is marked and kept in view, so the two views never disagree
+ * about "now".
  */
 export function BootJournalLane({
   inWindowEvents,
@@ -33,6 +34,8 @@ export function BootJournalLane({
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORY_FILTERS)[number]>("all");
   const [rowCap, setRowCap] = useState(ROW_BATCH);
+  const [open, setOpen] = useState(false);
+  const listRef = useRef<HTMLOListElement | null>(null);
 
   const needle = search.trim().toLowerCase();
   const rows = inWindowEvents
@@ -49,8 +52,22 @@ export function BootJournalLane({
   const atPlayheadIndex = upperBound(inWindowEvents, positionUs) - 1;
   const visibleRows = rows.slice(0, rowCap);
 
+  // The lane anchors to the playhead row when it opens and follows it while
+  // the clock moves; a paused playhead never fights the reader's scroll.
+  // Centering keeps surrounding records in view instead of pinning the row
+  // to the lane's bottom edge.
+  useEffect(() => {
+    if (!open || atPlayheadIndex < 0) return;
+    const row = listRef.current?.querySelectorAll("li")[atPlayheadIndex];
+    row?.querySelector("button")?.scrollIntoView?.({ block: "center" });
+  }, [open, atPlayheadIndex]);
+
   return (
-    <details className="boot-journal-lane">
+    <details
+      className="boot-journal-lane"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary>
         <span>Show loaded events</span>
         <span>
@@ -87,14 +104,14 @@ export function BootJournalLane({
         </label>
       </div>
       {visibleRows.length ? (
-        <ol className="boot-journal-rows">
+        <ol className="boot-journal-rows" ref={listRef}>
           {visibleRows.map(({ event, index }) => {
             const atPlayhead = index === atPlayheadIndex;
             return (
               <li key={event.id}>
                 <button
                   type="button"
-                  className={atPlayhead ? "at-playhead" : ""}
+                  className={`boot-journal-row-${event.category}${atPlayhead ? " at-playhead" : ""}`}
                   aria-current={atPlayhead ? "true" : undefined}
                   onClick={() => {
                     onSeek(event.offsetUs ?? positionUs);
