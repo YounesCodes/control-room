@@ -774,6 +774,17 @@ describe("critical UI in Chromium", () => {
         const initial = bounds();
         await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
         expect(bounds()).toEqual(initial);
+        const status = container!.querySelector<HTMLElement>(".settings-status")!;
+        const range = document.createRange();
+        range.selectNodeContents(status);
+        const textBounds = range.getBoundingClientRect();
+        const saveBounds = container!.querySelector(".settings-save")!.getBoundingClientRect();
+        expect(Math.abs(saveBounds.left - textBounds.right - 12)).toBeLessThanOrEqual(1);
+        if (width > 900) {
+          const searchBounds = search.element().closest(".search-field")!.getBoundingClientRect();
+          expect(textBounds.left - searchBounds.right).toBeGreaterThan(24);
+        }
+        await page.screenshot({ path: `../../test-results/save-group-unsaved-${width}.png` });
         await page.getByRole("button", { name: "Save settings", exact: true }).click();
         await expect
           .element(page.getByRole("button", { name: "Saving…", exact: true }))
@@ -782,6 +793,7 @@ describe("critical UI in Chromium", () => {
         finish();
         await expect.element(page.getByRole("status")).toHaveTextContent("Settings saved.");
         expect(bounds()).toEqual(initial);
+        await page.screenshot({ path: `../../test-results/save-group-saved-${width}.png` });
       } finally {
         save.mockRestore();
       }

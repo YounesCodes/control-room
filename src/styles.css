@@ -6046,6 +6046,7 @@ dd {
 }
 
 .settings-heading-actions {
+  margin-left: 11px;
   display: flex;
   min-width: 0;
   flex: none;
@@ -6057,6 +6058,7 @@ dd {
    of text in the bar rather than a banner in the form. */
 .settings-status {
   width: 22ch;
+  text-align: right;
   flex: none;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8473,8 +8475,8 @@ details[open] > .inspector-disclosure-body {
     flex: 1;
   }
   .settings-search {
-    flex: 1 1 auto;
-    width: auto;
+    flex: 1 1 100%;
+    width: 100%;
     order: 1;
   }
   .settings-heading-actions {
