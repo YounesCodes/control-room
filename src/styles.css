@@ -1061,12 +1061,13 @@ code,
 
 .search-field {
   display: flex;
-  min-height: 38px;
+  min-height: 32px;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: #0a0a0a;
+  background: var(--surface-sunken);
+  padding: 0 10px;
   color: var(--text-faint);
   transition:
     border-color var(--motion-fast) var(--ease),
@@ -1074,13 +1075,19 @@ code,
 }
 
 .search-field:hover {
-  border-color: #565656;
+  border-color: var(--border-strong);
 }
 
 .search-field:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  border-color: var(--text-muted);
+  box-shadow: none;
   color: var(--text-muted);
+}
+
+.search-field > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 .search-field input {
@@ -1089,7 +1096,9 @@ code,
   border: 0;
   outline: 0;
   background: transparent;
-  padding: 8px 0;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .search-field input:focus-visible {
@@ -1788,10 +1797,12 @@ code,
 }
 
 .local-shell-icon > svg,
+.local-shell-icon > img,
 .host-os-icon > svg {
   display: block;
   width: calc(var(--identity-size) - 2px);
   height: calc(var(--identity-size) - 2px);
+  object-fit: contain;
 }
 
 .local-shell-icon {
@@ -3145,11 +3156,11 @@ code,
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 5px;
+  padding: 3px;
   color: var(--text-muted);
   animation: popover-in var(--motion-fast) var(--ease);
 }
@@ -3160,6 +3171,17 @@ code,
   border: 0;
   background: transparent;
   padding: 4px 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.terminal-search:focus-within {
+  border-color: var(--text-muted);
+}
+
+.terminal-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .terminal-search-count {
@@ -3177,8 +3199,8 @@ code,
 
 .terminal-search button {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex: none;
   place-items: center;
   border-radius: var(--radius-sm);
@@ -3956,7 +3978,7 @@ dd {
 }
 
 .list-panel > .search-field {
-  min-height: 37px;
+  min-height: 32px;
   margin-bottom: 12px;
   padding: 0 10px;
 }
@@ -4002,13 +4024,13 @@ dd {
 
 .port-list-controls .search-field {
   min-width: 0;
-  min-height: 37px;
+  min-height: 32px;
   padding: 0 10px;
 }
 
 .port-list-controls select {
   width: auto;
-  min-height: 37px;
+  min-height: 32px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 11px;
@@ -4016,13 +4038,13 @@ dd {
 
 .systemd-list-controls .search-field {
   min-width: 0;
-  min-height: 37px;
+  min-height: 32px;
   padding: 0 10px;
 }
 
 .systemd-list-controls select {
   width: 100%;
-  min-height: 37px;
+  min-height: 32px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 11px;
@@ -4319,6 +4341,7 @@ dd {
   }
 }
 .systemd-search-control {
+  padding: 0;
   flex: 0 1 auto;
   min-width: 32px;
   max-width: 452px;
@@ -4344,7 +4367,7 @@ dd {
   border-color: transparent;
 }
 .systemd-search-control:has(.systemd-inline-search):focus-within {
-  border-color: var(--accent);
+  border-color: var(--text-muted);
 }
 .systemd-search-control:has(.systemd-inline-search) > .icon-button {
   background: transparent;
@@ -5491,7 +5514,7 @@ dd {
 
 .log-search {
   min-width: 210px;
-  min-height: 37px;
+  min-height: 32px;
   padding: 0 9px;
 }
 
@@ -6126,9 +6149,35 @@ dd {
 }
 
 .local-shell-default {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.settings-form .local-shell-default > .local-shell-icon {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+
+.settings-form .local-shell-icon {
+  --identity-size: 18px;
+}
+
+.settings-form .local-shell-default:has(.local-shell-icon) select {
+  padding-left: 36px;
+}
+
+.settings-form .local-shell-toggle-group .checkbox-label {
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--motion-fast) var(--ease);
+}
+
+.settings-form .local-shell-toggle-group .checkbox-label:hover {
+  background: var(--fill-hover);
 }
 
 .local-shell-default select {
@@ -6911,9 +6960,9 @@ kbd {
   border-radius: 0;
   outline: 0;
   background: transparent;
-  padding: 15px 0;
+  padding: 11px 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* The search bar is the palette's obvious focus target, so suppress the shared
@@ -7281,11 +7330,7 @@ kbd {
 .session-tab-overflow-menu > button[aria-current="page"] .identity-mark,
 .command-item:hover .identity-mark,
 .command-item:focus-visible .identity-mark,
-.command-item.active .identity-mark,
-.local-shell-toggle-group label:hover .identity-mark,
-.local-shell-toggle-group label:focus-within .identity-mark,
-.local-shell-default:hover .identity-mark,
-.local-shell-default:focus-within .identity-mark {
+.command-item.active .identity-mark {
   color: var(--identity);
 }
 
@@ -7480,8 +7525,8 @@ kbd {
 }
 
 .ports-search-field input {
-  padding-block: 10px;
-  font-size: 13px;
+  padding-block: 6px;
+  font-size: 12px;
 }
 
 .ports-search-field .icon-button {

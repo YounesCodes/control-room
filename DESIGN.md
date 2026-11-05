@@ -20,13 +20,15 @@ guardrails, not every choice described below.
   color signals success, warning, or failure. User-selected tag colors identify
   connections; they do not imply health. OS and shell marks may reveal their
   brand color on a hovered or selected tab or host row to identify the target;
-  the color is identity, never health, and it never shows at rest. Terminal ANSI
+  the color is identity, never health. Git Bash keeps the upstream Git for Windows
+  icon in full color at rest and during interaction. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
   Read-only configuration and command blocks may use a small syntax palette for
   sections, keys, strings, paths, and variables. Keep those colors inside code;
   they describe syntax and do not signal service health.
-  Local shell logos reveal their own colors on hover, keyboard focus, or selection:
-  Git orange and PowerShell blue. Command Prompt and the generic local-terminal
+  PowerShell logos reveal blue on hover, keyboard focus, or selection outside
+  Settings. Settings keeps shell marks steady while the whole preference row
+  receives a quiet hover fill. Command Prompt and the generic local-terminal
   launcher use muted gray at rest and white on hover, keyboard focus, or selection.
   Use each local shell's own mark in workspace tabs, launch and split menus,
   overflow lists, the command palette, and Settings. Administrator shells keep
@@ -451,6 +453,9 @@ short explanation are better than repeated captions. Let technical identifiers
 wrap or truncate deliberately so they do not force a pane wider.
 
 ### Spacing, shape, and motion
+
+Search fields use compact type and height, an inset icon with a clear gutter,
+a quiet surface border, and one visible focus border without an extra glow.
 
 Use the existing spacing, radius, and motion tokens. Prefer layout gaps over
 one-off margins. Keep related controls grouped and leave enough room between

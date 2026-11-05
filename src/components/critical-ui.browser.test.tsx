@@ -150,7 +150,17 @@ function SettingsFixture() {
         settings={settings}
         defaults={settings}
         logTailOptions={[50, 100, 200, 500, 1000]}
-        localShells={[]}
+        localShells={[
+          { id: "powershell-7", label: "PowerShell 7", kind: "powershell-7", elevated: false },
+          { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
+          {
+            id: "command-prompt",
+            label: "Command Prompt",
+            kind: "command-prompt",
+            elevated: false,
+          },
+          { id: "admin", label: "PowerShell 7", kind: "powershell-7", elevated: true },
+        ]}
         environment={environment}
         appVersion="0.8.2"
         onCheckForUpdates={async () => ({ outcome: "current" })}
@@ -714,6 +724,51 @@ describe("critical UI in Chromium", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
+  });
+
+  it.each([768, 1200])("integrates search and shell preferences at %ipx", async (width) => {
+    await page.viewport(width, 720);
+    mount(<SettingsFixture />);
+    const search = page.getByRole("searchbox", { name: "Search settings" });
+    await expect.element(search).toBeVisible();
+    const field = search.element().closest(".search-field")!;
+    const icon = field.querySelector("svg")!;
+    const bounds = field.getBoundingClientRect();
+    expect(bounds.height).toBeLessThanOrEqual(34);
+    expect(icon.getBoundingClientRect().left - bounds.left).toBeGreaterThanOrEqual(10);
+    expect(
+      search.element().getBoundingClientRect().left - icon.getBoundingClientRect().right,
+    ).toBeGreaterThanOrEqual(6);
+    const border = getComputedStyle(field).borderColor;
+    await search.click();
+    await expect.element(search).toHaveFocus();
+    await expect.poll(() => getComputedStyle(field).borderColor).not.toBe(border);
+    expect(getComputedStyle(field).boxShadow).toBe("none");
+    expect(field.getBoundingClientRect().height).toBe(bounds.height);
+    if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
+    await page.getByRole("button", { name: "Local shells", exact: true }).click();
+    const row = page
+      .getByRole("checkbox", { name: "Offer PowerShell 7", exact: true })
+      .element()
+      .closest("label")!;
+    const shell = row.querySelector(".local-shell-icon")!;
+    const color = getComputedStyle(shell).color;
+    await userEvent.hover(row);
+    expect(getComputedStyle(shell).color).toBe(color);
+    (row.querySelector("input") as HTMLInputElement).focus();
+    expect(getComputedStyle(shell).color).toBe(color);
+    const git = container!.querySelector<HTMLImageElement>(".local-shell-icon-git-bash img")!;
+    await vi.waitFor(() => expect(git.naturalWidth).toBeGreaterThan(0));
+    expect(getComputedStyle(git).filter).toBe("none");
+    const select = page.getByRole("combobox", { name: "Default local terminal" }).element();
+    const embedded = select
+      .parentElement!.querySelector(".local-shell-icon")!
+      .getBoundingClientRect();
+    expect(embedded.left).toBeGreaterThan(select.getBoundingClientRect().left + 6);
+    expect(embedded.right).toBeLessThan(select.getBoundingClientRect().right - 20);
+    expect(container!.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: `../../test-results/search-shell-polish-${width}.png` });
   });
 
   it.each([768, 960, 1600])(
