@@ -5970,9 +5970,10 @@ dd {
 .settings-category-select select {
   min-height: 32px;
   height: 32px;
+  border-width: 1.5px;
   border-color: var(--border-subtle);
   background-color: var(--surface-sunken);
-  padding-block: 5px;
+  padding-block: 4.5px;
   font-size: 13px;
   line-height: 20px;
 }
