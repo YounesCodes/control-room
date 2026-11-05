@@ -1,8 +1,9 @@
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
-import type { AppSettings, SavedConnection } from "../src/types";
+import type { AppSettings, HostBaseline, SavedConnection } from "../src/types";
 import { recordApplication } from "./app-processes";
 
 export interface RuntimeStatus {
@@ -135,6 +136,31 @@ export async function addConnection(
   return (await ipc<SavedConnection[]>("list_connections")).find(
     (connection) => connection.displayName === name,
   )!;
+}
+
+// Seed only the current test's isolated SQLite file. The app still reads the
+// capture through its normal commands, without a test-only write command.
+export function seedBaseline(baseline: HostBaseline) {
+  if (!directory) throw new Error("Restart the isolated app before seeding a capture");
+  const database = new DatabaseSync(join(directory, "control-room.db"));
+  try {
+    database.exec("PRAGMA busy_timeout = 5000");
+    database
+      .prepare(
+        "INSERT INTO host_baselines (id, connection_id, label, schema_version, captured_at, payload, pinned) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        baseline.id,
+        baseline.connectionId,
+        baseline.label,
+        baseline.schemaVersion,
+        baseline.capturedAt,
+        JSON.stringify(baseline),
+        baseline.pinned ? 1 : 0,
+      );
+  } finally {
+    database.close();
+  }
 }
 
 export async function connectionMenu(name: string) {

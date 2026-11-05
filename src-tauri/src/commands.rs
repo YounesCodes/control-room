@@ -636,6 +636,7 @@ pub fn capture_host_baseline(
     captures: State<'_, BaselineCaptureRegistry>,
     request: BaselineCaptureRequest,
     progress: Channel<BaselineProgress>,
+    sudo_password: Option<String>,
 ) -> Result<HostBaselineSummary, String> {
     let connection = database.get_connection(&request.connection_id)?;
     let _permit = limiter.acquire(&request.connection_id)?;
@@ -645,9 +646,9 @@ pub fn capture_host_baseline(
     };
     // A capture honours the sudo permission the user granted for this host, so
     // sections that need root are collected rather than recorded as partial.
-    // It still never prompts: without passwordless sudo the reads run
-    // unelevated and say so.
-    let elevation = elevation_for(&database, &connection, None)?;
+    // The password, when the dialog offered one, is one-shot and never
+    // written into the capture or stored anywhere.
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
     let baseline = baselines::capture(
         &connection,
         &request.capture_id,
@@ -765,6 +766,7 @@ pub fn compare_host_baseline_with_live(
     base_id: String,
     capture_id: String,
     progress: Channel<BaselineProgress>,
+    sudo_password: Option<String>,
 ) -> Result<BaselineComparison, String> {
     let base = database.get_host_baseline(&base_id)?;
     let connection = database.get_connection(&base.connection_id)?;
@@ -773,7 +775,7 @@ pub fn compare_host_baseline_with_live(
         capture_id: &capture_id,
         channel: progress,
     };
-    let elevation = elevation_for(&database, &connection, None)?;
+    let elevation = elevation_for(&database, &connection, sudo_password)?;
     let live = baselines::capture(
         &connection,
         &capture_id,
@@ -784,6 +786,30 @@ pub fn compare_host_baseline_with_live(
         &reporter,
     )?;
     Ok(baselines::compare_with_live(&base, &live))
+}
+
+#[tauri::command]
+pub fn set_host_baseline_reference(
+    database: State<'_, Database>,
+    id: String,
+) -> Result<HostBaselineSummary, String> {
+    database.set_host_baseline_reference(&id)
+}
+
+#[tauri::command]
+pub fn clear_host_baseline_reference(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<bool, String> {
+    database.clear_host_baseline_reference(&connection_id)
+}
+
+#[tauri::command]
+pub fn get_host_baseline_reference(
+    database: State<'_, Database>,
+    connection_id: String,
+) -> Result<Option<HostBaselineSummary>, String> {
+    database.get_host_baseline_reference(&connection_id)
 }
 
 #[tauri::command]

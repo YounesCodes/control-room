@@ -1,15 +1,13 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, History } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
-import { formatCapturedAt, sectionLabel, statusHint, statusLabel } from "../../lib/host-baselines";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type {
   HostBaseline,
   BaselineEntry,
   BaselineSection,
   BaselineSectionKind,
   BaselineSectionStatus,
-  BaselineTrace,
 } from "../../types";
+import { entrySearchText, sectionLabel, statusHint, statusLabel } from "../../lib/host-baselines";
 
 export function StatusChip({ status }: { status: BaselineSectionStatus }) {
   return (
@@ -19,42 +17,74 @@ export function StatusChip({ status }: { status: BaselineSectionStatus }) {
   );
 }
 
-export function BaselineSectionList({
-  connectionId,
-  baseline,
-}: {
-  connectionId: string;
+/** Large sections render a window of matches rather than every row at once: a
+ * package inventory can be thousands of rows, and the state view must stay
+ * responsive while every entry remains findable through the filter. */
+const VISIBLE_WINDOW = 150;
+
+interface BaselineSectionListProps {
   baseline: HostBaseline;
-}) {
+  search?: string;
+  /** Which entry identity is being inspected, so the row shows its state. */
+  selectedIdentity: string | null;
+  onInspect: (section: BaselineSection, entry: BaselineEntry) => void;
+}
+
+// A capture is worth opening on its own, not only as one side of a diff, so
+// every section that read something can be expanded to the entries it
+// recorded. Selecting an entry opens the inspector beside the workspace.
+export function BaselineSectionList({
+  baseline,
+  search = "",
+  selectedIdentity,
+  onInspect,
+}: BaselineSectionListProps) {
   return (
     <div className="baseline-sections">
       {baseline.sections.map((section) => (
-        <SectionView key={section.kind} connectionId={connectionId} section={section} />
+        <SectionView
+          key={section.kind + ":" + search}
+          section={section}
+          search={search}
+          selectedIdentity={selectedIdentity}
+          onInspect={onInspect}
+        />
       ))}
     </div>
   );
 }
 
-// A capture is worth opening on its own, not only as one side of a diff, so
-// every section that read something can be expanded to the entries it recorded.
+function sectionKind(section: BaselineSection): BaselineSectionKind {
+  return section.kind as BaselineSectionKind;
+}
+
 function SectionView({
-  connectionId,
   section,
+  search,
+  selectedIdentity,
+  onInspect,
 }: {
-  connectionId: string;
   section: BaselineSection;
+  search: string;
+  selectedIdentity: string | null;
+  onInspect: (section: BaselineSection, entry: BaselineEntry) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState("");
+  const [page, setPage] = useState(0);
   const expandable = section.entries.length > 0;
-  const needle = filter.trim().toLowerCase();
-  const visible = needle
+  const needle = (search || filter).trim().toLowerCase();
+  const matching = needle
     ? section.entries.filter(
-        (entry) =>
-          entry.label.toLowerCase().includes(needle) ||
-          entry.facts.some((fact) => fact.value.toLowerCase().includes(needle)),
+        (entry) => entrySearchText(entry, needle) && entrySearchText(entry, filter),
       )
     : section.entries;
+  const start = Math.min(
+    page * VISIBLE_WINDOW,
+    Math.max(0, Math.ceil(matching.length / VISIBLE_WINDOW) - 1) * VISIBLE_WINDOW,
+  );
+  const visible = matching.slice(start, start + VISIBLE_WINDOW);
+  const isExpanded = expanded || Boolean(needle);
 
   return (
     <section className="baseline-section">
@@ -63,14 +93,14 @@ function SectionView({
           <button
             className="baseline-section-toggle"
             type="button"
-            aria-expanded={expanded}
+            aria-expanded={isExpanded}
             onClick={() => setExpanded((current) => !current)}
           >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <h3>{sectionLabel(section.kind)}</h3>
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <h3>{sectionLabel(sectionKind(section))}</h3>
           </button>
         ) : (
-          <h3>{sectionLabel(section.kind)}</h3>
+          <h3>{sectionLabel(sectionKind(section))}</h3>
         )}
         <StatusChip status={section.status} />
         {section.kind !== "host" && (
@@ -78,28 +108,53 @@ function SectionView({
         )}
       </header>
       {section.message && <p className="inline-warning">{section.message}</p>}
-      {expanded && (
+      {isExpanded && (
         <>
           {section.entries.length > 8 && (
             <input
               className="baseline-entry-filter"
               value={filter}
-              onChange={(event) => setFilter(event.target.value)}
+              onChange={(event) => {
+                setFilter(event.target.value);
+                setPage(0);
+              }}
               placeholder={`Filter ${section.entries.length} entries`}
-              aria-label={`Filter ${sectionLabel(section.kind)}`}
+              aria-label={`Filter ${sectionLabel(sectionKind(section))}`}
             />
           )}
           <ul className="baseline-entry-list">
             {visible.map((entry) => (
               <EntryRow
                 key={entry.identity}
-                connectionId={connectionId}
-                kind={section.kind}
                 entry={entry}
+                section={section}
+                selected={selectedIdentity === entry.identity}
+                onInspect={onInspect}
               />
             ))}
           </ul>
           {!visible.length && <p className="baseline-section-count">No entry matches that text</p>}
+          {matching.length > visible.length && (
+            <p className="baseline-section-count">
+              Showing {start + 1}–{start + visible.length} of {matching.length}
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={start === 0}
+                onClick={() => setPage(Math.max(0, page - 1))}
+              >
+                Previous entries
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={start + visible.length >= matching.length}
+                onClick={() => setPage(page + 1)}
+              >
+                Next entries
+              </button>
+            </p>
+          )}
         </>
       )}
     </section>
@@ -107,101 +162,35 @@ function SectionView({
 }
 
 function EntryRow({
-  connectionId,
-  kind,
   entry,
+  section,
+  selected,
+  onInspect,
 }: {
-  connectionId: string;
-  kind: BaselineSectionKind;
   entry: BaselineEntry;
+  section: BaselineSection;
+  selected: boolean;
+  onInspect: (section: BaselineSection, entry: BaselineEntry) => void;
 }) {
-  const [trace, setTrace] = useState<BaselineTrace | null>(null);
-  const [tracing, setTracing] = useState(false);
-  const [traceError, setTraceError] = useState<string | null>(null);
-
-  async function toggleTrace() {
-    if (trace) {
-      setTrace(null);
-      return;
-    }
-    setTracing(true);
-    setTraceError(null);
-    try {
-      setTrace(await api.traceHostBaselineEntry(connectionId, kind, entry.identity));
-    } catch (caught) {
-      setTraceError(errorMessage(caught));
-    } finally {
-      setTracing(false);
-    }
-  }
-
   return (
     <li>
-      <div className="baseline-entry-head">
+      <button
+        className={
+          selected ? "baseline-entry-head baseline-entry-head-selected" : "baseline-entry-head"
+        }
+        type="button"
+        onClick={() => onInspect(section, entry)}
+      >
         <code>{entry.label}</code>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={`History of ${entry.label}`}
-          aria-pressed={Boolean(trace)}
-          onClick={() => void toggleTrace()}
-        >
-          <History size={14} />
-        </button>
-      </div>
-      <dl className="baseline-entry-facts">
-        {entry.facts.map((fact) => (
+      </button>
+      <dl className="baseline-entry-facts baseline-entry-preview">
+        {entry.facts.slice(0, 2).map((fact) => (
           <div key={fact.name}>
             <dt>{fact.name}</dt>
             <dd className="technical">{fact.value}</dd>
           </div>
         ))}
       </dl>
-      {tracing && <p className="baseline-section-count">Reading saved captures…</p>}
-      {traceError && <p className="inline-error">{traceError}</p>}
-      {trace && <TraceTable trace={trace} />}
     </li>
-  );
-}
-
-// Two captures answer what changed. Reading one entry down the whole history
-// answers when it changed, which is usually the actual question.
-function TraceTable({ trace }: { trace: BaselineTrace }) {
-  const names = [...new Set(trace.points.flatMap((point) => point.facts.map((fact) => fact.name)))];
-  return (
-    <div className="baseline-trace">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Capture</th>
-            {names.map((name) => (
-              <th scope="col" key={name}>
-                {name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {trace.points.map((point) => (
-            <tr key={point.baselineId}>
-              <th scope="row">{point.label ?? formatCapturedAt(point.capturedAt)}</th>
-              {point.present ? (
-                names.map((name) => (
-                  <td className="technical" key={name}>
-                    {point.facts.find((fact) => fact.name === name)?.value ?? "not recorded"}
-                  </td>
-                ))
-              ) : (
-                <td className="baseline-trace-absent" colSpan={names.length || 1}>
-                  {point.sectionStatus === "collected" || point.sectionStatus === "partial"
-                    ? "Not present in this capture"
-                    : statusLabel(point.sectionStatus)}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }

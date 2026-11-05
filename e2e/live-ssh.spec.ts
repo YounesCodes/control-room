@@ -240,8 +240,9 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     const { saved } = await connect();
     await feature("Baselines");
     for (const label of ["Before", "After"]) {
-      await $("aria/Baseline label").setValue(label);
       await $("button=Capture baseline").click();
+      await $("aria/Baseline label").setValue(label);
+      await $("button=Start capture").click();
       await browser.waitUntil(
         async () =>
           (
@@ -264,7 +265,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
       await ipc<HostBaselineSummary[]>("list_host_baselines", { connectionId: saved.id }),
     ).toHaveLength(2);
     await feature("Baselines");
-    await $(`#baseline-row-${stored[0].id}`).click();
+    await $(`#baseline-node-${stored[0].id}`).click();
     await $(".baseline-compare-field select").selectByAttribute("value", "live");
     await browser.waitUntil(async () => $(".baseline-comparison-note").isExisting(), {
       timeout: 60_000,

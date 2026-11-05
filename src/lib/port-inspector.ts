@@ -369,3 +369,24 @@ export interface PublishedPortSelection {
   hostPort: number;
   containerPort: string;
 }
+
+export interface RecordedListenerSelection {
+  protocol: string;
+  addressFamily: string;
+  localAddress: string;
+  port: number;
+  systemdUnit: string;
+}
+export function matchesRecordedListener(
+  socket: ListeningSocket,
+  recorded: RecordedListenerSelection,
+): boolean {
+  return (
+    socket.ownership === "known" &&
+    socket.protocol === recorded.protocol &&
+    socket.addressFamily === recorded.addressFamily &&
+    socket.localAddress === recorded.localAddress &&
+    socket.port === recorded.port &&
+    socket.systemdUnit === recorded.systemdUnit
+  );
+}

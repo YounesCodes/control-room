@@ -5,25 +5,19 @@ description: Save a host snapshot and compare it with a later one.
 
 import baselinesScreenshot from "../../../assets/screenshots/baselines.png";
 
-A baseline is a snapshot you choose to save for one SSH host. Capture one before a change, then compare it with another snapshot or a fresh read of the host.
+A baseline is a snapshot you choose to save for one SSH host. The Baselines tab arranges your saved snapshots on a timeline, so you pick a moment in time instead of picking two rows to compare.
 
-<figure class="docs-screenshot">
-  <a href={baselinesScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={baselinesScreenshot.src}
-      alt="Saved baselines beside a comparison showing a changed container image."
-    />
-  </a>
-  <figcaption>Choose a saved snapshot and compare it with another. Example data shown.</figcaption>
-</figure>
+The same **Capture baseline** button starts every capture. It opens a small dialog where you can name the capture and choose what to read:
 
-Choose what to capture:
-
-- host identity and capabilities
-- systemd units
-- Docker containers
-- listening ports
-- filesystems
+- host identity, hardware, and timezone
+- systemd units, persistent dependency settings, and timer definitions
+- Docker images, mounts, networks, restart policies, and limits
+- listening ports, interfaces, and default routes
+- firewall policy and ordered rules from UFW, firewalld, nftables, or iptables
+- filesystems, device sources, and safe mount settings from fstab
+- cron jobs
+- installed packages from dpkg or rpm, with recent dpkg transaction-log evidence when readable
+- selected SSH and sysctl settings, privileged group membership, and safe Docker daemon options
 
 The app reads one part at a time. If you stop, completed parts stay saved and the rest are marked skipped. Each part also has a collection time and status:
 
@@ -35,8 +29,33 @@ The app reads one part at a time. If you stop, completed parts stay saved and th
 | Not readable | The read failed or the account did not have permission.   |
 | Not captured | You did not select this part, or stopped before it ran.   |
 
-Comparison shows what was added, removed, or changed. It matches services by unit ID, containers by ID, listeners by address and protocol, and filesystems by mount point. A live comparison is read and discarded; it does not save a new baseline. The app shows when host identity or section versions do not match, and does not guess why something changed.
+The timeline shows each capture with its date, label, how much of the host it read, and how many meaningful changes happened since the capture before it. Use **Jump to latest** to reach the newest capture, and the arrow keys, Home, and End to move between them.
 
-Open a saved baseline to expand its parts. Use the history icon beside an entry to see its values across saved captures. Comparisons hide service sub-states and container states by default; turn off **Hide values that move on their own** to include them.
+<figure class="docs-screenshot">
+  <a href={baselinesScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={baselinesScreenshot.src}
+      alt="Example baseline timeline, saved comparison, and SSH unit inspector"
+    />
+  </a>
+  <figcaption>Example captures with recorded SSH unit differences.</figcaption>
+</figure>
 
-You can rename, pin, or delete a baseline, and copy or export a comparison as Markdown or JSON. Control Room keeps up to 20 unpinned baselines per host; pinned ones stay until you remove them.
+Selecting a capture opens two views:
+
+- **Changes** shows the differences against another capture — the previous one by default. Select a difference to inspect its before and after values. **Filter changes** narrows the view by section and change type.
+- **State** shows everything the capture recorded, section by section. Search finds recorded facts, and large inventories have **Previous entries** and **Next entries** controls.
+
+Values that move on their own — a restarted container, disk usage within five percentage points, a recreated container ID — are separated from the differences that matter. The count at the top of a comparison says how many of these routine changes were hidden, and **Show routine changes** includes them with the reason each one is routine. If a section could not be read, its changes are reported as impossible to compare instead of as unchanged, and missing resources from a partial read are marked unverified and excluded from confirmed difference counts.
+
+**Compare with** chooses the other side: the previous capture, the reference, any saved capture, or **Live machine (unsaved read)**, which reads the host right now without saving a baseline.
+
+Choose a difference to open the inspector beside the workspace. It shows the recorded facts, the exact change, its classification, and **Read across captures** for that resource's values in every saved snapshot. Where the evidence is exact, it offers **Open in Systemd**, **Open in Docker**, or **Open in Ports** for the same unit or container.
+
+You can rename, pin, or delete a capture, and **Mark as reference** sets one capture per host as the anchor for comparisons. A reference is protected from the 20-capture retention limit, is separate from pinning, and replacing or clearing it asks for confirmation.
+
+Sections that need root follow the host's Allow sudo setting. A one-shot **Retry with sudo** also works when that setting is off. **Retry live read with sudo** keeps its result unsaved. If some parts could not be read, the pane can run the capture again with sudo; the earlier snapshot is never rewritten. Copy and export produce Markdown or JSON that matches what the comparison currently shows, including its warnings.
+
+The app keeps at most 5,000 installed packages, 400 cron jobs, and detailed settings for 200 containers per capture. Additional evidence is limited to 1,000 resources per section. Reaching a limit marks the section **Partial**. Cron commands stay on the host; captures save a redacted description and a SHA-256 fingerprint so argument changes remain detectable.
+
+Nftables and Docker daemon option reads require `jq` on the host. Free-text firewall annotations and credential-bearing mount options are omitted. Package history covers events in the last 1,000 lines of the current dpkg log. Other transaction sources report the last update as unknown.

@@ -1,24 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
-  changeCount,
   comparisonSummary,
-  applyVolatileFilter,
   comparisonTargetTitle,
   comparisonToMarkdown,
+  comparisonTotals,
+  comparisonView,
+  coverageText,
   exportFileName,
-  hasVolatileChanges,
-  statusHint,
   identityWarning,
+  isRoutineEntry,
   orderForComparison,
   sectionLabel,
   baselineTitle,
   sortBaselines,
+  statusHint,
   statusLabel,
+  SECTION_KINDS,
 } from "./host-baselines";
 import type {
   HostBaselineSummary,
   BaselineComparison,
   BaselineSectionDiff,
+  BaselineEntryChange,
   BaselineSectionKind,
   BaselineSectionStatus,
 } from "../types";
@@ -32,6 +35,7 @@ function summary(id: string, capturedAt: string, label: string | null = null): H
     capturedAt,
     pinned: false,
     changesSincePrevious: null,
+    routineSincePrevious: null,
     identity: {
       hostname: "host-a",
       machineFingerprint: "0123456789abcdef",
@@ -44,205 +48,268 @@ function summary(id: string, capturedAt: string, label: string | null = null): H
   };
 }
 
+function change(
+  identity: string,
+  facts: { name: string; base: string | null; target: string | null; routine?: boolean }[],
+): BaselineEntryChange {
+  return {
+    identity,
+    label: identity,
+    changes: facts.map((fact) => ({
+      name: fact.name,
+      baseValue: fact.base,
+      targetValue: fact.target,
+      classification: fact.routine ? ("routine" as const) : ("meaningful" as const),
+      reason: fact.routine ? "Sub-states move on their own between captures." : null,
+    })),
+  };
+}
+
 function diff(
   kind: BaselineSectionKind,
   comparable: boolean,
-  counts: { added?: number; removed?: number; changed?: number; unchanged?: number } = {},
+  overrides: Partial<BaselineSectionDiff> = {},
 ): BaselineSectionDiff {
-  const entry = (index: number) => ({
-    identity: `${kind}-${index}`,
-    label: `${kind}-${index}`,
-    facts: [],
-  });
   return {
     kind,
     baseStatus: "collected" as BaselineSectionStatus,
-    targetStatus: comparable ? "collected" : "unsupported",
+    targetStatus: comparable
+      ? ("collected" as BaselineSectionStatus)
+      : ("unsupported" as BaselineSectionStatus),
     comparable,
-    note: null,
-    added: Array.from({ length: counts.added ?? 0 }, (_, index) => entry(index)),
-    removed: Array.from({ length: counts.removed ?? 0 }, (_, index) => entry(100 + index)),
-    changed: Array.from({ length: counts.changed ?? 0 }, (_, index) => ({
-      identity: `${kind}-c${index}`,
-      label: `${kind}-c${index}`,
-      changes: [{ name: "activeState", baseValue: "active", targetValue: "failed" }],
-    })),
-    unchangedCount: counts.unchanged ?? 0,
+    note: comparable ? null : "Not comparable: in the later capture the subsystem was not present.",
+    added: [],
+    removed: [],
+    changed: comparable
+      ? [change("nginx.service", [{ name: "activeState", base: "active", target: "failed" }])]
+      : [],
+    unchangedCount: comparable ? 5 : 0,
+    routineCount: 0,
+    removalsIndeterminate: false,
+    ...overrides,
   };
 }
 
 function comparison(
   sections: BaselineSectionDiff[],
-  identityMatch: BaselineComparison["identityMatch"] = "same",
-  targetIsLive = false,
+  overrides: Partial<BaselineComparison> = {},
 ): BaselineComparison {
   return {
-    base: summary("base", "2026-09-01T10:00:00Z"),
-    target: summary("target", "2026-09-02T10:00:00Z"),
-    identityMatch,
+    base: summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+    target: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+    identityMatch: "same",
     schemaCompatible: true,
-    targetIsLive,
+    targetIsLive: false,
     sections,
+    ...overrides,
   };
 }
 
-describe("baseline labels", () => {
-  it("names sections and statuses in plain words", () => {
-    expect(sectionLabel("systemdUnits")).toBe("Systemd units");
-    expect(sectionLabel("filesystems")).toBe("Filesystems");
-    expect(statusLabel("unsupported")).toBe("Not present");
-    expect(statusLabel("unavailable")).toBe("Not readable");
-    expect(statusLabel("partial")).toBe("Partial");
+describe("baseline comparison summaries", () => {
+  it("counts meaningful differences separately from hidden routine churn", () => {
+    const units = diff("systemdUnits", true, {
+      changed: [
+        change("nginx.service", [
+          { name: "unitFileState", base: "enabled", target: "disabled" },
+          { name: "subState", base: "running", target: "dead", routine: true },
+        ]),
+        // Only routine facts moved: this entry leaves the meaningful count.
+        change("backup.service", [
+          { name: "subState", base: "running", target: "dead", routine: true },
+        ]),
+      ],
+      routineCount: 2,
+      unchangedCount: 8,
+    });
+    const totals = comparisonTotals(comparison([units]));
+    expect(totals.meaningful).toBe(1);
+    expect(totals.routine).toBe(2);
+    expect(totals.incomparable).toBe(0);
   });
 
-  it("falls back to the capture time when a baseline has no label", () => {
-    expect(baselineTitle(summary("a", "2026-09-01T10:00:00Z", "before upgrade"))).toBe(
-      "before upgrade",
-    );
-    expect(baselineTitle(summary("a", "2026-09-01T10:00:00Z"))).not.toBe("");
-  });
-});
-
-describe("comparison summary", () => {
-  it("counts additions, removals, and modifications together", () => {
-    expect(changeCount(diff("containers", true, { added: 1, removed: 2, changed: 3 }))).toBe(6);
-    expect(
-      comparisonSummary(comparison([diff("containers", true, { added: 1, unchanged: 4 })])),
-    ).toBe("1 change");
+  it("says how many sections could not be compared instead of calling them quiet", () => {
+    const readable = diff("systemdUnits", true, { changed: [], added: [], unchangedCount: 3 });
+    const unreadable = diff("containers", false);
+    const summaryLine = comparisonSummary(comparison([readable, unreadable]));
+    expect(summaryLine).toContain("0 meaningful differences");
+    expect(summaryLine).toContain("1 section could not be compared");
   });
 
-  it("never counts an incomparable section as unchanged", () => {
-    const result = comparisonSummary(
-      comparison([diff("containers", false), diff("systemdUnits", true, { unchanged: 12 })]),
-    );
-    expect(result).toBe("0 changes, 1 section could not be compared");
-  });
-
-  it("pluralizes skipped sections", () => {
-    expect(
-      comparisonSummary(comparison([diff("containers", false), diff("listeners", false)])),
-    ).toBe("0 changes, 2 sections could not be compared");
-  });
-});
-
-describe("host identity evidence", () => {
-  it("warns when the two captures came from different machines", () => {
-    expect(identityWarning(comparison([], "different"))).toContain("different machine identities");
-  });
-
-  it("warns when identity could not be read at all", () => {
-    expect(identityWarning(comparison([], "unknown"))).toContain("cannot confirm");
-  });
-
-  it("stays quiet when the fingerprints match", () => {
-    expect(identityWarning(comparison([], "same"))).toBeNull();
-  });
-
-  it("says the live host answered as a different machine, not that two captures differ", () => {
-    const warning = identityWarning(comparison([], "different", true));
-    expect(warning).toContain("This connection is answering as a different machine");
-    expect(warning).not.toContain("These captures");
+  it("separates the routine count on sections that only moved on their own", () => {
+    const onlyRoutine = diff("containers", true, {
+      changed: [
+        change("api", [{ name: "state", base: "running", target: "exited", routine: true }]),
+      ],
+      routineCount: 1,
+      unchangedCount: 2,
+    });
+    const line = comparisonSummary(comparison([onlyRoutine]));
+    expect(line).toContain("0 meaningful differences");
+    expect(line).toContain("1 routine change hidden");
   });
 });
 
-describe("live comparison naming", () => {
-  it("names the live side rather than showing it as a capture", () => {
-    expect(comparisonTargetTitle(comparison([], "same", true))).toBe("Live state");
-  });
-
-  it("keeps the baseline title when both sides are saved captures", () => {
-    expect(comparisonTargetTitle(comparison([]))).toBe(
-      baselineTitle(summary("target", "2026-09-02T10:00:00Z")),
-    );
-  });
-});
-
-describe("baseline ordering", () => {
-  it("lists the newest capture first and breaks ties by id", () => {
-    const ordered = sortBaselines([
-      summary("a", "2026-09-01T10:00:00Z"),
-      summary("c", "2026-09-03T10:00:00Z"),
-      summary("b", "2026-09-01T10:00:00Z"),
+describe("baseline comparison filtering", () => {
+  it("hides routine-only entries by default and reveals them on request", () => {
+    const units = diff("systemdUnits", true, {
+      changed: [
+        change("nginx.service", [{ name: "unitFileState", base: "enabled", target: "disabled" }]),
+        change("backup.service", [
+          { name: "subState", base: "running", target: "dead", routine: true },
+        ]),
+      ],
+      routineCount: 1,
+    });
+    const result = comparisonView(comparison([units]), { showRoutine: false, search: "" });
+    expect(result[0].changed.map((entry) => entry.identity)).toEqual(["nginx.service"]);
+    expect(result[0].routineCount).toBe(1);
+    const all = comparisonView(comparison([units]), { showRoutine: true, search: "" });
+    expect(all[0].changed.map((entry) => entry.identity)).toEqual([
+      "nginx.service",
+      "backup.service",
     ]);
-    expect(ordered.map((item) => item.id)).toEqual(["c", "b", "a"]);
   });
 
-  it("always compares earlier to later whichever row is selected", () => {
-    const earlier = summary("early", "2026-09-01T10:00:00Z");
-    const later = summary("late", "2026-09-05T10:00:00Z");
-    expect(orderForComparison(later, earlier)).toEqual({ baseId: "early", targetId: "late" });
-    expect(orderForComparison(earlier, later)).toEqual({ baseId: "early", targetId: "late" });
-  });
-});
-
-describe("noisy facts", () => {
-  function churn(): BaselineComparison {
-    const base = comparison([diff("systemdUnits", true, { unchanged: 3 })]);
-    base.sections[0].changed = [
-      {
-        identity: "logrotate.service",
-        label: "logrotate.service",
-        changes: [{ name: "subState", baseValue: "running", targetValue: "dead" }],
-      },
-      {
-        identity: "ssh.service",
-        label: "ssh.service",
-        changes: [
-          { name: "subState", baseValue: "running", targetValue: "dead" },
-          { name: "activeState", baseValue: "active", targetValue: "failed" },
-        ],
-      },
-    ];
-    return base;
-  }
-
-  it("notices when a comparison contains values that move on their own", () => {
-    expect(hasVolatileChanges(churn())).toBe(true);
-    expect(hasVolatileChanges(comparison([diff("filesystems", true)]))).toBe(false);
+  it("keeps the hidden routine count consistent after filtering", () => {
+    const units = diff("systemdUnits", true, {
+      changed: [
+        change("backup.service", [
+          { name: "subState", base: "running", target: "dead", routine: true },
+        ]),
+      ],
+      routineCount: 1,
+    });
+    const hidden = comparisonView(comparison([units]), { showRoutine: false, search: "" });
+    expect(hidden[0].changed).toHaveLength(0);
+    expect(hidden[0].routineCount).toBe(1);
+    expect(hidden[0].meaningfulCount).toBe(0);
   });
 
-  it("drops an entry whose only change was a noisy fact, and counts it unchanged", () => {
-    const filtered = applyVolatileFilter(churn(), true);
-    const section = filtered.sections[0];
-
-    expect(section.changed).toHaveLength(1);
-    expect(section.changed[0].identity).toBe("ssh.service");
-    expect(section.changed[0].changes.map((change) => change.name)).toEqual(["activeState"]);
-    expect(section.unchangedCount).toBe(4);
+  it("searches labels and fact values but never invents rows", () => {
+    const units = diff("systemdUnits", true, {
+      added: [{ identity: "postgresql.service", label: "postgresql.service", facts: [] }],
+      removed: [{ identity: "redis.service", label: "redis.service", facts: [] }],
+      changed: [
+        change("nginx.service", [{ name: "activeState", base: "active", target: "failed" }]),
+      ],
+    });
+    const result = comparisonView(comparison([units]), { showRoutine: false, search: "nginx" });
+    expect(result[0].added).toHaveLength(0);
+    expect(result[0].removed).toHaveLength(0);
+    expect(result[0].changed.map((entry) => entry.identity)).toEqual(["nginx.service"]);
   });
 
-  it("leaves the comparison alone when the filter is off", () => {
-    expect(applyVolatileFilter(churn(), false).sections[0].changed).toHaveLength(2);
+  it("carries incomparable sections through the view with their note", () => {
+    const unreadable = diff("packages", false);
+    const result = comparisonView(comparison([unreadable]), { showRoutine: false, search: "" });
+    expect(result[0].comparable).toBe(false);
+    expect(result[0].note).toContain("Not comparable");
   });
 });
 
-describe("comparison export", () => {
-  it("writes the same facts the panel shows", () => {
-    const markdown = comparisonToMarkdown(
-      comparison([diff("systemdUnits", true, { added: 1, changed: 1, unchanged: 2 })]),
+describe("baseline helper contracts", () => {
+  it("treats an entry as routine only when every fact change is routine", () => {
+    expect(
+      isRoutineEntry(change("a", [{ name: "state", base: "1", target: "2", routine: true }])),
+    ).toBe(true);
+    expect(
+      isRoutineEntry(
+        change("a", [
+          { name: "state", base: "1", target: "2", routine: true },
+          { name: "image", base: "api:1", target: "api:2" },
+        ]),
+      ),
+    ).toBe(false);
+    expect(isRoutineEntry(change("a", [{ name: "image", base: "api:1", target: "api:2" }]))).toBe(
+      false,
     );
-
-    expect(markdown).toContain("## Systemd units");
-    expect(markdown).toContain("- Added `systemdUnits-0`");
-    expect(markdown).toContain("activeState: `active` → `failed`");
   });
 
-  it("says a section could not be compared instead of leaving it blank", () => {
-    const markdown = comparisonToMarkdown(comparison([diff("containers", false)]));
-    expect(markdown).toContain("Not comparable");
+  it("orders newest first and compares earlier to later", () => {
+    const earlier = summary("earlier", "2026-09-01T10:00:00Z");
+    const later = summary("later", "2026-09-02T10:00:00Z");
+    expect(sortBaselines([earlier, later]).map((item) => item.id)).toEqual(["later", "earlier"]);
+    expect(orderForComparison(later, earlier)).toEqual({
+      baseId: "earlier",
+      targetId: "later",
+    });
+    expect(orderForComparison(earlier, later)).toEqual({ baseId: "earlier", targetId: "later" });
   });
 
-  it("builds a file name no filesystem will reject", () => {
-    const name = exportFileName(comparison([], "same", true), "md");
-    expect(name.endsWith(".md")).toBe(true);
-    expect(name).not.toMatch(/[^a-zA-Z0-9.-]/);
+  it("labels every section the backend records", () => {
+    expect(SECTION_KINDS).toHaveLength(9);
+    expect(sectionLabel("configurationAccess")).toBe("Configuration & access");
+    expect(sectionLabel("firewall")).toBe("Firewall");
+    expect(sectionLabel("scheduledJobs")).toBe("Scheduled jobs");
+    expect(sectionLabel("packages")).toBe("Packages");
+    expect(statusLabel("partial")).toBe("Partial");
+    expect(statusHint("unsupported").length).toBeGreaterThan(0);
   });
-});
 
-describe("status hints", () => {
-  it("separates a missing subsystem from one this account cannot read", () => {
-    expect(statusHint("unsupported")).toContain("not installed");
-    expect(statusHint("unavailable")).toContain("could not read");
-    expect(statusHint("skipped")).toContain("never asked");
+  it("reports coverage as readable sections, not a health verdict", () => {
+    const baseline = summary("a", "2026-09-01T10:00:00Z");
+    baseline.sections = [
+      { kind: "host", status: "collected", entryCount: 1 },
+      { kind: "systemdUnits", status: "partial", entryCount: 40 },
+      { kind: "containers", status: "unsupported", entryCount: 0 },
+    ];
+    expect(coverageText(baseline)).toBe("2/3 read · 1 partial");
+  });
+
+  it("names the target honestly, including a live read", () => {
+    const stored = comparison([]);
+    expect(comparisonTargetTitle(stored)).toBe("after upgrade");
+    expect(comparisonTargetTitle(comparison([], { targetIsLive: true }))).toBe("Live state");
+    expect(baselineTitle(stored.base)).toBe("before upgrade");
+  });
+
+  it("warns when identity evidence is missing or contradictory", () => {
+    expect(identityWarning(comparison([], { identityMatch: "same" }))).toBeNull();
+    expect(identityWarning(comparison([], { identityMatch: "unknown" }))).toContain(
+      "cannot confirm",
+    );
+    expect(identityWarning(comparison([], { identityMatch: "different" }))).toContain("two hosts");
+  });
+
+  it("exports markdown matching the requested filters, with routine reasons", () => {
+    const units = diff("systemdUnits", true, {
+      changed: [
+        change("nginx.service", [
+          { name: "unitFileState", base: "enabled", target: "disabled" },
+          { name: "subState", base: "running", target: "dead", routine: true },
+        ]),
+      ],
+      routineCount: 1,
+    });
+    const text = comparisonToMarkdown(comparison([units]), { showRoutine: false, search: "" });
+    expect(text).toContain("1 meaningful difference");
+    expect(text).toContain("1 routine change hidden");
+    expect(text).toContain("unitFileState: `enabled` → `disabled`");
+    expect(text).not.toContain("subState: `running`");
+    const showAll = comparisonToMarkdown(comparison([units]), { showRoutine: true, search: "" });
+    expect(showAll).toContain("1 routine change");
+    expect(showAll).not.toContain("hidden");
+    expect(showAll).toContain("subState: `running` → `dead`");
+    expect(showAll).toContain("routine: Sub-states move on their own between captures.");
+  });
+
+  it("marks live reads and partial removals in the export", () => {
+    const listeners = diff("listeners", true, {
+      removed: [{ identity: "tcp/ipv4/0.0.0.0:22", label: "0.0.0.0:22/tcp", facts: [] }],
+      removalsIndeterminate: true,
+      note: "One side of this section was partial. The comparison covers only what each capture could read.",
+    });
+    const live = comparison([listeners], {
+      target: summary("live", "2026-09-03T09:00:00Z"),
+      targetIsLive: true,
+    });
+    const text = comparisonToMarkdown(live);
+    expect(text).toContain("This read was not saved");
+    expect(text).toContain("unverified rather than confirmed gone");
+  });
+
+  it("builds export file names both platforms accept", () => {
+    const result = comparison([]);
+    expect(exportFileName(result, "md")).toMatch(/^baseline-before-upgrade-to-after-upgrade\.md$/);
   });
 });

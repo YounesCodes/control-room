@@ -16,6 +16,9 @@ const api = vi.hoisted(() => ({
   setHostBaselinePinned: vi.fn(),
   traceHostBaselineEntry: vi.fn(),
   exportTextFile: vi.fn(),
+  getHostBaselineReference: vi.fn(),
+  setHostBaselineReference: vi.fn(),
+  clearHostBaselineReference: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn() }));
@@ -74,10 +77,11 @@ function summary(
     id,
     connectionId: connection.id,
     label,
-    schemaVersion: 1,
+    schemaVersion: 2,
     capturedAt,
     pinned: false,
     changesSincePrevious: null,
+    routineSincePrevious: null,
     identity,
     ...extra,
     sections: [
@@ -85,7 +89,10 @@ function summary(
       { kind: "systemdUnits", status: "collected", entryCount: 40 },
       { kind: "containers", status: "unsupported", entryCount: 0 },
       { kind: "listeners", status: "partial", entryCount: 7 },
+      { kind: "firewall", status: "collected", entryCount: 3 },
       { kind: "filesystems", status: "collected", entryCount: 3 },
+      { kind: "scheduledJobs", status: "collected", entryCount: 4 },
+      { kind: "packages", status: "partial", entryCount: 5000 },
     ],
   };
 }
@@ -94,7 +101,7 @@ const detail: HostBaseline = {
   id: "later",
   connectionId: connection.id,
   label: "after upgrade",
-  schemaVersion: 1,
+  schemaVersion: 2,
   capturedAt: "2026-09-02T10:00:00Z",
   pinned: false,
   identity,
@@ -123,12 +130,15 @@ const detail: HostBaseline = {
         {
           identity: "ssh.service",
           label: "ssh.service",
-          facts: [{ name: "activeState", value: "active" }],
+          facts: [
+            { name: "activeState", value: "failed" },
+            { name: "subState", value: "running" },
+          ],
         },
         {
           identity: "nginx.service",
           label: "nginx.service",
-          facts: [{ name: "activeState", value: "failed" }],
+          facts: [{ name: "activeState", value: "active" }],
         },
       ],
     },
@@ -143,53 +153,80 @@ const detail: HostBaseline = {
   ],
 };
 
-const comparison: BaselineComparison = {
-  base: summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
-  target: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
-  identityMatch: "same",
-  schemaCompatible: true,
-  targetIsLive: false,
-  sections: [
-    {
-      kind: "systemdUnits",
-      baseStatus: "collected",
-      targetStatus: "collected",
-      comparable: true,
-      note: null,
-      added: [{ identity: "postgresql.service", label: "postgresql.service", facts: [] }],
-      removed: [{ identity: "nginx.service", label: "nginx.service", facts: [] }],
-      changed: [
-        {
-          identity: "ssh.service",
-          label: "ssh.service",
-          changes: [{ name: "activeState", baseValue: "active", targetValue: "failed" }],
-        },
-      ],
-      unchangedCount: 37,
-    },
-    {
-      kind: "containers",
-      baseStatus: "collected",
-      targetStatus: "unsupported",
-      comparable: false,
-      note: "Not comparable: in the later capture the subsystem was not present.",
-      added: [],
-      removed: [],
-      changed: [],
-      unchangedCount: 0,
-    },
-  ],
-};
+function comparisonFixture(): BaselineComparison {
+  return {
+    base: summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+    target: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+    identityMatch: "same",
+    schemaCompatible: true,
+    targetIsLive: false,
+    sections: [
+      {
+        kind: "systemdUnits",
+        baseStatus: "collected",
+        targetStatus: "collected",
+        comparable: true,
+        note: null,
+        added: [{ identity: "postgresql.service", label: "postgresql.service", facts: [] }],
+        removed: [{ identity: "nginx.service", label: "nginx.service", facts: [] }],
+        changed: [
+          {
+            identity: "ssh.service",
+            label: "ssh.service",
+            changes: [
+              {
+                name: "activeState",
+                baseValue: "active",
+                targetValue: "failed",
+                classification: "meaningful",
+                reason: null,
+              },
+              {
+                name: "subState",
+                baseValue: "running",
+                targetValue: "dead",
+                classification: "routine",
+                reason: "Sub-states move on their own between captures.",
+              },
+            ],
+          },
+        ],
+        unchangedCount: 37,
+        routineCount: 1,
+        removalsIndeterminate: false,
+      },
+      {
+        kind: "containers",
+        baseStatus: "collected",
+        targetStatus: "unsupported",
+        comparable: false,
+        note: "Not comparable: in the later capture the subsystem was not present.",
+        added: [],
+        removed: [],
+        changed: [],
+        unchangedCount: 0,
+        routineCount: 0,
+        removalsIndeterminate: false,
+      },
+    ],
+  };
+}
 
-// The section names now appear twice on the page: once as capture checkboxes,
-// once in the detail. Detail assertions look inside the detail panel only.
-function detail_panel() {
+function inspector_pane() {
   return within(screen.getByRole("complementary"));
 }
 
-function renderPane(selectedId: string | null = "later") {
+function renderPane(selectedId: string | null = "later", extraProps: Record<string, unknown> = {}) {
   const onSelect = vi.fn();
-  render(<BaselinesPane connection={connection} selectedId={selectedId} onSelect={onSelect} />);
+  render(
+    <BaselinesPane
+      connection={connection}
+      selectedId={selectedId}
+      onSelect={onSelect}
+      globalSudoEnabled={false}
+      {...extraProps}
+    />,
+  );
   return onSelect;
 }
 
@@ -198,52 +235,114 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("baselines pane", () => {
-  it("ignores a comparison that finishes after No comparison is selected", async () => {
+describe("baselines explorer", () => {
+  it("opens with the latest capture selected and compares it with the previous one", async () => {
     api.listHostBaselines.mockResolvedValue([
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+    ]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.compareHostBaselines.mockResolvedValue(comparisonFixture());
+    api.getHostBaselineReference.mockResolvedValue(null);
+    renderPane("later");
+    expect(await screen.findAllByText("after upgrade")).not.toHaveLength(0);
+    // The comparison against the previous capture runs on its own: opening the
+    // pane answers "what changed", without asking the host anything.
+    await waitFor(() => expect(api.compareHostBaselines).toHaveBeenCalledWith("earlier", "later"));
+    // Nothing contacted the host to draw the timeline.
+    expect(api.captureHostBaseline).not.toHaveBeenCalled();
+    expect(api.compareHostBaselineWithLive).not.toHaveBeenCalled();
+  });
+
+  it("navigates the timeline with the keyboard and updates the selection", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+    ]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    const onSelect = renderPane("later");
+    await screen.findAllByText("after upgrade");
+    const timeline = screen.getByRole("group", { name: "Capture history" });
+    timeline.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("earlier"));
+    await userEvent.keyboard("{Home}");
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("earlier"));
+    await userEvent.keyboard("{End}");
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("later"));
+    await userEvent.click(screen.getByRole("button", { name: "Jump to latest capture" }));
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("later"));
+  });
+
+  it("shows distinct honest states instead of a false all-clear", async () => {
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    renderPane("later");
+    await screen.findByText(/No earlier capture/);
+    expect(screen.getByRole("tab", { name: "State" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("defaults a single capture to State and searches recorded facts", async () => {
+    api.listHostBaselines.mockResolvedValue([
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
     ]);
     api.getHostBaseline.mockResolvedValue(detail);
-    let finish!: (value: BaselineComparison) => void;
-    api.compareHostBaselines.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
+    api.getHostBaselineReference.mockResolvedValue(null);
     renderPane();
-    await screen.findAllByText("before upgrade");
-    await userEvent.selectOptions(screen.getByRole("combobox"), "earlier");
-    await waitFor(() => expect(finish).toBeDefined());
-    await userEvent.selectOptions(screen.getByRole("combobox"), "");
-    await act(async () => finish(comparison));
-    expect(screen.queryByText("postgresql.service")).toBeNull();
-    expect(screen.queryByText("Comparing baselines…")).toBeNull();
+    await screen.findByRole("tab", { name: "State" });
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "State" }).getAttribute("aria-selected")).toBe("true"),
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Search baseline" }), "failed");
+    expect(await screen.findByRole("button", { name: "ssh.service" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "nginx.service" })).toBeNull();
   });
 
-  it("clears the previous detail when the next selection cannot be read", async () => {
+  it("does not read the live host again when navigating saved history", async () => {
     api.listHostBaselines.mockResolvedValue([
-      summary("earlier", "2026-09-01T10:00:00Z", null),
-      summary("later", "2026-09-02T10:00:00Z", null),
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
     ]);
-    api.getHostBaseline
-      .mockResolvedValueOnce(detail)
-      .mockRejectedValueOnce(new Error("Unreadable capture"));
-    const onSelect = vi.fn();
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    api.compareHostBaselines.mockResolvedValue(comparisonFixture());
+    api.compareHostBaselineWithLive.mockResolvedValue({
+      ...comparisonFixture(),
+      targetIsLive: true,
+    });
     const view = render(
-      <BaselinesPane connection={connection} selectedId="later" onSelect={onSelect} />,
+      <BaselinesPane
+        connection={connection}
+        selectedId="later"
+        onSelect={vi.fn()}
+        globalSudoEnabled={false}
+      />,
     );
-    await screen.findByText("Docker is not installed");
+    await screen.findByRole("combobox", { name: "Compare with" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Compare with" }), "live");
+    await waitFor(() => expect(api.compareHostBaselineWithLive).toHaveBeenCalledTimes(1));
     view.rerender(
-      <BaselinesPane connection={connection} selectedId="earlier" onSelect={onSelect} />,
+      <BaselinesPane
+        connection={connection}
+        selectedId="earlier"
+        onSelect={vi.fn()}
+        globalSudoEnabled={false}
+      />,
     );
-    await screen.findByText("Unreadable capture");
-    expect(screen.queryByText("Docker is not installed")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Compare with" })).toHaveProperty(
+        "value",
+        "previous",
+      ),
+    );
+    expect(api.compareHostBaselineWithLive).toHaveBeenCalledTimes(1);
   });
 
-  it("shows capture progress and cancels the active capture without requesting another", async () => {
+  it("captures from a dialog, defaults to every section and reports real progress", async () => {
     api.listHostBaselines.mockResolvedValue([]);
+    api.getHostBaselineReference.mockResolvedValue(null);
     let finish!: (value: HostBaselineSummary) => void;
     api.captureHostBaseline.mockImplementationOnce((request, channel) => {
       channel.onmessage({
@@ -252,7 +351,7 @@ describe("baselines pane", () => {
         status: "collected",
         message: null,
         completed: 1,
-        total: 5,
+        total: 8,
       });
       return new Promise((resolve) => {
         finish = resolve;
@@ -260,172 +359,199 @@ describe("baselines pane", () => {
     });
     api.cancelHostBaseline.mockResolvedValue(undefined);
     renderPane(null);
-    await screen.findByText("No baselines yet");
+    await screen.findByText("No captures yet");
     await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
-    expect(screen.getByRole("button", { name: "Stop after this section" })).toBeTruthy();
-    expect(document.querySelector(".baseline-progress")?.textContent).toContain("Host facts");
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "Ports" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /Start capture/ }));
+    await screen.findByText("Host facts");
+    expect(within(dialog).getByText("Collected")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Stop after this section" }));
     expect(api.cancelHostBaseline).toHaveBeenCalledExactlyOnceWith(
       api.captureHostBaseline.mock.calls[0][0].captureId,
     );
-    await act(async () => finish(summary("partial", "2026-10-07T10:00:00Z", "Stopped capture")));
-    expect(api.captureHostBaseline).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Stop after this section" })).toBeNull();
+    await act(async () => finish(summary("new", "2026-09-03T10:00:00Z", "fresh capture")));
+    const request = api.captureHostBaseline.mock.calls[0][0];
+    expect(request.label).toBeNull();
+    expect(request.sections).toEqual([
+      "host",
+      "systemdUnits",
+      "containers",
+      "firewall",
+      "filesystems",
+      "scheduledJobs",
+      "packages",
+      "configurationAccess",
+    ]);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("ignores a previous selection's late detail failure", async () => {
+  it("sends a label and no section list when everything stays selected", async () => {
+    api.listHostBaselines.mockResolvedValue([]);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    api.captureHostBaseline.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
+    renderPane(null);
+    await screen.findByText("No captures yet");
+    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Baseline label" }), "after");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Start capture/ }));
+    await waitFor(() => expect(api.captureHostBaseline).toHaveBeenCalled());
+    expect(api.captureHostBaseline.mock.calls[0][0].label).toBe("after");
+    expect(api.captureHostBaseline.mock.calls[0][0].sections).toBeNull();
+  });
+
+  it("compares against the reference capture when one is marked", async () => {
     api.listHostBaselines.mockResolvedValue([
-      summary("earlier", "2026-09-01T10:00:00Z", null),
-      summary("later", "2026-09-02T10:00:00Z", null),
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+      summary("reference", "2026-09-01T08:00:00Z", "clean install"),
     ]);
-    let reject!: (error: Error) => void;
-    api.getHostBaseline
-      .mockImplementationOnce(
-        () =>
-          new Promise((_resolve, fail) => {
-            reject = fail;
-          }),
-      )
-      .mockResolvedValue(detail);
-    const onSelect = vi.fn();
-    const view = render(
-      <BaselinesPane connection={connection} selectedId="earlier" onSelect={onSelect} />,
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.compareHostBaselines.mockResolvedValue(comparisonFixture());
+    api.getHostBaselineReference.mockResolvedValue(
+      summary("reference", "2026-09-01T08:00:00Z", "clean install"),
     );
-    await waitFor(() => expect(api.getHostBaseline).toHaveBeenCalledWith("earlier"));
-    view.rerender(<BaselinesPane connection={connection} selectedId="later" onSelect={onSelect} />);
-    await screen.findAllByText("Host facts");
-    await act(async () => reject(new Error("old request failed")));
-    expect(screen.queryByText("old request failed")).toBeNull();
+    renderPane("later");
+    await screen.findAllByText("after upgrade");
+    await userEvent.click(screen.getByRole("button", { name: "Mark as reference" }));
+    expect(api.setHostBaselineReference).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Replace reference" }),
+    );
+    await waitFor(() => expect(api.setHostBaselineReference).toHaveBeenCalledWith("later"));
+    const options = screen.getByRole("combobox", { name: "Compare with" });
+    await userEvent.selectOptions(options, "reference");
+    await waitFor(() =>
+      expect(api.compareHostBaselines).toHaveBeenCalledWith("reference", "later"),
+    );
   });
-  it("lists saved captures and says capture is manual", async () => {
+
+  it("clears the reference only after an explicit confirmation", async () => {
     api.listHostBaselines.mockResolvedValue([
-      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+      summary("reference", "2026-09-01T08:00:00Z", "clean install"),
+    ]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(
+      summary("reference", "2026-09-01T08:00:00Z", "clean install"),
+    );
+    api.clearHostBaselineReference.mockResolvedValue(true);
+    renderPane("reference");
+    await screen.findAllByText("clean install");
+    await userEvent.click(screen.getByRole("button", { name: "Clear reference" }));
+    expect(api.clearHostBaselineReference).not.toHaveBeenCalled();
+    const confirm = await screen.findByRole("dialog");
+    await userEvent.click(within(confirm).getByRole("button", { name: "Clear reference" }));
+    await waitFor(() =>
+      expect(api.clearHostBaselineReference).toHaveBeenCalledWith("connection-a"),
+    );
+  });
+
+  it("deletes the selected capture after a confirmation that warns about the reference", async () => {
+    api.listHostBaselines.mockResolvedValue([
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
     ]);
     api.getHostBaseline.mockResolvedValue(detail);
-    renderPane();
-    expect(await screen.findAllByText("before upgrade")).not.toHaveLength(0);
-    expect(screen.getAllByText("after upgrade")).not.toHaveLength(0);
-    expect(
-      screen.getByText(
-        "Captured only when you ask. Control Room never collects in the background.",
-      ),
-    ).toBeTruthy();
+    api.getHostBaselineReference.mockResolvedValue(
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+    );
+    api.deleteHostBaseline.mockResolvedValue(undefined);
+    renderPane("later");
+    await screen.findAllByText("after upgrade");
+    await userEvent.click(screen.getByRole("button", { name: "Delete capture" }));
+    expect(api.deleteHostBaseline).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/clears with it/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete capture" }));
+    await waitFor(() => expect(api.deleteHostBaseline).toHaveBeenCalledWith("later"));
   });
 
-  it("shows an unsupported section in the detail instead of hiding it", async () => {
+  it("pins and renames the selected capture", async () => {
     api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
     api.getHostBaseline.mockResolvedValue(detail);
-    renderPane();
-    await screen.findAllByText("Containers");
-    expect(detail_panel().getByText("Not present")).toBeTruthy();
-    expect(detail_panel().getByText("Docker is not installed")).toBeTruthy();
-  });
-
-  it("compares earlier to later whichever capture is selected", async () => {
-    api.listHostBaselines.mockResolvedValue([
-      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
-      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
-    ]);
-    api.getHostBaseline.mockResolvedValue(detail);
-    api.compareHostBaselines.mockResolvedValue(comparison);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    api.setHostBaselinePinned.mockResolvedValue(
+      summary("later", "2026-09-02T10:00:00Z", null, { pinned: true }),
+    );
+    api.renameHostBaseline.mockResolvedValue(summary("later", "2026-09-02T10:00:00Z", "renamed"));
     renderPane("later");
-    await screen.findAllByText("before upgrade");
-    await userEvent.selectOptions(screen.getByRole("combobox"), "earlier");
-    await waitFor(() => expect(api.compareHostBaselines).toHaveBeenCalledWith("earlier", "later"));
-    expect(await screen.findByText("postgresql.service")).toBeTruthy();
-    expect(screen.getByText("nginx.service")).toBeTruthy();
-    expect(screen.getByText("ssh.service")).toBeTruthy();
-    expect(screen.getByText("failed")).toBeTruthy();
+    await screen.findByRole("tab", { name: "Changes" });
+    await userEvent.click(screen.getByRole("button", { name: "Pin capture" }));
+    await waitFor(() => expect(api.setHostBaselinePinned).toHaveBeenCalledWith("later", true));
+    await userEvent.click(screen.getByRole("button", { name: "Rename capture" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Capture label" }), "renamed");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.renameHostBaseline).toHaveBeenCalledWith("later", "renamed"));
   });
 
-  it("reports a section it could not compare rather than calling it unchanged", async () => {
-    api.listHostBaselines.mockResolvedValue([
-      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
-      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
-    ]);
-    api.getHostBaseline.mockResolvedValue(detail);
-    api.compareHostBaselines.mockResolvedValue(comparison);
-    renderPane("later");
-    await screen.findAllByText("before upgrade");
-    await userEvent.selectOptions(screen.getByRole("combobox"), "earlier");
-    expect(
-      await screen.findByText(
-        "Not comparable: in the later capture the subsystem was not present.",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("3 changes, 1 section could not be compared", { exact: false }),
-    ).toBeTruthy();
-  });
-
-  it("compares the selected capture against live machine state without saving a capture", async () => {
+  it("compares the selected capture with an unsaved live read", async () => {
     api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
     api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
     api.compareHostBaselineWithLive.mockResolvedValue({
-      ...comparison,
+      ...comparisonFixture(),
       base: summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
       target: summary("live", "2026-09-03T09:00:00Z", null),
       targetIsLive: true,
     });
     renderPane("later");
-    await screen.findAllByText("Host facts");
-
-    await userEvent.selectOptions(screen.getByRole("combobox"), "live");
-
+    await screen.findByRole("tab", { name: "Changes" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Compare with" }), "live");
     await waitFor(() =>
       expect(api.compareHostBaselineWithLive).toHaveBeenCalledWith(
         "later",
         expect.any(String),
         expect.anything(),
         connection.id,
+        null,
       ),
     );
-    expect(await screen.findByText(/after upgrade → Live state:/)).toBeTruthy();
-    expect(screen.getByText(/This read was not saved/)).toBeTruthy();
+    expect(await screen.findByText(/This read was not saved/)).toBeTruthy();
     expect(api.captureHostBaseline).not.toHaveBeenCalled();
     expect(screen.getByText("postgresql.service")).toBeTruthy();
   });
 
-  it("offers the live comparison even when no other capture exists", async () => {
-    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+  it("ignores a comparison that finishes after a newer selection", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+    ]);
     api.getHostBaseline.mockResolvedValue(detail);
-    renderPane("later");
-    await screen.findAllByText("Host facts");
-
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
-    expect(select.disabled).toBe(false);
-    expect([...select.options].map((option) => option.value).includes("live")).toBe(true);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    let finish!: (value: BaselineComparison) => void;
+    api.compareHostBaselines.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const onSelect = vi.fn();
+    const view = render(
+      <BaselinesPane
+        connection={connection}
+        selectedId="later"
+        onSelect={onSelect}
+        globalSudoEnabled={false}
+      />,
+    );
+    await waitFor(() => expect(api.compareHostBaselines).toHaveBeenCalled());
+    view.rerender(
+      <BaselinesPane
+        connection={connection}
+        selectedId="earlier"
+        onSelect={onSelect}
+        globalSudoEnabled={false}
+      />,
+    );
+    await act(async () => finish(comparisonFixture()));
+    expect(screen.queryByText("postgresql.service")).toBeNull();
+    expect(screen.queryByText("Comparing captures…")).toBeNull();
   });
 
-  it("shows host facts as collected without listing their values", async () => {
+  it("shows the state view and opens the inspector with history across captures", async () => {
     api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
     api.getHostBaseline.mockResolvedValue(detail);
-    renderPane("later");
-    await screen.findAllByText("Host facts");
-
-    expect(detail_panel().getAllByText("Collected")).not.toHaveLength(0);
-    expect(detail_panel().queryByText("kernel")).toBeNull();
-    expect(detail_panel().queryByText("6.1.0")).toBeNull();
-  });
-
-  it("opens a section to the entries it recorded", async () => {
-    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostBaseline.mockResolvedValue(detail);
-    renderPane("later");
-    await screen.findAllByText("Systemd units");
-
-    expect(detail_panel().queryByText("ssh.service")).toBeNull();
-    await userEvent.click(detail_panel().getByRole("button", { name: /Systemd units/ }));
-
-    expect(detail_panel().getByText("ssh.service")).toBeTruthy();
-    expect(detail_panel().getByText("nginx.service")).toBeTruthy();
-    expect(detail_panel().getByText("failed")).toBeTruthy();
-  });
-
-  it("reads one entry across every stored capture", async () => {
-    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
     api.traceHostBaselineEntry.mockResolvedValue({
       kind: "systemdUnits",
       identity: "ssh.service",
@@ -439,22 +565,17 @@ describe("baselines pane", () => {
           present: true,
           facts: [{ name: "activeState", value: "failed" }],
         },
-        {
-          baselineId: "earlier",
-          label: "before upgrade",
-          capturedAt: "2026-09-01T10:00:00Z",
-          sectionStatus: "collected",
-          present: false,
-          facts: [],
-        },
       ],
     });
-    renderPane("later");
-    await screen.findAllByText("Systemd units");
-    await userEvent.click(detail_panel().getByRole("button", { name: /Systemd units/ }));
-
-    await userEvent.click(detail_panel().getByRole("button", { name: "History of ssh.service" }));
-
+    const onOpenSystemd = vi.fn();
+    renderPane("later", { onOpenSystemd });
+    await screen.findByRole("tab", { name: "Changes" });
+    await userEvent.click(screen.getByRole("tab", { name: "State" }));
+    await userEvent.click(screen.getByRole("button", { name: /Systemd units/ }));
+    await userEvent.click(screen.getByRole("button", { name: "ssh.service" }));
+    const pane = inspector_pane();
+    expect(pane.getAllByText("failed")).not.toHaveLength(0);
+    await userEvent.click(pane.getByRole("button", { name: /Read across captures/ }));
     await waitFor(() =>
       expect(api.traceHostBaselineEntry).toHaveBeenCalledWith(
         "connection-a",
@@ -462,87 +583,119 @@ describe("baselines pane", () => {
         "ssh.service",
       ),
     );
-    expect(await detail_panel().findByText("Not present in this capture")).toBeTruthy();
+    await userEvent.click(pane.getByRole("button", { name: "Open in Systemd" }));
+    expect(onOpenSystemd).toHaveBeenCalledWith("ssh.service");
+    await userEvent.click(pane.getByRole("button", { name: "Close inspector" }));
+    expect(screen.getByRole("button", { name: "ssh.service" })).toBeTruthy();
   });
 
-  it("pins a capture so retention cannot evict it", async () => {
-    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
-    api.getHostBaseline.mockResolvedValue(detail);
-    api.setHostBaselinePinned.mockResolvedValue(
-      summary("later", "2026-09-02T10:00:00Z", null, { pinned: true }),
-    );
-    renderPane("later");
-    await screen.findAllByText("Host facts");
-
-    await userEvent.click(screen.getByRole("button", { name: "Pin baseline" }));
-
-    await waitFor(() => expect(api.setHostBaselinePinned).toHaveBeenCalledWith("later", true));
-  });
-
-  it("captures only the sections that stay ticked", async () => {
-    api.listHostBaselines.mockResolvedValue([]);
-    api.captureHostBaseline.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
-    renderPane(null);
-    await screen.findByText("No baselines yet");
-
-    await userEvent.click(screen.getByRole("checkbox", { name: "Containers" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Filesystems" }));
-    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
-
-    await waitFor(() => expect(api.captureHostBaseline).toHaveBeenCalled());
-    expect(api.captureHostBaseline.mock.calls[0][0].sections).toEqual([
-      "host",
-      "systemdUnits",
-      "listeners",
-    ]);
-  });
-
-  it("sends no section list when every section is wanted", async () => {
-    api.listHostBaselines.mockResolvedValue([]);
-    api.captureHostBaseline.mockResolvedValue(summary("new", "2026-09-03T10:00:00Z", null));
-    renderPane(null);
-    await screen.findByText("No baselines yet");
-
-    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
-
-    await waitFor(() => expect(api.captureHostBaseline).toHaveBeenCalled());
-    expect(api.captureHostBaseline.mock.calls[0][0].sections).toBeNull();
-  });
-
-  it("says how far each row moved from the capture below it", async () => {
+  it("opens a changed row in the inspector with exact before and after facts", async () => {
     api.listHostBaselines.mockResolvedValue([
-      summary("later", "2026-09-02T10:00:00Z", "after upgrade", { changesSincePrevious: 12 }),
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
       summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
     ]);
     api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    api.compareHostBaselines.mockResolvedValue(comparisonFixture());
     renderPane("later");
-
-    expect(await screen.findByText("12 changed")).toBeTruthy();
-    expect(screen.getByText("3/5 collected")).toBeTruthy();
+    await screen.findByText("ssh.service");
+    await userEvent.click(screen.getByRole("button", { name: /ssh\.service/ }));
+    const pane = inspector_pane();
+    expect(pane.getAllByText("activeState")).not.toHaveLength(0);
+    expect(pane.getByText("active")).toBeTruthy();
+    expect(pane.getAllByText("failed")).not.toHaveLength(0);
+    expect(pane.getByText("Sub-states move on their own between captures.")).toBeTruthy();
   });
 
-  it("deletes the selected capture", async () => {
+  it("reveals a Docker deep link only when the capture recorded the container ID", async () => {
+    api.listHostBaselines.mockResolvedValue([summary("later", "2026-09-02T10:00:00Z", null)]);
+    const withContainer: HostBaseline = {
+      ...detail,
+      sections: [
+        ...detail.sections,
+        {
+          kind: "containers",
+          status: "collected",
+          schemaVersion: 1,
+          collectedAt: "2026-09-02T10:00:00Z",
+          message: null,
+          entries: [
+            {
+              identity: "api",
+              label: "api",
+              facts: [
+                { name: "image", value: "api:2" },
+                { name: "containerId", value: "abc123" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    api.getHostBaseline.mockResolvedValue(withContainer);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    const onOpenContainer = vi.fn();
+    renderPane("later", { onOpenContainer });
+    await screen.findByRole("tab", { name: "Changes" });
+    await userEvent.click(screen.getByRole("tab", { name: "State" }));
+    await userEvent.click(screen.getByRole("button", { name: /Containers/ }));
+    await userEvent.click(screen.getByRole("button", { name: "api" }));
+    await userEvent.click(inspector_pane().getByRole("button", { name: "Open in Docker" }));
+    expect(onOpenContainer).toHaveBeenCalledWith("abc123");
+  });
+
+  it("offers a one-shot sudo retry without changing the saved permission", async () => {
+    api.listHostBaselines.mockResolvedValue([]);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    let finish!: (value: HostBaselineSummary) => void;
+    api.captureHostBaseline.mockImplementationOnce((request, channel) => {
+      channel.onmessage({
+        captureId: request.captureId,
+        kind: "containers",
+        status: "unavailable",
+        message: "permission denied",
+        completed: 3,
+        total: 8,
+      });
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    renderPane(null, { globalSudoEnabled: false });
+    await screen.findByText("No captures yet");
+    await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /Start capture/ }),
+    );
+    await act(async () => finish(summary("partial", "2026-09-04T10:00:00Z", "with gap")));
+    await screen.findByText(/Some sections were incomplete or could not be read/);
+    expect(screen.getByRole("button", { name: "Retry with sudo" })).toBeTruthy();
+  });
+
+  it("pins the capture count and manual-collection honesty to the header", async () => {
     api.listHostBaselines.mockResolvedValue([
       summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
     ]);
     api.getHostBaseline.mockResolvedValue(detail);
-    api.deleteHostBaseline.mockResolvedValue(undefined);
-    renderPane();
-    await screen.findAllByText("after upgrade");
-    await userEvent.click(screen.getByRole("button", { name: "Delete baseline" }));
-    expect(api.deleteHostBaseline).not.toHaveBeenCalled();
-    await userEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Delete baseline" }),
-    );
-    await waitFor(() => expect(api.deleteHostBaseline).toHaveBeenCalledWith("later"));
+    api.getHostBaselineReference.mockResolvedValue(null);
+    renderPane("later");
+    expect(await screen.findByText(/2 captures/)).toBeTruthy();
+    expect(
+      screen.getByTitle("Capture now. Control Room never collects in the background."),
+    ).toBeTruthy();
   });
 
   it("surfaces a capture failure without inventing a baseline", async () => {
     api.listHostBaselines.mockResolvedValue([]);
+    api.getHostBaselineReference.mockResolvedValue(null);
     api.captureHostBaseline.mockRejectedValue(new Error("Capture stopped before it finished"));
     renderPane(null);
-    await screen.findByText("No baselines yet");
+    await screen.findByText("No captures yet");
     await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /Start capture/ }),
+    );
     expect(await screen.findByText("Capture stopped before it finished")).toBeTruthy();
   });
 });

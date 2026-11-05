@@ -22,10 +22,11 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        BootDiagnostics, BootRecord, BootSection, BootTiming, ConnectionRemote, ConnectionSummary,
-        DockerContainer, DockerContainerDetails, DockerMount, DockerNetworkAttachment,
-        DockerPublishedPort, EstablishedConnections, Filesystem, FirewallRule, FirewallStatus,
-        HostCapabilities, HostIdentity, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
+        BaselineCronJob, BaselinePackage, BootDiagnostics, BootRecord, BootSection, BootTiming,
+        ConnectionRemote, ConnectionSummary, CronInventory, DockerContainer,
+        DockerContainerDetails, DockerMount, DockerNetworkAttachment, DockerPublishedPort,
+        EstablishedConnections, Filesystem, FirewallRule, FirewallStatus, HostCapabilities,
+        HostIdentity, HostResources, LOG_TAIL_OPTIONS, ListeningSocket, PackageInventory,
         SavedConnection, SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
@@ -548,6 +549,274 @@ pub fn list_filesystems(connection: &SavedConnection) -> Result<Vec<Filesystem>,
     let text =
         RemoteCommandExecutor::execute(connection, "list_filesystems", &command)?.success_text()?;
     parse_filesystems(&text)
+}
+
+/// Reads the stable hardware facts a baseline records beside the identity:
+/// CPU model and count, total memory, and the host's timezone. Each fact is
+/// keyed and absent when the host cannot report it.
+pub fn list_host_facts(connection: &SavedConnection) -> Result<Vec<(String, String)>, String> {
+    let command = r#"LC_ALL=C
+model=""
+if test -r /proc/cpuinfo; then model=$(grep -m1 -E '^(model name|Model)[[:space:]]*:' /proc/cpuinfo 2>/dev/null | cut -d: -f2-); fi
+printf 'cpuModel=%s\n' "$model"
+count=$(getconf _NPROCESSORS_ONLN 2>/dev/null); test -n "$count" || count=$(nproc 2>/dev/null); test -n "$count" || count=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+printf 'cpuCount=%s\n' "$count"
+if test -r /proc/meminfo; then printf 'memoryTotalKib=%s\n' "$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)"; fi
+tz=$(readlink /etc/localtime 2>/dev/null)
+test -n "$tz" || if command -v timedatectl >/dev/null 2>&1; then tz=$(timedatectl show -p Timezone --value 2>/dev/null); fi
+test -n "$tz" || if test -r /etc/timezone; then tz=$(tr -d ' \t\r\n' < /etc/timezone); fi
+printf 'timezone=%s\n' "$tz""#;
+    let text = RemoteCommandExecutor::execute(connection, "baseline_host_facts", command)?
+        .success_text()?;
+    let values = parse_key_values(&text);
+    let mut facts = Vec::new();
+    let model = values
+        .get("cpuModel")
+        .map(|value| bounded_text(value, 96))
+        .filter(|value| !value.is_empty());
+    if let Some(model) = model {
+        facts.push(("cpuModel".into(), model));
+    }
+    if let Some(count) = values
+        .get("cpuCount")
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|count| (1..=65536).contains(count))
+    {
+        facts.push(("cpuCount".into(), count.to_string()));
+    }
+    if let Some(memory) = values
+        .get("memoryTotalKib")
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|memory| *memory > 0)
+    {
+        facts.push(("memoryTotalKib".into(), memory.to_string()));
+    }
+    // /etc/localtime is a relative path on several distributions; only the
+    // zone under zoneinfo is the stable observation.
+    let timezone = values
+        .get("timezone")
+        .map(|value| {
+            let value = bounded_text(value, 64);
+            let zone = value.rsplit("zoneinfo/").next().unwrap_or(&value);
+            zone.trim_start_matches('/').to_string()
+        })
+        .filter(|value: &String| !value.is_empty());
+    if let Some(timezone) = timezone {
+        facts.push(("timezone".into(), timezone));
+    }
+    Ok(facts)
+}
+
+const CRON_JOB_MARKER: &str = "__CR_JOB__\t";
+const CRON_SPPOOL_MARKER: &str = "__CR_SPPOOL__\t";
+const CRON_SPOOL_UNREADABLE: &str = "unread";
+const MAX_CRON_JOBS: usize = 400;
+
+/// Reads cron entries from the sources a baseline can inspect: the system
+/// crontab, /etc/cron.d, and — when permissions allow — personal crontabs.
+/// The emitted descriptor never carries a raw command line, because cron
+/// commands routinely embed credentials.
+pub fn list_cron_jobs(
+    connection: &SavedConnection,
+    elevation: Elevation,
+) -> Result<CronInventory, String> {
+    let command = r#"LC_ALL=C
+export LC_ALL
+collect_file() {
+  file=$1; source=$2; owner=$3
+  test -r "$file" || { printf '__CR_SPPOOL__\tunread\n'; return; }
+  awk -v src="$source" -v owner="$owner" '
+    /^[[:space:]]*($|#)/ {next}
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {next}
+    {
+      special=($1 ~ /^@/)
+      first=special ? (owner==""?3:2) : (owner==""?7:6)
+      if(NF<first) {print "__CR_SPPOOL__\tunread"; next}
+      schedule=special?$1:($1" "$2" "$3" "$4" "$5)
+      user=owner==""?$(first-1):owner
+      command=$0
+      for(i=1;i<first;i++) sub(/^[[:space:]]*[^[:space:]]+[[:space:]]*/,"",command)
+      printf "%s\t%d\t%s\t%s\t%d\t%s\n",src,NR,schedule,user,NF-first+1,command
+    }' "$file" 2>/dev/null
+}
+{
+ for file in /etc/crontab /etc/cron.d/*; do
+   test -f "$file" || continue
+   case "$file" in /etc/crontab) source=crontab ;; *) source="cron.d/${file##*/}" ;; esac
+   collect_file "$file" "$source" ""
+ done
+ for directory in /var/spool/cron/crontabs /var/spool/cron; do
+   test -d "$directory" || continue
+   test -r "$directory" && test -x "$directory" || { printf '__CR_SPPOOL__\tunread\n'; continue; }
+   for file in "$directory"/*; do
+     test -f "$file" || continue
+     collect_file "$file" "user:${file##*/}" "${file##*/}"
+   done
+ done
+} | {
+ count=0
+ tab=$(printf '\t')
+ while IFS="$tab" read -r source line schedule user words command; do
+   if test "$source" = __CR_SPPOOL__; then printf '__CR_SPPOOL__\tunread\n'; continue; fi
+   count=$((count+1))
+   if test "$count" -gt 400; then printf '__CR_LIMIT__\n'; continue; fi
+   if command -v sha256sum >/dev/null 2>&1; then
+     fingerprint=$(printf '%s' "$command" | sha256sum | cut -d' ' -f1)
+     printf '__CR_JOB__\t%s\t%s\t%s\t%s\tredacted\t%s\t%s\n' "$source" "$line" "$schedule" "$user" "$words" "$fingerprint"
+   else printf '__CR_SPPOOL__\tunread\n'; fi
+ done
+}
+printf '__CR_CRON_DONE__\n'"#;
+    let output = RemoteCommandExecutor::execute_elevated(
+        connection,
+        "list_cron_jobs",
+        &format!("sh -c {}", shell_single_quote(command)),
+        &elevation,
+    )?;
+    Ok(parse_cron_inventory(&output.success_text()?))
+}
+
+fn parse_cron_inventory(text: &str) -> CronInventory {
+    let mut jobs = Vec::new();
+    let mut spool_unreadable = false;
+    let mut truncated = false;
+    let mut done = false;
+    for line in text.lines() {
+        if line == "__CR_CRON_DONE__" {
+            done = true;
+            continue;
+        }
+        if line == "__CR_LIMIT__" {
+            truncated = true;
+            continue;
+        }
+        if let Some(flag) = line.strip_prefix(CRON_SPPOOL_MARKER) {
+            if flag.trim() == CRON_SPOOL_UNREADABLE {
+                spool_unreadable = true;
+            }
+            continue;
+        }
+        let Some(record) = line.strip_prefix(CRON_JOB_MARKER) else {
+            continue;
+        };
+        if jobs.len() >= MAX_CRON_JOBS {
+            truncated = true;
+            break;
+        }
+        if let Some(job) = parse_cron_job(record) {
+            if job.fingerprint.is_none() {
+                spool_unreadable = true;
+            }
+            jobs.push(job);
+        } else {
+            spool_unreadable = true;
+        }
+    }
+    CronInventory {
+        jobs,
+        spool_unreadable: spool_unreadable || !done,
+        truncated,
+    }
+}
+
+fn parse_cron_job(record: &str) -> Option<BaselineCronJob> {
+    let mut fields = record.trim_end_matches('\r').split('\t');
+    let source = bounded_text(fields.next()?, 64);
+    let line = fields.next()?.parse::<u32>().ok()?;
+    let schedule = bounded_text(fields.next()?, 40);
+    let user = bounded_text(fields.next()?, 32);
+    let name = bounded_text(fields.next()?, 48);
+    let words = fields.next()?.parse::<u32>().ok()?;
+    if source.is_empty() || schedule.is_empty() || user.is_empty() || name.is_empty() {
+        return None;
+    }
+    let command = format!("Command redacted ({words} words)");
+    let fingerprint = fields
+        .next()
+        .filter(|value| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .map(str::to_string);
+    Some(BaselineCronJob {
+        source,
+        line,
+        schedule,
+        user,
+        command,
+        fingerprint,
+    })
+}
+
+const PACKAGE_MANAGER_MARKER: &str = "__CR_PKGMGR__\t";
+const PACKAGE_COUNT_MARKER: &str = "__CR_PKGCOUNT__\t";
+const MAX_PACKAGES: usize = 5000;
+
+/// Reads the installed-package inventory from the first package manager the
+/// host provides. The list is sorted on the host, so the kept bound is the
+/// same range every time rather than whatever the database laptop decides.
+pub fn list_packages(connection: &SavedConnection) -> Result<PackageInventory, String> {
+    let command = crate::baseline_collectors::packages_command();
+    let text =
+        RemoteCommandExecutor::execute(connection, "list_packages", &command)?.success_text()?;
+    parse_package_inventory(&text)
+}
+
+fn parse_package_inventory(text: &str) -> Result<PackageInventory, String> {
+    let mut manager: Option<String> = None;
+    let mut sources_reported: Option<u32> = None;
+    let mut packages = Vec::new();
+    for line in text.lines() {
+        if line == "__CR_PACKAGE_FAILED__" {
+            return Err("The package manager could not read its database".into());
+        }
+        if let Some(claimed) = line.strip_prefix(PACKAGE_MANAGER_MARKER) {
+            manager = Some(claimed.trim().to_string());
+            continue;
+        }
+        if let Some(count) = line.strip_prefix(PACKAGE_COUNT_MARKER) {
+            sources_reported = count.trim().parse::<u32>().ok();
+            continue;
+        }
+        if packages.len() < MAX_PACKAGES
+            && let Some(package) = parse_package(line)
+        {
+            packages.push(package);
+        }
+    }
+    let Some(manager) = manager else {
+        return Err("The package read returned no manager marker".into());
+    };
+    if manager == "none" {
+        return Err("The host has no package manager Control Room reads (dpkg or rpm)".into());
+    }
+    if manager != "dpkg" && manager != "rpm" {
+        return Err("The package manager reported an unknown identity".into());
+    }
+    let reported = sources_reported
+        .ok_or_else(|| "The package read ended before reporting its count".to_string())?;
+    // Truncated means the keeping bound cut the list, not that stray invalid
+    // rows thinned it: the count is only reported as cut when the parser is
+    // holding exactly as many rows as it keeps.
+    let truncated = (reported as usize) != packages.len();
+    Ok(PackageInventory {
+        manager,
+        packages,
+        sources_reported: reported,
+        truncated,
+    })
+}
+
+fn parse_package(line: &str) -> Option<BaselinePackage> {
+    let mut fields = line.trim_end_matches('\r').splitn(3, '\t');
+    let name = bounded_text(fields.next()?, 128);
+    let architecture = bounded_text(fields.next()?, 16);
+    let version = bounded_text(fields.next()?, 64);
+    if name.is_empty() || architecture.is_empty() || version.is_empty() {
+        return None;
+    }
+    Some(BaselinePackage {
+        name,
+        architecture,
+        version,
+    })
 }
 
 fn parse_filesystems(text: &str) -> Result<Vec<Filesystem>, String> {
@@ -3093,6 +3362,72 @@ __CONTROL_ROOM_PROCESS_UNITS__
     }
 
     #[test]
+    fn cron_records_carry_no_raw_command_text() {
+        let job = parse_cron_job("cron.d/backup\t12\t30 2 * * *\troot\tbackup\t3\t")
+            .expect("parseable cron record");
+        assert_eq!(job.source, "cron.d/backup");
+        assert_eq!(job.line, 12);
+        assert_eq!(job.schedule, "30 2 * * *");
+        assert_eq!(job.user, "root");
+        // The descriptor names the binary and its word count; the arguments
+        // they carried on the host stay on the host.
+        assert_eq!(job.command, "Command redacted (3 words)");
+        assert!(!job.command.contains("password"));
+        // Incomplete records are dropped rather than half-recorded.
+        assert!(parse_cron_job("cron.d/short\t1\troot").is_none());
+    }
+
+    #[test]
+    fn cron_output_marks_sourced_limits_and_unreadable_spools() {
+        let text = "__CR_JOB__\tcrontab\t5\t0 3 * * *\troot\tlogrotate\t1\n\
+                    __CR_SPPOOL__\tunread\n";
+        let inventory = parse_cron_inventory(text);
+        assert!(inventory.spool_unreadable);
+        assert_eq!(inventory.jobs.len(), 1);
+        assert_eq!(inventory.jobs[0].source, "crontab");
+        assert!(!inventory.truncated);
+    }
+
+    #[test]
+    fn package_reading_keeps_only_typed_three_field_rows() {
+        let text = "__CR_PKGMGR__\tdpkg\n\
+                    libc6\tamd64\t2.36-9\n\
+                    _ypbind:i386__broken row\n\
+                    __CR_PKGCOUNT__\t1200\n";
+        let inventory = parse_package_inventory(text).unwrap();
+        assert_eq!(inventory.manager, "dpkg");
+        assert_eq!(inventory.sources_reported, 1200);
+        assert_eq!(inventory.packages.len(), 1);
+        assert_eq!(inventory.packages[0].name, "libc6");
+        assert!(inventory.truncated);
+    }
+
+    #[test]
+    fn a_package_read_without_a_final_count_is_not_complete() {
+        assert!(parse_package_inventory("__CR_PKGMGR__\tdpkg\nlibc6\tamd64\t1.0\n").is_err());
+    }
+
+    #[test]
+    fn a_package_count_over_the_bound_reports_true_completeness() {
+        let mut text = String::from("__CR_PKGMGR__\trpm\n");
+        for index in 0..MAX_PACKAGES {
+            text.push_str(&format!("pkg{index}\tx86_64\t1.0\n"));
+        }
+        text.push_str(&format!("__CR_PKGCOUNT__\t{}\n", MAX_PACKAGES + 10));
+        let inventory = parse_package_inventory(&text).unwrap();
+        assert_eq!(inventory.packages.len(), MAX_PACKAGES);
+        assert_eq!(inventory.sources_reported as usize, MAX_PACKAGES + 10);
+        assert!(inventory.truncated);
+    }
+
+    #[test]
+    fn a_host_without_a_supported_package_manager_is_an_error_not_an_empty_list() {
+        let error = parse_package_inventory("__CR_PKGMGR__\tnone\n")
+            .expect_err("no manager is no inventory");
+        assert!(error.contains("no package manager"));
+    }
+
+    #[test]
     fn parses_firewalld_active_zone_numeric_ports_without_global_policy_claims() {
         let status = parse_firewall_status(
             "__CR_FW_BACKEND__\tfirewalld\n__CR_FW_STATE__\tactive\n__CR_FW_ZONE__\tpublic\t22/tcp 5353/udp\n",
@@ -4255,7 +4590,12 @@ esac
             assert!(section.schema_version > 0);
         }
         assert_eq!(captured.sections[0].status, baselines::STATUS_COLLECTED);
-        assert_eq!(captured.sections[1].status, baselines::STATUS_COLLECTED);
+        assert_eq!(
+            captured.sections[1].status,
+            baselines::STATUS_COLLECTED,
+            "{:?}",
+            captured.sections[1].message
+        );
         assert!(matches!(
             captured.sections[3].status.as_str(),
             baselines::STATUS_COLLECTED | baselines::STATUS_PARTIAL
@@ -4264,6 +4604,25 @@ esac
         if captured.sections[3].status == baselines::STATUS_PARTIAL {
             assert!(captured.sections[3].message.is_some());
         }
-        assert_eq!(captured.sections[4].status, baselines::STATUS_COLLECTED);
+        let filesystems = captured
+            .sections
+            .iter()
+            .find(|section| section.kind == baselines::SECTION_FILESYSTEMS)
+            .unwrap();
+        assert_eq!(filesystems.status, baselines::STATUS_COLLECTED);
+        let configuration = captured
+            .sections
+            .iter()
+            .find(|section| section.kind == baselines::SECTION_CONFIGURATION)
+            .unwrap();
+        assert!(matches!(
+            configuration.status.as_str(),
+            baselines::STATUS_COLLECTED | baselines::STATUS_PARTIAL
+        ));
+        assert!(!configuration.entries.is_empty());
+        assert_eq!(
+            baselines::total_changes(&baselines::compare(&captured, &captured)),
+            Some(0)
+        );
     }
 }

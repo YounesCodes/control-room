@@ -1,3 +1,4 @@
+mod baseline_collectors;
 mod baselines;
 mod commands;
 mod database;
@@ -150,6 +151,9 @@ pub fn run() {
             commands::set_host_baseline_pinned,
             commands::delete_host_baseline,
             commands::trace_host_baseline_entry,
+            commands::get_host_baseline_reference,
+            commands::set_host_baseline_reference,
+            commands::clear_host_baseline_reference,
             commands::export_text_file,
             commands::compare_host_baselines,
             commands::compare_host_baseline_with_live,

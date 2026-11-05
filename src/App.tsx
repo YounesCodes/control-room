@@ -257,6 +257,17 @@ export function App() {
     )
       setSystemdPortFocus(null);
   }, [workspaces, systemdPortFocus]);
+  const [baselineListenerFocus, setBaselineListenerFocus] = useState<
+    (import("./lib/port-inspector").RecordedListenerSelection & { workspaceId: string }) | null
+  >(null);
+  useEffect(() => {
+    if (
+      baselineListenerFocus &&
+      workspaces.find((workspace) => workspace.id === baselineListenerFocus.workspaceId)?.view !==
+        "ports"
+    )
+      setBaselineListenerFocus(null);
+  }, [workspaces, baselineListenerFocus]);
   const [portFocus, setPortFocus] = useState<
     (PublishedPortSelection & { workspaceId: string }) | null
   >(null);
@@ -2616,6 +2627,11 @@ export function App() {
                           ? systemdPortFocus.unit
                           : undefined
                       }
+                      focusListener={
+                        baselineListenerFocus?.workspaceId === activeRemoteWorkspace.id
+                          ? baselineListenerFocus
+                          : undefined
+                      }
                       focusEndpoint={
                         portFocus?.workspaceId === activeRemoteWorkspace.id ? portFocus : undefined
                       }
@@ -2701,6 +2717,21 @@ export function App() {
                       selectedId={activeRemoteWorkspace.baselineSelectionId}
                       onSelect={(baselineSelectionId) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
+                      }
+                      globalSudoEnabled={settings.globalSudoEnabled}
+                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
+                      onOpenListener={(listener) => {
+                        setBaselineListenerFocus({
+                          ...listener,
+                          workspaceId: activeRemoteWorkspace.id,
+                        });
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
+                      }}
+                      onOpenContainer={(containerId) =>
+                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
+                          view: "docker",
+                          containerSelectionId: containerId,
+                        })
                       }
                     />
                   )}
