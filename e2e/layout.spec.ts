@@ -7,6 +7,7 @@ import {
   openOfflineConnection,
   openScratchpad,
   restartApp,
+  seedBaseline,
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
@@ -73,19 +74,49 @@ describe("Resizable panels in the native app", () => {
   });
 
   it("saves content and split widths, shares them across hosts, restores and resets through SQLite", async () => {
-    const create = async (name: string) => {
-      await $(".sidebar-primary").click();
-      await $("aria/Display name").setValue(name);
-      await $("aria/SSH destination").setValue("127.0.0.1");
-      await $("aria/Username").setValue("tester");
-      await $(".port-field input").setValue("1");
-      await $(".modal-actions button[type=submit]").click();
-    };
-    await create("Layout host A");
-    await create("Layout host B");
+    for (const name of ["Layout host A", "Layout host B"]) {
+      const connection = await addConnection(name);
+      seedBaseline({
+        id: "layout-" + connection.id,
+        connectionId: connection.id,
+        label: "Layout capture",
+        schemaVersion: 1,
+        capturedAt: "2026-11-05T09:00:00Z",
+        pinned: false,
+        identity: {
+          hostname: "layout-fixture",
+          machineFingerprint: null,
+          osId: "ubuntu",
+          osVersion: "24.04",
+          kernel: "6.8",
+          architecture: "x86_64",
+        },
+        sections: [
+          {
+            kind: "host",
+            status: "collected",
+            schemaVersion: 1,
+            collectedAt: "2026-11-05T09:00:00Z",
+            message: null,
+            entries: [
+              {
+                identity: "host",
+                label: "Recorded host",
+                facts: [{ name: "kernel", value: "6.8" }],
+              },
+            ],
+          },
+        ],
+      });
+    }
     await openOfflineConnection("Layout host A");
     const openBaselines = async () => {
       await $("nav[aria-label='Workspace features']").$("button=Baselines").click();
+      await $("button=Host facts").waitForDisplayed();
+      await expect($("aria/Resize Baselines panes")).not.toBeDisplayed();
+      await $("button=Host facts").click();
+      await $("button=Recorded host").click();
+      await $("aria/Resize Baselines panes").waitForDisplayed();
     };
     await openBaselines();
     let content = $("aria/Resize Baselines content");
@@ -122,6 +153,7 @@ describe("Resizable panels in the native app", () => {
       );
     });
     await restartApp();
+    await openBaselines();
     content = $("aria/Resize Baselines content");
     split = $("aria/Resize Baselines panes");
     await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
