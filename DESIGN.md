@@ -116,6 +116,20 @@ their group and retain them when switching views. Constrain displayed sizes in
 small windows without overwriting the saved proportions. Reset a divider to equal
 sizes with a double-click or Enter.
 
+Move split terminals from their compact pane headers. A center drop swaps leaves;
+edge drops detach and dock the live pane. Preview the resulting position before
+committing and reject cramped targets. Escape cancels. The pane's Arrange menu
+offers the same moves and saved split orientation by keyboard. Keep terminals
+mounted in a flat keyed list; animate layout edits briefly without scaling text.
+When even responsive rotation cannot fit the group, scroll its surface locally
+and keep each terminal usable. Window resizing never changes saved directions or ratios.
+
+Compact windows replace the Connections rail with a titlebar navigation drawer.
+Keep host selection and all inspection views in that drawer, with keyboard focus
+contained until it closes. Preserve rail widths when returning to a wide window.
+Reflow forms, toolbars, and Settings rather than reducing typography or scaling
+the application. Keep native window controls fixed and dialogs inside the viewport.
+
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
 show a window of complete tabs with previous/next controls; never paint a partial

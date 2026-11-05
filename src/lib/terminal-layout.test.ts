@@ -11,9 +11,130 @@ import {
   removeTerminalFromLayout,
   selectTerminalTab,
   splitTerminalLayout,
+  swapTerminalLayout,
+  dockTerminalLayout,
+  orientTerminalLayout,
+  terminalParentSplitPath,
+  terminalSplitDirection,
+  terminalDropZone,
+  getTerminalLayoutSurface,
+  terminalLayoutFits,
 } from "./terminal-layout";
 
 describe("terminal pane tree", () => {
+  const nested = () =>
+    resizeTerminalLayout(
+      splitTerminalLayout(
+        splitTerminalLayout(createTerminalLayout("a"), "a", "b", "vertical"),
+        "b",
+        "c",
+        "horizontal",
+      ),
+      "",
+      0.6,
+    );
+
+  it("swaps nested leaves while keeping geometry, ratios and session membership", () => {
+    const layout = nested();
+    const swapped = swapTerminalLayout(layout, "a", "c");
+    expect(getTerminalLayoutIds(swapped)).toEqual(["c", "b", "a"]);
+    expect(getTerminalPaneRects(swapped).c).toEqual(getTerminalPaneRects(layout).a);
+    expect(swapped).toMatchObject({
+      direction: "vertical",
+      ratio: 0.6,
+      second: { direction: "horizontal" },
+    });
+    expect(swapTerminalLayout(swapped, "c", "a")).toEqual(layout);
+  });
+
+  it.each(["left", "right", "top", "bottom"] as const)(
+    "detaches and docks at the %s edge, collapsing empty ancestors",
+    (edge) => {
+      const layout = nested();
+      const moved = dockTerminalLayout(layout, "a", "c", edge);
+      expect(getTerminalLayoutIds(moved).sort()).toEqual(["a", "b", "c"]);
+      expect(moved).toMatchObject({
+        kind: "split",
+        direction: "horizontal",
+        first: { workspaceId: "b" },
+        second: {
+          kind: "split",
+          direction: edge === "left" || edge === "right" ? "vertical" : "horizontal",
+        },
+      });
+      const geometry = getTerminalPaneRects(moved);
+      if (edge === "left") expect(geometry.a.left + geometry.a.width).toBe(geometry.c.left);
+      if (edge === "right") expect(geometry.c.left + geometry.c.width).toBe(geometry.a.left);
+      if (edge === "top") expect(geometry.a.top + geometry.a.height).toBe(geometry.c.top);
+      if (edge === "bottom") expect(geometry.c.top + geometry.c.height).toBe(geometry.a.top);
+      expect(layout).toEqual(nested());
+    },
+  );
+
+  it("rejects self, missing and duplicate members and avoids orientation churn", () => {
+    const layout = nested();
+    for (const [source, target] of [
+      ["a", "a"],
+      ["a", "missing"],
+      ["missing", "b"],
+    ]) {
+      expect(swapTerminalLayout(layout, source, target)).toBe(layout);
+      expect(dockTerminalLayout(layout, source, target, "top")).toBe(layout);
+    }
+    const duplicate = {
+      kind: "split",
+      direction: "vertical",
+      first: layout,
+      second: createTerminalLayout("a"),
+    } as const;
+    expect(swapTerminalLayout(duplicate, "a", "b")).toBe(duplicate);
+    expect(dockTerminalLayout(duplicate, "a", "b", "top")).toBe(duplicate);
+    expect(getTerminalLayoutIds(pruneTerminalLayout(duplicate, new Set(["a", "b", "c"]))!)).toEqual(
+      ["a", "b", "c"],
+    );
+    expect(pruneTerminalLayout(layout, new Set(["a", "b", "c"]))).toBe(layout);
+    expect(orientTerminalLayout(layout, "missing", "horizontal")).toBe(layout);
+    expect(orientTerminalLayout(layout, "", "vertical")).toBe(layout);
+    expect(orientTerminalLayout(layout, "second", "vertical")).toMatchObject({
+      ratio: 0.6,
+      second: { direction: "vertical" },
+    });
+    expect(terminalParentSplitPath(layout, "a")).toBe("");
+    expect(terminalParentSplitPath(layout, "c")).toBe("second");
+    expect(terminalParentSplitPath(layout, "missing")).toBeNull();
+    expect(terminalSplitDirection(layout, "")).toBe("vertical");
+    expect(terminalSplitDirection(layout, "second")).toBe("horizontal");
+    expect(terminalSplitDirection(layout, "missing")).toBeNull();
+  });
+
+  it("distinguishes drop centers, every edge, outside and nonfinite coordinates", () => {
+    expect(terminalDropZone(0.5, 0.5)).toBe("center");
+    expect(terminalDropZone(0.1, 0.5)).toBe("left");
+    expect(terminalDropZone(0.9, 0.5)).toBe("right");
+    expect(terminalDropZone(0.5, 0.1)).toBe("top");
+    expect(terminalDropZone(0.5, 0.9)).toBe("bottom");
+    expect(terminalDropZone(-0.1, 0.5)).toBeNull();
+    expect(terminalDropZone(1.1, 0.5)).toBeNull();
+    expect(terminalDropZone(NaN, 0.5)).toBeNull();
+  });
+
+  it("keeps deeply nested panes usable with a local scrolling fallback and restores saved geometry", () => {
+    let layout = nested();
+    for (let i = 0; i < 6; i++) layout = splitTerminalLayout(layout, "c", `extra-${i}`, "vertical");
+    const original = structuredClone(layout);
+    const available = { width: 598, height: 350 };
+    const compact = getTerminalLayoutSurface(layout, available);
+    expect(terminalLayoutFits(layout, available)).toBe(false);
+    for (const rectangle of Object.values(compact.panes)) {
+      expect((rectangle.width * compact.viewport.width) / 100).toBeGreaterThanOrEqual(279.99);
+      expect((rectangle.height * compact.viewport.height) / 100).toBeGreaterThanOrEqual(179.99);
+    }
+    expect(layout).toEqual(original);
+    const large = getTerminalLayoutSurface(layout, { width: 7000, height: 1400 });
+    expect(large.viewport).toEqual({ width: 7000, height: 1400 });
+    expect(large.dividers[0].direction).toBe("vertical");
+    expect(large.panes.a.width).toBe(60);
+  });
   it("rounds shared split edges without gaps at odd viewport sizes", () => {
     const layout = splitTerminalLayout(
       splitTerminalLayout(createTerminalLayout("a"), "a", "b", "vertical"),
@@ -65,9 +186,9 @@ describe("terminal pane tree", () => {
     const layout = resizeTerminalLayout(pair, "", 0.9);
     const small = getResponsiveTerminalGeometry(layout, { width: 500, height: 700 });
     expect(small.dividers[0].direction).toBe("horizontal");
-    expect(small.panes.local.height).toBe(80);
-    expect(small.panes.ssh.top).toBe(80);
-    expect(small.dividers[0].position).toBe(560);
+    expect(small.panes.local.height).toBeCloseTo((520 / 700) * 100);
+    expect(small.panes.ssh.top).toBeCloseTo((520 / 700) * 100);
+    expect(small.dividers[0].position).toBeCloseTo(520);
     expect(getResponsiveTerminalPaneRects(layout, { width: 3000, height: 800 }).local.width).toBe(
       90,
     );

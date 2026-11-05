@@ -240,14 +240,22 @@ async function respond(command: string, args: any = {}) {
 
 async function mount() {
   root.render(<App />);
+  if (window.innerWidth < 860)
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
   await page
     .getByRole("button", { name: /Fixture Alpha/ })
     .first()
     .click();
-  await expect.element(page.getByRole("navigation", { name: "Workspace features" })).toBeVisible();
+  if (window.innerWidth >= 860)
+    await expect
+      .element(page.getByRole("navigation", { name: "Workspace features" }))
+      .toBeVisible();
+  else await expect.poll(() => element.querySelector(".sidebar")?.hasAttribute("inert")).toBe(true);
 }
 async function navigate(name: string) {
+  if (element.querySelector(".sidebar")?.hasAttribute("inert"))
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   await page
     .getByRole("navigation", { name: "Workspace features" })
     .getByRole("button", { name, exact: true })
@@ -280,6 +288,322 @@ afterEach(() => {
 });
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
+    await mount();
+    for (const width of [858, 859, 860, 861, 862, 864]) {
+      await page.viewport(width, 600);
+      await expect
+        .poll(() => element.querySelector(".app-shell")!.hasAttribute("data-compact"))
+        .toBe(width - 2 < 860);
+      const sidebar = element.querySelector<HTMLElement>(".sidebar")!;
+      if (width - 2 < 860) {
+        const open = page.getByRole("button", { name: "Open navigation", exact: true });
+        await expect.element(open).toBeVisible();
+        await open.click();
+        await expect
+          .element(page.getByRole("navigation", { name: "Workspace features" }))
+          .toBeVisible();
+        await userEvent.keyboard("{Escape}");
+        await expect.element(open).toHaveFocus();
+      } else {
+        expect(sidebar.hasAttribute("inert")).toBe(false);
+        expect(getComputedStyle(sidebar).display).not.toBe("none");
+      }
+    }
+  });
+  it("animates live pane bounds without scaling text and applies reduced motion immediately", async () => {
+    await mount();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    const panes = [...element.querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")];
+    await expect.poll(() => panes.length).toBe(2);
+    expect(panes.flatMap((pane) => pane.getAnimations())).toHaveLength(0);
+    const xterms = panes.map((pane) => pane.querySelector(".xterm"));
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    const media = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+      const result = nativeMatchMedia(query);
+      if (query === "(prefers-reduced-motion: reduce)")
+        Object.defineProperty(result, "matches", { value: false });
+      return result;
+    });
+    try {
+      await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
+      (
+        page.getByRole("button", { name: "Stacked", exact: true }).element() as HTMLButtonElement
+      ).click();
+      await expect
+        .poll(() => panes.flatMap((pane) => pane.getAnimations()).length)
+        .toBeGreaterThan(0);
+      const animations = panes.flatMap((pane) => pane.getAnimations());
+      animations.forEach((animation) => {
+        animation.pause();
+        animation.currentTime = 100;
+      });
+      expect(panes[0].getBoundingClientRect().width).toBeGreaterThan(590);
+      expect(panes[0].getBoundingClientRect().width).toBeLessThan(1180);
+      expect(getComputedStyle(panes[0]).transform).toBe("none");
+      expect(panes.map((pane) => pane.querySelector(".xterm"))).toEqual(xterms);
+      animations.forEach((animation) => animation.finish());
+      await page.screenshot({ path: "../test-results/terminal-stacked.png" });
+    } finally {
+      media.mockRestore();
+    }
+  });
+  it("previews pointer swaps and docks, cancels Escape/outside drops and rejects cramped targets", async () => {
+    await mount();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    await expect.poll(() => persisted.terminalGroups?.length).toBe(1);
+    const original = structuredClone(persisted.terminalGroups![0].layout);
+    const grip = page
+      .getByRole("button", { name: "Move Fixture Alpha", exact: true })
+      .element() as HTMLButtonElement;
+    vi.spyOn(grip, "setPointerCapture").mockImplementation(() => undefined);
+    const target = () =>
+      page
+        .getByRole("button", { name: "Move Command Prompt", exact: true })
+        .element()
+        .closest(".terminal-pane-heading")!
+        .getBoundingClientRect();
+    const event = (type: string, x: number, y: number) =>
+      grip.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 17,
+          isPrimary: true,
+          button: 0,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    const begin = (zone: "center" | "right") => {
+      const from = grip.getBoundingClientRect();
+      const to = target();
+      const pane = element
+        .querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")[1]
+        .getBoundingClientRect();
+      event("pointerdown", from.left + 30, from.top + 14);
+      event(
+        "pointermove",
+        zone === "center" ? to.left + to.width / 2 : to.right - 10,
+        pane.top + pane.height / 2,
+      );
+    };
+    begin("center");
+    await expect
+      .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
+      .toContain("Swap with Command Prompt");
+    await page.screenshot({ path: "../test-results/terminal-drop-swap-preview.png" });
+    await userEvent.keyboard("{Escape}");
+    expect(element.querySelector(".terminal-drop-layer")).toBeNull();
+    expect(persisted.terminalGroups![0].layout).toEqual(original);
+    begin("right");
+    await expect
+      .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
+      .toContain("Dock right");
+    event("pointerup", -20, -20);
+    await expect.poll(() => element.querySelector(".terminal-drop-layer")).toBeNull();
+    expect(persisted.terminalGroups![0].layout).toEqual(original);
+    begin("center");
+    const to = element
+      .querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")[1]
+      .getBoundingClientRect();
+    event("pointerup", to.left + to.width / 2, to.top + to.height / 2);
+    await expect.poll(() => persisted.terminalGroups![0].layout).not.toEqual(original);
+    const swapped = structuredClone(persisted.terminalGroups![0].layout);
+    await page.viewport(520, 480);
+    await expect
+      .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
+      .toHaveAttribute("aria-orientation", "horizontal");
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+    );
+    await expect
+      .poll(
+        () => element.querySelector<HTMLElement>(".terminal-workspace-pane-visible")!.offsetHeight,
+      )
+      .toBeGreaterThanOrEqual(180);
+    // The target is now above the source after the swap and compact reflow.
+    const from = grip.getBoundingClientRect();
+    const destination = page
+      .getByRole("button", { name: "Move Command Prompt", exact: true })
+      .element()
+      .closest(".terminal-pane-heading")!
+      .getBoundingClientRect();
+    event("pointerdown", from.left + 30, from.top + 14);
+    event("pointermove", destination.left + 10, destination.top + 80);
+    await expect
+      .poll(() => element.querySelector(".terminal-drop-target.invalid") !== null)
+      .toBe(true);
+    await page.screenshot({ path: "../test-results/terminal-drop-invalid-compact.png" });
+    event("pointerup", destination.left + 10, destination.top + 80);
+    expect(persisted.terminalGroups![0].layout).toEqual(swapped);
+    expect(
+      native.invoke.mock.calls.filter(([command]) => command === "close_session"),
+    ).toHaveLength(0);
+    vi.restoreAllMocks();
+  });
+  it("rearranges nested live panes by drag and keyboard without replacing sessions", async () => {
+    await mount();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    const split = async () => {
+      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await page
+        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+        .click();
+    };
+    await split();
+    await split();
+    await expect
+      .element(page.getByRole("button", { name: "Arrange Command Prompt 2", exact: true }))
+      .toBeVisible();
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(
+          ([command]) => command === "start_session" || command === "start_local_session",
+        ),
+      ).toHaveLength(3),
+    );
+    const terminals = [...element.querySelectorAll(".terminal-workspace-pane .xterm")];
+    const pane = (name: string) => page.getByRole("button", { name: `Move ${name}`, exact: true });
+    await expect.poll(() => persisted.terminalGroups?.length).toBe(1);
+    const original = structuredClone(persisted.terminalGroups!);
+    await userEvent.dragAndDrop(pane("Fixture Alpha"), pane("Command Prompt"), {
+      targetPosition: { x: 100, y: 14 },
+    });
+    await expect.poll(() => persisted.terminalGroups?.[0].layout).not.toEqual(original[0]?.layout);
+    // Releasing over the terminal body uses its center, rather than a header's top edge.
+    await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Target pane" })
+      .selectOptions(
+        (
+          page
+            .getByRole("option", { name: "Command Prompt 2", exact: true })
+            .element() as HTMLOptionElement
+        ).value,
+      );
+    await page.getByRole("button", { name: "Swap", exact: true }).click();
+    await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Target pane" })
+      .selectOptions(
+        (
+          page
+            .getByRole("option", { name: "Command Prompt 2", exact: true })
+            .element() as HTMLOptionElement
+        ).value,
+      );
+    await page.getByRole("button", { name: "Move down", exact: true }).click();
+    await expect
+      .element(page.getByRole("separator", { name: "Resize terminal split 2" }))
+      .toHaveAttribute("aria-orientation", "horizontal");
+    await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
+    await page.getByRole("button", { name: "Side by side", exact: true }).click();
+    await expect
+      .element(page.getByRole("separator", { name: "Resize terminal split 2" }))
+      .toHaveAttribute("aria-orientation", "vertical");
+    expect([...element.querySelectorAll(".terminal-workspace-pane .xterm")]).toEqual(terminals);
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command]) => command === "start_session" || command === "start_local_session",
+      ),
+    ).toHaveLength(3);
+    expect(
+      native.invoke.mock.calls.filter(([command]) => command === "close_session"),
+    ).toHaveLength(0);
+    await page.screenshot({ path: "../test-results/terminal-rearranged.png" });
+    await page.getByRole("button", { name: "Close pane Fixture Alpha", exact: true }).click();
+    await page.getByRole("button", { name: "Disconnect & close", exact: true }).click();
+    await expect
+      .poll(() => element.querySelectorAll(".terminal-workspace-pane-visible").length)
+      .toBe(2);
+    expect([...element.querySelectorAll(".terminal-workspace-pane .xterm")]).toEqual(
+      terminals.slice(1),
+    );
+  });
+
+  it.each([520, 600, 683, 768])(
+    "fits existing views, navigation and dialogs at %spx",
+    async (width) => {
+      await mount();
+      await page.viewport(width, 480);
+      const open = page.getByRole("button", { name: "Open navigation", exact: true });
+      await expect.element(open).toBeVisible();
+      await expect.poll(() => element.querySelector(".sidebar")?.hasAttribute("inert")).toBe(true);
+      await open.click();
+      await userEvent.keyboard("{Escape}");
+      await expect.element(open).toHaveFocus();
+      const check = () => {
+        expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+        const content = element.querySelector<HTMLElement>(".workspace-content")!;
+        expect(content.scrollWidth).toBeLessThanOrEqual(content.clientWidth + 1);
+        for (const node of element.querySelectorAll<HTMLElement>(
+          ".page-heading, .boot-heading, .history-tools, .log-controls, .settings-heading, .systemd-toolbar",
+        )) {
+          expect(node.scrollWidth, node.className).toBeLessThanOrEqual(node.clientWidth + 1);
+        }
+      };
+      for (const view of [
+        "Systemd",
+        "Ports",
+        "Docker",
+        "Boot",
+        "Logs",
+        "Baselines",
+        "History",
+        "Terminal",
+      ]) {
+        await open.click();
+        await navigate(view);
+        await expect
+          .poll(() => element.querySelector(".sidebar")?.hasAttribute("inert"))
+          .toBe(true);
+        await vi.waitFor(check);
+        await page.screenshot({
+          path: `../test-results/compact-${view.toLowerCase()}-${width}.png`,
+        });
+      }
+      await open.click();
+      await page.getByRole("button", { name: "Add connection", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Add Saved Connection", exact: true });
+      await expect.element(dialog).toBeVisible();
+      const bounds = dialog.element().getBoundingClientRect();
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(width);
+      expect(bounds.bottom).toBeLessThanOrEqual(480);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await userEvent.keyboard("{Escape}");
+      await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+      await expect
+        .element(page.getByRole("button", { name: "Save settings", exact: true }))
+        .toBeVisible();
+      await vi.waitFor(check);
+      await page.screenshot({ path: `../test-results/compact-settings-${width}.png` });
+      for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
+        const control = page.getByRole("button", { name, exact: true });
+        await expect.element(control).toBeVisible();
+        const bounds = control.element().getBoundingClientRect();
+        expect(bounds.top).toBeGreaterThanOrEqual(0);
+        expect(bounds.bottom).toBeLessThanOrEqual(42);
+        expect(bounds.right).toBeLessThanOrEqual(width);
+        expect(
+          document
+            .elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+            ?.closest("button"),
+        ).toBe(control.element());
+      }
+      expect((await axe.run(element)).violations).toEqual([]);
+    },
+  );
   it.each([960, 1180])(
     "uses one launcher before and after the first tab at %spx",
     async (width) => {
