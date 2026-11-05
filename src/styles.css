@@ -5963,6 +5963,16 @@ dd {
   flex-direction: column;
 }
 
+.settings-body:has(#settings-appearance:not([hidden])):not(:has(.settings-result-category)) {
+  scrollbar-width: none;
+}
+
+.settings-body:has(#settings-appearance:not([hidden])):not(
+    :has(.settings-result-category)
+  )::-webkit-scrollbar {
+  display: none;
+}
+
 .settings-subnavigation {
   display: flex;
   flex: none;
