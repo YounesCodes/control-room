@@ -12,6 +12,7 @@ import { WorkspaceTabScroller } from "./WorkspaceTabScroller";
 import { SettingsPane } from "../pages/SettingsPane";
 import type { AppSettings, EnvironmentInfo } from "../types";
 import "../styles.css";
+import { api } from "../lib/api";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -749,6 +750,43 @@ describe("critical UI in Chromium", () => {
       expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
     }
   });
+
+  it.each([768, 960, 1200])(
+    "keeps Settings search stable through save feedback at %ipx",
+    async (width) => {
+      await page.viewport(width, 720);
+      let finish!: () => void;
+      const save = vi.spyOn(api, "saveSettings").mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      try {
+        mount(<SettingsFixture />);
+        const search = page.getByRole("searchbox", { name: "Search settings" });
+        await expect.element(search).toBeVisible();
+        const bounds = () => {
+          const rect = search.element().closest(".search-field")!.getBoundingClientRect();
+          const button = container!.querySelector(".settings-save")!.getBoundingClientRect();
+          return [rect.x, rect.y, rect.width, rect.height, button.x, button.width];
+        };
+        const initial = bounds();
+        await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
+        expect(bounds()).toEqual(initial);
+        await page.getByRole("button", { name: "Save settings", exact: true }).click();
+        await expect
+          .element(page.getByRole("button", { name: "Saving…", exact: true }))
+          .toBeVisible();
+        expect(bounds()).toEqual(initial);
+        finish();
+        await expect.element(page.getByRole("status")).toHaveTextContent("Settings saved.");
+        expect(bounds()).toEqual(initial);
+      } finally {
+        save.mockRestore();
+      }
+    },
+  );
 
   it("navigates Settings categories with arrows without taking keys from form fields", async () => {
     await page.viewport(1200, 720);

@@ -6056,7 +6056,11 @@ dd {
 /* The save result belongs next to the control that produced it, so it is a line
    of text in the bar rather than a banner in the form. */
 .settings-status {
-  max-width: 34ch;
+  width: 22ch;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin: 0;
   color: var(--text-faint);
   font-size: 11px;
@@ -6303,6 +6307,12 @@ dd {
   margin-left: auto;
   color: var(--text-faint);
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.settings-save {
+  width: 132px;
+  flex: none;
   white-space: nowrap;
 }
 

@@ -393,16 +393,19 @@ export function SettingsPane({
             />
           </div>
           <div className="settings-heading-actions">
-            {message ? (
-              <p
-                className={saveFailed ? "settings-status failed" : "settings-status saved"}
-                role="status"
-              >
-                {message}
-              </p>
-            ) : (
-              dirty && <span className="settings-status">Unsaved changes</span>
-            )}
+            <p
+              className={
+                message
+                  ? saveFailed
+                    ? "settings-status failed"
+                    : "settings-status saved"
+                  : "settings-status"
+              }
+              role={message ? "status" : undefined}
+              title={message ?? undefined}
+            >
+              {message ?? (dirty ? "Unsaved changes" : "")}
+            </p>
             {/* Outside the form it submits, which is what keeps it on screen
                 while the form itself scrolls. */}
             <button

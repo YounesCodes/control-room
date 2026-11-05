@@ -610,7 +610,8 @@ focus outline.
 Search across categories by setting names and keywords, with category context on
 results. Preserve drafts and useful category scroll positions. Keep numeric fields
 compact, with readable values in short, quietly bordered inputs and selectors.
-Save explicitly, with dirty, saving, saved, and error feedback.
+Save explicitly, with dirty, saving, saved, and error feedback. Reserve a steady
+status slot and Save button width so feedback changes never move the search field.
 Settings uses readable section titles. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.
