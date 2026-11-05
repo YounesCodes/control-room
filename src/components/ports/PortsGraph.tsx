@@ -1,9 +1,10 @@
-import type { PublishedPortSelection } from "../../lib/port-inspector";
+import type { PublishedPortSelection, RecordedListenerSelection } from "../../lib/port-inspector";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Container, Cpu, HelpCircle, Server } from "lucide-react";
 import { InspectionGraph } from "../InspectionGraph";
 import { PortOverviewDetail } from "./PortOverviewDetail";
 import {
+  matchesRecordedListener,
   exposureLabel,
   socketExposure,
   type Exposure,
@@ -91,12 +92,14 @@ export function PortsGraph({
   onOpenContainer,
   onViewLogs,
   focusEndpoint,
+  focusListener,
   focusUnit,
   loading = false,
   loadingLabel,
 }: {
   focusUnit?: string;
   focusEndpoint?: PublishedPortSelection;
+  focusListener?: RecordedListenerSelection;
   loading?: boolean;
   loadingLabel?: string;
   sockets: ListeningSocket[];
@@ -157,6 +160,23 @@ export function PortsGraph({
   );
   const selected = groups.flatMap((group) => group.items).find((item) => item.id === selectedId);
 
+  const handledListenerFocus = useRef<RecordedListenerSelection | undefined>(undefined);
+  const matchingListeners = focusListener
+    ? sockets.filter((socket) => matchesRecordedListener(socket, focusListener))
+    : [];
+  const focusedListener =
+    matchingListeners.length === 1
+      ? groups
+          .flatMap((group) => group.items)
+          .find((item) => item.sockets.some((socket) => socket.id === matchingListeners[0].id))
+      : undefined;
+  useEffect(() => {
+    if (focusedListener && focusListener !== handledListenerFocus.current) {
+      handledListenerFocus.current = focusListener;
+      setSelectedId(focusedListener.id);
+    }
+  }, [focusedListener?.id, focusListener]);
+
   const focused = groups
     .flatMap((group) => group.items)
     .find((item) =>
@@ -202,6 +222,12 @@ export function PortsGraph({
       toolbar={
         <>
           {toolbar}
+          {focusListener && !focusedListener && !loading && (
+            <p className="inline-warning" role="status">
+              The recorded listener was not found, or its owning unit could not be verified in this
+              Ports snapshot.
+            </p>
+          )}
           {focusEndpoint && focusEndpoint !== handledFocus.current && !focused && !loading && (
             <p className="inline-warning" role="status">
               Published endpoint was not found in this Ports snapshot.

@@ -24,6 +24,7 @@ const VISIBLE_WINDOW = 150;
 
 interface BaselineSectionListProps {
   baseline: HostBaseline;
+  search?: string;
   /** Which entry identity is being inspected, so the row shows its state. */
   selectedIdentity: string | null;
   onInspect: (section: BaselineSection, entry: BaselineEntry) => void;
@@ -34,6 +35,7 @@ interface BaselineSectionListProps {
 // recorded. Selecting an entry opens the inspector beside the workspace.
 export function BaselineSectionList({
   baseline,
+  search = "",
   selectedIdentity,
   onInspect,
 }: BaselineSectionListProps) {
@@ -41,8 +43,9 @@ export function BaselineSectionList({
     <div className="baseline-sections">
       {baseline.sections.map((section) => (
         <SectionView
-          key={section.kind}
+          key={section.kind + ":" + search}
           section={section}
+          search={search}
           selectedIdentity={selectedIdentity}
           onInspect={onInspect}
         />
@@ -57,21 +60,31 @@ function sectionKind(section: BaselineSection): BaselineSectionKind {
 
 function SectionView({
   section,
+  search,
   selectedIdentity,
   onInspect,
 }: {
   section: BaselineSection;
+  search: string;
   selectedIdentity: string | null;
   onInspect: (section: BaselineSection, entry: BaselineEntry) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState("");
+  const [page, setPage] = useState(0);
   const expandable = section.entries.length > 0;
-  const needle = filter.trim().toLowerCase();
+  const needle = (search || filter).trim().toLowerCase();
   const matching = needle
-    ? section.entries.filter((entry) => entrySearchText(entry, needle))
+    ? section.entries.filter(
+        (entry) => entrySearchText(entry, needle) && entrySearchText(entry, filter),
+      )
     : section.entries;
-  const visible = matching.slice(0, VISIBLE_WINDOW);
+  const start = Math.min(
+    page * VISIBLE_WINDOW,
+    Math.max(0, Math.ceil(matching.length / VISIBLE_WINDOW) - 1) * VISIBLE_WINDOW,
+  );
+  const visible = matching.slice(start, start + VISIBLE_WINDOW);
+  const isExpanded = expanded || Boolean(needle);
 
   return (
     <section className="baseline-section">
@@ -80,10 +93,10 @@ function SectionView({
           <button
             className="baseline-section-toggle"
             type="button"
-            aria-expanded={expanded}
+            aria-expanded={isExpanded}
             onClick={() => setExpanded((current) => !current)}
           >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             <h3>{sectionLabel(sectionKind(section))}</h3>
           </button>
         ) : (
@@ -95,13 +108,16 @@ function SectionView({
         )}
       </header>
       {section.message && <p className="inline-warning">{section.message}</p>}
-      {expanded && (
+      {isExpanded && (
         <>
           {section.entries.length > 8 && (
             <input
               className="baseline-entry-filter"
               value={filter}
-              onChange={(event) => setFilter(event.target.value)}
+              onChange={(event) => {
+                setFilter(event.target.value);
+                setPage(0);
+              }}
               placeholder={`Filter ${section.entries.length} entries`}
               aria-label={`Filter ${sectionLabel(sectionKind(section))}`}
             />
@@ -120,8 +136,23 @@ function SectionView({
           {!visible.length && <p className="baseline-section-count">No entry matches that text</p>}
           {matching.length > visible.length && (
             <p className="baseline-section-count">
-              Showing {visible.length} of {matching.length} matching entries. Filter further to
-              reach the rest.
+              Showing {start + 1}–{start + visible.length} of {matching.length}
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={start === 0}
+                onClick={() => setPage(Math.max(0, page - 1))}
+              >
+                Previous entries
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={start + visible.length >= matching.length}
+                onClick={() => setPage(page + 1)}
+              >
+                Next entries
+              </button>
             </p>
           )}
         </>
@@ -152,8 +183,8 @@ function EntryRow({
       >
         <code>{entry.label}</code>
       </button>
-      <dl className="baseline-entry-facts">
-        {entry.facts.map((fact) => (
+      <dl className="baseline-entry-facts baseline-entry-preview">
+        {entry.facts.slice(0, 2).map((fact) => (
           <div key={fact.name}>
             <dt>{fact.name}</dt>
             <dd className="technical">{fact.value}</dd>

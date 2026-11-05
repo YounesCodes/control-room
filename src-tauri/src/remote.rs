@@ -621,56 +621,58 @@ pub fn list_cron_jobs(
     elevation: Elevation,
 ) -> Result<CronInventory, String> {
     let command = r#"LC_ALL=C
-for f in /etc/crontab /etc/cron.d/*; do
-  test -f "$f" || continue
-  test -r "$f" || continue
-  case "$f" in /etc/crontab) src=crontab ;; *) src="cron.d/${f##*/}" ;; esac
-  awk -v src="$src" '
-    /^[[:space:]]*($|#)/ { next }
-    /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ { next }
-    NF >= 7 {
-      name = $7
-      sub(/^.*\//, "", name)
-      printf "%s%s\t%d\t%s\t%s\t%s\t%d\n", "__CR_JOB__\t", src, NR, ($1" "$2" "$3" "$4" "$5), $6, name, NF-6
-    }
-  ' "$f" 2>/dev/null
-done
-if test -d /var/spool/cron/crontabs && ! test -r /var/spool/cron/crontabs; then printf '%s%s\n' "__CR_SPPOOL__\t" unread; fi
-if test -d /var/spool/cron/crontabs && test -r /var/spool/cron/crontabs; then
-  for f in /var/spool/cron/crontabs/*; do
-    test -f "$f" || continue
-    test -r "$f" || { printf '%s%s\n' "__CR_SPPOOL__\t" unread; continue; }
-    awk -v user="${f##*/}" '
-      /^[[:space:]]*($|#)/ { next }
-      /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ { next }
-      NF >= 6 {
-        name = $6
-        sub(/^.*\//, "", name)
-        printf "%suser:%s\t%d\t%s\t%s\t%s\t%d\n", "__CR_JOB__\t", user, NR, ($1" "$2" "$3" "$4" "$5), user, name, NF-5
-      }
-    ' "$f" 2>/dev/null
-  done
-fi
-if test -d /var/spool/cron && ! test -d /var/spool/cron/crontabs; then
-  if ! test -r /var/spool/cron; then printf '%s%s\n' "__CR_SPPOOL__\t" unread; fi
-  if test -r /var/spool/cron; then
-    for f in /var/spool/cron/*; do
-      test -f "$f" || continue
-      test -r "$f" || { printf '%s%s\n' "__CR_SPPOOL__\t" unread; continue; }
-      awk -v user="${f##*/}" '
-        /^[[:space:]]*($|#)/ { next }
-        /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ { next }
-        NF >= 6 {
-          name = $6
-          sub(/^.*\//, "", name)
-          printf "%suser:%s\t%d\t%s\t%s\t%s\t%d\n", "__CR_JOB__\t", user, NR, ($1" "$2" "$3" "$4" "$5), user, name, NF-5
-        }
-      ' "$f" 2>/dev/null
-    done
-  fi
-fi"#;
-    let output =
-        RemoteCommandExecutor::execute_elevated(connection, "list_cron_jobs", command, &elevation)?;
+export LC_ALL
+collect_file() {
+  file=$1; source=$2; owner=$3
+  test -r "$file" || { printf '__CR_SPPOOL__\tunread\n'; return; }
+  awk -v src="$source" -v owner="$owner" '
+    /^[[:space:]]*($|#)/ {next}
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {next}
+    {
+      special=($1 ~ /^@/)
+      first=special ? (owner==""?3:2) : (owner==""?7:6)
+      if(NF<first) {print "__CR_SPPOOL__\tunread"; next}
+      schedule=special?$1:($1" "$2" "$3" "$4" "$5)
+      user=owner==""?$(first-1):owner
+      command=$0
+      for(i=1;i<first;i++) sub(/^[[:space:]]*[^[:space:]]+[[:space:]]*/,"",command)
+      printf "%s\t%d\t%s\t%s\t%d\t%s\n",src,NR,schedule,user,NF-first+1,command
+    }' "$file" 2>/dev/null
+}
+{
+ for file in /etc/crontab /etc/cron.d/*; do
+   test -f "$file" || continue
+   case "$file" in /etc/crontab) source=crontab ;; *) source="cron.d/${file##*/}" ;; esac
+   collect_file "$file" "$source" ""
+ done
+ for directory in /var/spool/cron/crontabs /var/spool/cron; do
+   test -d "$directory" || continue
+   test -r "$directory" && test -x "$directory" || { printf '__CR_SPPOOL__\tunread\n'; continue; }
+   for file in "$directory"/*; do
+     test -f "$file" || continue
+     collect_file "$file" "user:${file##*/}" "${file##*/}"
+   done
+ done
+} | {
+ count=0
+ tab=$(printf '\t')
+ while IFS="$tab" read -r source line schedule user words command; do
+   if test "$source" = __CR_SPPOOL__; then printf '__CR_SPPOOL__\tunread\n'; continue; fi
+   count=$((count+1))
+   if test "$count" -gt 400; then printf '__CR_LIMIT__\n'; continue; fi
+   if command -v sha256sum >/dev/null 2>&1; then
+     fingerprint=$(printf '%s' "$command" | sha256sum | cut -d' ' -f1)
+     printf '__CR_JOB__\t%s\t%s\t%s\t%s\tredacted\t%s\t%s\n' "$source" "$line" "$schedule" "$user" "$words" "$fingerprint"
+   else printf '__CR_SPPOOL__\tunread\n'; fi
+ done
+}
+printf '__CR_CRON_DONE__\n'"#;
+    let output = RemoteCommandExecutor::execute_elevated(
+        connection,
+        "list_cron_jobs",
+        &format!("sh -c {}", shell_single_quote(command)),
+        &elevation,
+    )?;
     Ok(parse_cron_inventory(&output.success_text()?))
 }
 
@@ -678,7 +680,16 @@ fn parse_cron_inventory(text: &str) -> CronInventory {
     let mut jobs = Vec::new();
     let mut spool_unreadable = false;
     let mut truncated = false;
+    let mut done = false;
     for line in text.lines() {
+        if line == "__CR_CRON_DONE__" {
+            done = true;
+            continue;
+        }
+        if line == "__CR_LIMIT__" {
+            truncated = true;
+            continue;
+        }
         if let Some(flag) = line.strip_prefix(CRON_SPPOOL_MARKER) {
             if flag.trim() == CRON_SPOOL_UNREADABLE {
                 spool_unreadable = true;
@@ -693,12 +704,17 @@ fn parse_cron_inventory(text: &str) -> CronInventory {
             break;
         }
         if let Some(job) = parse_cron_job(record) {
+            if job.fingerprint.is_none() {
+                spool_unreadable = true;
+            }
             jobs.push(job);
+        } else {
+            spool_unreadable = true;
         }
     }
     CronInventory {
         jobs,
-        spool_unreadable,
+        spool_unreadable: spool_unreadable || !done,
         truncated,
     }
 }
@@ -714,13 +730,18 @@ fn parse_cron_job(record: &str) -> Option<BaselineCronJob> {
     if source.is_empty() || schedule.is_empty() || user.is_empty() || name.is_empty() {
         return None;
     }
-    let command = format!("{name} ({words} words)");
+    let command = format!("Command redacted ({words} words)");
+    let fingerprint = fields
+        .next()
+        .filter(|value| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .map(str::to_string);
     Some(BaselineCronJob {
         source,
         line,
         schedule,
         user,
         command,
+        fingerprint,
     })
 }
 
@@ -732,21 +753,7 @@ const MAX_PACKAGES: usize = 5000;
 /// host provides. The list is sorted on the host, so the kept bound is the
 /// same range every time rather than whatever the database laptop decides.
 pub fn list_packages(connection: &SavedConnection) -> Result<PackageInventory, String> {
-    let awk = format!(
-        r#"awk -F'\t' -v limit={MAX_PACKAGES} '{{ if (n < limit) {{ print; n++ }} total++ }} END {{ printf "%s%d\n", "__CR_PKGCOUNT__\t", total }}'"#
-    );
-    let command = format!(
-        r#"LC_ALL=C
-if command -v dpkg-query >/dev/null 2>&1; then
-  printf '{PACKAGE_MANAGER_MARKER}dpkg\n'
-  dpkg-query -W -f='${{binary:Package}}\t${{Architecture}}\t${{Version}}\n' 2>/dev/null | LC_ALL=C sort | {awk}
-elif command -v rpm >/dev/null 2>&1; then
-  printf '{PACKAGE_MANAGER_MARKER}rpm\n'
-  rpm -qa --qf '%{{NAME}}\t%{{ARCH}}\t%{{VERSION}}\n' 2>/dev/null | LC_ALL=C sort | {awk}
-else
-  printf '{PACKAGE_MANAGER_MARKER}none\n'
-fi"#
-    );
+    let command = crate::baseline_collectors::packages_command();
     let text =
         RemoteCommandExecutor::execute(connection, "list_packages", &command)?.success_text()?;
     parse_package_inventory(&text)
@@ -757,6 +764,9 @@ fn parse_package_inventory(text: &str) -> Result<PackageInventory, String> {
     let mut sources_reported: Option<u32> = None;
     let mut packages = Vec::new();
     for line in text.lines() {
+        if line == "__CR_PACKAGE_FAILED__" {
+            return Err("The package manager could not read its database".into());
+        }
         if let Some(claimed) = line.strip_prefix(PACKAGE_MANAGER_MARKER) {
             manager = Some(claimed.trim().to_string());
             continue;
@@ -780,11 +790,12 @@ fn parse_package_inventory(text: &str) -> Result<PackageInventory, String> {
     if manager != "dpkg" && manager != "rpm" {
         return Err("The package manager reported an unknown identity".into());
     }
-    let reported = sources_reported.unwrap_or(packages.len() as u32);
+    let reported = sources_reported
+        .ok_or_else(|| "The package read ended before reporting its count".to_string())?;
     // Truncated means the keeping bound cut the list, not that stray invalid
     // rows thinned it: the count is only reported as cut when the parser is
     // holding exactly as many rows as it keeps.
-    let truncated = packages.len() >= MAX_PACKAGES && (reported as usize) > packages.len();
+    let truncated = (reported as usize) != packages.len();
     Ok(PackageInventory {
         manager,
         packages,
@@ -3360,7 +3371,7 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert_eq!(job.user, "root");
         // The descriptor names the binary and its word count; the arguments
         // they carried on the host stay on the host.
-        assert_eq!(job.command, "backup (3 words)");
+        assert_eq!(job.command, "Command redacted (3 words)");
         assert!(!job.command.contains("password"));
         // Incomplete records are dropped rather than half-recorded.
         assert!(parse_cron_job("cron.d/short\t1\troot").is_none());
@@ -3388,7 +3399,12 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert_eq!(inventory.sources_reported, 1200);
         assert_eq!(inventory.packages.len(), 1);
         assert_eq!(inventory.packages[0].name, "libc6");
-        assert!(!inventory.truncated);
+        assert!(inventory.truncated);
+    }
+
+    #[test]
+    fn a_package_read_without_a_final_count_is_not_complete() {
+        assert!(parse_package_inventory("__CR_PKGMGR__\tdpkg\nlibc6\tamd64\t1.0\n").is_err());
     }
 
     #[test]
@@ -4574,7 +4590,12 @@ esac
             assert!(section.schema_version > 0);
         }
         assert_eq!(captured.sections[0].status, baselines::STATUS_COLLECTED);
-        assert_eq!(captured.sections[1].status, baselines::STATUS_COLLECTED);
+        assert_eq!(
+            captured.sections[1].status,
+            baselines::STATUS_COLLECTED,
+            "{:?}",
+            captured.sections[1].message
+        );
         assert!(matches!(
             captured.sections[3].status.as_str(),
             baselines::STATUS_COLLECTED | baselines::STATUS_PARTIAL
@@ -4583,6 +4604,25 @@ esac
         if captured.sections[3].status == baselines::STATUS_PARTIAL {
             assert!(captured.sections[3].message.is_some());
         }
-        assert_eq!(captured.sections[4].status, baselines::STATUS_COLLECTED);
+        let filesystems = captured
+            .sections
+            .iter()
+            .find(|section| section.kind == baselines::SECTION_FILESYSTEMS)
+            .unwrap();
+        assert_eq!(filesystems.status, baselines::STATUS_COLLECTED);
+        let configuration = captured
+            .sections
+            .iter()
+            .find(|section| section.kind == baselines::SECTION_CONFIGURATION)
+            .unwrap();
+        assert!(matches!(
+            configuration.status.as_str(),
+            baselines::STATUS_COLLECTED | baselines::STATUS_PARTIAL
+        ));
+        assert!(!configuration.entries.is_empty());
+        assert_eq!(
+            baselines::total_changes(&baselines::compare(&captured, &captured)),
+            Some(0)
+        );
     }
 }

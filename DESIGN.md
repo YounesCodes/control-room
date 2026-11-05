@@ -428,15 +428,16 @@ classified, explained, and counted separately from meaningful differences,
 never deleted; the default view hides it, names how many changes are hidden,
 and reveals them with their reasons on request. Sections that could not be read
 are reported as not comparable rather than unchanged, and removals from a
-partial read are labelled unverified. The contextual inspector beside the
+partial read are labelled unverified. The command header and timeline use the full pane width. Open the inspector
+only after selecting evidence; use a focused dialog at compact widths. The contextual inspector beside the
 workspace shows exact before/after facts, the classification and its reason,
 the resource's recorded facts, and its trace across saved captures; it links
-to an exact Systemd unit or Docker container only when the capture recorded
+to an exact Systemd unit, Docker container, or listener with its verified owning unit only when the capture recorded
 the evidence to resolve it, and explains why a deep link is unavailable
 otherwise. Captures start from a focused dialog with real per-section progress
 and stop-after-section; captured evidence — cron commands, package inventories,
 firewall rules — stays privacy-safe, redacted where commands are involved, and
-large inventories render through a window with the true count reported.
+large inventories render through a window with the true count reported. Search and change filters never turn hidden differences into unchanged claims; exports use the same filters. Reference replacement requires confirmation and the reference never consumes an ordinary retention slot.
 Reduced motion settles all navigation, inspector, and change emphasis
 immediately.
 

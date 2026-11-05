@@ -329,7 +329,7 @@ pub struct Filesystem {
 /// Version of the normalized host state written into stored baselines. Only a
 /// whole-capture version; comparison itself is decided per section below, so a
 /// capture from another version still compares in every section both record.
-pub const BASELINE_SCHEMA_VERSION: u32 = 2;
+pub const BASELINE_SCHEMA_VERSION: u32 = 3;
 
 /// Stable evidence about which Remote Host a baseline came from. The machine
 /// fingerprint is a truncated SHA-256 computed on the host, so the raw
@@ -365,7 +365,7 @@ pub struct BaselineEntry {
 #[serde(rename_all = "camelCase")]
 pub struct BaselineSection {
     /// `host`, `systemdUnits`, `containers`, `listeners`, `firewall`,
-    /// `filesystems`, `scheduledJobs`, or `packages`.
+    /// `filesystems`, `scheduledJobs`, `packages`, or `configurationAccess`.
     pub kind: String,
     /// `collected`, `partial`, `unsupported`, `unavailable`, or `skipped`.
     /// These are distinct: an absent subsystem is not the same as one this
@@ -494,6 +494,10 @@ pub struct BaselineFactChange {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BaselineEntryChange {
+    #[serde(default)]
+    pub base_entry: Option<BaselineEntry>,
+    #[serde(default)]
+    pub target_entry: Option<BaselineEntry>,
     pub identity: String,
     pub label: String,
     pub changes: Vec<BaselineFactChange>,
@@ -538,7 +542,7 @@ pub struct BaselineComparison {
 }
 
 /// One scheduled-cron observation. The command is a redacted descriptor of the
-/// binary name and its word count: raw cron lines can embed credentials, so
+/// word count and an opaque fingerprint: raw cron lines can embed credentials, so
 /// the raw text never leaves the host.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -546,12 +550,13 @@ pub struct BaselineCronJob {
     /// `crontab`, `cron.d/<file>`, or `user:<owner>` for a personal crontab.
     pub source: String,
     pub line: u32,
-    /// The five schedule fields exactly as written.
+    /// The five schedule fields or a macro such as @reboot.
     pub schedule: String,
     /// The user the entry runs as, or the spool owner for personal crontabs.
     pub user: String,
-    /// A privacy-safe descriptor, e.g. `backup (3 words)`.
+    /// A redacted descriptor with the command word count.
     pub command: String,
+    pub fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

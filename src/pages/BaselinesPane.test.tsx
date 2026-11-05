@@ -280,8 +280,64 @@ describe("baselines explorer", () => {
     api.getHostBaseline.mockResolvedValue(detail);
     api.getHostBaselineReference.mockResolvedValue(null);
     renderPane("later");
-    await screen.findByText("Only this capture is stored");
-    expect(screen.getByText(/Capture again to compare two saved moments/)).toBeTruthy();
+    await screen.findByText(/No earlier capture/);
+    expect(screen.getByRole("tab", { name: "State" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("defaults a single capture to State and searches recorded facts", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+    ]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    renderPane();
+    await screen.findByRole("tab", { name: "State" });
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "State" }).getAttribute("aria-selected")).toBe("true"),
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Search baseline" }), "failed");
+    expect(await screen.findByRole("button", { name: "ssh.service" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "nginx.service" })).toBeNull();
+  });
+
+  it("does not read the live host again when navigating saved history", async () => {
+    api.listHostBaselines.mockResolvedValue([
+      summary("later", "2026-09-02T10:00:00Z", "after upgrade"),
+      summary("earlier", "2026-09-01T10:00:00Z", "before upgrade"),
+    ]);
+    api.getHostBaseline.mockResolvedValue(detail);
+    api.getHostBaselineReference.mockResolvedValue(null);
+    api.compareHostBaselines.mockResolvedValue(comparisonFixture());
+    api.compareHostBaselineWithLive.mockResolvedValue({
+      ...comparisonFixture(),
+      targetIsLive: true,
+    });
+    const view = render(
+      <BaselinesPane
+        connection={connection}
+        selectedId="later"
+        onSelect={vi.fn()}
+        globalSudoEnabled={false}
+      />,
+    );
+    await screen.findByRole("combobox", { name: "Compare with" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Compare with" }), "live");
+    await waitFor(() => expect(api.compareHostBaselineWithLive).toHaveBeenCalledTimes(1));
+    view.rerender(
+      <BaselinesPane
+        connection={connection}
+        selectedId="earlier"
+        onSelect={vi.fn()}
+        globalSudoEnabled={false}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Compare with" })).toHaveProperty(
+        "value",
+        "previous",
+      ),
+    );
+    expect(api.compareHostBaselineWithLive).toHaveBeenCalledTimes(1);
   });
 
   it("captures from a dialog, defaults to every section and reports real progress", async () => {
@@ -325,6 +381,7 @@ describe("baselines explorer", () => {
       "filesystems",
       "scheduledJobs",
       "packages",
+      "configurationAccess",
     ]);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -358,8 +415,12 @@ describe("baselines explorer", () => {
     renderPane("later");
     await screen.findAllByText("after upgrade");
     await userEvent.click(screen.getByRole("button", { name: "Mark as reference" }));
+    expect(api.setHostBaselineReference).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Replace reference" }),
+    );
     await waitFor(() => expect(api.setHostBaselineReference).toHaveBeenCalledWith("later"));
-    const options = screen.getByRole("combobox");
+    const options = screen.getByRole("combobox", { name: "Compare with" });
     await userEvent.selectOptions(options, "reference");
     await waitFor(() =>
       expect(api.compareHostBaselines).toHaveBeenCalledWith("reference", "later"),
@@ -435,7 +496,7 @@ describe("baselines explorer", () => {
     });
     renderPane("later");
     await screen.findByRole("tab", { name: "Changes" });
-    await userEvent.selectOptions(screen.getByRole("combobox"), "live");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Compare with" }), "live");
     await waitFor(() =>
       expect(api.compareHostBaselineWithLive).toHaveBeenCalledWith(
         "later",
@@ -542,7 +603,7 @@ describe("baselines explorer", () => {
     const pane = inspector_pane();
     expect(pane.getAllByText("activeState")).not.toHaveLength(0);
     expect(pane.getByText("active")).toBeTruthy();
-    expect(pane.getByText("failed")).toBeTruthy();
+    expect(pane.getAllByText("failed")).not.toHaveLength(0);
     expect(pane.getByText("Sub-states move on their own between captures.")).toBeTruthy();
   });
 
@@ -583,7 +644,7 @@ describe("baselines explorer", () => {
     expect(onOpenContainer).toHaveBeenCalledWith("abc123");
   });
 
-  it("offers a sudo retry only on a host where the permission realm allows it", async () => {
+  it("offers a one-shot sudo retry without changing the saved permission", async () => {
     api.listHostBaselines.mockResolvedValue([]);
     api.getHostBaselineReference.mockResolvedValue(null);
     let finish!: (value: HostBaselineSummary) => void;
@@ -600,14 +661,14 @@ describe("baselines explorer", () => {
         finish = resolve;
       });
     });
-    renderPane(null, { globalSudoEnabled: true });
+    renderPane(null, { globalSudoEnabled: false });
     await screen.findByText("No captures yet");
     await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
     await userEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", { name: /Start capture/ }),
     );
     await act(async () => finish(summary("partial", "2026-09-04T10:00:00Z", "with gap")));
-    await screen.findByText(/Some sections could not be read by this account/);
+    await screen.findByText(/Some sections were incomplete or could not be read/);
     expect(screen.getByRole("button", { name: "Retry with sudo" })).toBeTruthy();
   });
 

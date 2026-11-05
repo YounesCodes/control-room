@@ -1,4 +1,5 @@
-import { useState } from "react";
+import type { RecordedListenerSelection } from "../../lib/port-inspector";
+import { useEffect, useRef, useState } from "react";
 import { History, X } from "lucide-react";
 import type {
   BaselineEntry,
@@ -12,6 +13,7 @@ import {
   isRoutineChange,
   sectionLabel,
   statusLabel,
+  recordedListenerSelection,
 } from "../../lib/host-baselines";
 
 /** What the inspector is looking at: one recorded resource, optionally placed
@@ -26,6 +28,8 @@ export interface BaselineInspection {
   changeType: "added" | "removed" | "changed" | null;
   removalsIndeterminate: boolean;
   sectionNote: string | null;
+  capturedAt?: string;
+  additionsIndeterminate?: boolean;
 }
 
 interface BaselineInspectorProps {
@@ -34,6 +38,7 @@ interface BaselineInspectorProps {
   onClose: () => void;
   onOpenSystemd?: (unit: string) => void;
   onOpenContainer?: (containerId: string) => void;
+  onOpenListener?: (listener: RecordedListenerSelection) => void;
 }
 
 const CHANGE_TYPE_LABELS: Record<"added" | "removed" | "changed", string> = {
@@ -48,17 +53,42 @@ export function BaselineInspector({
   onClose,
   onOpenSystemd,
   onOpenContainer,
+  onOpenListener,
 }: BaselineInspectorProps) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    headingRef.current?.focus();
+    return () => {
+      if (trigger?.isConnected) trigger.focus();
+    };
+  }, []);
   const identity = inspection.entry?.identity ?? inspection.change?.identity ?? "";
   const label = inspection.entry?.label ?? inspection.change?.label ?? identity;
   const systemsUnit = unitFact(inspection, "systemdUnit");
   const containerId = unitFact(inspection, "containerId");
+  const listener =
+    inspection.sectionKind === "listeners" ? recordedListenerSelection(inspection.entry) : null;
   return (
-    <div className="baseline-inspector" aria-label={`${label} details`}>
+    <div
+      className="baseline-inspector"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+      aria-label={`${label} details`}
+    >
       <header className="baseline-inspector-header">
         <div>
-          <h3>{label}</h3>
-          <p>{sectionLabel(inspection.sectionKind)}</p>
+          <h3 ref={headingRef} tabIndex={-1}>
+            {label}
+          </h3>
+          <p>
+            {sectionLabel(inspection.sectionKind)}
+            {inspection.capturedAt ? ` · ${formatCapturedAt(inspection.capturedAt)}` : ""}
+          </p>
         </div>
         <button
           className="icon-button"
@@ -71,7 +101,15 @@ export function BaselineInspector({
       </header>
       {inspection.changeType && (
         <p className={`baseline-inspector-type baseline-change-${inspection.changeType}`}>
-          {CHANGE_TYPE_LABELS[inspection.changeType]} in this comparison
+          {inspection.changeType === "added" && inspection.additionsIndeterminate
+            ? "First observed"
+            : CHANGE_TYPE_LABELS[inspection.changeType]}{" "}
+          in this comparison
+        </p>
+      )}
+      {inspection.additionsIndeterminate && inspection.changeType === "added" && (
+        <p className="inline-warning">
+          The earlier read was partial, so this resource may already have existed.
         </p>
       )}
       {inspection.changeType === "removed" && inspection.removalsIndeterminate && (
@@ -110,10 +148,10 @@ export function BaselineInspector({
         </section>
       ) : null}
       {inspection.entry && (
-        <section className="baseline-inspector-entry">
-          <h4>
+        <details className="baseline-inspector-entry" open={!inspection.change}>
+          <summary>
             {inspection.changeType === "removed" ? "Recorded in the earlier capture" : "Recorded"}
-          </h4>
+          </summary>
           <dl className="baseline-entry-facts">
             {inspection.entry.facts.map((fact) => (
               <div key={fact.name}>
@@ -122,9 +160,24 @@ export function BaselineInspector({
               </div>
             ))}
           </dl>
-        </section>
+        </details>
       )}
       <div className="baseline-inspector-links">
+        {inspection.sectionKind === "listeners" && onOpenListener && (
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!listener}
+            title={
+              listener
+                ? "Find the exact binding and owning unit in the current Ports snapshot."
+                : "This capture does not identify a listener with a verified owning unit."
+            }
+            onClick={() => listener && onOpenListener(listener)}
+          >
+            Open in Ports
+          </button>
+        )}
         {inspection.sectionKind === "systemdUnits" && onOpenSystemd && identity && (
           <button
             type="button"
@@ -161,6 +214,7 @@ export function BaselineInspector({
       </div>
       {identity && (
         <EntryHistory
+          key={`${connectionId}:${inspection.sectionKind}:${identity}`}
           connectionId={connectionId}
           kind={inspection.sectionKind}
           identity={identity}
@@ -171,7 +225,9 @@ export function BaselineInspector({
 }
 
 function unitFact(inspection: BaselineInspection, name: string): string | null {
-  const value = inspection.entry?.facts.find((fact) => fact.name === name)?.value;
+  const value = (inspection.entry ?? inspection.change?.targetEntry)?.facts.find(
+    (fact) => fact.name === name,
+  )?.value;
   if (!value || value === "unavailable" || value === "none") return null;
   return value;
 }
@@ -230,7 +286,12 @@ function EntryHistory({
 export function TraceTable({ trace }: { trace: BaselineTrace }) {
   const names = [...new Set(trace.points.flatMap((point) => point.facts.map((fact) => fact.name)))];
   return (
-    <div className="baseline-trace">
+    <div
+      className="baseline-trace"
+      tabIndex={0}
+      role="region"
+      aria-label="Recorded resource history"
+    >
       <table>
         <thead>
           <tr>
@@ -245,7 +306,15 @@ export function TraceTable({ trace }: { trace: BaselineTrace }) {
         <tbody>
           {trace.points.map((point) => (
             <tr key={point.baselineId}>
-              <th scope="row">{point.label ?? formatCapturedAt(point.capturedAt)}</th>
+              <th scope="row">
+                {point.label && (
+                  <span>
+                    {point.label}
+                    <br />
+                  </span>
+                )}
+                <time dateTime={point.capturedAt}>{formatCapturedAt(point.capturedAt)}</time>
+              </th>
               {point.present ? (
                 names.map((name) => (
                   <td className="technical" key={name}>
@@ -254,9 +323,11 @@ export function TraceTable({ trace }: { trace: BaselineTrace }) {
                 ))
               ) : (
                 <td className="baseline-trace-absent" colSpan={names.length || 1}>
-                  {point.sectionStatus === "collected" || point.sectionStatus === "partial"
+                  {point.sectionStatus === "collected"
                     ? "Not present in this capture"
-                    : statusLabel(point.sectionStatus)}
+                    : point.sectionStatus === "partial"
+                      ? "Not observed, partial read"
+                      : statusLabel(point.sectionStatus)}
                 </td>
               )}
             </tr>

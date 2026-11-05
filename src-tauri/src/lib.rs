@@ -1,3 +1,4 @@
+mod baseline_collectors;
 mod baselines;
 mod commands;
 mod database;

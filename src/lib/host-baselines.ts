@@ -1,3 +1,4 @@
+import type { RecordedListenerSelection } from "./port-inspector";
 import type {
   HostBaselineSummary,
   BaselineComparison,
@@ -18,6 +19,7 @@ const SECTION_LABELS: Record<BaselineSectionKind, string> = {
   filesystems: "Filesystems",
   scheduledJobs: "Scheduled jobs",
   packages: "Packages",
+  configurationAccess: "Configuration & access",
 };
 
 const SECTION_SHORT_LABELS: Record<BaselineSectionKind, string> = {
@@ -29,6 +31,7 @@ const SECTION_SHORT_LABELS: Record<BaselineSectionKind, string> = {
   filesystems: "Filesystems",
   scheduledJobs: "Cron",
   packages: "Packages",
+  configurationAccess: "Configuration & access",
 };
 
 const STATUS_LABELS: Record<BaselineSectionStatus, string> = {
@@ -58,6 +61,7 @@ export const SECTION_KINDS: BaselineSectionKind[] = [
   "filesystems",
   "scheduledJobs",
   "packages",
+  "configurationAccess",
 ];
 
 export function statusHint(status: BaselineSectionStatus): string {
@@ -76,8 +80,8 @@ export function isRoutineEntry(entry: BaselineEntryChange): boolean {
 
 export function meaningfulChangeCount(section: BaselineSectionDiff): number {
   return (
-    section.added.length +
-    section.removed.length +
+    (section.baseStatus === "partial" ? 0 : section.added.length) +
+    (section.removalsIndeterminate ? 0 : section.removed.length) +
     section.changed.filter((entry) => !isRoutineEntry(entry)).length
   );
 }
@@ -113,10 +117,13 @@ export interface ComparisonViewOptions {
   /** False hides routine churn (the default review); true shows everything. */
   showRoutine: boolean;
   search: string;
+  changeType?: "all" | "added" | "removed" | "changed";
+  sectionKind?: BaselineSectionKind | "all";
 }
 
 export interface ComparisonSectionView extends BaselineSectionDiff {
   meaningfulCount: number;
+  filteredCount: number;
 }
 
 /** This view carries both the hidden churn count and the search position, so
@@ -128,17 +135,39 @@ export function comparisonView(
   return comparison.sections.map((section) => {
     const meaningfulCount = section.comparable ? meaningfulChangeCount(section) : 0;
     if (!section.comparable) {
-      return { ...section, added: [], removed: [], changed: [], meaningfulCount };
+      return { ...section, added: [], removed: [], changed: [], meaningfulCount, filteredCount: 0 };
     }
     const changed = options.showRoutine
       ? section.changed
       : section.changed.filter((entry) => !isRoutineEntry(entry));
+    const included =
+      !options.sectionKind || options.sectionKind === "all" || options.sectionKind === section.kind;
+    const kind = options.changeType ?? "all";
+    const added =
+      included && (kind === "all" || kind === "added")
+        ? section.added.filter((entry) => entrySearchText(entry, options.search))
+        : [];
+    const removed =
+      included && (kind === "all" || kind === "removed")
+        ? section.removed.filter((entry) => entrySearchText(entry, options.search))
+        : [];
+    const visibleChanged =
+      included && (kind === "all" || kind === "changed")
+        ? changed.filter((entry) => changeSearchText(entry, options.search))
+        : [];
     return {
       ...section,
-      added: section.added.filter((entry) => entrySearchText(entry, options.search)),
-      removed: section.removed.filter((entry) => entrySearchText(entry, options.search)),
-      changed: changed.filter((entry) => changeSearchText(entry, options.search)),
+      added,
+      removed,
+      changed: visibleChanged,
       meaningfulCount,
+      filteredCount:
+        section.added.length +
+        section.removed.length +
+        changed.length -
+        added.length -
+        removed.length -
+        visibleChanged.length,
     };
   });
 }
@@ -185,7 +214,8 @@ export function coverageText(baseline: HostBaselineSummary): string {
   const read = baseline.sections.filter(
     (section) => section.status === "collected" || section.status === "partial",
   ).length;
-  return `${read}/${total} read`;
+  const partial = baseline.sections.filter((section) => section.status === "partial").length;
+  return `${read}/${total} read${partial ? ` · ${partial} partial` : ""}`;
 }
 
 // A section that could not be compared is never counted as unchanged, so the
@@ -211,6 +241,29 @@ export function comparisonSummary(
         ? "1 section could not be compared"
         : `${incomparable} sections could not be compared`,
     );
+  }
+  const unverified = comparison.sections
+    .filter((section) => section.comparable)
+    .reduce(
+      (total, section) =>
+        total +
+        (section.removalsIndeterminate ? section.removed.length : 0) +
+        (section.baseStatus === "partial" ? section.added.length : 0),
+      0,
+    );
+  if (unverified) parts.push(unverified + " unverified resource changes");
+  if (
+    options &&
+    (options.search.trim() ||
+      (options.changeType && options.changeType !== "all") ||
+      (options.sectionKind && options.sectionKind !== "all"))
+  ) {
+    const shown = comparisonView(comparison, options).reduce(
+      (total, section) =>
+        total + section.added.length + section.removed.length + section.changed.length,
+      0,
+    );
+    parts.push(shown + " shown");
   }
   return parts.join(" · ");
 }
@@ -269,6 +322,8 @@ export function comparisonToMarkdown(
   const lines: string[] = [
     `# ${baselineTitle(comparison.base)} → ${comparisonTargetTitle(comparison)}`,
     "",
+    `Observed ${formatCapturedAt(comparison.base.capturedAt)} → ${formatCapturedAt(comparison.target.capturedAt)}`,
+    "",
     comparisonSummary(comparison, options),
     "",
   ];
@@ -301,6 +356,10 @@ export function comparisonToMarkdown(
       );
     }
     const changes = section.added.length + section.removed.length + section.changed.length;
+    if (!changes && section.filteredCount > 0) {
+      lines.push("No differences match the current filters.", "");
+      continue;
+    }
     if (!changes) {
       lines.push(
         `No change across ${section.unchangedCount} compared entries${
@@ -312,8 +371,18 @@ export function comparisonToMarkdown(
       );
       continue;
     }
-    for (const entry of section.added) lines.push(`- Added \`${entry.label}\``);
-    for (const entry of section.removed) lines.push(`- Removed \`${entry.label}\``);
+    for (const [entries, mark] of [
+      [
+        section.added,
+        section.baseStatus === "partial" ? "First observed, earlier read partial" : "Added",
+      ],
+      [section.removed, section.removalsIndeterminate ? "Unverified absence" : "Removed"],
+    ] as const) {
+      for (const entry of entries) {
+        lines.push(`- ${mark} \`${entry.label}\``);
+        for (const fact of entry.facts) lines.push(`  - ${fact.name}: \`${fact.value}\``);
+      }
+    }
     for (const entry of section.changed) {
       lines.push(`- Changed \`${entry.label}\``);
       // The export shows exactly the facts the view shows: hidden routine is
@@ -336,8 +405,21 @@ export function comparisonToMarkdown(
   return lines.join("\n");
 }
 
-export function comparisonToJson(comparison: BaselineComparison): string {
-  return JSON.stringify(comparison, null, 2);
+export function comparisonToJson(
+  comparison: BaselineComparison,
+  options?: ComparisonViewOptions,
+): string {
+  if (!options) return JSON.stringify(comparison, null, 2);
+  const sections = comparisonView(comparison, options).map((section) => ({
+    ...section,
+    changed: section.changed.map((entry) => ({
+      ...entry,
+      changes: options.showRoutine
+        ? entry.changes
+        : entry.changes.filter((fact) => !isRoutineChange(fact)),
+    })),
+  }));
+  return JSON.stringify({ ...comparison, filters: options, sections }, null, 2);
 }
 
 // A file name someone can find again a week later, and one no filesystem will
@@ -351,4 +433,23 @@ export function exportFileName(comparison: BaselineComparison, extension: string
   return `baseline-${safe(baselineTitle(comparison.base))}-to-${safe(
     comparisonTargetTitle(comparison),
   )}.${extension}`;
+}
+
+export function recordedListenerSelection(
+  entry: BaselineEntry | null,
+): RecordedListenerSelection | null {
+  const match = entry?.identity.match(/^(tcp|udp)\/(ipv4|ipv6)\/(.+):(\d+)$/);
+  const owner = entry?.facts.find((fact) => fact.name === "systemdUnit")?.value;
+  const ownership = entry?.facts.find((fact) => fact.name === "ownership")?.value;
+  if (!match || !owner || owner === "unavailable" || owner === "none" || ownership !== "known")
+    return null;
+  const port = Number(match[4]);
+  if (port < 1 || port > 65535) return null;
+  return {
+    protocol: match[1],
+    addressFamily: match[2],
+    localAddress: match[3],
+    port,
+    systemdUnit: owner,
+  };
 }

@@ -309,7 +309,8 @@ export type BaselineSectionKind =
   | "firewall"
   | "filesystems"
   | "scheduledJobs"
-  | "packages";
+  | "packages"
+  | "configurationAccess";
 
 export type BaselineSectionStatus =
   "collected" | "partial" | "unsupported" | "unavailable" | "skipped";
@@ -412,6 +413,8 @@ export interface BaselineFactChange {
 }
 
 export interface BaselineEntryChange {
+  baseEntry?: BaselineEntry | null;
+  targetEntry?: BaselineEntry | null;
   identity: string;
   label: string;
   changes: BaselineFactChange[];
