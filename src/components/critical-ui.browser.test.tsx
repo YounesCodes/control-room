@@ -726,6 +726,23 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
+  it("rounds the open dropdown and preserves option selection and keyboard dismissal", async () => {
+    await page.viewport(960, 640);
+    mount(<SettingsFixture />);
+    await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+    const select = page.getByRole("combobox", { name: "Default log tail" });
+    await select.click();
+    expect(select.element().matches(":open")).toBe(true);
+    expect(getComputedStyle(select.element(), "::picker(select)").borderRadius).toBe("6px");
+    await page.screenshot({ path: "../../test-results/rounded-dropdown.png" });
+    await page.getByRole("option", { name: "500", exact: true }).click();
+    await expect.element(select).toHaveValue("500");
+    await select.click();
+    await userEvent.keyboard("{Escape}");
+    expect(select.element().matches(":open")).toBe(false);
+    await expect.element(select).toHaveValue("500");
+  });
+
   it("keeps dark-outline checkboxes native, keyboard-operable and consistent across states", async () => {
     mount(
       <form className="form-stack">

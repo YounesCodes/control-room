@@ -458,6 +458,8 @@ Search fields use compact type and height, an inset icon with a clear gutter,
 a quiet surface border, and one visible focus border without an extra glow.
 Use the same compact proportions for ordinary form inputs and selectors across
 the app. Keep dropdown chevrons smaller than the values beside them.
+Round both the dropdown field and its opened option list. Keep option rows inset
+inside the popup corners, with clear selection, hover, and keyboard-focus states.
 
 Use the existing spacing, radius, and motion tokens. Prefer layout gaps over
 one-off margins. Keep related controls grouped and leave enough room between

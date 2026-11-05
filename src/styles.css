@@ -266,11 +266,61 @@ select {
 
 select {
   appearance: none;
+  border-radius: var(--radius-md);
   padding-right: 32px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-size: 8px 5.5px;
   background-position: right 10px center;
+}
+
+/* Keep the browser's select semantics while rounding its top-layer picker. */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+
+  select::picker-icon {
+    display: none;
+  }
+
+  select::picker(select) {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-overlay);
+    color: var(--text);
+    box-shadow: var(--shadow-popover);
+    margin-block: 4px;
+    padding: 4px;
+    overflow: auto;
+    max-height: min(320px, 60vh);
+  }
+
+  select:not([multiple]):not([size]) option {
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  select option::checkmark {
+    display: none;
+  }
+
+  select option:checked {
+    background: var(--fill-active);
+    color: var(--text-strong);
+  }
+
+  select option:hover:not(:disabled) {
+    background: var(--fill-hover);
+  }
+
+  select option:focus-visible {
+    outline: 1px solid var(--text-muted);
+    outline-offset: -1px;
+  }
 }
 
 input:hover:not(:disabled),
@@ -8209,7 +8259,7 @@ details[open] > .inspector-disclosure-body {
   max-height: 230px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
@@ -8218,6 +8268,7 @@ details[open] > .inspector-disclosure-body {
 }
 
 .font-suggestions li {
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -8236,6 +8287,10 @@ details[open] > .inspector-disclosure-body {
 
 .font-suggestions small {
   color: var(--text-muted);
+}
+
+.font-catalog input[role="combobox"] {
+  border-radius: var(--radius-md);
 }
 
 .font-catalog-actions,
