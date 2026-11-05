@@ -25,6 +25,7 @@ Find nearby tests and existing implementation before changing a feature contract
 - Do not create additional `.md` file unless explicitly asked to.
 - Always work in a dedicated branch unless explicitly asked not to.
 - After completing and validating the task, commit and push all task-related changes to that branch, then open a PR against main.
+- When opening a PR, correctly link all corresponding issues using GitHub issue links. Use closing references when merging the PR completes the issue; otherwise, link the issue without automatic closure.
 - For releases, create a GitHub draft release for the next `vX.Y.Z` tag and write its release notes in the draft body before pushing the tag. Keep the release as a draft. The tag workflow builds the app, copies the GitHub body into `latest.json`, verifies that the notes match, and publishes the release. Release notes do not need a file or commit in this repository.
 - Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
 - Make the best decision that will elevate all three: the user experience (UX), developer experience (DX), and agent experience (AX) always, without breaking anything.
@@ -35,7 +36,7 @@ Start with the smallest relevant validation, then expand according to the surfac
 
 Run only tests relevant to the changes; skip validation for trivial or documentation-only edits. Avoid rerunning checks already passed for unchanged code or enforced by Git hooks/CI. Run the full suite only when explicitly requested or when changes affect multiple independent subsystems.
 
-- If you lack vision capabilities, delegate UI/UX visual verification to an available vision-capable subagent.
+- If you lack vision capabilities, delegate UI/UX visual verification to an available vision-capable subagent. This is the only permitted use of subagents; otherwise, do not use subagents at all.
 - **Frontend-only changes:** Run the relevant frontend tests and static checks.
 - **Rust/backend changes:** Run the relevant Rust tests and checks.
 - **Changes crossing the Tauri boundary:** Validate both frontend and Rust layers.
