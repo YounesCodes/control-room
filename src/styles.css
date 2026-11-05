@@ -5962,30 +5962,36 @@ dd {
 .settings-subnavigation {
   display: flex;
   flex: none;
-  gap: 6px;
   border-bottom: 1px solid var(--border-subtle);
   padding: 10px var(--settings-gutter);
 }
 
 .settings-subnavigation button {
+  position: relative;
   min-height: 32px;
   padding: 6px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--text-muted);
   font-size: 13px;
-  transition:
-    background var(--motion-fast) var(--ease),
-    border-color var(--motion-fast) var(--ease),
-    color var(--motion-fast) var(--ease);
+  font-weight: 400;
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.settings-subnavigation button + button::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 16px;
+  border-left: 1px solid var(--border);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .settings-subnavigation button[aria-selected="true"] {
-  background: var(--fill-selected);
-  border-color: var(--border);
-  color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .settings-terminal-panel {
@@ -5997,7 +6003,6 @@ dd {
 }
 
 .settings-subnavigation button:hover {
-  background: var(--fill-hover);
   color: var(--text);
 }
 
