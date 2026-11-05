@@ -5,7 +5,7 @@ import gitBashIcon from "../assets/shells/git-for-windows.ico";
 // Git Bash: git-for-windows/build-extra, portable/root/usr/share/git/git-for-windows.ico.
 // PowerShell: PowerShell/PowerShell assets/ps_black_64.svg.
 // Trademarks belong to their owners.
-// Vector marks inherit identity colors; Git Bash retains the upstream artwork.
+// Vector marks inherit identity colors; Git Bash uses the shared artwork filter.
 export function LocalShellIcon({
   kind,
   elevated = false,

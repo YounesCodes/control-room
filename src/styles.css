@@ -767,7 +767,7 @@ code,
 }
 .settings-form .host-metrics-options {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 200px);
   align-items: center;
   gap: 16px;
   padding: 0;
@@ -1807,6 +1807,12 @@ code,
 
 .local-shell-icon {
   position: relative;
+  --shell-artwork-filter: grayscale(1) brightness(0.85);
+}
+
+.local-shell-icon > img {
+  filter: var(--shell-artwork-filter);
+  transition: filter var(--motion-fast) var(--ease);
 }
 
 .local-shell-icon.local-shell-mark {
@@ -5952,7 +5958,38 @@ dd {
 
 .settings-form input[type="number"] {
   width: 88px;
+  font-variant-numeric: tabular-nums;
 }
+
+.terminal-appearance-controls input[type="number"] {
+  width: 72px;
+}
+
+.settings-form input:not([type="checkbox"], [type="color"]),
+.settings-form select,
+.settings-category-select select {
+  min-height: 32px;
+  height: 32px;
+  border-color: var(--border-subtle);
+  background-color: var(--surface-sunken);
+  padding-block: 5px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.settings-form input:not([type="checkbox"], [type="color"]):hover:not(:disabled),
+.settings-form select:hover:not(:disabled),
+.settings-category-select select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.settings-form input:not([type="checkbox"], [type="color"]):focus-visible,
+.settings-form select:focus-visible,
+.settings-category-select select:focus-visible {
+  border-color: var(--text-muted);
+  box-shadow: none;
+}
+
 .settings-form select {
   max-width: 320px;
 }
@@ -7332,6 +7369,7 @@ kbd {
 .command-item:focus-visible .identity-mark,
 .command-item.active .identity-mark {
   color: var(--identity);
+  --shell-artwork-filter: none;
 }
 
 /* ==========================================================================

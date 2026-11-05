@@ -20,15 +20,16 @@ guardrails, not every choice described below.
   color signals success, warning, or failure. User-selected tag colors identify
   connections; they do not imply health. OS and shell marks may reveal their
   brand color on a hovered or selected tab or host row to identify the target;
-  the color is identity, never health. Git Bash keeps the upstream Git for Windows
-  icon in full color at rest and during interaction. Terminal ANSI
+  the color is identity, never health. Git Bash uses the upstream Git for Windows
+  icon, gray at rest and in color on hover, keyboard focus, or selection. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
   Read-only configuration and command blocks may use a small syntax palette for
   sections, keys, strings, paths, and variables. Keep those colors inside code;
   they describe syntax and do not signal service health.
   PowerShell logos reveal blue on hover, keyboard focus, or selection outside
   Settings. Settings keeps shell marks steady while the whole preference row
-  receives a quiet hover fill. Command Prompt and the generic local-terminal
+  receives a quiet hover fill. Git Bash also stays gray throughout Settings.
+  Command Prompt and the generic local-terminal
   launcher use muted gray at rest and white on hover, keyboard focus, or selection.
   Use each local shell's own mark in workspace tabs, launch and split menus,
   overflow lists, the command palette, and Settings. Administrator shells keep
@@ -597,7 +598,8 @@ for its form and keep Back and Save visible while its body scrolls.
 Use a slim category rail on wide windows and a category selector at narrow widths.
 Search across categories by setting names and keywords, with category context on
 results. Preserve drafts and useful category scroll positions. Keep numeric fields
-compact and save explicitly, with dirty, saving, saved, and error feedback.
+compact, with readable values in short, quietly bordered inputs and selectors.
+Save explicitly, with dirty, saving, saved, and error feedback.
 Settings uses readable section titles. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.

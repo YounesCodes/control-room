@@ -389,7 +389,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
-  it("keeps shell identity across layouts and preserves the full-color Git Bash artwork", async () => {
+  it("reveals the Git Bash artwork color on interaction across layouts", async () => {
     await page.viewport(960, 640);
     overrides.set("list_local_shells", () => ({
       profiles: [
@@ -435,10 +435,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       name: "New local terminal: Git Bash",
       exact: true,
     });
-    await userEvent.hover(splitChoice.element());
     const gitLogo = splitChoice.element().querySelector<HTMLImageElement>(".local-shell-mark img")!;
     await vi.waitFor(() => expect(gitLogo.naturalWidth).toBeGreaterThan(0));
-    expect(getComputedStyle(gitLogo).filter).toBe("none");
+    expect(getComputedStyle(gitLogo).filter).toBe("grayscale(1) brightness(0.85)");
+    await userEvent.hover(splitChoice.element());
+    await expect.poll(() => getComputedStyle(gitLogo).filter).toBe("none");
     await splitChoice.click();
     const pane = page
       .getByRole("navigation", { name: /Terminals in .* group/ })
@@ -470,7 +471,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.hover(git.element());
     const overflowLogo = git.element().querySelector<HTMLImageElement>(".local-shell-icon img")!;
     expect(overflowLogo.src).toBe(gitLogo.src);
-    expect(getComputedStyle(overflowLogo).filter).toBe("none");
+    await expect.poll(() => getComputedStyle(overflowLogo).filter).toBe("none");
   });
 
   it("shows shell identities and elevation in the command palette and Settings", async () => {

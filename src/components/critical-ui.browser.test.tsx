@@ -731,6 +731,10 @@ describe("critical UI in Chromium", () => {
     mount(<SettingsFixture />);
     const search = page.getByRole("searchbox", { name: "Search settings" });
     await expect.element(search).toBeVisible();
+    const refresh = page.getByRole("combobox", { name: "Host metrics refresh interval" }).element();
+    expect(refresh.getBoundingClientRect().height).toBe(32);
+    expect(refresh.getBoundingClientRect().width).toBeLessThanOrEqual(200);
+    await page.screenshot({ path: `../../test-results/settings-controls-general-${width}.png` });
     const field = search.element().closest(".search-field")!;
     const icon = field.querySelector("svg")!;
     const bounds = field.getBoundingClientRect();
@@ -748,6 +752,11 @@ describe("critical UI in Chromium", () => {
     if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
     else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
     await page.getByRole("button", { name: "Local shells", exact: true }).click();
+    for (const name of ["Font size", "Scrollback lines"]) {
+      const input = page.getByRole("spinbutton", { name, exact: true }).element();
+      expect(input.getBoundingClientRect().height).toBe(32);
+      expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(13);
+    }
     const row = page
       .getByRole("checkbox", { name: "Offer PowerShell 7", exact: true })
       .element()
@@ -760,7 +769,9 @@ describe("critical UI in Chromium", () => {
     expect(getComputedStyle(shell).color).toBe(color);
     const git = container!.querySelector<HTMLImageElement>(".local-shell-icon-git-bash img")!;
     await vi.waitFor(() => expect(git.naturalWidth).toBeGreaterThan(0));
-    expect(getComputedStyle(git).filter).toBe("none");
+    expect(getComputedStyle(git).filter).toBe("grayscale(1) brightness(0.85)");
+    await userEvent.hover(git.closest("label")!);
+    expect(getComputedStyle(git).filter).toBe("grayscale(1) brightness(0.85)");
     const select = page.getByRole("combobox", { name: "Default local terminal" }).element();
     const embedded = select
       .parentElement!.querySelector(".local-shell-icon")!
@@ -769,6 +780,13 @@ describe("critical UI in Chromium", () => {
     expect(embedded.right).toBeLessThan(select.getBoundingClientRect().right - 20);
     expect(container!.scrollWidth).toBeLessThanOrEqual(width);
     await page.screenshot({ path: `../../test-results/search-shell-polish-${width}.png` });
+    if (width > 900)
+      await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+    else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("logs");
+    const tail = page.getByRole("combobox", { name: "Default log tail" }).element();
+    expect(tail.getBoundingClientRect().height).toBe(32);
+    expect(parseFloat(getComputedStyle(tail).fontSize)).toBeGreaterThanOrEqual(13);
+    await page.screenshot({ path: `../../test-results/settings-controls-logs-${width}.png` });
   });
 
   it.each([768, 960, 1600])(
