@@ -5889,11 +5889,12 @@ dd {
   flex: none;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-chrome);
-  padding: 13px calc(var(--settings-gutter) + var(--settings-scrollbar)) 13px var(--settings-gutter);
+  padding: 13px var(--settings-gutter);
 }
 
 /* Align the heading and Save with the form across the full Settings page. */
 .settings-heading-inner {
+  position: relative;
   display: flex;
   width: 100%;
   max-width: var(--settings-measure);
@@ -5903,6 +5904,9 @@ dd {
 }
 
 .settings-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   width: clamp(160px, 28vw, 320px);
   flex: 0 1 320px;
 }
@@ -8475,6 +8479,8 @@ details[open] > .inspector-disclosure-body {
     flex: 1;
   }
   .settings-search {
+    position: static;
+    transform: none;
     flex: 1 1 100%;
     width: 100%;
     order: 1;

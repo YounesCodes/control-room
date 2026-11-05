@@ -772,6 +772,7 @@ describe("critical UI in Chromium", () => {
           return [rect.x, rect.y, rect.width, rect.height, button.x, button.width];
         };
         const initial = bounds();
+        expect(Math.abs(initial[0] + initial[2] / 2 - width / 2)).toBeLessThanOrEqual(1);
         await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
         expect(bounds()).toEqual(initial);
         const status = container!.querySelector<HTMLElement>(".settings-status")!;
