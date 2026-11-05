@@ -811,6 +811,9 @@ describe("critical UI in Chromium", () => {
     if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
     else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
     const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    if (width === 1200) expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
+    else expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
     await size.fill("18");
     const originalInput = size.element();
     const tabs = page.getByRole("tablist", { name: "Terminal settings" });
