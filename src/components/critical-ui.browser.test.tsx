@@ -954,9 +954,21 @@ describe("critical UI in Chromium", () => {
     mount(<SettingsFixture />);
     const search = page.getByRole("searchbox", { name: "Search settings" });
     await expect.element(search).toBeVisible();
-    const refresh = page.getByRole("combobox", { name: "Host metrics refresh interval" }).element();
+    const refresh = page.getByRole("combobox", { name: "Refresh host metrics" }).element();
     expect(refresh.getBoundingClientRect().height).toBe(32);
     expect(refresh.getBoundingClientRect().width).toBeLessThanOrEqual(200);
+    const refreshLabel = refresh.closest("label")!.querySelector("span")!.getBoundingClientRect();
+    const refreshBounds = refresh.getBoundingClientRect();
+    expect(refreshBounds.left - refreshLabel.right).toBeGreaterThanOrEqual(12);
+    expect(refreshBounds.left - refreshLabel.right).toBeLessThanOrEqual(18);
+    expect(
+      Math.abs(
+        (refreshLabel.top + refreshLabel.bottom) / 2 -
+          (refreshBounds.top + refreshBounds.bottom) / 2,
+      ),
+    ).toBeLessThanOrEqual(1);
+    const choices = container!.querySelector(".host-metrics-choices")!.getBoundingClientRect();
+    expect(refreshBounds.top).toBeGreaterThanOrEqual(choices.bottom);
     await page.screenshot({ path: `../../test-results/settings-controls-general-${width}.png` });
     const field = search.element().closest(".search-field")!;
     const icon = field.querySelector("svg")!;

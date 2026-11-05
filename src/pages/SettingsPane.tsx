@@ -545,8 +545,8 @@ export function SettingsPane({
                       </label>
                     ))}
                   </div>
-                  <label>
-                    <span>Host metrics refresh interval</span>
+                  <label className="host-metrics-refresh">
+                    <span>Refresh host metrics</span>
                     <select
                       value={draft.hostMetricsIntervalSeconds ?? 5}
                       onChange={(event) =>

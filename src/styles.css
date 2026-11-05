@@ -887,13 +887,14 @@ code,
   gap: 12px 24px;
 }
 .settings-form .host-metrics-settings {
-  gap: 16px;
+  gap: 10px;
 }
 .settings-form .host-metrics-options {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 200px);
-  align-items: center;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  gap: 10px;
   padding: 0;
   margin: 0;
   border: 0;
@@ -905,10 +906,18 @@ code,
   padding: 0;
   margin-bottom: 10px;
 }
-@media (max-width: 760px) {
-  .settings-form .host-metrics-options {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.settings-form .host-metrics-options .host-metrics-refresh {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.host-metrics-refresh select {
+  width: 176px;
+  min-width: 0;
 }
 .host-metrics-options:disabled {
   opacity: 0.6;

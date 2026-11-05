@@ -187,7 +187,7 @@ describe("Settings actions", () => {
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
-    fireEvent.change(screen.getByLabelText("Host metrics refresh interval"), {
+    fireEvent.change(screen.getByLabelText("Refresh host metrics"), {
       target: { value: "10" },
     });
     await userEvent.click(saveButton());
