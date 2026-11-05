@@ -16,6 +16,7 @@ interface BaselineCaptureDialogProps {
   progress: BaselineProgress[];
   /** What the user should know about elevation for this host, when it matters. */
   permissionNote: string | null;
+  error?: string | null;
   onRequestCapture: (label: string, sections: BaselineSectionKind[]) => void;
   onStopCapture: () => void;
   onClose: () => void;
@@ -29,6 +30,7 @@ export function BaselineCaptureDialog({
   running,
   progress,
   permissionNote,
+  error,
   onRequestCapture,
   onStopCapture,
   onClose,
@@ -51,6 +53,11 @@ export function BaselineCaptureDialog({
       onClose={running ? () => undefined : onClose}
     >
       <div className="baseline-capture-form">
+        {error && (
+          <p className="inline-error" role="alert">
+            {error}
+          </p>
+        )}
         {!running && (
           <>
             <label className="baseline-capture-label">
@@ -96,7 +103,6 @@ export function BaselineCaptureDialog({
                 disabled={!chosen.length}
                 onClick={() => {
                   onRequestCapture(label.trim() || "", chosen);
-                  setLabel("");
                 }}
               >
                 <Camera size={15} /> Start capture

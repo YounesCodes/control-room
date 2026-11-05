@@ -3,6 +3,8 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { Copy, Download } from "lucide-react";
 import type { BaselineComparison, BaselineEntry, BaselineEntryChange } from "../../types";
 import {
+  baselineTitle,
+  comparisonTargetTitle,
   comparisonSummary,
   comparisonToMarkdown,
   comparisonToJson,
@@ -30,6 +32,7 @@ interface BaselineComparisonViewProps {
   ) => void;
   onInspectChange: (section: ComparisonSectionView, change: BaselineEntryChange) => void;
   onError: (message: string) => void;
+  onClearFilters?: () => void;
   /** Sidebars render tools only once; the view lives in the busy half. */
   compact?: boolean;
 }
@@ -46,19 +49,29 @@ export function BaselineComparisonView({
   onInspectEntry,
   onInspectChange,
   onError,
+  onClearFilters,
   compact = false,
 }: BaselineComparisonViewProps) {
   const [copied, setCopied] = useState(false);
-  const options: ComparisonViewOptions = { showRoutine, search };
+  const [changeType, setChangeType] =
+    useState<NonNullable<ComparisonViewOptions["changeType"]>>("all");
+  const [sectionKind, setSectionKind] =
+    useState<NonNullable<ComparisonViewOptions["sectionKind"]>>("all");
+  const options: ComparisonViewOptions = {
+    showRoutine,
+    search,
+    ...(changeType !== "all" ? { changeType } : {}),
+    ...(sectionKind !== "all" ? { sectionKind } : {}),
+  };
   const sections = useMemo(
     () => comparisonView(comparison, options),
-    [comparison, showRoutine, search],
+    [comparison, showRoutine, search, changeType, sectionKind],
   );
   const routineTotal = comparison.sections
     .filter((section) => section.comparable)
     .reduce((total, section) => total + section.routineCount, 0);
   const warning = identityWarning(comparison);
-  const markdown = () => comparisonToMarkdown(comparison, { showRoutine, search });
+  const markdown = () => comparisonToMarkdown(comparison, options);
 
   async function copyMarkdown() {
     try {
@@ -77,7 +90,10 @@ export function BaselineComparisonView({
         filters: [{ name: format === "md" ? "Markdown" : "JSON", extensions: [format] }],
       });
       if (!path) return;
-      await api.exportTextFile(path, format === "md" ? markdown() : comparisonToJson(comparison));
+      await api.exportTextFile(
+        path,
+        format === "md" ? markdown() : comparisonToJson(comparison, options),
+      );
     } catch (caught) {
       onError(errorMessage(caught));
     }
@@ -92,13 +108,22 @@ export function BaselineComparisonView({
       Number(right.comparable && rightChanges > 0) - Number(left.comparable && leftChanges > 0)
     );
   });
+  const filteredOut = sections.some((section) => section.filteredCount > 0);
+  const noMatches =
+    filteredOut &&
+    sections.every(
+      (section) => !section.added.length && !section.removed.length && !section.changed.length,
+    );
   const viewKey = `${comparison.base.id}:${comparison.target.id}:${comparison.targetIsLive}`;
 
   return (
     <div className="baseline-sections" key={viewKey}>
-      <p className="baseline-comparison-summary">
-        {comparisonSummary(comparison, { showRoutine, search })}
-      </p>
+      <div className="baseline-comparison-direction">
+        <span>{baselineTitle(comparison.base)}</span>
+        <span aria-label="compared to">→</span>
+        <span>{comparisonTargetTitle(comparison)}</span>
+      </div>
+      <p className="baseline-comparison-summary">{comparisonSummary(comparison, options)}</p>
       {comparison.targetIsLive && (
         <p className="baseline-comparison-note">
           Live state read {formatCapturedAt(comparison.target.capturedAt)}. This read was not saved.
@@ -111,6 +136,39 @@ export function BaselineComparisonView({
         </p>
       )}
       {warning && <p className="inline-warning">{warning}</p>}
+      <details className="baseline-change-filters">
+        <summary>
+          Filter changes{changeType !== "all" || sectionKind !== "all" ? " · active" : ""}
+        </summary>
+        <label>
+          Change type
+          <select
+            aria-label="Change type"
+            value={changeType}
+            onChange={(event) => setChangeType(event.target.value as typeof changeType)}
+          >
+            <option value="all">All changes</option>
+            <option value="added">Added</option>
+            <option value="removed">Removed</option>
+            <option value="changed">Changed</option>
+          </select>
+        </label>
+        <label>
+          Section
+          <select
+            aria-label="Change section"
+            value={sectionKind}
+            onChange={(event) => setSectionKind(event.target.value as typeof sectionKind)}
+          >
+            <option value="all">All sections</option>
+            {comparison.sections.map((section) => (
+              <option key={section.kind} value={section.kind}>
+                {sectionLabel(section.kind)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </details>
       <div className="baseline-comparison-tools">
         {routineTotal > 0 && (
           <label className="baseline-volatile-toggle">
@@ -132,6 +190,28 @@ export function BaselineComparisonView({
           <Download size={14} /> JSON
         </button>
       </div>
+      {selectedIdentity &&
+        !sections.some((section) =>
+          [...section.added, ...section.removed, ...section.changed].some(
+            (entry) => entry.identity === selectedIdentity,
+          ),
+        ) && (
+          <p className="inline-warning">
+            Selection hidden by filters.{" "}
+            <button
+              className="link-button"
+              type="button"
+              onClick={() => {
+                setChangeType("all");
+                setSectionKind("all");
+                onClearFilters?.();
+              }}
+            >
+              Clear filters
+            </button>
+          </p>
+        )}
+      {noMatches && <p role="status">No differences match the current filters.</p>}
       {ordered.map((section) => (
         <SectionDiffView
           key={section.kind}
@@ -169,7 +249,14 @@ function SectionDiffView({
   onShowRoutineChange: (show: boolean) => void;
   compact: boolean;
 }) {
+  const [visibleLimit, setVisibleLimit] = useState(150);
   const changes = diff.added.length + diff.removed.length + diff.changed.length;
+  const visibleAdded = diff.added.slice(0, visibleLimit);
+  const visibleRemoved = diff.removed.slice(0, Math.max(0, visibleLimit - visibleAdded.length));
+  const visibleChanged = diff.changed.slice(
+    0,
+    Math.max(0, visibleLimit - visibleAdded.length - visibleRemoved.length),
+  );
   if (!diff.comparable) {
     return (
       <section className="baseline-section baseline-section-incomparable">
@@ -183,6 +270,14 @@ function SectionDiffView({
       </section>
     );
   }
+  if (changes === 0 && diff.filteredCount > 0)
+    return (
+      <section className="baseline-section">
+        <h3>{sectionLabel(diff.kind)}</h3>
+        <p className="baseline-section-count">{diff.filteredCount} differences filtered out</p>
+        {diff.note && <p className="inline-warning">{diff.note}</p>}
+      </section>
+    );
   if (changes === 0) {
     const routineHidden = !showRoutine && diff.routineCount > 0;
     return (
@@ -198,6 +293,7 @@ function SectionDiffView({
               : `${diff.unchangedCount} compared, no changes`}
           </span>
         </summary>
+        {diff.note && <p className="inline-warning">{diff.note}</p>}
         <p className="baseline-section-count">
           {routineHidden ? (
             <>
@@ -237,10 +333,10 @@ function SectionDiffView({
       )}
       {!!diff.added.length && (
         <ul className="baseline-change-list">
-          {diff.added.map((entry) => (
+          {visibleAdded.map((entry) => (
             <li key={`added-${entry.identity}`}>
               <ChangeRowButton
-                mark="Added"
+                mark={diff.baseStatus === "partial" ? "First observed" : "Added"}
                 classNameMark="baseline-change-added"
                 selected={selectedIdentity === entry.identity}
                 onClick={() => onInspectEntry(diff, entry, "added")}
@@ -253,10 +349,10 @@ function SectionDiffView({
       )}
       {!!diff.removed.length && (
         <ul className="baseline-change-list">
-          {diff.removed.map((entry) => (
+          {visibleRemoved.map((entry) => (
             <li key={`removed-${entry.identity}`}>
               <ChangeRowButton
-                mark="Removed"
+                mark={diff.removalsIndeterminate ? "Unverified" : "Removed"}
                 classNameMark="baseline-change-removed"
                 selected={selectedIdentity === entry.identity}
                 onClick={() => onInspectEntry(diff, entry, "removed")}
@@ -267,9 +363,18 @@ function SectionDiffView({
           ))}
         </ul>
       )}
+      {changes > visibleLimit && (
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => setVisibleLimit((limit) => limit + 150)}
+        >
+          Show next {Math.min(150, changes - visibleLimit)} differences
+        </button>
+      )}
       {!!diff.changed.length && (
         <ul className="baseline-change-list">
-          {diff.changed.map((entry) => {
+          {visibleChanged.map((entry) => {
             const meaningful = entry.changes.filter(
               (change) => change.classification === "meaningful",
             );

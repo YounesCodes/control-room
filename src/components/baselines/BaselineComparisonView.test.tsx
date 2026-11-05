@@ -90,6 +90,21 @@ describe("baseline exports through the save dialog", () => {
     expect(content).toContain("unitFileState: `enabled` → `disabled`");
     expect(content).not.toContain("subState: `running`");
   });
+  it("does not call filtered-out differences unchanged", () => {
+    mount(false, "no-such-resource");
+    expect(screen.queryByText(/no changes/)).toBeNull();
+    expect(screen.getByText(/No differences match/)).toBeTruthy();
+  });
+
+  it("filters JSON using the same options as Markdown", async () => {
+    mount(false, "no-such-resource");
+    await userEvent.click(screen.getByRole("button", { name: "JSON" }));
+    await waitFor(() => expect(native.exportTextFile).toHaveBeenCalled());
+    const data = JSON.parse(native.exportTextFile.mock.calls[0][1]);
+    expect(data.sections[0].changed).toHaveLength(0);
+    expect(data.filters).toEqual({ showRoutine: false, search: "no-such-resource" });
+  });
+
   it("offers to reveal routine changes rather than deleting them", async () => {
     const { onShowRoutineChange } = mount(false);
     expect(screen.queryByText("fixture.service", { exact: false })).toBeTruthy();

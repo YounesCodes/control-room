@@ -19,6 +19,7 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::{
+    baseline_collectors as evidence,
     models::{
         BASELINE_SCHEMA_VERSION, BaselineComparison, BaselineEntry, BaselineEntryChange,
         BaselineFact, BaselineFactChange, BaselineSection, BaselineSectionDiff,
@@ -36,9 +37,10 @@ pub const SECTION_FIREWALL: &str = "firewall";
 pub const SECTION_FILESYSTEMS: &str = "filesystems";
 pub const SECTION_SCHEDULED_JOBS: &str = "scheduledJobs";
 pub const SECTION_PACKAGES: &str = "packages";
+pub const SECTION_CONFIGURATION: &str = "configurationAccess";
 
 /// The capture order, which is also the display order of a comparison.
-pub const SECTION_KINDS: [&str; 8] = [
+pub const SECTION_KINDS: [&str; 9] = [
     SECTION_HOST,
     SECTION_SYSTEMD_UNITS,
     SECTION_CONTAINERS,
@@ -47,6 +49,7 @@ pub const SECTION_KINDS: [&str; 8] = [
     SECTION_FILESYSTEMS,
     SECTION_SCHEDULED_JOBS,
     SECTION_PACKAGES,
+    SECTION_CONFIGURATION,
 ];
 
 pub const STATUS_COLLECTED: &str = "collected";
@@ -70,9 +73,9 @@ pub fn section_schema_version(kind: &str) -> u32 {
         SECTION_SYSTEMD_UNITS => 1,
         SECTION_CONTAINERS => 1,
         SECTION_LISTENERS => 1,
-        SECTION_FIREWALL => 1,
+        SECTION_FIREWALL => 2,
         SECTION_FILESYSTEMS => 1,
-        SECTION_SCHEDULED_JOBS => 1,
+        SECTION_SCHEDULED_JOBS => 2,
         SECTION_PACKAGES => 1,
         _ => 1,
     }
@@ -84,6 +87,7 @@ pub fn section_schema_version(kind: &str) -> u32 {
 pub fn section_introduced_in(kind: &str) -> u32 {
     match kind {
         SECTION_FIREWALL | SECTION_SCHEDULED_JOBS | SECTION_PACKAGES => 2,
+        SECTION_CONFIGURATION => 3,
         _ => 1,
     }
 }
@@ -224,13 +228,29 @@ fn collect_section(
 ) -> BaselineSection {
     match kind {
         SECTION_HOST => host_section(connection, identity),
-        SECTION_SYSTEMD_UNITS => systemd_section(connection),
-        SECTION_CONTAINERS => containers_section(connection, elevation),
-        SECTION_LISTENERS => listeners_section(connection, elevation),
-        SECTION_FIREWALL => firewall_section(connection, elevation),
-        SECTION_FILESYSTEMS => filesystems_section(connection),
+        SECTION_SYSTEMD_UNITS => evidence::merge(
+            systemd_section(connection),
+            evidence::read(connection, elevation, kind, evidence::SYSTEMD),
+        ),
+        SECTION_CONTAINERS => evidence::merge(
+            containers_section(connection, elevation),
+            evidence::docker(connection, elevation),
+        ),
+        SECTION_LISTENERS => evidence::merge(
+            listeners_section(connection, elevation),
+            evidence::read(connection, elevation, kind, evidence::NETWORK),
+        ),
+        SECTION_FIREWALL => evidence::read(connection, elevation, kind, evidence::FIREWALL),
+        SECTION_FILESYSTEMS => evidence::merge(
+            filesystems_section(connection),
+            evidence::read(connection, elevation, kind, evidence::STORAGE),
+        ),
         SECTION_SCHEDULED_JOBS => scheduled_jobs_section(connection, elevation),
-        _ => packages_section(connection),
+        SECTION_PACKAGES => evidence::merge(
+            packages_section(connection),
+            evidence::read(connection, elevation, kind, evidence::PACKAGE_HISTORY),
+        ),
+        _ => evidence::read(connection, elevation, kind, evidence::CONFIGURATION),
     }
 }
 
@@ -266,7 +286,9 @@ fn host_section(connection: &SavedConnection, identity: &HostIdentity) -> Baseli
     // Hardware facts are additive: a capture that could not read one simply
     // does not record it, the same way an older capture did not. They never
     // degrade the identity facts the fingerprint check depends on.
-    for extra in remote::list_host_facts(connection).unwrap_or_default() {
+    let extra_facts = remote::list_host_facts(connection);
+    let extras_complete = extra_facts.as_ref().is_ok_and(|facts| facts.len() == 4);
+    for extra in extra_facts.unwrap_or_default() {
         if !facts.iter().any(|existing| existing.name == extra.0) {
             facts.push(BaselineFact {
                 name: extra.0,
@@ -274,7 +296,7 @@ fn host_section(connection: &SavedConnection, identity: &HostIdentity) -> Baseli
             });
         }
     }
-    let status = if identity_complete {
+    let status = if identity_complete && extras_complete {
         STATUS_COLLECTED
     } else {
         STATUS_PARTIAL
@@ -372,6 +394,20 @@ fn containers_section(connection: &SavedConnection, elevation: &Elevation) -> Ba
                             name: "containerId".into(),
                             value: container.id,
                         },
+                        BaselineFact {
+                            name: "composeContainerNumber".into(),
+                            value: container
+                                .compose_container_number
+                                .map(|number| number.to_string())
+                                .unwrap_or_else(|| "unknown".into()),
+                        },
+                        BaselineFact {
+                            name: "composeOneoff".into(),
+                            value: container
+                                .compose_oneoff
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| "unknown".into()),
+                        },
                     ],
                 })
                 .collect();
@@ -446,105 +482,6 @@ fn listeners_section(connection: &SavedConnection, elevation: &Elevation) -> Bas
     }
 }
 
-/// Firewall evidence reuses the same read Ports shows, so the two panes can
-/// never disagree about the same moment on a host.
-fn firewall_section(connection: &SavedConnection, elevation: &Elevation) -> BaselineSection {
-    match remote::list_firewall(connection, elevation.clone()) {
-        Ok(status) => {
-            if !status.available {
-                let message = match status.backend.as_deref() {
-                    Some(_backend) => "The firewall front-end reported nothing readable.",
-                    None => "Neither UFW nor firewalld was readable on this host.",
-                };
-                return section(
-                    SECTION_FIREWALL,
-                    STATUS_UNSUPPORTED,
-                    Some(message.into()),
-                    Vec::new(),
-                );
-            }
-            let backend = status.backend.clone().unwrap_or_else(|| "unknown".into());
-            let mut facts = vec![BaselineFact {
-                name: "backend".into(),
-                value: backend.clone(),
-            }];
-            if let Some(active) = status.active {
-                facts.push(BaselineFact {
-                    name: "active".into(),
-                    value: if active { "yes" } else { "no" }.into(),
-                });
-            }
-            if let Some(policy) = status.default_incoming.clone() {
-                facts.push(BaselineFact {
-                    name: "defaultIncomingPolicy".into(),
-                    value: policy,
-                });
-            }
-            let mut entries = vec![BaselineEntry {
-                identity: "configuration".into(),
-                label: format!("{backend} configuration"),
-                facts,
-            }];
-            for rule in &status.rules {
-                // Rules are keyed by their content, not their position in the
-                // front-end's report: inserting one rule must not churn every
-                // identity below it into an add/remove pair.
-                let from = if rule.from == "Anywhere" {
-                    "anywhere".to_string()
-                } else {
-                    rule.from.clone()
-                };
-                let port = rule
-                    .port
-                    .map(|port| port.to_string())
-                    .unwrap_or_else(|| "any".into());
-                let protocol = rule.protocol.clone().unwrap_or_else(|| "any".into());
-                entries.push(BaselineEntry {
-                    identity: format!("rule/{}/{}/{}", rule.action, rule.to, from),
-                    label: format!("{}/{}", rule.to, rule.action),
-                    facts: vec![
-                        BaselineFact {
-                            name: "action".into(),
-                            value: rule.action.clone(),
-                        },
-                        BaselineFact {
-                            name: "from".into(),
-                            value: from,
-                        },
-                        BaselineFact {
-                            name: "port".into(),
-                            value: port,
-                        },
-                        BaselineFact {
-                            name: "protocol".into(),
-                            value: protocol,
-                        },
-                    ],
-                });
-            }
-            // The front-end answered, so the read was complete whether the
-            // firewall is on or off. Only an answer it never gave is partial.
-            let status_word = if status.active.is_some() {
-                STATUS_COLLECTED
-            } else {
-                STATUS_PARTIAL
-            };
-            let message = match status.active {
-                Some(false) => Some("The firewall is not active.".to_string()),
-                None => Some("The front-end did not report whether it is active.".to_string()),
-                _ => None,
-            };
-            section(SECTION_FIREWALL, status_word, message, entries)
-        }
-        Err(error) => section(
-            SECTION_FIREWALL,
-            STATUS_UNAVAILABLE,
-            Some(error),
-            Vec::new(),
-        ),
-    }
-}
-
 fn filesystems_section(connection: &SavedConnection) -> BaselineSection {
     match remote::list_filesystems(connection) {
         Ok(filesystems) => {
@@ -569,7 +506,18 @@ fn filesystems_section(connection: &SavedConnection) -> BaselineSection {
                     ],
                 })
                 .collect();
-            section(SECTION_FILESYSTEMS, STATUS_COLLECTED, None, entries)
+            let entries: Vec<BaselineEntry> = entries;
+            let bounded = entries.len() >= 200;
+            section(
+                SECTION_FILESYSTEMS,
+                if bounded {
+                    STATUS_PARTIAL
+                } else {
+                    STATUS_COLLECTED
+                },
+                bounded.then(|| "Filesystem evidence reached the 200-mount limit.".into()),
+                entries,
+            )
         }
         Err(error) => {
             let status = if error.contains("no df command") {
@@ -584,31 +532,49 @@ fn filesystems_section(connection: &SavedConnection) -> BaselineSection {
 
 /// Cron evidence: schedules and a privacy-safe command descriptor per source
 /// line. Raw command lines never leave the host — cron commands routinely
-/// embed credentials, and a fingerprint of the binary name with its word count
-/// is enough to tell a changed job from the same one.
+/// embed credentials. Only the word count and a SHA-256 command fingerprint
+/// leave the host; source line movement does not change a job identity.
 fn scheduled_jobs_section(connection: &SavedConnection, elevation: &Elevation) -> BaselineSection {
     match remote::list_cron_jobs(connection, elevation.clone()) {
         Ok(jobs) => {
+            let mut occurrences = HashMap::<String, u32>::new();
             let mut entries = jobs
                 .jobs
                 .iter()
-                .map(|job| BaselineEntry {
-                    identity: format!("{}#{}", job.source, job.line),
-                    label: format!("{} line {} · {}", job.source, job.line, job.command),
-                    facts: vec![
-                        BaselineFact {
-                            name: "schedule".into(),
-                            value: job.schedule.clone(),
-                        },
-                        BaselineFact {
-                            name: "user".into(),
-                            value: job.user.clone(),
-                        },
-                        BaselineFact {
-                            name: "command".into(),
-                            value: job.command.clone(),
-                        },
-                    ],
+                .map(|job| {
+                    let signature = format!(
+                        "{}/{}/{}",
+                        job.source,
+                        job.user,
+                        job.fingerprint.as_deref().unwrap_or("unrecorded")
+                    );
+                    let number = occurrences.entry(signature.clone()).or_default();
+                    *number += 1;
+                    BaselineEntry {
+                        identity: format!("{signature}#{number}"),
+                        label: format!("{} line {} · {}", job.source, job.line, job.command),
+                        facts: vec![
+                            BaselineFact {
+                                name: "schedule".into(),
+                                value: job.schedule.clone(),
+                            },
+                            BaselineFact {
+                                name: "user".into(),
+                                value: job.user.clone(),
+                            },
+                            BaselineFact {
+                                name: "command".into(),
+                                value: job.command.clone(),
+                            },
+                            BaselineFact {
+                                name: "commandFingerprint".into(),
+                                value: job
+                                    .fingerprint
+                                    .clone()
+                                    .unwrap_or_else(|| "not recorded".into()),
+                            },
+                        ],
+                    }
                 })
                 .collect::<Vec<_>>();
             entries.sort_by(|left, right| left.identity.cmp(&right.identity));
@@ -769,7 +735,16 @@ pub fn total_changes(comparison: &BaselineComparison) -> Option<u32> {
                             .any(|change| change.classification == CLASSIFICATION_MEANINGFUL)
                     })
                     .count() as u32;
-                (section.added.len() + section.removed.len()) as u32 + changed
+                (if section.base_status == STATUS_PARTIAL {
+                    0
+                } else {
+                    section.added.len()
+                } + if section.removals_indeterminate {
+                    0
+                } else {
+                    section.removed.len()
+                }) as u32
+                    + changed
             })
             .sum(),
     )
@@ -793,6 +768,17 @@ pub fn total_routine(comparison: &BaselineComparison) -> Option<u32> {
 /// a value moved, which two-capture comparison cannot.
 pub fn trace_entry(baselines: &[HostBaseline], kind: &str, identity: &str) -> BaselineTrace {
     let mut label = identity.to_string();
+    let logical = (kind == SECTION_CONTAINERS)
+        .then(|| {
+            baselines
+                .iter()
+                .flat_map(|baseline| &baseline.sections)
+                .filter(|section| section.kind == kind)
+                .flat_map(|section| &section.entries)
+                .find(|entry| entry.identity == identity)
+                .and_then(logical_container)
+        })
+        .flatten();
     let points = baselines
         .iter()
         .map(|baseline| {
@@ -801,10 +787,12 @@ pub fn trace_entry(baselines: &[HostBaseline], kind: &str, identity: &str) -> Ba
                 .iter()
                 .find(|section| section.kind == kind);
             let entry = section.and_then(|section| {
-                section
-                    .entries
-                    .iter()
-                    .find(|entry| entry.identity == identity)
+                section.entries.iter().find(|entry| {
+                    entry.identity == identity
+                        || logical
+                            .as_ref()
+                            .is_some_and(|key| logical_container(entry).as_ref() == Some(key))
+                })
             });
             if let Some(entry) = entry {
                 label = entry.label.clone();
@@ -880,7 +868,7 @@ fn classify_fact_change(
         (SECTION_SYSTEMD_UNITS, "subState") => {
             routine("Sub-states move on their own between captures.")
         }
-        (SECTION_CONTAINERS, "state") => {
+        (SECTION_CONTAINERS, "state") if target != Some("dead") => {
             routine("Container states move on their own between captures.")
         }
         (SECTION_CONTAINERS, "containerId") => routine(
@@ -908,13 +896,16 @@ fn classify_fact_change(
                 _ => (CLASSIFICATION_MEANINGFUL.to_string(), None),
             }
         }
-        _ => (CLASSIFICATION_MEANINGFUL.to_string(), None),
+        _ => (
+            CLASSIFICATION_MEANINGFUL.to_string(),
+            Some(format!("The recorded {name} changed.")),
+        ),
     }
 }
 
 /// How far disk use can move between two captures before the change is worth
 /// a meaningful-difference mention. Above it, a jump is a story worth telling.
-const ROUTINE_USAGE_DELTA: i32 = 20;
+const ROUTINE_USAGE_DELTA: i32 = 5;
 
 fn compare_section(kind: &str, base: &HostBaseline, target: &HostBaseline) -> BaselineSectionDiff {
     let base_section = base.sections.iter().find(|section| section.kind == kind);
@@ -976,8 +967,40 @@ fn compare_section(kind: &str, base: &HostBaseline, target: &HostBaseline) -> Ba
     let base_partial = base_status == STATUS_PARTIAL;
     let target_partial = target_status == STATUS_PARTIAL;
     let partial = base_partial || target_partial;
-    let base_entries = index_entries(base_section);
-    let target_entries = index_entries(target_section);
+    let duplicate_identities =
+        [base_section, target_section]
+            .into_iter()
+            .flatten()
+            .any(|section| {
+                let mut seen = std::collections::HashSet::new();
+                let mut logical_seen = std::collections::HashSet::new();
+                section.entries.iter().any(|entry| {
+                    !seen.insert(&entry.identity)
+                        || (kind == SECTION_CONTAINERS
+                            && logical_container(entry)
+                                .is_some_and(|key| !logical_seen.insert(key)))
+                })
+            });
+    if duplicate_identities {
+        return BaselineSectionDiff {
+            kind: kind.into(),
+            base_status,
+            target_status,
+            comparable: false,
+            note: Some(
+                "Resource identities are ambiguous; this section cannot be matched reliably."
+                    .into(),
+            ),
+            added: vec![],
+            removed: vec![],
+            changed: vec![],
+            unchanged_count: 0,
+            routine_count: 0,
+            removals_indeterminate: true,
+        };
+    }
+    let base_entries = index_entries(kind, base_section, target_section);
+    let target_entries = index_entries(kind, target_section, base_section);
     let mut added = Vec::new();
     let mut removed = Vec::new();
     let mut changed = Vec::new();
@@ -996,7 +1019,9 @@ fn compare_section(kind: &str, base: &HostBaseline, target: &HostBaseline) -> Ba
                         .filter(|change| change.classification == CLASSIFICATION_ROUTINE)
                         .count() as u32;
                     changed.push(BaselineEntryChange {
-                        identity: identity.clone(),
+                        base_entry: Some((*previous).clone()),
+                        target_entry: Some((*entry).clone()),
+                        identity: entry.identity.clone(),
                         label: entry.label.clone(),
                         changes,
                     });
@@ -1037,7 +1062,7 @@ fn incomparable_note(
     base_status: &str,
     target_status: &str,
 ) -> String {
-    if !section_schema_compatible {
+    if !section_schema_compatible && !base_predates && !target_predates {
         return "These captures recorded this section in different shapes, so it cannot be compared. Other sections are unaffected."
             .into();
     }
@@ -1078,13 +1103,47 @@ fn identity_match(base: &HostIdentity, target: &HostIdentity) -> &'static str {
     }
 }
 
-fn index_entries(section: Option<&BaselineSection>) -> BTreeMap<String, &BaselineEntry> {
+fn logical_container(entry: &BaselineEntry) -> Option<String> {
+    let project = find_fact(entry, "composeProject").filter(|value| value != "none")?;
+    let service = find_fact(entry, "composeService").filter(|value| value != "none")?;
+    let number = find_fact(entry, "composeContainerNumber")?
+        .parse::<u32>()
+        .ok()
+        .filter(|number| *number > 0)?;
+    if find_fact(entry, "composeOneoff").as_deref() != Some("false") {
+        return None;
+    }
+    Some(format!("compose:{project:?}/{service:?}/{number}"))
+}
+
+fn index_entries<'a>(
+    kind: &str,
+    section: Option<&'a BaselineSection>,
+    other: Option<&BaselineSection>,
+) -> BTreeMap<String, &'a BaselineEntry> {
     section
         .map(|section| {
             section
                 .entries
                 .iter()
-                .map(|entry| (entry.identity.clone(), entry))
+                .map(|entry| {
+                    let logical = (kind == SECTION_CONTAINERS)
+                        .then(|| logical_container(entry))
+                        .flatten();
+                    let key = logical
+                        .filter(|key| {
+                            other.is_some_and(|section| {
+                                section
+                                    .entries
+                                    .iter()
+                                    .filter(|other| logical_container(other).as_ref() == Some(key))
+                                    .count()
+                                    == 1
+                            })
+                        })
+                        .unwrap_or_else(|| entry.identity.clone());
+                    (key, entry)
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -1256,7 +1315,7 @@ mod tests {
                 base_value: Some("active".into()),
                 target_value: Some("failed".into()),
                 classification: CLASSIFICATION_MEANINGFUL.into(),
-                reason: None,
+                reason: Some("The recorded activeState changed.".into()),
             }]
         );
         assert_eq!(diff.unchanged_count, 0);
@@ -1285,7 +1344,7 @@ mod tests {
                 base_value: None,
                 target_value: Some("active".into()),
                 classification: CLASSIFICATION_MEANINGFUL.into(),
-                reason: None,
+                reason: Some("The recorded activeState changed.".into()),
             }]
         );
     }
@@ -1713,6 +1772,48 @@ mod tests {
     }
 
     #[test]
+    fn compose_replica_recreation_matches_without_losing_legacy_name_matching() {
+        let facts = [
+            ("composeProject", "demo"),
+            ("composeService", "web"),
+            ("composeContainerNumber", "1"),
+            ("composeOneoff", "false"),
+            ("containerId", "old"),
+        ];
+        let old = entry("old-name", &facts);
+        let mut new = old.clone();
+        new.identity = "new-name".into();
+        new.label = "new-name".into();
+        new.facts.last_mut().unwrap().value = "new".into();
+        let base = baseline(
+            "base",
+            Some("a"),
+            vec![section(
+                SECTION_CONTAINERS,
+                STATUS_COLLECTED,
+                None,
+                vec![old],
+            )],
+        );
+        let target = baseline(
+            "target",
+            Some("a"),
+            vec![section(
+                SECTION_CONTAINERS,
+                STATUS_COLLECTED,
+                None,
+                vec![new],
+            )],
+        );
+        let diff = find(compare(&base, &target), SECTION_CONTAINERS);
+        assert!(diff.added.is_empty() && diff.removed.is_empty());
+        assert_eq!(diff.changed[0].identity, "new-name");
+        assert_eq!(diff.routine_count, 1);
+        let trace = trace_entry(&[target, base], SECTION_CONTAINERS, "new-name");
+        assert!(trace.points.iter().all(|point| point.present));
+    }
+
+    #[test]
     fn small_disk_moves_are_routine_and_large_moves_are_meaningful() {
         let moved = |base: &str, target: &str| {
             let section_kind = SECTION_FILESYSTEMS;
@@ -1741,9 +1842,57 @@ mod tests {
         let churn = moved("31", "32");
         assert_eq!(churn.classification, CLASSIFICATION_ROUTINE);
         assert!(churn.reason.as_deref().unwrap().contains("31% to 32%"));
+        assert_eq!(moved("31", "42").classification, CLASSIFICATION_MEANINGFUL);
         let surge = moved("12", "94");
         assert_eq!(surge.classification, CLASSIFICATION_MEANINGFUL);
         assert!(surge.reason.as_deref().unwrap().contains("12% to 94%"));
+    }
+
+    #[test]
+    fn changed_resources_carry_exact_recorded_evidence() {
+        let base = baseline(
+            "base",
+            Some("a"),
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry(
+                    "ssh.service",
+                    &[("activeState", "active"), ("unitFileState", "enabled")],
+                )],
+            )],
+        );
+        let target = baseline(
+            "target",
+            Some("a"),
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry(
+                    "ssh.service",
+                    &[("activeState", "failed"), ("unitFileState", "enabled")],
+                )],
+            )],
+        );
+        let diff = find(compare(&base, &target), SECTION_SYSTEMD_UNITS);
+        assert_eq!(
+            diff.changed[0].target_entry.as_ref().unwrap().facts.len(),
+            2
+        );
+        assert!(diff.changed[0].changes[0].reason.is_some());
+    }
+
+    #[test]
+    fn duplicate_resources_are_ambiguous_not_silently_coalesced() {
+        let sample = baseline(
+            "sample",
+            Some("a"),
+            vec![units(
+                STATUS_COLLECTED,
+                vec![entry("same", &[]), entry("same", &[])],
+            )],
+        );
+        let diff = find(compare(&sample, &sample), SECTION_SYSTEMD_UNITS);
+        assert!(!diff.comparable);
+        assert!(diff.note.unwrap().contains("ambiguous"));
     }
 
     #[test]

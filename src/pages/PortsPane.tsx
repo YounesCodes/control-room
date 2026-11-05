@@ -1,4 +1,4 @@
-import type { PublishedPortSelection } from "../lib/port-inspector";
+import type { PublishedPortSelection, RecordedListenerSelection } from "../lib/port-inspector";
 import { Search } from "../components/MagnifierIcon";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -43,10 +43,12 @@ export function PortsPane({
   onOpenContainer,
   onViewLogs,
   focusEndpoint,
+  focusListener,
   focusUnit,
 }: {
   focusUnit?: string;
   focusEndpoint?: PublishedPortSelection;
+  focusListener?: RecordedListenerSelection;
   connection: SavedConnection;
   capabilities: HostCapabilities | null;
   globalSudoEnabled: boolean;
@@ -285,6 +287,7 @@ export function PortsPane({
       <PortsGraph
         focusUnit={unitScope}
         focusEndpoint={focusEndpoint}
+        focusListener={focusListener}
         loading={cache.loading || containersCache.loading || containersCache.fetchedAt === null}
         loadingLabel={
           kind === "connections"

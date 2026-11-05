@@ -659,7 +659,7 @@ impl Database {
                 // Pinned and referenced captures both survive eviction: a pin
                 // keeps a capture the user chose, a reference is the anchor its
                 // comparisons point at.
-                "DELETE FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT baseline_id FROM host_baseline_references WHERE connection_id = ?1) AND id NOT IN (SELECT id FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 ORDER BY captured_at DESC, id DESC LIMIT ?2)",
+                "DELETE FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT baseline_id FROM host_baseline_references WHERE connection_id = ?1) AND id NOT IN (SELECT id FROM host_baselines WHERE connection_id = ?1 AND pinned = 0 AND id NOT IN (SELECT baseline_id FROM host_baseline_references WHERE connection_id = ?1) ORDER BY captured_at DESC, id DESC LIMIT ?2)",
                 params![baseline.connection_id, MAX_BASELINES_PER_CONNECTION as i64],
             )
             .map_err(|error| error.to_string())?;
@@ -2537,6 +2537,34 @@ mod tests {
         // outside it without occupying one of the twenty slots.
         assert_eq!(stored.len(), MAX_BASELINES_PER_CONNECTION + 1);
         assert!(stored.iter().any(|summary| summary.id == "anchor"));
+    }
+
+    #[test]
+    fn a_recent_reference_does_not_take_an_ordinary_retention_slot() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_host_baseline(&baseline_for(
+                &saved.id,
+                "reference",
+                "2026-12-31T00:00:00Z",
+            ))
+            .unwrap();
+        database.set_host_baseline_reference("reference").unwrap();
+        for index in 0..MAX_BASELINES_PER_CONNECTION + 1 {
+            database
+                .save_host_baseline(&baseline_for(
+                    &saved.id,
+                    &format!("capture-{index:02}"),
+                    &format!("2026-11-01T{index:02}:00:00Z"),
+                ))
+                .unwrap();
+        }
+        assert_eq!(
+            database.list_host_baselines(&saved.id).unwrap().len(),
+            MAX_BASELINES_PER_CONNECTION + 1
+        );
     }
 
     #[test]

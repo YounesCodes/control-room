@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
-import { ChevronsRight, Flag, Pin } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsRight, Flag, Pin } from "lucide-react";
 import type { HostBaselineSummary } from "../../types";
 import { baselineTitle, coverageText } from "../../lib/host-baselines";
 
@@ -41,7 +41,7 @@ export function BaselineTimeline({
     indicator.style.transition = reduced ? "none" : "";
     indicator.style.width = `${node.offsetWidth}px`;
     indicator.style.height = `${node.offsetHeight}px`;
-    indicator.style.transform = `translateX(${node.offsetLeft}px) translateY(${node.offsetTop}px)`;
+    indicator.style.transform = `translateX(${node.offsetLeft}px) translateY(${node.offsetTop - 2}px)`;
     indicator.style.opacity = "1";
     node.scrollIntoView?.({ block: "nearest", inline: "center" });
   }, [selectedId, baselines]);
@@ -67,6 +67,7 @@ export function BaselineTimeline({
         const target = event.key === "Home" ? oldestFirst[0] : baselines[0];
         if (target) {
           onSelect(target.id);
+          document.getElementById(`baseline-node-${target.id}`)?.focus();
           revealNode(target.id);
         }
         return;
@@ -78,6 +79,7 @@ export function BaselineTimeline({
       const target = oldestFirst[next];
       if (target) {
         onSelect(target.id);
+        document.getElementById(`baseline-node-${target.id}`)?.focus();
         revealNode(target.id);
       }
     },
@@ -90,6 +92,18 @@ export function BaselineTimeline({
     <div className="baseline-timeline-wrap">
       <div className="baseline-timeline-side">
         <button
+          type="button"
+          className="icon-button"
+          aria-label="Previous capture"
+          disabled={!oldestFirst[oldestFirst.findIndex((item) => item.id === selectedId) - 1]}
+          onClick={() => {
+            const item = oldestFirst[oldestFirst.findIndex((item) => item.id === selectedId) - 1];
+            if (item) onSelect(item.id);
+          }}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
           className="icon-button"
           type="button"
           aria-label="Jump to latest capture"
@@ -97,6 +111,18 @@ export function BaselineTimeline({
           onClick={onLatest}
         >
           <ChevronsRight size={14} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Next capture"
+          disabled={selectedId === baselines[0]?.id}
+          onClick={() => {
+            const item = oldestFirst[oldestFirst.findIndex((item) => item.id === selectedId) + 1];
+            if (item) onSelect(item.id);
+          }}
+        >
+          <ChevronRight size={14} />
         </button>
         {referenceExists && (
           <button
@@ -118,7 +144,7 @@ export function BaselineTimeline({
         onKeyDown={onKeyDown}
       >
         <div className="baseline-timeline-selection" ref={indicatorRef} aria-hidden="true" />
-        {oldestFirst.map((baseline) => {
+        {oldestFirst.map((baseline, index) => {
           const isSelected = baseline.id === selectedId;
           return (
             <button
@@ -127,6 +153,8 @@ export function BaselineTimeline({
               className={isSelected ? "baseline-node baseline-node-selected" : "baseline-node"}
               type="button"
               ref={isSelected ? selectedRef : undefined}
+              tabIndex={isSelected ? 0 : -1}
+              aria-description={nodeDescription(baseline, baseline.id === referenceId)}
               aria-current={isSelected ? "true" : undefined}
               title={nodeDescription(baseline, baseline.id === referenceId)}
               onClick={() => {
@@ -139,9 +167,15 @@ export function BaselineTimeline({
               <span className="baseline-node-meta">
                 <span className="baseline-node-count">
                   {baseline.changesSincePrevious === null
-                    ? coverageText(baseline)
+                    ? index === 0
+                      ? "First capture"
+                      : "Not comparable"
                     : `${baseline.changesSincePrevious} changed`}
                 </span>
+                <span>{coverageText(baseline)}</span>
+                {baseline.routineSincePrevious != null && baseline.routineSincePrevious > 0 && (
+                  <span>{baseline.routineSincePrevious} routine</span>
+                )}
                 {baseline.pinned && <Pin size={11} aria-hidden="true" />}
                 {baseline.id === referenceId && (
                   <Flag size={11} aria-hidden="true" className="baseline-node-ref" />

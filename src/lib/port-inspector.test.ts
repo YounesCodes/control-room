@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DockerContainer, FirewallStatus, ListeningSocket } from "../types";
 import {
+  matchesRecordedListener,
   dockerPortLinks,
   exposureLabel,
   filterAndSortSockets,
@@ -252,4 +253,25 @@ describe("owner gap notice", () => {
     expect(notice?.message).toContain("several processes");
     expect(notice?.offerSudo).toBe(true);
   });
+});
+
+it("matches a recorded listener only with the full binding and verified owning unit", () => {
+  const recorded = {
+    protocol: "tcp",
+    addressFamily: "ipv4",
+    localAddress: "0.0.0.0",
+    port: 443,
+    systemdUnit: "nginx.service",
+  };
+  expect(matchesRecordedListener(socket(), recorded)).toBe(true);
+  for (const changed of [
+    { systemdUnit: "other.service" },
+    { ownership: "unavailable" },
+    { localAddress: "127.0.0.1" },
+    { addressFamily: "ipv6" },
+    { protocol: "udp" },
+  ])
+    expect(matchesRecordedListener(socket(changed as Partial<ListeningSocket>), recorded)).toBe(
+      false,
+    );
 });

@@ -1,8 +1,11 @@
+import type { RecordedListenerSelection } from "../lib/port-inspector";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
-import { Camera, Flag, FlagOff, Pencil, Pin, PinOff, Search, Trash2, X } from "lucide-react";
+import { Camera, Flag, FlagOff, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
+import { Search } from "../components/MagnifierIcon";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
-import { ResizableSplit } from "../components/ResizablePanels";
+import { Modal } from "../components/Modal";
+import { ResizableSplit, usePanelWidth } from "../components/ResizablePanels";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { BaselineTimeline } from "../components/baselines/BaselineTimeline";
@@ -49,6 +52,7 @@ interface BaselinesPaneProps {
   /** Deep links the inspector offers when the recorded evidence is exact. */
   onOpenSystemd?: (unit: string) => void;
   onOpenContainer?: (containerId: string) => void;
+  onOpenListener?: (listener: RecordedListenerSelection) => void;
 }
 
 // The pane answers one question per region: what moved between two
@@ -64,7 +68,10 @@ export function BaselinesPane({
   globalSudoEnabled,
   onOpenSystemd,
   onOpenContainer,
+  onOpenListener,
 }: BaselinesPaneProps) {
+  const { ref: pageRef, width: pageWidth } = usePanelWidth();
+  const compactInspector = pageWidth > 0 && pageWidth < 760;
   const [baselines, setBaselines] = useState<HostBaselineSummary[]>([]);
   const [reference, setReference] = useState<HostBaselineSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,13 +95,23 @@ export function BaselinesPane({
   const [renameDraft, setRenameDraft] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<HostBaselineSummary | null>(null);
   const [clearReferenceAsk, setClearReferenceAsk] = useState(false);
+  const [replaceReferenceAsk, setReplaceReferenceAsk] = useState(false);
+  const activeLiveIdRef = useRef<string | null>(null);
   const [sudoAsk, setSudoAsk] = useState(false);
+  const [sudoContext, setSudoContext] = useState<"capture" | "live">("capture");
   const [sudoNoticed, setSudoNoticed] = useState(false);
   const [slide, setSlide] = useState<"newer" | "older" | null>(null);
   const detailRequestRef = useRef(0);
   const comparisonRequestRef = useRef(0);
   const lastSelectedIndexRef = useRef<number | null>(null);
-  const lastComparisonKeyRef = useRef<string | null>(null);
+  const connectionRef = useRef(connection.id);
+  connectionRef.current = connection.id;
+  const listRequestRef = useRef(0);
+  const referenceRequestRef = useRef(0);
+  const operationEpochRef = useRef(0);
+  const previousSelectionRef = useRef(selectedId);
+  const liveRequestedForRef = useRef<string | null>(null);
+  const [liveRefresh, setLiveRefresh] = useState(0);
   const lastCaptureSectionsRef = useRef<BaselineSectionKind[]>(SECTION_KINDS);
 
   const selected = baselines.find((baseline) => baseline.id === selectedId) ?? null;
@@ -107,25 +124,32 @@ export function BaselinesPane({
   const sudoAllowed = elevationAllowed(globalSudoEnabled, connection.sudoEnabled);
 
   async function loadList(nextSelection?: string) {
+    const request = ++listRequestRef.current;
+    const connectionId = connection.id;
     setListError(null);
     try {
-      const items = sortBaselines(await api.listHostBaselines(connection.id));
+      const items = sortBaselines(await api.listHostBaselines(connectionId));
+      if (request !== listRequestRef.current || connectionId !== connectionRef.current) return;
       setBaselines(items);
       const wanted = nextSelection ?? selectedId;
       const exists = items.some((baseline) => baseline.id === wanted);
       onSelect(exists ? (wanted ?? null) : (items[0]?.id ?? null));
     } catch (caught) {
-      setListError(errorMessage(caught));
+      if (request === listRequestRef.current) setListError(errorMessage(caught));
     } finally {
-      setLoading(false);
+      if (request === listRequestRef.current) setLoading(false);
     }
   }
 
   async function loadReference() {
+    const request = ++referenceRequestRef.current;
+    const connectionId = connection.id;
     try {
-      setReference(await api.getHostBaselineReference(connection.id));
+      const result = await api.getHostBaselineReference(connectionId);
+      if (request === referenceRequestRef.current && connectionId === connectionRef.current)
+        setReference(result);
     } catch (caught) {
-      setActionError(errorMessage(caught));
+      if (request === referenceRequestRef.current) setActionError(errorMessage(caught));
     }
   }
 
@@ -138,10 +162,21 @@ export function BaselinesPane({
     setRenaming(false);
     setSudoNoticed(false);
     lastSelectedIndexRef.current = null;
-    lastComparisonKeyRef.current = null;
+    setBaselines([]);
+    setReference(null);
+    setActionError(null);
+    setCaptureId(null);
+    setCaptureDialog(false);
+    setLiveReadId(null);
+    activeLiveIdRef.current = null;
     setLoading(true);
     void loadList();
     void loadReference();
+    return () => {
+      listRequestRef.current += 1;
+      referenceRequestRef.current += 1;
+      operationEpochRef.current += 1;
+    };
   }, [connection.id]);
 
   // A direction-aware slide accompanies moving between captures: content
@@ -162,6 +197,11 @@ export function BaselinesPane({
   // The detail load is guarded: a response from an abandoned selection can
   // never overwrite the capture the user is looking at now.
   useEffect(() => {
+    if (previousSelectionRef.current !== selectedId) {
+      setComparisonTarget("previous");
+      previousSelectionRef.current = selectedId;
+    }
+    setRenaming(false);
     const request = ++detailRequestRef.current;
     comparisonRequestRef.current += 1;
     setComparison(null);
@@ -186,7 +226,7 @@ export function BaselinesPane({
       detailRequestRef.current += 1;
       comparisonRequestRef.current += 1;
     };
-  }, [selectedId]);
+  }, [selectedId, connection.id]);
 
   // The key includes the resolved target, so a comparison runs not only when
   // the user picks a target but also when the list loads and the previous
@@ -197,18 +237,39 @@ export function BaselinesPane({
       : comparisonTarget === "reference"
         ? (referenceId ?? "")
         : comparisonTarget;
-  const comparisonKey = `${selectedId}:${resolvedTarget}`;
+  useEffect(() => {
+    // Live reads start only in the picker or Refresh action. Revisiting a saved
+    // capture must never repeat a remote operation.
+    if (resolvedTarget === LIVE_COMPARISON_ID) {
+      if (liveRequestedForRef.current === selectedId) {
+        liveRequestedForRef.current = null;
+        void compareWithLive();
+      }
+      return;
+    }
+    comparisonRequestRef.current += 1;
+    setComparison(null);
+    setComparing(false);
+    setInspection(null);
+    if (mode !== "changes" || !selected || !resolvedTarget) return;
+    if (resolvedTarget !== selected.id) void compareWith(resolvedTarget);
+    return () => {
+      comparisonRequestRef.current += 1;
+    };
+  }, [selectedId, resolvedTarget, mode, connection.id, liveRefresh]);
 
   useEffect(() => {
-    if (mode !== "changes" || !selected || !resolvedTarget) return;
-    if (lastComparisonKeyRef.current === comparisonKey) return;
-    lastComparisonKeyRef.current = comparisonKey;
-    if (resolvedTarget === LIVE_COMPARISON_ID) {
-      void compareWithLive();
-    } else if (resolvedTarget !== selected.id) {
-      void compareWith(resolvedTarget);
-    }
-  }, [comparisonKey, mode]);
+    if (selected && !previousCapture && comparisonTarget === "previous") setMode("state");
+  }, [selectedId, baselines.length]);
+
+  function selectCapture(id: string) {
+    comparisonRequestRef.current += 1;
+    setComparisonTarget("previous");
+    setComparison(null);
+    setInspection(null);
+    setMode("changes");
+    onSelect(id);
+  }
 
   async function compareWith(otherId: string) {
     if (!selected) return;
@@ -216,6 +277,7 @@ export function BaselinesPane({
     if (!other) return;
     const { baseId, targetId } = orderForComparison(selected, other);
     const request = ++comparisonRequestRef.current;
+    setComparison(null);
     setComparing(true);
     setActionError(null);
     try {
@@ -234,6 +296,7 @@ export function BaselinesPane({
     if (!selected || liveReadId) return;
     const request = ++comparisonRequestRef.current;
     const readId = crypto.randomUUID();
+    activeLiveIdRef.current = readId;
     setLiveReadId(readId);
     setLiveProgress([]);
     setComparison(null);
@@ -256,7 +319,10 @@ export function BaselinesPane({
     } catch (caught) {
       if (request === comparisonRequestRef.current) setActionError(errorMessage(caught));
     } finally {
-      setLiveReadId(null);
+      if (activeLiveIdRef.current === readId) {
+        activeLiveIdRef.current = null;
+        setLiveReadId(null);
+      }
       if (request === comparisonRequestRef.current) setComparing(false);
     }
   }
@@ -275,6 +341,7 @@ export function BaselinesPane({
   async function capture(label: string, sections: BaselineSectionKind[], sudoPassword?: string) {
     if (captureId) return;
     lastCaptureSectionsRef.current = sections;
+    const epoch = operationEpochRef.current;
     const id = crypto.randomUUID();
     setCaptureId(id);
     setProgress([]);
@@ -282,8 +349,9 @@ export function BaselinesPane({
     const channel = new Channel<BaselineProgress>();
     let permissionLimited = false;
     channel.onmessage = (event) => {
+      if (epoch !== operationEpochRef.current) return;
       setProgress((current) => [...current, event]);
-      if (event.status === "unavailable") permissionLimited = true;
+      if (event.status === "unavailable" || event.status === "partial") permissionLimited = true;
     };
     try {
       const summary = await api.captureHostBaseline(
@@ -296,6 +364,7 @@ export function BaselinesPane({
         channel,
         sudoPassword ?? null,
       );
+      if (epoch !== operationEpochRef.current) return;
       setCaptureDialog(false);
       setProgress([]);
       await loadList(summary.id);
@@ -305,9 +374,9 @@ export function BaselinesPane({
       setComparisonTarget("previous");
       setSudoNoticed(permissionLimited);
     } catch (caught) {
-      setActionError(errorMessage(caught));
+      if (epoch === operationEpochRef.current) setActionError(errorMessage(caught));
     } finally {
-      setCaptureId(null);
+      if (epoch === operationEpochRef.current) setCaptureId(null);
     }
   }
 
@@ -341,8 +410,13 @@ export function BaselinesPane({
     }
   }
 
-  async function markReference() {
+  async function markReference(confirmed = false) {
     if (!selected) return;
+    if (reference && reference.id !== selected.id && !confirmed) {
+      setReplaceReferenceAsk(true);
+      return;
+    }
+    setReplaceReferenceAsk(false);
     try {
       await api.setHostBaselineReference(selected.id);
       await loadReference();
@@ -368,7 +442,9 @@ export function BaselinesPane({
     try {
       await api.deleteHostBaseline(target.id);
       setDeleteTarget(null);
-      await loadList();
+      const index = baselines.findIndex((item) => item.id === target.id);
+      const neighbor = baselines[index + 1] ?? baselines[index - 1];
+      await loadList(target.id === selectedId ? neighbor?.id : undefined);
       if (target.id === referenceId) {
         await loadReference();
         if (comparisonTarget === "reference") setComparisonTarget("previous");
@@ -391,11 +467,15 @@ export function BaselinesPane({
       sectionKind: section.kind as BaselineSectionKind,
       entry:
         from ??
+        target.change?.targetEntry ??
         (target.change
           ? { identity: target.change.identity, label: target.change.label, facts: [] }
           : null),
       change: target.change ?? null,
       changeType: target.type,
+      capturedAt:
+        target.type === "removed" ? comparison?.base.capturedAt : comparison?.target.capturedAt,
+      additionsIndeterminate: section.baseStatus === "partial",
       removalsIndeterminate: section.removalsIndeterminate,
       sectionNote: section.note ?? null,
     });
@@ -407,6 +487,7 @@ export function BaselinesPane({
       entry,
       change: null,
       changeType: null,
+      capturedAt: section.collectedAt,
       removalsIndeterminate: false,
       sectionNote: section.message ?? null,
     });
@@ -423,7 +504,7 @@ export function BaselinesPane({
   }
 
   return (
-    <ResizableSplit name="Baselines" className="feature-page split-page baseline-explorer">
+    <div ref={pageRef} className="feature-page baseline-explorer">
       <div className="baseline-workspace-column">
         <header className="baselines-command-header">
           <div>
@@ -449,21 +530,26 @@ export function BaselinesPane({
             </button>
           </div>
         </header>
-        {actionError && <p className="inline-error">{actionError}</p>}
+        {actionError && !captureDialog && <p className="inline-error">{actionError}</p>}
         {sudoNoticed && (
           <p className="inline-warning">
-            Some sections could not be read by this account.
-            {sudoAllowed ? (
+            Some sections were incomplete or could not be read.
+            {
               <>
                 {" "}
-                <button className="link-button" type="button" onClick={() => setSudoAsk(true)}>
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => {
+                    setSudoContext("capture");
+                    setSudoAsk(true);
+                  }}
+                >
                   Retry with sudo
                 </button>{" "}
                 runs a new capture with elevation; saved captures are never rewritten.
               </>
-            ) : (
-              " Allow sudo for Structured Operations to record them."
-            )}
+            }
           </p>
         )}
         {!baselines.length && (
@@ -477,22 +563,24 @@ export function BaselinesPane({
             baselines={baselines}
             selectedId={selectedId}
             referenceId={referenceId}
-            onSelect={onSelect}
-            onLatest={() => baselines[0] && onSelect(baselines[0].id)}
-            onReference={() => referenceId && onSelect(referenceId)}
+            onSelect={selectCapture}
+            onLatest={() => baselines[0] && selectCapture(baselines[0].id)}
+            onReference={() => referenceId && selectCapture(referenceId)}
           />
         )}
         {selected && (
           <div
             className={
               slide === "newer"
-                ? "baseline-workspace-slide baseline-slide-newer"
+                ? "baseline-workspace-view baseline-workspace-slide baseline-slide-newer"
                 : slide === "older"
-                  ? "baseline-workspace-slide baseline-slide-older"
-                  : "baseline-workspace-slide"
+                  ? "baseline-workspace-view baseline-workspace-slide baseline-slide-older"
+                  : "baseline-workspace-view"
             }
             key={selected.id}
-            onAnimationEnd={() => setSlide(null)}
+            onAnimationEnd={(event) => {
+              if (event.target === event.currentTarget) setSlide(null);
+            }}
           >
             <div className="baseline-context">
               <div className="baseline-context-heading">
@@ -514,12 +602,14 @@ export function BaselinesPane({
                   </div>
                 ) : (
                   <>
-                    <h3>{baselineTitle(selected)}</h3>
-                    <p>
-                      Captured {formatCapturedAt(selected.capturedAt)} · {coverageText(selected)}
-                      {referenceId === selected.id ? " · reference" : ""}
-                      {selected.identity.hostname ? ` · ${selected.identity.hostname}` : ""}
-                    </p>
+                    <div className="baseline-context-title">
+                      <h3>{baselineTitle(selected)}</h3>
+                      <p>
+                        Captured {formatCapturedAt(selected.capturedAt)} · {coverageText(selected)}
+                        {referenceId === selected.id ? " · reference" : ""}
+                        {selected.identity.hostname ? ` · ${selected.identity.hostname}` : ""}
+                      </p>
+                    </div>
                   </>
                 )}
                 <div className="baseline-context-actions">
@@ -582,17 +672,43 @@ export function BaselinesPane({
                 </div>
               </div>
               <div className="baseline-context-tools">
-                <div className="baseline-mode-tabs" role="tablist" aria-label="Capture view">
+                <div
+                  className="baseline-mode-tabs"
+                  role="tablist"
+                  aria-label="Capture view"
+                  onKeyDown={(event) => {
+                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? "changes"
+                        : event.key === "End"
+                          ? "state"
+                          : mode === "changes"
+                            ? "state"
+                            : "changes";
+                    setMode(next);
+                    setInspection(null);
+                    event.currentTarget
+                      .querySelector<HTMLButtonElement>('[data-mode="' + next + '"]')
+                      ?.focus();
+                  }}
+                >
                   {(["changes", "state"] as const).map((candidate) => (
                     <button
                       key={candidate}
                       type="button"
                       role="tab"
+                      data-mode={candidate}
+                      tabIndex={mode === candidate ? 0 : -1}
                       aria-selected={mode === candidate}
                       className={
                         mode === candidate ? "baseline-mode-tab selected" : "baseline-mode-tab"
                       }
-                      onClick={() => setMode(candidate)}
+                      onClick={() => {
+                        setMode(candidate);
+                        setInspection(null);
+                      }}
                     >
                       {candidate === "changes" ? "Changes" : "State"}
                     </button>
@@ -601,10 +717,14 @@ export function BaselinesPane({
                 <label className="baseline-compare-field">
                   <span>Compare with</span>
                   <select
+                    aria-label="Compare with"
                     value={comparisonTarget}
                     onChange={(event) => {
                       setComparisonTarget(event.target.value);
                       setInspection(null);
+                      setMode("changes");
+                      if (event.target.value === LIVE_COMPARISON_ID)
+                        liveRequestedForRef.current = selectedId;
                     }}
                     disabled={Boolean(liveReadId)}
                   >
@@ -627,6 +747,19 @@ export function BaselinesPane({
                     <option value={LIVE_COMPARISON_ID}>Live machine (unsaved read)</option>
                   </select>
                 </label>
+                {comparisonTarget === LIVE_COMPARISON_ID && (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={Boolean(liveReadId)}
+                    onClick={() => {
+                      liveRequestedForRef.current = selectedId;
+                      setLiveRefresh((value) => value + 1);
+                    }}
+                  >
+                    Read live again
+                  </button>
+                )}
                 <label className="baseline-search-field">
                   <Search size={14} />
                   <input
@@ -638,102 +771,154 @@ export function BaselinesPane({
                 </label>
               </div>
             </div>
-            {mode === "changes" && (
-              <div className="baseline-workspace">
-                {!comparing && !comparison && baselines.length === 1 ? (
-                  <EmptyState title="Only this capture is stored">
-                    Capture again to compare two saved moments, or compare with the live machine for
-                    an unsaved read of right now.
-                  </EmptyState>
-                ) : !comparing && !comparison && !previousCapture ? (
-                  <EmptyState title="Earliest capture selected">
-                    This is the oldest capture. Choose another capture or the live machine in
-                    Compare with.
-                  </EmptyState>
-                ) : comparing ? (
-                  <LoadingState
-                    label={liveReadId ? "Reading the live host…" : "Comparing captures…"}
-                  />
-                ) : (
-                  comparison && (
-                    <BaselineComparisonView
-                      comparison={comparison}
-                      showRoutine={showRoutine}
-                      search={search}
-                      selectedIdentity={
-                        inspection?.entry?.identity ?? inspection?.change?.identity ?? null
-                      }
-                      onShowRoutineChange={setShowRoutine}
-                      onInspectEntry={(section, entry, changeType) =>
-                        inspectFromDiff(section, { entry, type: changeType })
-                      }
-                      onInspectChange={(section, change) =>
-                        inspectFromDiff(section, { change, type: "changed" })
-                      }
-                      onError={setActionError}
-                    />
-                  )
+            <ResizableSplit
+              name="Baselines"
+              className={`baseline-investigation split-page${inspection && !compactInspector ? " has-inspector" : ""}`}
+              defaultFraction={0.62}
+            >
+              <div className="baseline-results">
+                {mode === "changes" && (
+                  <div className="baseline-workspace">
+                    {!comparing && !comparison && baselines.length === 1 ? (
+                      <EmptyState title="Only this capture is stored">
+                        Capture again to compare two saved moments, or compare with the live machine
+                        for an unsaved read of right now.
+                      </EmptyState>
+                    ) : !comparing && !comparison && !previousCapture ? (
+                      <EmptyState title="Earliest capture selected">
+                        This is the oldest capture. Choose another capture or the live machine in
+                        Compare with.
+                      </EmptyState>
+                    ) : comparing ? (
+                      <LoadingState
+                        label={liveReadId ? "Reading the live host…" : "Comparing captures…"}
+                      />
+                    ) : (
+                      comparison && (
+                        <BaselineComparisonView
+                          comparison={comparison}
+                          showRoutine={showRoutine}
+                          search={search}
+                          selectedIdentity={
+                            inspection?.entry?.identity ?? inspection?.change?.identity ?? null
+                          }
+                          onShowRoutineChange={setShowRoutine}
+                          onInspectEntry={(section, entry, changeType) =>
+                            inspectFromDiff(section, { entry, type: changeType })
+                          }
+                          onInspectChange={(section, change) =>
+                            inspectFromDiff(section, { change, type: "changed" })
+                          }
+                          onClearFilters={() => {
+                            setSearch("");
+                            setShowRoutine(true);
+                          }}
+                          onError={setActionError}
+                        />
+                      )
+                    )}
+                    {comparison?.targetIsLive &&
+                      !liveReadId &&
+                      comparison.sections.some(
+                        (item) =>
+                          item.targetStatus === "partial" || item.targetStatus === "unavailable",
+                      ) && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => {
+                            setSudoContext("live");
+                            setSudoAsk(true);
+                          }}
+                        >
+                          Retry live read with sudo
+                        </button>
+                      )}
+                    {liveReadId && (
+                      <ol className="baseline-progress baseline-live-progress" aria-live="polite">
+                        {liveProgress.map((event) => (
+                          <li key={event.kind}>
+                            <span>{sectionLabel(event.kind as BaselineSectionKind)}</span>
+                            <span className={`baseline-status baseline-status-${event.status}`}>
+                              {statusLabel(event.status)}
+                            </span>
+                          </li>
+                        ))}
+                        <li className="baseline-progress-count">
+                          Reading live state · {liveProgress.length} of{" "}
+                          {liveProgress[0]?.total ?? SECTION_KINDS.length} sections
+                        </li>
+                        <li>
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={() => void stopLiveRead()}
+                          >
+                            <X size={15} /> Stop after this section
+                          </button>
+                        </li>
+                      </ol>
+                    )}
+                  </div>
                 )}
-                {liveReadId && (
-                  <ol className="baseline-progress baseline-live-progress" aria-live="polite">
-                    {liveProgress.map((event) => (
-                      <li key={event.kind}>
-                        <span>{sectionLabel(event.kind as BaselineSectionKind)}</span>
-                        <span className={`baseline-status baseline-status-${event.status}`}>
-                          {statusLabel(event.status)}
-                        </span>
-                      </li>
-                    ))}
-                    <li className="baseline-progress-count">
-                      Reading live state · {liveProgress.length} of{" "}
-                      {liveProgress[0]?.total ?? SECTION_KINDS.length} sections
-                    </li>
-                    <li>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={() => void stopLiveRead()}
-                      >
-                        <X size={15} /> Stop after this section
-                      </button>
-                    </li>
-                  </ol>
+                {mode === "state" && (
+                  <div className="baseline-workspace">
+                    {!previousCapture && (
+                      <p className="baseline-comparison-note">
+                        No earlier capture. Choose another comparison or capture again.
+                      </p>
+                    )}
+                    {detailLoading ? (
+                      <LoadingState label="Reading capture…" />
+                    ) : detail ? (
+                      <BaselineSectionList
+                        baseline={detail}
+                        search={search}
+                        selectedIdentity={inspection?.entry?.identity ?? null}
+                        onInspect={inspectStateEntry}
+                      />
+                    ) : (
+                      <EmptyState title="Nothing recorded" />
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-            {mode === "state" && (
-              <div className="baseline-workspace">
-                {detailLoading ? (
-                  <LoadingState label="Reading capture…" />
-                ) : detail ? (
-                  <BaselineSectionList
-                    baseline={detail}
-                    selectedIdentity={inspection?.entry?.identity ?? null}
-                    onInspect={inspectStateEntry}
+              {inspection && !compactInspector && (
+                <aside className="baseline-inspector-pane">
+                  <BaselineInspector
+                    key={`${inspection.sectionKind}:${inspection.entry?.identity}`}
+                    connectionId={connection.id}
+                    inspection={inspection}
+                    onClose={() => setInspection(null)}
+                    onOpenSystemd={onOpenSystemd}
+                    onOpenContainer={onOpenContainer}
+                    onOpenListener={onOpenListener}
                   />
-                ) : (
-                  <EmptyState title="Nothing recorded" />
-                )}
-              </div>
-            )}
+                </aside>
+              )}
+            </ResizableSplit>
           </div>
         )}
       </div>
-      <aside className="baseline-inspector-pane">
-        {inspection ? (
-          <BaselineInspector
-            connectionId={connection.id}
-            inspection={inspection}
-            onClose={() => setInspection(null)}
-            onOpenSystemd={onOpenSystemd}
-            onOpenContainer={onOpenContainer}
-          />
-        ) : (
-          <EmptyState title="Select a change">
-            Choose a difference or an entry to see its exact facts, classification, and history.
-          </EmptyState>
-        )}
-      </aside>
+      {inspection && compactInspector && (
+        <Modal
+          title={inspection.entry?.label ?? "Resource details"}
+          onClose={() => setInspection(null)}
+          className="baseline-inspector-modal"
+        >
+          <aside className="baseline-inspector-pane">
+            <BaselineInspector
+              key={`${inspection.sectionKind}:${inspection.entry?.identity}`}
+              connectionId={connection.id}
+              inspection={inspection}
+              onClose={() => setInspection(null)}
+              onOpenSystemd={onOpenSystemd}
+              onOpenContainer={onOpenContainer}
+              onOpenListener={onOpenListener}
+            />
+          </aside>
+        </Modal>
+      )}
       {captureDialog && (
         <BaselineCaptureDialog
           connectionName={connection.displayName}
@@ -744,6 +929,7 @@ export function BaselinesPane({
               ? null
               : "Allow sudo is off for this host, so sections that need root record less."
           }
+          error={actionError}
           onRequestCapture={(label, sections) => void capture(label, sections)}
           onStopCapture={() => void stopCapture()}
           onClose={() => {
@@ -769,6 +955,20 @@ export function BaselinesPane({
           onClose={() => setDeleteTarget(null)}
         />
       )}
+      {replaceReferenceAsk && reference && selected && (
+        <ConfirmDialog
+          title="Replace reference?"
+          message={
+            <>
+              Use "{baselineTitle(selected)}" instead of "{baselineTitle(reference)}" as this host's
+              reference? Both captures stay saved.
+            </>
+          }
+          confirmLabel="Replace reference"
+          onConfirm={() => void markReference(true)}
+          onClose={() => setReplaceReferenceAsk(false)}
+        />
+      )}
       {clearReferenceAsk && reference && (
         <ConfirmDialog
           title="Clear reference?"
@@ -790,6 +990,10 @@ export function BaselinesPane({
           onClose={() => setSudoAsk(false)}
           onSubmit={async (password) => {
             setSudoAsk(false);
+            if (sudoContext === "live") {
+              await compareWithLive(password);
+              return;
+            }
             // A retry is a new capture over the same sections. The earlier
             // snapshot keeps its facts; nothing already saved is edited.
             setSudoNoticed(false);
@@ -799,6 +1003,6 @@ export function BaselinesPane({
           }}
         />
       )}
-    </ResizableSplit>
+    </div>
   );
 }

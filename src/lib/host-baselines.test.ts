@@ -237,7 +237,8 @@ describe("baseline helper contracts", () => {
   });
 
   it("labels every section the backend records", () => {
-    expect(SECTION_KINDS).toHaveLength(8);
+    expect(SECTION_KINDS).toHaveLength(9);
+    expect(sectionLabel("configurationAccess")).toBe("Configuration & access");
     expect(sectionLabel("firewall")).toBe("Firewall");
     expect(sectionLabel("scheduledJobs")).toBe("Scheduled jobs");
     expect(sectionLabel("packages")).toBe("Packages");
@@ -252,7 +253,7 @@ describe("baseline helper contracts", () => {
       { kind: "systemdUnits", status: "partial", entryCount: 40 },
       { kind: "containers", status: "unsupported", entryCount: 0 },
     ];
-    expect(coverageText(baseline)).toBe("2/3 read");
+    expect(coverageText(baseline)).toBe("2/3 read · 1 partial");
   });
 
   it("names the target honestly, including a live read", () => {

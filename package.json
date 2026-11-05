@@ -18,6 +18,7 @@
     "test:desktop": "wdio run wdio.conf.ts",
     "test:updater-install": "node scripts/test-updater-install.mjs",
     "test:live-ssh": "node scripts/test-live-ssh.mjs",
+    "test:baseline-collectors": "node scripts/test-baseline-collectors.mjs",
     "test:local-lab": "node scripts/test-local-lab.mjs",
     "test:local-gate": "node scripts/test-local-gate.mjs",
     "install:local-lab-hooks": "node scripts/install-local-lab-hooks.mjs",
