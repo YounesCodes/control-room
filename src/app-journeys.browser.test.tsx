@@ -978,16 +978,19 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .getByRole("dialog", { name: "New terminal" })
         .getByRole("button", { name: new RegExp(shellLabels[shellIndex]) });
       expect(
-        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} svg`),
+        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} :is(svg, img)`),
       ).not.toBeNull();
-      const logo = choice.element().querySelector(".local-shell-icon svg")!;
-      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      const logo = choice.element().querySelector(".local-shell-icon :is(svg, img)")!;
+      if (shellIndex === 0)
+        expect(getComputedStyle(logo).filter).toBe("grayscale(1) brightness(0.85)");
+      else expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
       await userEvent.hover(choice.element());
-      await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
+      if (shellIndex === 0) await expect.poll(() => getComputedStyle(logo).filter).toBe("none");
+      else await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
       await choice.click();
       expect(
         element.querySelector(
-          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} svg`,
+          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} :is(svg, img)`,
         ),
       ).not.toBeNull();
     }
@@ -999,18 +1002,30 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expectTerminalMenuAlignment(terminalMenu);
     for (const kind of shellKinds) {
       expect(
-        terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
+        terminalMenu.querySelector(
+          `.session-tab-menu-icon .local-shell-icon-${kind} :is(svg, img)`,
+        ),
       ).not.toBeNull();
-      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!;
-      expect(getComputedStyle(logo).color).toBe(
-        logo.closest("button")!.getAttribute("aria-current") === "page"
-          ? shellColors[shellKinds.indexOf(kind)]
-          : "rgb(173, 173, 170)",
-      );
-      await userEvent.hover(logo.closest("button")!);
-      await expect
-        .poll(() => getComputedStyle(logo).color)
-        .toBe(shellColors[shellKinds.indexOf(kind)]);
+      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} :is(svg, img)`)!;
+      if (kind === "git-bash") {
+        expect(getComputedStyle(logo).filter).toBe(
+          logo.closest("button")!.getAttribute("aria-current") === "page"
+            ? "none"
+            : "grayscale(1) brightness(0.85)",
+        );
+        await userEvent.hover(logo.closest("button")!);
+        await expect.poll(() => getComputedStyle(logo).filter).toBe("none");
+      } else {
+        expect(getComputedStyle(logo).color).toBe(
+          logo.closest("button")!.getAttribute("aria-current") === "page"
+            ? shellColors[shellKinds.indexOf(kind)]
+            : "rgb(173, 173, 170)",
+        );
+        await userEvent.hover(logo.closest("button")!);
+        await expect
+          .poll(() => getComputedStyle(logo).color)
+          .toBe(shellColors[shellKinds.indexOf(kind)]);
+      }
     }
     expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
     expect(

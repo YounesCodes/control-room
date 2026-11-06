@@ -101,7 +101,14 @@ it("uses the same logo scale for every OS and local shell, including larger dial
   await expect.element(page.getByRole("button", { name: "Administrator" })).toBeVisible();
   for (const row of container.querySelectorAll(".session-tab-wrap")) {
     const mark = row.querySelector<HTMLElement>(".host-os-icon, .local-shell-icon")!;
-    const svg = mark.querySelector("svg")!;
+    const svg = mark.querySelector("svg");
+    if (!svg) {
+      const image = mark.querySelector("img")!;
+      await expect.poll(() => image.naturalWidth).toBeGreaterThan(0);
+      expect(image.getBoundingClientRect().width).toBe(16);
+      expect(image.getBoundingClientRect().height).toBe(16);
+      continue;
+    }
     expect(mark.getBoundingClientRect().width).toBe(18);
     expect(mark.getBoundingClientRect().height).toBe(18);
     expect(svg.getBoundingClientRect().width).toBe(16);
