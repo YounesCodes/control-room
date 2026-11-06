@@ -671,11 +671,19 @@ code,
   flex: 1;
   gap: 12px;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
-  padding: 2px 0 2px 14px;
+  /* Reserve the same shallow scrollbar rail before and after overflow, so
+     revealing Terminal's Focus button cannot push the labels upward. */
+  overflow-x: scroll;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+  padding: 6px 0 0 14px;
   align-items: center;
+}
+.host-metrics-values::-webkit-scrollbar {
+  height: 6px;
+}
+.host-metrics-values::-webkit-scrollbar-thumb {
+  border-width: 2px;
 }
 .host-metric {
   display: flex;

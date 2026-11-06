@@ -1878,6 +1878,46 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/documentation-settings.png" });
   });
 
+  it("keeps metric labels inset across Terminal and inspection tabs", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    overrides.set("check_for_update", () => ({
+      currentVersion: "0.9.2",
+      version: "9.9.9",
+      notes: "Fixture release",
+      publishedAt: null,
+    }));
+    await mount();
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
+    for (const [width, height] of [
+      [1440, 900],
+      [1174, 700],
+      [1120, 700],
+      [960, 640],
+      [520, 480],
+    ]) {
+      await page.viewport(width, height);
+      for (const view of ["Systemd", "Terminal"]) {
+        await navigate(view);
+        const header = element.querySelector<HTMLElement>(".app-bar")!;
+        await page.screenshot({
+          element: header,
+          path: `../test-results/metric-inset-${view.toLowerCase()}-${width}.png`,
+        });
+        const label = header.querySelector<HTMLElement>(".host-metric-label")!;
+        expect(
+          label.getBoundingClientRect().top - header.getBoundingClientRect().top,
+        ).toBeGreaterThanOrEqual(5);
+        const reading = header.querySelector<HTMLElement>(".host-metric-reading")!;
+        expect(
+          header.getBoundingClientRect().bottom - reading.getBoundingClientRect().bottom,
+        ).toBeGreaterThanOrEqual(4);
+      }
+    }
+  });
+
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {
     overrides.set("check_for_update", () => ({
       currentVersion: "0.8.2",
