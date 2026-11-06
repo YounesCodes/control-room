@@ -10,11 +10,12 @@ describe("Shell-reported terminal titles", () => {
     const tab = $(".session-tab-wrap.active .session-tab-main");
     await $(".terminal-workspace-pane.active .xterm-screen").click();
     await browser.keys(
-      'title python --token private-title-argument & node -e "setTimeout(function(){},1500)" & echo TITLE_FINISHED',
+      `title python --token private-title-argument & node -e "process.stdin.once('data',function(){process.exit(0)})" & echo TITLE_FINISHED`,
     );
     await browser.keys("Enter");
     await expect(tab).toHaveText("python · Command Prompt");
     await expect(tab).toHaveAttribute("title", "python · Command Prompt");
+    await browser.keys("Enter");
     await terminalContains("TITLE_FINISHED");
     await expect(tab).toHaveText("Command Prompt");
     await tab.moveTo();
