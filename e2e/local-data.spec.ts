@@ -91,7 +91,7 @@ describe("Local data in remote Workspaces", () => {
     await $("input[placeholder='Search commands']").setValue("HISTORY_FIXTURE");
     await expect($("code=printf HISTORY_FIXTURE")).toBeDisplayed();
     await expect($("aria/Paste into terminal")).toBeDisabled();
-    await $("aria/More actions").click();
+    await $(".history-page button[aria-label='More actions']").click();
     await $("[role='menuitem']=Clear saved history").click();
     await $("button=Cancel").click();
     expect(
@@ -103,7 +103,7 @@ describe("Local data in remote Workspaces", () => {
         })
       )[0].id,
     ).toBe(entry.id);
-    await $("aria/More actions").click();
+    await $(".history-page button[aria-label='More actions']").click();
     await $("[role='menuitem']=Clear saved history").click();
     await $("button=Clear history").click();
     expect(
