@@ -20,13 +20,16 @@ guardrails, not every choice described below.
   color signals success, warning, or failure. User-selected tag colors identify
   connections; they do not imply health. OS and shell marks may reveal their
   brand color on a hovered or selected tab or host row to identify the target;
-  the color is identity, never health, and it never shows at rest. Terminal ANSI
+  the color is identity, never health. Git Bash uses the upstream Git for Windows
+  icon, gray at rest and in color on hover, keyboard focus, or selection. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
   Read-only configuration and command blocks may use a small syntax palette for
   sections, keys, strings, paths, and variables. Keep those colors inside code;
   they describe syntax and do not signal service health.
-  Local shell logos reveal their own colors on hover, keyboard focus, or selection:
-  Git orange and PowerShell blue. Command Prompt and the generic local-terminal
+  PowerShell logos reveal blue on hover, keyboard focus, or selection outside
+  Settings. Settings keeps shell marks steady while the whole preference row
+  receives a quiet hover fill. Git Bash also stays gray throughout Settings.
+  Command Prompt and the generic local-terminal
   launcher use muted gray at rest and white on hover, keyboard focus, or selection.
   Use each local shell's own mark in workspace tabs, launch and split menus,
   overflow lists, the command palette, and Settings. Administrator shells keep
@@ -427,8 +430,7 @@ Defaults use classic CGA bright colors for prompts and ANSI output, with slightl
 text on black.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview
-and any readability warning when the picker closes, and let the user save a
-deliberate low-contrast choice.
+when the picker closes and save the chosen colors without readability warnings.
 
 Use borders and restrained fills to separate controls and surfaces. Make the
 selected state easy to locate without shifting nearby content. Selected Saved
@@ -451,6 +453,13 @@ short explanation are better than repeated captions. Let technical identifiers
 wrap or truncate deliberately so they do not force a pane wider.
 
 ### Spacing, shape, and motion
+
+Search fields use compact type and height, an inset icon with a clear gutter,
+a quiet surface border, and one visible focus border without an extra glow.
+Use the same compact proportions for ordinary form inputs and selectors across
+the app. Keep dropdown chevrons smaller than the values beside them.
+Round both the dropdown field and its opened option list. Keep option rows inset
+inside the popup corners, with clear selection, hover, and keyboard-focus states.
 
 Use the existing spacing, radius, and motion tokens. Prefer layout gaps over
 one-off margins. Keep related controls grouped and leave enough room between
@@ -480,6 +489,10 @@ Interactive controls need clear default, hover, selected, focus-visible, and
 disabled states. Use the established button hierarchy: one primary action for
 the main decision, secondary actions for alternatives, danger styling for
 confirmed destructive work, and labelled icon buttons for compact controls.
+Checkboxes use a compact dark square, a quiet gray outline, and a white tick
+when selected. Keep a dark selected fill, a lighter hover border, and a clear
+keyboard focus ring. Retain native checkbox semantics, disabled and mixed states,
+and the native rendering in Windows high-contrast mode.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.
@@ -589,9 +602,38 @@ Settings fills the window below a draggable titlebar with native window controls
 Hide Connections and Workspace tabs while Settings is open, and restore the
 existing workspace and focus mode when it closes. Use the available page width
 for its form and keep Back and Save visible while its body scrolls.
-Settings uses readable section titles and short scope descriptions. Group
+Use a slim category rail on wide windows and a category selector at narrow widths.
+In the category rail, Up/Down changes category and moves focus with it. Home/End
+selects the first or last category. Tab enters the rail at its selected item.
+Use the selected category highlight as its keyboard focus cue, without a rectangular
+focus outline.
+Search across categories by setting names and keywords, with category context on
+results. Preserve drafts and useful category scroll positions. Keep numeric fields
+compact, with readable values in short, quietly bordered inputs and selectors.
+Save explicitly, with dirty, saving, saved, and error feedback. Reserve a steady
+status slot and Save button width so feedback changes never move the search field.
+Right-align status text beside Save, with a larger gap from search. On narrow
+windows, search fills a separate row below the heading and save actions.
+Settings uses readable section titles. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.
+Arrange colors in a compact grid; stack the preview above its controls on narrow
+windows. Category changes reveal the whole form together with the Systemd unit fade and
+vertical motion, preserving draft controls and respecting reduced motion.
+Terminal uses a persistent row of Appearance, Tabs & naming, and Local shells tabs.
+Separate tabs with thin vertical bars and mark the selected tab with bold text
+without outlines or filled backgrounds. These automatically selected tabs use
+the bold label as their keyboard focus cue instead of a rectangular focus ring. Show only its panel, starting at the normal content gutter. Left/Right
+wraps between tabs; Home/End selects the first or last. Preserve mounted draft
+controls and use the category reveal motion when switching panels. Search still
+shows matching sections across all panels.
+
+Automatic terminal titles default to on. Use only shell-reported executable or
+title metadata, reduced to a bounded executable name without arguments or paths.
+Keep the shell or host identity and duplicate numbering in the display title.
+Manual names take priority. Clear activity on command completion, prompt return,
+disconnect, or session replacement. Titles stay in memory and never change saved
+workspace names. Unsupported metadata falls back to the normal identity.
 
 Select the current font value on focus or when reopening the field so typing
 starts a new search without deleting the saved family. Preserve cursor editing

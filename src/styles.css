@@ -245,40 +245,164 @@ textarea:focus-visible,
 input,
 select,
 textarea {
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: #0a0a0a;
-  padding: 9px 11px;
+  background: var(--surface-sunken);
+  padding: 6px 10px;
   transition:
     border-color var(--motion-fast) var(--ease),
     box-shadow var(--motion-fast) var(--ease),
     --scrollbar-thumb var(--motion-fast) var(--ease);
 }
 
+input:not([type="checkbox"], [type="color"], [type="range"], [type="file"], [type="hidden"]),
+select {
+  min-height: 32px;
+  height: 32px;
+  padding-block: 4.5px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
 select {
   appearance: none;
+  border-radius: var(--radius-md);
   padding-right: 32px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 16px center;
+  background-size: 8px 5.5px;
+  background-position: right 10px center;
+}
+
+/* Keep the browser's select semantics while rounding its top-layer picker. */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+
+  select::picker-icon {
+    display: none;
+  }
+
+  select::picker(select) {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-overlay);
+    color: var(--text);
+    box-shadow: var(--shadow-popover);
+    margin-block: 4px;
+    padding: 4px;
+    overflow: auto;
+    max-height: min(320px, 60vh);
+  }
+
+  select:not([multiple]):not([size]) option {
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  select option::checkmark {
+    display: none;
+  }
+
+  select option:checked {
+    background: var(--fill-active);
+    color: var(--text-strong);
+  }
+
+  select option:hover:not(:disabled) {
+    background: var(--fill-hover);
+  }
+
+  select option:focus-visible {
+    outline: 1px solid var(--text-muted);
+    outline-offset: -1px;
+  }
 }
 
 input:hover:not(:disabled),
 select:hover:not(:disabled),
 textarea:hover:not(:disabled) {
-  border-color: #565656;
+  border-color: var(--border-strong);
 }
 
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  border-color: var(--text-muted);
+  box-shadow: none;
 }
 
 input[type="checkbox"] {
-  accent-color: var(--accent);
+  appearance: none;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid #686868;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 11px 10px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+input[type="number"] {
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+  border-color: #909090;
+  background-color: #151515;
+}
+
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M1 5 4.5 8.5 11 1.5' fill='none' stroke='%23eee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M2 5h8' fill='none' stroke='%23eee' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:hover:not(:disabled),
+label:hover > input[type="checkbox"]:not(:disabled) {
+  border-color: #aaa;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  input[type="checkbox"],
+  input[type="checkbox"]:checked,
+  input[type="checkbox"]:indeterminate {
+    appearance: auto;
+    background: none;
+    border: revert;
+  }
 }
 
 input::placeholder,
@@ -760,16 +884,17 @@ code,
 .host-metrics-choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: 16px 24px;
 }
 .settings-form .host-metrics-settings {
-  gap: 16px;
+  gap: 10px;
 }
 .settings-form .host-metrics-options {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
-  align-items: center;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  gap: 10px;
   padding: 0;
   margin: 0;
   border: 0;
@@ -781,10 +906,18 @@ code,
   padding: 0;
   margin-bottom: 10px;
 }
-@media (max-width: 760px) {
-  .settings-form .host-metrics-options {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.settings-form .host-metrics-options .host-metrics-refresh {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.host-metrics-refresh select {
+  width: 176px;
+  min-width: 0;
 }
 .host-metrics-options:disabled {
   opacity: 0.6;
@@ -838,6 +971,19 @@ code,
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.update-indicator-label {
+  display: inline-block;
+  width: 17ch;
+  text-align: left;
+}
+
+.update-indicator-percent {
+  display: inline-block;
+  width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .update-indicator-button:hover,
@@ -1048,12 +1194,13 @@ code,
 
 .search-field {
   display: flex;
-  min-height: 38px;
+  min-height: 32px;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: #0a0a0a;
+  background: var(--surface-sunken);
+  padding: 0 10px;
   color: var(--text-faint);
   transition:
     border-color var(--motion-fast) var(--ease),
@@ -1061,22 +1208,32 @@ code,
 }
 
 .search-field:hover {
-  border-color: #565656;
+  border-color: var(--border-strong);
 }
 
 .search-field:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  border-color: var(--text-muted);
+  box-shadow: none;
   color: var(--text-muted);
 }
 
+.search-field > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
 .search-field input {
+  min-height: 0;
+  height: auto;
   min-width: 0;
   flex: 1;
   border: 0;
   outline: 0;
   background: transparent;
-  padding: 8px 0;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .search-field input:focus-visible {
@@ -1775,14 +1932,22 @@ code,
 }
 
 .local-shell-icon > svg,
+.local-shell-icon > img,
 .host-os-icon > svg {
   display: block;
   width: calc(var(--identity-size) - 2px);
   height: calc(var(--identity-size) - 2px);
+  object-fit: contain;
 }
 
 .local-shell-icon {
   position: relative;
+  --shell-artwork-filter: grayscale(1) brightness(0.85);
+}
+
+.local-shell-icon > img {
+  filter: var(--shell-artwork-filter);
+  transition: filter var(--motion-fast) var(--ease);
 }
 
 .local-shell-icon.local-shell-mark {
@@ -3132,21 +3297,34 @@ code,
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 5px;
+  padding: 3px;
   color: var(--text-muted);
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
 .terminal-search input {
+  min-height: 0;
+  height: auto;
   min-width: 80px;
   flex: 1 1 120px;
   border: 0;
   background: transparent;
   padding: 4px 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.terminal-search:focus-within {
+  border-color: var(--text-muted);
+}
+
+.terminal-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .terminal-search-count {
@@ -3164,8 +3342,8 @@ code,
 
 .terminal-search button {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex: none;
   place-items: center;
   border-radius: var(--radius-sm);
@@ -3943,7 +4121,7 @@ dd {
 }
 
 .list-panel > .search-field {
-  min-height: 37px;
+  min-height: 32px;
   margin-bottom: 12px;
   padding: 0 10px;
 }
@@ -3989,13 +4167,13 @@ dd {
 
 .port-list-controls .search-field {
   min-width: 0;
-  min-height: 37px;
+  min-height: 32px;
   padding: 0 10px;
 }
 
 .port-list-controls select {
   width: auto;
-  min-height: 37px;
+  min-height: 32px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 11px;
@@ -4003,13 +4181,13 @@ dd {
 
 .systemd-list-controls .search-field {
   min-width: 0;
-  min-height: 37px;
+  min-height: 32px;
   padding: 0 10px;
 }
 
 .systemd-list-controls select {
   width: 100%;
-  min-height: 37px;
+  min-height: 32px;
   padding-top: 0;
   padding-bottom: 0;
   font-size: 11px;
@@ -4306,6 +4484,7 @@ dd {
   }
 }
 .systemd-search-control {
+  padding: 0;
   flex: 0 1 auto;
   min-width: 32px;
   max-width: 452px;
@@ -4331,7 +4510,7 @@ dd {
   border-color: transparent;
 }
 .systemd-search-control:has(.systemd-inline-search):focus-within {
-  border-color: var(--accent);
+  border-color: var(--text-muted);
 }
 .systemd-search-control:has(.systemd-inline-search) > .icon-button {
   background: transparent;
@@ -5472,13 +5651,13 @@ dd {
 }
 
 .checkbox-label input {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .log-search {
   min-width: 210px;
-  min-height: 37px;
+  min-height: 32px;
   padding: 0 9px;
 }
 
@@ -5689,6 +5868,7 @@ dd {
    of the fields it applies to, so the bar keeps Back, the page identity, and
    Save on screen the whole way down. */
 .settings-page {
+  container: settings / inline-size;
   --settings-measure: none;
   --settings-gutter: 30px;
   /* The classic scrollbar Chromium gives the body, sized by the
@@ -5709,17 +5889,142 @@ dd {
   flex: none;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-chrome);
-  padding: 13px calc(var(--settings-gutter) + var(--settings-scrollbar)) 13px var(--settings-gutter);
+  padding: 13px var(--settings-gutter);
 }
 
 /* Align the heading and Save with the form across the full Settings page. */
 .settings-heading-inner {
+  position: relative;
   display: flex;
   width: 100%;
   max-width: var(--settings-measure);
   align-items: center;
   margin-inline: auto;
   gap: 13px;
+}
+
+.settings-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(380px, calc(100% - 600px));
+  flex: 0 1 320px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 204px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+
+.settings-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 12px;
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.settings-navigation button {
+  min-height: 38px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+  transition:
+    background var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.settings-navigation button:focus-visible {
+  outline: none;
+}
+
+.settings-navigation button:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.settings-navigation button[aria-current="page"] {
+  background: var(--fill-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-strong);
+}
+
+.settings-category-select {
+  display: none;
+}
+
+.settings-content {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.settings-subnavigation {
+  display: flex;
+  flex: none;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px var(--settings-gutter);
+}
+
+.settings-subnavigation button {
+  position: relative;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.settings-subnavigation button + button::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 16px;
+  border-left: 1px solid var(--border);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.settings-subnavigation button:focus-visible {
+  outline: none;
+}
+
+.settings-subnavigation button[aria-selected="true"] {
+  font-weight: 700;
+}
+
+.settings-terminal-panel {
+  min-width: 0;
+}
+
+.settings-terminal-panel[hidden] {
+  display: none;
+}
+
+.settings-subnavigation button:hover {
+  color: var(--text);
+}
+
+.settings-result-category {
+  color: var(--text-faint);
+}
+
+.settings-empty {
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .settings-heading-text {
@@ -5745,6 +6050,7 @@ dd {
 }
 
 .settings-heading-actions {
+  margin-left: 11px;
   display: flex;
   min-width: 0;
   flex: none;
@@ -5755,7 +6061,12 @@ dd {
 /* The save result belongs next to the control that produced it, so it is a line
    of text in the bar rather than a banner in the form. */
 .settings-status {
-  max-width: 34ch;
+  width: 22ch;
+  text-align: right;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin: 0;
   color: var(--text-faint);
   font-size: 11px;
@@ -5775,6 +6086,7 @@ dd {
 }
 
 .settings-body {
+  position: relative;
   min-height: 0;
   flex: 1;
   overflow-y: auto;
@@ -5783,9 +6095,10 @@ dd {
 }
 
 .settings-form {
+  position: relative;
   display: flow-root;
-  max-width: var(--settings-measure);
-  margin-inline: auto;
+  max-width: 1180px;
+  margin-right: auto;
   padding-bottom: 8px;
 }
 
@@ -5794,10 +6107,75 @@ dd {
   flex-direction: column;
   gap: 14px;
   border: 0;
-  border-top: 1px solid var(--border);
-  margin: 0 0 32px;
-  padding: 18px 0 0;
+  margin: 0 0 28px;
+  padding: 12px 0 0;
   min-width: 0;
+}
+
+.settings-form[data-category="terminal"] {
+  padding-bottom: 0;
+}
+
+.settings-form[data-category="terminal"] .settings-terminal-panel > fieldset {
+  margin-bottom: 0;
+}
+
+.settings-form fieldset[hidden] {
+  display: none;
+}
+
+.settings-form fieldset[id] > label:not(.checkbox-label) {
+  max-width: 640px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.settings-form input[type="number"] {
+  width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+
+.terminal-appearance-controls input[type="number"] {
+  width: 72px;
+}
+
+.settings-form input:not([type="checkbox"], [type="color"]),
+.settings-form select,
+.settings-category-select select {
+  min-height: 32px;
+  height: 32px;
+  border-width: 1.5px;
+  border-color: var(--border-subtle);
+  background-color: var(--surface-sunken);
+  padding-block: 4.5px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.settings-form input:not([type="checkbox"], [type="color"]):hover:not(:disabled),
+.settings-form select:hover:not(:disabled),
+.settings-category-select select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.settings-form input:not([type="checkbox"], [type="color"]):focus-visible,
+.settings-form select:focus-visible,
+.settings-category-select select:focus-visible {
+  border-color: var(--text-muted);
+  box-shadow: none;
+}
+
+.settings-form select {
+  max-width: 320px;
+}
+.settings-form .detail-list {
+  max-width: 800px;
+}
+.settings-form .technical {
+  user-select: text;
+  overflow-wrap: anywhere;
 }
 
 .settings-form legend {
@@ -5805,6 +6183,23 @@ dd {
   color: var(--text);
   font-size: 18px;
   font-weight: 700;
+}
+
+@media (min-height: 700px) {
+  .settings-form fieldset[id] {
+    gap: 20px;
+    padding-top: 18px;
+    margin-bottom: 36px;
+  }
+
+  .settings-form .host-metrics-settings,
+  .settings-form .host-metrics-options {
+    gap: 20px;
+  }
+
+  .settings-form .checkbox-label {
+    min-height: 40px;
+  }
 }
 
 .settings-form label:not(.checkbox-label),
@@ -5921,8 +6316,10 @@ dd {
   white-space: nowrap;
 }
 
-.terminal-color-warning {
-  margin-top: 0;
+.settings-save {
+  width: 132px;
+  flex: none;
+  white-space: nowrap;
 }
 
 .settings-save:disabled {
@@ -5981,9 +6378,35 @@ dd {
 }
 
 .local-shell-default {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.settings-form .local-shell-default > .local-shell-icon {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+
+.settings-form .local-shell-icon {
+  --identity-size: 18px;
+}
+
+.settings-form .local-shell-default:has(.local-shell-icon) select {
+  padding-left: 36px;
+}
+
+.settings-form .local-shell-toggle-group .checkbox-label {
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--motion-fast) var(--ease);
+}
+
+.settings-form .local-shell-toggle-group .checkbox-label:hover {
+  background: var(--fill-hover);
 }
 
 .local-shell-default select {
@@ -6760,15 +7183,17 @@ kbd {
 }
 
 .command-palette-search input {
+  min-height: 0;
+  height: auto;
   flex: 1;
   min-width: 0;
   border: 0;
   border-radius: 0;
   outline: 0;
   background: transparent;
-  padding: 15px 0;
+  padding: 11px 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* The search bar is the palette's obvious focus target, so suppress the shared
@@ -7136,12 +7561,9 @@ kbd {
 .session-tab-overflow-menu > button[aria-current="page"] .identity-mark,
 .command-item:hover .identity-mark,
 .command-item:focus-visible .identity-mark,
-.command-item.active .identity-mark,
-.local-shell-toggle-group label:hover .identity-mark,
-.local-shell-toggle-group label:focus-within .identity-mark,
-.local-shell-default:hover .identity-mark,
-.local-shell-default:focus-within .identity-mark {
+.command-item.active .identity-mark {
   color: var(--identity);
+  --shell-artwork-filter: none;
 }
 
 /* ==========================================================================
@@ -7335,8 +7757,8 @@ kbd {
 }
 
 .ports-search-field input {
-  padding-block: 10px;
-  font-size: 13px;
+  padding-block: 6px;
+  font-size: 12px;
 }
 
 .ports-search-field .icon-button {
@@ -7933,7 +8355,7 @@ details[open] > .inspector-disclosure-body {
   max-height: 230px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
@@ -7942,6 +8364,7 @@ details[open] > .inspector-disclosure-body {
 }
 
 .font-suggestions li {
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7960,6 +8383,10 @@ details[open] > .inspector-disclosure-body {
 
 .font-suggestions small {
   color: var(--text-muted);
+}
+
+.font-catalog input[role="combobox"] {
+  border-radius: var(--radius-md);
 }
 
 .font-catalog-actions,
@@ -8014,10 +8441,74 @@ details[open] > .inspector-disclosure-body {
   font-size: 12px;
 }
 .terminal-appearance-controls .terminal-color-grid {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .terminal-appearance-preview .ansi-preview {
-  min-height: 190px;
+  min-height: 124px;
+}
+
+.terminal-appearance-controls .terminal-color-example {
+  display: none;
+}
+.terminal-appearance-controls .terminal-color-control {
+  min-height: 38px;
+}
+.settings-form .local-shell-toggle-group {
+  max-width: 640px;
+}
+
+@container settings (max-width: 900px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-navigation {
+    display: none;
+  }
+  .settings-category-select {
+    display: block;
+    padding: 12px var(--settings-gutter) 0;
+  }
+  .settings-category-select select {
+    width: 100%;
+  }
+  .settings-heading-inner {
+    flex-wrap: wrap;
+  }
+  .settings-heading-text {
+    flex: 1;
+  }
+  .settings-search {
+    position: static;
+    transform: none;
+    flex: 1 1 100%;
+    width: 100%;
+    order: 1;
+  }
+  .settings-heading-actions {
+    margin-left: auto;
+  }
+  .settings-status {
+    max-width: 24ch;
+  }
+}
+
+@container settings (max-width: 760px) {
+  .terminal-appearance-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .terminal-appearance-preview {
+    order: -1;
+    position: static;
+  }
+  .settings-form fieldset[id] > label:not(.checkbox-label) {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .settings-form .local-shell-default {
+    max-width: 100%;
+  }
 }
 
 /* Saved panel widths and keyboard-operable dividers. */

@@ -389,7 +389,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
-  it("reveals each shell logo color on hover, focus, and selection in both layouts", async () => {
+  it("reveals the Git Bash artwork color on interaction across layouts", async () => {
     await page.viewport(960, 640);
     overrides.set("list_local_shells", () => ({
       profiles: [
@@ -401,7 +401,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     const white = "rgb(255, 255, 255)";
     const neutral = "rgb(173, 173, 170)";
-    const orange = "rgb(240, 80, 50)";
     const color = (mark: Element) => getComputedStyle(mark).color;
     await page.getByRole("button", { name: "New terminal", exact: true }).click();
     const choice = page.getByRole("button", {
@@ -436,10 +435,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       name: "New local terminal: Git Bash",
       exact: true,
     });
+    const gitLogo = splitChoice.element().querySelector<HTMLImageElement>(".local-shell-mark img")!;
+    await vi.waitFor(() => expect(gitLogo.naturalWidth).toBeGreaterThan(0));
+    expect(getComputedStyle(gitLogo).filter).toBe("grayscale(1) brightness(0.85)");
     await userEvent.hover(splitChoice.element());
-    await expect
-      .poll(() => color(splitChoice.element().querySelector(".local-shell-mark")!))
-      .toBe(orange);
+    await expect.poll(() => getComputedStyle(gitLogo).filter).toBe("none");
     await splitChoice.click();
     const pane = page
       .getByRole("navigation", { name: /Terminals in .* group/ })
@@ -469,7 +469,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toBe(white);
     const git = page.getByRole("menuitem", { name: /^Git Bash/ });
     await userEvent.hover(git.element());
-    await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(orange);
+    const overflowLogo = git.element().querySelector<HTMLImageElement>(".local-shell-icon img")!;
+    expect(overflowLogo.src).toBe(gitLogo.src);
+    await expect.poll(() => getComputedStyle(overflowLogo).filter).toBe("none");
   });
 
   it("shows shell identities and elevation in the command palette and Settings", async () => {
@@ -509,7 +511,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     ).not.toBeNull();
     for (const kind of ["git-bash", "powershell-7", "windows-powershell", "command-prompt"]) {
       expect(
-        palette.element().querySelector(`#shell-${kind} .local-shell-icon-${kind} svg`),
+        palette
+          .element()
+          .querySelector(
+            `#shell-${kind} .local-shell-icon-${kind} ${kind === "git-bash" ? "img" : "svg"}`,
+          ),
       ).not.toBeNull();
     }
     await page.getByRole("combobox", { name: "Search commands" }).fill("administrator");
@@ -523,6 +529,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
     await userEvent.keyboard("{Escape}");
     await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
     const checkbox = page.getByRole("checkbox", {
       name: "Offer PowerShell 7, run as administrator",
     });
@@ -531,10 +539,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(
       row.querySelector(".local-shell-icon-powershell-7 .local-shell-elevation"),
     ).not.toBeNull();
+    const restingColor = getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color;
     await userEvent.hover(row);
-    await expect
-      .poll(() => getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color)
-      .toBe("rgb(83, 145, 254)");
+    expect(getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color).toBe(
+      restingColor,
+    );
     await page.screenshot({ path: "../test-results/local-shell-icons-settings.png" });
   });
 
@@ -969,16 +978,19 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .getByRole("dialog", { name: "New terminal" })
         .getByRole("button", { name: new RegExp(shellLabels[shellIndex]) });
       expect(
-        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} svg`),
+        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} :is(svg, img)`),
       ).not.toBeNull();
-      const logo = choice.element().querySelector(".local-shell-icon svg")!;
-      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      const logo = choice.element().querySelector(".local-shell-icon :is(svg, img)")!;
+      if (shellIndex === 0)
+        expect(getComputedStyle(logo).filter).toBe("grayscale(1) brightness(0.85)");
+      else expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
       await userEvent.hover(choice.element());
-      await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
+      if (shellIndex === 0) await expect.poll(() => getComputedStyle(logo).filter).toBe("none");
+      else await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
       await choice.click();
       expect(
         element.querySelector(
-          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} svg`,
+          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} :is(svg, img)`,
         ),
       ).not.toBeNull();
     }
@@ -990,18 +1002,30 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expectTerminalMenuAlignment(terminalMenu);
     for (const kind of shellKinds) {
       expect(
-        terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
+        terminalMenu.querySelector(
+          `.session-tab-menu-icon .local-shell-icon-${kind} :is(svg, img)`,
+        ),
       ).not.toBeNull();
-      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!;
-      expect(getComputedStyle(logo).color).toBe(
-        logo.closest("button")!.getAttribute("aria-current") === "page"
-          ? shellColors[shellKinds.indexOf(kind)]
-          : "rgb(173, 173, 170)",
-      );
-      await userEvent.hover(logo.closest("button")!);
-      await expect
-        .poll(() => getComputedStyle(logo).color)
-        .toBe(shellColors[shellKinds.indexOf(kind)]);
+      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} :is(svg, img)`)!;
+      if (kind === "git-bash") {
+        expect(getComputedStyle(logo).filter).toBe(
+          logo.closest("button")!.getAttribute("aria-current") === "page"
+            ? "none"
+            : "grayscale(1) brightness(0.85)",
+        );
+        await userEvent.hover(logo.closest("button")!);
+        await expect.poll(() => getComputedStyle(logo).filter).toBe("none");
+      } else {
+        expect(getComputedStyle(logo).color).toBe(
+          logo.closest("button")!.getAttribute("aria-current") === "page"
+            ? shellColors[shellKinds.indexOf(kind)]
+            : "rgb(173, 173, 170)",
+        );
+        await userEvent.hover(logo.closest("button")!);
+        await expect
+          .poll(() => getComputedStyle(logo).color)
+          .toBe(shellColors[shellKinds.indexOf(kind)]);
+      }
     }
     expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
     expect(
@@ -1863,6 +1887,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }));
     await mount();
     await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
     await page.getByRole("button", { name: "Check for updates" }).click();
     await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     await page.getByRole("button", { name: /Control Room 9.9.9/ }).click();
@@ -1997,7 +2022,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(settings.right).toBe(shell.right - 1);
       expect(settings.top).toBe(titlebar.bottom);
       expect(settings.bottom).toBe(shell.bottom - 1);
-      expect(form.width).toBeGreaterThan(width - 100);
+      expect(form.width).toBeGreaterThan(width - 450);
       expect(getComputedStyle(element.querySelector(".sidebar")!).display).toBe("none");
       expect(getComputedStyle(workspace).display).toBe("none");
       for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
@@ -2041,6 +2066,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(960, 640);
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await page.getByLabelText("Font size", { exact: true }).fill("18");
     failures.set("save_settings", "fixture disk full");
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
@@ -2055,6 +2081,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("applies hidden shell settings to new terminal, split menu and palette", async () => {
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
     await page.getByRole("checkbox", { name: /Command Prompt/ }).click();
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
     await vi.waitFor(() => expect(currentSettings.hiddenLocalShells).toEqual(["command-prompt"]));

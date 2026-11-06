@@ -23,6 +23,14 @@ const settings: AppSettings = {
 };
 
 describe("Settings drafts", () => {
+  it("defaults automatic titles to on without dirtying older settings", () => {
+    expect(settingsHaveChanges(settings, { ...settings, automaticTerminalTitles: true })).toBe(
+      false,
+    );
+    expect(settingsHaveChanges(settings, { ...settings, automaticTerminalTitles: false })).toBe(
+      true,
+    );
+  });
   it("treats an empty startup default like a null or missing preference", () => {
     expect(settingsHaveChanges({ ...settings, defaultLocalShellId: "" }, settings)).toBe(false);
     expect(settingsHaveChanges(settings, { ...settings, defaultLocalShellId: "git-bash" })).toBe(

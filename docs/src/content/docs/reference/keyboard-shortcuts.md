@@ -18,3 +18,9 @@ description: Keys for the current tab and terminal.
 | `Escape`       | Close the inspector or toolbar panel.                                       |
 
 Closing a tab with a running terminal asks for confirmation.
+
+In Settings, focus the category list and use `Up` / `Down` to switch categories.
+`Home` / `End` selects the first or last category. `Tab` moves into the page's
+controls. In Terminal settings, `Left` / `Right` switches tabs and wraps at either
+end; `Home` / `End` selects Appearance or Local shells. Arrow keys in fields keep
+their normal editing behavior.
