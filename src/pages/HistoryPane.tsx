@@ -117,14 +117,12 @@ function HistoryEntryRow({
           })}
         </time>
         <ExitStatus exitCode={entry.exitCode} />
-        <div className="history-entry-main">
-          <code className="history-command" tabIndex={0}>
-            <CommandText command={entry.command} search={search} />
-          </code>
-          <small className="history-cwd" title={entry.cwd ?? undefined}>
-            {entry.cwd ?? "Directory unavailable"}
-          </small>
-        </div>
+        <code className="history-command" tabIndex={0}>
+          <CommandText command={entry.command} search={search} />
+        </code>
+        <small className="history-cwd" title={entry.cwd ?? undefined}>
+          {entry.cwd ?? "Directory unavailable"}
+        </small>
         <div className="row-actions">
           <button
             className={copied ? "icon-button copied" : "icon-button"}

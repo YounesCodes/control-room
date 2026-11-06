@@ -5739,8 +5739,11 @@ dd {
 .history-row-inner {
   display: grid;
   grid-template-columns: 70px 40px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
+  grid-template-areas:
+    "time status command actions"
+    ". . cwd .";
+  align-items: center;
+  gap: 5px 10px;
   min-height: 0;
   overflow: hidden;
   border-bottom: 1px solid var(--border-subtle);
@@ -5762,7 +5765,7 @@ dd {
 }
 
 .history-row-inner time {
-  padding-top: 5px;
+  grid-area: time;
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -5771,9 +5774,9 @@ dd {
 /* Exit status sits directly on the row: success is a bare green check, failure
    is the bare nonzero code, unknown is a muted dash. No badge, box, or fill. */
 .exit-status {
+  grid-area: status;
   display: inline-flex;
   justify-content: flex-end;
-  padding-top: 4px;
   font-size: 11px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -5792,19 +5795,14 @@ dd {
   font-weight: 400;
 }
 
-.history-entry-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 5px;
-}
-
 /* The command is the visual anchor: a charcoal Markdown-style code surface with
    its own padding, not a card around the whole row. Exact text is preserved;
    long or multiline commands scroll inside the surface instead of breaking the
    layout. */
 .history-command {
+  grid-area: command;
   display: block;
+  min-width: 0;
   max-width: 100%;
   max-height: 220px;
   overflow: auto;
@@ -5828,6 +5826,8 @@ dd {
 }
 
 .history-cwd {
+  grid-area: cwd;
+  min-width: 0;
   color: var(--text-faint);
   font-size: 10.5px;
   overflow-wrap: anywhere;
@@ -5835,6 +5835,7 @@ dd {
 }
 
 .history-row .row-actions {
+  grid-area: actions;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--motion-fast) var(--ease);
@@ -8514,19 +8515,11 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     grid-template-columns: auto auto minmax(0, 1fr);
     grid-template-areas:
       "time status actions"
-      "main main main";
-  }
-  .history-row-inner > time {
-    grid-area: time;
-    padding-top: 0;
+      "command command command"
+      "cwd cwd cwd";
   }
   .history-row-inner .exit-status {
-    grid-area: status;
     justify-content: flex-start;
-    padding-top: 0;
-  }
-  .history-row-inner .history-entry-main {
-    grid-area: main;
   }
   .history-row-inner .row-actions {
     grid-area: actions;
