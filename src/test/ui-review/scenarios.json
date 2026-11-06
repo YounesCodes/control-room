@@ -1,0 +1,28 @@
+{
+  "viewports": {
+    "normal": { "width": 1440, "height": 900 },
+    "narrow": { "width": 960, "height": 640 }
+  },
+  "scenarios": {
+    "settings": {
+      "states": ["populated"],
+      "ready": ".settings-page",
+      "motion": {
+        "description": "Settings category reveal, General to Terminal",
+        "target": ".settings-form",
+        "button": "Terminal",
+        "select": "Settings category",
+        "option": "terminal"
+      }
+    },
+    "systemd": {
+      "states": ["populated", "empty", "loading", "error", "stale", "overflow"],
+      "ready": "[data-ui-review-ready]",
+      "settled": {
+        "populated": ".systemd-memory-value > [aria-hidden]",
+        "stale": ".systemd-memory-value > [aria-hidden]",
+        "overflow": ".systemd-memory-value > [aria-hidden]"
+      }
+    }
+  }
+}

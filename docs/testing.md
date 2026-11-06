@@ -39,6 +39,70 @@ The first Windows baseline (September 2026) is 70.15% frontend statements, 64.37
 
 Run `npx playwright install chromium` once, then `npm run test:browser`. Vitest Browser Mode uses Playwright Chromium; these tests use real keyboard, focus, layout, and axe checks without Tauri or network access. Layout checks cover long-dialog scrolling and wide Settings alignment rather than source or CSS syntax. The main `npm test` command still runs the existing jsdom suites. Browser screenshots on failure go to `.vitest/`.
 
+## Headless UI review
+
+Capture one synthetic React scenario without opening Tauri or a visible browser:
+
+```bash
+npm run ui:capture -- --list
+npm run ui:capture -- --scenario settings
+npm run ui:capture -- --scenario systemd --state overflow --viewport narrow
+npm run ui:motion -- --scenario settings
+```
+
+Install Chromium with `npx playwright install chromium` first. On headless Ubuntu,
+use `npx playwright install --with-deps chromium` to provision its OS libraries.
+The same commands run on Windows. No SSH host, desktop session, MCP tool, or external
+API is needed. They start a loopback-only ephemeral Vite server and one headless
+Chromium session, then close both. Run commands serially; a lock prevents overlapping
+captures. A session has a two-minute budget. Exit codes are 0 for success, 1 for a
+capture failure, and 2 for invalid arguments. Use `--help` for available selections.
+
+Both normal 1440×900 and minimum-supported 960×640 viewports run by default.
+Use `--viewport normal` or `--viewport narrow` for a single size. Settings starts
+on General & Monitoring. Systemd supports `populated`, `empty`, `loading`, `error`,
+`stale`, and `overflow`; populated states open the real unit inspector. Data is
+synthetic and network requests outside the fixture server are blocked. No local
+environment files are loaded.
+
+The CLI prints a JSON line identifying each manifest under the ignored directory
+`test-results/ui-review/<scenario>/<state>/<viewport>/<capture|motion>/`.
+`manifest.json` records the state, dimensions, motion preference, result, relative
+PNG paths, and verification limits. A failed capture writes its error there;
+`test-results/ui-review/session.json` also records startup failures and links the
+latest session's manifests.
+Still captures use reduced motion. Motion uses normal motion and triggers the real
+Settings category reveal. It saves before/start/midpoint/after PNGs with timeline
+positions and computed poses, failing if no changing transition is found. The
+animation is paused at each sample for reproducibility. These frames prove visible
+poses, not frame pacing, dropped frames, or real-time performance.
+
+Open the actual PNGs with an image viewer or a vision-capable agent. Check hierarchy,
+readability, clipping, positioning, and responsive layout. For a layout change,
+capture before editing and preserve those PNGs outside the selected output folder,
+which is overwritten on recapture. Change the UI, capture the same states and widths,
+inspect again, and repeat when needed. Inspect the motion sequence in order for
+transition changes. A passing command or pixel comparison does not review UX.
+Chromium evidence cannot verify native WebView2, Tauri window controls, ConPTY,
+real SSH, or live terminal resizing. A native app or visible browser launch on the
+Windows laptop requires explicit approval, including desktop E2E and the manual
+`test:local-lab` / `test:local-gate` commands. Hosted CI can run its native suites.
+
+The existing hosted frontend CI job runs this small capture slice after browser
+tests, without repeating the browser suite or desktop E2E. It uploads PNGs and
+manifests as `ui-review` for seven days when present. Download an existing run with
+`gh run download <run-id> --name ui-review --dir test-results/ui-review-ci`.
+Capture failures fail the step; absent artifacts do not fail uploads.
+
+To add a scenario, register its states and ready selector in
+`src/test/ui-review/scenarios.json` and mount real components in
+`src/test/ui-review/fixtures.tsx`, reusing `src/test/` fixture data. Keep ready
+selectors tied to completed rendering, stub any native reads with synthetic data,
+and register a motion trigger and animated target only when that transition can
+run headlessly. The harness lives outside the product entry point; it is not
+included in the packaged app. Existing reduced-motion Vitest browser tests stay
+independent.
+
 ## Windows desktop E2E
 
 On Windows 11 with WebView2 and the Rust/Tauri build prerequisites, run:
