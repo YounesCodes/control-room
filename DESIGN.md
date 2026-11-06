@@ -696,8 +696,11 @@ Keep resource readings in the optional host header. Host inspectors focus on ser
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking
-banner. Show download progress, require confirmation before installing, and keep
-the app's updates clearly distinct from any host package information.
+banner. Use a compact charcoal circle with a light Download icon in the titlebar.
+Keep its footprint fixed across update states, show download progress in a ring
+and the tooltip, and switch to a restart icon with a green dot when ready.
+Keep full state and version information accessible. Require confirmation before
+installing, and keep the app's updates clearly distinct from any host package information.
 
 ## Accessibility
 

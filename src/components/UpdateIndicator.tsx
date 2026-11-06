@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownToLine, RotateCcw } from "lucide-react";
+import { ArrowDownToLine, Download, RotateCcw } from "lucide-react";
 import {
   canOpenUpdateDetails,
   downloadPercent,
@@ -71,20 +71,29 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
         aria-controls={open ? panelId : undefined}
         title={label}
       >
-        <span
-          className="update-indicator-dot"
-          aria-hidden="true"
-          data-state={state.status === "downloaded" ? "ready" : "pending"}
-        />
-        <span className="update-indicator-label">
-          {state.status === "downloading" && percent !== null ? (
-            <>
-              Downloading <span className="update-indicator-percent">{percent}%</span>
-            </>
-          ) : (
-            label
-          )}
-        </span>
+        {state.status === "downloaded" || state.status === "installing" ? (
+          <RotateCcw size={16} aria-hidden="true" />
+        ) : (
+          <Download size={16} aria-hidden="true" />
+        )}
+        {state.status === "downloading" && (
+          <svg
+            className={`update-indicator-progress${percent === null ? " spinning" : ""}`}
+            viewBox="0 0 28 28"
+            aria-hidden="true"
+          >
+            <circle
+              cx="14"
+              cy="14"
+              r="12"
+              pathLength="100"
+              strokeDashoffset={100 - (percent ?? 25)}
+            />
+          </svg>
+        )}
+        {state.status === "downloaded" && (
+          <span className="update-indicator-dot" aria-hidden="true" data-state="ready" />
+        )}
       </button>
 
       {/* Progress semantics live on a dedicated node so the button keeps a

@@ -968,30 +968,34 @@ code,
 }
 
 .update-indicator-button {
-  display: inline-flex;
-  min-height: 26px;
-  align-items: center;
-  gap: 7px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  padding: 0 9px;
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  padding: 0;
   color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
-.update-indicator-label {
-  display: inline-block;
-  width: 17ch;
-  text-align: left;
+.update-indicator-progress {
+  position: absolute;
+  inset: -1px;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  transform: rotate(-90deg);
 }
 
-.update-indicator-percent {
-  display: inline-block;
-  width: 4ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.update-indicator-progress circle {
+  fill: none;
+  stroke: var(--text-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
 }
 
 .update-indicator-button:hover,
@@ -1000,9 +1004,11 @@ code,
   color: var(--text-strong);
 }
 
-/* Quiet but noticeable, and never the only signal: the label beside it says
-   the same thing in words. */
+/* The restart icon, tooltip, and accessible name also identify the ready state. */
 .update-indicator-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
   width: 6px;
   height: 6px;
   flex: none;
@@ -1010,15 +1016,9 @@ code,
   background: var(--text-faint);
 }
 
-.update-indicator-button:hover .update-indicator-dot,
-.update-indicator-button.active .update-indicator-dot {
-  background: var(--text-muted);
-}
-
 .update-indicator-dot[data-state="ready"] {
   background: var(--success);
-  /* Three soft halos announce the download, then the dot rests; the label
-     beside it stays the persistent signal. */
+  /* Three soft halos announce the download, then the dot rests. */
   animation: ready-ping 2.2s var(--ease) 0.3s 3;
 }
 
