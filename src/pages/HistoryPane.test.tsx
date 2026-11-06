@@ -592,4 +592,43 @@ describe("HistoryPane", () => {
       screen.getByRole("button", { name: "Copied" }).closest("article")?.textContent,
     ).toContain("git status");
   });
+
+  it.each([false, true])("dismisses More actions on Tab, backwards: %s", async (backwards) => {
+    api.historyIntegrationStatus.mockResolvedValue(true);
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("docker ps");
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.keyboard(backwards ? "{Shift>}{Tab}{/Shift}" : "{Tab}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole(backwards ? "button" : "textbox", {
+        name: backwards ? "More actions" : "Search commands",
+      }),
+    );
+  });
+
+  it("identifies empty local history when the remote status is unavailable", async () => {
+    api.history.mockResolvedValue([]);
+    render(<HistoryPane {...props()} />);
+    expect(await screen.findByText("No saved commands")).toBeTruthy();
+    expect(screen.getByText(/could not check the remote Bash integration/)).toBeTruthy();
+    expect(screen.queryByText(/Reconnect this connection or open a new terminal, then/)).toBeNull();
+  });
+
+  it("describes resuming recording on the Resume button", async () => {
+    render(<HistoryPane {...props()} paused />);
+    const resume = await screen.findByRole("button", { name: "Resume" });
+    expect(resume.title).toBe("Resume recording for this Workspace");
+  });
+
+  it("avoids capture guidance based on a cached integration status after a failed refresh", async () => {
+    api.history.mockResolvedValue([]);
+    api.historyIntegrationStatus.mockResolvedValueOnce(true);
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("No commands recorded yet");
+    api.historyIntegrationStatus.mockRejectedValueOnce(new Error("Host is offline"));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await screen.findByText("No saved commands");
+    expect(screen.queryByText("No commands recorded yet")).toBeNull();
+  });
 });

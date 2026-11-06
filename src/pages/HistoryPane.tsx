@@ -206,6 +206,7 @@ export function HistoryPane({
   const copyRequestRef = useRef(0);
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const removalTimersRef = useRef(new Map<string, number>());
 
   const mutationGeneration = useRef(0);
@@ -510,7 +511,7 @@ export function HistoryPane({
             type="button"
             onClick={() => onPausedChange(!paused)}
             disabled={!globalEnabled || !connection.historyEnabled}
-            title="Pause recording for this Workspace"
+            title={`${paused ? "Resume" : "Pause"} recording for this Workspace`}
           >
             {paused ? <Play size={14} /> : <Pause size={14} />}
             {paused ? "Resume" : "Pause"}
@@ -547,6 +548,13 @@ export function HistoryPane({
                 role="menu"
                 aria-label="History actions"
                 onKeyDown={(event) => {
+                  if (event.key === "Tab") {
+                    event.preventDefault();
+                    setMenuOpen(false);
+                    if (event.shiftKey) moreMenuTriggerRef.current?.focus();
+                    else searchInputRef.current?.focus();
+                    return;
+                  }
                   if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
                   event.preventDefault();
                   const buttons = [
@@ -612,7 +620,7 @@ export function HistoryPane({
       </header>
       {integrationError && (
         <p className="inline-warning">
-          Saved commands are available, but Control Room could not check the remote Bash
+          Saved history is stored locally, but Control Room could not check the remote Bash
           integration: {integrationError}
         </p>
       )}
@@ -647,6 +655,7 @@ export function HistoryPane({
         <label className="search-field">
           <Search size={15} />
           <input
+            ref={searchInputRef}
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -679,17 +688,27 @@ export function HistoryPane({
             </p>
           </EmptyState>
         )}
-        {!search && integrationInstalled === true && !error && hasLoaded && !grouped.length && (
-          <EmptyState title="No commands recorded yet">
-            {!globalEnabled
-              ? "Enable Enhanced History globally in Settings to record new commands."
-              : !connection.historyEnabled
-                ? "Enable on this connection from More actions to record new commands."
-                : paused
-                  ? "Resume recording in this workspace to record new commands."
-                  : "Reconnect this connection or open a new terminal, then run a command. Sessions opened before you enabled capture are not integrated."}
+        {!search && integrationError && !error && hasLoaded && !grouped.length && (
+          <EmptyState title="No saved commands">
+            No commands are saved locally for {connection.displayName}.
           </EmptyState>
         )}
+        {!search &&
+          integrationInstalled === true &&
+          !integrationError &&
+          !error &&
+          hasLoaded &&
+          !grouped.length && (
+            <EmptyState title="No commands recorded yet">
+              {!globalEnabled
+                ? "Enable Enhanced History globally in Settings to record new commands."
+                : !connection.historyEnabled
+                  ? "Enable on this connection from More actions to record new commands."
+                  : paused
+                    ? "Resume recording in this workspace to record new commands."
+                    : "Reconnect this connection or open a new terminal, then run a command. Sessions opened before you enabled capture are not integrated."}
+            </EmptyState>
+          )}
         {grouped.map(([date, items]) => (
           <section className="history-group" key={date}>
             <h3>{date}</h3>
