@@ -9,8 +9,12 @@ describe("Shell-reported terminal titles", () => {
     const sessions = (await runtime()).sessionIds;
     const tab = $(".session-tab-wrap.active .session-tab-main");
     await $(".terminal-workspace-pane.active .xterm-screen").click();
+    // Emit OSC metadata directly: Windows Server ConPTY does not consistently
+    // forward cmd.exe's SetConsoleTitle updates.
+    const report =
+      "process.stdout.write(String.fromCharCode(27)+']0;python --token private-title-argument'+String.fromCharCode(7));";
     await browser.keys(
-      `title python --token private-title-argument & node -e "process.stdin.once('data',function(){process.exit(0)})" & echo TITLE_FINISHED`,
+      `node -e "${report}process.stdin.once('data',function(){process.exit(0)})" & echo TITLE_FINISHED`,
     );
     await browser.keys("Enter");
     await expect(tab).toHaveText("python · Command Prompt");
