@@ -71,7 +71,7 @@ async function motion(page, definition, directory) {
       return animation;
     };
   });
-  const select = page.getByLabel(definition.select, { exact: true });
+  const select = page.getByRole("combobox", { name: definition.select, exact: true });
   if (await select.isVisible()) await select.selectOption(definition.option);
   else await page.getByRole("button", { name: definition.button, exact: true }).click();
   await page.waitForFunction(() => window.__reviewAnimations.length > 0);
@@ -111,9 +111,9 @@ try {
   process.exitCode = 2;
 }
 if (options?.help) {
-  console.log(`Usage: npm run ui:capture -- --scenario NAME [--state NAME] [--viewport all|normal|narrow]
-       npm run ui:motion -- --scenario settings [--viewport all|normal|narrow]
-Both viewports by default. PNGs and manifest.json: test-results/ui-review/SCENARIO/STATE/VIEWPORT/TYPE/
+  console.log(`Usage: npm run ui:capture -- --scenario NAME [--state NAME] [--viewport all|${Object.keys(registry.viewports).join("|")}]
+       npm run ui:motion -- --scenario settings [--viewport all|${Object.keys(registry.viewports).join("|")}]
+All viewports by default. PNGs and manifest.json: test-results/ui-review/SCENARIO/STATE/VIEWPORT/TYPE/
 Exit codes: 0 captured, 1 capture failed, 2 invalid arguments. One session at a time.
 Motion samples real transitions with normal motion; screenshots default to reduced motion.
 ${JSON.stringify(registry, null, 2)}`);
@@ -134,6 +134,16 @@ ${JSON.stringify(registry, null, 2)}`);
       configFile: false,
       envDir: false,
       plugins: [react()],
+      resolve: {
+        alias: Object.fromEntries(
+          [
+            "@tauri-apps/api/core",
+            "@tauri-apps/api/event",
+            "@tauri-apps/api/window",
+            "@tauri-apps/plugin-dialog",
+          ].map((name) => [name, path.join(root, "src/test/ui-review/native.ts")]),
+        ),
+      },
       logLevel: "error",
       server: { host: "127.0.0.1", port: 0, open: false, hmr: false },
     });
@@ -196,6 +206,13 @@ ${JSON.stringify(registry, null, 2)}`);
           { waitUntil: "networkidle", timeout: 30_000 },
         );
         await page.locator(definition.ready).waitFor();
+        for (const action of definition.prepare?.[options.state] ?? []) {
+          let locator = action.selector
+            ? page.locator(action.selector)
+            : page.getByRole(action.role, { name: action.name, exact: true });
+          if (action.last) locator = locator.last();
+          await locator.click();
+        }
         manifest.observedReducedMotion = await page.evaluate(() =>
           window.matchMedia("(prefers-reduced-motion: reduce)").matches
             ? "reduce"
@@ -206,6 +223,53 @@ ${JSON.stringify(registry, null, 2)}`);
         if (definition.settled?.[options.state])
           await page.locator(definition.settled[options.state]).waitFor();
         await page.evaluate(() => document.fonts.ready);
+        await page.mouse.move(0, 0);
+        manifest.layout = await page.evaluate(() => {
+          const box = (selector) => {
+            const element = document.querySelector(selector);
+            return element && element.getBoundingClientRect().toJSON();
+          };
+          return {
+            shell: box(".app-shell"),
+            compactNavigation: document.querySelector(".app-shell").hasAttribute("data-compact"),
+            header: box(".app-bar"),
+            sidebar: box(".sidebar"),
+            tabs: box(".session-tabs"),
+            content: box(".connection-section"),
+            settings: box(".settings-page"),
+            documentWidth: document.documentElement.scrollWidth,
+          };
+        });
+        const {
+          shell,
+          compactNavigation,
+          header,
+          sidebar,
+          tabs,
+          content,
+          settings: settingsBounds,
+        } = manifest.layout;
+        if (!shell || !header || header.height <= 0 || Math.abs(shell.width - viewport.width) > 1)
+          throw new Error(
+            "Capture must render the App shell at the requested viewport without scaling",
+          );
+        if (
+          options.scenario === "systemd" &&
+          ((!compactNavigation && (!sidebar || sidebar.width <= 0)) ||
+            !tabs ||
+            !content ||
+            (!compactNavigation && content.left < sidebar.right - 1) ||
+            content.top < Math.max(header.bottom, tabs.bottom) - 1 ||
+            (!compactNavigation && content.width >= viewport.width - 1))
+        )
+          throw new Error(
+            "Systemd capture must respect the real rail, titlebar, and workspace tabs",
+          );
+        if (
+          options.scenario === "settings" &&
+          (!settingsBounds || settingsBounds.top < header.bottom - 1)
+        )
+          throw new Error("Settings capture must respect the real titlebar");
         if (options.type === "motion") {
           manifest.motion = await motion(page, definition.motion, directory);
           manifest.results = manifest.motion.frames.map((frame) => frame.path);

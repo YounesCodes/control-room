@@ -58,12 +58,18 @@ Chromium session, then close both. Run commands serially; a lock prevents overla
 captures. A session has a two-minute budget. Exit codes are 0 for success, 1 for a
 capture failure, and 2 for invalid arguments. Use `--help` for available selections.
 
-Both normal 1440×900 and minimum-supported 960×640 viewports run by default.
-Use `--viewport normal` or `--viewport narrow` for a single size. Settings starts
-on General & Monitoring. Systemd supports `populated`, `empty`, `loading`, `error`,
+Normal 1440×900, narrow 960×640, and compact 520×480 viewports run by default.
+Use `--viewport normal`, `--viewport narrow`, or `--viewport compact` for one size.
+Compact covers the smaller window target from PR #188, even before that change
+lands. Captures show the current branch's layout without scaling or hiding its
+clipping. Settings starts on General & Monitoring. Systemd supports
+`populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector. Data is
 synthetic and network requests outside the fixture server are blocked. No local
-environment files are loaded.
+environment files are loaded. Both scenarios render the real `App`, including
+its titlebar, rail, workspace tabs, and content constraints. Settings uses the
+app's own full-window Settings layout. Manifests record measured shell and
+pane bounds; captures fail if the fixture bypasses the expected shell geometry.
 
 The CLI prints a JSON line identifying each manifest under the ignored directory
 `test-results/ui-review/<scenario>/<state>/<viewport>/<capture|motion>/`.
@@ -95,9 +101,12 @@ manifests as `ui-review` for seven days when present. Download an existing run w
 Capture failures fail the step; absent artifacts do not fail uploads.
 
 To add a scenario, register its states and ready selector in
-`src/test/ui-review/scenarios.json` and mount real components in
-`src/test/ui-review/fixtures.tsx`, reusing `src/test/` fixture data. Keep ready
-selectors tied to completed rendering, stub any native reads with synthetic data,
+`src/test/ui-review/scenarios.json`, including focused preparation actions and
+state-specific settled selectors. Configure synthetic native responses in
+`src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
+server aliases Tauri imports to that browser-only module; the product build does
+not. Prefer the real App layout over duplicated shell markup. Keep ready
+selectors tied to completed rendering, stub any new native reads with synthetic data,
 and register a motion trigger and animated target only when that transition can
 run headlessly. The harness lives outside the product entry point; it is not
 included in the packaged app. Existing reduced-motion Vitest browser tests stay

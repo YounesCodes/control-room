@@ -1,12 +1,15 @@
 {
   "viewports": {
     "normal": { "width": 1440, "height": 900 },
-    "narrow": { "width": 960, "height": 640 }
+    "narrow": { "width": 960, "height": 640 },
+    "compact": { "width": 520, "height": 480 }
   },
   "scenarios": {
     "settings": {
       "states": ["populated"],
-      "ready": ".settings-page",
+      "ready": ".app-shell",
+      "prepare": { "populated": [{ "role": "button", "name": "Open Settings" }] },
+      "settled": { "populated": ".settings-page" },
       "motion": {
         "description": "Settings category reveal, General to Terminal",
         "target": ".settings-form",
@@ -17,11 +20,22 @@
     },
     "systemd": {
       "states": ["populated", "empty", "loading", "error", "stale", "overflow"],
-      "ready": "[data-ui-review-ready]",
+      "ready": ".app-shell",
+      "prepare": {
+        "populated": [{ "selector": ".systemd-inventory .dense-row", "last": true }],
+        "stale": [
+          { "selector": ".systemd-inventory .dense-row", "last": true },
+          { "role": "button", "name": "Refresh systemd units" }
+        ],
+        "overflow": [{ "selector": ".systemd-inventory .dense-row", "last": true }]
+      },
       "settled": {
         "populated": ".systemd-memory-value > [aria-hidden]",
-        "stale": ".systemd-memory-value > [aria-hidden]",
-        "overflow": ".systemd-memory-value > [aria-hidden]"
+        "stale": ".systemd-page .inline-warning",
+        "overflow": ".systemd-memory-value > [aria-hidden]",
+        "loading": ".connection-section .panel-state[aria-live]",
+        "empty": ".systemd-inventory .panel-state",
+        "error": ".connection-section .panel-state-error"
       }
     }
   }

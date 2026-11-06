@@ -22,7 +22,7 @@ export function parseOptions(args) {
   if (!scenario.states.includes(options.state))
     throw new Error(`Unknown state for ${options.scenario}`);
   if (options.viewport !== "all" && !Object.hasOwn(registry.viewports, options.viewport))
-    throw new Error("Choose --viewport all, normal, or narrow");
+    throw new Error(`Choose --viewport all or ${Object.keys(registry.viewports).join(", ")}`);
   if (options.type === "motion" && !scenario.motion)
     throw new Error(`No motion transition registered for ${options.scenario}`);
   return options;

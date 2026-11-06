@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseOptions, registry } from "./ui-review-options.mjs";
 
 describe("UI capture selection", () => {
-  it("captures both supported widths unless one is requested", () => {
+  it("captures all supported sizes unless one is requested", () => {
     expect(parseOptions(["capture", "--scenario", "settings"])).toEqual({
       type: "capture",
       scenario: "settings",
@@ -21,6 +21,14 @@ describe("UI capture selection", () => {
       ]),
     ).toMatchObject({ state: "error", viewport: "narrow" });
     expect(registry.viewports.narrow).toEqual({ width: 960, height: 640 });
+    expect(registry.viewports.normal).toEqual({ width: 1440, height: 900 });
+    expect(registry.viewports.compact).toEqual({ width: 520, height: 480 });
+    expect(
+      parseOptions(["capture", "--scenario", "systemd", "--viewport", "compact"]).viewport,
+    ).toBe("compact");
+    expect(
+      parseOptions(["motion", "--scenario", "settings", "--viewport", "compact"]).viewport,
+    ).toBe("compact");
   });
 
   it.each([
