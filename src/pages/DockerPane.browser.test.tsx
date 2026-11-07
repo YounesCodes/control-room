@@ -338,6 +338,11 @@ it("frames a container opened from Ports and keeps details and logs usable at mi
     within(inspector).getByRole("button", { name: "View logs" }).getBoundingClientRect().top,
   ).toBe(footer.top);
   expect(body.scrollWidth).toBeLessThanOrEqual(body.clientWidth);
+  await waitFor(() =>
+    expect(inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running")).toBe(
+      false,
+    ),
+  );
   expect((await axe.run(document.querySelector(".docker-page")!)).violations).toEqual([]);
   await page.getByRole("button", { name: "View logs" }).click();
   expect(onViewLogs).toHaveBeenCalledWith({ type: "docker", id: containers[0].id });

@@ -37,13 +37,7 @@ export function useTerminalLayoutMotion(
     );
     const before = previous.current;
     previous.current = { topology, viewportKey, boxes };
-    if (
-      !before ||
-      before.topology === topology ||
-      before.viewportKey !== viewportKey ||
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
+    if (!before || before.topology === topology || before.viewportKey !== viewportKey) return;
     // Switching groups or individual tabs is selection, not a layout edit.
     if (![...boxes.keys()].some((id) => before.boxes.has(id))) return;
     for (const node of nodes) {

@@ -2977,6 +2977,8 @@ code,
 .terminal-pane-layout .terminal-layout-surface {
   position: relative;
   inset: auto;
+  /* Keep rounded pane edges and animated headings out of the scroll size. */
+  overflow: clip;
 }
 
 .terminal-pane-layout .terminal-workspace-pane {
@@ -2987,11 +2989,7 @@ code,
   overflow: hidden;
 }
 
-.terminal-pane-layout .terminal-workspace-pane.active {
-  z-index: 1;
-}
-
-/* Paint the frame above terminal backgrounds, inside the pane's rectangle. */
+/* Paint the frame inside the pane's rectangle. */
 .terminal-pane-layout .terminal-workspace-pane::after {
   content: "";
   position: absolute;
@@ -3003,6 +3001,7 @@ code,
 }
 
 .terminal-pane-layout .terminal-workspace-pane.active::after {
+  z-index: 6;
   border: 1px solid var(--accent);
 }
 
@@ -4397,12 +4396,6 @@ dd {
 .systemd-scope-switch [aria-pressed="true"] {
   background: transparent;
 }
-@media (prefers-reduced-motion: reduce) {
-  .systemd-mode-switch[data-animated]::before,
-  .systemd-scope-switch::before {
-    transition: none;
-  }
-}
 .systemd-toolbar-actions {
   margin-left: auto;
   display: flex;
@@ -5236,30 +5229,6 @@ dd {
     visibility: hidden;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .systemd-graph-exit-scene {
-    display: none;
-  }
-  .systemd-connection,
-  .systemd-connection.edge-reverse {
-    animation: none;
-  }
-  .systemd-presence > * {
-    animation: none !important;
-  }
-  .systemd-graph-node,
-  .systemd-unit-reveal,
-  .systemd-inspector.arch-detail {
-    animation: none;
-  }
-  .systemd-inventory {
-    transition: none;
-  }
-  .systemd-selection-indicator[data-glide] {
-    transition: none;
-  }
-}
-
 .unit-scope-note {
   display: block;
   margin-top: 3px;
@@ -7364,19 +7333,6 @@ kbd {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-delay: 0s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    transition-delay: 0s !important;
-  }
-}
-
 /* Shared inspection canvas */
 .ports-page {
   position: absolute;
@@ -8022,11 +7978,6 @@ details[open] > .inspector-disclosure-body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  details[open] > .inspector-disclosure-body {
-    animation: none;
-  }
-}
 .port-owner-actions {
   display: flex;
   flex-wrap: wrap;
@@ -8484,17 +8435,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .log-controls > label {
     min-width: 0;
     max-width: 100%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .arch-focusing,
-  .graph-toolbar {
-    transition: none;
-  }
-
-  .arch-detail {
-    animation: none;
   }
 }
 

@@ -311,7 +311,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }
     }
   });
-  it("animates live pane bounds without scaling text and applies reduced motion immediately", async () => {
+  it("animates live pane bounds without scaling text", async () => {
     await mount();
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     await page.getByRole("button", { name: "Split terminal", exact: true }).click();
@@ -320,56 +320,76 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .click();
     const panes = [...element.querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")];
     await expect.poll(() => panes.length).toBe(2);
-    expect(panes.flatMap((pane) => pane.getAnimations())).toHaveLength(0);
+    await expect.poll(() => panes.flatMap((pane) => pane.getAnimations()).length).toBe(0);
     const xterms = panes.map((pane) => pane.querySelector(".xterm"));
-    const nativeMatchMedia = window.matchMedia.bind(window);
-    const media = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
-      const result = nativeMatchMedia(query);
-      if (query === "(prefers-reduced-motion: reduce)")
-        Object.defineProperty(result, "matches", { value: false });
-      return result;
+    await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
+    (
+      page.getByRole("button", { name: "Stacked", exact: true }).element() as HTMLButtonElement
+    ).click();
+    await expect
+      .poll(() => panes.flatMap((pane) => pane.getAnimations()).length)
+      .toBeGreaterThan(0);
+    const animations = panes.flatMap((pane) => pane.getAnimations());
+    animations.forEach((animation) => {
+      animation.pause();
+      animation.currentTime = 100;
     });
-    try {
-      await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
-      (
-        page.getByRole("button", { name: "Stacked", exact: true }).element() as HTMLButtonElement
-      ).click();
-      await expect
-        .poll(() => panes.flatMap((pane) => pane.getAnimations()).length)
-        .toBeGreaterThan(0);
-      const animations = panes.flatMap((pane) => pane.getAnimations());
-      animations.forEach((animation) => {
-        animation.pause();
-        animation.currentTime = 100;
-      });
-      expect(panes[0].getBoundingClientRect().width).toBeGreaterThan(590);
-      expect(panes[0].getBoundingClientRect().width).toBeLessThan(1180);
-      expect(getComputedStyle(panes[0]).transform).toBe("none");
-      expect(panes[0].querySelector<HTMLElement>(".terminal-pane")!.offsetWidth).toBe(
-        Number.parseFloat(panes[0].style.width),
-      );
-      expect(panes.map((pane) => pane.querySelector(".xterm"))).toEqual(xterms);
-      animations.forEach((animation) => animation.finish());
-      await page.screenshot({ path: "../test-results/terminal-stacked.png" });
-      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
-      await page
-        .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
-        .click();
-      await expect
-        .poll(
-          () =>
-            native.invoke.mock.calls.filter(([command]) => command === "start_local_session")
-              .length,
-        )
-        .toBe(2);
-      const started = native.invoke.mock.calls
-        .filter(([command]) => command === "start_local_session")
-        .at(-1)![1];
-      expect(started.cols).toBeGreaterThan(20);
-      expect(started.rows).toBeGreaterThan(5);
-    } finally {
-      media.mockRestore();
+    expect(panes[0].getBoundingClientRect().width).toBeGreaterThan(590);
+    expect(panes[0].getBoundingClientRect().width).toBeLessThan(1180);
+    expect(getComputedStyle(panes[0]).transform).toBe("none");
+    expect(panes[0].querySelector<HTMLElement>(".terminal-pane")!.offsetWidth).toBe(
+      Number.parseFloat(panes[0].style.width),
+    );
+    expect(panes.map((pane) => pane.querySelector(".xterm"))).toEqual(xterms);
+    animations.forEach((animation) => animation.finish());
+    await page.screenshot({ path: "../test-results/terminal-stacked.png" });
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.filter(([command]) => command === "start_local_session").length,
+      )
+      .toBe(2);
+    const started = native.invoke.mock.calls
+      .filter(([command]) => command === "start_local_session")
+      .at(-1)![1];
+    expect(started.cols).toBeGreaterThan(20);
+    expect(started.rows).toBeGreaterThan(5);
+  });
+  it.each([1180, 520])("settles a terminal split at %spx and 150%% scaling", async (width) => {
+    await mount();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await page.viewport(width * 1.5, (width === 1180 ? 700 : 480) * 1.5);
+    element.querySelector<HTMLElement>(".app-shell")!.style.zoom = "1.5";
+    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
+      .click();
+    await expect
+      .poll(() => element.querySelectorAll(".terminal-workspace-pane-visible .xterm").length)
+      .toBe(2);
+    // Sample consecutive frames after the pane transition and terminal refit have finished.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const viewport = element.querySelector<HTMLElement>(".terminal-pane-layout")!;
+    const panes = Array.from(viewport.querySelectorAll(".terminal-workspace-pane-visible"));
+    const terminalResizes = () =>
+      native.invoke.mock.calls.filter(([command]) => command === "resize_session").length;
+    const resizeCount = terminalResizes();
+    const frames = new Set<string>();
+    for (let frame = 0; frame < 16; frame++) {
+      await new Promise(requestAnimationFrame);
+      frames.add(JSON.stringify(panes.map((pane) => pane.getBoundingClientRect().toJSON())));
+      expect(viewport.clientWidth).toBe(viewport.scrollWidth);
+      expect(viewport.clientHeight).toBe(viewport.scrollHeight);
     }
+    expect([...frames]).toHaveLength(1);
+    expect(terminalResizes()).toBe(resizeCount);
+    await expect
+      .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
+      .toHaveAttribute("aria-orientation", width === 1180 ? "vertical" : "horizontal");
   });
   it("previews pointer swaps and docks, cancels Escape/outside drops and rejects cramped targets", async () => {
     await mount();
@@ -401,18 +421,17 @@ describe("complete app journeys with typed IPC fixtures", () => {
           clientY: y,
         }),
       );
-    const begin = (zone: "center" | "right") => {
+    const begin = (zone: "center" | "right" | "bottom") => {
       const from = grip.getBoundingClientRect();
       const to = target();
       const pane = element
         .querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")[1]
         .getBoundingClientRect();
       event("pointerdown", from.left + 30, from.top + 14);
-      event(
-        "pointermove",
-        zone === "center" ? to.left + to.width / 2 : to.right - 10,
-        pane.top + pane.height / 2,
-      );
+      const x = zone === "right" ? to.right - 10 : to.left + to.width / 2;
+      const y = zone === "bottom" ? pane.bottom - 10 : pane.top + pane.height / 2;
+      event("pointermove", x, y);
+      return { x, y };
     };
     begin("center");
     await expect
@@ -465,6 +484,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/terminal-drop-invalid-compact.png" });
     event("pointerup", destination.left + 10, destination.top + 80);
     expect(persisted.terminalGroups![0].layout).toEqual(swapped);
+    await page.viewport(1180, 700);
+    await expect
+      .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
+      .toHaveAttribute("aria-orientation", "vertical");
+    const dock = begin("bottom");
+    await expect
+      .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
+      .toContain("Dock bottom");
+    event("pointerup", dock.x, dock.y);
+    await expect
+      .poll(() => persisted.terminalGroups![0].layout)
+      .toMatchObject({ kind: "split", direction: "horizontal" });
     expect(
       native.invoke.mock.calls.filter(([command]) => command === "close_session"),
     ).toHaveLength(0);
@@ -1315,7 +1346,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} svg`),
       ).not.toBeNull();
       const logo = choice.element().querySelector(".local-shell-icon svg")!;
-      expect(getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      await userEvent.unhover(choice.element());
+      await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
       await userEvent.hover(choice.element());
       await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
       await choice.click();
@@ -1727,6 +1759,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         const rect = original.getBoundingClientRect();
         return [rect.x, rect.y, rect.width, rect.height];
       };
+      await expect.poll(() => position()[0]).toBe(width - 179);
       const normalBounds = position();
       expect(normalBounds[0]).toBe(width - 179);
       expect(normalBounds[1]).toBe(1);
@@ -1748,11 +1781,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(closeBounds.height).toBe(normalBounds[3]);
       expect(closeBounds.right).toBe(width - 1);
       const actions = element.querySelector(".app-window-actions")!;
-      const strip = element.querySelector(".session-tabs")!;
+      const strip = element.querySelector<HTMLElement>(".session-tabs")!;
       await expect
         .poll(() => element.querySelector(".session-tab-actions")!.getBoundingClientRect().right)
         .toBeLessThanOrEqual(actions.getBoundingClientRect().left);
-      expect(strip.getBoundingClientRect().height).toBe(42);
+      expect(strip.offsetHeight).toBe(42);
       await page.screenshot({ path: `../test-results/focus-toggle-focus-${width}.png` });
       await page.getByRole("button", { name: "Split terminal", exact: true }).click();
       await page
@@ -1820,13 +1853,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(1280, 800);
     await mount();
     await navigate("Terminal");
-    const originalMatch = window.matchMedia.bind(window);
-    const match = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
-      const result = originalMatch(query);
-      if (query.includes("prefers-reduced-motion"))
-        Object.defineProperty(result, "matches", { value: false });
-      return result;
-    });
     const capture = vi.spyOn(document, "startViewTransition");
     const animate = vi.spyOn(HTMLElement.prototype, "animate");
     const focus = page
@@ -1863,7 +1889,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     } finally {
       capture.mockRestore();
       animate.mockRestore();
-      match.mockRestore();
     }
   });
 
@@ -1875,6 +1900,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const controls = element.querySelector(".window-controls")!;
     const focus = element.querySelector(".app-focus-toggle")!;
     const bar = element.querySelector(".app-bar")!;
+    await expect.poll(() => actions.getBoundingClientRect().width).toBe(178);
     const initial = controls.getBoundingClientRect().left;
     const style = document.createElement("style");
     style.id = "focus-slot-motion-test";
@@ -2985,8 +3011,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const icon = docker.element().querySelector("svg")!;
     const color = () => getComputedStyle(icon).color;
     await userEvent.hover(ports.element());
-    await vi.waitFor(() => expect(color()).not.toBe("rgb(2, 136, 209)"));
-    const resting = color();
+    const resting = "rgb(242, 242, 238)";
+    await vi.waitFor(() => expect(color()).toBe(resting));
     await userEvent.hover(docker.element());
     await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
     await userEvent.hover(ports.element());
@@ -3164,7 +3190,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     );
     expect(searchField.querySelector("button[aria-label='Clear search']")).toBeTruthy();
     expect(searchField.scrollWidth).toBeLessThanOrEqual(searchField.clientWidth + 1);
-    expect((await axe.run(element.querySelector("#ports-tools")!)).violations).toEqual([]);
+    await expect.poll(() => getComputedStyle(searchPanel).opacity).toBe("1");
+    expect((await axe.run(searchPanel)).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/ports-search-controls.png" });
     await page.getByRole("button", { name: "Clear search", exact: true }).click();
     await page.getByRole("button", { name: "Filter ports", exact: true }).click();
@@ -3186,6 +3213,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
     async function checkInspectorLayout() {
       const inspector = element.querySelector<HTMLElement>(".arch-detail")!;
+      await expect
+        .poll(() =>
+          inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
+        )
+        .toBe(false);
       const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
       const header = inspector.querySelector("header")!;
       const actions = inspector.querySelector(".detail-actions")!;

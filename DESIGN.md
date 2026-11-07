@@ -99,12 +99,12 @@ Keep the same button and screen position in both modes, including split groups
 and overflowing tabs, so toggling never moves it away from the pointer.
 Outside Terminal, collapse its titlebar slot and fade and slide the button out;
 reverse the motion when Terminal returns. Keep native window controls fixed and
-make the hidden button inert. Reduced motion applies the layout change immediately.
+make the hidden button inert.
 Entering and leaving Focus Mode coordinates the sidebar and titlebar exit/entrance,
 tab-strip movement, pane controls, and workspace bounds in one short transition.
 Keep terminal text at its original pixel size and native window controls fixed.
 Preserve the live terminal sessions and keyboard focus. Reverse promptly when the
-user toggles again. Reduced motion and unsupported webviews apply the state immediately.
+user toggles again. Unsupported webviews apply the state immediately.
 Apply focus state synchronously. Documentation, Settings, and native window
 controls appear immediately on exit, outside the animated workspace. Use a short
 live workspace slide and sidebar fade rather than captured terminal frames or
@@ -122,7 +122,8 @@ committing and reject cramped targets. Escape cancels. The pane's Arrange menu
 offers the same moves and saved split orientation by keyboard. Keep terminals
 mounted in a flat keyed list; animate layout edits briefly without scaling text.
 When even responsive rotation cannot fit the group, scroll its surface locally
-and keep each terminal usable. Window resizing never changes saved directions or ratios.
+and keep each terminal usable. Scrollbars and animated panes must not change the
+responsive split direction. Window resizing never changes saved directions or ratios.
 
 Compact windows replace the Connections rail with a titlebar navigation drawer.
 Keep host selection and all inspection views in that drawer, with keyboard focus
@@ -215,9 +216,8 @@ smoothly zooms and centers it in the graph area beside the inspector, then
 slides a closable inspector in from the right. Give the inspector equal top and
 bottom canvas gutters. Slide zoom controls to the lower-left when it opens,
 then back to the lower-right when it closes, keeping its footer clear.
-Reduced motion moves the controls immediately. Direct pan and zoom interrupt
-the camera transition. Reduced motion applies the framing immediately. Keep the
-inspector heading and actions fixed,
+Direct pan and zoom interrupt the camera transition. Keep the inspector heading
+and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin
 scrollbar that fades when the body is not hovered. Keep every binding,
 firewall, ownership, and endpoint field available there, with the
@@ -252,7 +252,7 @@ Ports includes publications by default without a separate Docker-only filter.
 The container inspector repeats the selected image logo beside its title, using
 the same generic fallback for unknown images. Docker and Ports inspector sections
 share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
-behavior and show section content immediately when reduced motion is requested.
+behavior.
 
 Systemd starts with a compact unit inventory: name, description, and one meaningful
 state. Start without a selected unit; loading or refreshing never picks one.
@@ -280,7 +280,7 @@ open inspector immediately. Keep keyboard focus on the row and scroll it into
 view, including in virtual inventories. The inspector itself also accepts Up/Down;
 leave its fields, disclosures, and scrollable evidence to their native keys.
 Keep the panel in place while its new identity and content briefly fade and slide
-into view. Skip these transitions under reduced motion.
+into view.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.
@@ -288,10 +288,10 @@ Default the inventory to Focused: services, timers, sockets, and paths, excludin
 routine systemd, D-Bus, login-session, and module-loader units. Always include
 failed units of every type. Keep unknown application services visible, including
 stopped and disabled services. Offer a visible Focused / All units switch with a
-sliding selection fill and reduced-motion fallback. Reveal the updated inventory
+sliding selection fill. Reveal the updated inventory
 with a short fade and vertical slide in either direction, preserving its live rows,
-scrolling, and focus. Retarget an interrupted reveal from its rendered position;
-skip the reveal under reduced motion. Show visible and total counts
+scrolling, and focus. Retarget an interrupted reveal from its rendered position.
+Show visible and total counts
 when they differ. Search and explicit type filters reach the whole inventory;
 dependency graphs always retain all reported unit types. Keep the scope with the
 workspace and let a filtered selection reveal itself in All units.
@@ -334,8 +334,8 @@ Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
 expanded descendants while keeping shared branches. Restore a collapsed branch with Expand.
 Reveal connectors in their arrow direction while nodes move 8px into place over 240ms.
 Keep removed nodes and edges as inert,
-visual-only snapshots for a 240ms fade and slight movement, cancel ghosts when nodes reappear, and skip
-exit retention under reduced motion. Preserve layout slots during collapse as well.
+visual-only snapshots for a 240ms fade and slight movement. Cancel ghosts when
+nodes reappear and preserve layout slots during collapse.
 Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during
 navigation. Changed SSH targets discard that context and use separate detail caches.
@@ -363,7 +363,7 @@ as Focused / All units. Use symmetric easing so expansion and contraction feel e
 Measure its position and width so it fits the unequal
 labels, follows window-size changes, and reverses from its current
 pose on rapid switching. Apply the same sliding fill to Dependencies, Ordering,
-and Activation. Place the initial fill immediately and skip motion when reduced motion is requested.
+and Activation. Place the initial fill immediately.
 Refresh runtime properties for the inspected service periodically without inserting
 loading text or resetting open sections. Pause reads in hidden windows and stop
 when the inspector closes. Keep the last reading with an error if refresh fails;
@@ -371,8 +371,8 @@ never replace unavailable memory with zero.
 Interpolate service memory, CPU time, task and restart counts, and uptime briefly
 between readings with tabular digits, starting
 from the displayed value if a newer reading arrives mid-transition. Show the first
-reading immediately. Reduced motion uses the latest value directly, and assistive
-technology reads the collected value rather than intermediate animation frames.
+reading immediately. Assistive technology reads the collected value rather than
+intermediate animation frames.
 Name the graph action Dependency graph. Keep the full target in its accessible
 name and tooltip, and show it beside the action and in the graph heading. Cap the
 visible name at 24 characters. Let the card fit its text. Keep scope and relationship
@@ -394,7 +394,7 @@ Reserve search space in both states so opening it does not resize or move the vi
 switch or refresh action. Scope/category controls may move with the field's expansion.
 Truncate names based on available pane
 width, independently of search visibility. Animate only the search field within
-that space; skip its motion when reduced motion is requested.
+that space.
 Opening Dependency graph focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
@@ -410,8 +410,7 @@ effective properties. Render code with selectable, wrapping monospace text and
 restrained syntax colors. Give long command and schedule fields the full inspector
 width. Preserve the original host text, including whitespace, quotes, and escapes;
 command metadata may gain visual line breaks without rewriting copied content.
-Reuse inspector disclosure motion. Reduced motion removes camera, node, and
-disclosure animation. Show Ports navigation only for services or sockets with a
+Reuse inspector disclosure motion. Show Ports navigation only for services or sockets with a
 fresh, known listener ownership match to that exact unit. Opening Advanced may read
 listeners without elevation, sharing the Ports view's workspace cache. Hide the
 shortcut while ownership is unknown or its read is unavailable. Show Boot only
@@ -480,7 +479,7 @@ window lacks the room, and keeps its edges inside the window gutters; a menu
 dismisses rather than floating away from its anchor after a resize. Live states —
 connecting, new terminal output, a bell, a downloaded update — use small
 one-purpose cues that rest once their point is made. Never animate the terminal
-surface itself. Respect `prefers-reduced-motion`. Use Lucide icons
+surface itself. Use Lucide icons
 consistently, except for the shared Phosphor Bold magnifiers used by every search
 and zoom control. Keep their filled silhouettes and use matching plus/minus
 variants for zoom. Pair icon-only actions with accessible names and tooltips
@@ -556,7 +555,7 @@ the only cue.
 Exited containers use neutral gray; reserve red for failed or dead containers.
 Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
-pane and group tabs. Reduced motion keeps the open ring without rotation.
+pane and group tabs.
 Command activity uses shell markers where available, otherwise the return of
 the rendered prompt, including commands recalled from shell history. Blank or
 whitespace-only submissions and command editing stay idle. A pause in output
@@ -638,9 +637,9 @@ Give disk read and write rates separate fixed slots with right-aligned values so
 digit and unit changes cannot push the direction labels or neighboring readings.
 Reserve percentage and trend slots even when a chart is unavailable. Right-align
 percentage readouts so their percent signs stay anchored as digits change.
-Animation frames never become samples. Show first readings, new targets, unavailable
-values, and reduced-motion updates immediately. A refresh cue runs only while a reading is in progress;
-stale and paused charts rest. Respect reduced motion throughout.
+Animation frames never become samples. Show first readings, new targets, and
+unavailable values immediately. A refresh cue runs only while a reading is in
+progress. Stale and paused charts rest.
 Use one compact status button to open reading details, separated from
 the numeric readings. Keep Live compact and let longer status labels use only
 the space they need. Keep the active host name in its tooltip, accessible label,
@@ -680,7 +679,6 @@ the app's updates clearly distinct from any host package information.
 - Pair color with text, shape, position, or another cue.
 - Keep controls usable at the supported minimum window size and do not rely on
   motion to communicate state.
-- Honor reduced-motion preferences.
 
 ## Maintaining this guide
 

@@ -61,21 +61,4 @@ describe("usePopoverExit", () => {
     expect(result.current.closing).toBe(false);
     expect(POPOVER_EXIT_MS).toBeGreaterThan(0);
   });
-
-  it("removes the closing frame immediately when reduced motion is requested", () => {
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({ matches: true })),
-    );
-    try {
-      const { result, rerender } = renderHook(({ open }) => usePopoverExit(open), {
-        initialProps: { open: true },
-      });
-      rerender({ open: false });
-      act(() => vi.advanceTimersByTime(0));
-      expect(result.current.present).toBe(false);
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
 });

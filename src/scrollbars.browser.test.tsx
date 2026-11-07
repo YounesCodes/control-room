@@ -30,8 +30,7 @@ const pixel = (section: HTMLElement) => {
 };
 const hidden = (section: HTMLElement) => expect.poll(() => pixel(section)[3]).toBe(0);
 
-// The suite emulates prefers-reduced-motion, which collapses every transition
-// to 0.01ms. Stretching durations back out lets a fade be caught mid-flight.
+// Stretch the transition so the test can reliably sample the fade in progress.
 const stretchTransitions = () => {
   motionOverride = document.createElement("style");
   motionOverride.textContent = "*, *::before, *::after { transition-duration: 10s !important; }";
@@ -60,7 +59,6 @@ it("reveals only the hovered scroll section without changing its layout or scrol
     return section;
   });
   const widths = sections.map((section) => section.clientWidth);
-  expect(getComputedStyle(sections[0]).transitionDuration).toBe("1e-05s");
 
   await userEvent.unhover(sections[0]);
   for (const section of sections) {
@@ -123,7 +121,6 @@ it("hides the terminal scrollbar after leaving a terminal with scrollback", asyn
   const screen = fixture.querySelector<HTMLElement>(".xterm-screen")!;
   const scrollbar = fixture.querySelector<HTMLElement>(".scrollbar.vertical")!;
   const opacity = () => getComputedStyle(scrollbar).opacity;
-  expect(getComputedStyle(scrollbar).transitionDuration).toBe("1e-05s");
   await userEvent.hover(screen);
   await expect.poll(opacity).toBe("1");
   await userEvent.unhover(screen);

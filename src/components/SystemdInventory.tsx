@@ -99,11 +99,7 @@ export function SystemdInventory({
         : `translateY(${style.getPropertyValue("--scope-offset").trim()})`,
     };
     scopeAnimation.current?.cancel();
-    if (
-      globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
-      typeof element.animate !== "function"
-    )
-      return;
+    if (typeof element.animate !== "function") return;
     scopeAnimation.current = element.animate([from, { opacity: 1, transform: "translateY(0)" }], {
       duration: parseFloat(style.getPropertyValue("--motion-slow")),
       easing: style.getPropertyValue("--ease").trim(),

@@ -410,23 +410,23 @@ function terminalLayoutMinimum(layout: TerminalLayout): TerminalLayoutViewport {
     : { width: Math.max(first.width, second.width), height: first.height + second.height };
 }
 
-/** A scrollable surface is the last fallback when even rotated splits cannot fit. */
+/** Choose directions before scrollbars take space, then size panes in the visible viewport. */
 export function getTerminalLayoutSurface(
   layout: TerminalLayout,
-  available: TerminalLayoutViewport,
+  visible: TerminalLayoutViewport,
+  available = visible,
 ) {
   const requestedMinimum = terminalLayoutMinimum(layout);
-  if (requestedMinimum.width <= available.width && requestedMinimum.height <= available.height) {
-    return { viewport: available, ...getResponsiveTerminalGeometry(layout, available, false) };
-  }
-  const responsive = getResponsiveTerminalGeometry(layout, available);
   let temporary = layout;
-  for (const divider of responsive.dividers)
-    temporary = orientTerminalLayout(temporary, divider.path, divider.direction);
-  const minimum = terminalLayoutMinimum(temporary);
+  if (requestedMinimum.width > available.width || requestedMinimum.height > available.height) {
+    const responsive = getResponsiveTerminalGeometry(layout, available);
+    for (const divider of responsive.dividers)
+      temporary = orientTerminalLayout(temporary, divider.path, divider.direction);
+  }
+  const minimum = temporary === layout ? requestedMinimum : terminalLayoutMinimum(temporary);
   const viewport = {
-    width: Math.max(available.width, minimum.width),
-    height: Math.max(available.height, minimum.height),
+    width: Math.max(visible.width, minimum.width),
+    height: Math.max(visible.height, minimum.height),
   };
   return { viewport, ...getResponsiveTerminalGeometry(temporary, viewport, false) };
 }

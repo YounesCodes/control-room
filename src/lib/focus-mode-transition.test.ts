@@ -10,27 +10,16 @@ afterEach(() => {
   delete document.documentElement.dataset.focusTransition;
 });
 
-it.each([true, false])(
-  "updates controls synchronously without capturing frames, reduced motion: %s",
-  (reduced) => {
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({ matches: reduced })),
-    );
-    const start = vi.fn();
-    Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
-    const update = vi.fn();
-    transitionFocusMode("exit", update);
-    expect(update).toHaveBeenCalledOnce();
-    expect(start).not.toHaveBeenCalled();
-  },
-);
+it("updates controls synchronously without capturing frames", () => {
+  const start = vi.fn();
+  Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
+  const update = vi.fn();
+  transitionFocusMode("exit", update);
+  expect(update).toHaveBeenCalledOnce();
+  expect(start).not.toHaveBeenCalled();
+});
 
 it("cancels superseded live motion without delaying the next state or leaving overlays", async () => {
-  vi.stubGlobal(
-    "matchMedia",
-    vi.fn(() => ({ matches: false })),
-  );
   document.body.innerHTML =
     '<div class="app-shell"><aside class="sidebar"></aside><main class="workspace-shell"></main></div>';
   const motions: { cancel: ReturnType<typeof vi.fn>; finish: () => void }[] = [];

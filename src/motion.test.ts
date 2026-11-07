@@ -18,24 +18,6 @@ function rule(selector: string): string {
 }
 
 describe("motion guardrails", () => {
-  it("kills every animation and transition under reduced motion", () => {
-    const reduced = [
-      ...stylesSource.matchAll(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/g),
-    ]
-      .map(([block]) => block)
-      .join("\n");
-    expect(reduced, "the reduced-motion block is missing").not.toBe("");
-    for (const declaration of [
-      "animation-duration: 0.01ms !important",
-      "animation-delay: 0s !important",
-      "animation-iteration-count: 1 !important",
-      "transition-duration: 0.01ms !important",
-      "transition-delay: 0s !important",
-    ]) {
-      expect(reduced).toContain(declaration);
-    }
-  });
-
   it("never animates the terminal surface", () => {
     // xterm measures and paints on its own schedule; a transition on the
     // container would smear every resize and refit.

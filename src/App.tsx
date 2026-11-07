@@ -335,9 +335,9 @@ export function App() {
   const closingWorkspaceIdsRef = useRef(new Set<string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
   const terminalLayoutSurfaceRef = useRef<HTMLDivElement>(null);
-  const [terminalLayoutViewport, setTerminalLayoutViewport] = useState({
-    width: Number.POSITIVE_INFINITY,
-    height: Number.POSITIVE_INFINITY,
+  const [terminalLayoutViewport, setTerminalLayoutViewport] = useState(() => {
+    const unmeasured = { width: Infinity, height: Infinity };
+    return { visible: unmeasured, available: unmeasured };
   });
   // Anchored geometry for the terminal popovers, measured when they open.
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<AnchoredPopover | null>(null);
@@ -505,6 +505,7 @@ export function App() {
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const hasActiveWorkspace = activeWorkspace !== null;
   const tabArrangementKey = [
     terminalFocusMode ? "focus" : "normal",
     ...workspaces.map((workspace) => workspace.id),
@@ -575,17 +576,23 @@ export function App() {
   const ungroupedWorkspaces = workspaces.filter(
     (workspace) => !groupedWorkspaceIds.has(workspace.id),
   );
+  const { visible: visibleTerminalSpace, available: availableTerminalSpace } =
+    terminalLayoutViewport;
   const terminalGeometry =
     terminalSplitMode && activeTerminalGroup
-      ? getTerminalLayoutSurface(activeTerminalGroup.layout, terminalLayoutViewport)
-      : { panes: {}, dividers: [], viewport: terminalLayoutViewport };
+      ? getTerminalLayoutSurface(
+          activeTerminalGroup.layout,
+          visibleTerminalSpace,
+          availableTerminalSpace,
+        )
+      : { panes: {}, dividers: [], viewport: visibleTerminalSpace };
   const terminalPaneRects = terminalGeometry.panes;
   useTerminalLayoutMotion(
     terminalLayoutSurfaceRef,
     JSON.stringify(activeTerminalGroup?.layout ?? activeWorkspaceId, (key, value) =>
       key === "ratio" ? undefined : value,
     ),
-    `${terminalLayoutViewport.width}:${terminalLayoutViewport.height}:${terminalFocusMode}`,
+    `${visibleTerminalSpace.width}:${visibleTerminalSpace.height}:${availableTerminalSpace.width}:${availableTerminalSpace.height}:${terminalFocusMode}`,
     JSON.stringify(activeTerminalGroup?.layout ?? activeWorkspaceId),
   );
   useEffect(() => {
@@ -656,19 +663,37 @@ export function App() {
     const element = terminalLayoutViewportRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
 
-    function rememberSize(width: number, height: number) {
+    function rememberSize(width: number, height: number, outerWidth: number, outerHeight: number) {
       setTerminalLayoutViewport((current) =>
-        current.width === width && current.height === height ? current : { width, height },
+        current.visible.width === width &&
+        current.visible.height === height &&
+        current.available.width === outerWidth &&
+        current.available.height === outerHeight
+          ? current
+          : { visible: { width, height }, available: { width: outerWidth, height: outerHeight } },
       );
     }
 
-    rememberSize(element.clientWidth, element.clientHeight);
+    rememberSize(
+      element.clientWidth,
+      element.clientHeight,
+      element.offsetWidth,
+      element.offsetHeight,
+    );
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) rememberSize(entry.contentRect.width, entry.contentRect.height);
+      if (!entry) return;
+      // A fallback scrollbar may shrink the visible box, but must not rotate the split again.
+      const outer = entry.borderBoxSize?.[0];
+      rememberSize(
+        entry.contentRect.width,
+        entry.contentRect.height,
+        outer?.inlineSize ?? element.offsetWidth,
+        outer?.blockSize ?? element.offsetHeight,
+      );
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [loading, activeWorkspace?.id]);
+  }, [loading, hasActiveWorkspace]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
@@ -722,7 +747,8 @@ export function App() {
           return;
         }
         // Do not stack the palette on top of a modal dialog (connection or sudo).
-        if (dialogConnection !== null || document.querySelector('[role="dialog"]')) return;
+        if (dialogConnection !== null || document.querySelector('[role="dialog"]:not([inert])'))
+          return;
         event.preventDefault();
         setPaletteOpen(true);
       }
@@ -2617,7 +2643,7 @@ export function App() {
                     key={activeTerminalGroup.id}
                     layout={activeTerminalGroup.layout}
                     viewport={terminalGeometry.viewport}
-                    available={terminalLayoutViewport}
+                    available={availableTerminalSpace}
                     panes={terminalPaneRects}
                     container={terminalLayoutSurfaceRef}
                     labels={Object.fromEntries(

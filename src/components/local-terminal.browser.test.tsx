@@ -444,9 +444,7 @@ describe("Local Terminal Mode in the real App", () => {
     await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("button", { name: "Scratchpad" })).toHaveFocus();
-    // Reduced motion can remove the popup before the input promise settles.
-    // Keep the original node so closing and inertness remain observable even
-    // after removal, including when CI takes an extra event-loop turn.
+    // Keep the original node so closing and inertness remain observable after removal.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(popoverElement).toHaveAttribute("data-closing");
     expect(popoverElement).toHaveAttribute("inert");

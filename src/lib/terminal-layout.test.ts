@@ -155,6 +155,26 @@ describe("terminal pane tree", () => {
     expect(c.top + c.height).toBe(viewport.height);
   });
 
+  it("keeps responsive directions stable when the fallback scrollbar consumes space", () => {
+    let layout = createTerminalLayout("a");
+    for (const [target, next] of [
+      ["a", "b"],
+      ["b", "d"],
+      ["b", "c"],
+      ["d", "e"],
+    ]) {
+      layout = splitTerminalLayout(layout, target, next, "vertical");
+    }
+    const available = { width: 560, height: 540 };
+    const initial = getTerminalLayoutSurface(layout, available);
+    const scrolled = getTerminalLayoutSurface(layout, { width: 549, height: 540 }, available);
+    expect(initial.viewport.height).toBeGreaterThan(available.height);
+    expect(scrolled.viewport).toEqual({ width: 560, height: initial.viewport.height });
+    expect(scrolled.dividers.map(({ direction }) => direction)).toEqual(
+      initial.dividers.map(({ direction }) => direction),
+    );
+  });
+
   it("keeps percentage layout available until the viewport is measurable", () => {
     const rectangle = { left: 0, top: 0, width: 100, height: 100 };
     expect(getTerminalPanePixels(rectangle, { width: Infinity, height: Infinity })).toBeNull();
