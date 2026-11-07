@@ -257,6 +257,31 @@ impl Elevation {
     }
 }
 
+/// Writes pasted clipboard image bytes onto the remote host, and returns the
+/// absolute path its shells can open. The upload rides the same bounded SSH
+/// transport every remote read uses, with the bytes on stdin rather than the
+/// command line.
+pub fn stage_image(
+    connection: &SavedConnection,
+    data: &[u8],
+    extension: &str,
+) -> Result<String, String> {
+    let (path, command) = remote_paste_plan(&uuid::Uuid::new_v4().to_string(), extension);
+    RemoteCommandExecutor::execute_with_input(connection, "stage_paste_image", &command, data)?
+        .success_text()?;
+    Ok(path)
+}
+
+/// Plans where a pasted image lands on the host and the command that writes
+/// it. Both carry the same quoted path, so what is pasted is exactly what was
+/// written.
+fn remote_paste_plan(name: &str, extension: &str) -> (String, String) {
+    let path = format!("/tmp/control-room-paste/paste-{name}.{extension}");
+    let command =
+        format!("mkdir -p /tmp/control-room-paste && cat > '{path}' && chmod 600 '{path}'");
+    (path, command)
+}
+
 /// Wraps a read in sudo according to `elevation`.
 ///
 /// `Allowed` probes sudo and falls back inside the same shell, so an account
@@ -4265,5 +4290,14 @@ esac
             assert!(captured.sections[3].message.is_some());
         }
         assert_eq!(captured.sections[4].status, baselines::STATUS_COLLECTED);
+    }
+
+    #[test]
+    fn a_remote_paste_targets_one_quoted_path_that_the_command_writes() {
+        let (path, command) = remote_paste_plan("a1b2", "png");
+        assert_eq!(path, "/tmp/control-room-paste/paste-a1b2.png");
+        assert!(command.starts_with("mkdir -p /tmp/control-room-paste"));
+        assert!(command.contains("cat > '/tmp/control-room-paste/paste-a1b2.png'"));
+        assert!(command.ends_with("chmod 600 '/tmp/control-room-paste/paste-a1b2.png'"));
     }
 }

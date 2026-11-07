@@ -297,6 +297,54 @@ pub fn close_session(
     sessions.close(&session_id)
 }
 
+/// Turns clipboard image bytes into a file the target shell can open, and
+/// resolves to its absolute path. A local shell stages the bytes on this
+/// machine; a remote Workspace writes them onto its host, so the path lands
+/// where the CLI there reads it.
+#[tauri::command(async)]
+pub fn stage_paste_image(
+    database: State<'_, Database>,
+    connection_id: Option<String>,
+    data: Vec<u8>,
+    extension: String,
+) -> Result<String, String> {
+    if data.is_empty() {
+        return Err("No image was available to paste.".into());
+    }
+    let extension = sanitize_paste_extension(&extension);
+    match connection_id {
+        None => stage_local_paste_image(&data, &extension),
+        Some(connection_id) => {
+            let connection = database.get_connection(&connection_id)?;
+            if windows_host(&database, &connection_id)? {
+                return Err("Pasting an image into a Windows host is not supported yet.".into());
+            }
+            remote::stage_image(&connection, &data, &extension)
+        }
+    }
+}
+
+fn sanitize_paste_extension(extension: &str) -> String {
+    let cleaned: String = extension
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect();
+    if cleaned.is_empty() {
+        "png".to_string()
+    } else {
+        cleaned.to_ascii_lowercase()
+    }
+}
+
+fn stage_local_paste_image(data: &[u8], extension: &str) -> Result<String, String> {
+    let directory = std::env::temp_dir().join("control-room-paste");
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| format!("Pasting an image failed: {error}"))?;
+    let path = directory.join(format!("paste-{}.{extension}", uuid::Uuid::new_v4()));
+    std::fs::write(&path, data).map_err(|error| format!("Pasting an image failed: {error}"))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 pub fn get_cached_capabilities(
     database: State<'_, Database>,
@@ -928,7 +976,10 @@ pub fn uninstall_history_integration(
 
 #[cfg(test)]
 mod tests {
-    use super::{elevation_for, export_text_file, validated_test_connection};
+    use super::{
+        elevation_for, export_text_file, sanitize_paste_extension, stage_local_paste_image,
+        validated_test_connection,
+    };
     use crate::database::Database;
     use crate::models::SavedConnectionInput;
     use crate::remote::Elevation;
@@ -1382,5 +1433,21 @@ mod tests {
             assert!(!body.contains("remote::"));
             assert!(!body.contains("RemoteOperationLimiter"));
         }
+    }
+
+    #[test]
+    fn pasting_an_image_stages_the_bytes_next_to_the_local_shell() {
+        let path = stage_local_paste_image(b"pngbytes", "png").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"pngbytes");
+        assert!(path.to_ascii_lowercase().ends_with(".png"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_paste_image_extension_is_limited_to_a_plain_suffix() {
+        assert_eq!(sanitize_paste_extension("jpeg"), "jpeg");
+        assert_eq!(sanitize_paste_extension("p:n/g\\"), "png");
+        assert_eq!(sanitize_paste_extension(""), "png");
+        assert_eq!(sanitize_paste_extension("JPG"), "jpg");
     }
 }

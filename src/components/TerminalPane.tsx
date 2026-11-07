@@ -7,8 +7,17 @@ import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
 import { ChevronDown, ChevronUp, RotateCw, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { readTerminalPaste } from "../lib/terminal-clipboard";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { notifyHistoryChanged } from "../lib/history-events";
+import {
+  applyTerminalSelection,
+  selectionGranularity,
+  selectionPointFromClient,
+  type SelectionGranularity,
+  type SelectionPoint,
+  type SelectionTerminal,
+} from "../lib/terminal-selection";
 import {
   BoundedByteQueue,
   isControlRoomShortcut,
@@ -109,6 +118,7 @@ export function TerminalPane({
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
+  const pasteClipboardRef = useRef<() => void>(() => undefined);
   const [localError, setLocalError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -143,6 +153,8 @@ export function TerminalPane({
     pendingHistoryRef.current = null;
     onSessionRef.current(null);
   };
+
+  pasteClipboardRef.current = pasteClipboard;
 
   sendInputRef.current = (bytes) => {
     const sessionId = sessionIdRef.current;
@@ -221,14 +233,6 @@ export function TerminalPane({
     );
 
     const send = (bytes: Uint8Array) => sendInputRef.current(bytes);
-    const pasteClipboard = () => {
-      void navigator.clipboard
-        .readText()
-        .then((text) => {
-          if (text) terminal.paste(text);
-        })
-        .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
-    };
     const dataDisposable = terminal.onData((data) => send(new TextEncoder().encode(data)));
     const binaryDisposable = terminal.onBinary((data) =>
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
@@ -289,9 +293,85 @@ export function TerminalPane({
           .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
         return;
       }
-      if (action === "paste") pasteClipboard();
+      if (action === "paste") pasteClipboardRef.current();
     };
     container.addEventListener("contextmenu", handleContextMenu);
+
+    /* A Shift+drag makes a real terminal selection while a program in the pty
+       reads the mouse. xterm cannot keep that selection alive on its own: while
+       a program requests drag or motion reporting, the very mouse moves of the
+       drag are forwarded to it, each one counts as user input again, and every
+       such input clears the selection being drawn — before it is ever
+       finished. So Control Room owns the whole gesture: the events here are
+       kept away from xterm, and the dragged span is applied through xterm's
+       public selection APIs, which notify selection listeners and drive the
+       Copy action exactly like a program-independent selection would. Without
+       Shift the program keeps the mouse, and when nothing in the pty tracks
+       the mouse xterm's own selection runs untouched. */
+    let nativeSelection: { anchor: SelectionPoint; granularity: SelectionGranularity } | null =
+      null;
+    const beginsNativeSelection = (event: MouseEvent) =>
+      event.button === 0 && event.shiftKey && terminal.modes.mouseTrackingMode !== "none";
+    const selectionGridPoint = (event: MouseEvent): SelectionPoint | null => {
+      const screen = container.querySelector<HTMLElement>(".xterm-screen");
+      if (!screen) return null;
+      return selectionPointFromClient(
+        screen.getBoundingClientRect(),
+        terminal.cols,
+        terminal.rows,
+        event.clientX,
+        event.clientY,
+      );
+    };
+    const applyNativeSelection = (event: MouseEvent) => {
+      const state = nativeSelection;
+      if (!state) return;
+      const target = selectionGridPoint(event);
+      if (!target) return;
+      applyTerminalSelection(
+        terminal as unknown as SelectionTerminal,
+        state.anchor,
+        target,
+        state.granularity,
+      );
+    };
+    const handleNativeSelectionDown = (event: MouseEvent) => {
+      if (!beginsNativeSelection(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const anchor = selectionGridPoint(event);
+      if (!anchor) return;
+      const granularity = selectionGranularity(event.detail);
+      nativeSelection = { anchor, granularity };
+      if (granularity !== "character") applyNativeSelection(event);
+    };
+    const handleNativeSelectionMove = (event: MouseEvent) => {
+      if (!nativeSelection) return;
+      event.preventDefault();
+      event.stopPropagation();
+      applyNativeSelection(event);
+    };
+    const handleNativeSelectionUp = (event: MouseEvent) => {
+      if (!nativeSelection) return;
+      event.preventDefault();
+      event.stopPropagation();
+      nativeSelection = null;
+    };
+    const handleNativeSelectionKey = (event: KeyboardEvent) => {
+      if (!nativeSelection || event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      nativeSelection = null;
+      terminal.clearSelection();
+    };
+    container.addEventListener("mousedown", handleNativeSelectionDown, { capture: true });
+    container.ownerDocument.addEventListener("mousemove", handleNativeSelectionMove, {
+      capture: true,
+    });
+    container.ownerDocument.addEventListener("mouseup", handleNativeSelectionUp, { capture: true });
+    container.ownerDocument.addEventListener("keydown", handleNativeSelectionKey, {
+      capture: true,
+    });
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
       if (!sessionIdRef.current) return false;
@@ -414,6 +494,16 @@ export function TerminalPane({
       observer.disconnect();
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
       container.removeEventListener("contextmenu", handleContextMenu);
+      container.removeEventListener("mousedown", handleNativeSelectionDown, { capture: true });
+      container.ownerDocument.removeEventListener("mousemove", handleNativeSelectionMove, {
+        capture: true,
+      });
+      container.ownerDocument.removeEventListener("mouseup", handleNativeSelectionUp, {
+        capture: true,
+      });
+      container.ownerDocument.removeEventListener("keydown", handleNativeSelectionKey, {
+        capture: true,
+      });
       window.clearTimeout(resizeTimer);
       window.clearTimeout(bellTimer);
       dataDisposable.dispose();
@@ -682,10 +772,14 @@ export function TerminalPane({
   function pasteClipboard() {
     const terminal = terminalRef.current;
     if (!terminal) return;
-    void navigator.clipboard
-      .readText()
-      .then((text) => {
-        if (text) terminal.paste(text);
+    // One shared paste path: text, or a staged image handed over as a path.
+    // Every Control Room gesture funnels here, so nothing can paste twice.
+    void readTerminalPaste(navigator.clipboard, (bytes, extension) =>
+      api.stagePasteImage(remote?.connectionId ?? null, bytes, extension),
+    )
+      .then((content) => {
+        if (content.kind === "text" && content.text) terminal.paste(content.text);
+        else if (content.kind === "image") terminal.paste(content.path);
       })
       .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
   }

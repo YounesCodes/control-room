@@ -193,6 +193,15 @@ export const api = {
   acknowledgeSessionOutput: (sessionId: string, bytes: number) =>
     invoke<void>("acknowledge_session_output", { sessionId, bytes }),
   closeSession: (sessionId: string) => invoke<void>("close_session", { sessionId }),
+  // Resolves to the absolute path of the staged image, next to the shell that
+  // will read it: local temp storage for a local shell, the remote host for a
+  // Saved Connection.
+  stagePasteImage: (connectionId: string | null, data: Uint8Array, extension: string) =>
+    invoke<string>("stage_paste_image", {
+      connectionId,
+      data: Array.from(data),
+      extension,
+    }),
   cachedCapabilities: (connectionId: string) =>
     invoke<HostCapabilities | null>("get_cached_capabilities", { connectionId }),
   refreshCapabilities: (connectionId: string) =>

@@ -809,8 +809,8 @@ describe("TerminalPane sessions", () => {
     );
 
     await vi.waitFor(() => expect(clipboard.readText).toHaveBeenCalledTimes(1));
-    expect(xterm.pastes).toEqual([pasted]);
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
+    expect(xterm.pastes).toEqual([pasted]);
     expect(writtenText()).toEqual(["\u001b[200~echo first\recho second\u001b[201~"]);
   });
 

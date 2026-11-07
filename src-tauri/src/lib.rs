@@ -139,6 +139,7 @@ pub fn run() {
             commands::resize_session,
             commands::acknowledge_session_output,
             commands::close_session,
+            commands::stage_paste_image,
             commands::get_cached_capabilities,
             commands::refresh_capabilities,
             commands::sample_host_resources,
