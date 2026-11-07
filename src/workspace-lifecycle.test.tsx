@@ -193,11 +193,13 @@ function stubTabStripLayout() {
       toJSON: () => ({}),
     }) as DOMRect;
   content.getBoundingClientRect = () => rect(0);
-  Array.from(content.querySelectorAll<HTMLElement>(":scope > .session-tab-wrap")).forEach(
-    (wrap, index) => {
-      wrap.getBoundingClientRect = () => rect(index * 175);
-    },
-  );
+  Array.from(
+    content.querySelectorAll<HTMLElement>(
+      ":scope > .session-tab-wrap, :scope > .session-tab-group",
+    ),
+  ).forEach((wrap, index) => {
+    wrap.getBoundingClientRect = () => rect(index * 175);
+  });
 }
 
 /// The repo's pointer event pattern: a MouseEvent with pointer properties.
@@ -223,6 +225,80 @@ function lastSavedWorkspaceIds() {
 
 function activeTabLabel() {
   return document.querySelector(".session-tab-wrap.active .session-tab-main")?.textContent;
+}
+
+/// Focus-mode strip: two two-pane groups around one plain Workspace, with a
+/// group member active: Alpha owns workspaces 0 and 1, Beta owns 3 and 4.
+function restoredGroupedState(): PersistedWorkspaceState {
+  return {
+    workspaces: ["a", "b", "c", "d", "e"].map((connectionId, index) => ({
+      id: `workspace-${index}`,
+      label: null,
+      connectionId,
+      localShellId: null,
+      view: "terminal",
+      historyPaused: false,
+    })),
+    activeWorkspaceId: "workspace-0",
+    terminalLayout: { kind: "leaf", workspaceId: "workspace-0" },
+    terminalGroups: [
+      {
+        id: "group-alpha",
+        name: "Alpha",
+        layout: {
+          kind: "split",
+          direction: "vertical",
+          first: { kind: "leaf", workspaceId: "workspace-0" },
+          second: { kind: "leaf", workspaceId: "workspace-1" },
+        },
+      },
+      {
+        id: "group-beta",
+        name: "Beta",
+        layout: {
+          kind: "split",
+          direction: "vertical",
+          first: { kind: "leaf", workspaceId: "workspace-3" },
+          second: { kind: "leaf", workspaceId: "workspace-4" },
+        },
+      },
+    ],
+  };
+}
+
+/// Focus mode collapses each terminal group to one slot, so the strip reads
+/// `Alpha 2` for a group and `Host C` for a plain Workspace.
+function focusStripLabels(): string[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(".session-tabs .session-tab-content > *"),
+  ).map((tab) => {
+    if (tab.classList.contains("session-tab-group")) {
+      return (tab.querySelector(".session-tab-group-main")?.textContent ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    return tab.querySelector(".session-tab-label")?.textContent ?? "";
+  });
+}
+
+function groupTab(name: string): HTMLElement {
+  // The group row's scope keeps the aria name short: only its own button.
+  return within(screen.getByRole("group", { name })).getByRole("button");
+}
+
+async function renderFocusGroupedApp() {
+  api.listConnections.mockResolvedValue(
+    ["a", "b", "c", "d", "e"].map((id, index) =>
+      connection(id, `Host ${String.fromCharCode(65 + index)}`),
+    ),
+  );
+  api.workspaceState.mockResolvedValue(restoredGroupedState());
+  render(<App />);
+  await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 });
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Focus terminal" }));
+  expect(focusStripLabels()).toEqual(["Alpha 2", "Host C", "Beta 2"]);
+  return user;
 }
 
 describe("App Workspace behavior", () => {
@@ -651,6 +727,81 @@ describe("App Workspace behavior", () => {
     // The canceled drag left normal tab selection in place.
     await user.click(tabMainButton("Host C"));
     await waitFor(() => expect(activeTabLabel()).toBe("Host C"));
+  });
+
+  it("drags a terminal group in focus mode and its Workspaces stay one block", async () => {
+    await renderFocusGroupedApp();
+
+    stubTabStripLayout();
+    const betaTab = groupTab("Beta");
+    stripPointer(betaTab, "pointerdown", 437);
+    stripPointer(betaTab, "pointermove", 60);
+    expect(document.querySelector(".session-tab-dragged")).toBeTruthy();
+    stripPointer(betaTab, "pointerup", 60);
+
+    expect(focusStripLabels()).toEqual(["Beta 2", "Alpha 2", "Host C"]);
+    // The group moves whole, so its two Workspaces land together and in pane
+    // order, ahead of the plain Workspace it passed.
+    await waitFor(() =>
+      expect(lastSavedWorkspaceIds()).toEqual([
+        "workspace-3",
+        "workspace-4",
+        "workspace-0",
+        "workspace-1",
+        "workspace-2",
+      ]),
+    );
+    // Both groups stay single slots and the active group keeps its mark.
+    expect(screen.getByRole("group", { name: "Alpha" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Beta" })).toBeTruthy();
+    expect(document.querySelector(".session-tab-group.active")?.textContent).toContain("Alpha");
+  });
+
+  it("restores the focus strip untouched when a group drag is canceled", async () => {
+    await renderFocusGroupedApp();
+
+    stubTabStripLayout();
+    const alphaTab = groupTab("Alpha");
+    stripPointer(alphaTab, "pointerdown", 87);
+    stripPointer(alphaTab, "pointermove", 450);
+    expect(document.querySelector(".session-tab-dragged")).toBeTruthy();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(document.querySelector(".session-tab-dragged")).toBeNull();
+
+    stripPointer(alphaTab, "pointerup", 450);
+    expect(focusStripLabels()).toEqual(["Alpha 2", "Host C", "Beta 2"]);
+    // The strip keeps its group block, plain tab, and group blocks in order.
+    await waitFor(() =>
+      expect(lastSavedWorkspaceIds()).toEqual([
+        "workspace-0",
+        "workspace-1",
+        "workspace-2",
+        "workspace-3",
+        "workspace-4",
+      ]),
+    );
+  });
+
+  it("moves a focused group with Control and Shift arrow keys in focus mode", async () => {
+    await renderFocusGroupedApp();
+
+    stubTabStripLayout();
+    const alphaTab = groupTab("Alpha");
+    act(() => alphaTab.focus());
+    fireEvent.keyDown(alphaTab, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
+    expect(focusStripLabels()).toEqual(["Host C", "Alpha 2", "Beta 2"]);
+    // Moving the group one slot moves its Workspaces as one block.
+    await waitFor(() =>
+      expect(lastSavedWorkspaceIds()).toEqual([
+        "workspace-2",
+        "workspace-0",
+        "workspace-1",
+        "workspace-3",
+        "workspace-4",
+      ]),
+    );
   });
 
   it("moves a focused tab with the keyboard and closes keep the new order", async () => {

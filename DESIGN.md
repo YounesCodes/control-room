@@ -128,8 +128,10 @@ can reach the first or last position. Dropping outside the strip, or Escape,
 restores the previous order; a finished drag never selects the dragged tab
 by the click that follows it. Reordering moves whole Workspaces, so the
 active terminal, its session, and its focus carry over, and Control+Shift
-with the arrow keys move a focused tab one slot. Group rows and pane tabs
-stay put. Saved order is the tab order itself, so a restart restores it.
+with the arrow keys move a focused tab one slot. In focus mode the strip's
+group rows reorder the same way: a group moves as one block, keeping its
+member Workspaces together, while the per-pane strip stays focused on its
+panes. Saved order is the tab order itself, so a restart restores it.
 
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,

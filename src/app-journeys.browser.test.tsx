@@ -3423,4 +3423,90 @@ describe("complete app journeys with typed IPC fixtures", () => {
     // Moving a tab never moves the active Workspace with it.
     expect(activeStripTab()).toBe("Fixture Alpha");
   });
+
+  it("reorders a focus-mode group tab by dragging and saves the block order", async () => {
+    overrides.set("list_connections", () => [
+      fixtures.connection(),
+      fixtures.connection("host-b"),
+      { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
+    ]);
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-c",
+          label: null,
+          connectionId: "host-c",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [
+        {
+          id: "group-a",
+          name: "Fixture Group",
+          layout: {
+            kind: "split",
+            direction: "vertical",
+            first: { kind: "leaf", workspaceId: "tab-a" },
+            second: { kind: "leaf", workspaceId: "tab-b" },
+          },
+        },
+      ],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    const focusStrip = (): string[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(".session-tabs .session-tab-content > *"),
+      ).map((tab) =>
+        (tab.querySelector(".session-tab-main, .session-tab-group-main")?.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
+    const groupMain = () => document.querySelector<HTMLElement>(".session-tab-group-main")!;
+
+    // A reorderable strip promises the drag for group rows too.
+    await userEvent.hover(groupMain());
+    expect(getComputedStyle(groupMain()).cursor).toBe("grab");
+
+    // A real pointer drag of the group onto Gamma's slot.
+    const gamma = stripTabMain("Fixture Gamma")!;
+    await userEvent.dragAndDrop(groupMain(), gamma, { targetPosition: { x: 150, y: 15 } });
+    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Gamma", "Fixture Group 2"]));
+    const savedIds = () => persisted.workspaces.map((workspace) => workspace.id);
+    await vi.waitFor(() => expect(savedIds()).toEqual(["tab-c", "tab-a", "tab-b"]));
+
+    // The group stays one slot and keeps the active Workspace's group.
+    expect(document.querySelectorAll(".session-tab-group")).toHaveLength(1);
+    expect(document.querySelector(".session-tab-group.active")?.textContent).toContain(
+      "Fixture Group",
+    );
+
+    // The keyboard moves the whole group back one slot.
+    groupMain().focus();
+    await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
+    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
+    await vi.waitFor(() => expect(savedIds()).toEqual(["tab-a", "tab-b", "tab-c"]));
+  });
 });
