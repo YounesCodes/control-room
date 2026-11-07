@@ -119,6 +119,20 @@ their group and retain them when switching views. Constrain displayed sizes in
 small windows without overwriting the saved proportions. Reset a divider to equal
 sizes with a double-click or Enter.
 
+Workspace tabs reorder by dragging them along the strip. A short threshold
+keeps plain clicks their own act; past it the tab lifts under a shadow,
+follows the pointer inside the strip's borders, and the tabs it passes
+slide one slot over in the same motion. Holding the
+lifted tab at an overflowing strip's edge pages the window open, so any tab
+can reach the first or last position. Dropping outside the strip, or Escape,
+restores the previous order; a finished drag never selects the dragged tab
+by the click that follows it. Reordering moves whole Workspaces, so the
+active terminal, its session, and its focus carry over, and Control+Shift
+with the arrow keys move a focused tab one slot. In focus mode the strip's
+group rows reorder the same way: a group moves as one block, keeping its
+member Workspaces together, while the per-pane strip stays focused on its
+panes. Saved order is the tab order itself, so a restart restores it.
+
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
 show a window of complete tabs with previous/next controls; never paint a partial
