@@ -5,6 +5,7 @@ import { api, errorMessage } from "../lib/api";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { ResizableSplit } from "../components/ResizablePanels";
 import type { SavedConnection, WindowsService } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 export function WindowsServicesPane({ connection }: { connection: SavedConnection }) {
   const [services, setServices] = useState<WindowsService[]>([]);
@@ -83,7 +84,10 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
           </button>
         </header>
         {error && (
-          <p className="inline-warning">Showing previous services. Refresh failed: {error}</p>
+          <p className="inline-warning">
+            <WarningSign />
+            Showing previous services. Refresh failed: {error}
+          </p>
         )}
         <div className="systemd-list-controls windows-service-list-controls">
           <label className="search-field">

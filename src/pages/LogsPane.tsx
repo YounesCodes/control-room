@@ -19,6 +19,7 @@ import type {
   StreamStateEvent,
   SystemdUnit,
 } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 type StreamStatus = "stopped" | "starting" | "running" | "stopping";
 type SudoPurpose = "sources" | "stream";
@@ -546,7 +547,10 @@ export function LogsPane({
         </button>
       </div>
       {sourceCache.error && (
-        <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
+        <p className="inline-warning">
+          <WarningSign />
+          Showing saved sources. Refresh failed: {sourceCache.error}
+        </p>
       )}
       {error && (
         <div className="inline-error" role="alert">

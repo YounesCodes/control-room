@@ -30,6 +30,7 @@ import type {
   SavedConnection,
   HostCapabilities,
 } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 export function DockerPane({
   connection,
@@ -420,6 +421,7 @@ export function DockerPane({
                 {tools === "info" && (
                   <div className="ports-reading-body">
                     <p className="inline-warning">
+                      <WarningSign />
                       <span>
                         {cache.items.length ? "Showing saved results. Refresh failed: " : ""}
                         {cache.error}

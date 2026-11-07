@@ -42,6 +42,7 @@ import type {
   HostBaselineSummary,
   SavedConnection,
 } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 interface BaselinesPaneProps {
   connection: SavedConnection;
@@ -533,6 +534,7 @@ export function BaselinesPane({
         {actionError && !captureDialog && <p className="inline-error">{actionError}</p>}
         {sudoNoticed && (
           <p className="inline-warning">
+            <WarningSign />
             Some sections were incomplete or could not be read.
             {
               <>

@@ -15,6 +15,7 @@ import {
   statusLabel,
   recordedListenerSelection,
 } from "../../lib/host-baselines";
+import { WarningSign } from "../WarningSign";
 
 /** What the inspector is looking at: one recorded resource, optionally placed
  * in its comparison context so the exact before and after speak for
@@ -109,16 +110,23 @@ export function BaselineInspector({
       )}
       {inspection.additionsIndeterminate && inspection.changeType === "added" && (
         <p className="inline-warning">
+          <WarningSign />
           The earlier read was partial, so this resource may already have existed.
         </p>
       )}
       {inspection.changeType === "removed" && inspection.removalsIndeterminate && (
         <p className="inline-warning">
+          <WarningSign />
           The read on one side was partial, so this disappearance is unverified rather than
           confirmed gone.
         </p>
       )}
-      {inspection.sectionNote && <p className="inline-warning">{inspection.sectionNote}</p>}
+      {inspection.sectionNote && (
+        <p className="inline-warning">
+          <WarningSign />
+          {inspection.sectionNote}
+        </p>
+      )}
       {inspection.change?.changes.length ? (
         <section className="baseline-inspector-changes">
           <h4>Changed facts</h4>

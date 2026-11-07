@@ -155,6 +155,7 @@ import type {
   WorkspacePatch,
   WorkspaceView,
 } from "./types";
+import { WarningSign } from "./components/WarningSign";
 
 const emptyEnvironment: EnvironmentInfo = {
   sshPath: null,
@@ -2824,6 +2825,7 @@ export function App() {
             </div>
             {!environment.sshPath && (
               <p className="inline-warning">
+                <WarningSign />
                 Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
               </p>
             )}

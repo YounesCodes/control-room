@@ -18,6 +18,7 @@ import {
 } from "../../lib/host-baselines";
 import { api, errorMessage } from "../../lib/api";
 import { StatusChip } from "./BaselineSectionList";
+import { WarningSign } from "../WarningSign";
 
 interface BaselineComparisonViewProps {
   comparison: BaselineComparison;
@@ -131,11 +132,17 @@ export function BaselineComparisonView({
       )}
       {!comparison.schemaCompatible && (
         <p className="inline-warning">
+          <WarningSign />
           These captures were saved by different versions of Control Room. Sections compare wherever
           both recorded them in the same shape.
         </p>
       )}
-      {warning && <p className="inline-warning">{warning}</p>}
+      {warning && (
+        <p className="inline-warning">
+          <WarningSign />
+          {warning}
+        </p>
+      )}
       <details className="baseline-change-filters">
         <summary>
           Filter changes{changeType !== "all" || sectionKind !== "all" ? " · active" : ""}
@@ -197,6 +204,7 @@ export function BaselineComparisonView({
           ),
         ) && (
           <p className="inline-warning">
+            <WarningSign />
             Selection hidden by filters.{" "}
             <button
               className="link-button"
@@ -266,7 +274,10 @@ function SectionDiffView({
           <span aria-hidden="true">→</span>
           <StatusChip status={diff.targetStatus} />
         </header>
-        <p className="inline-warning">{diff.note}</p>
+        <p className="inline-warning">
+          <WarningSign />
+          {diff.note}
+        </p>
       </section>
     );
   }
@@ -275,7 +286,12 @@ function SectionDiffView({
       <section className="baseline-section">
         <h3>{sectionLabel(diff.kind)}</h3>
         <p className="baseline-section-count">{diff.filteredCount} differences filtered out</p>
-        {diff.note && <p className="inline-warning">{diff.note}</p>}
+        {diff.note && (
+          <p className="inline-warning">
+            <WarningSign />
+            {diff.note}
+          </p>
+        )}
       </section>
     );
   if (changes === 0) {
@@ -293,7 +309,12 @@ function SectionDiffView({
               : `${diff.unchangedCount} compared, no changes`}
           </span>
         </summary>
-        {diff.note && <p className="inline-warning">{diff.note}</p>}
+        {diff.note && (
+          <p className="inline-warning">
+            <WarningSign />
+            {diff.note}
+          </p>
+        )}
         <p className="baseline-section-count">
           {routineHidden ? (
             <>
@@ -325,9 +346,15 @@ function SectionDiffView({
           {`${changes} ${changes === 1 ? "difference" : "differences"} of ${changes + diff.unchangedCount} compared`}
         </span>
       </header>
-      {diff.note && <p className="inline-warning">{diff.note}</p>}
+      {diff.note && (
+        <p className="inline-warning">
+          <WarningSign />
+          {diff.note}
+        </p>
+      )}
       {diff.removalsIndeterminate && !!diff.removed.length && (
         <p className="inline-warning">
+          <WarningSign />
           One side was read partially, so removals here are unverified, not confirmed gone.
         </p>
       )}

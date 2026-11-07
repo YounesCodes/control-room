@@ -4,6 +4,7 @@ import { FileClock, RefreshCw } from "lucide-react";
 import { ErrorState, LoadingState } from "./PanelState";
 import { ContainerImageIcon } from "./ContainerImageIcon";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
+import { WarningSign } from "./WarningSign";
 
 function displayTime(value: string | null) {
   if (!value) return "Not recorded";
@@ -246,7 +247,10 @@ export function DockerContainerInspector({
         ) : (
           <>
             {cache?.error && (
-              <p className="inline-warning">Showing saved details. Refresh failed: {cache.error}</p>
+              <p className="inline-warning">
+                <WarningSign />
+                Showing saved details. Refresh failed: {cache.error}
+              </p>
             )}
             <Overview details={details} />
             <InspectorDisclosure title="Published ports">

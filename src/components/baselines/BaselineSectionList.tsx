@@ -8,6 +8,7 @@ import type {
   BaselineSectionStatus,
 } from "../../types";
 import { entrySearchText, sectionLabel, statusHint, statusLabel } from "../../lib/host-baselines";
+import { WarningSign } from "../WarningSign";
 
 export function StatusChip({ status }: { status: BaselineSectionStatus }) {
   return (
@@ -107,7 +108,12 @@ function SectionView({
           <span className="baseline-section-count">{section.entries.length} recorded</span>
         )}
       </header>
-      {section.message && <p className="inline-warning">{section.message}</p>}
+      {section.message && (
+        <p className="inline-warning">
+          <WarningSign />
+          {section.message}
+        </p>
+      )}
       {isExpanded && (
         <>
           {section.entries.length > 8 && (

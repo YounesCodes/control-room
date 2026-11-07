@@ -775,7 +775,7 @@ it("reveals chips for keyboard focus without selecting them", async () => {
   expect(await inspectorHeading()).toBe("443 / TCP");
 });
 
-it("keeps warning retry actions below long messages without splitting their labels", async () => {
+it("keeps warning signs and retry actions in one flowing line without splitting their labels", async () => {
   await page.viewport(960, 760);
   const timeout =
     "Connection timed out: ssh: connect to host 192.0.2.10 port 22: Connection timed out";
@@ -793,15 +793,27 @@ it("keeps warning retry actions below long messages without splitting their labe
     for (const name of ["Retry ports", "Retry connections", "Retry Docker", "Retry with sudo"]) {
       const button = screen.getByRole("button", { name });
       const warning = button.closest(".inline-warning")!;
+      const sign = warning.querySelector("svg")!;
+      const signBounds = sign.getBoundingClientRect();
+      const warningBounds = warning.getBoundingClientRect();
+      expect(signBounds.width).toBeCloseTo(12, 0);
+      expect(signBounds.height).toBeCloseTo(12, 0);
+      expect(signBounds.left).toBeCloseTo(warningBounds.left, 0);
+      expect(signBounds.top).toBeGreaterThanOrEqual(warningBounds.top - 1);
+      expect(signBounds.bottom).toBeLessThanOrEqual(warningBounds.bottom + 1);
       const message = document.createRange();
       message.setStart(warning, 0);
       message.setEndBefore(button);
+      const messageBounds = message.getBoundingClientRect();
       const bounds = button.getBoundingClientRect();
-      expect(bounds.height).toBeLessThanOrEqual(
-        parseFloat(getComputedStyle(button).lineHeight) + 1,
+      expect(bounds.left).toBeGreaterThanOrEqual(messageBounds.left - 1);
+      expect(bounds.top).toBeGreaterThanOrEqual(messageBounds.top - 1);
+      expect(bounds.left >= messageBounds.right - 1 || bounds.top >= messageBounds.bottom - 1).toBe(
+        true,
       );
-      expect(bounds.top).toBeGreaterThanOrEqual(message.getBoundingClientRect().bottom + 8);
-      expect(bounds.right).toBeLessThanOrEqual(warning.getBoundingClientRect().right - 12);
+      expect(bounds.height).toBeLessThanOrEqual(
+        parseFloat(getComputedStyle(warning).fontSize) * 1.8 + 2,
+      );
       expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
     }
   }

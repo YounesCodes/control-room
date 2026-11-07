@@ -6,6 +6,7 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { useSystemdReads } from "../lib/systemd-inspection";
 import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
+import { WarningSign } from "./WarningSign";
 
 export interface SystemdInspectorViewState {
   configuration: boolean;
@@ -100,6 +101,7 @@ function Evidence({
       {result?.loading && <p role="status">Reading {content}…</p>}
       {result?.error && (
         <p className="inline-warning" role="status">
+          <WarningSign />
           {result.value ? "Saved evidence. " : ""}
           {result.error}{" "}
           <button type="button" className="link-button" onClick={() => setRetry((n) => n + 1)}>
@@ -109,10 +111,16 @@ function Evidence({
       )}
       {result?.value?.warnings.map((warning) => (
         <p className="inline-warning" key={warning}>
+          <WarningSign />
           {warning}
         </p>
       ))}
-      {result?.value?.truncated && <p className="inline-warning">Showing the first 128 KiB.</p>}
+      {result?.value?.truncated && (
+        <p className="inline-warning">
+          <WarningSign />
+          Showing the first 128 KiB.
+        </p>
+      )}
       {result?.value &&
         (result.value.text ? (
           <SystemdCode
@@ -328,17 +336,20 @@ export function SystemdUnitInspector({
         )}
         {result?.error && (
           <p className="inline-warning" role="status">
+            <WarningSign />
             {result.value ? "Showing saved details. " : "Details unavailable. "}
             {result.error}
           </p>
         )}
         {result?.value?.warnings.map((warning) => (
           <p className="inline-warning" key={warning}>
+            <WarningSign />
             {warning}
           </p>
         ))}
         {result?.value?.truncated && (
           <p className="inline-warning">
+            <WarningSign />
             Details truncated at 128 KiB. Some relationships may be missing.
           </p>
         )}

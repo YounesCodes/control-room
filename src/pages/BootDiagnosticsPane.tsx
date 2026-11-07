@@ -5,6 +5,7 @@ import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { bootLabel, durationToMillis, sampleHint, splitJournalLine } from "../lib/boot-diagnostics";
 import type { BootDiagnostics, BootSection, LogSourceSelection, SavedConnection } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 const JOURNAL_CAP = 30;
 
@@ -168,7 +169,10 @@ export function BootDiagnosticsPane({
       </header>
 
       {error && (
-        <p className="inline-warning">Showing the previous result. Refresh failed: {error}</p>
+        <p className="inline-warning">
+          <WarningSign />
+          Showing the previous result. Refresh failed: {error}
+        </p>
       )}
       {loading && snapshot && (
         <p className="boot-refreshing">Refreshing this boot investigation…</p>

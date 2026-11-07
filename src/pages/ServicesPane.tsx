@@ -33,6 +33,7 @@ import type {
   SystemdExplorerState,
   SystemdUnit,
 } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 const DEFAULT: SystemdExplorerState = {
   mode: "inventory",
@@ -542,6 +543,7 @@ export function ServicesPane({
       />
       {cache.error && (
         <p className="inline-warning" role="status">
+          <WarningSign />
           Showing saved results. Refresh failed: {cache.error}
         </p>
       )}

@@ -21,6 +21,7 @@ import type {
   ListeningSocket,
   LogSourceSelection,
 } from "../../types";
+import { WarningSign } from "../WarningSign";
 
 function OwnerIcon({ kind }: { kind: OwnerKind }) {
   if (kind === "container") return <Container size={14} />;
@@ -224,12 +225,14 @@ export function PortsGraph({
           {toolbar}
           {focusListener && !focusedListener && !loading && (
             <p className="inline-warning" role="status">
+              <WarningSign />
               The recorded listener was not found, or its owning unit could not be verified in this
               Ports snapshot.
             </p>
           )}
           {focusEndpoint && focusEndpoint !== handledFocus.current && !focused && !loading && (
             <p className="inline-warning" role="status">
+              <WarningSign />
               Published endpoint was not found in this Ports snapshot.
             </p>
           )}

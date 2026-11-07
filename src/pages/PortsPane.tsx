@@ -30,6 +30,7 @@ import type {
   LogSourceSelection,
   SavedConnection,
 } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 export function PortsPane({
   connection,
@@ -479,6 +480,7 @@ export function PortsPane({
                     <div className="ports-reading-body">
                       {cache.error && (
                         <p className="inline-warning">
+                          <WarningSign />
                           {cache.items.length
                             ? "Showing saved results. Refresh failed: "
                             : "Listening ports unavailable: "}
@@ -494,6 +496,7 @@ export function PortsPane({
                       )}
                       {connectionsError && (
                         <p className="inline-warning">
+                          <WarningSign />
                           {connections
                             ? "Showing saved connections. Refresh failed: "
                             : "Connections unavailable: "}
@@ -509,6 +512,7 @@ export function PortsPane({
                       )}
                       {containersCache.error && (
                         <p className="inline-warning">
+                          <WarningSign />
                           {containersCache.items.length
                             ? "Showing saved Docker mappings. Refresh failed: "
                             : "Docker mappings unavailable: "}
@@ -524,6 +528,7 @@ export function PortsPane({
                       )}
                       {firewallError && (
                         <p className="inline-warning">
+                          <WarningSign />
                           Firewall status unavailable: {firewallError}
                           {capabilities?.osId !== "windows" &&
                             firewallError.toLowerCase().includes("permission denied") && (
@@ -539,6 +544,7 @@ export function PortsPane({
                       )}
                       {ownerGap && (
                         <p className="inline-warning">
+                          <WarningSign />
                           {ownerGap.message}
                           {ownerGap.offerSudo && (
                             <button

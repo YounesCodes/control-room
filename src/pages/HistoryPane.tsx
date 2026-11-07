@@ -19,6 +19,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { notifyHistoryChanged, onHistoryChanged } from "../lib/history-events";
 import type { HistoryEntry, HistoryIntegrationStatus, SavedConnection } from "../types";
+import { WarningSign } from "../components/WarningSign";
 
 type CaptureState =
   | "recording"
@@ -677,6 +678,7 @@ export function HistoryPane({
       </header>
       {integrationError && (
         <p className="inline-warning">
+          <WarningSign />
           Saved history is stored locally, but Control Room could not check the remote Bash
           integration: {integrationError}
         </p>

@@ -3,6 +3,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { ChevronDown } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import type { CatalogFont, FontCatalog, FontProgress } from "../types";
+import { WarningSign } from "./WarningSign";
 
 export function FontCatalogPicker({
   value,
@@ -326,6 +327,7 @@ export function FontCatalogPicker({
       {catalog?.stale && <p role="status">Catalog unavailable. Showing fonts from this session.</p>}
       {catalogError && (
         <div className="inline-warning">
+          <WarningSign />
           <p role="status">{catalogError} Your current font is unchanged.</p>
           <button
             type="button"
@@ -383,6 +385,7 @@ export function FontCatalogPicker({
       )}
       {picked && previewErrors[picked.id] && (
         <div className="inline-warning">
+          <WarningSign />
           <p role="status">{previewErrors[picked.id]} The preview uses your current font.</p>
           <button
             type="button"
@@ -409,6 +412,7 @@ export function FontCatalogPicker({
       )}
       {failure && (
         <p role="alert" className="inline-warning">
+          <WarningSign />
           {failure}{" "}
           {installed.current?.id === active?.id
             ? "The font is installed for your Windows account but has not been applied or saved. Retry apply font."
