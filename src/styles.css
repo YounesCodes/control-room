@@ -7745,7 +7745,6 @@ dd {
 }
 
 .inline-error,
-.inline-warning,
 .inline-message {
   display: flex;
   align-items: center;
@@ -7773,12 +7772,30 @@ dd {
 }
 
 /* Warning text speaks in one voice app-wide: the amber hue always pairs with
-   the app's strong step, so no warning line reads half-bold or half-muted. */
+   the app's strong step and its warning sign, so no warning line reads
+   half-bold, half-muted, or unsigned. The sign is drawn by a mask, so every
+   call site pairs it with the hue without any markup. */
 .inline-warning {
-  border-color: var(--warning);
-  background: #131313;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
   color: var(--warning);
+  font-size: 11px;
   font-weight: 600;
+}
+
+.inline-warning::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12' y1='16' y2='16'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12' y1='16' y2='16'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 .inline-message {
