@@ -3582,4 +3582,82 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-a", "tab-b"]),
     );
   });
+
+  it("parks Rename and Close while the strip drags", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+
+    const alpha = stripTabMain("Fixture Alpha")!;
+    const content = document.querySelector<HTMLElement>(".session-tab-content")!;
+    const press = alpha.getBoundingClientRect();
+    const y = press.top + press.height / 2;
+    const dispatch = (node: HTMLElement, type: string, x: number) =>
+      node.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          isPrimary: true,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    const draggedTab = () =>
+      document
+        .querySelector<HTMLElement>(".session-tab-dragged .session-tab-main")!
+        .closest(".session-tab-wrap")! as HTMLElement;
+    const toolOf = (className: string) => draggedTab().querySelector<HTMLElement>(className)!;
+
+    // Held focus, like the ride along the strip's hover, would reveal the
+    // tab tools; mid-drag they stay parked so the lifted chip reads as one
+    // clean piece.
+    alpha.focus();
+    dispatch(alpha, "pointerdown", press.left + 20);
+    dispatch(content, "pointermove", 460);
+    await vi.waitFor(() => expect(toolOf(".session-tab-close")).toBeTruthy());
+    await vi.waitFor(() => {
+      expect(getComputedStyle(toolOf(".session-tab-close")).opacity).toBe("0");
+      expect(getComputedStyle(toolOf(".session-tab-rename")).opacity).toBe("0");
+    });
+    await page.screenshot({ path: "../test-results/drag-parked-tools.png" });
+
+    // Outside the drag, focus on a tab reveals the tools again.
+    dispatch(content, "pointerup", 460);
+    await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
+    stripTabMain("Fixture Alpha")!.focus();
+    await vi.waitFor(() => {
+      const wrap = document.querySelector<HTMLElement>(".session-tab-wrap:focus-within")!;
+      expect(getComputedStyle(wrap.querySelector<HTMLElement>(".session-tab-close")!).opacity).toBe(
+        "1",
+      );
+      expect(
+        getComputedStyle(wrap.querySelector<HTMLElement>(".session-tab-rename")!).opacity,
+      ).toBe("1");
+    });
+  });
 });

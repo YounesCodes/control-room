@@ -2397,6 +2397,16 @@ code,
   width: 24px;
 }
 
+/* A drag rides the strip's hover and hold, so Rename and Close would reveal
+   mid-motion and float over the lifted chip. While the strip drags, the tab
+   tools stay parked so the chip reads as one clean piece. */
+.session-tab-scroll-region.dragging .session-tab-close,
+.session-tab-scroll-region.dragging .session-tab-rename {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(6px);
+}
+
 .session-tab-wrap.active {
   border-bottom-color: var(--accent);
   background: var(--surface-raised);

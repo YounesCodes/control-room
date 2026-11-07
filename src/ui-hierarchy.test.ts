@@ -268,6 +268,14 @@ describe("application hierarchy", () => {
     );
   });
 
+  it("parks Rename and Close while the workspace strip drags", () => {
+    // Hover and the held focus reveal the tab tools, so mid-drag they would
+    // float over the lifted chip. The strip keeps them parked until it rests.
+    expect(stylesSource).toMatch(
+      /\.session-tab-scroll-region\.dragging \.session-tab-close,\s*\.session-tab-scroll-region\.dragging \.session-tab-rename\s*\{[^}]*opacity: 0;/,
+    );
+  });
+
   it("grants a native permission for every window control the frontend uses", () => {
     // The same deny-by-default ACL that made baseline export dead on arrival.
     // A window method with no matching permission fails only in a built app,
