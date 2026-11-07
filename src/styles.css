@@ -3308,14 +3308,20 @@ code,
   text-transform: uppercase;
 }
 
-/* The elevation note stays a single quiet line: the amber rule carries the
-   restriction cue without an alert banner's box drawing. */
+/* The elevation note stays a single quiet line: the amber warning sign
+   carries the restriction cue without an alert banner's box drawing. */
 .baseline-capture-note {
+  display: flex;
+  align-items: center;
   margin: 0;
-  padding: 0 0 0 10px;
-  border-left: 2px solid var(--warning);
   color: var(--text-muted);
   font-size: 11px;
+  gap: 6px;
+}
+
+.baseline-capture-note svg {
+  flex: none;
+  color: var(--warning);
 }
 
 .baseline-progress {

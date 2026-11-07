@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, X } from "lucide-react";
+import { AlertCircle, Camera, X } from "lucide-react";
 import { Modal } from "../Modal";
 import type { BaselineProgress, BaselineSectionKind } from "../../types";
 import {
@@ -84,7 +84,12 @@ export function BaselineCaptureDialog({
                 </label>
               ))}
             </fieldset>
-            {permissionNote && <p className="baseline-capture-note">{permissionNote}</p>}
+            {permissionNote && (
+              <p className="baseline-capture-note">
+                <AlertCircle size={12} aria-hidden="true" />
+                {permissionNote}
+              </p>
+            )}
             <div className="modal-actions">
               <button type="button" className="secondary-button" onClick={onClose}>
                 Cancel
