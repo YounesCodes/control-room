@@ -15,7 +15,7 @@ Control Room uses Rust and Vitest component tests for contracts and failure path
 
 Start with `npm ci`. The normal Windows CI still runs Prettier, ESLint, TypeScript and Vite builds, `cargo audit`, and the NSIS installer build. `src/ui-hierarchy.test.ts` keeps architecture and permission contracts; browser and desktop tests check user behavior. Neither normal test command needs an SSH host.
 
-Development builds use `%APPDATA%\app.controlroom.desktop\development\control-room.db` and start with separate connections and settings. Installed release builds keep `%APPDATA%\app.controlroom.desktop\control-room.db`. Development builds never copy or migrate the installed database, so testing an unreleased schema cannot prevent the installed app from opening. Desktop E2E builds continue to use the runner's isolated data directory.
+Development builds use `%APPDATA%\app.controlroom.desktop\development\control-room.db` and start with separate connections and settings. Installed release builds keep `%APPDATA%\app.controlroom.desktop\control-room.db`. Development builds never copy or migrate the installed database, so testing an unreleased schema cannot prevent the installed app from opening. Desktop E2E builds continue to use the runner's isolated data directory. Debug windows also self-identify: the title is the checkout's Git branch and the taskbar icon carries the dev badge from `src-tauri/icons/icon-dev.ico`, while release builds keep the plain Control Room title and icon.
 
 ## Windows SSH hosts
 
