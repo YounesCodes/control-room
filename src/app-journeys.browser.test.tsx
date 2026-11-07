@@ -3,7 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import * as fixtures from "./test/app-fixtures";
-import type { AppSettings, HostBaseline, PersistedWorkspaceState } from "./types";
+import type { AppSettings, HistoryEntry, HostBaseline, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource-variable/inter/opsz.css";
 import "./styles.css";
@@ -177,7 +177,7 @@ async function respond(command: string, args: any = {}) {
     case "stop_log_stream":
       return;
     case "get_history_integration_status":
-      return true;
+      return "installed";
     case "get_history":
       return [];
     case "get_scratchpad_note":
@@ -3010,6 +3010,53 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
     expect(result.violations.map((violation) => violation.id)).toEqual([]);
   });
+  it("adds commands to the open History search after the terminal saves them", async () => {
+    const records: HistoryEntry[] = [];
+    let output!: { onmessage: (bytes: ArrayBuffer) => void };
+    overrides.set("start_session", (args) => {
+      output = args.output;
+      return { sessionId: "history-session" };
+    });
+    overrides.set("get_history", ({ search }) =>
+      records.filter((record) => record.command.includes(search)),
+    );
+    let commit!: () => void;
+    overrides.set(
+      "add_history_entry",
+      ({ input }) =>
+        new Promise<HistoryEntry>((resolve) => {
+          commit = () => {
+            const record = { ...input, id: "history-entry" };
+            records.push(record);
+            resolve(record);
+          };
+        }),
+    );
+    await mount();
+    await navigate("History");
+    await page.getByRole("textbox", { name: "Search commands" }).fill("live-update");
+    await expect.element(page.getByText("No matching commands")).toBeVisible();
+    const command = "printf live-update";
+    const start = `\x1b]633;ControlRoom;start;1000;L3RtcA==;${btoa(command)}\x07`;
+    const finish = "\x1b]633;ControlRoom;finish;1001;0;L3RtcA==\x07";
+    output.onmessage(new TextEncoder().encode(start + finish + finish).buffer);
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(([name]) => name === "add_history_entry"),
+      ).toHaveLength(1),
+    );
+    await expect.element(page.getByText("No matching commands")).toBeVisible();
+    commit();
+    await vi.waitFor(() =>
+      expect(
+        [...document.querySelectorAll(".history-command")].map((row) => row.textContent),
+      ).toEqual([command]),
+    );
+    expect(
+      native.invoke.mock.calls.filter(([name]) => name === "get_history_integration_status"),
+    ).toHaveLength(1);
+  });
+
   it.each([
     [520, 480],
     [640, 760],

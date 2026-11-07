@@ -891,7 +891,7 @@ pub fn get_history_integration_status(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
-) -> Result<bool, String> {
+) -> Result<history::IntegrationStatus, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     history::integration_status(&connection)
@@ -902,11 +902,14 @@ pub fn install_history_integration(
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
+    enable_capture: Option<bool>,
 ) -> Result<SavedConnection, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
     history::install_integration(&connection)?;
-    database.set_history_enabled(&connection_id, true)?;
+    if enable_capture.unwrap_or(true) {
+        database.set_history_enabled(&connection_id, true)?;
+    }
     database.get_connection(&connection_id)
 }
 

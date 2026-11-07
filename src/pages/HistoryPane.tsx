@@ -17,10 +17,17 @@ import {
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
-import type { HistoryEntry, SavedConnection } from "../types";
+import { notifyHistoryChanged, onHistoryChanged } from "../lib/history-events";
+import type { HistoryEntry, HistoryIntegrationStatus, SavedConnection } from "../types";
 
 type CaptureState =
-  "recording" | "paused" | "connection-disabled" | "global-disabled" | "not-installed" | "unknown";
+  | "recording"
+  | "paused"
+  | "connection-disabled"
+  | "global-disabled"
+  | "not-installed"
+  | "update-available"
+  | "unknown";
 
 const CAPTURE_LABELS: Record<CaptureState, string> = {
   recording: "Recording",
@@ -28,12 +35,14 @@ const CAPTURE_LABELS: Record<CaptureState, string> = {
   "connection-disabled": "Disabled for this connection",
   "global-disabled": "Disabled globally",
   "not-installed": "Integration not installed",
+  "update-available": "Integration update available",
   unknown: "Status unavailable",
 };
 
 const MORE_MENU_WIDTH = 240;
 const MORE_MENU_HEIGHT = 132;
 const COPY_FEEDBACK_MS = 1500;
+const HISTORY_REFRESH_MS = 75;
 // Matches --motion-med; reduced motion removes the row immediately.
 const REMOVE_COLLAPSE_MS = 160;
 
@@ -181,14 +190,16 @@ export function HistoryPane({
 }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [removingIds, setRemovingIds] = useState<ReadonlySet<string>>(new Set());
-  const [integrationInstalled, setIntegrationInstalled] = useState<boolean | null>(null);
+  const [integration, setIntegration] = useState<HistoryIntegrationStatus | null>(null);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [integrationLoading, setIntegrationLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const error = actionError ?? readError;
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
@@ -199,6 +210,7 @@ export function HistoryPane({
     onConfirm: () => void;
   } | null>(null);
   const loadRequestRef = useRef(0);
+  const historyReadPendingRef = useRef(false);
   const integrationRequestRef = useRef(0);
   const copyTimerRef = useRef<number | null>(null);
   const copyRequestRef = useRef(0);
@@ -215,6 +227,7 @@ export function HistoryPane({
     setLoading(true);
     setHasLoaded(false);
     setError(null);
+    setReadError(null);
     setConfirmState(null);
     setCopiedId(null);
     setMenuOpen(false);
@@ -233,8 +246,8 @@ export function HistoryPane({
     setIntegrationLoading(true);
     setIntegrationError(null);
     try {
-      const installed = await api.historyIntegrationStatus(connection.id);
-      if (request === integrationRequestRef.current) setIntegrationInstalled(installed);
+      const status = await api.historyIntegrationStatus(connection.id);
+      if (request === integrationRequestRef.current) setIntegration(status);
     } catch (caught) {
       if (request === integrationRequestRef.current) setIntegrationError(errorMessage(caught));
     } finally {
@@ -242,33 +255,57 @@ export function HistoryPane({
     }
   }
 
-  async function loadHistory() {
+  async function loadHistory(background = false) {
     const request = ++loadRequestRef.current;
-    setLoading(true);
-    setError(null);
+    historyReadPendingRef.current = true;
+    if (!background) {
+      setLoading(true);
+      setError(null);
+      setReadError(null);
+    }
     try {
       const history = await api.history(connection.id, search);
       if (request === loadRequestRef.current) {
         setEntries(history);
         setHasLoaded(true);
+        setReadError(null);
       }
     } catch (caught) {
-      if (request === loadRequestRef.current) setError(errorMessage(caught));
+      if (request === loadRequestRef.current) setReadError(errorMessage(caught));
     } finally {
-      if (request === loadRequestRef.current) setLoading(false);
+      if (request === loadRequestRef.current) {
+        historyReadPendingRef.current = false;
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadHistory(), search ? 180 : 0);
+    const searchTimer = window.setTimeout(() => void loadHistory(), search ? 180 : 0);
+    let refreshTimer: number | undefined;
+    const refreshSaved = () => {
+      refreshTimer = undefined;
+      // Let a confirmed deletion finish collapsing before replacing the list.
+      if (removalTimersRef.current.size > 0) {
+        refreshTimer = window.setTimeout(refreshSaved, REMOVE_COLLAPSE_MS);
+      } else {
+        void loadHistory(true);
+      }
+    };
+    const unsubscribe = onHistoryChanged(connection.id, () => {
+      refreshTimer ??= window.setTimeout(refreshSaved, HISTORY_REFRESH_MS);
+    });
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(searchTimer);
+      window.clearTimeout(refreshTimer);
+      unsubscribe();
       loadRequestRef.current += 1;
+      historyReadPendingRef.current = false;
     };
   }, [connection.id, search]);
 
   useEffect(() => {
-    setIntegrationInstalled(null);
+    setIntegration(null);
     void loadIntegration();
     return () => {
       integrationRequestRef.current += 1;
@@ -309,12 +346,12 @@ export function HistoryPane({
   const capture = useMemo<CaptureState | null>(() => {
     if (!globalEnabled) return "global-disabled";
     if (integrationError) return "unknown";
-    if (integrationInstalled === false) return "not-installed";
-    if (integrationInstalled === null) return null;
+    if (integration !== "installed") return integration;
     if (!connection.historyEnabled) return "connection-disabled";
     if (paused) return "paused";
     return "recording";
-  }, [globalEnabled, integrationInstalled, integrationError, connection.historyEnabled, paused]);
+  }, [globalEnabled, integration, integrationError, connection.historyEnabled, paused]);
+  const integrationInstalled = integration === "installed" || integration === "update-available";
 
   const grouped = useMemo(() => {
     const groups = new Map<string, HistoryEntry[]>();
@@ -361,9 +398,15 @@ export function HistoryPane({
     setWorking(true);
     setError(null);
     try {
-      const updated = await api.installHistoryIntegration(connection.id);
+      const updated = await api.installHistoryIntegration(
+        connection.id,
+        integration !== "update-available",
+      );
       if (generation !== mutationGeneration.current) return;
-      setIntegrationInstalled(true);
+      integrationRequestRef.current += 1;
+      setIntegrationLoading(false);
+      setIntegrationError(null);
+      setIntegration("installed");
       onConnectionChanged(updated);
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
@@ -391,7 +434,10 @@ export function HistoryPane({
     try {
       const updated = await api.uninstallHistoryIntegration(connection.id);
       if (generation !== mutationGeneration.current) return;
-      setIntegrationInstalled(false);
+      integrationRequestRef.current += 1;
+      setIntegrationLoading(false);
+      setIntegrationError(null);
+      setIntegration("not-installed");
       onConnectionChanged(updated);
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
@@ -437,6 +483,14 @@ export function HistoryPane({
       });
   }
 
+  function invalidateHistoryRead() {
+    if (!historyReadPendingRef.current) return false;
+    loadRequestRef.current += 1;
+    historyReadPendingRef.current = false;
+    setLoading(false);
+    return true;
+  }
+
   function remove(entry: HistoryEntry) {
     const generation = mutationGeneration.current;
     setError(null);
@@ -444,6 +498,7 @@ export function HistoryPane({
       try {
         await api.deleteHistory(entry.id);
         if (generation !== mutationGeneration.current) return;
+        if (invalidateHistoryRead()) notifyHistoryChanged(connection.id);
         setRemovingIds((current) => new Set(current).add(entry.id));
         const delay = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
           ? 0
@@ -483,7 +538,11 @@ export function HistoryPane({
     setError(null);
     try {
       await api.clearHistory(connection.id);
-      if (generation === mutationGeneration.current) setEntries([]);
+      if (generation === mutationGeneration.current) {
+        invalidateHistoryRead();
+        setEntries([]);
+        notifyHistoryChanged(connection.id);
+      }
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
     }
@@ -574,7 +633,7 @@ export function HistoryPane({
                 style={menuPosition ?? undefined}
                 data-app-popover=""
               >
-                {integrationInstalled === true && (
+                {integrationInstalled && (
                   <button
                     type="button"
                     role="menuitem"
@@ -600,7 +659,7 @@ export function HistoryPane({
                 >
                   <Eraser size={14} /> Clear saved history
                 </button>
-                {integrationInstalled === true && (
+                {integrationInstalled && (
                   <button
                     type="button"
                     role="menuitem"
@@ -622,7 +681,20 @@ export function HistoryPane({
           integration: {integrationError}
         </p>
       )}
-      {integrationInstalled === false && !integrationError && (
+      {integration === "update-available" && !integrationError && (
+        <section className="history-opt-in">
+          <p>Reconnect after updating to load the new integration.</p>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={installIntegration}
+            disabled={working}
+          >
+            {working ? "Updating…" : "Update Bash integration"}
+          </button>
+        </section>
+      )}
+      {integration === "not-installed" && !integrationError && (
         <section className="history-opt-in">
           <h3>Enable exact Bash command history</h3>
           <p>
@@ -692,7 +764,7 @@ export function HistoryPane({
           </EmptyState>
         )}
         {!search &&
-          integrationInstalled === true &&
+          integration === "installed" &&
           !integrationError &&
           !error &&
           hasLoaded &&

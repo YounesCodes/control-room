@@ -20,7 +20,8 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { HistoryPane } from "./HistoryPane";
-import type { SavedConnection } from "../types";
+import { notifyHistoryChanged } from "../lib/history-events";
+import type { HistoryIntegrationStatus, SavedConnection } from "../types";
 
 const connection: SavedConnection = {
   id: "connection-a",
@@ -96,10 +97,31 @@ describe("HistoryPane", () => {
     api.historyIntegrationStatus.mockRejectedValue(new Error("Host is offline"));
   });
 
+  it("refreshes the active search when this connection saves a command", async () => {
+    const user = userEvent.setup();
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("docker ps");
+    await user.type(screen.getByRole("textbox", { name: "Search commands" }), "docker");
+    await waitFor(() => expect(api.history).toHaveBeenLastCalledWith(connection.id, "docker"));
+    api.history.mockResolvedValue([
+      { ...historyEntry, id: "new-entry", command: "docker stats" },
+      historyEntry,
+    ]);
+    const readCount = api.history.mock.calls.length;
+    notifyHistoryChanged("other-host");
+    expect(api.history).toHaveBeenCalledTimes(readCount);
+    notifyHistoryChanged(connection.id);
+    await screen.findByText("stats");
+    expect(api.history).toHaveBeenLastCalledWith(connection.id, "docker");
+    expect(api.historyIntegrationStatus).toHaveBeenCalledTimes(1);
+  });
+
   it("retains saved commands after clear fails and retries the confirmed operation", async () => {
     api.clearHistory
       .mockRejectedValueOnce(new Error("database locked"))
-      .mockResolvedValue(undefined);
+      .mockImplementationOnce(async () => {
+        api.history.mockResolvedValue([]);
+      });
     render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
     await clickAction("Clear saved history");
@@ -112,7 +134,7 @@ describe("HistoryPane", () => {
   });
 
   it("reports integration installation failure without enabling capture and allows retry", async () => {
-    api.historyIntegrationStatus.mockResolvedValue(false);
+    api.historyIntegrationStatus.mockResolvedValue("not-installed");
     api.installHistoryIntegration
       .mockRejectedValueOnce(new Error("remote home is read-only"))
       .mockResolvedValue(connection);
@@ -123,6 +145,18 @@ describe("HistoryPane", () => {
     expect(options.onConnectionChanged).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Enable Enhanced History" }));
     await waitFor(() => expect(options.onConnectionChanged).toHaveBeenCalledWith(connection));
+  });
+
+  it("updates an older Bash integration without enabling a disabled connection", async () => {
+    const options = props();
+    const disabled = { ...connection, historyEnabled: false };
+    api.historyIntegrationStatus.mockResolvedValue("update-available");
+    api.installHistoryIntegration.mockResolvedValue(disabled);
+    render(<HistoryPane {...options} connection={disabled} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Update Bash integration" }));
+    expect(api.installHistoryIntegration).toHaveBeenCalledExactlyOnceWith(connection.id, false);
+    expect(options.onConnectionChanged).toHaveBeenCalledExactlyOnceWith(disabled);
+    await screen.findByText("Disabled for this connection");
   });
 
   it("keeps local commands searchable when the remote integration check fails", async () => {
@@ -162,7 +196,9 @@ describe("HistoryPane", () => {
   });
 
   it("keeps history when clear is cancelled and removes it only after confirmation", async () => {
-    api.clearHistory.mockResolvedValue(undefined);
+    api.clearHistory.mockImplementationOnce(async () => {
+      api.history.mockResolvedValue([]);
+    });
     render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
     await clickAction("Clear saved history");
@@ -173,6 +209,23 @@ describe("HistoryPane", () => {
     await userEvent.click(screen.getByRole("button", { name: "Clear history" }));
     await waitFor(() => expect(screen.queryByText("docker ps")).toBeNull());
     expect(api.clearHistory).toHaveBeenCalledExactlyOnceWith(connection.id);
+  });
+
+  it("discards an in-flight read after clearing and shows commands saved after the clear", async () => {
+    render(<HistoryPane {...props()} />);
+    await screen.findByText("docker ps");
+    let finishRead!: (entries: (typeof historyEntry)[]) => void;
+    api.history.mockImplementationOnce(() => new Promise((resolve) => (finishRead = resolve)));
+    notifyHistoryChanged(connection.id);
+    await waitFor(() => expect(finishRead).toBeDefined());
+    api.clearHistory.mockImplementationOnce(async () => {
+      api.history.mockResolvedValue([{ ...historyEntry, id: "post-clear", command: "pwd" }]);
+    });
+    await clickAction("Clear saved history");
+    await userEvent.click(screen.getByRole("button", { name: "Clear history" }));
+    await act(async () => finishRead([historyEntry]));
+    await screen.findByText("pwd");
+    expect(screen.queryByText("docker ps")).toBeNull();
   });
 
   it("keeps the entry visible when deletion fails and allows a retry", async () => {
@@ -190,7 +243,7 @@ describe("HistoryPane", () => {
 
   it("reports an empty integrated history separately from a failed history read", async () => {
     api.history.mockResolvedValue([]);
-    api.historyIntegrationStatus.mockResolvedValue(true);
+    api.historyIntegrationStatus.mockResolvedValue("installed");
     render(<HistoryPane {...props()} />);
     expect(await screen.findByText("No commands recorded yet")).toBeTruthy();
     api.history.mockRejectedValue(new Error("Read failed"));
@@ -208,7 +261,7 @@ describe("HistoryPane", () => {
 
   it("changes only the selected connection's capture setting", async () => {
     const options = props();
-    api.historyIntegrationStatus.mockResolvedValue(true);
+    api.historyIntegrationStatus.mockResolvedValue("installed");
     api.setConnectionHistoryEnabled.mockResolvedValue({ ...connection, historyEnabled: false });
     render(<HistoryPane {...options} />);
     await screen.findByText("docker ps");
@@ -220,19 +273,19 @@ describe("HistoryPane", () => {
   });
 
   it("does not let a previous connection's pending refresh overwrite the current integration state", async () => {
-    api.historyIntegrationStatus.mockResolvedValue(true);
+    api.historyIntegrationStatus.mockResolvedValue("installed");
     const options = props();
     const view = render(<HistoryPane {...options} />);
     await screen.findByText("docker ps");
-    let finish!: (value: boolean) => void;
+    let finish!: (value: HistoryIntegrationStatus) => void;
     api.historyIntegrationStatus.mockImplementationOnce(
       () =>
-        new Promise<boolean>((resolve) => {
+        new Promise<HistoryIntegrationStatus>((resolve) => {
           finish = resolve;
         }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    api.historyIntegrationStatus.mockResolvedValue(false);
+    api.historyIntegrationStatus.mockResolvedValue("not-installed");
     api.history.mockResolvedValue([]);
     view.rerender(
       <HistoryPane
@@ -241,7 +294,7 @@ describe("HistoryPane", () => {
       />,
     );
     await screen.findByRole("button", { name: "Enable Enhanced History" });
-    await act(async () => finish(true));
+    await act(async () => finish("installed"));
     expect(screen.getByRole("button", { name: "Enable Enhanced History" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Disable on this connection" })).toBeNull();
   });
@@ -249,7 +302,9 @@ describe("HistoryPane", () => {
     "ignores late %s completion after switching hosts",
     async (operation) => {
       const options = props();
-      api.historyIntegrationStatus.mockResolvedValue(operation !== "install");
+      api.historyIntegrationStatus.mockResolvedValue(
+        operation === "install" ? "not-installed" : "installed",
+      );
       const method = {
         install: api.installHistoryIntegration,
         uninstall: api.uninstallHistoryIntegration,
@@ -292,7 +347,7 @@ describe("HistoryPane", () => {
   );
 
   it("ignores a late mutation error and releases the new host's controls", async () => {
-    api.historyIntegrationStatus.mockResolvedValue(false);
+    api.historyIntegrationStatus.mockResolvedValue("not-installed");
     let fail!: (reason: Error) => void;
     api.installHistoryIntegration.mockImplementationOnce(
       () =>
@@ -384,7 +439,7 @@ describe("HistoryPane", () => {
       api.history.mockImplementation((id: string, query?: string) =>
         query ? Promise.resolve([]) : Promise.resolve([{ ...historyEntry }]),
       );
-      api.historyIntegrationStatus.mockResolvedValue(true);
+      api.historyIntegrationStatus.mockResolvedValue("installed");
       render(<HistoryPane {...props()} />);
       await screen.findByText("docker ps");
       await user.type(screen.getByPlaceholderText("Search commands"), "zzz");
@@ -397,7 +452,7 @@ describe("HistoryPane", () => {
 
     it("highlights matched text without changing the stored command or copy payload", async () => {
       const user = userEvent.setup();
-      api.historyIntegrationStatus.mockResolvedValue(true);
+      api.historyIntegrationStatus.mockResolvedValue("installed");
       const writeText = stubClipboard();
       const view = render(<HistoryPane {...props()} />);
       await screen.findByText("docker ps");
@@ -410,7 +465,7 @@ describe("HistoryPane", () => {
 
   describe("capture state and management menu", () => {
     it("reads the capture state from actual signals", async () => {
-      api.historyIntegrationStatus.mockResolvedValue(true);
+      api.historyIntegrationStatus.mockResolvedValue("installed");
       const options = props();
       const view = render(<HistoryPane {...options} />);
       expect(await screen.findByText("Recording")).toBeTruthy();
@@ -422,7 +477,7 @@ describe("HistoryPane", () => {
       expect(screen.getByText("Disabled for this connection")).toBeTruthy();
       view.rerender(<HistoryPane {...options} globalEnabled={false} />);
       expect(screen.getByText("Disabled globally")).toBeTruthy();
-      api.historyIntegrationStatus.mockResolvedValue(false);
+      api.historyIntegrationStatus.mockResolvedValue("not-installed");
       view.rerender(
         <HistoryPane {...options} connection={{ ...connection, id: "connection-b" }} />,
       );
@@ -435,7 +490,7 @@ describe("HistoryPane", () => {
     });
 
     it("keeps de-emphasized management actions in a labeled, dismissible menu", async () => {
-      api.historyIntegrationStatus.mockResolvedValue(true);
+      api.historyIntegrationStatus.mockResolvedValue("installed");
       render(<HistoryPane {...props()} />);
       await screen.findByText("docker ps");
       const trigger = screen.getByRole("button", { name: "More actions" });
@@ -455,7 +510,7 @@ describe("HistoryPane", () => {
     });
   });
   it("keeps a deleted row mounted until its successful collapse completes", async () => {
-    api.historyIntegrationStatus.mockResolvedValue(true);
+    api.historyIntegrationStatus.mockResolvedValue("installed");
     let finish!: () => void;
     api.deleteHistory.mockImplementationOnce(
       () =>
@@ -495,7 +550,7 @@ describe("HistoryPane", () => {
   });
 
   it("returns keyboard focus to More after Escape dismisses its focused menu", async () => {
-    api.historyIntegrationStatus.mockResolvedValue(true);
+    api.historyIntegrationStatus.mockResolvedValue("installed");
     render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
     const more = screen.getByRole("button", { name: "More actions" });
@@ -507,7 +562,7 @@ describe("HistoryPane", () => {
   });
 
   it("reports unavailable after a failed refresh of a previously missing integration", async () => {
-    api.historyIntegrationStatus.mockResolvedValueOnce(false);
+    api.historyIntegrationStatus.mockResolvedValueOnce("not-installed");
     render(<HistoryPane {...props()} />);
     await screen.findByText("Integration not installed");
     api.historyIntegrationStatus.mockRejectedValueOnce(new Error("SSH unavailable"));
@@ -516,20 +571,20 @@ describe("HistoryPane", () => {
     expect(screen.getByText("Status unavailable")).toBeTruthy();
   });
   it("keeps refresh busy until the remote integration check also settles", async () => {
-    api.historyIntegrationStatus.mockResolvedValueOnce(true);
+    api.historyIntegrationStatus.mockResolvedValueOnce("installed");
     render(<HistoryPane {...props()} />);
     await screen.findByText("Recording");
-    let finish!: (value: boolean) => void;
+    let finish!: (value: HistoryIntegrationStatus) => void;
     api.historyIntegrationStatus.mockImplementationOnce(
       () =>
-        new Promise<boolean>((resolve) => {
+        new Promise<HistoryIntegrationStatus>((resolve) => {
           finish = resolve;
         }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect(screen.getByRole("button", { name: "Refresh" }).hasAttribute("disabled")).toBe(true);
     expect(document.querySelector(".spinning")).not.toBeNull();
-    await act(async () => finish(true));
+    await act(async () => finish("installed"));
     expect(screen.getByRole("button", { name: "Refresh" }).hasAttribute("disabled")).toBe(false);
   });
 
@@ -556,7 +611,7 @@ describe("HistoryPane", () => {
     "gives actionable empty-history guidance for $guidance",
     async ({ globalEnabled, paused, enabled, guidance }) => {
       api.history.mockResolvedValue([]);
-      api.historyIntegrationStatus.mockResolvedValue(true);
+      api.historyIntegrationStatus.mockResolvedValue("installed");
       render(
         <HistoryPane
           {...props()}
@@ -594,7 +649,7 @@ describe("HistoryPane", () => {
   });
 
   it.each([false, true])("dismisses More actions on Tab, backwards: %s", async (backwards) => {
-    api.historyIntegrationStatus.mockResolvedValue(true);
+    api.historyIntegrationStatus.mockResolvedValue("installed");
     render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
     await userEvent.click(screen.getByRole("button", { name: "More actions" }));
@@ -623,7 +678,7 @@ describe("HistoryPane", () => {
 
   it("avoids capture guidance based on a cached integration status after a failed refresh", async () => {
     api.history.mockResolvedValue([]);
-    api.historyIntegrationStatus.mockResolvedValueOnce(true);
+    api.historyIntegrationStatus.mockResolvedValueOnce("installed");
     render(<HistoryPane {...props()} />);
     await screen.findByText("No commands recorded yet");
     api.historyIntegrationStatus.mockRejectedValueOnce(new Error("Host is offline"));

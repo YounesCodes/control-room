@@ -9,6 +9,8 @@ import historyScreenshot from "../../../assets/screenshots/history.png";
 
 Open **History** for the host and select **Enable Enhanced History**. Control Room adds a marked block to the remote account's `~/.bashrc` and a script under `~/.local/share/control-room/`. Capture also needs **Enable Enhanced History globally** in Settings to be on.
 
+If History offers **Update Bash integration**, select it and reconnect so new sessions load the updated script.
+
 <figure class="docs-screenshot">
   <a href={historyScreenshot.src} target="_blank" rel="noreferrer">
     <img
@@ -19,14 +21,14 @@ Open **History** for the host and select **Enable Enhanced History**. Control Ro
   <figcaption>Saved commands from Bash sessions. Example data shown.</figcaption>
 </figure>
 
-Only sessions opened after the integration is enabled report entries. The integration reports:
+Only sessions opened after the integration is enabled report entries. Commands that Bash excludes from its history, such as space-prefixed commands with `HISTCONTROL=ignorespace`, are skipped. The integration reports:
 
 - the command line
 - working directory
 - start and finish times
 - exit code
 
-Entries are stored on your Windows machine. You can search, copy, or delete them, and paste a command into the terminal without running it. The header shows the current capture state: **Recording**, **Paused in this workspace**, **Disabled for this connection**, **Disabled globally**, **Integration not installed**, or **Status unavailable**. **Pause** stops capture for the current tab. Open the **More actions** menu at the top right for **Disable on this connection**, **Clear saved history**, and **Remove from remote Bash**.
+Entries are stored on your Windows machine and appear in History automatically when a command finishes. You can search, copy, or delete them, and paste a command into the terminal without running it. **Pause** stops capture for the current tab. Open the **More actions** menu at the top right for **Disable on this connection**, **Clear saved history**, and **Remove from remote Bash**.
 
 **Remove from remote Bash** removes the marked block and script. If several connections use the same remote account, removal affects all of them. **Clear saved history** deletes only this connection's saved entries on your machine.
 
