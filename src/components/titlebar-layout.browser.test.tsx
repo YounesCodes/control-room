@@ -105,8 +105,11 @@ it.each([1440, 960, 520])("keeps metrics still across update states at %ipx", as
     const button = container.querySelector(".update-indicator-button")!.getBoundingClientRect();
     expect(button.right).toBeLessThanOrEqual(width);
     expect(button.left).toBeGreaterThanOrEqual(0);
-    expect(button.width).toBe(28);
-    expect(button.height).toBe(28);
+    expect(button.width).toBe(38);
+    expect(button.height).toBe(38);
+    expect(!!container.querySelector(".update-indicator-progress")).toBe(
+      state.status === "downloading",
+    );
     expect(container.querySelector(".update-indicator-button")!.textContent).toBe("");
     if (state.status === "downloading" && state.total !== null)
       expect(container.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe(

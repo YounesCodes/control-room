@@ -671,19 +671,12 @@ code,
   flex: 1;
   gap: 12px;
   min-width: 0;
-  /* Reserve the same shallow scrollbar rail before and after overflow, so
-     revealing Terminal's Focus button cannot push the labels upward. */
-  overflow-x: scroll;
-  scrollbar-width: auto;
-  scrollbar-color: auto;
-  padding: 6px 0 0 14px;
+  overflow: clip;
+  padding-left: 14px;
   align-items: center;
 }
-.host-metrics-values::-webkit-scrollbar {
-  height: 6px;
-}
-.host-metrics-values::-webkit-scrollbar-thumb {
-  border-width: 2px;
+.host-metrics-values[data-empty] {
+  border-left-color: transparent;
 }
 .host-metric {
   display: flex;
@@ -698,6 +691,12 @@ code,
 .host-metric:last-child {
   padding-right: 0;
   border-right: 0;
+}
+.host-metric[data-overflow] {
+  visibility: hidden;
+}
+.host-metric:has(+ [data-overflow]) {
+  border-right-color: transparent;
 }
 .host-metric-label {
   color: var(--text-faint);
@@ -842,7 +841,7 @@ code,
   position: absolute;
   top: calc(100% + 10px);
   left: 12px;
-  width: min(420px, calc(100vw - 40px));
+  width: min(420px, calc(100vw - var(--connection-rail-width) - 26px));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
@@ -953,14 +952,27 @@ code,
   }
 }
 
+@media (max-width: 680px) {
+  .app-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .sidebar {
+    grid-column: 1;
+    grid-row: 2 / -1;
+  }
+
+  .host-metrics-panel {
+    width: min(420px, calc(100vw - 26px));
+    max-height: calc(100vh - 64px);
+  }
+}
+
 /* ==========================================================================
    Control Room updates
    ========================================================================== */
 
-/* The titlebar control sits left of Settings and renders nothing at all while
-   the app is current, so an up-to-date titlebar is unchanged by this feature.
-   It is a plain button with no drag region, so pressing it never starts a
-   window drag. */
 .update-indicator {
   position: relative;
   display: flex;
@@ -969,21 +981,12 @@ code,
 
 .update-indicator-button {
   position: relative;
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: none;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface-raised);
-  padding: 0;
-  color: var(--text-muted);
 }
 
 .update-indicator-progress {
   position: absolute;
-  inset: -1px;
+  inset: 0;
+  margin: auto;
   width: 28px;
   height: 28px;
   pointer-events: none;
@@ -998,17 +1001,11 @@ code,
   stroke-dasharray: 100;
 }
 
-.update-indicator-button:hover,
-.update-indicator-button.active {
-  background: var(--fill-hover);
-  color: var(--text-strong);
-}
-
 /* The restart icon, tooltip, and accessible name also identify the ready state. */
 .update-indicator-dot {
   position: absolute;
-  top: -1px;
-  right: -1px;
+  top: 6px;
+  right: 6px;
   width: 6px;
   height: 6px;
   flex: none;

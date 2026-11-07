@@ -44,9 +44,8 @@ it("reveals only the hovered scroll section without changing its layout or scrol
   fixture = document.createElement("div");
   fixture.style.cssText = "position:fixed;inset:20px;display:flex;gap:20px;align-items:start";
   document.body.append(fixture);
-  const sections = ["", "", "host-metrics-values"].map((className) => {
+  const sections = Array.from({ length: 2 }, () => {
     const section = document.createElement("div");
-    section.className = className;
     section.style.cssText = "width:160px;height:100px;overflow:auto;flex:none";
     const content = document.createElement("div");
     content.style.cssText = "width:400px;height:400px";
@@ -72,42 +71,38 @@ it("reveals only the hovered scroll section without changing its layout or scrol
     expect(sections.map((item) => item.clientWidth)).toEqual(widths);
     expect(section.scrollTop).toBe(30);
   }
-  await userEvent.unhover(sections[2]);
+  await userEvent.unhover(sections[1]);
   for (const section of sections) {
     await hidden(section);
   }
 });
 
-it.each(["div", "textarea", "metrics"])(
-  "fades a %s thumb on actual hover and leave",
-  async (kind) => {
-    stretchTransitions();
-    fixture = document.createElement("div");
-    fixture.style.cssText = "position:fixed;inset:20px";
-    document.body.append(fixture);
-    const section = document.createElement(kind === "textarea" ? "textarea" : "div");
-    if (kind === "metrics") section.className = "host-metrics-values";
-    section.style.cssText = "width:160px;height:100px;overflow:auto";
-    const content = document.createElement("div");
-    content.style.cssText = "width:400px;height:400px";
-    if (section instanceof HTMLTextAreaElement) section.value = "line\n".repeat(40);
-    else section.append(content);
-    fixture.append(section);
-    const alpha = () => pixel(section)[3] / 255;
+it.each(["div", "textarea"])("fades a %s thumb on actual hover and leave", async (kind) => {
+  stretchTransitions();
+  fixture = document.createElement("div");
+  fixture.style.cssText = "position:fixed;inset:20px";
+  document.body.append(fixture);
+  const section = document.createElement(kind === "textarea" ? "textarea" : "div");
+  section.style.cssText = "width:160px;height:100px;overflow:auto";
+  const content = document.createElement("div");
+  content.style.cssText = "width:400px;height:400px";
+  if (section instanceof HTMLTextAreaElement) section.value = "line\n".repeat(40);
+  else section.append(content);
+  fixture.append(section);
+  const alpha = () => pixel(section)[3] / 255;
 
-    await userEvent.unhover(section);
-    await hidden(section);
-    await userEvent.hover(section);
-    await expect.poll(alpha).toBeGreaterThan(0);
-    const revealing = alpha();
-    expect(revealing).toBeLessThan(1);
+  await userEvent.unhover(section);
+  await hidden(section);
+  await userEvent.hover(section);
+  await expect.poll(alpha).toBeGreaterThan(0);
+  const revealing = alpha();
+  expect(revealing).toBeLessThan(1);
 
-    await userEvent.unhover(section);
-    await expect.poll(alpha).toBeLessThan(revealing);
-    stopTransitions();
-    await hidden(section);
-  },
-);
+  await userEvent.unhover(section);
+  await expect.poll(alpha).toBeLessThan(revealing);
+  stopTransitions();
+  await hidden(section);
+});
 
 it("hides the terminal scrollbar after leaving a terminal with scrollback", async () => {
   fixture = document.createElement("div");

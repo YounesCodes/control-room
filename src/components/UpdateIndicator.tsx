@@ -17,7 +17,7 @@ interface UpdateIndicatorProps {
 }
 
 /**
- * The titlebar update control, immediately left of Settings.
+ * The update control in the titlebar.
  *
  * Nothing renders while Control Room is current, so the titlebar of an
  * up-to-date app is exactly what it was before this feature existed. The
@@ -62,7 +62,7 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
   return (
     <div className="update-indicator" ref={containerRef}>
       <button
-        className={open ? "update-indicator-button active" : "update-indicator-button"}
+        className={`app-bar-button update-indicator-button${open ? " active" : ""}`}
         type="button"
         onClick={() => canOpenUpdateDetails(state) && setOpen((current) => !current)}
         aria-label={updateIndicatorAccessibleName(state) ?? label}
