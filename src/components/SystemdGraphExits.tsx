@@ -22,12 +22,7 @@ export function SystemdGraphExits({ layout, root, scope, units }: Scene) {
   useLayoutEffect(() => {
     const old = previous.current;
     previous.current = { layout, root, scope, units };
-    if (
-      !old ||
-      old.root !== root ||
-      old.scope !== scope ||
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    ) {
+    if (!old || old.root !== root || old.scope !== scope) {
       for (const timer of timers.current.values()) clearTimeout(timer);
       timers.current.clear();
       setExits([]);

@@ -184,7 +184,7 @@ h3 {
 html,
 body,
 #root {
-  /* Tauri owns the native 960 x 640 minimum. WebView2 can report a fractional
+  /* Tauri owns the native 520 x 480 minimum. WebView2 can report a fractional
      content size just below that boundary after Windows scaling, so the web
      root must follow the actual viewport instead of forcing one extra pixel. */
   min-width: 0;
@@ -3135,7 +3135,19 @@ code,
 }
 
 .terminal-pane-layout {
-  overflow: hidden;
+  overflow: auto;
+}
+
+.terminal-layout-surface {
+  position: absolute;
+  inset: 0;
+}
+
+.terminal-pane-layout .terminal-layout-surface {
+  position: relative;
+  inset: auto;
+  /* Keep rounded pane edges and animated headings out of the scroll size. */
+  overflow: clip;
 }
 
 .terminal-pane-layout .terminal-workspace-pane {
@@ -3146,11 +3158,7 @@ code,
   overflow: hidden;
 }
 
-.terminal-pane-layout .terminal-workspace-pane.active {
-  z-index: 1;
-}
-
-/* Paint the frame above terminal backgrounds, inside the pane's rectangle. */
+/* Paint the frame inside the pane's rectangle. */
 .terminal-pane-layout .terminal-workspace-pane::after {
   content: "";
   position: absolute;
@@ -3162,6 +3170,7 @@ code,
 }
 
 .terminal-pane-layout .terminal-workspace-pane.active::after {
+  z-index: 6;
   border: 1px solid var(--accent);
 }
 
@@ -3175,6 +3184,7 @@ code,
   inset: auto;
   min-height: 0;
   flex: 1;
+  margin-top: 28px;
 }
 
 .terminal-layout-divider {
@@ -3186,6 +3196,143 @@ code,
   height: 24px;
   transform: translateY(-50%);
   cursor: row-resize;
+}
+
+.terminal-pane-heading {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  height: 28px;
+  padding-inline: 5px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-chrome);
+}
+.terminal-pane-heading button {
+  display: flex;
+  min-width: 26px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-muted);
+}
+.terminal-pane-heading button:hover,
+.terminal-pane-heading button:focus-visible {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+.terminal-pane-heading .terminal-pane-grip {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 5px;
+  touch-action: none;
+  cursor: grab;
+}
+.terminal-pane-grip:active {
+  cursor: grabbing;
+}
+.terminal-pane-grip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.terminal-pane-heading > button:not(.terminal-pane-grip) {
+  opacity: 0;
+}
+.terminal-pane-heading:hover > button,
+.terminal-pane-heading:focus-within > button {
+  opacity: 1;
+}
+.terminal-drop-layer {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  pointer-events: none;
+}
+.terminal-drop-target,
+.terminal-drop-preview {
+  position: absolute;
+}
+.terminal-drop-target {
+  border: 2px dashed var(--border-strong);
+  background: rgb(0 0 0 / 35%);
+}
+.terminal-drop-target > span {
+  position: absolute;
+  padding: 6px 8px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 11px;
+}
+.terminal-drop-target [data-zone="center"] {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.terminal-drop-target [data-zone="left"] {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.terminal-drop-target [data-zone="right"] {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.terminal-drop-target [data-zone="top"] {
+  left: 50%;
+  top: 34px;
+  transform: translateX(-50%);
+}
+.terminal-drop-target [data-zone="bottom"] {
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+}
+.terminal-drop-target.valid,
+.terminal-drop-target .selected {
+  border-color: var(--accent);
+}
+.terminal-drop-target.invalid,
+.terminal-drop-preview.invalid {
+  border-color: var(--failure);
+}
+.terminal-drop-preview {
+  border: 2px solid var(--accent);
+  background: rgb(255 255 255 / 8%);
+}
+.terminal-drop-preview > span {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 34px 8px 0;
+  padding: 5px 8px;
+  overflow-wrap: anywhere;
+  background: var(--surface-overlay);
+  color: var(--text);
+  font-size: 11px;
+}
+.terminal-arrange-body {
+  padding: 20px;
+}
+.terminal-arrange-body label {
+  display: grid;
+  gap: 8px;
+}
+.terminal-arrange-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.terminal-arrange-actions button {
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
 }
 
 .terminal-layout-divider[aria-orientation="horizontal"]::after {
@@ -4431,12 +4578,6 @@ dd {
 .systemd-scope-switch [aria-pressed="true"] {
   background: transparent;
 }
-@media (prefers-reduced-motion: reduce) {
-  .systemd-mode-switch[data-animated]::before,
-  .systemd-scope-switch::before {
-    transition: none;
-  }
-}
 .systemd-toolbar-actions {
   margin-left: auto;
   display: flex;
@@ -5271,30 +5412,6 @@ dd {
     visibility: hidden;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .systemd-graph-exit-scene {
-    display: none;
-  }
-  .systemd-connection,
-  .systemd-connection.edge-reverse {
-    animation: none;
-  }
-  .systemd-presence > * {
-    animation: none !important;
-  }
-  .systemd-graph-node,
-  .systemd-unit-reveal,
-  .systemd-inspector.arch-detail {
-    animation: none;
-  }
-  .systemd-inventory {
-    transition: none;
-  }
-  .systemd-selection-indicator[data-glide] {
-    transition: none;
-  }
-}
-
 .unit-scope-note {
   display: block;
   margin-top: 3px;
@@ -7821,19 +7938,6 @@ kbd {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-delay: 0s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    transition-delay: 0s !important;
-  }
-}
-
 /* Shared inspection canvas */
 .ports-page {
   position: absolute;
@@ -8479,11 +8583,6 @@ details[open] > .inspector-disclosure-body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  details[open] > .inspector-disclosure-body {
-    animation: none;
-  }
-}
 .port-owner-actions {
   display: flex;
   flex-wrap: wrap;
@@ -9031,13 +9130,97 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .arch-focusing,
-  .graph-toolbar {
-    transition: none;
+/* Compact windows keep content wide; Connections and views share a drawer. */
+.compact-navigation-toggle,
+.navigation-backdrop {
+  display: none;
+}
+.app-shell[data-compact]:not(.terminal-focus-mode):not(.settings-mode) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell[data-compact] .app-bar,
+.app-shell[data-compact] .workspace-shell {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.app-shell[data-compact] .app-bar {
+  justify-content: space-between;
+}
+.app-shell[data-compact] .app-bar > .host-metrics {
+  min-width: 0;
+  flex: 1;
+}
+.app-shell[data-compact] .compact-navigation-toggle {
+  display: flex;
+  flex: 0 0 40px;
+}
+.app-shell[data-compact] .sidebar {
+  display: none;
+}
+.app-shell[data-compact]:not(.settings-mode):not(.terminal-focus-mode) .sidebar.navigation-open {
+  position: fixed;
+  z-index: 60;
+  inset: 42px auto 0 0;
+  display: flex;
+  width: min(300px, calc(100vw - 56px));
+  box-shadow: var(--shadow-popover);
+}
+.app-shell[data-compact] .navigation-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 42px 0 0;
+  display: block;
+  background: rgb(0 0 0 / 55%);
+}
+.app-shell[data-compact] .connections-divider {
+  display: none;
+}
+@media (max-width: 859px) {
+  .session-group-action {
+    padding-inline: 8px;
   }
-
-  .arch-detail {
-    animation: none;
+  .terminal-appearance-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .terminal-appearance-preview {
+    position: static;
+  }
+  .settings-page {
+    --settings-gutter: 16px;
+  }
+  .settings-heading-text p {
+    display: none;
+  }
+  .history-page,
+  .logs-page,
+  .boot-page {
+    padding: 16px;
+  }
+  .boot-heading-actions,
+  .history-tools,
+  .history-tools-actions,
+  .toolbar-actions {
+    flex-wrap: wrap;
+  }
+  .page-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .log-controls .source-select,
+  .log-controls .log-search {
+    min-width: 0;
+    flex: 1 1 200px;
+  }
+  .modal-header h2 {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .modal-header {
+    min-height: 51px;
+    height: auto;
+    padding-block: 10px;
+  }
+  .modal-header > button {
+    flex-shrink: 0;
   }
 }

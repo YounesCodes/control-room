@@ -9,7 +9,7 @@ import terminalMenuScreenshot from "../../assets/screenshots/new-terminal-menu.p
 
 The SSH terminal uses Windows OpenSSH. Type commands as you would in any other SSH client. Local shells use the same terminal controls.
 
-The status circle becomes a rotating ring while connecting, running a command, or opening and refreshing host inspection views. It returns to a solid circle when the work finishes. Automatic header-metric readings use the header's own status and do not spin an idle terminal's circle. With reduced motion enabled, the ring stays still. Command completion follows the shell's markers or returning prompt; a custom prompt that changes its format may need shell integration to report completion reliably. Coding agents use their terminal progress reports or recognized on-screen work indicators. The circle rests while they are idle or paused. Agents with custom launch commands or interfaces need OSC 9;4 progress reporting for reliable activity detection.
+The status circle becomes a rotating ring while connecting, running a command, or opening and refreshing host inspection views. It returns to a solid circle when the work finishes. Automatic header-metric readings use the header's own status and do not spin an idle terminal's circle. Command completion follows the shell's markers or returning prompt; a custom prompt that changes its format may need shell integration to report completion reliably. Coding agents use their terminal progress reports or recognized on-screen work indicators. The circle rests while they are idle or paused. Agents with custom launch commands or interfaces need OSC 9;4 progress reporting for reliable activity detection.
 
 <figure class="docs-screenshot">
   <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
@@ -69,6 +69,8 @@ When a group's pane tabs overflow, **All panes** lists its terminals. Both lists
 </figure>
 
 Drag the divider between terminals to change their sizes, including inside nested splits. You can also focus a divider with Tab and use the arrow keys, or hold Shift for larger steps. Double-click a divider or press Enter to reset it to equal sizes. Each group remembers its sizes across switching views and app restarts. Small windows temporarily limit pane sizes; widening the window restores your saved proportions.
+
+Drag a pane's header onto another pane's center to swap them, or onto an edge to dock it beside, above, or below that pane. The preview shows the result before you release. Press **Escape** or release outside a target to cancel. A red target rejects a move that cannot fit. Use **Arrange pane** in the pane header for keyboard moves or to choose **Side by side** or **Stacked** for its split. Moving panes keeps their sessions and scrollback. Large groups scroll within the terminal area when the window cannot fit them.
 
 Leave focus mode to return to the host's inspection views. Closing a tab with a running session asks for confirmation.
 

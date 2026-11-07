@@ -179,13 +179,11 @@ docs-toc a:hover {
   outline-offset: 3px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  :where(a, button, select, summary) {
-    transition:
-      color 110ms,
-      background-color 110ms,
-      border-color 110ms;
-  }
+:where(a, button, select, summary) {
+  transition:
+    color 110ms,
+    background-color 110ms,
+    border-color 110ms;
 }
 
 @media (max-width: 49.999rem) {
@@ -221,15 +219,5 @@ docs-toc a:hover {
 
   .sidebar-content {
     padding-bottom: 2rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition: none !important;
-    animation: none !important;
   }
 }

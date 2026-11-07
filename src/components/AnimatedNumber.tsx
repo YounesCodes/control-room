@@ -25,7 +25,6 @@ export function AnimatedNumber({
     const element = visual.current;
     if (!element) return;
     let frame = 0;
-    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     const duration = parseFloat(getComputedStyle(element).getPropertyValue("--motion-slow")) || 0;
     const paint = (number: number | null) => {
       shown.current = number;
@@ -41,7 +40,6 @@ export function AnimatedNumber({
       target === null ||
       from === target ||
       !animate ||
-      media?.matches ||
       document.hidden ||
       !duration
     ) {
@@ -57,14 +55,12 @@ export function AnimatedNumber({
       else paint(target);
     };
     const settle = () => {
-      if (media?.matches || document.hidden) finish();
+      if (document.hidden) finish();
     };
     frame = requestAnimationFrame(tick);
-    media?.addEventListener("change", settle);
     document.addEventListener("visibilitychange", settle);
     return () => {
       cancelAnimationFrame(frame);
-      media?.removeEventListener("change", settle);
       document.removeEventListener("visibilitychange", settle);
     };
   }, [target, format, fallback, animate]);

@@ -43,7 +43,7 @@ const MORE_MENU_WIDTH = 240;
 const MORE_MENU_HEIGHT = 132;
 const COPY_FEEDBACK_MS = 1500;
 const HISTORY_REFRESH_MS = 75;
-// Matches --motion-med; reduced motion removes the row immediately.
+// Matches --motion-med.
 const REMOVE_COLLAPSE_MS = 160;
 
 function escapeRegExp(value: string): string {
@@ -500,9 +500,6 @@ export function HistoryPane({
         if (generation !== mutationGeneration.current) return;
         if (invalidateHistoryRead()) notifyHistoryChanged(connection.id);
         setRemovingIds((current) => new Set(current).add(entry.id));
-        const delay = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-          ? 0
-          : REMOVE_COLLAPSE_MS;
         const timer = window.setTimeout(() => {
           removalTimersRef.current.delete(entry.id);
           if (generation !== mutationGeneration.current) return;
@@ -512,7 +509,7 @@ export function HistoryPane({
             next.delete(entry.id);
             return next;
           });
-        }, delay);
+        }, REMOVE_COLLAPSE_MS);
         const previousTimer = removalTimersRef.current.get(entry.id);
         if (previousTimer !== undefined) window.clearTimeout(previousTimer);
         removalTimersRef.current.set(entry.id, timer);

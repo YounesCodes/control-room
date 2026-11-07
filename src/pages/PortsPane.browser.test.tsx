@@ -142,7 +142,6 @@ function renderPane(
 
 afterEach(() => {
   cleanup();
-  document.getElementById("camera-motion-override")?.remove();
 });
 
 it("switches graph selection and inspector with arrows and returns focus on Escape", async () => {
@@ -255,15 +254,6 @@ const manySockets: CachedList<ListeningSocket> = {
   error: null,
 };
 
-// The suite pins prefers-reduced-motion, which collapses the camera glide to
-// 0.01ms. Mid-gesture timing only reproduces with the production 420ms glide.
-function enableRealMotion() {
-  const style = document.createElement("style");
-  style.id = "camera-motion-override";
-  style.textContent = ".arch-focusing { transition: transform 420ms ease !important; }";
-  document.head.append(style);
-}
-
 /** A person's press: pointerdown focuses the chip, the camera may move while
  *  the button is held, and the mouseup lands on whatever sits under the same
  *  cursor position afterwards. Dispatched by hand on purpose — Playwright
@@ -351,35 +341,30 @@ it("keeps snapshot metadata on Ports hover with a gap below the whole toolbar", 
 });
 
 for (const width of [960, 1600]) {
-  it(
-    "frames selections beside the inspector at " + width + "px and respects reduced motion",
-    async () => {
-      await page.viewport(width, 760);
-      renderPane();
-      await screen.findByRole("button", { name: /12 established/ });
-      const before = camera();
-      await page.getByRole("button", { name: /443.*Listening/ }).click();
-      await waitFor(() => {
-        expect(camera().a).toBeGreaterThan(before.a);
-        expectNodeBesideInspector(screen.getByRole("button", { name: /443.*Listening/ }));
-      });
-      const inspector = screen.getByRole("complementary");
-      expect(document.activeElement).toBe(inspector);
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      expect(getComputedStyle(inspector).animationName).toBe(
-        reduced ? "none" : "port-inspector-in",
-      );
-      // Related connection evidence belongs to the selected listening endpoint.
-      expect(screen.getAllByRole("button", { name: /12 established/ })).toHaveLength(1);
-      await page.getByText("12 established · Remote endpoints", { exact: true }).click();
-      expect(within(screen.getByRole("complementary")).getByText("203.0.113.9")).toBeTruthy();
-      await userEvent.keyboard("{Escape}");
-      expect(screen.queryByRole("complementary")).toBeNull();
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: /443.*Listening/ }));
-      await page.getByRole("button", { name: "Fit to view" }).click();
-      expect(camera().a).toBeCloseTo(before.a);
-    },
-  );
+  it("frames selections beside the inspector at " + width + "px", async () => {
+    await page.viewport(width, 760);
+    renderPane();
+    await screen.findByRole("button", { name: /12 established/ });
+    const before = camera();
+    await page.getByRole("button", { name: /443.*Listening/ }).click();
+    await waitFor(() => {
+      expect(camera().a).toBeGreaterThan(before.a);
+      expectNodeBesideInspector(screen.getByRole("button", { name: /443.*Listening/ }));
+    });
+    const inspector = screen.getByRole("complementary");
+    expect(document.activeElement).toBe(inspector);
+
+    expect(getComputedStyle(inspector).animationName).toBe("port-inspector-in");
+    // Related connection evidence belongs to the selected listening endpoint.
+    expect(screen.getAllByRole("button", { name: /12 established/ })).toHaveLength(1);
+    await page.getByText("12 established · Remote endpoints", { exact: true }).click();
+    expect(within(screen.getByRole("complementary")).getByText("203.0.113.9")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /443.*Listening/ }));
+    await page.getByRole("button", { name: "Fit to view" }).click();
+    expect(camera().a).toBeCloseTo(before.a);
+  });
 }
 
 it("uses a compact filter header and visible labels without an empty footer", async () => {
@@ -441,28 +426,25 @@ it("slides zoom controls left on selection and right on inspector close", async 
   const controls = screen.getByRole("toolbar", { name: "Graph controls" });
   const canvas = document.querySelector(".arch-canvas")!.getBoundingClientRect();
   const initial = controls.getBoundingClientRect();
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   async function checkSlide(direction: "left" | "right") {
-    if (!reduced) {
-      const movement = controls
-        .getAnimations()
-        .find(
-          (animation) =>
-            animation instanceof CSSTransition && animation.transitionProperty === "left",
-        );
-      expect(movement).toBeTruthy();
-      const animations = controls.getAnimations();
-      for (const animation of animations) {
-        animation.pause();
-        animation.currentTime = 210;
-      }
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const midway = controls.getBoundingClientRect();
-      expect(midway.left).toBeGreaterThan(canvas.left + 12);
-      expect(midway.left).toBeLessThan(initial.left);
-      for (const animation of animations) animation.finish();
+    const movement = controls
+      .getAnimations()
+      .find(
+        (animation) =>
+          animation instanceof CSSTransition && animation.transitionProperty === "left",
+      );
+    expect(movement).toBeTruthy();
+    const animations = controls.getAnimations();
+    for (const animation of animations) {
+      animation.pause();
+      animation.currentTime = 210;
     }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const midway = controls.getBoundingClientRect();
+    expect(midway.left).toBeGreaterThan(canvas.left + 12);
+    expect(midway.left).toBeLessThan(initial.left);
+    for (const animation of animations) animation.finish();
     await waitFor(() => {
       const bounds = controls.getBoundingClientRect();
       if (direction === "left") expect(bounds.left - canvas.left).toBeCloseTo(12, 0);
@@ -620,6 +602,11 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(diagnostic.closest("details")?.open).toBe(false);
   await page.getByText("Host firewall policy", { exact: true }).click();
   expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
+  await waitFor(() =>
+    expect(inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running")).toBe(
+      false,
+    ),
+  );
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
   await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
@@ -701,6 +688,7 @@ it("commits the selection when pressing a chip beside the inspector panel", asyn
   await screen.findByRole("button", { name: /443.*Listening/ });
   const current = page.getByRole("button", { name: /443.*Listening/ });
   await current.click();
+  await waitFor(() => expect(document.querySelector(".arch-focusing")).toBeNull());
   await waitFor(() => expectNodeBesideInspector(current.element()));
 
   // Some card pokes out from under the panel, so its visible sliver is where
@@ -727,7 +715,6 @@ it("commits the selection when pressing another chip mid-glide", async () => {
   await page.viewport(1100, 760);
   renderPane(null, manySockets, { ...containers, items: [] });
   await screen.findByRole("button", { name: /443.*Listening/ });
-  enableRealMotion();
   const current = page.getByRole("button", { name: /443.*Listening/ });
   await current.click();
   await waitFor(() => expectNodeBesideInspector(current.element()));

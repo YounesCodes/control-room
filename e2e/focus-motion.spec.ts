@@ -9,20 +9,6 @@ describe("Focus Mode live layout in WebView2", () => {
     await terminalCommand("echo FOCUS_LIVE", "FOCUS_LIVE");
     const sessions = (await runtime()).sessionIds;
     const scale = await browser.execute(() => devicePixelRatio);
-    const reduced = await browser.execute(
-      () => matchMedia("(prefers-reduced-motion: reduce)").matches,
-    );
-    // This isolated test also exercises animation on machines whose owner has
-    // deliberately disabled Windows motion. Never change the OS preference.
-    await browser.execute(() => {
-      const original = window.matchMedia.bind(window);
-      window.matchMedia = (query) => {
-        const result = original(query);
-        if (query.includes("prefers-reduced-motion"))
-          Object.defineProperty(result, "matches", { value: false });
-        return result;
-      };
-    });
     const evidence = [];
     for (const direction of ["enter", "exit"]) {
       // A raw script avoids the test transpiler's injected function-name helper.
@@ -54,7 +40,7 @@ describe("Focus Mode live layout in WebView2", () => {
       mkdirSync("test-results/desktop", { recursive: true });
       writeFileSync(
         `test-results/desktop/focus-${direction}.json`,
-        JSON.stringify({ nativeReducedMotion: reduced, ...frames }, null, 2),
+        JSON.stringify(frames, null, 2),
       );
       expect(frames.sameTerminal).toBe(true);
       expect(frames.transform).toBe("none");
@@ -112,7 +98,7 @@ describe("Focus Mode live layout in WebView2", () => {
     await terminalCommand("echo SPLIT_STILL_LIVE", "SPLIT_STILL_LIVE");
     writeFileSync(
       "test-results/desktop/focus-motion.json",
-      JSON.stringify({ nativeReducedMotion: reduced, scale, evidence }, null, 2),
+      JSON.stringify({ scale, evidence }, null, 2),
     );
   });
 });

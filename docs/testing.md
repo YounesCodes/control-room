@@ -73,12 +73,12 @@ pane bounds; captures fail if the fixture bypasses the expected shell geometry.
 
 The CLI prints a JSON line identifying each manifest under the ignored directory
 `test-results/ui-review/<scenario>/<state>/<viewport>/<capture|motion>/`.
-`manifest.json` records the state, dimensions, motion preference, result, relative
+`manifest.json` records the state, dimensions, result, relative
 PNG paths, and verification limits. A failed capture writes its error there;
 `test-results/ui-review/session.json` also records startup failures and links the
 latest session's manifests.
-Still captures use reduced motion. Motion uses normal motion and triggers the real
-Settings category reveal. It saves before/start/midpoint/after PNGs with timeline
+Still captures finish animations before saving. Motion triggers the Settings
+category reveal and saves before/start/midpoint/after PNGs with timeline
 positions and computed poses, failing if no changing transition is found. The
 animation is paused at each sample for reproducibility. These frames prove visible
 poses, not frame pacing, dropped frames, or real-time performance.
@@ -109,8 +109,7 @@ not. Prefer the real App layout over duplicated shell markup. Keep ready
 selectors tied to completed rendering, stub any new native reads with synthetic data,
 and register a motion trigger and animated target only when that transition can
 run headlessly. The harness lives outside the product entry point; it is not
-included in the packaged app. Existing reduced-motion Vitest browser tests stay
-independent.
+included in the packaged app. Vitest browser tests stay independent.
 
 ## Windows desktop E2E
 
@@ -178,6 +177,6 @@ Browser fixtures prove user interactions against controlled results; they do not
 | Ports and Boot            | Real App owner links, table/connections views, previous/current boot, limited evidence, one-shot sudo cancel/retry; pane tests cover graph and firewall uncertainty                            | —                                                                                                                                  | Separate live Ports/Boot journeys; read-only command and parser tests                                 |
 | Logs                      | `LogsPane.test.tsx`, real App journeys: early events, delayed start cancellation, source changes, pause/resume, unread scroll/search/wrap, stream error/retry, navigation cleanup              | Runtime diagnostics verify no remaining stream IDs after each test                                                                 | Separate journal/Docker journeys; stream exit/diagnostic tests                                        |
 | Baselines                 | `BaselinesPane.test.tsx`, real App capture/rename/retry/pin/delete/live comparison; `BaselineComparisonView.test.tsx`: Markdown/JSON success, cancel, failure, volatile filtering; trace tests | Local persistence in the live desktop journey                                                                                      | Live capture/restart/stored/live comparison; Rust capture/cancel/diff/retention tests                 |
-| Updates and accessibility | Real App manual check/download retry/progress; updater fixtures; release-note safety, palette/keyboard, dialog focus, axe, reduced motion, minimum-size layout                                 | Settings and native window journey                                                                                                 | Updater endpoint, signature, installer and restart safeguards; E2E feature rejected in release builds |
+| Updates and accessibility | Real App manual check/download retry/progress; updater fixtures; release-note safety, palette/keyboard, dialog focus, axe, minimum-size layout                                                 | Settings and native window journey                                                                                                 | Updater endpoint, signature, installer and restart safeguards; E2E feature rejected in release builds |
 
 Coverage reports support this matrix; there is no arbitrary percentage target. PR checks run unit, Chromium, desktop, and hosted SSH tests. Local Ubuntu and Windows SSH journeys remain explicit.

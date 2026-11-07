@@ -93,27 +93,25 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
   expect(cell("cpu").title).toContain("90%");
   const path = cell("cpu").querySelector("path")!.getAttribute("d");
   const duration = parseFloat(getComputedStyle(visual("cpu")).getPropertyValue("--motion-slow"));
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    expect(visual("cpu").textContent).toBe("10%");
-    tick(duration / 2);
-    for (const [metric, min, max] of [
-      ["cpu", 10, 90],
-      ["ram", 50, 90],
-      ["gpu", 20, 80],
-      ["uptime", 30, 50],
-    ] as const) {
-      const value = parseFloat(visual(metric).textContent!);
-      expect(value).toBeGreaterThan(min);
-      expect(value).toBeLessThan(max);
-    }
-    expect(visual("diskIo").textContent).not.toContain("4.0 KiB/s");
-    expect(
-      document.querySelector(".host-metrics-panel .animated-number > [aria-hidden]")!.textContent,
-    ).toBe(visual("cpu").textContent);
-    expect(cell("cpu").querySelector("path")!.getAttribute("d")).toBe(path);
-    expect(reading.history).toHaveLength(2);
-    tick(duration / 2);
+  expect(visual("cpu").textContent).toBe("10%");
+  tick(duration / 2);
+  for (const [metric, min, max] of [
+    ["cpu", 10, 90],
+    ["ram", 50, 90],
+    ["gpu", 20, 80],
+    ["uptime", 30, 50],
+  ] as const) {
+    const value = parseFloat(visual(metric).textContent!);
+    expect(value).toBeGreaterThan(min);
+    expect(value).toBeLessThan(max);
   }
+  expect(visual("diskIo").textContent).not.toContain("4.0 KiB/s");
+  expect(
+    document.querySelector(".host-metrics-panel .animated-number > [aria-hidden]")!.textContent,
+  ).toBe(visual("cpu").textContent);
+  expect(cell("cpu").querySelector("path")!.getAttribute("d")).toBe(path);
+  expect(reading.history).toHaveLength(2);
+  tick(duration / 2);
   expect(visual("cpu").textContent).toBe("90%");
   expect(visual("diskIo").textContent).toBe("R 4.0 KiB/s W 2.0 KiB/s");
   expect(visual("uptime").textContent).toBe("50s");

@@ -660,9 +660,11 @@ describe("resizable connection panels in Chromium", () => {
     assertNoHorizontalOverflow(".ports-page, .port-list-controls");
     await page.getByRole("button", { name: /443.*Listening/ }).click();
     await expect.element(page.getByRole("complementary", { name: "Port details" })).toBeVisible();
-    const inspector = document.querySelector(".arch-detail")!.getBoundingClientRect();
-    expect(inspector.right).toBeLessThanOrEqual(workspace.right);
-    expect(inspector.bottom).toBeLessThanOrEqual(workspace.bottom);
+    await vi.waitFor(() => {
+      const inspector = document.querySelector(".arch-detail")!.getBoundingClientRect();
+      expect(inspector.right).toBeLessThanOrEqual(workspace.right);
+      expect(inspector.bottom).toBeLessThanOrEqual(workspace.bottom);
+    });
     assertNoHorizontalOverflow(".arch-detail");
     expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
     await page.screenshot({ path: "../../test-results/ports-minimum-window.png" });

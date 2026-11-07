@@ -18,19 +18,16 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
   overlays.forEach((overlay) => overlay.remove());
   animations = [];
   overlays = [];
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const supported = typeof HTMLElement.prototype.animate === "function";
   const sidebar =
-    direction === "enter" && !reduced && supported
-      ? document.querySelector<HTMLElement>(".sidebar")
-      : null;
+    direction === "enter" && supported ? document.querySelector<HTMLElement>(".sidebar") : null;
   const bounds = sidebar?.getBoundingClientRect();
   const departing = sidebar?.cloneNode(true) as HTMLElement | undefined;
 
   // No capture callback or animation frame may delay the real controls/state.
   flushSync(update);
   delete root.dataset.focusTransition;
-  if (reduced || !supported || !workspace || !before) return;
+  if (!supported || !workspace || !before) return;
   root.dataset.focusTransition = direction;
   const styles = getComputedStyle(root);
   // Production CSS can shorten 180ms to .18s. WAAPI always takes milliseconds.

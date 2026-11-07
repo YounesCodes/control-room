@@ -12,10 +12,6 @@ export function SystemdPresence({ open, children }: { open: boolean; children: R
       setMounted(true);
       return;
     }
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      setMounted(false);
-      return;
-    }
     const timer = setTimeout(() => setMounted(false), 180);
     return () => clearTimeout(timer);
   }, [open]);
