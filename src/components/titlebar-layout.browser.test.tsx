@@ -48,7 +48,7 @@ function mount(element: React.ReactNode) {
   flushSync(() => root.render(element));
 }
 
-it.each([1280, 760, 600])("keeps metrics still across update states at %ipx", async (width) => {
+it.each([1440, 960, 520])("keeps metrics still across update states at %ipx", async (width) => {
   await page.viewport(width, 700);
   let update!: (state: AppUpdateState) => void;
   const info = { version: "0.9.3", currentVersion: "0.9.2", notes: "", publishedAt: null };
@@ -84,7 +84,8 @@ it.each([1280, 760, 600])("keeps metrics still across update states at %ipx", as
   const before = metrics.getBoundingClientRect();
   const valueBefore = metrics.querySelector(".host-metric")!.getBoundingClientRect();
   const states: AppUpdateState[] = [
-    ...[0, 9, 10, 99, 100].map((downloaded) => ({
+    { status: "available", info },
+    ...[0, 9, 10, 42, 99, 100].map((downloaded) => ({
       status: "downloading" as const,
       info,
       downloaded,
@@ -104,12 +105,22 @@ it.each([1280, 760, 600])("keeps metrics still across update states at %ipx", as
     const button = container.querySelector(".update-indicator-button")!.getBoundingClientRect();
     expect(button.right).toBeLessThanOrEqual(width);
     expect(button.left).toBeGreaterThanOrEqual(0);
-    const label = container.querySelector<HTMLElement>(".update-indicator-label")!;
-    expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+    expect(button.width).toBe(38);
+    expect(button.height).toBe(38);
+    expect(!!container.querySelector(".update-indicator-progress")).toBe(
+      state.status === "downloading",
+    );
+    expect(container.querySelector(".update-indicator-button")!.textContent).toBe("");
     if (state.status === "downloading" && state.total !== null)
       expect(container.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe(
         String(state.downloaded),
       );
+    if (state.status !== "downloading" || state.downloaded === 42 || state.total === null) {
+      await page.screenshot({
+        element: container.querySelector(".app-bar")!,
+        path: `../../test-results/update-icon-${width}-${state.status}${state.status === "downloading" && state.total === null ? "-unknown" : ""}.png`,
+      });
+    }
   }
 });
 

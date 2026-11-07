@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Circle, CircleAlert, CircleDashed, Clock3, ChevronDown, Pause, X } from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
 import { usePopoverExit } from "../hooks/use-popover-exit";
@@ -73,12 +73,14 @@ function MetricTrace({ metric, history }: { metric: HeaderMetric; history: Heade
 
 function MetricCell({
   metric,
+  overflow,
   sample,
   history,
   failed,
   animate,
 }: {
   metric: HeaderMetric;
+  overflow: boolean;
   sample: HeaderMetrics | null;
   history: HeaderMetrics[];
   failed: boolean;
@@ -92,6 +94,7 @@ function MetricCell({
       role="group"
       aria-label={`${HEADER_METRIC_LABELS[metric]}: ${value}`}
       data-metric={metric}
+      data-overflow={overflow || undefined}
       data-available={value !== "Unavailable" && value !== "Reading"}
       data-tauri-drag-region
       title={`${HEADER_METRIC_LABELS[metric]}: ${value}. ${headerMetricDetail(metric, sample)}`}
@@ -136,7 +139,8 @@ export function HostMetrics({
   const close = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const values = useRef<HTMLDivElement>(null);
-  const [overflow, setOverflow] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(metrics.length);
+  const metricOrder = metrics.join(",");
   const status = !reading.visible
     ? "Paused"
     : reading.error
@@ -162,19 +166,22 @@ export function HostMetrics({
     Paused: "Automatic refresh is paused while the window is hidden.",
     Unavailable: "Host metrics could not be read. Open host details to check errors and retry.",
   }[status];
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = values.current;
     if (!element) return;
-    const measure = () => setOverflow(element.scrollWidth > element.clientWidth);
+    const cells = Array.from(element.children);
+    const measure = () => {
+      // Hidden cells keep their layout boxes so they can reappear as space returns.
+      const right = element.getBoundingClientRect().right;
+      const firstOverflow = cells.findIndex((cell) => cell.getBoundingClientRect().right > right);
+      setVisibleCount(firstOverflow === -1 ? cells.length : firstOverflow);
+    };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(element);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [metrics, reading.sample, reading.error, status]);
+    cells.forEach((cell) => observer?.observe(cell));
+    return () => observer?.disconnect();
+  }, [metricOrder, target]);
   useEffect(() => {
     if (!open) return;
     close.current?.focus();
@@ -226,18 +233,18 @@ export function HostMetrics({
       </button>
       <div
         className="host-metrics-values"
-        data-tauri-drag-region={overflow ? undefined : true}
+        data-empty={visibleCount === 0 || undefined}
+        data-tauri-drag-region
         ref={values}
-        tabIndex={overflow ? 0 : undefined}
         role="group"
-        aria-label={
-          overflow ? "Current host readings. Scroll for more metrics." : "Current host readings"
-        }
+        aria-label="Current host readings"
+        aria-hidden={visibleCount === 0 || undefined}
       >
-        {metrics.map((metric) => (
+        {metrics.map((metric, index) => (
           <MetricCell
             key={`${target}:${metric}`}
             metric={metric}
+            overflow={index >= visibleCount}
             sample={reading.sample}
             history={reading.history}
             failed={!!reading.error}

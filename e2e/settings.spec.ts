@@ -65,7 +65,7 @@ describe("Settings and native window", () => {
     await expect($(".host-metrics")).not.toExist();
   });
 
-  it("dispatches native metric dragging while leaving the overflowing scrollbar interactive", async () => {
+  it("dispatches native dragging from the metric row at both widths and keeps details clickable", async () => {
     await ipc("save_settings", {
       settings: { ...(await savedSettings()), hostMetricsEnabled: true },
     });
@@ -73,19 +73,17 @@ describe("Settings and native window", () => {
     await openLocal();
     await $(".host-metrics-values").waitForDisplayed();
     await browser.setWindowSize(1600, 900);
-    for (const overflowing of [false, true, false]) {
+    for (const narrow of [false, true, false]) {
       await browser.execute((narrow) => {
         document.querySelector<HTMLElement>(".host-metrics")!.style.maxWidth = narrow
           ? "340px"
           : "";
-      }, overflowing);
+      }, narrow);
       await browser.waitUntil(() =>
         browser.execute((narrow) => {
-          const row = document.querySelector<HTMLElement>(".host-metrics-values")!;
-          return (
-            row.scrollWidth > row.clientWidth === narrow && row.hasAttribute("tabindex") === narrow
-          );
-        }, overflowing),
+          const cells = document.querySelectorAll(".host-metric:not([data-overflow])");
+          return cells.length === (narrow ? 2 : 5);
+        }, narrow),
       );
       for (const selector of [
         ".host-metrics",
@@ -126,16 +124,15 @@ describe("Settings and native window", () => {
             window.fetch = original;
           }
         }, selector);
-        const interactive =
-          selector === ".host-metrics-status" ||
-          (overflowing && selector === ".host-metrics-values");
-        expect(calls).toEqual(interactive ? [] : ["ok"]);
+        expect(calls).toEqual(selector === ".host-metrics-status" ? [] : ["ok"]);
+      }
+      if (narrow) {
+        await $(".host-metrics-trigger").click();
+        await expect($(".host-metrics-panel").$("dt=Uptime")).toBeDisplayed();
+        await $("aria/Close host metrics").click();
+        await expect($(".host-metrics-panel")).not.toExist();
       }
     }
-    await $(".host-metrics-trigger").click();
-    await expect($(".host-metrics-panel")).toBeDisplayed();
-    await $("aria/Close host metrics").click();
-    await expect($(".host-metrics-panel")).not.toExist();
   });
 
   it("saves terminal settings and restores them after a native app restart", async () => {

@@ -1935,7 +1935,7 @@ export function App() {
           aria-pressed={terminalFocusMode}
           title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
         >
-          {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {terminalFocusMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
         <WindowControls />
       </div>

@@ -1335,45 +1335,34 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
   });
-  it("adds a keyboard tab stop only while the metric row overflows", async () => {
+  it("keeps whole priority readings in the titlebar and exposes the rest through the status button", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    await page.viewport(1440, 700);
     await mount();
-    const row = element.querySelector<HTMLDivElement>(".host-metrics-values")!;
-    await expect.poll(() => row.scrollWidth > row.clientWidth).toBe(false);
-    expect(row.getAttribute("tabindex")).toBeNull();
-    const strip = element.querySelector<HTMLElement>(".host-metrics")!;
-    strip.style.maxWidth = "340px";
-    await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
-    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
-    await userEvent.keyboard("{Escape}{Tab}{ArrowRight}");
-    await expect
-      .element(page.getByRole("group", { name: "Current host readings. Scroll for more metrics." }))
-      .toHaveFocus();
-    await expect.poll(() => row.scrollLeft).toBeGreaterThan(0);
-    strip.style.maxWidth = "";
-    await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
-  });
-  it("keeps the overflowing metrics scrollbar outside the window drag region", async () => {
-    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
-    await mount();
+    await navigate("Systemd");
     const strip = element.querySelector<HTMLElement>(".host-metrics")!;
     const row = strip.querySelector<HTMLElement>(".host-metrics-values")!;
-    await expect.poll(() => row.scrollWidth > row.clientWidth).toBe(false);
-    expect(row).toHaveAttribute("data-tauri-drag-region");
-
+    const visibleMetrics = () =>
+      [...row.querySelectorAll<HTMLElement>(".host-metric:not([data-overflow])")].map(
+        (cell) => cell.dataset.metric,
+      );
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
     strip.style.maxWidth = "340px";
-    await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
-    // Native scrollbar presses target the scroll container itself. Tauri must
-    // leave that target to the webview instead of starting a window drag.
-    expect(row).not.toHaveAttribute("data-tauri-drag-region");
-    expect(row.querySelector(".host-metric-label")).toHaveAttribute("data-tauri-drag-region");
-    row.focus();
-    await userEvent.keyboard("{ArrowRight}");
-    await expect.poll(() => row.scrollLeft).toBeGreaterThan(0);
-
-    strip.style.maxWidth = "";
-    await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram"]);
+    expect(row).not.toHaveAttribute("tabindex");
     expect(row).toHaveAttribute("data-tauri-drag-region");
+    const trigger = page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ });
+    await expect.element(page.getByRole("group", { name: /^Disk I\/O:/ })).not.toBeInTheDocument();
+    (trigger.element() as HTMLButtonElement).focus();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(page.getByRole("button", { name: "Close host metrics" })).toHaveFocus();
+    expect(
+      [...strip.querySelectorAll(".host-metrics-panel dt")].map((item) => item.textContent),
+    ).toEqual(["CPU", "RAM", "GPU", "Disk I/O", "Uptime"]);
+    await userEvent.keyboard("{Escape}");
+    await expect.element(trigger).toHaveFocus();
+    strip.style.maxWidth = "";
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
   });
   it("offers window drag targets across metric text and spacing while keeping details clickable", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
@@ -1759,10 +1748,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .toHaveFocus();
       await expect.poll(() => element.querySelector(".host-metrics-panel")).toBeNull();
       const badge = element.querySelector(".host-metrics-status")!;
-      if (width >= 1174) {
-        const row = element.querySelector<HTMLDivElement>(".host-metrics-values")!;
-        expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
-      }
       const cells = [...element.querySelectorAll<HTMLElement>(".host-metrics-values .host-metric")];
       expect(cells.filter((cell) => cell.querySelector("svg")).length).toBeGreaterThanOrEqual(2);
       for (const [index, cell] of cells.entries()) {
@@ -1876,6 +1861,75 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(result.violations.map(({ id }) => id)).toEqual([]);
     }
     await page.screenshot({ path: "../test-results/documentation-settings.png" });
+  });
+
+  it("fits whole metric readings beside the update icon across Terminal and inspection tabs", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    overrides.set("check_for_update", () => ({
+      currentVersion: "0.9.2",
+      version: "9.9.9",
+      notes: "Fixture release",
+      publishedAt: null,
+    }));
+    await mount();
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
+    for (const [width, height] of [
+      [1440, 900],
+      [1174, 700],
+      [1120, 700],
+      [960, 640],
+      [520, 480],
+    ]) {
+      await page.viewport(width, height);
+      for (const view of ["Systemd", "Terminal"]) {
+        await navigate(view);
+        const header = element.querySelector<HTMLElement>(".app-bar")!;
+        expect(header.getBoundingClientRect().top).toBeLessThanOrEqual(1);
+        if (view === "Terminal")
+          await expect
+            .poll(() => element.querySelector(".app-focus-toggle")!.getBoundingClientRect().width)
+            .toBe(40);
+        const buttons = [
+          ".update-indicator-button",
+          '[aria-label="Open documentation"]',
+          '[aria-label="Open Settings"]',
+          ...(view === "Terminal" ? [".app-focus-toggle"] : []),
+        ].map((selector) => element.querySelector(selector)!);
+        const glyphs = buttons.map((button) =>
+          button.querySelector("svg")!.getBoundingClientRect(),
+        );
+        for (const [index, glyph] of glyphs.entries()) {
+          const button = buttons[index].getBoundingClientRect();
+          expect(glyph.width).toBe(18);
+          expect(glyph.height).toBe(18);
+          expect(
+            Math.abs(glyph.left + glyph.width / 2 - (button.left + button.width / 2)),
+          ).toBeLessThanOrEqual(0.5);
+          expect(glyph.top).toBe(glyphs[0].top);
+        }
+        await page.screenshot({
+          element: header,
+          path: `../test-results/metric-inset-${view.toLowerCase()}-${width}.png`,
+        });
+        const row = header.querySelector(".host-metrics-values")!;
+        const cells = row.querySelectorAll(".host-metric:not([data-overflow])");
+        if (width >= 960) expect(cells.length).toBeGreaterThanOrEqual(2);
+        if (width === 1440) expect(cells).toHaveLength(5);
+        for (const cell of cells) {
+          const bounds = cell.getBoundingClientRect();
+          expect(bounds.right).toBeLessThanOrEqual(row.getBoundingClientRect().right);
+          expect(bounds.top - header.getBoundingClientRect().top).toBeGreaterThanOrEqual(4);
+          expect(header.getBoundingClientRect().bottom - bounds.bottom).toBeGreaterThanOrEqual(4);
+        }
+      }
+    }
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
+    const panel = element.querySelector(".host-metrics-panel")!;
+    expect(panel.getBoundingClientRect().right).toBeLessThan(520);
+    await page.screenshot({ path: "../test-results/titlebar-metrics-details-520.png" });
   });
 
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {

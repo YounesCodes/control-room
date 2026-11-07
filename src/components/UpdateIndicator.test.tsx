@@ -44,25 +44,22 @@ describe("titlebar update indicator", () => {
   it("offers the update with a version in its accessible name", () => {
     renderIndicator({ status: "available", info });
     const button = screen.getByRole("button", { name: "Update available: Control Room 0.7.0" });
-    expect(button.textContent).toContain("Update available");
+    expect(button.textContent).toBe("");
+    expect(button.title).toBe("Update available");
     // The control must not participate in window dragging.
     expect(button.closest("[data-tauri-drag-region]")).toBeNull();
   });
 
   it("shows download progress and exposes it as a progressbar", () => {
     renderIndicator({ status: "downloading", info, downloaded: 420, total: 1000 });
-    expect(screen.getByRole("button", { name: /Downloading/ }).textContent).toContain(
-      "Downloading 42%",
-    );
+    expect(screen.getByRole("button", { name: /Downloading/ }).title).toContain("Downloading 42%");
     const progress = screen.getByRole("progressbar");
     expect(progress.getAttribute("aria-valuenow")).toBe("42");
   });
 
   it("reports an unknown download size without a fake percentage", () => {
     renderIndicator({ status: "downloading", info, downloaded: 4200, total: null });
-    expect(screen.getByRole("button", { name: /Downloading/ }).textContent).toContain(
-      "Downloading…",
-    );
+    expect(screen.getByRole("button", { name: /Downloading/ }).title).toContain("Downloading…");
     const progress = screen.getByRole("progressbar");
     expect(progress.getAttribute("aria-valuenow")).toBeNull();
     expect(progress.getAttribute("aria-valuetext")).toBe("Downloading, size unknown");

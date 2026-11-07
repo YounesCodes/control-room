@@ -659,7 +659,8 @@ Use compact labeled values with neutral styling, readable numbers, and a visible
 reading state. Keep each label above its value, reserve space for changing numbers,
 and use small neutral trend lines for CPU, RAM, and GPU. Keep each value and its
 graph in one group, with a subtle divider and a larger gap before the next metric.
-Preserve this grouping at narrow widths rather than squeezing the metrics together. Trends hold
+Fit whole readings into the space available, prioritizing selected CPU and RAM readings.
+Keep every selected reading in the status dropdown as the header narrows. Trends hold
 at most twenty measured samples in memory, reset on host changes and monitoring
 pauses, and never invent points for missing readings. Trends use a fixed
 0–100 range. Disk I/O shows separate read and write speeds without a graph. Interpolate
@@ -678,10 +679,10 @@ the numeric readings. Keep Live compact and let longer status labels use only
 the space they need. Keep the active host name in its tooltip, accessible label,
 and details rather than repeating it in the header. The metric labels, values,
 and surrounding space drag the native window. Keep the status button and reading
-details as ordinary click targets, and preserve scrolling when the row overflows. Use green
+details as ordinary click targets. Use green
 for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
-Settings and native window controls reachable at narrow widths;
-scroll the metric row when needed. Host details must open with a keyboard or click
+Settings and native window controls reachable at narrow widths.
+Host details must open with a keyboard or click
 and include the last reading time and refresh errors. Pause header reads
 in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
 Label read/write throughput as Disk I/O. Keep filesystem fullness out of the header.
@@ -700,8 +701,12 @@ Keep resource readings in the optional host header. Host inspectors focus on ser
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking
-banner. Show download progress, require confirmation before installing, and keep
-the app's updates clearly distinct from any host package information.
+banner. Match the Download glyph's size and alignment to Documentation, Settings, and Focus Mode.
+Use the same transparent button styling as Documentation and Settings.
+Keep its footprint fixed across update states, show download progress in a ring
+and the tooltip, and switch to a restart icon with a green dot when ready.
+Keep full state and version information accessible. Require confirmation before
+installing, and keep the app's updates clearly distinct from any host package information.
 
 ## Accessibility
 
