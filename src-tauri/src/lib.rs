@@ -110,6 +110,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
+            #[cfg(feature = "desktop-e2e")]
+            e2e::e2e_session_writes,
             commands::get_environment_info,
             documentation::open_documentation,
             fonts::list_catalog_fonts,

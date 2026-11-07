@@ -187,7 +187,18 @@ impl OutputFlow {
 #[derive(Clone, Default)]
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, Arc<ManagedSession>>>>,
+    /// The most recent bytes written into any terminal, for the debug desktop
+    /// builds that assert input behavior at the pty boundary — exactly-once
+    /// pastes, unprompted resends — without instrumenting the webview.
+    #[cfg(feature = "desktop-e2e")]
+    e2e_writes: Arc<Mutex<Vec<String>>>,
 }
+
+/// How many session writes the debug recording keeps before it starts
+/// dropping the oldest. A paste plus a few keystrokes fits comfortably, and a
+/// runaway run cannot grow the record without bound.
+#[cfg(feature = "desktop-e2e")]
+const E2E_RECORDED_WRITE_COUNT: usize = 64;
 
 impl SessionManager {
     #[cfg(feature = "desktop-e2e")]
@@ -195,6 +206,21 @@ impl SessionManager {
         let mut ids: Vec<_> = self.sessions.lock().keys().cloned().collect();
         ids.sort();
         ids
+    }
+
+    #[cfg(feature = "desktop-e2e")]
+    fn e2e_record_write(&self, data: &[u8]) {
+        let mut writes = self.e2e_writes.lock();
+        writes.push(String::from_utf8_lossy(data).into_owned());
+        let excess = writes.len().saturating_sub(E2E_RECORDED_WRITE_COUNT);
+        writes.drain(..excess);
+    }
+
+    /// Hands over the recorded session writes and empties the record, so a
+    /// caller reads each write exactly once.
+    #[cfg(feature = "desktop-e2e")]
+    pub fn e2e_take_writes(&self) -> Vec<String> {
+        std::mem::take(&mut *self.e2e_writes.lock())
     }
 
     pub fn start(
@@ -439,6 +465,8 @@ impl SessionManager {
 
     pub fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
         let session = self.get(session_id)?;
+        #[cfg(feature = "desktop-e2e")]
+        self.e2e_record_write(data);
         let mut writer = session.writer.lock();
         writer.write_all(data).map_err(|error| error.to_string())?;
         writer.flush().map_err(|error| error.to_string())

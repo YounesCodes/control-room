@@ -324,6 +324,52 @@ it("a clipboard image pastes as the staged path its CLI can open", async () => {
   expect(writtenText().split("/tmp/control-room-paste/paste-1.png").length - 1).toBe(1);
 });
 
+it("hovering over a motion-reporting program keeps a finished selection alive", async () => {
+  const selectionEvents: boolean[] = [];
+  const { terminal } = await mountPane((has) => selectionEvents.push(has));
+  await renderAgentScreen();
+  session.writeSession.mockClear();
+
+  dispatchSelectionGesture("mousedown", 5, 1);
+  dispatchSelectionGesture("mousemove", 90, 1);
+  dispatchSelectionGesture("mousemove", 160, 1);
+  dispatchSelectionGesture("mouseup", 160, 1);
+  expect(terminal.getSelection()).toBe("first line alpha");
+
+  // Pointer motion with no buttons held reports to a program that asked for
+  // any-motion tracking, and every report is input that clears selections. The
+  // pane keeps hover moves for itself while the selection lives.
+  const rect = screenRect();
+  for (const x of [20, 90, 160]) {
+    screen().dispatchEvent(
+      new MouseEvent("mousemove", {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + x,
+        clientY: rect.top + FIRST_LINE_Y,
+        buttons: 0,
+      }),
+    );
+  }
+  expect(terminal.hasSelection()).toBe(true);
+  // The program received none of those hovers.
+  expect(written()).toEqual([]);
+
+  // Right-clicking the live selection copies it: clipboard write, no click.
+  const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const right = new MouseEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: rect.left + 100,
+    clientY: rect.top + FIRST_LINE_Y,
+  });
+  screen().dispatchEvent(right);
+  await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+  expect(writeText.mock.calls[0][0]).toBe("first line alpha");
+  expect(terminal.hasSelection()).toBe(true);
+});
+
 it("a native paste event sends its clipboard text exactly once", async () => {
   await mountPane();
   await renderAgentScreen();

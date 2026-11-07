@@ -50,6 +50,14 @@ pub fn e2e_runtime_status(
     }
 }
 
+/// The recent bytes written into terminal sessions, as text, drained by the
+/// read. Desktop input tests assert on this: it is the exact bytes that left
+/// the app for the pty, whatever listener or shortcut produced them.
+#[tauri::command]
+pub fn e2e_session_writes(sessions: State<'_, SessionManager>) -> Vec<String> {
+    sessions.e2e_take_writes()
+}
+
 pub fn automation_browser_args(arguments: &str) -> Option<String> {
     let port = arguments
         .split_ascii_whitespace()

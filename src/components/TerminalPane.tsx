@@ -364,8 +364,25 @@ export function TerminalPane({
       nativeSelection = null;
       terminal.clearSelection();
     };
+    /* A finished selection also needs defending. A program that asks for
+       any-motion reporting receives every hover, and each report is input
+       again — which clears the selection before the pointer even reaches the
+       Copy button. While a selection exists, its hover moves are kept away
+       from xterm so the program reports nothing and the selection survives
+       until the user consumes or cancels it. Drags keep their buttons, so a
+       program that owns the mouse still gets its real gestures, and without
+       mouse tracking xterm's own behavior is untouched: there is nothing to
+       forward and nothing to preserve against. */
+    const handleSelectionPreservingMove = (event: MouseEvent) => {
+      if (nativeSelection || event.buttons !== 0) return;
+      if (terminal.modes.mouseTrackingMode === "none" || !terminal.hasSelection()) return;
+      event.stopPropagation();
+    };
     container.addEventListener("mousedown", handleNativeSelectionDown, { capture: true });
     container.ownerDocument.addEventListener("mousemove", handleNativeSelectionMove, {
+      capture: true,
+    });
+    container.ownerDocument.addEventListener("mousemove", handleSelectionPreservingMove, {
       capture: true,
     });
     container.ownerDocument.addEventListener("mouseup", handleNativeSelectionUp, { capture: true });
@@ -496,6 +513,9 @@ export function TerminalPane({
       container.removeEventListener("contextmenu", handleContextMenu);
       container.removeEventListener("mousedown", handleNativeSelectionDown, { capture: true });
       container.ownerDocument.removeEventListener("mousemove", handleNativeSelectionMove, {
+        capture: true,
+      });
+      container.ownerDocument.removeEventListener("mousemove", handleSelectionPreservingMove, {
         capture: true,
       });
       container.ownerDocument.removeEventListener("mouseup", handleNativeSelectionUp, {
