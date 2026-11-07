@@ -7773,13 +7773,11 @@ dd {
 
 /* Warning text speaks in one voice app-wide: the amber hue always pairs with
    the app's strong step and the WarningSign glyph, so no warning line reads
-   half-bold, half-muted, or unsigned. Items pin to the first text line so the
-   sign keeps the capture note's measures even when the message wraps. */
+   half-bold, half-muted, or unsigned. The line flows as prose: a wrapping flex
+   line would drop a long message below the sign and leave it stranded above,
+   while inline flow keeps the sign beside the first line at the capture
+   note's measures no matter how far the message wraps. */
 .inline-warning {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 6px;
   margin: 4px 0;
   color: var(--warning);
   font-size: 11px;
@@ -7787,8 +7785,13 @@ dd {
 }
 
 .inline-warning svg {
-  flex: none;
-  margin-top: 1px;
+  display: inline-block;
+  vertical-align: top;
+  margin: 1px 6px 0 0;
+}
+
+.inline-warning .link-button {
+  margin-left: 6px;
 }
 
 .inline-message {
@@ -8601,10 +8604,6 @@ kbd {
 .ports-tools-panel select {
   width: 100%;
   min-width: 0;
-}
-
-.ports-tools-panel .link-button {
-  margin-top: 10px;
 }
 
 .ports-reading-body {

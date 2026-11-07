@@ -801,21 +801,28 @@ it("keeps warning signs and retry actions in one flowing line without splitting 
       expect(signBounds.left).toBeCloseTo(warningBounds.left, 0);
       expect(signBounds.top).toBeGreaterThanOrEqual(warningBounds.top - 1);
       expect(signBounds.bottom).toBeLessThanOrEqual(warningBounds.bottom + 1);
+      const firstLine = document.createRange();
+      firstLine.setStart(warning, 1);
+      firstLine.setEndBefore(button);
+      const firstLineBounds = firstLine.getClientRects()[0]!;
+      expect(signBounds.top).toBeGreaterThanOrEqual(firstLineBounds.top - 1.5);
+      expect(signBounds.bottom).toBeLessThanOrEqual(firstLineBounds.bottom + 1.5);
       const message = document.createRange();
       message.setStart(warning, 0);
       message.setEndBefore(button);
       const messageBounds = message.getBoundingClientRect();
+      const messageLines = message.getClientRects();
+      const messageEnd = messageLines[messageLines.length - 1]!;
       const bounds = button.getBoundingClientRect();
       expect(bounds.left).toBeGreaterThanOrEqual(messageBounds.left - 1);
       expect(bounds.top).toBeGreaterThanOrEqual(messageBounds.top - 1);
-      expect(bounds.left >= messageBounds.right - 1 || bounds.top >= messageBounds.bottom - 1).toBe(
-        true,
-      );
+      expect(bounds.left >= messageEnd.right - 1 || bounds.top >= messageEnd.bottom - 1).toBe(true);
       expect(bounds.height).toBeLessThanOrEqual(
         parseFloat(getComputedStyle(warning).fontSize) * 1.8 + 2,
       );
       expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
     }
+    await page.screenshot({ path: `../../test-results/reading-warning-lines-${width}.png` });
   }
   vi.mocked(api.listPorts).mockClear().mockResolvedValueOnce(sockets.items);
   await userEvent.click(screen.getByRole("button", { name: "Retry ports" }));
