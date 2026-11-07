@@ -297,21 +297,29 @@ export function TerminalPane({
     };
     container.addEventListener("contextmenu", handleContextMenu);
 
-    /* A Shift+drag makes a real terminal selection while a program in the pty
-       reads the mouse. xterm cannot keep that selection alive on its own: while
-       a program requests drag or motion reporting, the very mouse moves of the
-       drag are forwarded to it, each one counts as user input again, and every
-       such input clears the selection being drawn — before it is ever
-       finished. So Control Room owns the whole gesture: the events here are
-       kept away from xterm, and the dragged span is applied through xterm's
-       public selection APIs, which notify selection listeners and drive the
-       Copy action exactly like a program-independent selection would. Without
-       Shift the program keeps the mouse, and when nothing in the pty tracks
-       the mouse xterm's own selection runs untouched. */
+    /* A drag over a program that reads the mouse makes a real terminal
+       selection, and a click still belongs to the program. xterm cannot own
+       that split by itself: while a program requests drag or motion
+       reporting, the very mouse moves of a drag are forwarded to it, each one
+       counts as user input again, and every such input clears the selection
+       being drawn — before it is ever finished. So Control Room owns the
+       trip: each press is noted but passed through, so clicks reach the
+       program, and once the pointer travels a few pixels under a held button
+       the gesture is claimed — its events are kept away from xterm, and the
+       dragged span is applied through xterm's public selection APIs, which
+       notify selection listeners and drive the Copy action exactly like a
+       program-independent selection would. When nothing in the pty tracks
+       the mouse, xterm's own selection runs untouched from the first pixel. */
     let nativeSelection: { anchor: SelectionPoint; granularity: SelectionGranularity } | null =
       null;
-    const beginsNativeSelection = (event: MouseEvent) =>
-      event.button === 0 && event.shiftKey && terminal.modes.mouseTrackingMode !== "none";
+    let pendingSelection: {
+      origin: { x: number; y: number };
+      anchor: SelectionPoint;
+      granularity: SelectionGranularity;
+    } | null = null;
+    /// The pointer travel, in pixels, that separates a click from a drag —
+    /// the same loose slop Windows itself uses for drag detection.
+    const SELECTION_START_SLOP = 4;
     const selectionGridPoint = (event: MouseEvent): SelectionPoint | null => {
       const screen = container.querySelector<HTMLElement>(".xterm-screen");
       if (!screen) return null;
@@ -336,22 +344,59 @@ export function TerminalPane({
       );
     };
     const handleNativeSelectionDown = (event: MouseEvent) => {
-      if (!beginsNativeSelection(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
+      if (event.button !== 0 || terminal.modes.mouseTrackingMode === "none") return;
+      if (nativeSelection || pendingSelection) return;
       const anchor = selectionGridPoint(event);
       if (!anchor) return;
-      const granularity = selectionGranularity(event.detail);
-      nativeSelection = { anchor, granularity };
-      if (granularity !== "character") applyNativeSelection(event);
+      // No preventDefault, no stopPropagation: the press reaches the
+      // program, and stays a click until the drag claims it.
+      pendingSelection = {
+        origin: { x: event.clientX, y: event.clientY },
+        anchor,
+        granularity: selectionGranularity(event.detail),
+      };
     };
     const handleNativeSelectionMove = (event: MouseEvent) => {
-      if (!nativeSelection) return;
+      if (nativeSelection) {
+        event.preventDefault();
+        event.stopPropagation();
+        applyNativeSelection(event);
+        return;
+      }
+      const pending = pendingSelection;
+      if (!pending || (event.buttons & 1) !== 1) return;
+      const dx = event.clientX - pending.origin.x;
+      const dy = event.clientY - pending.origin.y;
+      if (dx * dx + dy * dy < SELECTION_START_SLOP * SELECTION_START_SLOP) return;
+      pendingSelection = null;
+      nativeSelection = { anchor: pending.anchor, granularity: pending.granularity };
       event.preventDefault();
       event.stopPropagation();
+      // The press passed through to xterm, which armed its release tracker
+      // for it. Release it now, at the same spot, pressed and released with
+      // no motion in between: the program reads one more click, and xterm's
+      // tracker completes instead of outliving the pane. Reporting that
+      // click counts as input, and input clears selections — so the span is
+      // applied after the release, not before.
+      const release = new MouseEvent("mouseup", {
+        bubbles: true,
+        cancelable: true,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        button: 0,
+        buttons: 0,
+      });
+      (release as unknown as { controlRoomClaimRelease: boolean }).controlRoomClaimRelease = true;
+      container.ownerDocument.dispatchEvent(release);
       applyNativeSelection(event);
     };
     const handleNativeSelectionUp = (event: MouseEvent) => {
+      if ((event as unknown as { controlRoomClaimRelease?: boolean }).controlRoomClaimRelease)
+        return;
+      if (pendingSelection) {
+        pendingSelection = null;
+        return;
+      }
       if (!nativeSelection) return;
       event.preventDefault();
       event.stopPropagation();
@@ -369,10 +414,10 @@ export function TerminalPane({
        again — which clears the selection before the pointer even reaches the
        Copy button. While a selection exists, its hover moves are kept away
        from xterm so the program reports nothing and the selection survives
-       until the user consumes or cancels it. Drags keep their buttons, so a
-       program that owns the mouse still gets its real gestures, and without
-       mouse tracking xterm's own behavior is untouched: there is nothing to
-       forward and nothing to preserve against. */
+       until the user consumes or cancels it. Buttons still being held are
+       someone else's drag, and without mouse tracking xterm's own behavior
+       is untouched: there is nothing to forward and nothing to preserve
+       against. */
     const handleSelectionPreservingMove = (event: MouseEvent) => {
       if (nativeSelection || event.buttons !== 0) return;
       if (terminal.modes.mouseTrackingMode === "none" || !terminal.hasSelection()) return;

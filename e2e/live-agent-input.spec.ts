@@ -8,7 +8,7 @@ import { addConnection, ipc } from "./helpers";
 /// Gated behind CONTROL_ROOM_AGENT_INPUT=1 plus the CONTROL_ROOM_TEST_* fixture
 /// variables, like live-ssh.spec.ts. Each test connects to the live host,
 /// launches one agent CLI in the terminal, and drives the real native window
-/// through every clipboard gesture from issue #200: Shift+drag selection over
+/// through every clipboard gesture from issue #200: drag selection over
 /// output, toolbar Copy, Ctrl+Shift+C, right-click actions, Ctrl+V, and
 /// paste-followed-by-Enter staying exactly once.
 ///
@@ -127,70 +127,24 @@ if (process.env.CONTROL_ROOM_AGENT_INPUT === "1" && host && user) {
       `)) as { left: number; right: number; rowY: number; midX: number };
     }
 
-    async function dragRow(shiftKey: boolean) {
+    async function dragRow() {
       const { left, right, rowY } = await firstRowGeometry();
-      if (!shiftKey) {
-        const drag = browser.action("pointer", { parameters: { pointerType: "mouse" } });
-        await drag
-          .move({ origin: screen(), x: left, y: rowY })
-          .down()
-          .pause(30)
-          .move({ origin: screen(), x: (left + right) / 2, y: rowY })
-          .pause(30)
-          .move({ origin: screen(), x: right, y: rowY })
-          .up()
-          .perform();
-        return;
-      }
-      // The driver only folds a held modifier into pointer events inside one
-      // performActions batch, so the Shift+drag travels as a single sequence
-      // with the key and pointer sources aligned by tick.
-      const sx = await screenStart(rowY, left, right);
-      await browser.performActions([
-        {
-          type: "key",
-          id: "kbd",
-          actions: [
-            { type: "keyDown", value: "\uE008" },
-            { type: "pause", duration: 10 },
-            { type: "pause", duration: 60 },
-            { type: "pause", duration: 10 },
-            { type: "pause", duration: 60 },
-            { type: "pause", duration: 10 },
-            { type: "keyUp", value: "\uE008" },
-          ],
-        },
-        {
-          type: "pointer",
-          id: "mouse",
-          parameters: { pointerType: "mouse" },
-          actions: [
-            { type: "pointerMove", origin: "viewport", x: sx.x0, y: sx.y, duration: 0 },
-            { type: "pointerDown", button: 0 },
-            { type: "pointerMove", origin: "viewport", x: sx.x1, y: sx.y, duration: 60 },
-            { type: "pointerMove", origin: "viewport", x: sx.x2, y: sx.y, duration: 60 },
-            { type: "pause", duration: 10 },
-            { type: "pointerUp", button: 0 },
-          ],
-        },
-      ]);
+      const drag = browser.action("pointer", { parameters: { pointerType: "mouse" } });
+      await drag
+        .move({ origin: screen(), x: left, y: rowY })
+        .down()
+        .pause(30)
+        .move({ origin: screen(), x: (left + right) / 2, y: rowY })
+        .pause(30)
+        .move({ origin: screen(), x: right, y: rowY })
+        .up()
+        .perform();
     }
 
-    async function screenStart(rowY: number, left: number, right: number) {
-      return browser.execute(
-        `
-        const screenRect = document
-          .querySelector(".terminal-workspace-pane.active .xterm-screen")
-          .getBoundingClientRect();
-        const center = { x: screenRect.left + screenRect.width / 2, y: screenRect.top + screenRect.height / 2 };
-        return {
-          x0: Math.round(center.x + (${left})),
-          x1: Math.round(center.x + (${left} + ${right}) / 2),
-          x2: Math.round(center.x + (${right})),
-          y: Math.round(center.y + (${rowY})),
-        };
-        `,
-      ) as unknown as { x0: number; x1: number; x2: number; y: number };
+    async function clickRow() {
+      const { midX, rowY } = await firstRowGeometry();
+      const click = browser.action("pointer", { parameters: { pointerType: "mouse" } });
+      await click.move({ origin: screen(), x: midX, y: rowY }).down().up().perform();
     }
 
     async function rightClickScreen() {
@@ -271,22 +225,21 @@ if (process.env.CONTROL_ROOM_AGENT_INPUT === "1" && host && user) {
         await connect();
         await launchAgent(agent);
 
-        // A plain drag classifies who owns the mouse. With the mouse tracked,
-        // the drag belongs to the program: it is reported as mouse bytes and
-        // never selects. Without tracking, the same drag is the native
-        // selection and lights the toolbar Copy button.
+        // A click classifies who owns the mouse — a TUI that tracks it
+        // receives the press as mouse bytes, while a plain shell does not.
+        // A click must never turn into a selection either way.
         await drainWrites();
-        await dragRow(false);
-        const plainDragCopyEnabled = await copyButton().isEnabled();
-        const tracking = !plainDragCopyEnabled;
-        if (tracking) {
-          const dragWrites = await collectWritesUntil(
-            (writes) => writes.some((text) => text.startsWith("\u001b[")),
-            `${agent}: plain drag was not reported to the program`,
-          );
-          expect(dragWrites.length).toBeGreaterThan(0);
-          await dragRow(true);
-        }
+        await clickRow();
+        await browser.pause(600);
+        const tracking = (await takeWrites()).join("").includes("\u001b[<");
+        console.log(
+          `${agent}: ${tracking ? "the TUI tracks the mouse" : "the TUI left the mouse alone"}`,
+        );
+        await expect(copyButton()).toBeDisabled();
+
+        // An ordinary drag over the output selects it — the user's first
+        // instinct — whatever the program asked of the mouse.
+        await dragRow();
         await expect(copyButton()).toBeEnabled();
 
         // Toolbar Copy copies exactly the selected row.

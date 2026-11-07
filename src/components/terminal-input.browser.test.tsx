@@ -160,16 +160,16 @@ function screenRect() {
 // The pixel row of the terminal's first text line, at the pane's font metrics.
 const FIRST_LINE_Y = Math.floor(14 * 1.2);
 
-function dispatchSelectionGesture(type: string, x: number, detail: number, shiftKey = true) {
+function dispatchSelectionGesture(type: string, x: number, detail: number) {
   const rect = screenRect();
   screen().dispatchEvent(
     new MouseEvent(type, {
       bubbles: true,
       cancelable: true,
-      shiftKey,
       clientX: rect.left + x,
       clientY: rect.top + FIRST_LINE_Y,
       button: 0,
+      buttons: type === "mouseup" ? 0 : 1,
       detail,
     }),
   );
@@ -180,9 +180,9 @@ async function renderAgentScreen() {
   await vi.waitFor(() => expect(session.acknowledgeSessionOutput).toHaveBeenCalled());
 }
 
-it("a Shift+drag over a mouse-reporting program selects text and reports it for copying", async () => {
-  // The Copy button listens to selections; a TUI that grabbed the mouse must
-  // not make selecting impossible.
+it("an ordinary drag over a mouse-reporting program selects text and reports it for copying", async () => {
+  // The Copy button listens to selections; the user's first instinct —
+  // dragging over the output — must work even when a TUI holds the mouse.
   const selectionEvents: boolean[] = [];
   const { handle, terminal } = await mountPane((has) => selectionEvents.push(has));
   await renderAgentScreen();
@@ -195,8 +195,9 @@ it("a Shift+drag over a mouse-reporting program selects text and reports it for 
 
   expect(terminal.getSelection()).toBe("first line alpha");
   expect(selectionEvents.at(-1)).toBe(true);
-  // The gesture belonged to Control Room, so the program received nothing.
-  expect(written()).toEqual([]);
+  // The press was the program's to receive; the drag itself never reached it.
+  expect(writtenText()).toContain("\u001b[<0");
+  expect(writtenText()).not.toContain("\u001b[<32");
 
   const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
   handle.current!.copySelection();
@@ -204,38 +205,40 @@ it("a Shift+drag over a mouse-reporting program selects text and reports it for 
   expect(writeText.mock.calls[0][0]).toBe("first line alpha");
 });
 
-it("an ordinary drag while a program reports the mouse forwards the mouse and selects nothing", async () => {
+it("a click over a mouse-reporting program stays the program's", async () => {
   const selectionEvents: boolean[] = [];
   const { terminal } = await mountPane((has) => selectionEvents.push(has));
   await renderAgentScreen();
   session.writeSession.mockClear();
 
+  // A press and release without movement is the program's click: the TUI
+  // keeps its interaction, and nothing becomes a selection.
   await userEvent.pointer([
     { target: screen(), coords: { x: 5, y: FIRST_LINE_Y } },
     { keys: "[MouseLeft>]", target: screen(), coords: { x: 5, y: FIRST_LINE_Y } },
-    { target: screen(), coords: { x: 160, y: FIRST_LINE_Y } },
-    { keys: "[/MouseLeft]", target: screen(), coords: { x: 160, y: FIRST_LINE_Y } },
+    { keys: "[/MouseLeft]", target: screen(), coords: { x: 7, y: FIRST_LINE_Y } },
   ]);
 
   expect(terminal.hasSelection()).toBe(false);
-  // No event ever reports a selection, so the Copy button stays disabled.
   expect(selectionEvents.every((event) => event === false)).toBe(true);
-  // The program owns the gesture: it received the mouse reports it asked for.
+  // The program received the press and release it asked for.
   expect(writtenText()).toContain("\u001b[<");
 });
 
-it("a Shift double-click over reporting mouse selects the word under it", async () => {
+it("a double-click that becomes a drag selects the words under both ends", async () => {
   const { terminal } = await mountPane();
   await renderAgentScreen();
 
-  // Column ~100 lands inside "alpha" of the first line.
-  dispatchSelectionGesture("mousedown", 100, 2);
-  dispatchSelectionGesture("mouseup", 100, 2);
+  // The second press lands inside "alpha" of the first line; the drag then
+  // pulls the selection back to the word under the first end.
+  dispatchSelectionGesture("mousedown", 130, 2);
+  dispatchSelectionGesture("mousemove", 20, 2);
+  dispatchSelectionGesture("mouseup", 20, 2);
 
-  expect(terminal.getSelection()).toBe("alpha");
+  expect(terminal.getSelection()).toBe("first line alpha");
 });
 
-it("Escape cancels a Shift+drag while it is in progress", async () => {
+it("Escape cancels a drag over a mouse-reporting program while it is in progress", async () => {
   const selectionEvents: boolean[] = [];
   const { terminal } = await mountPane((has) => selectionEvents.push(has));
   await renderAgentScreen();
@@ -251,8 +254,9 @@ it("Escape cancels a Shift+drag while it is in progress", async () => {
 
   expect(terminal.hasSelection()).toBe(false);
   expect(selectionEvents).toContain(false);
-  // The key never reached the program either.
-  expect(written()).toEqual([]);
+  // The press was the program's; the Escape never reached it.
+  expect(writtenText()).toContain("\u001b[<0");
+  expect(writtenText()).not.toContain("\u001b[27");
 });
 
 it("a selection survives program redraws and focus changes", async () => {
@@ -338,8 +342,11 @@ it("hovering over a motion-reporting program keeps a finished selection alive", 
 
   // Pointer motion with no buttons held reports to a program that asked for
   // any-motion tracking, and every report is input that clears selections. The
-  // pane keeps hover moves for itself while the selection lives.
+  // pane keeps hover moves for itself while the selection lives: the press
+  // reached the program before the drag claimed the gesture, the hovers that
+  // follow reach no one.
   const rect = screenRect();
+  const writesAfterDrag = written().length;
   for (const x of [20, 90, 160]) {
     screen().dispatchEvent(
       new MouseEvent("mousemove", {
@@ -352,8 +359,8 @@ it("hovering over a motion-reporting program keeps a finished selection alive", 
     );
   }
   expect(terminal.hasSelection()).toBe(true);
-  // The program received none of those hovers.
-  expect(written()).toEqual([]);
+  expect(written().length).toBe(writesAfterDrag);
+  expect(writtenText()).toContain("\u001b[<0");
 
   // Right-clicking the live selection copies it: clipboard write, no click.
   const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
