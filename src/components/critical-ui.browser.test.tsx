@@ -514,6 +514,7 @@ describe("critical UI in Chromium", () => {
       .toBeVisible();
     await picker.click();
     await userEvent.keyboard("{End}");
+    await expect.poll(() => getComputedStyle(menu.element()).opacity).toBe("1");
     const bounds = menu.element().getBoundingClientRect();
     expect(bounds.left).toBeGreaterThanOrEqual(8);
     expect(bounds.right).toBeLessThanOrEqual(792);
