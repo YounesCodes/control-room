@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 let generation = 0;
 let animations: Animation[] = [];
 let overlays: HTMLElement[] = [];
+let restoreWorkspace: (() => void) | null = null;
 
 /** Update controls immediately, then move the live workspace without capturing terminal frames. */
 export function transitionFocusMode(direction: "enter" | "exit", update: () => void) {
@@ -12,6 +13,8 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
   // Measure the visible position before cancelling an interrupted slide.
   const before = workspace?.getBoundingClientRect();
   animations.forEach((animation) => animation.cancel());
+  restoreWorkspace?.();
+  restoreWorkspace = null;
   overlays.forEach((overlay) => overlay.remove());
   animations = [];
   overlays = [];
@@ -30,20 +33,34 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
   if (reduced || !supported || !workspace || !before) return;
   root.dataset.focusTransition = direction;
   const styles = getComputedStyle(root);
+  // Production CSS can shorten 180ms to .18s. WAAPI always takes milliseconds.
+  const duration = /^(\d*\.?\d+)(ms|s)$/.exec(styles.getPropertyValue("--motion-focus").trim());
   const options = {
-    duration: parseFloat(styles.getPropertyValue("--motion-focus")) || 180,
+    duration: duration ? Number(duration[1]) * (duration[2] === "s" ? 1000 : 1) : 180,
     easing: styles.getPropertyValue("--ease").trim() || "ease-out",
+    fill: "both" as const,
   };
   const animate = (node: HTMLElement, frames: Keyframe[]) =>
     animations.push(node.animate(frames, options));
   const after = workspace.getBoundingClientRect();
-  animate(workspace, [
-    {
-      transform:
-        "translate(" + (before.left - after.left) + "px," + (before.top - after.top) + "px)",
-    },
-    { transform: "translate(0,0)" },
-  ]);
+  // Interpolate the real layout box, never scale a bitmap of terminal glyphs.
+  // Fix it to the viewport only for this transition; the grid already owns the
+  // destination, and ResizeObserver keeps the live terminal fitted as it grows.
+  const position = workspace.style.position;
+  const zIndex = workspace.style.zIndex;
+  workspace.style.position = "fixed";
+  workspace.style.zIndex = "7";
+  restoreWorkspace = () => {
+    workspace.style.position = position;
+    workspace.style.zIndex = zIndex;
+  };
+  const frame = (box: DOMRect): Keyframe => ({
+    left: `${box.left}px`,
+    top: `${box.top}px`,
+    width: `${box.width}px`,
+    height: `${box.height}px`,
+  });
+  animate(workspace, [frame(before), frame(after)]);
   if (departing && bounds) {
     departing.inert = true;
     departing.setAttribute("aria-hidden", "true");
@@ -57,7 +74,7 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
       width: bounds.width + "px",
       height: bounds.height + "px",
       pointerEvents: "none",
-      zIndex: "34",
+      zIndex: "6",
     });
     departing.classList.add("focus-departing-sidebar");
     document.querySelector(".app-shell")?.append(departing);
@@ -78,6 +95,9 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
   if (panes) animate(panes, [{ opacity: 0 }, { opacity: 1 }]);
   void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
     if (generation !== token) return;
+    restoreWorkspace?.();
+    restoreWorkspace = null;
+    animations.forEach((animation) => animation.cancel());
     overlays.forEach((overlay) => overlay.remove());
     overlays = [];
     animations = [];

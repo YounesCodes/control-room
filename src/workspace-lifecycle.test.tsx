@@ -268,6 +268,7 @@ describe("App Workspace behavior", () => {
     render(<App />);
 
     await user.click(await screen.findByLabelText("Open Settings"));
+    await user.click(screen.getByRole("button", { name: "Terminal" }));
     await user.clear(screen.getByLabelText("Font family"));
     await user.type(screen.getByLabelText("Font family"), "Cascadia Mono");
     await user.keyboard("{Enter}");

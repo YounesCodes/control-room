@@ -40,6 +40,7 @@ const xterm = vi.hoisted(() => ({
   mouseTrackingMode: "none",
   // The handler xterm calls for typed input, so a test can type.
   onData: null as ((data: string) => void) | null,
+  onTitle: null as ((title: string) => void) | null,
   parseWrite: null as (() => void) | null,
   deferWrites: false,
   pendingWrites: [] as Array<() => void>,
@@ -47,6 +48,7 @@ const xterm = vi.hoisted(() => ({
   customKeyHandler: null as ((event: KeyboardEvent) => boolean) | null,
   reset() {
     this.onData = null;
+    this.onTitle = null;
     this.parseWrite = null;
     this.deferWrites = false;
     this.pendingWrites = [];
@@ -138,6 +140,14 @@ vi.mock("@xterm/xterm", () => ({
     }
     onBinary() {
       return { dispose: () => undefined };
+    }
+    onTitleChange(handler: (title: string) => void) {
+      xterm.onTitle = handler;
+      return {
+        dispose: () => {
+          xterm.onTitle = null;
+        },
+      };
     }
     onSelectionChange(handler: () => void) {
       xterm.selectionChange = handler;
@@ -245,6 +255,7 @@ function renderPane(
     ref?: Ref<TerminalPaneHandle>;
     onSelectionChange?: (hasSelection: boolean) => void;
     onProcessing?: (busy: boolean) => void;
+    onTitle?: (title: string | null) => void;
     findRequest?: number;
   } = {},
 ) {
@@ -351,6 +362,59 @@ describe("TerminalPane sessions", () => {
     renderPane(createRemoteWorkspace(connection));
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
     expect(xterm.oscHandlers).toBe(3);
+  });
+
+  it.each(["local", "remote"])(
+    "clears %s titles at command completion and disconnect, ignoring retired output",
+    async (kind) => {
+      const onTitle = vi.fn();
+      const workspace =
+        kind === "local" ? createLocalWorkspace(shell) : createRemoteWorkspace(connection);
+      renderPane({ ...workspace, state: "connected" }, vi.fn(), { onTitle });
+      await vi.waitFor(() =>
+        expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled(),
+      );
+      await act(async () => undefined);
+      act(() => xterm.onTitle?.("npm run dev --token private"));
+      expect(onTitle).toHaveBeenLastCalledWith("npm");
+      act(() => xterm.osc.get(133)?.("D;0"));
+      expect(onTitle).toHaveBeenLastCalledWith(null);
+      act(() => xterm.onTitle?.("npm stale title"));
+      expect(onTitle).toHaveBeenLastCalledWith(null);
+      act(() => {
+        xterm.osc.get(133)?.("C");
+        xterm.onTitle?.("python private.py");
+      });
+      expect(onTitle).toHaveBeenLastCalledWith("python");
+      act(() =>
+        nativeEvents.get("session-state-changed")?.forEach((listener) =>
+          listener({
+            payload: {
+              sessionId: kind === "local" ? "local-session" : "ssh-session",
+              state: "disconnected",
+              reason: null,
+            },
+          }),
+        ),
+      );
+      expect(onTitle).toHaveBeenLastCalledWith(null);
+      xterm.parseWrite = () => xterm.onTitle?.("vim secret.txt");
+      act(() => channels[0].onmessage?.(new TextEncoder().encode("retired title").buffer));
+      expect(onTitle).toHaveBeenLastCalledWith(null);
+    },
+  );
+
+  it("accepts new titles after successive unmarked commands return to their prompt", async () => {
+    const onTitle = vi.fn();
+    renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onTitle });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    for (const command of ["npm", "python"]) {
+      act(() => xterm.onData?.(`${command}\r`));
+      act(() => xterm.onTitle?.(`${command} --private secret`));
+      expect(onTitle).toHaveBeenLastCalledWith(command);
+      act(() => channels[0].onmessage?.(new TextEncoder().encode("$ ").buffer));
+      expect(onTitle).toHaveBeenLastCalledWith(null);
+    }
   });
 
   it("reports command processing until the rendered prompt returns and clears on unmount", async () => {

@@ -1,7 +1,7 @@
 {
   "name": "control-room",
   "private": true,
-  "version": "0.9.1",
+  "version": "0.9.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "test:rust-coverage": "cargo llvm-cov --locked --manifest-path src-tauri/Cargo.toml --html",
     "test:browser": "vitest run --config vitest.browser.config.ts",
+    "ui:capture": "node scripts/ui-review.mjs capture",
+    "ui:motion": "node scripts/ui-review.mjs motion",
     "test:desktop:build": "tauri build --debug --no-bundle --features desktop-e2e --config src-tauri/tauri.e2e.conf.json",
     "test:desktop": "wdio run wdio.conf.ts",
     "test:updater-install": "node scripts/test-updater-install.mjs",

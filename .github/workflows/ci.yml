@@ -94,6 +94,18 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install chromium
       - run: npm run test:browser
+      - name: Capture synthetic React UI evidence
+        run: |
+          npm run ui:capture -- --scenario settings
+          npm run ui:capture -- --scenario systemd --state populated
+          npm run ui:motion -- --scenario settings
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: ui-review
+          path: test-results/ui-review/
+          if-no-files-found: ignore
+          retention-days: 7
 
   validate:
     needs: changes

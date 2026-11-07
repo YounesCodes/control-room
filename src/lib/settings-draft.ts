@@ -16,6 +16,7 @@ export function settingsHaveChanges(saved: AppSettings, draft: AppSettings): boo
     ...(Object.keys(draft) as Array<keyof AppSettings>),
   ]);
   return [...keys].some((key) => {
+    if (key === "automaticTerminalTitles") return (saved[key] ?? true) !== (draft[key] ?? true);
     if (key === "hostMetricsEnabled") return (saved[key] ?? false) !== (draft[key] ?? false);
     if (key === "hostMetricsIntervalSeconds") return (saved[key] ?? 5) !== (draft[key] ?? 5);
     if (key === "hostMetrics")

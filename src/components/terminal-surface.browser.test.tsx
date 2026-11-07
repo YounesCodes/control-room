@@ -32,7 +32,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("../lib/api", () => ({
   api: {
-    startSession: vi.fn(() => Promise.resolve({ sessionId: "browser-ssh" })),
+    startSession: vi.fn(
+      (_id: string, _cols: number, _rows: number, output: NonNullable<typeof session.output>) => {
+        session.output = output;
+        return Promise.resolve({ sessionId: "browser-ssh" });
+      },
+    ),
     startLocalSession: vi.fn(
       (_id: string, _cols: number, _rows: number, output: NonNullable<typeof session.output>) => {
         session.output = output;
@@ -81,6 +86,60 @@ afterEach(() => {
   session.resizeSession.mockClear();
   vi.restoreAllMocks();
 });
+
+it.each(["local", "remote"])(
+  "tracks %s titles through real OSC parsing without retaining arguments",
+  async (kind) => {
+    container = document.createElement("div");
+    Object.assign(container.style, { width: "900px", height: "500px" });
+    document.body.append(container);
+    root = createRoot(container);
+    const onTitle = vi.fn();
+    const workspace =
+      kind === "local"
+        ? createLocalWorkspace({
+            id: "test-shell",
+            label: "Test shell",
+            kind: "command-prompt",
+            elevated: false,
+          })
+        : createRemoteWorkspace(connection());
+    root.render(
+      <TerminalPane
+        workspace={{ ...workspace, state: "connected" }}
+        settings={settings}
+        visible
+        active
+        onActivate={() => undefined}
+        onSession={() => undefined}
+        onState={() => undefined}
+        onTitle={onTitle}
+      />,
+    );
+    await vi.waitFor(() => expect(session.output).not.toBeNull());
+    const output = async (text: string) => {
+      const count = session.acknowledgeSessionOutput.mock.calls.length;
+      session.output!.onmessage!(new TextEncoder().encode(text).buffer);
+      await vi.waitFor(() =>
+        expect(session.acknowledgeSessionOutput.mock.calls.length).toBeGreaterThan(count),
+      );
+    };
+    await output("\x1b]133;C\x07\x1b]2;python --token private\x07");
+    expect(onTitle).toHaveBeenLastCalledWith("python");
+    await output("\x1b[?1049hEditor output\r\nMore output");
+    expect(onTitle).toHaveBeenLastCalledWith("python");
+    await output("\x1b[?1049l\x1b]133;D;0\x07");
+    expect(onTitle).toHaveBeenLastCalledWith(null);
+    const count = onTitle.mock.calls.length;
+    await output("\x1b]2;python stale title\x07\x1b]133;A\x07$ ");
+    expect(onTitle).toHaveBeenCalledTimes(count);
+    await output("\x1b]133;C\x07ordinary output with no title");
+    expect(onTitle).toHaveBeenCalledTimes(count);
+    root.unmount();
+    root = null;
+    expect(onTitle).toHaveBeenLastCalledWith(null);
+  },
+);
 
 it("tracks agent progress through real xterm parsing on both screens", async () => {
   container = document.createElement("div");

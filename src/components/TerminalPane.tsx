@@ -16,6 +16,7 @@ import {
 } from "../lib/terminal-flow";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
+import { TerminalTitle } from "../lib/terminal-title";
 import { readTerminalView } from "../lib/terminal-screen";
 import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
@@ -37,6 +38,7 @@ interface TerminalPaneProps {
   onSelectionChange?: (hasSelection: boolean) => void;
   onActivity?: (kind: "output" | "bell") => void;
   onProcessing?: (busy: boolean) => void;
+  onTitle?: (title: string | null) => void;
   findRequest?: number;
   onReconnect?: () => void;
 }
@@ -64,6 +66,7 @@ export function TerminalPane({
   onSelectionChange,
   onActivity = () => undefined,
   onProcessing = () => undefined,
+  onTitle = () => undefined,
   findRequest = 0,
   onReconnect,
 }: TerminalPaneProps) {
@@ -91,9 +94,18 @@ export function TerminalPane({
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onActivityRef = useRef(onActivity);
   const onProcessingRef = useRef(onProcessing);
+  const onTitleRef = useRef(onTitle);
+  const titleRef = useRef<TerminalTitle | null>(null);
+  if (!titleRef.current) titleRef.current = new TerminalTitle((title) => onTitleRef.current(title));
   const processingRef = useRef<TerminalProcessing | null>(null);
   if (!processingRef.current) {
-    processingRef.current = new TerminalProcessing((busy) => onProcessingRef.current(busy));
+    processingRef.current = new TerminalProcessing(
+      (busy) => {
+        if (busy) titleRef.current?.marker("C");
+        onProcessingRef.current(busy);
+      },
+      () => titleRef.current?.idle(),
+    );
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
@@ -118,11 +130,13 @@ export function TerminalPane({
   onSelectionChangeRef.current = onSelectionChange;
   onActivityRef.current = onActivity;
   onProcessingRef.current = onProcessing;
+  onTitleRef.current = onTitle;
 
   handleSessionStateRef.current = (event) => {
     onStateRef.current(event.state, event.reason);
     if (event.state !== "disconnected" && event.state !== "error") return;
     processingRef.current?.reset();
+    titleRef.current?.reset();
     acceptingInputRef.current = false;
     pendingInputRef.current.clear();
     sessionIdRef.current = null;
@@ -140,6 +154,7 @@ export function TerminalPane({
       void api.writeSession(sessionId, bytes).catch((error) => {
         if (sessionIdRef.current !== sessionId) return;
         processingRef.current?.reset();
+        titleRef.current?.reset();
         setLocalError(errorMessage(error));
       });
       return;
@@ -280,8 +295,12 @@ export function TerminalPane({
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
       if (!sessionIdRef.current) return false;
+      titleRef.current?.marker(data);
       processingRef.current?.shellMarker(data);
       return false;
+    });
+    const titleDisposable = terminal.onTitleChange((title) => {
+      if (sessionIdRef.current) titleRef.current?.report(title);
     });
     const progressDisposable = terminal.parser.registerOscHandler(9, (data) => {
       if (!sessionIdRef.current) return false;
@@ -291,6 +310,7 @@ export function TerminalPane({
     // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) {
+        if (sessionIdRef.current) titleRef.current?.marker(data);
         if (sessionIdRef.current) processingRef.current?.shellMarker(data);
         return false;
       }
@@ -303,6 +323,10 @@ export function TerminalPane({
           return true;
         }
         processingRef.current?.command(event.kind === "start");
+        if (event.kind === "start") {
+          titleRef.current?.marker("C");
+          titleRef.current?.report(event.command);
+        } else titleRef.current?.idle();
         if (!connectionIdRef.current) return true;
         if (event.kind === "start") {
           pendingHistoryRef.current = {
@@ -398,9 +422,11 @@ export function TerminalPane({
       bellDisposable.dispose();
       searchDisposable.dispose();
       promptDisposable.dispose();
+      titleDisposable.dispose();
       progressDisposable.dispose();
       oscDisposable.dispose();
       processingRef.current?.reset();
+      titleRef.current?.reset();
       search.dispose();
       terminal.dispose();
       terminalRef.current = null;
@@ -429,6 +455,7 @@ export function TerminalPane({
     if (!terminal) return;
     if (!workspace.connectRequested) {
       processingRef.current?.reset();
+      titleRef.current?.reset();
       acceptingInputRef.current = false;
       pendingInputRef.current.clear();
       sessionIdRef.current = null;
@@ -443,6 +470,7 @@ export function TerminalPane({
 
     acceptingInputRef.current = true;
     processingRef.current?.reset();
+    titleRef.current?.reset();
     pendingInputRef.current.clear();
     pendingHistoryRef.current = null;
     earlySessionEventsRef.current.clear();
@@ -557,6 +585,7 @@ export function TerminalPane({
         const message = errorMessage(error);
         setLocalError(message);
         processingRef.current?.reset();
+        titleRef.current?.reset();
         onStateRef.current("error", message);
       });
 
@@ -567,6 +596,7 @@ export function TerminalPane({
       pendingInputRef.current.clear();
       pendingHistoryRef.current = null;
       processingRef.current?.reset();
+      titleRef.current?.reset();
       window.clearTimeout(acknowledgementTimer);
       if (sessionIdRef.current === ownedSessionId) {
         sessionIdRef.current = null;

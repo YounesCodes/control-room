@@ -21,6 +21,7 @@ liveFonts("public font catalog in WebView2", () => {
       );
     const before = snapshot();
     await $("aria/Open Settings").click();
+    await $(".settings-navigation").$("button=Terminal").click();
     const current = $("[role=combobox][aria-controls=font-suggestions]");
     const original = await current.getValue();
     await current.click();

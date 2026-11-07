@@ -82,6 +82,7 @@ function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {})
     ...overrides,
   };
   const view = render(<SettingsPane {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Terminal" }));
   return { ...props, ...view };
 }
 
@@ -102,8 +103,54 @@ describe("Settings actions", () => {
     api.installCatalogFont.mockResolvedValue("JetBrains Mono");
   });
 
+  it("searches across categories, reports no matches and preserves unsaved drafts", async () => {
+    renderPane();
+    fireEvent.change(screen.getByLabelText("Font size"), { target: { value: "18" } });
+    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    for (const [query, group] of [
+      ["font", "Terminal appearance"],
+      ["refresh", "Host metrics"],
+      ["sudo", "Elevated commands"],
+      ["terminal names", "Tabs & naming"],
+      ["SSH", "SSH environment"],
+      ["update", "Control Room updates"],
+    ]) {
+      fireEvent.change(search, { target: { value: query } });
+      expect(screen.getByRole("group", { name: group })).toBeTruthy();
+    }
+    fireEvent.change(search, { target: { value: "no-such-preference" } });
+    expect(screen.getByRole("status").textContent).toContain("No settings match");
+    expect(screen.queryByRole("group")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Logs & History" }));
+    expect(screen.getByRole("group", { name: "Logs and History" })).toBeTruthy();
+    expect((search as HTMLInputElement).value).toBe("");
+    fireEvent.change(screen.getByRole("combobox", { name: "Settings category" }), {
+      target: { value: "terminal" },
+    });
+    expect((screen.getByLabelText("Font size") as HTMLInputElement).value).toBe("18");
+    expect(saveButton().disabled).toBe(false);
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Terminal" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+  });
+
+  it("defaults automatic titles to on and saves an explicit opt-out", async () => {
+    renderPane();
+    fireEvent.click(screen.getByRole("tab", { name: "Tabs & naming" }));
+    const preference = screen.getByRole("checkbox", {
+      name: "Show current command/process in terminal tab titles",
+    }) as HTMLInputElement;
+    expect(preference.checked).toBe(true);
+    expect(saveButton().disabled).toBe(true);
+    await userEvent.click(preference);
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith({ ...settings, automaticTerminalTitles: false });
+  });
+
   it("identifies local shells and administrator profiles with their shell marks", () => {
     renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     expect(
       screen
         .getByLabelText("Offer Git Bash")
@@ -127,6 +174,7 @@ describe("Settings actions", () => {
   it("updates the default shell mark when the selected profile changes", async () => {
     const user = userEvent.setup();
     renderPane({ localShells: [powershell, gitBash] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     const select = screen.getByRole("combobox", { name: "Default local terminal" });
     expect(select.parentElement?.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
     await user.selectOptions(select, "git-bash");
@@ -137,11 +185,12 @@ describe("Settings actions", () => {
     renderPane();
     expect(saveButton().disabled).toBe(true);
     expect(screen.queryByRole("checkbox", { name: "Storage" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "General & Monitoring" }));
     const enabled = screen.getByRole("checkbox", { name: "Show host metrics in header" });
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
-    fireEvent.change(screen.getByLabelText("Host metrics refresh interval"), {
+    fireEvent.change(screen.getByLabelText("Refresh host metrics"), {
       target: { value: "10" },
     });
     await userEvent.click(saveButton());
@@ -249,6 +298,7 @@ describe("Settings actions", () => {
   it("saves Local Terminal Mode and the selected enabled default", async () => {
     const user = userEvent.setup();
     renderPane({ localShells: [powershell, gitBash] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     await user.click(screen.getByRole("checkbox", { name: "Local Terminal Mode" }));
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Default local terminal" }),
@@ -262,6 +312,7 @@ describe("Settings actions", () => {
 
   it("excludes administrator shells from the startup selector while keeping their manual toggles", () => {
     renderPane({ localShells: [powershell, administratorPowerShell] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     expect(screen.queryByRole("option", { name: /Administrator/ })).toBeNull();
     expect(screen.getByRole("checkbox", { name: /PowerShell 7.*administrator/ })).toBeTruthy();
   });
@@ -271,6 +322,7 @@ describe("Settings actions", () => {
       settings: { ...settings, hiddenLocalShells: ["git-bash"] },
       localShells: [powershell, gitBash],
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
     expect(screen.queryByRole("option", { name: "Git Bash" })).toBeNull();
     expect(screen.getByRole("option", { name: "PowerShell 7" })).toBeTruthy();
   });
@@ -327,37 +379,26 @@ describe("Settings actions", () => {
     expect(preference.checked).toBe(true);
   });
 
-  it("warns about a terminal colour that is hard to read", () => {
+  it("accepts low-contrast colors without warnings", async () => {
     renderPane({ settings: { ...settings, terminalBlue: "#111111" } });
-
-    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
-  });
-
-  it("does not move the active color picker when contrast drops", () => {
-    renderPane();
     const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
-    const controls = picker.closest(".terminal-color-grid") as HTMLElement;
-
-    fireEvent.change(picker, { target: { value: "#111111" } });
-
-    const warning = screen.getByText(/ANSI 4.*Choose a brighter color/);
+    expect(screen.queryByText(/Hard to read|Choose a brighter color/)).toBeNull();
+    fireEvent.change(picker, { target: { value: "#090909" } });
     expect(picker.isConnected).toBe(true);
-    expect(
-      controls.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    await userEvent.click(saveButton());
+    expect(api.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalBlue: "#090909" }),
+    );
   });
 
-  it("waits until the native picker closes before showing a contrast warning", () => {
+  it("commits color changes only after the native picker closes", () => {
     renderPane();
     const picker = screen.getByLabelText("ANSI 4") as HTMLInputElement;
-
     fireEvent.input(picker, { target: { value: "#111111" } });
-    expect(screen.queryByText(/ANSI 4.*Choose a brighter color/)).toBeNull();
     expect(saveButton().disabled).toBe(true);
-
     fireEvent.change(picker, { target: { value: "#111111" } });
-    expect(screen.getByText(/ANSI 4.*Choose a brighter color/)).toBeTruthy();
     expect(saveButton().disabled).toBe(false);
+    expect(screen.queryByText(/Hard to read|Choose a brighter color/)).toBeNull();
   });
 
   it("uses swatches without hex fields or contrast numbers", () => {
@@ -436,6 +477,7 @@ describe("Settings actions", () => {
     expect(preference.checked).toBe(false);
 
     // Turning the schedule off is not the same as refusing to look.
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("You're up to date.")).toBeTruthy();
@@ -446,6 +488,7 @@ describe("Settings actions", () => {
     renderPane({
       onCheckForUpdates: vi.fn(async () => ({ outcome: "available", version: "0.7.0" }) as const),
     });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(await screen.findByText("Version 0.7.0 is available.")).toBeTruthy();
   });
@@ -461,6 +504,7 @@ describe("Settings actions", () => {
           }) as const,
       ),
     });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(await screen.findByText(/Could not check for updates\./)).toBeTruthy();
     expect(screen.getByText("Could not reach the update endpoint.")).toBeTruthy();
@@ -492,6 +536,7 @@ describe("Settings actions", () => {
 
   it("offers each installed shell in the two groups the launcher uses", () => {
     renderPane({ localShells: [powershell, gitBash, administratorPowerShell] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
 
     expect(screen.getByText("Local terminals")).toBeTruthy();
     expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
@@ -504,6 +549,7 @@ describe("Settings actions", () => {
 
   it("says so plainly when this machine has no local shells", () => {
     renderPane({ localShells: [] });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
 
     expect(screen.getByText("No local shells are installed on this machine.")).toBeTruthy();
     expect(screen.queryByLabelText("Offer Git Bash")).toBeNull();
@@ -532,6 +578,7 @@ describe("Settings actions", () => {
       settings: { ...settings, hiddenLocalShells: ["git-bash"] },
       localShells: [powershell, gitBash],
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Local shells" }));
 
     const toggle = screen.getByLabelText("Offer Git Bash") as HTMLInputElement;
     expect(toggle.checked).toBe(false);

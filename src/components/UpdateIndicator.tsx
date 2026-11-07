@@ -76,7 +76,15 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
           aria-hidden="true"
           data-state={state.status === "downloaded" ? "ready" : "pending"}
         />
-        <span className="update-indicator-label">{label}</span>
+        <span className="update-indicator-label">
+          {state.status === "downloading" && percent !== null ? (
+            <>
+              Downloading <span className="update-indicator-percent">{percent}%</span>
+            </>
+          ) : (
+            label
+          )}
+        </span>
       </button>
 
       {/* Progress semantics live on a dedicated node so the button keeps a

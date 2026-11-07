@@ -2269,10 +2269,30 @@ mod tests {
         assert_eq!(loaded.host_metrics_interval_seconds, 5);
         assert_eq!(loaded.host_metrics.len(), 5);
         assert!(loaded.global_sudo_enabled);
+        assert!(loaded.automatic_terminal_titles);
         assert!(
             loaded.automatic_update_checks,
             "a missing preference defaults to on rather than wiping the payload"
         );
+    }
+
+    #[test]
+    fn automatic_terminal_titles_preference_round_trips() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        for enabled in [false, true] {
+            let settings = AppSettings {
+                automatic_terminal_titles: enabled,
+                ..AppSettings::default()
+            };
+            database.save_settings(&settings).unwrap();
+            let reopened = Database::open(&path).unwrap();
+            assert_eq!(
+                reopened.get_settings().unwrap().automatic_terminal_titles,
+                enabled
+            );
+        }
     }
 
     #[test]

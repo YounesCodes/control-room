@@ -8,6 +8,33 @@ afterEach(() => {
   Reflect.deleteProperty(document, "startViewTransition");
   document.body.replaceChildren();
   delete document.documentElement.dataset.focusTransition;
+  document.documentElement.style.removeProperty("--motion-focus");
+});
+
+it.each([
+  ["180ms", 180],
+  [".18s", 180],
+  ["0s", 0],
+  ["invalid", 180],
+])("reads CSS duration %s as %i milliseconds", async (css, expected) => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: false })),
+  );
+  document.body.innerHTML = '<main class="workspace-shell"></main>';
+  document.documentElement.style.setProperty("--motion-focus", String(css));
+  const animate = vi.fn(() => ({ finished: Promise.resolve(), cancel: vi.fn() }));
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
+  try {
+    transitionFocusMode("enter", () => undefined);
+    expect(animate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ duration: expected }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, "animate");
+  }
 });
 
 it.each([true, false])(
@@ -25,6 +52,30 @@ it.each([true, false])(
     expect(start).not.toHaveBeenCalled();
   },
 );
+
+it("changes a real workspace immediately without animation when reduced motion is requested", () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: true })),
+  );
+  document.body.innerHTML =
+    '<div class="app-shell"><aside class="sidebar"></aside><main class="workspace-shell"></main></div>';
+  const animate = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
+  try {
+    transitionFocusMode("enter", () =>
+      document.querySelector(".app-shell")!.classList.add("terminal-focus-mode"),
+    );
+    expect(document.querySelector(".app-shell")!.classList.contains("terminal-focus-mode")).toBe(
+      true,
+    );
+    expect(animate).not.toHaveBeenCalled();
+    expect(document.querySelector(".focus-departing-sidebar")).toBeNull();
+    expect(document.documentElement.dataset.focusTransition).toBeUndefined();
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, "animate");
+  }
+});
 
 it("cancels superseded live motion without delaying the next state or leaving overlays", async () => {
   vi.stubGlobal(
