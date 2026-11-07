@@ -146,6 +146,34 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
   });
 
+  it("keeps the lifted tab inside the strip when the pointer overshoots", () => {
+    const onReorder = vi.fn();
+    const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);
+    stubStripGeometry(container);
+    const third = mainButton(container, "C");
+
+    pointer(third, "pointerdown", 360);
+    pointer(third, "pointermove", 3000);
+    // Thrown far past the right border, the tab pins to the strip's right
+    // edge instead of sliding off the window.
+    expect(container.querySelector<HTMLElement>(".session-tab-dragged")!.style.transform).toBe(
+      "translate3d(175px, 0, 0)",
+    );
+    // And a release out there is still a drop outside, so it reverts.
+    pointer(third, "pointerup", 3000);
+    expect(onReorder).not.toHaveBeenCalled();
+    expect(container.querySelector(".session-tab-dragged")).toBeNull();
+
+    pointer(third, "pointerdown", 360);
+    pointer(third, "pointermove", -300);
+    // The same clamp holds at the left border.
+    expect(container.querySelector<HTMLElement>(".session-tab-dragged")!.style.transform).toBe(
+      "translate3d(-350px, 0, 0)",
+    );
+    pointer(third, "pointerup", -300);
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
   it("drags a tab onto a later slot", () => {
     const onReorder = vi.fn();
     const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);

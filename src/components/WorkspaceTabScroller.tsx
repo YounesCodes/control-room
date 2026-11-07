@@ -510,7 +510,15 @@ export function WorkspaceTabScroller({
             if (slotIndex === activeDrag.fromIndex) {
               classes.push("session-tab-dragged");
               style.zIndex = 30;
-              style.transform = `translate3d(${activeDrag.pointerX - geometry.grabOffset - geometry.left - (activeDrag.fromIndex - dragSliceStart) * geometry.tabWidth}px, 0, 0)`;
+              // The lifted tab follows the pointer but never crosses the strip's
+              // borders: a pointer thrown far outside reads as the tab pinned
+              // at the nearest edge, not as a header sliding off the window.
+              const followed = activeDrag.pointerX - geometry.grabOffset;
+              const clamped = Math.max(
+                geometry.left,
+                Math.min(geometry.right - geometry.tabWidth, followed),
+              );
+              style.transform = `translate3d(${clamped - geometry.left - (activeDrag.fromIndex - dragSliceStart) * geometry.tabWidth}px, 0, 0)`;
             } else if (dragTarget !== null && dragTarget !== activeDrag.fromIndex) {
               // The tabs between the lift and the drop slide one slot against
               // the drag's direction, opening the gap the drop fills.

@@ -3509,4 +3509,77 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
     await vi.waitFor(() => expect(savedIds()).toEqual(["tab-a", "tab-b", "tab-c"]));
   });
+
+  it("keeps a dragged tab pinned inside the strip when the pointer leaves it", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+
+    const alpha = stripTabMain("Fixture Alpha")!;
+    const content = document.querySelector<HTMLElement>(".session-tab-content")!;
+    const press = alpha.getBoundingClientRect();
+    const pointer = (node: HTMLElement, type: string, x: number) =>
+      node.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          isPrimary: true,
+          clientX: x,
+          clientY: press.top + press.height / 2,
+        }),
+      );
+    const expectPinnedInside = async (shot: string) => {
+      await vi.waitFor(() => {
+        const dragged = document.querySelector<HTMLElement>(".session-tab-dragged")!;
+        expect(dragged).toBeTruthy();
+        const box = dragged.getBoundingClientRect();
+        const bounds = content.getBoundingClientRect();
+        // The lifted tab stays inside the strip's borders, right to the half
+        // pixel, no matter how far outside the pointer travels.
+        expect(box.left).toBeGreaterThanOrEqual(bounds.left - 0.5);
+        expect(box.right).toBeLessThanOrEqual(bounds.right + 0.5);
+      });
+      await page.screenshot({ path: `../test-results/${shot}` });
+    };
+
+    // Throw the pointer far past both borders; the tab pins to each edge.
+    pointer(alpha, "pointerdown", press.left + 20);
+    pointer(content, "pointermove", window.innerWidth + 300);
+    await expectPinnedInside("drag-overshoot-right.png");
+    pointer(content, "pointermove", -300);
+    await expectPinnedInside("drag-overshoot-left.png");
+
+    // Releasing out there is a drop outside the strip, so the order reverts.
+    pointer(content, "pointerup", -300);
+    await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
+    expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]);
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-a", "tab-b"]),
+    );
+  });
 });
