@@ -610,9 +610,10 @@ test ! -e "$HOME/.local/share/control-room/shell-integration.bash"
             ("printf after_clear", "0"),
         ];
         assert_eq!(markers.len(), 2 * expected.len(), "{markers:?}");
-        for (pair, (command, exit_code)) in markers.chunks_exact(2).zip(expected) {
-            assert_eq!(pair[0], format!("start;{command}"));
-            let (status, cwd) = pair[1].rsplit_once(';').unwrap();
+        let (pairs, _) = markers.as_chunks::<2>();
+        for ([start, finish], (command, exit_code)) in pairs.iter().copied().zip(expected) {
+            assert_eq!(start, format!("start;{command}"));
+            let (status, cwd) = finish.rsplit_once(';').unwrap();
             assert_eq!(status, format!("finish;{exit_code}"), "{command}");
             if command == "cd /" {
                 assert_eq!(cwd, "/");
