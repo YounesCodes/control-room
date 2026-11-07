@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertCircle, Camera, X } from "lucide-react";
 import { Modal } from "../Modal";
 import type { BaselineProgress, BaselineSectionKind } from "../../types";
@@ -15,7 +15,7 @@ interface BaselineCaptureDialogProps {
   running: boolean;
   progress: BaselineProgress[];
   /** What the user should know about elevation for this host, when it matters. */
-  permissionNote: string | null;
+  permissionNote: ReactNode;
   error?: string | null;
   onRequestCapture: (label: string, sections: BaselineSectionKind[]) => void;
   onStopCapture: () => void;
@@ -87,7 +87,7 @@ export function BaselineCaptureDialog({
             {permissionNote && (
               <p className="baseline-capture-note">
                 <AlertCircle size={12} aria-hidden="true" />
-                {permissionNote}
+                <span className="baseline-capture-note-text">{permissionNote}</span>
               </p>
             )}
             <div className="modal-actions">

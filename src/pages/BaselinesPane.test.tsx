@@ -363,10 +363,11 @@ describe("baselines explorer", () => {
     await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Read", { selector: "legend" })).toBeTruthy();
+    expect(dialog.textContent).toContain(
+      "Allow sudo is off for this host, so sections that need root record less.",
+    );
     expect(
-      within(dialog).getByText(
-        "Allow sudo is off for this host, so sections that need root record less.",
-      ),
+      within(dialog).getByText("Allow sudo is off for this host", { selector: "strong" }),
     ).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("checkbox", { name: "Ports" }));
     expect(within(dialog).getByText("Read (8 of 9)")).toBeTruthy();

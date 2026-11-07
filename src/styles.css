@@ -3324,6 +3324,13 @@ code,
   color: var(--warning);
 }
 
+/* The warning hue carries the clause that states the restriction; the
+   consequence after it stays quiet so one line holds both without shouting. */
+.baseline-capture-note strong {
+  color: var(--warning);
+  font-weight: 600;
+}
+
 .baseline-progress {
   display: flex;
   margin: 0;
