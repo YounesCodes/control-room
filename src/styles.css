@@ -7773,10 +7773,11 @@ dd {
 
 /* Warning text speaks in one voice app-wide: the amber hue always pairs with
    the app's strong step and the WarningSign glyph, so no warning line reads
-   half-bold, half-muted, or unsigned. */
+   half-bold, half-muted, or unsigned. Items pin to the first text line so the
+   sign keeps the capture note's measures even when the message wraps. */
 .inline-warning {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 6px;
   margin: 4px 0;
@@ -7787,6 +7788,7 @@ dd {
 
 .inline-warning svg {
   flex: none;
+  margin-top: 1px;
 }
 
 .inline-message {
