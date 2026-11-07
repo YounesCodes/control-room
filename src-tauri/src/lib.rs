@@ -37,6 +37,19 @@ fn database_path(app_data_directory: &std::path::Path, development: bool) -> std
     directory.join("control-room.db")
 }
 
+// Debug windows wear the checkout's branch as their title so parallel dev
+// builds are distinguishable in the taskbar; an unnamed branch falls back
+// to "dev".
+#[cfg(any(debug_assertions, test))]
+fn dev_window_title(branch: &str) -> String {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        "dev".to_string()
+    } else {
+        branch.to_string()
+    }
+}
+
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -54,7 +67,7 @@ pub fn run() {
         .setup(|app| {
             #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
             if let Some(window) = app.get_webview_window("main") {
-                window.set_title("Control Room (Dev)")?;
+                window.set_title(&dev_window_title(env!("CONTROL_ROOM_BRANCH")))?;
             }
 
             #[cfg(feature = "desktop-e2e")]
@@ -218,5 +231,32 @@ mod startup_tests {
             database_path(directory.path(), false),
             directory.path().join("control-room.db")
         );
+    }
+}
+
+#[cfg(test)]
+mod dev_window_title_tests {
+    use super::*;
+
+    #[test]
+    fn uses_the_checked_out_branch() {
+        assert_eq!(
+            dev_window_title("vibe/dev-window-identity"),
+            "vibe/dev-window-identity"
+        );
+    }
+
+    #[test]
+    fn trims_git_output() {
+        assert_eq!(
+            dev_window_title("  baselines-2.0-host-state-explorer\n"),
+            "baselines-2.0-host-state-explorer"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_dev_when_the_branch_is_unnamed() {
+        assert_eq!(dev_window_title(""), "dev");
+        assert_eq!(dev_window_title("   "), "dev");
     }
 }
