@@ -925,12 +925,9 @@ export function BaselinesPane({
           running={Boolean(captureId)}
           progress={progress}
           permissionNote={
-            sudoAllowed ? null : (
-              <>
-                <strong>Allow sudo is off for this host</strong>, so sections that need root record
-                less.
-              </>
-            )
+            sudoAllowed
+              ? null
+              : "Allow sudo is off for this host, so sections that need root record less."
           }
           error={actionError}
           onRequestCapture={(label, sections) => void capture(label, sections)}
