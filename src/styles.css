@@ -3308,26 +3308,23 @@ code,
   text-transform: uppercase;
 }
 
-/* The elevation note stays a single quiet line: the amber warning sign
-   carries the restriction cue without an alert banner's box drawing. */
+/* The elevation note reads as one warning line: the amber sign and the
+   whole sentence share the warning hue, and the strong clause keeps the
+   app's emphasis step without an alert banner's box drawing. */
 .baseline-capture-note {
   display: flex;
   align-items: center;
   margin: 0;
-  color: var(--text-muted);
+  color: var(--warning);
   font-size: 11px;
   gap: 6px;
 }
 
 .baseline-capture-note svg {
   flex: none;
-  color: var(--warning);
 }
 
-/* The warning hue carries the clause that states the restriction; the
-   consequence after it stays quiet so one line holds both without shouting. */
 .baseline-capture-note strong {
-  color: var(--warning);
   font-weight: 600;
 }
 
