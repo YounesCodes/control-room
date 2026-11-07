@@ -3,7 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import * as fixtures from "./test/app-fixtures";
-import type { AppSettings, HostBaseline, PersistedWorkspaceState } from "./types";
+import type { AppSettings, HistoryEntry, HostBaseline, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource-variable/inter/opsz.css";
 import "./styles.css";
@@ -177,7 +177,7 @@ async function respond(command: string, args: any = {}) {
     case "stop_log_stream":
       return;
     case "get_history_integration_status":
-      return true;
+      return "installed";
     case "get_history":
       return [];
     case "get_scratchpad_note":
@@ -2618,7 +2618,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ["Boot", "Boot Diagnostics"],
       ["Logs", "Logs"],
       ["Baselines", "Baselines"],
-      ["History", "Enhanced History"],
+      ["History", "Command History"],
     ]) {
       await navigate(view);
       await expect.element(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
@@ -3091,5 +3091,214 @@ describe("complete app journeys with typed IPC fixtures", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map((violation) => violation.id)).toEqual([]);
+  });
+  it("adds commands to the open History search after the terminal saves them", async () => {
+    const records: HistoryEntry[] = [];
+    let output!: { onmessage: (bytes: ArrayBuffer) => void };
+    overrides.set("start_session", (args) => {
+      output = args.output;
+      return { sessionId: "history-session" };
+    });
+    overrides.set("get_history", ({ search }) =>
+      records.filter((record) => record.command.includes(search)),
+    );
+    let commit!: () => void;
+    overrides.set(
+      "add_history_entry",
+      ({ input }) =>
+        new Promise<HistoryEntry>((resolve) => {
+          commit = () => {
+            const record = { ...input, id: "history-entry" };
+            records.push(record);
+            resolve(record);
+          };
+        }),
+    );
+    await mount();
+    await navigate("History");
+    await page.getByRole("textbox", { name: "Search commands" }).fill("live-update");
+    await expect.element(page.getByText("No matching commands")).toBeVisible();
+    const command = "printf live-update";
+    const start = `\x1b]633;ControlRoom;start;1000;L3RtcA==;${btoa(command)}\x07`;
+    const finish = "\x1b]633;ControlRoom;finish;1001;0;L3RtcA==\x07";
+    output.onmessage(new TextEncoder().encode(start + finish + finish).buffer);
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(([name]) => name === "add_history_entry"),
+      ).toHaveLength(1),
+    );
+    await expect.element(page.getByText("No matching commands")).toBeVisible();
+    commit();
+    await vi.waitFor(() =>
+      expect(
+        [...document.querySelectorAll(".history-command")].map((row) => row.textContent),
+      ).toEqual([command]),
+    );
+    expect(
+      native.invoke.mock.calls.filter(([name]) => name === "get_history_integration_status"),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    [520, 480],
+    [640, 760],
+    [960, 640],
+    [1180, 760],
+    [1440, 900],
+  ])("keeps History readable and keyboard-operable at %s by %s pixels", async (width, height) => {
+    await page.viewport(width, height);
+    const commands = [
+      "git status --short",
+      "systemctl restart example.service",
+      "git log --oneline -5",
+      Array.from({ length: 35 }, (_, index) => 'printf "example line ' + index + '\\n"').join("\n"),
+    ];
+    const records = commands.map((command, index) => ({
+      id: "history-" + index,
+      connectionId: "host-a",
+      sessionId: "old-session",
+      command,
+      cwd: index === 3 ? "/srv/" + "example/".repeat(70) : "/srv/example",
+      startedAt: "2026-11-05T10:00:0" + index + "Z",
+      finishedAt: null,
+      exitCode: index === 1 ? 130 : index === 2 ? null : 0,
+      shell: "bash",
+    }));
+    overrides.set("get_history", () => records.map((record) => ({ ...record })));
+    await mount();
+    await navigate("History");
+    await expect.element(page.getByText("git status --short", { exact: true })).toBeVisible();
+    const panel = element.querySelector<HTMLElement>(".history-page")!;
+    expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    expect(page.getByLabelText("Command failed, exit code 130").element().textContent).toBe("130");
+    const statuses = panel.querySelectorAll<HTMLElement>(".exit-status");
+    for (const status of statuses) {
+      expect(getComputedStyle(status).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+      expect(getComputedStyle(status).borderTopWidth).toBe("0px");
+    }
+    if (width === 640) {
+      expect(getComputedStyle(panel.querySelector(".row-actions")!).opacity).toBe("1");
+    }
+    const more = page.getByRole("button", { name: "More actions" });
+    await more.click();
+    expect(document.activeElement).toBe(
+      page.getByRole("menuitem", { name: "Disable on this connection" }).element(),
+    );
+    await userEvent.keyboard("{End}");
+    expect(document.activeElement).toBe(
+      page.getByRole("menuitem", { name: "Remove from remote Bash" }).element(),
+    );
+    await userEvent.keyboard("{Home}{ArrowDown}");
+    expect(document.activeElement).toBe(
+      page.getByRole("menuitem", { name: "Clear saved history" }).element(),
+    );
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(more.element());
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+    await more.click();
+    await userEvent.keyboard("{Tab}");
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      page.getByRole("textbox", { name: "Search commands" }).element(),
+    );
+    await more.click();
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(document.activeElement).toBe(more.element());
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+
+    let finish!: (value: typeof records) => void;
+    overrides.set(
+      "get_history",
+      () =>
+        new Promise<typeof records>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await page.getByRole("button", { name: "Refresh" }).click();
+    const copy = page.getByRole("button", { name: "Copy command" }).first().element();
+    const code = panel.querySelectorAll<HTMLElement>(".history-command")[3];
+    expect(code.textContent).toBe(commands[3]);
+    code.scrollTop = 80;
+    copy.focus();
+    finish(records.map((record) => ({ ...record })));
+    await vi.waitFor(() =>
+      expect(page.getByRole("button", { name: "Refresh" }).element().hasAttribute("disabled")).toBe(
+        false,
+      ),
+    );
+    expect(document.activeElement).toBe(copy);
+    expect(panel.querySelectorAll(".history-command")[3]).toBe(code);
+    expect(code.scrollTop).toBe(80);
+    await Promise.all(
+      panel.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => {})),
+    );
+    const audit = await axe.run(panel);
+    expect(
+      audit.violations.map(({ id, nodes }) => ({
+        id,
+        nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })),
+      })),
+    ).toEqual([]);
+    panel.scrollTop = 0;
+    await page.screenshot({ path: `../test-results/history-populated-${width}.png` });
+    if (width === 1180) {
+      overrides.set("get_history", () => records.slice(0, 3));
+      await page.getByRole("button", { name: "Refresh" }).click();
+      await vi.waitFor(() => expect(panel.querySelectorAll(".history-row")).toHaveLength(3));
+      await more.click();
+      await expect
+        .element(page.getByRole("menuitem", { name: "Clear saved history" }))
+        .toBeVisible();
+      await page.screenshot({ path: "../test-results/history-command-journal.png" });
+      await userEvent.keyboard("{Escape}");
+    }
+    overrides.set("get_history", () => []);
+    overrides.set("get_history_integration_status", () =>
+      Promise.reject(new Error("Host is offline")),
+    );
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect.element(page.getByText("No saved commands", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Status unavailable", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `../test-results/history-offline-empty-${width}.png` });
+  });
+  it("collapses History entries only after deletion succeeds", async () => {
+    const record = {
+      id: "delete-example",
+      connectionId: "host-a",
+      sessionId: "old-session",
+      command: "printf removable",
+      cwd: "/srv/example",
+      startedAt: "2026-11-05T10:00:00Z",
+      finishedAt: null,
+      exitCode: 0,
+      shell: "bash",
+    };
+    overrides.set("get_history", () => [
+      record,
+      { ...record, id: "keep-example", command: "printf retained" },
+    ]);
+    let finish!: () => void;
+    overrides.set(
+      "delete_history_entry",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await mount();
+    await navigate("History");
+    const command = page.getByText("printf removable", { exact: true });
+    await expect.element(command).toBeVisible();
+    const row = command.element().closest<HTMLElement>(".history-row")!;
+    await userEvent.hover(command);
+    await page.getByRole("button", { name: "Delete history entry" }).first().click();
+    expect(row.isConnected).toBe(true);
+    expect(row.hasAttribute("data-removing")).toBe(false);
+    finish();
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await vi.waitFor(() => expect(row.hasAttribute("data-removing")).toBe(true));
+    }
+    await vi.waitFor(() => expect(row.isConnected).toBe(false));
+    await expect.element(page.getByText("printf retained", { exact: true })).toBeVisible();
   });
 });
