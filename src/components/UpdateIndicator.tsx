@@ -72,9 +72,9 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
         title={label}
       >
         {state.status === "downloaded" || state.status === "installing" ? (
-          <RotateCcw size={16} aria-hidden="true" />
+          <RotateCcw size={18} aria-hidden="true" />
         ) : (
-          <Download size={16} aria-hidden="true" />
+          <Download size={18} aria-hidden="true" />
         )}
         {state.status === "downloading" && (
           <svg

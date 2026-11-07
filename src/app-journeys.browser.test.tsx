@@ -1888,6 +1888,28 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await navigate(view);
         const header = element.querySelector<HTMLElement>(".app-bar")!;
         expect(header.getBoundingClientRect().top).toBeLessThanOrEqual(1);
+        if (view === "Terminal")
+          await expect
+            .poll(() => element.querySelector(".app-focus-toggle")!.getBoundingClientRect().width)
+            .toBe(40);
+        const buttons = [
+          ".update-indicator-button",
+          '[aria-label="Open documentation"]',
+          '[aria-label="Open Settings"]',
+          ...(view === "Terminal" ? [".app-focus-toggle"] : []),
+        ].map((selector) => element.querySelector(selector)!);
+        const glyphs = buttons.map((button) =>
+          button.querySelector("svg")!.getBoundingClientRect(),
+        );
+        for (const [index, glyph] of glyphs.entries()) {
+          const button = buttons[index].getBoundingClientRect();
+          expect(glyph.width).toBe(18);
+          expect(glyph.height).toBe(18);
+          expect(
+            Math.abs(glyph.left + glyph.width / 2 - (button.left + button.width / 2)),
+          ).toBeLessThanOrEqual(0.5);
+          expect(glyph.top).toBe(glyphs[0].top);
+        }
         await page.screenshot({
           element: header,
           path: `../test-results/metric-inset-${view.toLowerCase()}-${width}.png`,

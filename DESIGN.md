@@ -697,7 +697,8 @@ Keep resource readings in the optional host header. Host inspectors focus on ser
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking
-banner. Use a Download glyph with the same transparent button styling as its titlebar neighbors.
+banner. Match the Download glyph's size and alignment to Documentation, Settings, and Focus Mode.
+Use the same transparent button styling as Documentation and Settings.
 Keep its footprint fixed across update states, show download progress in a ring
 and the tooltip, and switch to a restart icon with a green dot when ready.
 Keep full state and version information accessible. Require confirmation before
