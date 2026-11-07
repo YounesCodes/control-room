@@ -2657,8 +2657,7 @@ code,
 
 .toolbar-actions,
 .modal-actions,
-.history-tools,
-.history-tools-actions,
+.history-menu,
 .row-actions {
   display: flex;
   align-items: center;
@@ -5752,22 +5751,137 @@ dd {
   font-weight: 650;
 }
 
-.history-tools {
-  justify-content: space-between;
-  margin-bottom: 15px;
+/* Header: the page identity plus one compact, honest capture-state signal.
+   Pause/Resume and Refresh stay reachable; infrequent management lives behind
+   the More menu instead of a wall of equal-weight buttons. */
+.history-heading-copy {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-.history-tools .search-field {
-  width: min(500px, 60%);
+.history-heading-copy h2 {
+  margin: 0;
+}
+
+.history-capture {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.history-capture-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #737370;
+}
+
+.history-capture[data-state="recording"] .history-capture-dot {
+  background: var(--success);
+}
+
+.history-capture[data-state="paused"] .history-capture-dot {
+  background: var(--warning);
+}
+
+.history-more {
+  position: relative;
+}
+
+.history-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  width: 240px;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+
+.history-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.history-menu button:hover:not(:disabled) {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+.history-menu button:disabled {
+  opacity: 0.5;
+}
+
+.history-menu button.danger-text,
+.history-menu button.danger-text:hover:not(:disabled) {
+  color: var(--failure);
+}
+
+.history-menu button.danger-text:hover:not(:disabled) {
+  background: var(--fill-active);
+}
+
+/* Search: one compact field aligned with the list, not a full-width toolbar. */
+.history-search-row {
+  max-width: 980px;
+  margin-bottom: 16px;
+}
+
+.history-search-row .search-field {
+  width: min(460px, 100%);
   padding: 0 10px;
 }
 
-.history-opt-in + .history-tools {
+.history-opt-in + .history-search-row {
   margin-top: 16px;
 }
 
-.history-group {
+.search-clear {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--text-faint);
+}
+
+.search-clear:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.history-list {
   max-width: 980px;
+}
+
+.history-list:not([data-loading]) {
+  animation: history-results-in var(--motion-med) var(--ease);
+}
+
+/* Restart the result transition after a read without remounting rows or
+   resetting keyboard focus, text selection, and command scroll positions. */
+@keyframes history-results-in {
+  from {
+    opacity: 0.45;
+  }
+}
+
+.history-group {
   margin-top: 18px;
 }
 
@@ -5785,63 +5899,63 @@ dd {
   text-transform: uppercase;
 }
 
+/* The article is a single collapsible track around the row grid; a successful
+   delete collapses the track to 0fr and only then drops from the list. */
 .history-row {
   display: grid;
-  grid-template-columns: 82px 36px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 9px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 11px 5px;
-  transition: background-color var(--motion-fast) var(--ease);
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows var(--motion-med) var(--ease),
+    opacity var(--motion-med) var(--ease);
 }
 
-.history-row:hover {
+.history-row[data-removing] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.history-row-inner {
+  display: grid;
+  grid-template-columns: 70px 40px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "time status command actions"
+    ". . cwd .";
+  align-items: center;
+  gap: 5px 10px;
+  min-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 5px;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    padding-block var(--motion-med) var(--ease),
+    border-bottom-width var(--motion-med) var(--ease);
+}
+
+.history-row[data-removing] .history-row-inner {
+  padding-block: 0;
+  border-bottom-width: 0;
+}
+
+.history-row:hover .history-row-inner,
+.history-row:focus-within .history-row-inner {
   background: var(--fill-hover);
 }
 
-.history-row time,
-.history-row small {
-  color: var(--text-muted);
+.history-row-inner time {
+  grid-area: time;
+  color: var(--text-faint);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
-.history-row > div:not(.row-actions) {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.history-row code {
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font-size: 11.5px;
-  user-select: text;
-  white-space: pre-wrap;
-}
-
-.history-row .row-actions {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion-fast) var(--ease);
-}
-
-.history-row:hover .row-actions,
-.history-row:focus-within .row-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.exit-code {
+/* Exit status sits directly on the row: success is a bare green check, failure
+   is the bare nonzero code, unknown is a muted dash. No badge, box, or fill. */
+.exit-status {
+  grid-area: status;
   display: inline-flex;
-  min-width: 26px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
+  justify-content: flex-end;
   font-size: 11px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -5855,8 +5969,72 @@ dd {
   color: var(--failure);
 }
 
-.exit-code.exit-failure {
-  border-color: var(--failure);
+.exit-unknown {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* The command is the visual anchor: a charcoal Markdown-style code surface with
+   its own padding, not a card around the whole row. Exact text is preserved;
+   long or multiline commands scroll inside the surface instead of breaking the
+   layout. */
+.history-command {
+  grid-area: command;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.65;
+  user-select: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.history-command mark {
+  border-radius: 2px;
+  background: var(--fill-selected);
+  color: var(--text-strong);
+}
+
+.history-cwd {
+  grid-area: cwd;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.history-row .row-actions {
+  grid-area: actions;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+
+.history-row:hover .row-actions,
+.history-row:focus-within .row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .history-row .row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.history-row .row-actions .icon-button.copied {
+  color: var(--success);
 }
 
 /* ==========================================================================
@@ -8730,6 +8908,15 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     padding: 20px;
   }
 
+  .history-heading-copy {
+    flex-wrap: wrap;
+  }
+
+  /* Keep the sticky group header flush with the reduced page padding. */
+  .history-group > h3 {
+    top: -20px;
+  }
+
   .port-list-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -8797,9 +8984,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 @container (max-width: 480px) {
   .boot-heading-actions,
-  .toolbar-actions,
-  .history-tools,
-  .history-tools-actions {
+  .toolbar-actions {
     flex-wrap: wrap;
   }
   .boot-heading-actions label {
@@ -8812,14 +8997,25 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     padding-inline: 0;
     border-right: 0;
   }
-  .history-tools .search-field {
+  .history-search-row .search-field {
     width: 100%;
   }
-  .history-row {
-    grid-template-columns: 82px 36px minmax(0, 1fr);
+  /* Compact rows fold time and exit status onto one metadata line above the
+     command surface and keep the action buttons visible without hover. */
+  .history-row-inner {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "time status actions"
+      "command command command"
+      "cwd cwd cwd";
   }
-  .history-row .row-actions {
-    grid-column: 3;
+  .history-row-inner .exit-status {
+    justify-content: flex-start;
+  }
+  .history-row-inner .row-actions {
+    grid-area: actions;
+    opacity: 1;
+    pointer-events: auto;
   }
   .log-controls {
     flex-wrap: wrap;

@@ -649,6 +649,10 @@ per-user Windows installation and settings save both succeed.
 
 ### Host data and updates
 
+Command History refreshes its local results after a command is saved for the
+open connection. Keep the active search and row focus during these updates.
+Check the remote Bash integration separately.
+
 Header metrics are opt-in and follow the active Workspace in normal mode.
 Focus Mode hides the header and stops its resource reads.
 Use compact labeled values with neutral styling, readable numbers, and a visible

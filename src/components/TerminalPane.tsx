@@ -8,6 +8,7 @@ import { Terminal } from "@xterm/xterm";
 import { ChevronDown, ChevronUp, RotateCw, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
+import { notifyHistoryChanged } from "../lib/history-events";
 import {
   BoundedByteQueue,
   isControlRoomShortcut,
@@ -356,6 +357,7 @@ export function TerminalPane({
                 exitCode: event.exitCode,
                 shell: "bash",
               })
+              .then(() => notifyHistoryChanged(connectionId))
               .catch((error) => setLocalError(`History capture failed: ${errorMessage(error)}`));
           }
         }

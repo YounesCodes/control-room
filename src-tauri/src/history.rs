@@ -18,6 +18,7 @@ bashrc_temporary=""
 trap 'rm -f "$integration_temporary" "$bashrc_temporary"' EXIT
 cat > "$integration_temporary" <<'CONTROL_ROOM_INTEGRATION'
 # Control Room Bash integration. Loaded only by an explicitly enabled Control Room session.
+# Control Room history integration version: 2
 if [[ $- != *i* || ${CONTROL_ROOM_SHELL_INTEGRATION:-0} != 1 || -n ${__CONTROL_ROOM_LOADED:-} ]]; then
   return
 fi
@@ -32,16 +33,21 @@ __control_room_emit() {
 }
 
 __control_room_preexec() {
-  local command cwd started
-  command="$(fc -ln -1 2>/dev/null)" || command="$BASH_COMMAND"
-  command="${command#$'\t'}"
+  local entry command cwd started
+  __control_room_ready=0
+  # Bash leaves the previous entry in place when it excludes the current line.
+  # Compare numbered entries so repeated commands can still be recorded.
+  entry="$(HISTTIMEFORMAT= builtin history 1)"
+  [[ -n $entry && $entry != "$__control_room_last_history" ]] || return
+  # history prints padding, the entry number, a space or *, then a space.
+  command="${entry#"${entry%%[![:blank:]]*}"}"
+  command="${command#*[!0-9]}"
   command="${command# }"
   [[ -n ${command//[[:space:]]/} ]] || return
   cwd="$PWD"
   started="$(date +%s%3N)"
   __control_room_emit "start;$started;$(__control_room_b64 "$cwd");$(__control_room_b64 "$command")"
   __control_room_command_active=1
-  __control_room_ready=0
 }
 
 __control_room_precmd() {
@@ -58,6 +64,7 @@ __control_room_precmd() {
 }
 
 __control_room_prompt_complete() {
+  __control_room_last_history="$(HISTTIMEFORMAT= builtin history 1)"
   __control_room_in_prompt=0
   __control_room_ready=1
 }
@@ -75,7 +82,8 @@ __control_room_debug() {
   if [[ -n $__control_room_previous_debug_handler ]]; then
     eval "$__control_room_previous_debug_handler"
   fi
-  if [[ ${__control_room_ready:-0} == 1 && ${__control_room_in_prompt:-0} == 0 ]]; then
+  if [[ $BASH_SUBSHELL == 0 && $BASH_COMMAND != __control_room_precmd &&
+        ${__control_room_ready:-0} == 1 && ${__control_room_in_prompt:-0} == 0 ]]; then
     __control_room_preexec
   fi
   return "$previous_status"
@@ -145,22 +153,35 @@ printf 'removed\n'
 "##;
 
 const STATUS_SCRIPT: &str = r##"bashrc="$HOME/.bashrc"
-file=0; test -r "$HOME/.local/share/control-room/shell-integration.bash" && file=1
+integration_file="$HOME/.local/share/control-room/shell-integration.bash"
+file=0; test -r "$integration_file" && file=1
 start=0; end=0
 if test -f "$bashrc"; then
   start="$(grep -Fxc '# >>> Control Room shell integration >>>' "$bashrc" 2>/dev/null || true)"
   end="$(grep -Fxc '# <<< Control Room shell integration <<<' "$bashrc" 2>/dev/null || true)"
 fi
-if test "$file" -eq 1 && test "$start" -eq 1 && test "$end" -eq 1 && awk '$0 == "# >>> Control Room shell integration >>>" { opened=1 } $0 == "# <<< Control Room shell integration <<<" && !opened { exit 1 }' "$bashrc"; then exit 0; fi
+if test "$file" -eq 1 && test "$start" -eq 1 && test "$end" -eq 1 && awk '$0 == "# >>> Control Room shell integration >>>" { opened=1 } $0 == "# <<< Control Room shell integration <<<" && !opened { exit 1 }' "$bashrc"; then
+  grep -Fxq '# Control Room history integration version: 2' "$integration_file" && exit 0
+  exit 3
+fi
 if test "$file" -eq 0 && test "$start" -eq 0 && test "$end" -eq 0; then exit 1; fi
 exit 2
 "##;
 
-pub fn integration_status(connection: &SavedConnection) -> Result<bool, String> {
+#[derive(serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IntegrationStatus {
+    Installed,
+    NotInstalled,
+    UpdateAvailable,
+}
+
+pub fn integration_status(connection: &SavedConnection) -> Result<IntegrationStatus, String> {
     let output = RemoteCommandExecutor::execute(connection, "history_status", STATUS_SCRIPT)?;
     match output.exit_code {
-        0 => Ok(true),
-        1 => Ok(false),
+        0 => Ok(IntegrationStatus::Installed),
+        1 => Ok(IntegrationStatus::NotInstalled),
+        3 => Ok(IntegrationStatus::UpdateAvailable),
         _ => Err(
             "Enhanced History integration is incomplete or has duplicate .bashrc markers".into(),
         ),
@@ -490,16 +511,61 @@ rm -rf "$root"
 test_root="$(mktemp -d /tmp/control-room-history-test.XXXXXX)"
 trap 'rm -rf "$test_root"' EXIT
 export HOME="$test_root"
+cat > "$HOME/.bashrc" <<'CONTROL_ROOM_FIXTURE_RC'
+HISTCONTROL=ignoreboth
+HISTFILE=/dev/null
+PS1='$(printf "fixture> ")'
+PROMPT_COMMAND=(':')
+CONTROL_ROOM_FIXTURE_RC
 (
 {INSTALL_SCRIPT}
 )
-test -r "$HOME/.local/share/control-room/shell-integration.bash"
-grep -Fq '# >>> Control Room shell integration >>>' "$HOME/.bashrc"
-CONTROL_ROOM_SHELL_INTEGRATION=1 bash --noprofile --rcfile "$HOME/.bashrc" -i <<'CONTROL_ROOM_COMMANDS'
+integration_file="$HOME/.local/share/control-room/shell-integration.bash"
+(
+{STATUS_SCRIPT}
+)
+sed -i '/^# Control Room history integration version:/d' "$integration_file"
+status=0
+(
+{STATUS_SCRIPT}
+) || status=$?
+test "$status" -eq 3
+(
+{INSTALL_SCRIPT}
+)
+(
+{STATUS_SCRIPT}
+)
+test "$(grep -Fxc '# >>> Control Room shell integration >>>' "$HOME/.bashrc")" -eq 1
+CONTROL_ROOM_SHELL_INTEGRATION=1 bash --noprofile --rcfile "$HOME/.bashrc" -i > "$HOME/transcript" <<'CONTROL_ROOM_COMMANDS'
 printf CONTROL_ROOM_HISTORY_OK
+ : hidden
+
+HISTIGNORE='*skipped'
+: skipped
+HISTCONTROL=ignorespace
 false
-exit 0
+false
+printf pipeline | cat
+shopt -s lithist
+for value in one two
+do
+  printf '%s' "$value"
+done
+cd /
+set +o history
+: disabled
+set -o history
+history -c
+printf after_clear
 CONTROL_ROOM_COMMANDS
+while IFS=';' read -r kind timestamp field payload; do
+  case "$kind" in
+    start) printf '\037start;'; printf '%s' "$payload" | base64 -d ;;
+    finish) printf '\037finish;%s;' "$field"; printf '%s' "$payload" | base64 -d ;;
+  esac
+done < <(tr '\007' '\n' < "$HOME/transcript" | sed -n $'s/.*\033]633;ControlRoom;//p')
+printf '\037'
 (
 {UNINSTALL_SCRIPT}
 )
@@ -521,27 +587,38 @@ test ! -e "$HOME/.local/share/control-room/shell-integration.bash"
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let transcript = format!("{stdout}\n{}", String::from_utf8_lossy(&output.stderr));
-        assert!(stdout.contains("installed"));
-        assert!(transcript.contains("CONTROL_ROOM_HISTORY_OK"));
-        assert!(transcript.contains("\u{1b}]633;ControlRoom;start;"));
-        assert!(transcript.contains("\u{1b}]633;ControlRoom;finish;"));
-        let commands = transcript
-            .split("\u{1b}]633;ControlRoom;start;")
+        let markers: Vec<_> = stdout
+            .split('\u{1f}')
             .skip(1)
-            .filter_map(|marker| marker.split('\u{7}').next())
-            .filter_map(|payload| payload.split(';').nth(2))
-            .collect::<Vec<_>>();
-        assert!(commands.contains(&"cHJpbnRmIENPTlRST0xfUk9PTV9ISVNUT1JZX09L"));
-        assert!(commands.contains(&"ZmFsc2U="));
-        let exit_codes = transcript
-            .split("\u{1b}]633;ControlRoom;finish;")
-            .skip(1)
-            .filter_map(|marker| marker.split('\u{7}').next())
-            .filter_map(|payload| payload.split(';').nth(1))
-            .collect::<Vec<_>>();
-        assert!(exit_codes.contains(&"0"));
-        assert!(exit_codes.contains(&"1"));
+            .filter(|marker| !marker.starts_with("removed"))
+            .collect();
+        let expected = [
+            ("printf CONTROL_ROOM_HISTORY_OK", "0"),
+            ("HISTIGNORE='*skipped'", "0"),
+            ("HISTCONTROL=ignorespace", "0"),
+            ("false", "1"),
+            ("false", "1"),
+            ("printf pipeline | cat", "0"),
+            ("shopt -s lithist", "0"),
+            (
+                "for value in one two\ndo\n  printf '%s' \"$value\"\ndone",
+                "0",
+            ),
+            ("cd /", "0"),
+            ("set +o history", "0"),
+            ("history -c", "0"),
+            ("printf after_clear", "0"),
+        ];
+        assert_eq!(markers.len(), 2 * expected.len(), "{markers:?}");
+        let (pairs, _) = markers.as_chunks::<2>();
+        for ([start, finish], (command, exit_code)) in pairs.iter().copied().zip(expected) {
+            assert_eq!(start, format!("start;{command}"));
+            let (status, cwd) = finish.rsplit_once(';').unwrap();
+            assert_eq!(status, format!("finish;{exit_code}"), "{command}");
+            if command == "cd /" {
+                assert_eq!(cwd, "/");
+            }
+        }
         assert!(stdout.contains("removed"));
     }
 }
