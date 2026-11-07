@@ -80,6 +80,7 @@ import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
 import { hostProcessing } from "./lib/host-processing";
+import { workspaceActivityLabel } from "./lib/terminal-title";
 import { organizeConnections } from "./lib/connection-organization";
 import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
@@ -346,6 +347,7 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
   const [terminalProcessing, setTerminalProcessing] = useState<Record<string, boolean>>({});
+  const [terminalTitles, setTerminalTitles] = useState<Record<string, string>>({});
   const hostOperations = useSyncExternalStore(hostProcessing.subscribe, hostProcessing.getSnapshot);
   const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
   const [terminalHasSelection, setTerminalHasSelection] = useState<Record<string, boolean>>({});
@@ -1283,7 +1285,7 @@ export function App() {
       label: "Existing terminals",
       options: existingSplitCandidates.map((workspace) => ({
         id: workspace.id,
-        label: duplicateLabel(workspace),
+        label: activityLabel(workspace),
         icon: workspaceMark(workspace),
         onSelect: () => splitWithExistingTerminal(workspace),
       })),
@@ -1614,6 +1616,15 @@ export function App() {
     return workspaceDisplayLabel(workspace, workspaces);
   }
 
+  function activityLabel(workspace: Workspace) {
+    return workspaceActivityLabel(
+      workspace,
+      workspaces,
+      terminalTitles[workspace.id],
+      settingsContract?.current.automaticTerminalTitles ?? true,
+    );
+  }
+
   function renameWorkspace(workspace: Workspace) {
     setRenameTarget(workspace);
   }
@@ -1810,13 +1821,13 @@ export function App() {
         <button
           className="session-tab-main"
           type="button"
-          title={duplicateLabel(workspace)}
+          title={activityLabel(workspace)}
           aria-current={workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined}
           aria-describedby={`workspace-session-${workspace.id}`}
           onClick={() => selectWorkspaceTab(workspace)}
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
-          <span className="session-tab-label">{duplicateLabel(workspace)}</span>
+          <span className="session-tab-label">{activityLabel(workspace)}</span>
           {(workspace.state !== "connected" ||
             terminalFocusMode ||
             workspaceProcessing(workspace)) && (
@@ -1917,7 +1928,7 @@ export function App() {
     return [
       {
         id: workspace.id,
-        label: duplicateLabel(workspace),
+        label: activityLabel(workspace),
         icon: workspaceMark(workspace),
         detail: terminalStateLabel(workspace),
         active: workspace.id === activeWorkspaceId && !settingsOpen,
@@ -2018,7 +2029,7 @@ export function App() {
           aria-pressed={terminalFocusMode}
           title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
         >
-          {terminalFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {terminalFocusMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
         <WindowControls />
       </div>
@@ -2201,7 +2212,7 @@ export function App() {
                               aria-current={active ? "page" : undefined}
                               aria-label={`Open ${group.name} ${members.length} ${members.length === 1 ? "terminal" : "terminals"}`}
                               aria-describedby={`terminal-group-status-${group.id}`}
-                              title={`${group.name}: ${members.map(duplicateLabel).join(", ")}`}
+                              title={`${group.name}: ${members.map(activityLabel).join(", ")}`}
                             >
                               <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
                               <span>{group.name}</span> <small>{members.length}</small>
@@ -2221,7 +2232,7 @@ export function App() {
                             {members
                               .map(
                                 (member) =>
-                                  `${duplicateLabel(member)}: ${workspaceStatus(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
+                                  `${activityLabel(member)}: ${workspaceStatus(member)}${terminalActivity[member.id] === "bell" ? ", terminal bell" : terminalActivity[member.id] ? ", new output" : ""}`,
                               )
                               .join("; ")}
                           </span>
@@ -2453,7 +2464,7 @@ export function App() {
                   ? [
                       {
                         id,
-                        label: duplicateLabel(workspace),
+                        label: activityLabel(workspace),
                         icon: workspaceMark(workspace),
                         detail: terminalStateLabel(workspace),
                         active: id === activeWorkspaceId,
@@ -2615,6 +2626,15 @@ export function App() {
                                   ? kind
                                   : current[workspace.id],
                             }))
+                          }
+                          onTitle={(title) =>
+                            setTerminalTitles((current) => {
+                              if ((current[workspace.id] ?? null) === title) return current;
+                              const next = { ...current };
+                              if (title) next[workspace.id] = title;
+                              else delete next[workspace.id];
+                              return next;
+                            })
                           }
                           onProcessing={(busy) =>
                             setTerminalProcessing((current) => {
@@ -3050,7 +3070,7 @@ export function App() {
           // Workspaces offer the inspection views their platform supports.
           views={activeWorkspace ? offeredNavigation : []}
           hostCapabilities={hostCapabilities}
-          labelForWorkspace={duplicateLabel}
+          labelForWorkspace={activityLabel}
           onClose={() => setPaletteOpen(false)}
           onOpenConnection={(connection) => openConnection(connection)}
           onOpenLocalShell={openLocalShell}

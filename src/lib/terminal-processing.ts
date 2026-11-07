@@ -16,7 +16,10 @@ export class TerminalProcessing {
   private agentBusy = false;
   private progressBusy: boolean | null = null;
 
-  constructor(private readonly changed: (busy: boolean) => void) {}
+  constructor(
+    private readonly changed: (busy: boolean) => void,
+    private readonly returnedToPrompt: () => void = () => undefined,
+  ) {}
 
   reset() {
     this.prompt = null;
@@ -111,6 +114,7 @@ export class TerminalProcessing {
     // A returning shell prompt also clears progress left behind by a killed
     // program. Do not require a clean program exit to recover the indicator.
     if (!alternate && samePrompt(this.prompt ?? "", prompt ?? "")) {
+      this.returnedToPrompt();
       this.agent = false;
       this.program = false;
       this.progressBusy = null;

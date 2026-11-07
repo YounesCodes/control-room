@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownToLine, RotateCcw } from "lucide-react";
+import { ArrowDownToLine, Download, RotateCcw } from "lucide-react";
 import {
   canOpenUpdateDetails,
   downloadPercent,
@@ -17,7 +17,7 @@ interface UpdateIndicatorProps {
 }
 
 /**
- * The titlebar update control, immediately left of Settings.
+ * The update control in the titlebar.
  *
  * Nothing renders while Control Room is current, so the titlebar of an
  * up-to-date app is exactly what it was before this feature existed. The
@@ -62,7 +62,7 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
   return (
     <div className="update-indicator" ref={containerRef}>
       <button
-        className={open ? "update-indicator-button active" : "update-indicator-button"}
+        className={`app-bar-button update-indicator-button${open ? " active" : ""}`}
         type="button"
         onClick={() => canOpenUpdateDetails(state) && setOpen((current) => !current)}
         aria-label={updateIndicatorAccessibleName(state) ?? label}
@@ -71,12 +71,29 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
         aria-controls={open ? panelId : undefined}
         title={label}
       >
-        <span
-          className="update-indicator-dot"
-          aria-hidden="true"
-          data-state={state.status === "downloaded" ? "ready" : "pending"}
-        />
-        <span className="update-indicator-label">{label}</span>
+        {state.status === "downloaded" || state.status === "installing" ? (
+          <RotateCcw size={18} aria-hidden="true" />
+        ) : (
+          <Download size={18} aria-hidden="true" />
+        )}
+        {state.status === "downloading" && (
+          <svg
+            className={`update-indicator-progress${percent === null ? " spinning" : ""}`}
+            viewBox="0 0 28 28"
+            aria-hidden="true"
+          >
+            <circle
+              cx="14"
+              cy="14"
+              r="12"
+              pathLength="100"
+              strokeDashoffset={100 - (percent ?? 25)}
+            />
+          </svg>
+        )}
+        {state.status === "downloaded" && (
+          <span className="update-indicator-dot" aria-hidden="true" data-state="ready" />
+        )}
       </button>
 
       {/* Progress semantics live on a dedicated node so the button keeps a

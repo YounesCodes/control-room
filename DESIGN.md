@@ -20,13 +20,16 @@ guardrails, not every choice described below.
   color signals success, warning, or failure. User-selected tag colors identify
   connections; they do not imply health. OS and shell marks may reveal their
   brand color on a hovered or selected tab or host row to identify the target;
-  the color is identity, never health, and it never shows at rest. Terminal ANSI
+  the color is identity, never health. Git Bash uses the upstream Git for Windows
+  icon, gray at rest and in color on hover, keyboard focus, or selection. Terminal ANSI
   colors belong to host output and remain separate from the application palette.
   Read-only configuration and command blocks may use a small syntax palette for
   sections, keys, strings, paths, and variables. Keep those colors inside code;
   they describe syntax and do not signal service health.
-  Local shell logos reveal their own colors on hover, keyboard focus, or selection:
-  Git orange and PowerShell blue. Command Prompt and the generic local-terminal
+  PowerShell logos reveal blue on hover, keyboard focus, or selection outside
+  Settings. Settings keeps shell marks steady while the whole preference row
+  receives a quiet hover fill. Git Bash also stays gray throughout Settings.
+  Command Prompt and the generic local-terminal
   launcher use muted gray at rest and white on hover, keyboard focus, or selection.
   Use each local shell's own mark in workspace tabs, launch and split menus,
   overflow lists, the command palette, and Settings. Administrator shells keep
@@ -134,8 +137,9 @@ the application. Keep native window controls fixed and dialogs inside the viewpo
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
 show a window of complete tabs with previous/next controls; never paint a partial
-tab at either edge. The All terminals menu lists full names and marks the selected
-item at the right edge. Keep icons and names aligned at the left. Include shell
+tab at either edge. When space runs out, keep the All terminals menu and show as
+many complete tabs as fit. The menu lists full names and marks the selected item
+at the right edge. Keep icons and names aligned at the left. Include shell
 logos and remote host OS marks beside each entry, and a group icon for split groups.
 The pane row has its own All panes menu. Selecting a hidden item reveals its
 complete tab, including in focus mode. Keep overflow menus within the window
@@ -440,8 +444,7 @@ Defaults use classic CGA bright colors for prompts and ANSI output, with slightl
 text on black.
 
 Keep the terminal color picker open while a user adjusts it. Update the preview
-and any readability warning when the picker closes, and let the user save a
-deliberate low-contrast choice.
+when the picker closes and save the chosen colors without readability warnings.
 
 Use borders and restrained fills to separate controls and surfaces. Make the
 selected state easy to locate without shifting nearby content. Selected Saved
@@ -464,6 +467,13 @@ short explanation are better than repeated captions. Let technical identifiers
 wrap or truncate deliberately so they do not force a pane wider.
 
 ### Spacing, shape, and motion
+
+Search fields use compact type and height, an inset icon with a clear gutter,
+a quiet surface border, and one visible focus border without an extra glow.
+Use the same compact proportions for ordinary form inputs and selectors across
+the app. Keep dropdown chevrons smaller than the values beside them.
+Round both the dropdown field and its opened option list. Keep option rows inset
+inside the popup corners, with clear selection, hover, and keyboard-focus states.
 
 Use the existing spacing, radius, and motion tokens. Prefer layout gaps over
 one-off margins. Keep related controls grouped and leave enough room between
@@ -493,6 +503,10 @@ Interactive controls need clear default, hover, selected, focus-visible, and
 disabled states. Use the established button hierarchy: one primary action for
 the main decision, secondary actions for alternatives, danger styling for
 confirmed destructive work, and labelled icon buttons for compact controls.
+Checkboxes use a compact dark square, a quiet gray outline, and a white tick
+when selected. Keep a dark selected fill, a lighter hover border, and a clear
+keyboard focus ring. Retain native checkbox semantics, disabled and mixed states,
+and the native rendering in Windows high-contrast mode.
 The connection rail's persistent Add connection action stays quiet on a raised
 charcoal surface with a border, so the host list keeps its dominance; filled
 accent stays reserved for the one main decision inside a dialog or flow.
@@ -602,9 +616,38 @@ Settings fills the window below a draggable titlebar with native window controls
 Hide Connections and Workspace tabs while Settings is open, and restore the
 existing workspace and focus mode when it closes. Use the available page width
 for its form and keep Back and Save visible while its body scrolls.
-Settings uses readable section titles and short scope descriptions. Group
+Use a slim category rail on wide windows and a category selector at narrow widths.
+In the category rail, Up/Down changes category and moves focus with it. Home/End
+selects the first or last category. Tab enters the rail at its selected item.
+Use the selected category highlight as its keyboard focus cue, without a rectangular
+focus outline.
+Search across categories by setting names and keywords, with category context on
+results. Preserve drafts and useful category scroll positions. Keep numeric fields
+compact, with readable values in short, quietly bordered inputs and selectors.
+Save explicitly, with dirty, saving, saved, and error feedback. Reserve a steady
+status slot and Save button width so feedback changes never move the search field.
+Right-align status text beside Save, with a larger gap from search. On narrow
+windows, search fills a separate row below the heading and save actions.
+Settings uses readable section titles. Group
 terminal font, size, and color controls with one shared live preview that stays visible while those controls scroll. Keep terminal
 behavior separate from appearance and local shell availability.
+Arrange colors in a compact grid; stack the preview above its controls on narrow
+windows. Category changes reveal the whole form together with the Systemd unit fade and
+vertical motion, preserving draft controls.
+Terminal uses a persistent row of Appearance, Tabs & naming, and Local shells tabs.
+Separate tabs with thin vertical bars and mark the selected tab with bold text
+without outlines or filled backgrounds. These automatically selected tabs use
+the bold label as their keyboard focus cue instead of a rectangular focus ring. Show only its panel, starting at the normal content gutter. Left/Right
+wraps between tabs; Home/End selects the first or last. Preserve mounted draft
+controls and use the category reveal motion when switching panels. Search still
+shows matching sections across all panels.
+
+Automatic terminal titles default to on. Use only shell-reported executable or
+title metadata, reduced to a bounded executable name without arguments or paths.
+Keep the shell or host identity and duplicate numbering in the display title.
+Manual names take priority. Clear activity on command completion, prompt return,
+disconnect, or session replacement. Titles stay in memory and never change saved
+workspace names. Unsupported metadata falls back to the normal identity.
 
 Select the current font value on focus or when reopening the field so typing
 starts a new search without deleting the saved family. Preserve cursor editing
@@ -620,13 +663,18 @@ per-user Windows installation and settings save both succeed.
 
 ### Host data and updates
 
+Command History refreshes its local results after a command is saved for the
+open connection. Keep the active search and row focus during these updates.
+Check the remote Bash integration separately.
+
 Header metrics are opt-in and follow the active Workspace in normal mode.
 Focus Mode hides the header and stops its resource reads.
 Use compact labeled values with neutral styling, readable numbers, and a visible
 reading state. Keep each label above its value, reserve space for changing numbers,
 and use small neutral trend lines for CPU, RAM, and GPU. Keep each value and its
 graph in one group, with a subtle divider and a larger gap before the next metric.
-Preserve this grouping at narrow widths rather than squeezing the metrics together. Trends hold
+Fit whole readings into the space available, prioritizing selected CPU and RAM readings.
+Keep every selected reading in the status dropdown as the header narrows. Trends hold
 at most twenty measured samples in memory, reset on host changes and monitoring
 pauses, and never invent points for missing readings. Trends use a fixed
 0–100 range. Disk I/O shows separate read and write speeds without a graph. Interpolate
@@ -645,10 +693,10 @@ the numeric readings. Keep Live compact and let longer status labels use only
 the space they need. Keep the active host name in its tooltip, accessible label,
 and details rather than repeating it in the header. The metric labels, values,
 and surrounding space drag the native window. Keep the status button and reading
-details as ordinary click targets, and preserve scrolling when the row overflows. Use green
+details as ordinary click targets. Use green
 for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
-Settings and native window controls reachable at narrow widths;
-scroll the metric row when needed. Host details must open with a keyboard or click
+Settings and native window controls reachable at narrow widths.
+Host details must open with a keyboard or click
 and include the last reading time and refresh errors. Pause header reads
 in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
 Label read/write throughput as Disk I/O. Keep filesystem fullness out of the header.
@@ -667,8 +715,12 @@ Keep resource readings in the optional host header. Host inspectors focus on ser
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking
-banner. Show download progress, require confirmation before installing, and keep
-the app's updates clearly distinct from any host package information.
+banner. Match the Download glyph's size and alignment to Documentation, Settings, and Focus Mode.
+Use the same transparent button styling as Documentation and Settings.
+Keep its footprint fixed across update states, show download progress in a ring
+and the tooltip, and switch to a restart icon with a green dot when ready.
+Keep full state and version information accessible. Require confirmation before
+installing, and keep the app's updates clearly distinct from any host package information.
 
 ## Accessibility
 

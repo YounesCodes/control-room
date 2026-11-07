@@ -15,6 +15,7 @@ import type {
   FirewallStatus,
   HistoryEntry,
   HistoryInput,
+  HistoryIntegrationStatus,
   HostCapabilities,
   HostBaseline,
   HostBaselineSummary,
@@ -361,9 +362,9 @@ export const api = {
   deleteScratchpadNote: (scope: ScratchpadScope, ownerId: string, connectionId: string | null) =>
     invoke<void>("delete_scratchpad_note", { scope, ownerId, connectionId }),
   historyIntegrationStatus: (connectionId: string) =>
-    invoke<boolean>("get_history_integration_status", { connectionId }),
-  installHistoryIntegration: (connectionId: string) =>
-    invoke<SavedConnection>("install_history_integration", { connectionId }),
+    invoke<HistoryIntegrationStatus>("get_history_integration_status", { connectionId }),
+  installHistoryIntegration: (connectionId: string, enableCapture = true) =>
+    invoke<SavedConnection>("install_history_integration", { connectionId, enableCapture }),
   uninstallHistoryIntegration: (connectionId: string) =>
     invoke<SavedConnection>("uninstall_history_integration", { connectionId }),
 };

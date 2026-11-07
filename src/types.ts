@@ -421,6 +421,8 @@ export interface BaselineComparison {
   sections: BaselineSectionDiff[];
 }
 
+export type HistoryIntegrationStatus = "installed" | "not-installed" | "update-available";
+
 export interface HistoryEntry {
   id: string;
   connectionId: string;
@@ -462,6 +464,7 @@ export interface HeaderMetrics {
 }
 
 export interface AppSettings {
+  automaticTerminalTitles?: boolean;
   hostMetricsEnabled?: boolean;
   hostMetrics?: HeaderMetric[];
   hostMetricsIntervalSeconds?: number;

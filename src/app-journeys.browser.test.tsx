@@ -3,7 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import * as fixtures from "./test/app-fixtures";
-import type { AppSettings, HostBaseline, PersistedWorkspaceState } from "./types";
+import type { AppSettings, HistoryEntry, HostBaseline, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource-variable/inter/opsz.css";
 import "./styles.css";
@@ -177,7 +177,7 @@ async function respond(command: string, args: any = {}) {
     case "stop_log_stream":
       return;
     case "get_history_integration_status":
-      return true;
+      return "installed";
     case "get_history":
       return [];
     case "get_scratchpad_note":
@@ -359,7 +359,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(started.cols).toBeGreaterThan(20);
     expect(started.rows).toBeGreaterThan(5);
   });
-  it.each([1180, 520])("settles a terminal split at %spx and 150%% scaling", async (width) => {
+  it.each([1180, 520])("settles a scaled terminal split at %spx", async (width) => {
     await mount();
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     await page.viewport(width * 1.5, (width === 1180 ? 700 : 480) * 1.5);
@@ -371,6 +371,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .poll(() => element.querySelectorAll(".terminal-workspace-pane-visible .xterm").length)
       .toBe(2);
+    await expect
+      .poll(() =>
+        Boolean(document.activeElement?.closest(".terminal-workspace-pane-visible.active")),
+      )
+      .toBe(true);
     // Sample consecutive frames after the pane transition and terminal refit have finished.
     await new Promise((resolve) => setTimeout(resolve, 350));
     const viewport = element.querySelector<HTMLElement>(".terminal-pane-layout")!;
@@ -390,6 +395,24 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
       .toHaveAttribute("aria-orientation", width === 1180 ? "vertical" : "horizontal");
+    if (width === 520) {
+      expect(element.querySelector(".session-tabs .session-tab-content")!.childElementCount).toBe(
+        0,
+      );
+      const picker = page.getByRole("button", { name: "All terminals", exact: true });
+      await picker.click();
+      await expect
+        .element(
+          page
+            .getByRole("menu", { name: "All terminals" })
+            .getByRole("menuitem", { name: /Fixture Alpha group/ }),
+        )
+        .toHaveAttribute("aria-current", "page");
+      await userEvent.keyboard("{Escape}");
+      await expect.element(picker).toHaveFocus();
+      await expect.poll(() => element.querySelector(".session-tab-overflow-menu")).toBeNull();
+    }
+    await page.screenshot({ path: `../test-results/terminal-split-scaled-${width}.png` });
   });
   it("previews pointer swaps and docks, cancels Escape/outside drops and rejects cramped targets", async () => {
     await mount();
@@ -763,7 +786,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
-  it("reveals each shell logo color on hover, focus, and selection in both layouts", async () => {
+  it("reveals the Git Bash artwork color on interaction across layouts", async () => {
     await page.viewport(960, 640);
     overrides.set("list_local_shells", () => ({
       profiles: [
@@ -775,7 +798,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     const white = "rgb(255, 255, 255)";
     const neutral = "rgb(173, 173, 170)";
-    const orange = "rgb(240, 80, 50)";
     const color = (mark: Element) => getComputedStyle(mark).color;
     await page.getByRole("button", { name: "New terminal", exact: true }).click();
     const choice = page.getByRole("button", {
@@ -810,10 +832,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       name: "New local terminal: Git Bash",
       exact: true,
     });
+    const gitLogo = splitChoice.element().querySelector<HTMLImageElement>(".local-shell-mark img")!;
+    await vi.waitFor(() => expect(gitLogo.naturalWidth).toBeGreaterThan(0));
+    expect(getComputedStyle(gitLogo).filter).toBe("grayscale(1) brightness(0.85)");
     await userEvent.hover(splitChoice.element());
-    await expect
-      .poll(() => color(splitChoice.element().querySelector(".local-shell-mark")!))
-      .toBe(orange);
+    await expect.poll(() => getComputedStyle(gitLogo).filter).toBe("none");
     await splitChoice.click();
     const pane = page
       .getByRole("navigation", { name: /Terminals in .* group/ })
@@ -843,7 +866,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toBe(white);
     const git = page.getByRole("menuitem", { name: /^Git Bash/ });
     await userEvent.hover(git.element());
-    await expect.poll(() => color(git.element().querySelector(".local-shell-icon")!)).toBe(orange);
+    const overflowLogo = git.element().querySelector<HTMLImageElement>(".local-shell-icon img")!;
+    expect(overflowLogo.src).toBe(gitLogo.src);
+    await expect.poll(() => getComputedStyle(overflowLogo).filter).toBe("none");
   });
 
   it("shows shell identities and elevation in the command palette and Settings", async () => {
@@ -883,7 +908,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     ).not.toBeNull();
     for (const kind of ["git-bash", "powershell-7", "windows-powershell", "command-prompt"]) {
       expect(
-        palette.element().querySelector(`#shell-${kind} .local-shell-icon-${kind} svg`),
+        palette
+          .element()
+          .querySelector(
+            `#shell-${kind} .local-shell-icon-${kind} ${kind === "git-bash" ? "img" : "svg"}`,
+          ),
       ).not.toBeNull();
     }
     await page.getByRole("combobox", { name: "Search commands" }).fill("administrator");
@@ -897,6 +926,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
     await userEvent.keyboard("{Escape}");
     await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
     const checkbox = page.getByRole("checkbox", {
       name: "Offer PowerShell 7, run as administrator",
     });
@@ -905,10 +936,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(
       row.querySelector(".local-shell-icon-powershell-7 .local-shell-elevation"),
     ).not.toBeNull();
+    const restingColor = getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color;
     await userEvent.hover(row);
-    await expect
-      .poll(() => getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color)
-      .toBe("rgb(83, 145, 254)");
+    expect(getComputedStyle(row.querySelector(".local-shell-icon > svg")!).color).toBe(
+      restingColor,
+    );
     await page.screenshot({ path: "../test-results/local-shell-icons-settings.png" });
   });
 
@@ -1343,17 +1375,22 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .getByRole("dialog", { name: "New terminal" })
         .getByRole("button", { name: new RegExp(shellLabels[shellIndex]) });
       expect(
-        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} svg`),
+        choice.element().querySelector(`.local-shell-icon-${shellKinds[shellIndex]} :is(svg, img)`),
       ).not.toBeNull();
-      const logo = choice.element().querySelector(".local-shell-icon svg")!;
+      const logo = choice.element().querySelector(".local-shell-icon :is(svg, img)")!;
       await userEvent.unhover(choice.element());
-      await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
+      if (shellIndex === 0)
+        await expect
+          .poll(() => getComputedStyle(logo).filter)
+          .toBe("grayscale(1) brightness(0.85)");
+      else await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(173, 173, 170)");
       await userEvent.hover(choice.element());
-      await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
+      if (shellIndex === 0) await expect.poll(() => getComputedStyle(logo).filter).toBe("none");
+      else await expect.poll(() => getComputedStyle(logo).color).toBe(shellColors[shellIndex]);
       await choice.click();
       expect(
         element.querySelector(
-          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} svg`,
+          `.session-tab-wrap.active .local-shell-icon-${shellKinds[shellIndex]} :is(svg, img)`,
         ),
       ).not.toBeNull();
     }
@@ -1365,18 +1402,30 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expectTerminalMenuAlignment(terminalMenu);
     for (const kind of shellKinds) {
       expect(
-        terminalMenu.querySelector(`.session-tab-menu-icon .local-shell-icon-${kind} svg`),
+        terminalMenu.querySelector(
+          `.session-tab-menu-icon .local-shell-icon-${kind} :is(svg, img)`,
+        ),
       ).not.toBeNull();
-      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} svg`)!;
-      expect(getComputedStyle(logo).color).toBe(
-        logo.closest("button")!.getAttribute("aria-current") === "page"
-          ? shellColors[shellKinds.indexOf(kind)]
-          : "rgb(173, 173, 170)",
-      );
-      await userEvent.hover(logo.closest("button")!);
-      await expect
-        .poll(() => getComputedStyle(logo).color)
-        .toBe(shellColors[shellKinds.indexOf(kind)]);
+      const logo = terminalMenu.querySelector(`.local-shell-icon-${kind} :is(svg, img)`)!;
+      if (kind === "git-bash") {
+        expect(getComputedStyle(logo).filter).toBe(
+          logo.closest("button")!.getAttribute("aria-current") === "page"
+            ? "none"
+            : "grayscale(1) brightness(0.85)",
+        );
+        await userEvent.hover(logo.closest("button")!);
+        await expect.poll(() => getComputedStyle(logo).filter).toBe("none");
+      } else {
+        expect(getComputedStyle(logo).color).toBe(
+          logo.closest("button")!.getAttribute("aria-current") === "page"
+            ? shellColors[shellKinds.indexOf(kind)]
+            : "rgb(173, 173, 170)",
+        );
+        await userEvent.hover(logo.closest("button")!);
+        await expect
+          .poll(() => getComputedStyle(logo).color)
+          .toBe(shellColors[shellKinds.indexOf(kind)]);
+      }
     }
     expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
     expect(
@@ -1686,45 +1735,34 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
   });
-  it("adds a keyboard tab stop only while the metric row overflows", async () => {
+  it("keeps whole priority readings in the titlebar and exposes the rest through the status button", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    await page.viewport(1440, 700);
     await mount();
-    const row = element.querySelector<HTMLDivElement>(".host-metrics-values")!;
-    await expect.poll(() => row.scrollWidth > row.clientWidth).toBe(false);
-    expect(row.getAttribute("tabindex")).toBeNull();
-    const strip = element.querySelector<HTMLElement>(".host-metrics")!;
-    strip.style.maxWidth = "340px";
-    await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
-    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
-    await userEvent.keyboard("{Escape}{Tab}{ArrowRight}");
-    await expect
-      .element(page.getByRole("group", { name: "Current host readings. Scroll for more metrics." }))
-      .toHaveFocus();
-    await expect.poll(() => row.scrollLeft).toBeGreaterThan(0);
-    strip.style.maxWidth = "";
-    await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
-  });
-  it("keeps the overflowing metrics scrollbar outside the window drag region", async () => {
-    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
-    await mount();
+    await navigate("Systemd");
     const strip = element.querySelector<HTMLElement>(".host-metrics")!;
     const row = strip.querySelector<HTMLElement>(".host-metrics-values")!;
-    await expect.poll(() => row.scrollWidth > row.clientWidth).toBe(false);
-    expect(row).toHaveAttribute("data-tauri-drag-region");
-
+    const visibleMetrics = () =>
+      [...row.querySelectorAll<HTMLElement>(".host-metric:not([data-overflow])")].map(
+        (cell) => cell.dataset.metric,
+      );
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
     strip.style.maxWidth = "340px";
-    await expect.poll(() => row.getAttribute("tabindex")).toBe("0");
-    // Native scrollbar presses target the scroll container itself. Tauri must
-    // leave that target to the webview instead of starting a window drag.
-    expect(row).not.toHaveAttribute("data-tauri-drag-region");
-    expect(row.querySelector(".host-metric-label")).toHaveAttribute("data-tauri-drag-region");
-    row.focus();
-    await userEvent.keyboard("{ArrowRight}");
-    await expect.poll(() => row.scrollLeft).toBeGreaterThan(0);
-
-    strip.style.maxWidth = "";
-    await expect.poll(() => row.getAttribute("tabindex")).toBeNull();
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram"]);
+    expect(row).not.toHaveAttribute("tabindex");
     expect(row).toHaveAttribute("data-tauri-drag-region");
+    const trigger = page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ });
+    await expect.element(page.getByRole("group", { name: /^Disk I\/O:/ })).not.toBeInTheDocument();
+    (trigger.element() as HTMLButtonElement).focus();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(page.getByRole("button", { name: "Close host metrics" })).toHaveFocus();
+    expect(
+      [...strip.querySelectorAll(".host-metrics-panel dt")].map((item) => item.textContent),
+    ).toEqual(["CPU", "RAM", "GPU", "Disk I/O", "Uptime"]);
+    await userEvent.keyboard("{Escape}");
+    await expect.element(trigger).toHaveFocus();
+    strip.style.maxWidth = "";
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
   });
   it("offers window drag targets across metric text and spacing while keeping details clickable", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
@@ -2104,10 +2142,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .toHaveFocus();
       await expect.poll(() => element.querySelector(".host-metrics-panel")).toBeNull();
       const badge = element.querySelector(".host-metrics-status")!;
-      if (width >= 1174) {
-        const row = element.querySelector<HTMLDivElement>(".host-metrics-values")!;
-        expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
-      }
       const cells = [...element.querySelectorAll<HTMLElement>(".host-metrics-values .host-metric")];
       expect(cells.filter((cell) => cell.querySelector("svg")).length).toBeGreaterThanOrEqual(2);
       for (const [index, cell] of cells.entries()) {
@@ -2223,6 +2257,75 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/documentation-settings.png" });
   });
 
+  it("fits whole metric readings beside the update icon across Terminal and inspection tabs", async () => {
+    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+    overrides.set("check_for_update", () => ({
+      currentVersion: "0.9.2",
+      version: "9.9.9",
+      notes: "Fixture release",
+      publishedAt: null,
+    }));
+    await mount();
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
+    for (const [width, height] of [
+      [1440, 900],
+      [1174, 700],
+      [1120, 700],
+      [960, 640],
+      [520, 480],
+    ]) {
+      await page.viewport(width, height);
+      for (const view of ["Systemd", "Terminal"]) {
+        await navigate(view);
+        const header = element.querySelector<HTMLElement>(".app-bar")!;
+        expect(header.getBoundingClientRect().top).toBeLessThanOrEqual(1);
+        if (view === "Terminal")
+          await expect
+            .poll(() => element.querySelector(".app-focus-toggle")!.getBoundingClientRect().width)
+            .toBe(40);
+        const buttons = [
+          ".update-indicator-button",
+          '[aria-label="Open documentation"]',
+          '[aria-label="Open Settings"]',
+          ...(view === "Terminal" ? [".app-focus-toggle"] : []),
+        ].map((selector) => element.querySelector(selector)!);
+        const glyphs = buttons.map((button) =>
+          button.querySelector("svg")!.getBoundingClientRect(),
+        );
+        for (const [index, glyph] of glyphs.entries()) {
+          const button = buttons[index].getBoundingClientRect();
+          expect(glyph.width).toBe(18);
+          expect(glyph.height).toBe(18);
+          expect(
+            Math.abs(glyph.left + glyph.width / 2 - (button.left + button.width / 2)),
+          ).toBeLessThanOrEqual(0.5);
+          expect(glyph.top).toBe(glyphs[0].top);
+        }
+        await page.screenshot({
+          element: header,
+          path: `../test-results/metric-inset-${view.toLowerCase()}-${width}.png`,
+        });
+        const row = header.querySelector(".host-metrics-values")!;
+        const cells = row.querySelectorAll(".host-metric:not([data-overflow])");
+        if (width >= 960) expect(cells.length).toBeGreaterThanOrEqual(2);
+        if (width === 1440) expect(cells).toHaveLength(5);
+        for (const cell of cells) {
+          const bounds = cell.getBoundingClientRect();
+          expect(bounds.right).toBeLessThanOrEqual(row.getBoundingClientRect().right);
+          expect(bounds.top - header.getBoundingClientRect().top).toBeGreaterThanOrEqual(4);
+          expect(header.getBoundingClientRect().bottom - bounds.bottom).toBeGreaterThanOrEqual(4);
+        }
+      }
+    }
+    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
+    const panel = element.querySelector(".host-metrics-panel")!;
+    expect(panel.getBoundingClientRect().right).toBeLessThan(520);
+    await page.screenshot({ path: "../test-results/titlebar-metrics-details-520.png" });
+  });
+
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {
     overrides.set("check_for_update", () => ({
       currentVersion: "0.8.2",
@@ -2232,6 +2335,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }));
     await mount();
     await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
     await page.getByRole("button", { name: "Check for updates" }).click();
     await page.getByRole("button", { name: "Close Settings", exact: true }).click();
     await page.getByRole("button", { name: /Control Room 9.9.9/ }).click();
@@ -2366,7 +2470,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(settings.right).toBe(shell.right - 1);
       expect(settings.top).toBe(titlebar.bottom);
       expect(settings.bottom).toBe(shell.bottom - 1);
-      expect(form.width).toBeGreaterThan(width - 100);
+      expect(form.width).toBeGreaterThan(width - 450);
       expect(getComputedStyle(element.querySelector(".sidebar")!).display).toBe("none");
       expect(getComputedStyle(workspace).display).toBe("none");
       for (const name of ["Minimize window", "Maximize or restore window", "Close window"]) {
@@ -2410,6 +2514,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.viewport(960, 640);
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await page.getByLabelText("Font size", { exact: true }).fill("18");
     failures.set("save_settings", "fixture disk full");
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
@@ -2424,6 +2529,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("applies hidden shell settings to new terminal, split menu and palette", async () => {
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
     await page.getByRole("checkbox", { name: /Command Prompt/ }).click();
     await page.getByRole("button", { name: "Save settings", exact: true }).click();
     await vi.waitFor(() => expect(currentSettings.hiddenLocalShells).toEqual(["command-prompt"]));
@@ -2905,7 +3012,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ["Boot", "Boot Diagnostics"],
       ["Logs", "Logs"],
       ["Baselines", "Baselines"],
-      ["History", "Enhanced History"],
+      ["History", "Command History"],
     ]) {
       await navigate(view);
       await expect.element(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
@@ -3384,5 +3491,217 @@ describe("complete app journeys with typed IPC fixtures", () => {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map((violation) => violation.id)).toEqual([]);
+  });
+  it("adds commands to the open History search after the terminal saves them", async () => {
+    const records: HistoryEntry[] = [];
+    let output!: { onmessage: (bytes: ArrayBuffer) => void };
+    overrides.set("start_session", (args) => {
+      output = args.output;
+      return { sessionId: "history-session" };
+    });
+    overrides.set("get_history", ({ search }) =>
+      records.filter((record) => record.command.includes(search)),
+    );
+    let commit!: () => void;
+    overrides.set(
+      "add_history_entry",
+      ({ input }) =>
+        new Promise<HistoryEntry>((resolve) => {
+          commit = () => {
+            const record = { ...input, id: "history-entry" };
+            records.push(record);
+            resolve(record);
+          };
+        }),
+    );
+    await mount();
+    await navigate("History");
+    await page.getByRole("textbox", { name: "Search commands" }).fill("live-update");
+    await expect.element(page.getByText("No matching commands")).toBeVisible();
+    const command = "printf live-update";
+    const start = `\x1b]633;ControlRoom;start;1000;L3RtcA==;${btoa(command)}\x07`;
+    const finish = "\x1b]633;ControlRoom;finish;1001;0;L3RtcA==\x07";
+    output.onmessage(new TextEncoder().encode(start + finish + finish).buffer);
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(([name]) => name === "add_history_entry"),
+      ).toHaveLength(1),
+    );
+    await expect.element(page.getByText("No matching commands")).toBeVisible();
+    commit();
+    await vi.waitFor(() =>
+      expect(
+        [...document.querySelectorAll(".history-command")].map((row) => row.textContent),
+      ).toEqual([command]),
+    );
+    expect(
+      native.invoke.mock.calls.filter(([name]) => name === "get_history_integration_status"),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    [520, 480],
+    [640, 760],
+    [960, 640],
+    [1180, 760],
+    [1440, 900],
+  ])("keeps History readable and keyboard-operable at %s by %s pixels", async (width, height) => {
+    await page.viewport(width, height);
+    const commands = [
+      "git status --short",
+      "systemctl restart example.service",
+      "git log --oneline -5",
+      Array.from({ length: 35 }, (_, index) => 'printf "example line ' + index + '\\n"').join("\n"),
+    ];
+    const records = commands.map((command, index) => ({
+      id: "history-" + index,
+      connectionId: "host-a",
+      sessionId: "old-session",
+      command,
+      cwd: index === 3 ? "/srv/" + "example/".repeat(70) : "/srv/example",
+      startedAt: "2026-11-05T10:00:0" + index + "Z",
+      finishedAt: null,
+      exitCode: index === 1 ? 130 : index === 2 ? null : 0,
+      shell: "bash",
+    }));
+    overrides.set("get_history", () => records.map((record) => ({ ...record })));
+    await mount();
+    await navigate("History");
+    await expect.element(page.getByText("git status --short", { exact: true })).toBeVisible();
+    const panel = element.querySelector<HTMLElement>(".history-page")!;
+    expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    expect(page.getByLabelText("Command failed, exit code 130").element().textContent).toBe("130");
+    const statuses = panel.querySelectorAll<HTMLElement>(".exit-status");
+    for (const status of statuses) {
+      expect(getComputedStyle(status).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+      expect(getComputedStyle(status).borderTopWidth).toBe("0px");
+    }
+    if (width <= 640) {
+      const copy = page.getByRole("button", { name: "Copy command" }).first();
+      (copy.element() as HTMLButtonElement).focus();
+      await expect.element(copy).toHaveFocus();
+      await expect
+        .poll(() => getComputedStyle(copy.element().closest(".row-actions")!).opacity)
+        .toBe("1");
+    }
+    const more = page.getByRole("button", { name: "More actions" });
+    await more.click();
+    expect(document.activeElement).toBe(
+      page.getByRole("menuitem", { name: "Disable on this connection" }).element(),
+    );
+    await userEvent.keyboard("{End}");
+    expect(document.activeElement).toBe(
+      page.getByRole("menuitem", { name: "Remove from remote Bash" }).element(),
+    );
+    await userEvent.keyboard("{Home}{ArrowDown}");
+    expect(document.activeElement).toBe(
+      page.getByRole("menuitem", { name: "Clear saved history" }).element(),
+    );
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(more.element());
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+    await more.click();
+    await userEvent.keyboard("{Tab}");
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      page.getByRole("textbox", { name: "Search commands" }).element(),
+    );
+    await more.click();
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(document.activeElement).toBe(more.element());
+    await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+
+    let finish!: (value: typeof records) => void;
+    overrides.set(
+      "get_history",
+      () =>
+        new Promise<typeof records>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await page.getByRole("button", { name: "Refresh" }).click();
+    const copy = page.getByRole("button", { name: "Copy command" }).first().element();
+    const code = panel.querySelectorAll<HTMLElement>(".history-command")[3];
+    expect(code.textContent).toBe(commands[3]);
+    code.scrollTop = 80;
+    copy.focus();
+    finish(records.map((record) => ({ ...record })));
+    await vi.waitFor(() =>
+      expect(page.getByRole("button", { name: "Refresh" }).element().hasAttribute("disabled")).toBe(
+        false,
+      ),
+    );
+    expect(document.activeElement).toBe(copy);
+    expect(panel.querySelectorAll(".history-command")[3]).toBe(code);
+    expect(code.scrollTop).toBe(80);
+    await Promise.all(
+      panel.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => {})),
+    );
+    const audit = await axe.run(panel);
+    expect(
+      audit.violations.map(({ id, nodes }) => ({
+        id,
+        nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })),
+      })),
+    ).toEqual([]);
+    panel.scrollTop = 0;
+    await page.screenshot({ path: `../test-results/history-populated-${width}.png` });
+    if (width === 1180) {
+      overrides.set("get_history", () => records.slice(0, 3));
+      await page.getByRole("button", { name: "Refresh" }).click();
+      await vi.waitFor(() => expect(panel.querySelectorAll(".history-row")).toHaveLength(3));
+      await more.click();
+      await expect
+        .element(page.getByRole("menuitem", { name: "Clear saved history" }))
+        .toBeVisible();
+      await page.screenshot({ path: "../test-results/history-command-journal.png" });
+      await userEvent.keyboard("{Escape}");
+    }
+    overrides.set("get_history", () => []);
+    overrides.set("get_history_integration_status", () =>
+      Promise.reject(new Error("Host is offline")),
+    );
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect.element(page.getByText("No saved commands", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Status unavailable", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `../test-results/history-offline-empty-${width}.png` });
+  });
+  it("collapses History entries only after deletion succeeds", async () => {
+    const record = {
+      id: "delete-example",
+      connectionId: "host-a",
+      sessionId: "old-session",
+      command: "printf removable",
+      cwd: "/srv/example",
+      startedAt: "2026-11-05T10:00:00Z",
+      finishedAt: null,
+      exitCode: 0,
+      shell: "bash",
+    };
+    overrides.set("get_history", () => [
+      record,
+      { ...record, id: "keep-example", command: "printf retained" },
+    ]);
+    let finish!: () => void;
+    overrides.set(
+      "delete_history_entry",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await mount();
+    await navigate("History");
+    const command = page.getByText("printf removable", { exact: true });
+    await expect.element(command).toBeVisible();
+    const row = command.element().closest<HTMLElement>(".history-row")!;
+    await userEvent.hover(command);
+    await page.getByRole("button", { name: "Delete history entry" }).first().click();
+    expect(row.isConnected).toBe(true);
+    expect(row.hasAttribute("data-removing")).toBe(false);
+    finish();
+    await vi.waitFor(() => expect(row.hasAttribute("data-removing")).toBe(true));
+    await vi.waitFor(() => expect(row.isConnected).toBe(false));
+    await expect.element(page.getByText("printf retained", { exact: true })).toBeVisible();
   });
 });

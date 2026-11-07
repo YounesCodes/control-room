@@ -8,6 +8,29 @@ afterEach(() => {
   Reflect.deleteProperty(document, "startViewTransition");
   document.body.replaceChildren();
   delete document.documentElement.dataset.focusTransition;
+  document.documentElement.style.removeProperty("--motion-focus");
+});
+
+it.each([
+  ["180ms", 180],
+  [".18s", 180],
+  ["0s", 0],
+  ["invalid", 180],
+])("reads CSS duration %s as %i milliseconds", async (css, expected) => {
+  document.body.innerHTML = '<main class="workspace-shell"></main>';
+  document.documentElement.style.setProperty("--motion-focus", String(css));
+  const animate = vi.fn(() => ({ finished: Promise.resolve(), cancel: vi.fn() }));
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
+  try {
+    transitionFocusMode("enter", () => undefined);
+    expect(animate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ duration: expected }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, "animate");
+  }
 });
 
 it("updates controls synchronously without capturing frames", () => {

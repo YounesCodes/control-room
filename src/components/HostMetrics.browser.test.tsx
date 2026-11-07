@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { page } from "vitest/browser";
 import type { HeaderMetrics } from "../types";
 import { HostMetrics } from "./HostMetrics";
 import "../styles.css";
@@ -42,7 +43,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("smooths host percentages, rates, and uptime while keeping evidence exact and resetting for a new host", () => {
+it("smooths host percentages, rates, and uptime while keeping evidence exact and resetting for a new host", async () => {
+  await page.viewport(900, 650);
   let now = 0,
     id = 0;
   const frames = new Map<number, FrameRequestCallback>();
@@ -132,7 +134,8 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
   expect(frames.size).toBe(0);
 });
 
-it("anchors rate labels, neighboring values, and percent signs across animated updates", () => {
+it("anchors rate labels, neighboring values, and percent signs across animated updates", async () => {
+  await page.viewport(900, 650);
   let now = 0,
     id = 0;
   const frames = new Map<number, FrameRequestCallback>();

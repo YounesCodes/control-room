@@ -21,7 +21,8 @@ interface WorkspaceTabScrollerProps {
 
 const MIN_TAB_WIDTH = 160;
 const MAX_TAB_WIDTH = 196;
-const OVERFLOW_CONTROLS_WIDTH = 84;
+const OVERFLOW_BUTTON_WIDTH = 28;
+const OVERFLOW_CONTROLS_WIDTH = OVERFLOW_BUTTON_WIDTH * 3;
 
 export function WorkspaceTabScroller({
   children,
@@ -42,12 +43,13 @@ export function WorkspaceTabScroller({
   const tabs = Children.toArray(children);
   const count = tabs.length;
   const overflow = width > 0 && count * MIN_TAB_WIDTH > width;
-  const available = Math.max(0, width - (overflow ? OVERFLOW_CONTROLS_WIDTH : 0));
-  const pageSize =
-    width > 0 ? Math.max(1, Math.min(count, Math.floor(available / MIN_TAB_WIDTH))) : count;
+  const showPager = overflow && width >= MIN_TAB_WIDTH + OVERFLOW_CONTROLS_WIDTH;
+  const controlsWidth = showPager ? OVERFLOW_CONTROLS_WIDTH : overflow ? OVERFLOW_BUTTON_WIDTH : 0;
+  const available = Math.max(0, width - controlsWidth);
+  const pageSize = width > 0 ? Math.min(count, Math.floor(available / MIN_TAB_WIDTH)) : count;
   const tabWidth =
     width > 0 ? Math.min(MAX_TAB_WIDTH, available / Math.max(1, pageSize)) : MAX_TAB_WIDTH;
-  const lastStart = Math.max(0, count - pageSize);
+  const lastStart = pageSize > 0 ? count - pageSize : 0;
   const visibleStart = overflow ? Math.min(start, lastStart) : 0;
   const activeIndex = items.findIndex((item) => item.active);
 
@@ -56,7 +58,7 @@ export function WorkspaceTabScroller({
   useLayoutEffect(() => {
     const region = regionRef.current;
     if (!region) return;
-    const measure = () => setWidth(region.getBoundingClientRect().width);
+    const measure = () => setWidth(region.clientWidth);
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
@@ -110,9 +112,7 @@ export function WorkspaceTabScroller({
   }, [menuOpen]);
 
   function move(direction: -1 | 1) {
-    setStart((current) =>
-      Math.max(0, Math.min(lastStart, current + direction * Math.max(1, pageSize))),
-    );
+    setStart((current) => Math.max(0, Math.min(lastStart, current + direction * pageSize)));
   }
 
   function closeMenu() {
@@ -122,7 +122,7 @@ export function WorkspaceTabScroller({
 
   useEffect(() => {
     const list = listRef.current;
-    if (!list || !overflow) return;
+    if (!list || !overflow || pageSize === 0) return;
     let accumulated = 0;
     let resetTimer: ReturnType<typeof setTimeout> | undefined;
     const wheel = (event: WheelEvent) => {
@@ -152,7 +152,7 @@ export function WorkspaceTabScroller({
 
   return (
     <div className="session-tab-scroll-region" ref={regionRef}>
-      {overflow && (
+      {showPager && (
         <button
           className="session-tab-scroll-button"
           type="button"
@@ -173,31 +173,31 @@ export function WorkspaceTabScroller({
           {tabs.slice(visibleStart, visibleStart + pageSize)}
         </div>
       </div>
+      {showPager && (
+        <button
+          className="session-tab-scroll-button"
+          type="button"
+          disabled={visibleStart === lastStart}
+          onClick={() => move(1)}
+          aria-label="Scroll terminals right"
+          title="Next terminals"
+        >
+          <ChevronRight size={15} />
+        </button>
+      )}
       {overflow && (
-        <>
-          <button
-            className="session-tab-scroll-button"
-            type="button"
-            disabled={visibleStart === lastStart}
-            onClick={() => move(1)}
-            aria-label="Scroll terminals right"
-            title="Next terminals"
-          >
-            <ChevronRight size={15} />
-          </button>
-          <button
-            ref={pickerRef}
-            className="session-tab-scroll-button session-tab-picker"
-            type="button"
-            aria-label={menuLabel}
-            title={`${menuLabel} (${count})`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((current) => !current)}
-          >
-            <ChevronDown size={15} />
-          </button>
-        </>
+        <button
+          ref={pickerRef}
+          className="session-tab-scroll-button session-tab-picker"
+          type="button"
+          aria-label={menuLabel}
+          title={`${menuLabel} (${count})`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((current) => !current)}
+        >
+          <ChevronDown size={15} />
+        </button>
       )}
       {overflow && menuPresent && (
         <div

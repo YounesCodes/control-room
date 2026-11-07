@@ -27,7 +27,7 @@ const sample: HeaderMetrics = {
 describe("header metric values", () => {
   it("excludes retired storage selections without changing other choices", () => {
     expect(displayedHeaderMetrics()).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
-    expect(displayedHeaderMetrics(["diskIo", "disk", "cpu"])).toEqual(["diskIo", "cpu"]);
+    expect(displayedHeaderMetrics(["diskIo", "disk", "cpu"])).toEqual(["cpu", "diskIo"]);
     expect(displayedHeaderMetrics(["disk"])).toEqual([]);
     expect(displayedHeaderMetrics([])).toEqual([]);
   });

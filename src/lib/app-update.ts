@@ -64,8 +64,8 @@ export function downloadPercent(downloaded: number, total: number | null): numbe
 /**
  * The accessible name for the titlebar control.
  *
- * The visible label is deliberately terse, so the name carries what the icon
- * and two words cannot: which application and which version.
+ * The titlebar control uses an icon, so its name carries the state,
+ * application, and version.
  */
 export function updateIndicatorAccessibleName(state: AppUpdateState): string | null {
   const label = updateIndicatorLabel(state);

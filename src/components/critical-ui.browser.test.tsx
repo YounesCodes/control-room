@@ -12,6 +12,7 @@ import { WorkspaceTabScroller } from "./WorkspaceTabScroller";
 import { SettingsPane } from "../pages/SettingsPane";
 import type { AppSettings, EnvironmentInfo } from "../types";
 import "../styles.css";
+import { api } from "../lib/api";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -150,7 +151,17 @@ function SettingsFixture() {
         settings={settings}
         defaults={settings}
         logTailOptions={[50, 100, 200, 500, 1000]}
-        localShells={[]}
+        localShells={[
+          { id: "powershell-7", label: "PowerShell 7", kind: "powershell-7", elevated: false },
+          { id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false },
+          {
+            id: "command-prompt",
+            label: "Command Prompt",
+            kind: "command-prompt",
+            elevated: false,
+          },
+          { id: "admin", label: "PowerShell 7", kind: "powershell-7", elevated: true },
+        ]}
         environment={environment}
         appVersion="0.8.2"
         onCheckForUpdates={async () => ({ outcome: "current" })}
@@ -677,6 +688,10 @@ describe("critical UI in Chromium", () => {
     async (width) => {
       await page.viewport(width, 900);
       mount(<SettingsFixture />);
+      if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
+      else
+        await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
+      await page.getByRole("tab", { name: "Local shells", exact: true }).click();
       const mode = page.getByRole("checkbox", { name: "Local Terminal Mode", exact: true });
       await expect.element(mode).toBeInTheDocument();
       const row = mode.element().closest("label")!;
@@ -713,10 +728,404 @@ describe("critical UI in Chromium", () => {
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
   });
 
-  it("keeps appearance controls with their preview while Settings scrolls", async () => {
+  it("adds vertical breathing room on tall windows without widening controls or making short categories scroll", async () => {
+    await page.viewport(1200, 640);
+    mount(<SettingsFixture />);
+    const refresh = page.getByRole("combobox", { name: "Refresh host metrics" });
+    await expect.element(refresh).toBeVisible();
+    const before = refresh.element().getBoundingClientRect();
+    const metrics = container!.querySelector(".host-metrics-settings")!;
+    const compactHeight = metrics.getBoundingClientRect().height;
+    await page.viewport(1200, 900);
+    await vi.waitFor(() =>
+      expect(metrics.getBoundingClientRect().height).toBeGreaterThan(compactHeight + 20),
+    );
+    expect(refresh.element().getBoundingClientRect().width).toBe(before.width);
+    expect(refresh.element().getBoundingClientRect().left).toBe(before.left);
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
+    await page.screenshot({ path: "../../test-results/settings-vertical-spacing.png" });
+    for (const name of ["Logs & History", "Connections & Permissions", "App & Diagnostics"]) {
+      await page.getByRole("button", { name, exact: true }).click();
+      expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
+    }
+  });
+
+  it.each([768, 960, 1200])(
+    "keeps Settings search stable through save feedback at %ipx",
+    async (width) => {
+      await page.viewport(width, 720);
+      let finish!: () => void;
+      const save = vi.spyOn(api, "saveSettings").mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      try {
+        mount(<SettingsFixture />);
+        const search = page.getByRole("searchbox", { name: "Search settings" });
+        await expect.element(search).toBeVisible();
+        const bounds = () => {
+          const rect = search.element().closest(".search-field")!.getBoundingClientRect();
+          const button = container!.querySelector(".settings-save")!.getBoundingClientRect();
+          return [rect.x, rect.y, rect.width, rect.height, button.x, button.width];
+        };
+        const initial = bounds();
+        expect(Math.abs(initial[0] + initial[2] / 2 - width / 2)).toBeLessThanOrEqual(1);
+        await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
+        expect(bounds()).toEqual(initial);
+        const status = container!.querySelector<HTMLElement>(".settings-status")!;
+        const range = document.createRange();
+        range.selectNodeContents(status);
+        const textBounds = range.getBoundingClientRect();
+        const saveBounds = container!.querySelector(".settings-save")!.getBoundingClientRect();
+        expect(Math.abs(saveBounds.left - textBounds.right - 12)).toBeLessThanOrEqual(1);
+        if (width > 900) {
+          const searchBounds = search.element().closest(".search-field")!.getBoundingClientRect();
+          expect(textBounds.left - searchBounds.right).toBeGreaterThan(24);
+          expect(status.getBoundingClientRect().left - searchBounds.right).toBeGreaterThanOrEqual(
+            24,
+          );
+          expect(searchBounds.width).toBeGreaterThan(width === 960 ? 280 : 320);
+        }
+        await page.screenshot({ path: `../../test-results/save-group-unsaved-${width}.png` });
+        await page.getByRole("button", { name: "Save settings", exact: true }).click();
+        await expect
+          .element(page.getByRole("button", { name: "Saving…", exact: true }))
+          .toBeVisible();
+        expect(bounds()).toEqual(initial);
+        finish();
+        await expect.element(page.getByRole("status")).toHaveTextContent("Settings saved.");
+        expect(bounds()).toEqual(initial);
+        await page.screenshot({ path: `../../test-results/save-group-saved-${width}.png` });
+      } finally {
+        save.mockRestore();
+      }
+    },
+  );
+
+  it("navigates Settings categories with arrows without taking keys from form fields", async () => {
+    await page.viewport(1200, 720);
+    mount(<SettingsFixture />);
+    const general = page.getByRole("button", { name: "General & Monitoring", exact: true });
+    await expect.element(general).toBeVisible();
+    general.element().focus();
+    await userEvent.keyboard("{ArrowDown}");
+    const terminal = page.getByRole("button", { name: "Terminal", exact: true });
+    await expect.element(terminal).toHaveFocus();
+    expect(getComputedStyle(terminal.element()).outlineStyle).toBe("none");
+    await expect.element(terminal).toHaveAttribute("aria-current", "page");
+    const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
+    await size.fill("18");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(19);
+    await expect.element(terminal).toHaveAttribute("aria-current", "page");
+    terminal.element().focus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect
+      .element(page.getByRole("button", { name: "Logs & History", exact: true }))
+      .toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(19);
+    await userEvent.keyboard("{End}");
+    const app = page.getByRole("button", { name: "App & Diagnostics", exact: true });
+    await expect.element(app).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(app).toHaveFocus();
+    await userEvent.keyboard("{Home}{ArrowUp}");
+    await expect.element(general).toHaveFocus();
+    expect(container!.querySelectorAll('.settings-navigation button[tabindex="0"]')).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps number fields clean on hover while retaining keyboard steps and limits", async () => {
+    await page.viewport(1200, 720);
+    mount(<SettingsFixture />);
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
+    await userEvent.hover(size);
+    await size.click();
+    expect(getComputedStyle(size.element()).appearance).toBe("textfield");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(15);
+    await size.fill("32");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(size).toHaveValue(32);
+    await size.fill("9");
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(size).toHaveValue(9);
+    await size.screenshot({ path: "../../test-results/number-field.png" });
+  });
+
+  it.each([768, 1200])("isolates Terminal tabs and preserves drafts at %ipx", async (width) => {
+    await page.viewport(width, 640);
+    mount(<SettingsFixture />);
+    await expect.element(page.getByRole("searchbox", { name: "Search settings" })).toBeVisible();
+    if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
+    const size = page.getByRole("spinbutton", { name: "Font size", exact: true });
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    if (width === 1200) expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight);
+    else expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+    await size.fill("18");
+    const originalInput = size.element();
+    const tabs = page.getByRole("tablist", { name: "Terminal settings" });
+    const appearance = tabs.getByRole("tab", { name: "Appearance", exact: true });
+    await expect.element(appearance).toHaveAttribute("aria-selected", "true");
+    for (const name of ["Tabs & naming", "Local shells", "Appearance"]) {
+      const tab = tabs.getByRole("tab", { name, exact: true });
+      await tab.click();
+      await expect.element(tab).toHaveAttribute("aria-selected", "true");
+      expect(container!.querySelectorAll('[role="tabpanel"]:not([hidden])').length).toBe(1);
+      expect(
+        container!.querySelectorAll(".settings-form > .settings-terminal-panel:not([hidden])")
+          .length,
+      ).toBe(1);
+      expect(container!.querySelector(".settings-body")!.scrollTop).toBe(0);
+      await page.screenshot({
+        path: `../../test-results/terminal-tab-${name.split(" ")[0]}-${width}.png`,
+      });
+    }
+    expect(size.element()).toBe(originalInput);
+    await expect.element(size).toHaveValue(18);
+    await appearance.click();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect
+      .element(tabs.getByRole("tab", { name: "Tabs & naming", exact: true }))
+      .toHaveFocus();
+    await expect.element(page.getByRole("spinbutton", { name: "Scrollback lines" })).toBeVisible();
+    await userEvent.keyboard("{End}");
+    await expect
+      .element(tabs.getByRole("tab", { name: "Local shells", exact: true }))
+      .toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect.element(appearance).toHaveFocus();
+    await userEvent.keyboard("{ArrowLeft}");
+    await expect
+      .element(tabs.getByRole("tab", { name: "Local shells", exact: true }))
+      .toHaveFocus();
+    await userEvent.keyboard("{Home}");
+    await expect.element(appearance).toHaveFocus();
+    await page.getByRole("searchbox", { name: "Search settings" }).fill("terminal");
+    await expect
+      .element(page.getByRole("group", { name: "Tabs & naming", exact: true }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("group", { name: "Local terminal", exact: true }))
+      .toBeVisible();
+    expect(
+      (await axe.run(container!, { rules: { region: { enabled: false } } })).violations,
+    ).toEqual([]);
+  });
+
+  it("rounds the open dropdown and preserves option selection and keyboard dismissal", async () => {
+    await page.viewport(960, 640);
+    mount(<SettingsFixture />);
+    await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+    const select = page.getByRole("combobox", { name: "Default log tail" });
+    await select.click();
+    expect(select.element().matches(":open")).toBe(true);
+    expect(getComputedStyle(select.element(), "::picker(select)").borderRadius).toBe("6px");
+    await page.screenshot({ path: "../../test-results/rounded-dropdown.png" });
+    await page.getByRole("option", { name: "500", exact: true }).click();
+    await expect.element(select).toHaveValue("500");
+    await select.click();
+    await userEvent.keyboard("{Escape}");
+    expect(select.element().matches(":open")).toBe(false);
+    await expect.element(select).toHaveValue("500");
+  });
+
+  it("keeps dark-outline checkboxes native, keyboard-operable and consistent across states", async () => {
+    mount(
+      <form className="form-stack">
+        <label className="checkbox-label">
+          <input type="checkbox" name="enabled" />
+          Enabled
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" defaultChecked disabled />
+          Locked
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" />
+          Mixed
+        </label>
+      </form>,
+    );
+    const enabled = page.getByRole("checkbox", { name: "Enabled", exact: true });
+    await expect.element(enabled).toBeVisible();
+    await page.getByText("Enabled", { exact: true }).click();
+    await expect.element(enabled).toBeChecked();
+    const input = enabled.element() as HTMLInputElement;
+    expect(getComputedStyle(input).backgroundImage).not.toBe("none");
+    expect(input.getBoundingClientRect().width).toBe(16);
+    input.focus();
+    await userEvent.keyboard(" ");
+    await expect.element(enabled).not.toBeChecked();
+    expect(getComputedStyle(input).backgroundImage).toBe("none");
+    const locked = page.getByRole("checkbox", { name: "Locked" });
+    await expect.element(locked).toBeDisabled();
+    await expect.element(locked).toBeChecked();
+    const mixed = page.getByRole("checkbox", { name: "Mixed" }).element() as HTMLInputElement;
+    mixed.indeterminate = true;
+    expect(getComputedStyle(mixed).backgroundImage).not.toBe("none");
+    await expect.element(enabled).toHaveFocus();
+    expect(getComputedStyle(input).outlineStyle).toBe("solid");
+  });
+
+  it("reveals Settings categories as one form and cancels interrupted motion", async () => {
+    await page.viewport(1200, 720);
+    mount(<SettingsFixture />);
+    await expect.element(page.getByRole("searchbox", { name: "Search settings" })).toBeVisible();
+    const form = container!.querySelector("form")!;
+    const font = form.querySelector('input[type="number"]');
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const first = form.getAnimations()[0];
+    expect(first).toBeDefined();
+    first.pause();
+    first.currentTime = 60;
+    expect(Number(getComputedStyle(form).opacity)).toBeLessThan(1);
+    expect(getComputedStyle(form).transform).not.toBe("none");
+    await page.getByRole("tab", { name: "Tabs & naming", exact: true }).click();
+    await expect.poll(() => first.playState).toBe("idle");
+    const panelAnimation = form.getAnimations()[0];
+    expect(panelAnimation).toBeDefined();
+    await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+    await expect.poll(() => panelAnimation.playState).toBe("idle");
+    expect(form.querySelector('input[type="number"]')).toBe(font);
+  });
+
+  it.each([768, 1200])("integrates search and shell preferences at %ipx", async (width) => {
+    await page.viewport(width, 720);
+    mount(<SettingsFixture />);
+    const search = page.getByRole("searchbox", { name: "Search settings" });
+    await expect.element(search).toBeVisible();
+    const refresh = page.getByRole("combobox", { name: "Refresh host metrics" }).element();
+    expect(refresh.getBoundingClientRect().height).toBe(32);
+    expect(refresh.getBoundingClientRect().width).toBeLessThanOrEqual(200);
+    const refreshLabel = refresh.closest("label")!.querySelector("span")!.getBoundingClientRect();
+    const refreshBounds = refresh.getBoundingClientRect();
+    expect(refreshBounds.left - refreshLabel.right).toBeGreaterThanOrEqual(12);
+    expect(refreshBounds.left - refreshLabel.right).toBeLessThanOrEqual(18);
+    expect(
+      Math.abs(
+        (refreshLabel.top + refreshLabel.bottom) / 2 -
+          (refreshBounds.top + refreshBounds.bottom) / 2,
+      ),
+    ).toBeLessThanOrEqual(1);
+    const choices = container!.querySelector(".host-metrics-choices")!.getBoundingClientRect();
+    expect(refreshBounds.top).toBeGreaterThanOrEqual(choices.bottom);
+    await page.screenshot({ path: `../../test-results/settings-controls-general-${width}.png` });
+    const field = search.element().closest(".search-field")!;
+    const icon = field.querySelector("svg")!;
+    const bounds = field.getBoundingClientRect();
+    expect(bounds.height).toBeLessThanOrEqual(34);
+    expect(icon.getBoundingClientRect().left - bounds.left).toBeGreaterThanOrEqual(10);
+    expect(
+      search.element().getBoundingClientRect().left - icon.getBoundingClientRect().right,
+    ).toBeGreaterThanOrEqual(6);
+    const border = getComputedStyle(field).borderColor;
+    await search.click();
+    await expect.element(search).toHaveFocus();
+    await expect.poll(() => getComputedStyle(field).borderColor).not.toBe(border);
+    expect(getComputedStyle(field).boxShadow).toBe("none");
+    expect(field.getBoundingClientRect().height).toBe(bounds.height);
+    if (width > 900) await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
+    for (const name of ["Font size", "Scrollback lines"]) {
+      await page
+        .getByRole("tab", {
+          name: name === "Font size" ? "Appearance" : "Tabs & naming",
+          exact: true,
+        })
+        .click();
+      const input = page.getByRole("spinbutton", { name, exact: true }).element();
+      expect(input.getBoundingClientRect().height).toBe(32);
+      expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(13);
+    }
+    await page.getByRole("tab", { name: "Local shells", exact: true }).click();
+    const row = page
+      .getByRole("checkbox", { name: "Offer PowerShell 7", exact: true })
+      .element()
+      .closest("label")!;
+    const shell = row.querySelector(".local-shell-icon")!;
+    const color = getComputedStyle(shell).color;
+    await userEvent.hover(row);
+    expect(getComputedStyle(shell).color).toBe(color);
+    (row.querySelector("input") as HTMLInputElement).focus();
+    expect(getComputedStyle(shell).color).toBe(color);
+    const git = container!.querySelector<HTMLImageElement>(".local-shell-icon-git-bash img")!;
+    await vi.waitFor(() => expect(git.naturalWidth).toBeGreaterThan(0));
+    expect(getComputedStyle(git).filter).toBe("grayscale(1) brightness(0.85)");
+    await userEvent.hover(git.closest("label")!);
+    expect(getComputedStyle(git).filter).toBe("grayscale(1) brightness(0.85)");
+    const select = page.getByRole("combobox", { name: "Default local terminal" }).element();
+    const embedded = select
+      .parentElement!.querySelector(".local-shell-icon")!
+      .getBoundingClientRect();
+    expect(embedded.left).toBeGreaterThan(select.getBoundingClientRect().left + 6);
+    expect(embedded.right).toBeLessThan(select.getBoundingClientRect().right - 20);
+    expect(container!.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: `../../test-results/search-shell-polish-${width}.png` });
+    if (width > 900)
+      await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+    else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("logs");
+    const tail = page.getByRole("combobox", { name: "Default log tail" }).element();
+    expect(tail.getBoundingClientRect().height).toBe(32);
+    expect(parseFloat(getComputedStyle(tail).fontSize)).toBeGreaterThanOrEqual(13);
+    await page.screenshot({ path: `../../test-results/settings-controls-logs-${width}.png` });
+  });
+
+  it.each([768, 960, 1600])(
+    "navigates and searches Settings without losing validation at %ipx",
+    async (width) => {
+      await page.viewport(width, 640);
+      mount(<SettingsFixture />);
+      const choose = async (value: string, label: string) => {
+        if (width > 900) await page.getByRole("button", { name: label, exact: true }).click();
+        else await page.getByRole("combobox", { name: "Settings category" }).selectOptions(value);
+      };
+      await choose("terminal", "Terminal");
+      await page.getByRole("tab", { name: "Tabs & naming", exact: true }).click();
+      await expect
+        .element(
+          page.getByRole("checkbox", {
+            name: "Show current command/process in terminal tab titles",
+          }),
+        )
+        .toBeVisible();
+      await page.getByRole("tab", { name: "Appearance", exact: true }).click();
+      await page.getByLabelText("Font size", { exact: true }).fill("1");
+      await choose("logs", "Logs & History");
+      await page.getByRole("button", { name: "Save settings", exact: true }).click();
+      await expect.element(page.getByLabelText("Font size", { exact: true })).toHaveFocus();
+      await page.getByLabelText("Font size", { exact: true }).fill("16");
+      const search = page.getByRole("searchbox", { name: "Search settings" });
+      await search.fill("sudo");
+      await expect.element(page.getByRole("group", { name: "Elevated commands" })).toBeVisible();
+      await expect
+        .element(page.getByText("Connections & Permissions", { exact: true }).last())
+        .toBeVisible();
+      await search.fill("no-such-setting");
+      await expect.element(page.getByText('No settings match "no-such-setting".')).toBeVisible();
+      await search.fill("");
+      await expect.element(page.getByLabelText("Font size", { exact: true })).toHaveValue(16);
+      expect(container!.scrollWidth).toBeLessThanOrEqual(width);
+      const result = await axe.run(container!, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      });
+      expect(result.violations.map(({ id }) => id)).toEqual([]);
+      await page.screenshot({ path: `../../test-results/settings-${width}.png` });
+    },
+  );
+
+  it("stacks the preview above appearance controls in narrow Settings", async () => {
     await page.viewport(960, 640);
     mount(<SettingsFixture />);
     container!.style.width = "708px";
+    await page.getByRole("combobox", { name: "Settings category" }).selectOptions("terminal");
     await expect.element(page.getByRole("group", { name: "Terminal appearance" })).toBeVisible();
     const appearance = page.getByRole("group", { name: "Terminal appearance" }).element();
     const preview = appearance.querySelector<HTMLElement>(".terminal-appearance-preview")!;
@@ -727,8 +1136,8 @@ describe("critical UI in Chromium", () => {
     )!;
     expect(appearance.contains(font)).toBe(true);
     expect(colorInput).not.toBeNull();
-    expect(preview.getBoundingClientRect().left).toBeGreaterThan(
-      font.getBoundingClientRect().right,
+    expect(preview.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      font.getBoundingClientRect().top,
     );
     expect(
       Number.parseFloat(getComputedStyle(appearance.querySelector("legend")!).fontSize),
@@ -745,7 +1154,7 @@ describe("critical UI in Chromium", () => {
       ),
     );
     const body = container!.querySelector<HTMLElement>(".settings-body")!;
-    body.scrollTop = 160;
+    body.scrollTop = 0;
     await vi.waitFor(() =>
       expect(preview.getBoundingClientRect().top).toBeGreaterThanOrEqual(
         body.getBoundingClientRect().top,
@@ -753,7 +1162,9 @@ describe("critical UI in Chromium", () => {
     );
     expect(container!.scrollWidth).toBeLessThanOrEqual(708);
     await page.screenshot({ path: "../../test-results/settings-minimum.png" });
-    expect(container!.querySelector(".settings-navigation")).toBeNull();
+    expect(getComputedStyle(container!.querySelector(".settings-navigation")!).display).toBe(
+      "none",
+    );
     body.scrollTop = body.scrollHeight;
     await expect.element(page.getByRole("button", { name: "Save settings" })).toBeVisible();
     await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
@@ -775,10 +1186,19 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     const form = container!.querySelector(".settings-form")!.getBoundingClientRect();
     const heading = container!.querySelector(".settings-heading-inner")!.getBoundingClientRect();
-    expect(form.width).toBeGreaterThan(1500);
-    expect(Math.abs(form.left - (1600 - form.right))).toBeLessThan(24);
-    expect(Math.abs(heading.left - form.left)).toBeLessThan(24);
-    expect(Math.abs(heading.right - form.right)).toBeLessThan(24);
+    expect(form.width).toBeGreaterThan(1000);
+    const nav = container!.querySelector(".settings-navigation")!.getBoundingClientRect();
+    expect(form.left).toBeGreaterThan(nav.right);
+    expect(heading.right).toBeGreaterThan(form.right);
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const body = container!.querySelector<HTMLElement>(".settings-body")!;
+    body.scrollTop = 160;
+    const preview = container!
+      .querySelector(".terminal-appearance-preview")!
+      .getBoundingClientRect();
+    expect(preview.top).toBeGreaterThanOrEqual(body.getBoundingClientRect().top);
+    expect(preview.bottom).toBeLessThanOrEqual(body.getBoundingClientRect().bottom);
+    body.scrollTop = 0;
     if (import.meta.env.VITE_CAPTURE_DOCS === "1") {
       await page.screenshot({ path: "../../docs/src/assets/screenshots/settings.png" });
     }
