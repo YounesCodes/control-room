@@ -599,9 +599,8 @@ describe("App Workspace behavior", () => {
     const hostCTab = tabMainButton("Host C");
     stripPointer(hostCTab, "pointerdown", 480);
     stripPointer(hostCTab, "pointermove", 60);
-    // Mid-drag the tab is lifted, the insert line shows, and the rest slide.
+    // Mid-drag the tab is lifted and the rest slide.
     expect(document.querySelector(".session-tab-dragged")).toBeTruthy();
-    expect(document.querySelector(".session-tab-insert")).toBeTruthy();
     stripPointer(hostCTab, "pointerup", 60);
 
     expect(stripOrder()).toEqual(["Host C", "Host A", "Host B"]);
@@ -642,7 +641,6 @@ describe("App Workspace behavior", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(document.querySelector(".session-tab-dragged")).toBeNull();
-    expect(document.querySelector(".session-tab-insert")).toBeNull();
 
     stripPointer(hostCTab, "pointerup", 60);
     expect(stripOrder()).toEqual(["Host A", "Host B", "Host C"]);

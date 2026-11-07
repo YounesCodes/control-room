@@ -493,15 +493,6 @@ export function WorkspaceTabScroller({
           onKeyDown={onReorder ? reorderWithKeyboard : undefined}
           style={{ "--session-tab-width": `${tabWidth}px` } as React.CSSProperties}
         >
-          {activeDrag && dragTarget !== null && dragTarget !== activeDrag.fromIndex && (
-            <span
-              className="session-tab-insert"
-              aria-hidden="true"
-              style={{
-                transform: `translate3d(${(dragTarget - dragSliceStart) * activeDrag.geometry.tabWidth}px, 0, 0)`,
-              }}
-            />
-          )}
           {renderedTabs.map((tab, index) => {
             const slotIndex = dragSliceStart + index;
             if (!activeDrag || !isValidElement(tab)) return tab;

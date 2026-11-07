@@ -121,8 +121,8 @@ sizes with a double-click or Enter.
 
 Workspace tabs reorder by dragging them along the strip. A short threshold
 keeps plain clicks their own act; past it the tab lifts under a shadow and
-follows the pointer, its destination slot is marked with an inset accent line,
-and the tabs it passes slide one slot over in the same motion. Holding the
+follows the pointer, and the tabs it passes slide one slot over in the same
+motion. Holding the
 lifted tab at an overflowing strip's edge pages the window open, so any tab
 can reach the first or last position. Dropping outside the strip, or Escape,
 restores the previous order; a finished drag never selects the dragged tab

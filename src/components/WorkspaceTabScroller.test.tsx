@@ -119,7 +119,7 @@ describe("WorkspaceTabScroller reordering", () => {
     vi.restoreAllMocks();
   });
 
-  it("drags a tab onto an earlier slot and lifts, displaces, and marks it", () => {
+  it("drags a tab onto an earlier slot and lifts and displaces it", () => {
     const onReorder = vi.fn();
     const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);
     stubStripGeometry(container);
@@ -135,8 +135,7 @@ describe("WorkspaceTabScroller reordering", () => {
     const dragged = container.querySelector<HTMLElement>(".session-tab-dragged");
     expect(dragged).toBeTruthy();
     expect(dragged!.querySelector(".session-tab-main")!.textContent).toBe("C");
-    // The insert line points at the first slot; A and B slide one slot right.
-    expect(container.querySelector(".session-tab-insert")).toBeTruthy();
+    // A and B slide one slot right toward the first slot.
     expect(isShifted(container, "A")).toBe(true);
     expect(isShifted(container, "B")).toBe(true);
     expect(isShifted(container, "D")).toBe(false);
@@ -145,7 +144,6 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(onReorder).toHaveBeenCalledTimes(1);
     expect(onReorder).toHaveBeenCalledWith("id-3", 0);
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
-    expect(container.querySelector(".session-tab-insert")).toBeNull();
   });
 
   it("drags a tab onto a later slot", () => {
@@ -219,7 +217,6 @@ describe("WorkspaceTabScroller reordering", () => {
     pointer(third, "pointerup", 362, 18);
     expect(onReorder).not.toHaveBeenCalled();
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
-    expect(container.querySelector(".session-tab-insert")).toBeNull();
   });
 
   it("leaves the order unchanged when the tab drops outside the strip", () => {
@@ -248,7 +245,6 @@ describe("WorkspaceTabScroller reordering", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
-    expect(container.querySelector(".session-tab-insert")).toBeNull();
 
     pointer(third, "pointerup", 40);
     expect(onReorder).not.toHaveBeenCalled();
