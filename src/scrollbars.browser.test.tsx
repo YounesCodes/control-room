@@ -16,15 +16,11 @@ afterEach(() => {
   motionOverride = undefined;
 });
 
-const color = (section: HTMLElement) =>
-  section.classList.contains("host-metrics-values")
-    ? getComputedStyle(section).scrollbarColor
-    : getComputedStyle(section, "::-webkit-scrollbar-thumb").backgroundColor;
 // Relative colors may serialize as color(srgb ...) rather than rgba(...).
-// Read the rendered color so the checks cover either browser serialization.
+// Let the canvas resolve the thumb color to RGBA regardless of serialization.
 const pixel = (section: HTMLElement) => {
   const context = document.createElement("canvas").getContext("2d")!;
-  context.fillStyle = color(section).match(/^(?:rgba?|color)\([^)]*\)/)![0];
+  context.fillStyle = getComputedStyle(section, "::-webkit-scrollbar-thumb").backgroundColor;
   context.fillRect(0, 0, 1, 1);
   return context.getImageData(0, 0, 1, 1).data;
 };
