@@ -833,6 +833,7 @@ code,
 }
 .host-metrics-status[data-state="stale"] {
   color: var(--warning);
+  font-weight: 600;
 }
 .host-metrics-status[data-state="unavailable"] {
   color: var(--failure);
@@ -3376,6 +3377,7 @@ code,
 .baseline-status-unsupported {
   border-color: var(--warning);
   color: var(--warning);
+  font-weight: 600;
 }
 
 .baseline-status-unavailable {
@@ -7770,10 +7772,13 @@ dd {
   text-align: center;
 }
 
+/* Warning text speaks in one voice app-wide: the amber hue always pairs with
+   the app's strong step, so no warning line reads half-bold or half-muted. */
 .inline-warning {
   border-color: var(--warning);
   background: #131313;
   color: var(--warning);
+  font-weight: 600;
 }
 
 .inline-message {
