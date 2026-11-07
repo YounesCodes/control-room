@@ -362,7 +362,14 @@ describe("baselines explorer", () => {
     await screen.findByText("No captures yet");
     await userEvent.click(screen.getByRole("button", { name: /Capture baseline/ }));
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Read", { selector: "legend" })).toBeTruthy();
+    expect(
+      within(dialog).getByText(
+        "Allow sudo is off for this host, so sections that need root record less.",
+      ),
+    ).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("checkbox", { name: "Ports" }));
+    expect(within(dialog).getByText("Read (8 of 9)")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: /Start capture/ }));
     await screen.findByText("Host facts");
     expect(within(dialog).getByText("Collected")).toBeTruthy();

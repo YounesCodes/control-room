@@ -2735,7 +2735,8 @@ code,
 .baseline-context-title p {
   overflow-wrap: anywhere;
 }
-.baseline-inspector-modal {
+/* Compound selector so the override outranks the later shared .modal width. */
+.modal.baseline-inspector-modal {
   width: min(620px, calc(100vw - 32px));
 }
 .baseline-inspector-modal > .baseline-inspector-pane {
@@ -3265,46 +3266,61 @@ code,
   border-color: var(--border-subtle);
 }
 
+.modal.baseline-capture-modal {
+  width: min(470px, calc(100vw - 40px));
+}
+
+/* The shared .modal-actions footer bleeds to its parent's padding with -20px
+   margins, so the form body keeps the same 20px rail: the footer then sits
+   flush with the dialog edges without making the modal scroll. */
 .baseline-capture-form {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 20px;
   min-width: 0;
 }
 
-.baseline-capture-label span {
-  display: block;
-  color: var(--text-faint);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 4px;
+.baseline-capture-input {
+  width: 100%;
+  min-width: 0;
 }
 
 .baseline-capture-sections {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  /* The third column carries the longest labels (Containers, Filesystems,
+     Configuration & access), so it hugs its widest label instead of folding
+     it to a second line. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) max-content;
   border: 0;
-  padding-top: 8px;
-  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  gap: 6px 12px;
 }
 
 .baseline-capture-sections legend {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  padding: 0;
   color: var(--text-faint);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.baseline-capture-hint {
+/* The elevation note stays a single quiet line: the amber rule carries the
+   restriction cue without an alert banner's box drawing. */
+.baseline-capture-note {
   margin: 0;
-  color: var(--text-faint);
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--warning);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .baseline-progress {
   display: flex;
-  margin: 0 16px 10px;
+  margin: 0;
   flex-direction: column;
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);

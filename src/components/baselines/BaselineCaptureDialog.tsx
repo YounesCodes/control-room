@@ -51,6 +51,7 @@ export function BaselineCaptureDialog({
     <Modal
       title={`Capture baseline of ${connectionName}`}
       onClose={running ? () => undefined : onClose}
+      className="baseline-capture-modal"
     >
       <div className="baseline-capture-form">
         {error && (
@@ -60,19 +61,17 @@ export function BaselineCaptureDialog({
         )}
         {!running && (
           <>
-            <label className="baseline-capture-label">
-              <span>Label</span>
-              <input
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-                placeholder="Optional, e.g. before upgrade"
-                aria-label="Baseline label"
-                maxLength={80}
-                autoFocus
-              />
-            </label>
+            <input
+              className="baseline-capture-input"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder="Optional label, e.g. before upgrade"
+              aria-label="Baseline label"
+              maxLength={80}
+              autoFocus
+            />
             <fieldset className="baseline-capture-sections">
-              <legend>Read</legend>
+              <legend>Read{chosen.length < total ? ` (${chosen.length} of ${total})` : ""}</legend>
               {SECTION_KINDS.map((kind) => (
                 <label key={kind} className="baseline-capture-section-choice">
                   <input
@@ -85,14 +84,7 @@ export function BaselineCaptureDialog({
                 </label>
               ))}
             </fieldset>
-            <p className="baseline-capture-hint">
-              {chosen.length === total
-                ? "Reads all sections."
-                : chosen.length === 1
-                  ? "Reads 1 section."
-                  : `Reads ${chosen.length} of ${total} sections.`}
-            </p>
-            {permissionNote && <p className="inline-warning">{permissionNote}</p>}
+            {permissionNote && <p className="baseline-capture-note">{permissionNote}</p>}
             <div className="modal-actions">
               <button type="button" className="secondary-button" onClick={onClose}>
                 Cancel
@@ -125,7 +117,6 @@ export function BaselineCaptureDialog({
                 {progress.length} of {progress[0]?.total ?? total} sections read
               </li>
             </ol>
-            <p className="baseline-capture-hint">Saving what finished so far.</p>
             <div className="modal-actions">
               <button type="button" className="secondary-button" onClick={onStopCapture}>
                 <X size={15} /> Stop after this section

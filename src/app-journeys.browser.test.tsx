@@ -3190,6 +3190,21 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Capture baseline", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("textbox", { name: "Baseline label" }).fill("Browser capture");
+    // The composed dialog must fit its own box: a footer that overflows its
+    // padded body reintroduces scrollbars nothing needs.
+    const captureDialog = dialog.element();
+    expect(captureDialog.scrollWidth).toBe(captureDialog.clientWidth);
+    expect(captureDialog.scrollHeight).toBe(captureDialog.clientHeight);
+    // Three aligned columns stay single-line; a wrapped section label doubles
+    // one row's height and breaks the grid. The dialog-in entrance starts at
+    // 0.97 scale, so poll until it settles before sampling row heights.
+    await vi.waitFor(() => {
+      const sectionRows = [
+        ...captureDialog.querySelectorAll<HTMLElement>(".baseline-capture-section-choice"),
+      ];
+      expect(sectionRows).toHaveLength(9);
+      expect(new Set(sectionRows.map((row) => row.clientHeight)).size).toBe(1);
+    });
     await dialog.getByRole("button", { name: "Start capture" }).click();
     await expect.element(page.getByRole("button", { name: "Pin capture" })).toBeVisible();
     await page.getByRole("button", { name: "Rename capture" }).click();
