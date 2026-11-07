@@ -850,6 +850,21 @@ export function App() {
     );
   }
 
+  /// Moves a Workspace tab to `targetIndex` in the header strip. Tabs ride
+  /// along as whole objects, so session, name, and connection survive; the
+  /// active tab stays active wherever it lands.
+  function moveWorkspaceTo(id: string, targetIndex: number) {
+    setWorkspaces((current) => {
+      const from = current.findIndex((workspace) => workspace.id === id);
+      if (from < 0) return current;
+      const to = Math.max(0, Math.min(targetIndex, current.length - 1));
+      if (to === from) return current;
+      const next = current.filter((workspace) => workspace.id !== id);
+      next.splice(to, 0, current[from]);
+      return next;
+    });
+  }
+
   /// Patches the fields only a remote Workspace has: inspection caches,
   /// selections, and Enhanced History state. A local Workspace is left alone
   /// rather than given fields it has no use for.
@@ -2055,6 +2070,7 @@ export function App() {
               activeTabId={settingsOpen ? null : activeWorkspaceId}
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
+              onReorder={terminalFocusMode ? undefined : moveWorkspaceTo}
             >
               {terminalFocusMode
                 ? (() => {

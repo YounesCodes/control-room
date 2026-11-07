@@ -1848,6 +1848,72 @@ code,
   width: 100%;
   min-width: 0;
   align-items: stretch;
+  /* The insertion marker and lifted tabs position against the content box. */
+  position: relative;
+}
+
+/* Drag reordering pins tabs at uniform slot positions and animates only the
+   slot motion, so the strip stays light under the pointer. */
+.session-tab-scroll-region.can-reorder .session-tab-main,
+.session-tab-scroll-region.can-reorder .session-tab-group-main {
+  cursor: grab;
+}
+
+.session-tab-scroll-region.dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+.session-tab-scroll-region.dragging .session-tab-main,
+.session-tab-scroll-region.dragging .session-tab-group-main {
+  cursor: grabbing;
+}
+
+/* Space for Rename and Close is reserved only on hover and focus; a lifted tab
+   keeps its label full-width for the whole drag. */
+.session-tab-scroll-region.dragging .session-tab-wrap:hover .session-tab-main,
+.session-tab-scroll-region.dragging .session-tab-wrap:focus-within .session-tab-main {
+  padding-right: 8px;
+}
+
+/* Slots slide only while a tab is lifted; the settling render that drops the
+   region class switches layout and transform at once without animating them,
+   because every displaced tab is already sitting at its final position. */
+.session-tab-scroll-region.dragging .session-tab-wrap,
+.session-tab-scroll-region.dragging .session-tab-group {
+  transition:
+    transform var(--motion-med) var(--ease),
+    background-color var(--motion-fast) var(--ease),
+    border-bottom-color var(--motion-fast) var(--ease);
+}
+
+.session-tab-dragged {
+  z-index: 30;
+  background: var(--surface-chrome);
+  box-shadow: var(--shadow-popover);
+}
+
+/* The lifted tab tracks the pointer one-to-one; its own slide never lags. */
+.session-tab-scroll-region.dragging .session-tab-dragged {
+  transition: none;
+}
+
+.session-tab-scroll-region.dragging .session-tab-dragged:hover,
+.session-tab-scroll-region.dragging .session-tab-dragged:focus-within {
+  background: var(--surface-chrome);
+}
+
+.session-tab-insert {
+  position: absolute;
+  z-index: 25;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 25%);
+  pointer-events: none;
 }
 
 .session-tab-list::-webkit-scrollbar {

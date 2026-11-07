@@ -163,6 +163,68 @@ function workspaceTabCount(displayName: string): number {
     ).length;
 }
 
+function stripOrder(): (string | null)[] {
+  return Array.from(document.querySelectorAll(".session-tabs .session-tab-label")).map(
+    (label) => label.textContent,
+  );
+}
+
+function tabMainButton(label: string) {
+  return Array.from(document.querySelectorAll<HTMLButtonElement>(".session-tab-main")).find(
+    (button) => button.textContent === label,
+  )!;
+}
+
+/// The jsdom strip reports zero boxes; pin the uniform tab slots the browser
+/// would lay out before driving a pointer drag.
+function stubTabStripLayout() {
+  const content = document.querySelector<HTMLElement>(".session-tabs .session-tab-content");
+  if (!content) throw new Error("no workspace tab strip");
+  const rect = (left: number): DOMRect =>
+    ({
+      x: left,
+      y: 0,
+      left,
+      right: left + 175,
+      top: 0,
+      bottom: 34,
+      width: 175,
+      height: 34,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  content.getBoundingClientRect = () => rect(0);
+  Array.from(content.querySelectorAll<HTMLElement>(":scope > .session-tab-wrap")).forEach(
+    (wrap, index) => {
+      wrap.getBoundingClientRect = () => rect(index * 175);
+    },
+  );
+}
+
+/// The repo's pointer event pattern: a MouseEvent with pointer properties.
+function stripPointer(node: Element, type: string, x: number, y = 17) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: x,
+    clientY: y,
+    button: 0,
+  });
+  Object.defineProperties(event, { pointerId: { value: 1 }, isPrimary: { value: true } });
+  fireEvent(node, event);
+}
+
+/// The most recent order App asked to persist, as workspace ids.
+function lastSavedWorkspaceIds() {
+  const calls = api.saveWorkspaceState.mock.calls;
+  return (calls[calls.length - 1]?.[0] as { workspaces: { id: string }[] }).workspaces.map(
+    (workspace) => workspace.id,
+  );
+}
+
+function activeTabLabel() {
+  return document.querySelector(".session-tab-wrap.active .session-tab-main")?.textContent;
+}
+
 describe("App Workspace behavior", () => {
   afterEach(cleanup);
 
@@ -515,5 +577,110 @@ describe("App Workspace behavior", () => {
 
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(api.deleteScratchpadNote).not.toHaveBeenCalled();
+  });
+
+  it("reorders a dragged Workspace tab and keeps the active terminal live", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    const third = connection("33333333-3333-4333-8333-333333333333", "Host C");
+    api.listConnections.mockResolvedValue([first, second, third]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id, third.id]));
+    render(<App />);
+
+    const terminalA = await screen.findByTestId("terminal-workspace-0", undefined, {
+      timeout: 5_000,
+    });
+    const terminalB = screen.getByTestId("terminal-workspace-1");
+    const terminalC = screen.getByTestId("terminal-workspace-2");
+    expect(stripOrder()).toEqual(["Host A", "Host B", "Host C"]);
+
+    stubTabStripLayout();
+    const hostCTab = tabMainButton("Host C");
+    stripPointer(hostCTab, "pointerdown", 480);
+    stripPointer(hostCTab, "pointermove", 60);
+    // Mid-drag the tab is lifted, the insert line shows, and the rest slide.
+    expect(document.querySelector(".session-tab-dragged")).toBeTruthy();
+    expect(document.querySelector(".session-tab-insert")).toBeTruthy();
+    stripPointer(hostCTab, "pointerup", 60);
+
+    expect(stripOrder()).toEqual(["Host C", "Host A", "Host B"]);
+    // The reordered tab keeps its terminal instance, session included, and the
+    // active Workspace is untouched by the motion next to it.
+    expect(screen.getByTestId("terminal-workspace-2")).toBe(terminalC);
+    expect(screen.getByTestId("terminal-workspace-0")).toBe(terminalA);
+    expect(screen.getByTestId("terminal-workspace-1")).toBe(terminalB);
+    expect(activeTabLabel()).toBe("Host A");
+    await waitFor(() =>
+      expect(lastSavedWorkspaceIds()).toEqual(["workspace-2", "workspace-0", "workspace-1"]),
+    );
+
+    // A finished drag does not swallow the next click: selecting still works.
+    await user.click(tabMainButton("Host B"));
+    await waitFor(() => expect(activeTabLabel()).toBe("Host B"));
+    expect(stripOrder()).toEqual(["Host C", "Host A", "Host B"]);
+  });
+
+  it("restores the strip untouched when a Workspace drag is canceled", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    const third = connection("33333333-3333-4333-8333-333333333333", "Host C");
+    api.listConnections.mockResolvedValue([first, second, third]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id, third.id]));
+    render(<App />);
+
+    await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 });
+    expect(stripOrder()).toEqual(["Host A", "Host B", "Host C"]);
+    stubTabStripLayout();
+
+    const hostCTab = tabMainButton("Host C");
+    stripPointer(hostCTab, "pointerdown", 480);
+    stripPointer(hostCTab, "pointermove", 60);
+    expect(document.querySelector(".session-tab-dragged")).toBeTruthy();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(document.querySelector(".session-tab-dragged")).toBeNull();
+    expect(document.querySelector(".session-tab-insert")).toBeNull();
+
+    stripPointer(hostCTab, "pointerup", 60);
+    expect(stripOrder()).toEqual(["Host A", "Host B", "Host C"]);
+    await waitFor(() =>
+      expect(lastSavedWorkspaceIds()).toEqual(["workspace-0", "workspace-1", "workspace-2"]),
+    );
+
+    // The canceled drag left normal tab selection in place.
+    await user.click(tabMainButton("Host C"));
+    await waitFor(() => expect(activeTabLabel()).toBe("Host C"));
+  });
+
+  it("moves a focused tab with the keyboard and closes keep the new order", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    const third = connection("33333333-3333-4333-8333-333333333333", "Host C");
+    api.listConnections.mockResolvedValue([first, second, third]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id, third.id]));
+    render(<App />);
+
+    await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 });
+    expect(stripOrder()).toEqual(["Host A", "Host B", "Host C"]);
+
+    act(() => tabMainButton("Host B").focus());
+    const hostB = tabMainButton("Host B");
+    fireEvent.keyDown(hostB, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
+    expect(stripOrder()).toEqual(["Host B", "Host A", "Host C"]);
+    // Moving a tab never moves the active Workspace with it.
+    expect(activeTabLabel()).toBe("Host A");
+    await waitFor(() =>
+      expect(lastSavedWorkspaceIds()).toEqual(["workspace-1", "workspace-0", "workspace-2"]),
+    );
+
+    // Closing the moved tab leaves the survivors in their new relative order.
+    await user.click(screen.getByRole("button", { name: "Close Host B Workspace" }));
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-1")).toBeNull());
+    expect(stripOrder()).toEqual(["Host A", "Host C"]);
+    await waitFor(() => expect(lastSavedWorkspaceIds()).toEqual(["workspace-0", "workspace-2"]));
   });
 });

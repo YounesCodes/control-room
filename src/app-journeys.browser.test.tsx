@@ -3301,4 +3301,126 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(row.isConnected).toBe(false));
     await expect.element(page.getByText("printf retained", { exact: true })).toBeVisible();
   });
+
+  const stripTabLabels = (): (string | null)[] =>
+    Array.from(document.querySelectorAll<HTMLElement>(".session-tabs .session-tab-label")).map(
+      (label) => label.textContent,
+    );
+
+  const activeStripTab = () =>
+    document.querySelector(".session-tab-wrap.active .session-tab-main")?.textContent;
+
+  function stripTabMain(label: string) {
+    return Array.from(document.querySelectorAll<HTMLElement>(".session-tab-main")).find(
+      (button) => button.textContent === label,
+    );
+  }
+
+  it("reorders a workspace tab by dragging and saves the new order", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+    const alpha = stripTabMain("Fixture Alpha")!;
+    const beta = stripTabMain("Fixture Beta")!;
+
+    // A reorderable strip promises the drag on hover.
+    await userEvent.hover(beta);
+    expect(getComputedStyle(beta).cursor).toBe("grab");
+
+    // A real pointer drag of Beta onto Alpha's slot.
+    await userEvent.dragAndDrop(beta, alpha, { targetPosition: { x: 8, y: 15 } });
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Beta", "Fixture Alpha"]));
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-b", "tab-a"]),
+    );
+    // The active Workspace, its session, and its focus survive the reorder.
+    expect(activeStripTab()).toBe("Fixture Alpha");
+    expect(document.activeElement?.className).toContain("session-tab-main");
+
+    // The finished drag does not swallow the next click.
+    await userEvent.click(beta);
+    await vi.waitFor(() => expect(activeStripTab()).toBe("Fixture Beta"));
+  });
+
+  it("moves a focused workspace tab with Control and Shift arrow keys", async () => {
+    overrides.set("list_connections", () => [
+      fixtures.connection(),
+      fixtures.connection("host-b"),
+      { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
+    ]);
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-c",
+          label: null,
+          connectionId: "host-c",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() =>
+      expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta", "Fixture Gamma"]),
+    );
+
+    stripTabMain("Fixture Beta")!.focus();
+    await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
+    await vi.waitFor(() =>
+      expect(stripTabLabels()).toEqual(["Fixture Beta", "Fixture Alpha", "Fixture Gamma"]),
+    );
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual([
+        "tab-b",
+        "tab-a",
+        "tab-c",
+      ]),
+    );
+    // Moving a tab never moves the active Workspace with it.
+    expect(activeStripTab()).toBe("Fixture Alpha");
+  });
 });
