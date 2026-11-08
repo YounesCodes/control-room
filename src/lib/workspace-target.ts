@@ -81,7 +81,6 @@ export function createRemoteWorkspace(
     containerSelectionId: null,
     containerDetailsCache: {},
     logSource: null,
-    baselineSelectionId: null,
   };
 }
 

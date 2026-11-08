@@ -43,7 +43,6 @@ function workspace(id: string, connectionId: string): RemoteWorkspace {
     containerSelectionId: null,
     containerDetailsCache: {},
     logSource: null,
-    baselineSelectionId: null,
   };
 }
 

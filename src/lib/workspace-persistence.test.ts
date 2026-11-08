@@ -78,7 +78,7 @@ describe("Workspace restoration", () => {
       state.terminalGroups,
     );
   });
-  it.each(["overview", "scratchpad", "boot"] as const)(
+  it.each(["overview", "scratchpad", "boot", "baselines"] as const)(
     "restores retired %s selections to Terminal",
     (view) => {
       const workspace = createRemoteWorkspace(connection("host"));

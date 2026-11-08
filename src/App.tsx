@@ -28,7 +28,6 @@ import {
 } from "react";
 import {
   RotateCcw,
-  Camera,
   ChevronDown,
   Clipboard,
   Columns2,
@@ -128,7 +127,6 @@ import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { navigateSystemdExplorer } from "./lib/systemd-units";
 import { SettingsPane } from "./pages/SettingsPane";
-import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
   CachedList,
   ConnectionGroup,
@@ -183,7 +181,6 @@ const navigation: {
   { id: "services", label: "Systemd", icon: Server },
   { id: "logs", label: "Logs", icon: FileClock },
   { id: "ports", label: "Ports", icon: Network },
-  { id: "baselines", label: "Baselines", icon: Camera },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -2731,16 +2728,6 @@ export function App() {
                       }
                       onSourceChange={(logSource) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, { logSource })
-                      }
-                    />
-                  )}
-                  {activeRemoteWorkspace.view === "baselines" && (
-                    <BaselinesPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      selectedId={activeRemoteWorkspace.baselineSelectionId}
-                      onSelect={(baselineSelectionId) =>
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
                       }
                     />
                   )}

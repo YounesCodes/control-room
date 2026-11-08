@@ -65,7 +65,7 @@ their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
 feature navigation. Order remote capabilities by expected frequency of use:
-Terminal, Docker, Systemd, Logs, Ports, Baselines, then History. Local
+Terminal, Docker, Systemd, Logs, Ports, then History. Local
 Workspaces are terminal-only, so do not show remote
 inspection navigation for them. Hide the capability navigation and its divider
 for local Workspaces so the connection list uses the available sidebar height.
@@ -708,7 +708,7 @@ must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, logs, and saved baselines. Retired selections such as Overview and Boot fall back to Terminal. A live baseline comparison should be visibly identified as live and unsaved.
+Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, and logs. Retired selections such as Overview, Boot, and Baselines fall back to Terminal.
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking

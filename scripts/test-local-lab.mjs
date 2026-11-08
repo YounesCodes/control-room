@@ -78,7 +78,6 @@ run(ssh, [
 const tests = [
   "history::tests::live_history_install_is_reversible_in_an_isolated_home",
   "remote::tests::live_ubuntu_structured_reads_return_typed_evidence",
-  "remote::tests::live_ubuntu_baseline_capture_is_ephemeral_and_typed",
   "session::tests::conpty_hosts_windows_ssh_against_live_fixture",
 ];
 for (const test of tests) {

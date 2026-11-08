@@ -1,10 +1,7 @@
 import type {
   AppSettings,
-  BaselineComparison,
   DockerContainer,
   DockerContainerDetails,
-  HostBaseline,
-  HostBaselineSummary,
   HostCapabilities,
   HostResources,
   ListeningSocket,
@@ -151,68 +148,3 @@ export const socket: ListeningSocket = {
   systemdUnit: service.id,
   ownership: "known",
 };
-export function baseline(id: string, label = id): HostBaseline {
-  return {
-    id,
-    connectionId: "host-a",
-    label,
-    schemaVersion: 1,
-    capturedAt: new Date().toISOString(),
-    pinned: false,
-    identity: {
-      hostname: "host-a",
-      machineFingerprint: "fixture",
-      osId: "ubuntu",
-      osVersion: "24.04",
-      kernel: "6.8",
-      architecture: "x86_64",
-    },
-    sections: [
-      {
-        kind: "host",
-        status: "collected",
-        schemaVersion: 1,
-        collectedAt: new Date().toISOString(),
-        message: null,
-        entries: [{ identity: "host", label: "host-a", facts: [{ name: "kernel", value: "6.8" }] }],
-      },
-    ],
-  };
-}
-export function summary(value: HostBaseline): HostBaselineSummary {
-  return {
-    ...value,
-    changesSincePrevious: null,
-    sections: value.sections.map((section) => ({
-      kind: section.kind,
-      status: section.status,
-      entryCount: section.entries.length,
-    })),
-  };
-}
-export function comparison(
-  base: HostBaseline,
-  target: HostBaseline,
-  live = false,
-): BaselineComparison {
-  return {
-    base: summary(base),
-    target: summary(target),
-    identityMatch: "same",
-    schemaCompatible: true,
-    targetIsLive: live,
-    sections: [
-      {
-        kind: "host",
-        baseStatus: "collected",
-        targetStatus: "collected",
-        comparable: true,
-        note: null,
-        added: [],
-        removed: [],
-        changed: [],
-        unchangedCount: 1,
-      },
-    ],
-  };
-}

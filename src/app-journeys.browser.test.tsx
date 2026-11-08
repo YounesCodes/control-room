@@ -3,14 +3,13 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import * as fixtures from "./test/app-fixtures";
-import type { AppSettings, HistoryEntry, HostBaseline, PersistedWorkspaceState } from "./types";
+import type { AppSettings, HistoryEntry, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource-variable/inter/opsz.css";
 import "./styles.css";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
-  save: vi.fn(),
   listeners: new Map<string, Set<(event: { payload: any }) => void>>(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -32,14 +31,13 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ close: vi.fn(), minimize: vi.fn(), toggleMaximize: vi.fn() }),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ save: native.save, open: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 import { App } from "./App";
 
 let root: Root;
 let element: HTMLDivElement;
 let currentSettings: AppSettings;
 let persisted: PersistedWorkspaceState;
-let captures: HostBaseline[];
 let sequence: number;
 let streamOutput: { onmessage: (message: ArrayBuffer) => void } | null;
 const failures = new Map<string, string>();
@@ -182,54 +180,7 @@ async function respond(command: string, args: any = {}) {
       return null;
     case "save_scratchpad_note":
       return { ...args.input, id: "note", createdAt: "", updatedAt: "" };
-    case "list_host_baselines":
-      return captures.map(fixtures.summary);
-    case "get_host_baseline":
-      return captures.find((capture) => capture.id === args.id);
-    case "capture_host_baseline": {
-      const capture = fixtures.baseline(
-        `capture-${++sequence}`,
-        args.request.label ?? "New baseline",
-      );
-      captures.unshift(capture);
-      args.progress.onmessage({
-        captureId: args.request.captureId,
-        kind: "host",
-        status: "collected",
-        message: null,
-        completed: 1,
-        total: 1,
-      });
-      return fixtures.summary(capture);
-    }
-    case "cancel_host_baseline":
-      return;
-    case "rename_host_baseline": {
-      const capture = captures.find((capture) => capture.id === args.id)!;
-      capture.label = args.label;
-      return fixtures.summary(capture);
-    }
-    case "set_host_baseline_pinned": {
-      const capture = captures.find((capture) => capture.id === args.id)!;
-      capture.pinned = args.pinned;
-      return fixtures.summary(capture);
-    }
-    case "delete_host_baseline":
-      captures = captures.filter((capture) => capture.id !== args.id);
-      return;
-    case "compare_host_baselines":
-      return fixtures.comparison(
-        captures.find((capture) => capture.id === args.baseId)!,
-        captures.find((capture) => capture.id === args.targetId)!,
-      );
-    case "compare_host_baseline_with_live":
-      return fixtures.comparison(
-        captures.find((capture) => capture.id === args.baseId)!,
-        fixtures.baseline("live", "Live state"),
-        true,
-      );
     case "open_documentation":
-    case "export_text_file":
       return;
     default:
       throw new Error(`Missing typed fixture for ${command}`);
@@ -258,11 +209,9 @@ beforeEach(async () => {
   overrides.clear();
   native.listeners.clear();
   native.invoke.mockReset();
-  native.save.mockReset();
   sequence = 0;
   streamOutput = null;
   currentSettings = { ...fixtures.settings };
-  captures = [fixtures.baseline("stored", "Stored baseline")];
   persisted = { workspaces: [], activeWorkspaceId: null, terminalGroups: [], terminalLayout: null };
   native.invoke.mockImplementation(respond);
   element = document.createElement("div");
@@ -2222,9 +2171,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       truncated: false,
       collectedAt: new Date().toISOString(),
     }));
-    captures = records.map((index) =>
-      fixtures.baseline(`baseline-${index}`, `Example baseline ${index}`),
-    );
     await mount();
     async function checkList() {
       await vi.waitFor(() =>
@@ -2251,7 +2197,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
       expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     }
-    for (const view of ["Systemd", "Baselines"]) {
+    for (const view of ["Systemd"]) {
       await navigate(view);
       await checkList();
     }
@@ -2583,13 +2529,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-nav button")).map((button) =>
         button.textContent?.trim(),
       ),
-    ).toEqual(["Terminal", "Docker", "Systemd", "Logs", "Ports", "Baselines", "History"]);
+    ).toEqual(["Terminal", "Docker", "Systemd", "Logs", "Ports", "History"]);
     for (const [view, heading] of [
       ["Docker", "Containers"],
       ["Systemd", "Systemd"],
       ["Logs", "Logs"],
       ["Ports", "Ports"],
-      ["Baselines", "Baselines"],
       ["History", "Command History"],
     ]) {
       await navigate(view);
@@ -2992,48 +2937,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }),
     );
     expect(currentSettings.globalSudoEnabled).toBe(false);
-  });
-
-  it("captures, renames with cancellation and save recovery, pins and compares before deleting a baseline", async () => {
-    await mount();
-    await navigate("Baselines");
-    await page.getByRole("textbox", { name: "Baseline label" }).fill("Browser capture");
-    await page.getByRole("button", { name: "Capture baseline", exact: true }).click();
-    await expect.element(page.getByRole("button", { name: "Pin baseline" })).toBeVisible();
-    await page.getByRole("button", { name: "Rename baseline", exact: true }).click();
-    await page.getByRole("textbox", { name: "Baseline label" }).nth(1).fill("Discarded rename");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect
-      .element(page.getByRole("heading", { name: "Browser capture", exact: true }))
-      .toBeVisible();
-    await page.getByRole("button", { name: "Rename baseline", exact: true }).click();
-    await page.getByRole("textbox", { name: "Baseline label" }).nth(1).fill("Renamed capture");
-    failures.set("rename_host_baseline", "fixture rename failed");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect.element(page.getByText("fixture rename failed", { exact: true })).toBeVisible();
-    await expect
-      .element(page.getByRole("textbox", { name: "Baseline label" }).nth(1))
-      .toHaveValue("Renamed capture");
-    failures.delete("rename_host_baseline");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect
-      .element(page.getByRole("heading", { name: "Renamed capture", exact: true }))
-      .toBeVisible();
-    await page.getByRole("button", { name: "Pin baseline" }).click();
-    await expect.element(page.getByRole("button", { name: "Unpin baseline" })).toBeVisible();
-    const count = captures.length;
-    await page.getByRole("combobox").selectOptions("live");
-    await expect.element(page.getByText(/This read was not saved/)).toBeVisible();
-    expect(captures).toHaveLength(count);
-    await page.getByRole("button", { name: "Delete baseline", exact: true }).click();
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    expect(captures).toHaveLength(count);
-    await page.getByRole("button", { name: "Delete baseline", exact: true }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Delete baseline", exact: true })
-      .click();
-    await vi.waitFor(() => expect(captures).toHaveLength(count - 1));
   });
 
   it("drives the app command palette with a keyboard and checks the Settings page with axe", async () => {
