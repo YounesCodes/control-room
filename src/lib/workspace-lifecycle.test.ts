@@ -42,7 +42,6 @@ function workspace(id: string, connectionId: string): RemoteWorkspace {
     systemdSelectionId: null,
     containerSelectionId: null,
     containerDetailsCache: {},
-    bootDiagnostics: null,
     logSource: null,
     baselineSelectionId: null,
   };

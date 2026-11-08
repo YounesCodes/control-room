@@ -216,7 +216,6 @@ function Fixture() {
                       "split",
                       "ports",
                       "systemd",
-                      "boot",
                       "logs",
                       "baselines",
                       "history",

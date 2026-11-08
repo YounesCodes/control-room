@@ -27,7 +27,11 @@ export function restoreWorkspaceState(
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
   const shellsById = new Map(localShells.map((shell) => [shell.id, shell]));
   const workspaces = state.workspaces.flatMap<Workspace>((saved) => {
-    const view = saved.view === "scratchpad" || saved.view === "overview" ? "terminal" : saved.view;
+    // Older app versions persisted the Scratchpad, Overview, and Boot pages.
+    const view =
+      saved.view === "scratchpad" || saved.view === "overview" || saved.view === "boot"
+        ? "terminal"
+        : saved.view;
     const reconnecting = {
       id: saved.id,
       label: saved.label,

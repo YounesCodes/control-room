@@ -255,43 +255,6 @@ export interface DockerMount {
   propagation: string | null;
 }
 
-export interface BootDiagnostics {
-  id: string;
-  collectedAt: string;
-  selectedBootId: string | null;
-  boots: BootSection<BootRecord[]>;
-  timing: BootSection<BootTiming>;
-  slowUnits: BootSection<SlowBootUnit[]>;
-  failedUnits: BootSection<SystemdUnit[]>;
-  journal: BootSection<string[]>;
-}
-
-export interface BootSection<T> {
-  collectedAt: string;
-  data: T | null;
-  error: string | null;
-  permissionRequired: boolean;
-}
-
-export interface BootRecord {
-  index: number;
-  id: string;
-  range: string;
-  current: boolean;
-}
-
-export interface BootTiming {
-  total: string | null;
-  kernel: string | null;
-  userspace: string | null;
-  original: string;
-}
-
-export interface SlowBootUnit {
-  unit: string;
-  duration: string;
-}
-
 export interface HostIdentity {
   hostname: string | null;
   machineFingerprint: string | null;
@@ -561,7 +524,7 @@ export interface LocalShellCatalog {
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 export type WorkspaceView =
-  "terminal" | "services" | "ports" | "docker" | "boot" | "logs" | "baselines" | "history";
+  "terminal" | "services" | "ports" | "docker" | "logs" | "baselines" | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -612,7 +575,6 @@ export interface RemoteWorkspace extends WorkspaceBase {
   systemdExplorer?: SystemdExplorerState;
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
-  bootDiagnostics: BootDiagnostics | null;
   logSource: LogSourceSelection | null;
   baselineSelectionId: string | null;
 }
@@ -638,8 +600,9 @@ interface PersistedWorkspace {
   connectionId: string | null;
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
-  /** Older app versions persisted the standalone Scratchpad page. */
-  view: WorkspaceView | "scratchpad" | "overview";
+  /** Older app versions persisted the standalone Scratchpad page and the
+   * retired Boot Diagnostics view. */
+  view: WorkspaceView | "scratchpad" | "overview" | "boot";
   historyPaused: boolean;
 }
 

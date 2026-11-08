@@ -5,7 +5,6 @@ import type {
   FontCatalog,
   FontProgress,
   AppUpdateInfo,
-  BootDiagnostics,
   ConnectionGroup,
   ConnectionTag,
   DockerContainer,
@@ -236,16 +235,6 @@ export const api = {
     invokeRemoteInspection<DockerContainerDetails>("inspect_container", {
       connectionId,
       containerId,
-      sudoPassword,
-    }),
-  collectBootDiagnostics: (
-    connectionId: string,
-    bootId: string | null,
-    sudoPassword: string | null = null,
-  ) =>
-    invokeRemoteInspection<BootDiagnostics>("collect_boot_diagnostics", {
-      connectionId,
-      bootId,
       sudoPassword,
     }),
   startJournalStream: (

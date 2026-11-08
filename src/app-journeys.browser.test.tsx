@@ -168,8 +168,6 @@ async function respond(command: string, args: any = {}) {
         truncated: false,
         collectedAt: new Date().toISOString(),
       };
-    case "collect_boot_diagnostics":
-      return { ...fixtures.boot(), selectedBootId: args.bootId ?? "a".repeat(32) };
     case "start_journal_stream":
     case "start_docker_log_stream":
       streamOutput = args.output;
@@ -2166,7 +2164,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     ).toHaveLength(1);
   });
 
-  it("reports unsupported Docker and limited boot journal evidence", async () => {
+  it("reports unsupported Docker on its view without reaching for containers", async () => {
     overrides.set("refresh_capabilities", () => ({
       ...fixtures.capabilities(),
       dockerAvailable: false,
@@ -2177,23 +2175,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       dockerAvailable: false,
       dockerAccessible: false,
     }));
-    overrides.set("collect_boot_diagnostics", () => ({
-      ...fixtures.boot(),
-      journal: {
-        data: null,
-        collectedAt: "",
-        error: "permission denied",
-        permissionRequired: true,
-      },
-    }));
     failures.set("list_containers", "Docker is not installed on this host");
     await mount();
     await navigate("Docker");
     await expect
       .element(page.getByText(/Docker.*not.*(?:installed|available|detected)/i))
       .toBeVisible();
-    await navigate("Boot");
-    await expect.element(page.getByText(/permission denied/)).toBeVisible();
   });
 
   it.each([960, 1600])("keeps long inspection lists scrollable at %s px", async (width) => {
@@ -2341,91 +2328,72 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
-  it.each([960, 1600])(
-    "scrolls long History, Boot, Logs, and Scratchpad content at %s px",
-    async (width) => {
-      await page.viewport(width, 700);
-      const records = Array.from({ length: 100 }, (_, index) => index);
-      overrides.set("get_history", () =>
-        records.map((index) => ({
-          id: `entry-${index}`,
-          connectionId: "host-a",
-          sessionId: "old-session",
-          command: `printf example-${index}`,
-          cwd: "/",
-          startedAt: "2026-10-13T00:00:00Z",
-          finishedAt: null,
-          exitCode: 0,
-          shell: "bash",
-        })),
+  it.each([960, 1600])("scrolls long History and Scratchpad content at %s px", async (width) => {
+    await page.viewport(width, 700);
+    const records = Array.from({ length: 100 }, (_, index) => index);
+    overrides.set("get_history", () =>
+      records.map((index) => ({
+        id: `entry-${index}`,
+        connectionId: "host-a",
+        sessionId: "old-session",
+        command: `printf example-${index}`,
+        cwd: "/",
+        startedAt: "2026-10-13T00:00:00Z",
+        finishedAt: null,
+        exitCode: 0,
+        shell: "bash",
+      })),
+    );
+    overrides.set("get_scratchpad_note", () => ({
+      id: "example-note",
+      scope: "connection",
+      ownerId: "host-a",
+      text: records.map((index) => `Example note ${index}`).join("\n"),
+      createdAt: "",
+      updatedAt: "",
+    }));
+    await mount();
+    await navigate("History");
+    await expect.element(page.getByText("printf example-99", { exact: true })).toBeInTheDocument();
+    {
+      const panel = element.querySelector<HTMLElement>(".feature-page")!;
+      expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
+        element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
       );
-      overrides.set("collect_boot_diagnostics", () => {
-        const snapshot = fixtures.boot();
-        return {
-          ...snapshot,
-          journal: {
-            ...snapshot.journal,
-            data: records.slice(0, 30).map((index) => `warning: example-${index}`),
-          },
-        };
-      });
-      overrides.set("get_scratchpad_note", () => ({
-        id: "example-note",
-        scope: "connection",
-        ownerId: "host-a",
-        text: records.map((index) => `Example note ${index}`).join("\n"),
-        createdAt: "",
-        updatedAt: "",
-      }));
-      await mount();
-      for (const view of ["History", "Boot"]) {
-        await navigate(view);
-        await expect
-          .element(
-            page.getByText(view === "History" ? "printf example-99" : "warning: example-29", {
-              exact: true,
-            }),
-          )
-          .toBeInTheDocument();
-        const panel = element.querySelector<HTMLElement>(".feature-page")!;
-        expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
-          element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
-        );
-        expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
-        panel.scrollTop = panel.scrollHeight;
-        expect(panel.scrollTop).toBeGreaterThan(0);
-        expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
-      }
-      await navigate("Terminal");
-      await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
-      await vi.waitFor(() =>
-        expect(
-          element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")?.value,
-        ).toContain("Example note 99"),
-      );
-      const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
-      expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
-      textarea.focus();
-      await userEvent.keyboard("{Control>}{End}{/Control}");
-      expect(textarea.scrollTop).toBeGreaterThan(0);
-      await navigate("Logs");
-      await page.getByRole("button", { name: "Start", exact: true }).click();
-      streamOutput!.onmessage(
-        new TextEncoder().encode(records.map((index) => `Example log ${index}`).join("\n")).buffer,
-      );
-      await expect.element(page.getByText(/Example log 99/)).toBeInTheDocument();
-      const output = element.querySelector<HTMLElement>("pre.log-output")!;
-      expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
-      output.scrollTop = output.scrollHeight;
-      expect(output.scrollTop).toBeGreaterThan(0);
-      await navigate("Docker");
-      await expect
-        .element(page.getByRole("heading", { name: "Containers", exact: true }))
-        .toBeVisible();
-      await navigate("Terminal");
-      await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
-    },
-  );
+      expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+      panel.scrollTop = panel.scrollHeight;
+      expect(panel.scrollTop).toBeGreaterThan(0);
+      expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    }
+    await navigate("Terminal");
+    await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
+    await vi.waitFor(() =>
+      expect(
+        element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")?.value,
+      ).toContain("Example note 99"),
+    );
+    const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
+    expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
+    textarea.focus();
+    await userEvent.keyboard("{Control>}{End}{/Control}");
+    expect(textarea.scrollTop).toBeGreaterThan(0);
+    await navigate("Logs");
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    streamOutput!.onmessage(
+      new TextEncoder().encode(records.map((index) => `Example log ${index}`).join("\n")).buffer,
+    );
+    await expect.element(page.getByText(/Example log 99/)).toBeInTheDocument();
+    const output = element.querySelector<HTMLElement>("pre.log-output")!;
+    expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
+    output.scrollTop = output.scrollHeight;
+    expect(output.scrollTop).toBeGreaterThan(0);
+    await navigate("Docker");
+    await expect
+      .element(page.getByRole("heading", { name: "Containers", exact: true }))
+      .toBeVisible();
+    await navigate("Terminal");
+    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+  });
 
   it("restores legacy Scratchpad pages to Terminal and opens notes from the palette", async () => {
     persisted.workspaces = [
@@ -2611,12 +2579,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("navigates every remote page through the real app and keeps the terminal Workspace", async () => {
     await mount();
+    expect(
+      Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-nav button")).map((button) =>
+        button.textContent?.trim(),
+      ),
+    ).toEqual(["Terminal", "Docker", "Systemd", "Logs", "Ports", "Baselines", "History"]);
     for (const [view, heading] of [
-      ["Systemd", "Systemd"],
       ["Docker", "Containers"],
-      ["Ports", "Ports"],
-      ["Boot", "Boot Diagnostics"],
+      ["Systemd", "Systemd"],
       ["Logs", "Logs"],
+      ["Ports", "Ports"],
       ["Baselines", "Baselines"],
       ["History", "Command History"],
     ]) {
@@ -2973,21 +2945,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Filter ports", exact: true }).click();
     await page.getByRole("combobox", { name: "Graph contents" }).selectOptions("connections");
     await expect.element(page.getByText(/No established/)).toBeVisible();
-  });
-
-  it("reads previous boot evidence and follows a current failed unit to Logs", async () => {
-    await mount();
-    await navigate("Boot");
-    await page.getByRole("combobox", { name: "Boot", exact: true }).selectOptions("b".repeat(32));
-    await vi.waitFor(() =>
-      expect(native.invoke).toHaveBeenCalledWith(
-        "collect_boot_diagnostics",
-        expect.objectContaining({ bootId: "b".repeat(32) }),
-      ),
-    );
-    await page.getByRole("combobox", { name: "Boot", exact: true }).selectOptions("a".repeat(32));
-    await page.getByRole("button", { name: /View journal/ }).click();
-    await expect.element(page.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
   });
 
   it("reports refresh failure, keeps existing Systemd data and recovers", async () => {

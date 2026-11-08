@@ -42,7 +42,6 @@ import {
   Minimize2,
   Network,
   Pencil,
-  Power,
   Plus,
   Rows2,
   Server,
@@ -123,7 +122,6 @@ import {
   workspaceTargetName,
 } from "./lib/workspace-target";
 import { DockerPane } from "./pages/DockerPane";
-import { BootDiagnosticsPane } from "./pages/BootDiagnosticsPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { PortsPane } from "./pages/PortsPane";
@@ -133,7 +131,6 @@ import { SettingsPane } from "./pages/SettingsPane";
 import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
   CachedList,
-  BootDiagnostics,
   ConnectionGroup,
   ConnectionState,
   ConnectionTag,
@@ -182,11 +179,10 @@ const navigation: {
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
-  { id: "services", label: "Systemd", icon: Server },
-  { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: DockerIcon },
-  { id: "boot", label: "Boot", icon: Power },
+  { id: "services", label: "Systemd", icon: Server },
   { id: "logs", label: "Logs", icon: FileClock },
+  { id: "ports", label: "Ports", icon: Network },
   { id: "baselines", label: "Baselines", icon: Camera },
   { id: "history", label: "History", icon: History },
 ];
@@ -1045,10 +1041,6 @@ export function App() {
         [containerId]: details,
       },
     });
-  }
-
-  function updateBootDiagnostics(id: string, bootDiagnostics: BootDiagnostics) {
-    updateRemoteWorkspace(id, { bootDiagnostics });
   }
 
   function rememberCapabilities(capabilities: HostCapabilities) {
@@ -2643,10 +2635,6 @@ export function App() {
                         connection={activeConnection}
                         cache={activeRemoteWorkspace.servicesCache}
                         portsCache={activeRemoteWorkspace.portsCache}
-                        bootSnapshot={activeRemoteWorkspace.bootDiagnostics}
-                        onBootSnapshotChange={(snapshot) =>
-                          updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
-                        }
                         onPortsCacheChange={(cache) =>
                           updatePortsCache(activeRemoteWorkspace.id, cache)
                         }
@@ -2670,9 +2658,6 @@ export function App() {
                           });
                           updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
                         }}
-                        onOpenBoot={() =>
-                          updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "boot" })
-                        }
                       />
                     ))}
                   {activeRemoteWorkspace.view === "ports" && (
@@ -2726,18 +2711,6 @@ export function App() {
                       }
                       onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
                       focusId={activeRemoteWorkspace.containerSelectionId}
-                    />
-                  )}
-                  {activeRemoteWorkspace.view === "boot" && (
-                    <BootDiagnosticsPane
-                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      snapshot={activeRemoteWorkspace.bootDiagnostics}
-                      onSnapshotChange={(snapshot) =>
-                        updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
-                      }
-                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
                     />
                   )}
                   {activeRemoteWorkspace.view === "logs" && (

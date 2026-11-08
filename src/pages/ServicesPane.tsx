@@ -11,7 +11,6 @@ import { SystemdPresence } from "../components/SystemdPresence";
 import { SystemdToolbar } from "../components/SystemdToolbar";
 import { api, errorMessage } from "../lib/api";
 import { connectionTargetKey } from "../lib/connection-validation";
-import { hasUnitBootEvidence, isCurrentBootSnapshotFresh } from "../lib/boot-diagnostics";
 import {
   countSystemdUnits,
   filterSystemdUnits,
@@ -26,7 +25,6 @@ import { invalidateSystemdReads, useSystemdReads } from "../lib/systemd-inspecti
 import { isCacheFresh } from "../lib/workspace-cache";
 import type {
   CachedList,
-  BootDiagnostics,
   LogSourceSelection,
   ListeningSocket,
   SavedConnection,
@@ -59,9 +57,6 @@ export function ServicesPane({
   onOpenPorts,
   portsCache,
   onPortsCacheChange,
-  onOpenBoot,
-  bootSnapshot,
-  onBootSnapshotChange,
 }: {
   connection: SavedConnection;
   cache: CachedList<SystemdUnit>;
@@ -74,9 +69,6 @@ export function ServicesPane({
   onOpenPorts?: (unit: string) => void;
   portsCache?: CachedList<ListeningSocket>;
   onPortsCacheChange?: (cache: CachedList<ListeningSocket>) => void;
-  onOpenBoot?: () => void;
-  bootSnapshot?: BootDiagnostics | null;
-  onBootSnapshotChange?: (snapshot: BootDiagnostics) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     focusId && isSystemdUnitName(focusId) ? focusId : null,
@@ -114,21 +106,11 @@ export function ServicesPane({
   const portsRequestRef = useRef(0);
   const portsLoadingRef = useRef(false);
   const portsCacheRef = useRef(portsCache);
-  const bootSnapshotRef = useRef(bootSnapshot);
-  const bootRequestRef = useRef(0);
-  const bootLoadingRef = useRef(false);
-  const [bootRead, setBootRead] = useState({
-    target: connectionTargetKey(connection),
-    status: "idle" as "idle" | "loading" | "error",
-  });
   const targetRef = useRef(connectionTargetKey(connection));
   portsCacheRef.current = portsCache;
-  bootSnapshotRef.current = bootSnapshot;
   if (targetRef.current !== connectionTargetKey(connection)) {
     portsRequestRef.current += 1;
     portsLoadingRef.current = false;
-    bootRequestRef.current += 1;
-    bootLoadingRef.current = false;
     targetRef.current = connectionTargetKey(connection);
   }
   const selectionCallback = useRef(onSelectionChange);
@@ -165,7 +147,6 @@ export function ServicesPane({
     return () => {
       requestRef.current += 1;
       portsRequestRef.current += 1;
-      bootRequestRef.current += 1;
     };
   }, [connection.id]);
   useEffect(() => {
@@ -345,11 +326,6 @@ export function ServicesPane({
     setRevision((n) => n + 1);
     const portsSnapshot = portsCacheRef.current;
     if (portsSnapshot && portsSnapshot.fetchedAt !== null) void loadUnitPorts(true);
-    if (
-      bootSnapshotRef.current ||
-      (bootRead.target === targetRef.current && bootRead.status !== "idle")
-    )
-      void loadUnitBoot(true);
   }
   async function loadUnitPorts(force = false) {
     const current = portsCacheRef.current;
@@ -382,34 +358,6 @@ export function ServicesPane({
       onPortsCacheChange(next);
     } finally {
       if (request === portsRequestRef.current) portsLoadingRef.current = false;
-    }
-  }
-  async function loadUnitBoot(force = false) {
-    const target = connectionTargetKey(connection);
-    if (
-      target !== targetRef.current ||
-      !selectedId ||
-      !onBootSnapshotChange ||
-      bootLoadingRef.current ||
-      (!force &&
-        isCurrentBootSnapshotFresh(bootSnapshotRef.current) &&
-        (bootRead.target !== target || bootRead.status === "idle"))
-    )
-      return;
-    const request = ++bootRequestRef.current;
-    bootLoadingRef.current = true;
-    setBootRead({ target, status: "loading" });
-    try {
-      const next = await api.collectBootDiagnostics(connection.id, null, null);
-      if (request !== bootRequestRef.current || target !== targetRef.current) return;
-      bootSnapshotRef.current = next;
-      onBootSnapshotChange(next);
-      setBootRead({ target, status: "idle" });
-    } catch {
-      if (request !== bootRequestRef.current || target !== targetRef.current) return;
-      setBootRead({ target, status: "error" });
-    } finally {
-      if (request === bootRequestRef.current) bootLoadingRef.current = false;
     }
   }
   function refocus(id: string) {
@@ -488,13 +436,6 @@ export function ServicesPane({
           (socket) => socket.ownership === "known" && socket.systemdUnit === selectedId,
         )
           ? onOpenPorts
-          : undefined
-      }
-      onRequestBoot={onOpenBoot ? () => void loadUnitBoot() : undefined}
-      onOpenBoot={
-        (bootRead.target !== cacheScope || bootRead.status === "idle") &&
-        hasUnitBootEvidence(bootSnapshot, selectedId)
-          ? onOpenBoot
           : undefined
       }
     />

@@ -29,7 +29,6 @@ function inspector(value: SystemdInspection) {
     onViewLogs: vi.fn(),
     onOpenPorts: vi.fn(),
     onRequestPorts: vi.fn(),
-    onOpenBoot: vi.fn(),
   };
   render(<SystemdUnitInspector {...props} />);
   return props;
@@ -72,7 +71,6 @@ it.each(["worker.service", "worker.socket", "backup.timer"])(
   "rechecks restored Advanced evidence once for %s without treating native toggle as another request",
   async (unitId) => {
     const onRequestPorts = vi.fn();
-    const onRequestBoot = vi.fn();
     const props = {
       connectionId: "host",
       unitId,
@@ -81,7 +79,6 @@ it.each(["worker.service", "worker.socket", "backup.timer"])(
       onRefresh: vi.fn(),
       onViewLogs: vi.fn(),
       onRequestPorts,
-      onRequestBoot,
       initialViewState: {
         configuration: false,
         advanced: true,
@@ -90,13 +87,14 @@ it.each(["worker.service", "worker.socket", "backup.timer"])(
       },
     };
     const view = render(<SystemdUnitInspector {...props} />);
-    await waitFor(() => expect(onRequestBoot).toHaveBeenCalledTimes(1));
     expect(onRequestPorts).toHaveBeenCalledTimes(unitId.endsWith(".timer") ? 0 : 1);
     view.rerender(<SystemdUnitInspector {...props} revision={1} />);
-    expect(onRequestBoot).toHaveBeenCalledTimes(1);
+    expect(onRequestPorts).toHaveBeenCalledTimes(unitId.endsWith(".timer") ? 0 : 1);
     await userEvent.setup().click(screen.getByText("Advanced", { selector: "summary" }));
     await userEvent.setup().click(screen.getByText("Advanced", { selector: "summary" }));
-    await waitFor(() => expect(onRequestBoot).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(onRequestPorts).toHaveBeenCalledTimes(unitId.endsWith(".timer") ? 0 : 2),
+    );
   },
 );
 
@@ -124,7 +122,6 @@ it.each(["-.mount", "backup.timer", "system.slice", "deploy.path"])(
     await user.click(screen.getByText("Advanced", { selector: "summary" }));
     expect(screen.queryByRole("button", { name: "Ports" })).toBeNull();
     expect(props.onRequestPorts).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Boot" })).toBeTruthy();
   },
 );
 
@@ -186,8 +183,6 @@ it("keeps configuration directly accessible, reads it on demand, and opens the f
   );
   await user.click(screen.getByRole("button", { name: "Ports" }));
   expect(props.onOpenPorts).toHaveBeenCalledWith("worker.service");
-  await user.click(screen.getByRole("button", { name: "Boot" }));
-  expect(props.onOpenBoot).toHaveBeenCalled();
   await user.click(screen.getByText("Advanced", { selector: "summary" }));
   expect(screen.getByText("Configuration", { selector: "summary" }).closest("details")?.open).toBe(
     true,
