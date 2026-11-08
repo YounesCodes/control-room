@@ -7,13 +7,12 @@ use crate::{
     header_metrics, history, local_shell,
     models::{
         AppSettings, BaselineCaptureRequest, BaselineComparison, BaselineProgress, BaselineSection,
-        BaselineTrace, BootDiagnostics, ConnectionGroup, ConnectionTag, DockerContainer,
-        DockerContainerDetails, EnvironmentInfo, EstablishedConnections, FirewallStatus,
-        HeaderMetric, HeaderMetrics, HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary,
-        HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted,
-        LocalShellCatalog, PersistedWorkspaceState, SavedConnection, SavedConnectionInput,
-        ScratchpadNote, ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted,
-        SystemdUnit,
+        BaselineTrace, ConnectionGroup, ConnectionTag, DockerContainer, DockerContainerDetails,
+        EnvironmentInfo, EstablishedConnections, FirewallStatus, HeaderMetric, HeaderMetrics,
+        HistoryEntry, HistoryInput, HostBaseline, HostBaselineSummary, HostCapabilities,
+        HostResources, LOG_TAIL_OPTIONS, ListeningSocket, LocalSessionStarted, LocalShellCatalog,
+        PersistedWorkspaceState, SavedConnection, SavedConnectionInput, ScratchpadNote,
+        ScratchpadNoteInput, SessionStarted, SettingsContract, StreamStarted, SystemdUnit,
     },
     remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
     session::SessionManager,
@@ -515,20 +514,6 @@ pub fn inspect_container(
     }
     let elevation = elevation_for(&database, &connection, sudo_password)?;
     remote::inspect_container(&connection, &container_id, elevation)
-}
-
-#[tauri::command(async)]
-pub fn collect_boot_diagnostics(
-    database: State<'_, Database>,
-    limiter: State<'_, RemoteOperationLimiter>,
-    connection_id: String,
-    boot_id: Option<String>,
-    sudo_password: Option<String>,
-) -> Result<BootDiagnostics, String> {
-    let _permit = limiter.acquire(&connection_id)?;
-    let connection = database.get_connection(&connection_id)?;
-    let elevation = elevation_for(&database, &connection, sudo_password)?;
-    remote::collect_boot_diagnostics(&connection, boot_id.as_deref(), elevation)
 }
 
 #[allow(clippy::too_many_arguments)]

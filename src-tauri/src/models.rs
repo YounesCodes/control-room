@@ -159,28 +159,6 @@ pub struct ListeningSocket {
     pub ownership: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct BootDiagnostics {
-    pub id: String,
-    pub collected_at: String,
-    pub selected_boot_id: Option<String>,
-    pub boots: BootSection<Vec<BootRecord>>,
-    pub timing: BootSection<BootTiming>,
-    pub slow_units: BootSection<Vec<SlowBootUnit>>,
-    pub failed_units: BootSection<Vec<SystemdUnit>>,
-    pub journal: BootSection<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct BootSection<T> {
-    pub collected_at: String,
-    pub data: Option<T>,
-    pub error: Option<String>,
-    pub permission_required: bool,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainerDetails {
@@ -212,15 +190,6 @@ pub struct DockerContainerDetails {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct BootRecord {
-    pub index: i32,
-    pub id: String,
-    pub range: String,
-    pub current: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 pub struct FirewallRule {
     pub to: String,
     pub action: String,
@@ -228,15 +197,6 @@ pub struct FirewallRule {
     pub port: Option<u16>,
     pub protocol: Option<String>,
     pub ipv6: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct BootTiming {
-    pub total: Option<String>,
-    pub kernel: Option<String>,
-    pub userspace: Option<String>,
-    pub original: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -514,13 +474,6 @@ pub struct BaselineComparison {
     /// never saved, so the UI can name it as live rather than as a capture.
     pub target_is_live: bool,
     pub sections: Vec<BaselineSectionDiff>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SlowBootUnit {
-    pub unit: String,
-    pub duration: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

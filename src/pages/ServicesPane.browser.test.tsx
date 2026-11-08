@@ -10,7 +10,6 @@ import { systemdEdges } from "../lib/systemd-units";
 import { ConnectionSection } from "../components/ResizablePanels";
 import { connection } from "../test/app-fixtures";
 import { systemdInspection } from "../test/systemd-fixtures";
-import { bootDiagnostics } from "../test/boot-fixtures";
 import { invalidateSystemdReads } from "../lib/systemd-inspection";
 import type { SystemdInspection, SystemdUnit } from "../types";
 import "../styles.css";
@@ -19,7 +18,6 @@ const api = vi.hoisted(() => ({
   listServices: vi.fn(),
   inspectSystemdUnit: vi.fn(),
   listPorts: vi.fn(),
-  collectBootDiagnostics: vi.fn(),
 }));
 vi.mock("../lib/api", () => ({ api, errorMessage: String }));
 const host = connection();
@@ -136,7 +134,6 @@ function renderPane(items = units) {
         onCacheChange={vi.fn()}
         onViewLogs={vi.fn()}
         onOpenPorts={vi.fn()}
-        onOpenBoot={vi.fn()}
       />
     </ConnectionSection>,
   );
@@ -337,7 +334,6 @@ it("shows Ports only on the unit with known listener ownership", async () => {
         onCacheChange={vi.fn()}
         onViewLogs={vi.fn()}
         onOpenPorts={onOpenPorts}
-        onOpenBoot={vi.fn()}
       />
     </ConnectionSection>,
   );
@@ -346,46 +342,10 @@ it("shows Ports only on the unit with known listener ownership", async () => {
     await page.getByRole("button", { name: new RegExp("^" + id) }).click();
     await page.getByText("Advanced", { exact: true }).click();
     expect(!!screen.queryByRole("button", { name: "Ports" })).toBe(id === "database.service");
-    expect(screen.queryByRole("button", { name: "Boot" })).toBeNull();
   }
   await page.getByRole("button", { name: "Ports", exact: true }).click();
   expect(onOpenPorts).toHaveBeenCalledWith("database.service");
   expect(api.listPorts).not.toHaveBeenCalled();
-  expect((await audit()).violations).toEqual([]);
-});
-
-it("shows Boot only for units named in current boot diagnostics", async () => {
-  await page.viewport(1280, 800);
-  const snapshot = bootDiagnostics();
-  snapshot.slowUnits.data = [{ unit: "database.service", duration: "3s" }];
-  snapshot.failedUnits.data = [units[0]];
-  const onOpenBoot = vi.fn();
-  render(
-    <ConnectionSection section="services">
-      <ServicesPane
-        connection={host}
-        cache={{ items: units, fetchedAt: Date.now(), loading: false, error: null }}
-        bootSnapshot={snapshot}
-        onBootSnapshotChange={vi.fn()}
-        onCacheChange={vi.fn()}
-        onViewLogs={vi.fn()}
-        onOpenBoot={onOpenBoot}
-      />
-    </ConnectionSection>,
-  );
-  await page.getByRole("button", { name: "All units" }).click();
-  for (const id of ["data.mount", "database.service", "worker.service"]) {
-    await page.getByRole("button", { name: new RegExp("^" + id) }).click();
-    await page.getByText("Advanced", { exact: true }).click();
-    expect(!!screen.queryByRole("button", { name: "Boot" })).toBe(id !== "data.mount");
-    if (id === "data.mount")
-      expect(getComputedStyle(document.querySelector(".systemd-inspector-links")!).display).toBe(
-        "none",
-      );
-  }
-  await page.getByRole("button", { name: "Boot", exact: true }).click();
-  expect(onOpenBoot).toHaveBeenCalledTimes(1);
-  expect(api.collectBootDiagnostics).not.toHaveBeenCalled();
   expect((await audit()).violations).toEqual([]);
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { FileClock, Network, RefreshCw, Timer } from "lucide-react";
+import { FileClock, Network, RefreshCw } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -137,8 +137,6 @@ export function SystemdUnitInspector({
   onViewLogs,
   onOpenPorts,
   onRequestPorts,
-  onOpenBoot,
-  onRequestBoot,
   initialViewState,
   onViewStateChange,
 }: {
@@ -152,8 +150,6 @@ export function SystemdUnitInspector({
   onViewLogs: (source: LogSourceSelection) => void;
   onOpenPorts?: (unit: string) => void;
   onRequestPorts?: () => void;
-  onOpenBoot?: () => void;
-  onRequestBoot?: () => void;
   initialViewState?: SystemdInspectorViewState;
   onViewStateChange?: (state: SystemdInspectorViewState) => void;
 }) {
@@ -165,7 +161,6 @@ export function SystemdUnitInspector({
     // Restoring an open disclosure must recheck evidence freshness too.
     // The parent loaders reuse fresh caches and deduplicate pending requests.
     if (/\.(service|socket)$/.test(unitId)) onRequestPorts?.();
-    onRequestBoot?.();
   }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
   const latestView = useRef({ configuration, effective, advanced, onViewStateChange });
@@ -388,7 +383,6 @@ export function SystemdUnitInspector({
             if (open === advanced) return;
             setAdvanced(open);
             if (open && (type === "service" || type === "socket")) onRequestPorts?.();
-            if (open) onRequestBoot?.();
             if (!open) {
               setEffective(false);
             }
@@ -437,12 +431,6 @@ export function SystemdUnitInspector({
                   <button type="button" className="link-button" onClick={() => onOpenPorts(unitId)}>
                     <Network size={13} />
                     Ports
-                  </button>
-                )}
-                {onOpenBoot && (
-                  <button type="button" className="link-button" onClick={onOpenBoot}>
-                    <Timer size={13} />
-                    Boot
                   </button>
                 )}
               </div>

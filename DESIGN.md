@@ -64,7 +64,9 @@ active work. Bound dense lists and detail pages so wide windows do not stretch
 their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
-feature navigation. Local Workspaces are terminal-only, so do not show remote
+feature navigation. Order remote capabilities by expected frequency of use:
+Terminal, Docker, Systemd, Logs, Ports, Baselines, then History. Local
+Workspaces are terminal-only, so do not show remote
 inspection navigation for them. Hide the capability navigation and its divider
 for local Workspaces so the connection list uses the available sidebar height.
 Scratchpad stays in the terminal toolbar for every Workspace kind.
@@ -417,12 +419,7 @@ Reuse inspector disclosure motion. Reduced motion removes camera, node, and
 disclosure animation. Show Ports navigation only for services or sockets with a
 fresh, known listener ownership match to that exact unit. Opening Advanced may read
 listeners without elevation, sharing the Ports view's workspace cache. Hide the
-shortcut while ownership is unknown or its read is unavailable. Show Boot only
-when fresh current-boot diagnostics contain a matching slow-unit or failed-unit
-entry from a readable section. Opening Advanced may collect current boot evidence
-without elevation, sharing the Boot view's workspace snapshot. Hide unrelated,
-historical, or unavailable evidence. Current Boot
-unit rows link back to Systemd without attributing a cause.
+shortcut while ownership is unknown or its read is unavailable.
 
 ## Visual language
 
@@ -711,7 +708,7 @@ must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, logs, boot evidence, and saved baselines. Restore retired Overview selections to Terminal. A live baseline comparison should be visibly identified as live and unsaved.
+Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, logs, and saved baselines. Retired selections such as Overview and Boot fall back to Terminal. A live baseline comparison should be visibly identified as live and unsaved.
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking

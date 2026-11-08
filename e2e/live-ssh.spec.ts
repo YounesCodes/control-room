@@ -11,7 +11,6 @@ import {
   terminalContains,
 } from "./helpers";
 import type {
-  BootDiagnostics,
   DockerContainer,
   HostBaselineSummary,
   HostCapabilities,
@@ -149,28 +148,6 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await expect($("[aria-label='Graph contents']")).toHaveValue("connections");
     await $("aria/Close port tools").click();
     await expect($("aria/Ports graph")).toBeDisplayed();
-  });
-  it("reads current and discovered previous boot evidence without sudo", async () => {
-    const { saved } = await connect();
-    const current = await ipc<BootDiagnostics>("collect_boot_diagnostics", {
-      connectionId: saved.id,
-      bootId: null,
-      sudoPassword: null,
-    });
-    expect(current.collectedAt).toBeTruthy();
-    await feature("Boot");
-    await expect($("h2=Boot Diagnostics")).toBeDisplayed();
-    if (current.boots.permissionRequired || current.journal.permissionRequired)
-      console.log("Optional journal evidence: limited account access; permission state verified");
-    const previous = current.boots.data?.find((boot) => !boot.current);
-    if (previous) {
-      const evidence = await ipc<BootDiagnostics>("collect_boot_diagnostics", {
-        connectionId: saved.id,
-        bootId: previous.id,
-        sudoPassword: null,
-      });
-      expect(evidence.selectedBootId).toBe(previous.id);
-    } else console.log("Optional previous boot evidence: no retained previous boot available");
   });
   it("starts and stops journal streaming and tears down on navigation", async function () {
     const { saved, caps } = await connect();

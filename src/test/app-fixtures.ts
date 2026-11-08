@@ -1,7 +1,6 @@
 import type {
   AppSettings,
   BaselineComparison,
-  BootDiagnostics,
   DockerContainer,
   DockerContainerDetails,
   HostBaseline,
@@ -152,42 +151,6 @@ export const socket: ListeningSocket = {
   systemdUnit: service.id,
   ownership: "known",
 };
-export function boot(): BootDiagnostics {
-  const collectedAt = new Date().toISOString();
-  return {
-    id: "boot-fixture",
-    collectedAt,
-    selectedBootId: "a".repeat(32),
-    boots: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: [
-        { id: "a".repeat(32), index: 0, range: "Current boot", current: true },
-        { id: "b".repeat(32), index: -1, range: "Previous boot", current: false },
-      ],
-    },
-    timing: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: { total: "8s", kernel: "3s", userspace: "5s", original: "8s total" },
-    },
-    slowUnits: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: [{ unit: service.id, duration: "2s" }],
-    },
-    failedUnits: { collectedAt, error: null, permissionRequired: false, data: [failedService] },
-    journal: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: ["warning: fixture boot evidence"],
-    },
-  };
-}
 export function baseline(id: string, label = id): HostBaseline {
   return {
     id,

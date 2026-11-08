@@ -13,7 +13,6 @@ const pages = [
   "start-here/installation/",
   "reference/keyboard-shortcuts/",
   "inspection/baselines/",
-  "inspection/boot/",
   "inspection/docker/",
   "inspection/logs/",
   "inspection/overview/",
