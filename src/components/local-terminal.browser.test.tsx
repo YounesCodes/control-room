@@ -315,7 +315,7 @@ describe("Local Terminal Mode in the real App", () => {
         await userEvent.click(allTerminals);
         expect(
           page
-            .getByRole("menu", { name: "All terminals" })
+            .getByRole("menu", { name: "All terminals menu" })
             .element()
             .querySelectorAll('[role="menuitem"]'),
         ).toHaveLength(4);

@@ -30,16 +30,16 @@ describe("ConPTY and Workspace lifecycle", () => {
     }
     await $("aria/Focus terminal").click();
     const sessions = (await runtime()).sessionIds;
-    await $("[aria-label='All terminals']").click();
+    await $('button[aria-label="All terminals"]').click();
     await $("[role=menu]").$("button*=Shell 1").click();
     await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
     await terminalCommand("echo OVERFLOW_FIRST", "OVERFLOW_FIRST");
     await $("[aria-label='Scroll terminals right']").click();
-    await $("[aria-label='All terminals']").click();
+    await $('button[aria-label="All terminals"]').click();
     await browser.keys("Home");
     await browser.keys("Enter");
     await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
-    await $("[aria-label='All terminals']").click();
+    await $('button[aria-label="All terminals"]').click();
     await browser.keys("End");
     await browser.keys("Enter");
     await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 8");

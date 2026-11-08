@@ -493,7 +493,7 @@ describe("critical UI in Chromium", () => {
     await page.getByRole("button", { name: "Add many terminals" }).click();
     const picker = page.getByRole("button", { name: "All terminals", exact: true });
     await picker.click();
-    const menu = page.getByRole("menu", { name: "All terminals" });
+    const menu = page.getByRole("menu", { name: "All terminals menu" });
     await expect.element(menu).toBeVisible();
     expect(menu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(20);
     const active = menu.getByRole("menuitem", { name: /^Terminal 20 / });
@@ -541,6 +541,44 @@ describe("critical UI in Chromium", () => {
     await page.getByRole("button", { name: "Remove terminal" }).click();
     await expect.element(picker).not.toBeInTheDocument();
     expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+  });
+
+  it("reopens the overflow menu quickly while an earlier menu is still exiting", async () => {
+    await page.viewport(800, 640);
+    mount(<TabOverflowFixture longNames />);
+    await page.getByRole("button", { name: "Add many terminals" }).click();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    const menu = page.getByRole("menu", { name: "All terminals menu" });
+
+    // Selecting an item starts the menu's 110 ms exit while the fading element
+    // stays mounted. The strip must still own exactly one control named
+    // "All terminals" in that window, so a second rapid interaction — the
+    // native selector used by the E2E suite — resolves unambiguously.
+    await picker.click();
+    await userEvent.keyboard("{Home}{Enter}");
+    expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
+    await picker.click();
+    await expect.element(menu).toBeVisible();
+    expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
+
+    // Keyboard navigation still lands on the active item after the reopen.
+    await expect.element(menu.getByRole("menuitem", { name: /^Terminal 1 / })).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    await expect.element(menu.getByRole("menuitem", { name: /^Terminal 20 / })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(picker).toHaveFocus();
+
+    // Trigger-only toggling across the exit window reuses one menu and keeps
+    // keyboard focus moving back into it after the reopen.
+    await picker.click();
+    await expect.element(menu).toBeVisible();
+    await picker.click();
+    await expect.element(menu).not.toBeInTheDocument();
+    await picker.click();
+    await expect.element(menu).toBeVisible();
+    await expect.element(menu.getByRole("menuitem", { name: /^Terminal 1 / })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(picker).toHaveFocus();
   });
 
   it("traps dialog focus, closes on Escape, and restores the trigger", async () => {

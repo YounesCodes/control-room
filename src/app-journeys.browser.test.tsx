@@ -351,7 +351,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect
         .element(
           page
-            .getByRole("menu", { name: "All terminals" })
+            .getByRole("menu", { name: "All terminals menu" })
             .getByRole("menuitem", { name: /Fixture Alpha group/ }),
         )
         .toHaveAttribute("aria-current", "page");
@@ -798,7 +798,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .click();
     }
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
-    const menu = page.getByRole("menu", { name: "All terminals" }).element();
+    const menu = page.getByRole("menu", { name: "All terminals menu" }).element();
     await expect
       .poll(() => color(menu.querySelector('[aria-current="page"] .local-shell-icon')!))
       .toBe(white);
@@ -1336,7 +1336,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ([command]) => command === "start_session" || command === "start_local_session",
     ).length;
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
-    const terminalMenu = page.getByRole("menu", { name: "All terminals" }).element();
+    const terminalMenu = page.getByRole("menu", { name: "All terminals menu" }).element();
     expectTerminalMenuAlignment(terminalMenu);
     for (const kind of shellKinds) {
       expect(
@@ -1370,7 +1370,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       terminalMenu.querySelector('[aria-current="page"] .session-tab-menu-check svg'),
     ).not.toBeNull();
     await page
-      .getByRole("menu", { name: "All terminals" })
+      .getByRole("menu", { name: "All terminals menu" })
       .getByRole("menuitem", { name: /^Fixture Alpha/ })
       .click();
     await expect
@@ -1399,10 +1399,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Scroll terminals right" }).first().click();
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
     const groupItem = page
-      .getByRole("menu", { name: "All terminals" })
+      .getByRole("menu", { name: "All terminals menu" })
       .getByRole("menuitem", { name: /^Fixture Alpha group/ });
     await expect.element(groupItem).toHaveTextContent("Fixture Alpha group6 terminals");
-    expectTerminalMenuAlignment(page.getByRole("menu", { name: "All terminals" }).element());
+    expectTerminalMenuAlignment(page.getByRole("menu", { name: "All terminals menu" }).element());
     expect(
       groupItem.element().querySelector(".session-tab-menu-icon .lucide-columns-2"),
     ).not.toBeNull();
@@ -1411,7 +1411,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("button", { name: "Open Fixture Alpha group 6 terminals" }))
       .toBeVisible();
     await page.getByRole("button", { name: "All panes", exact: true }).click();
-    const paneMenu = page.getByRole("menu", { name: "All panes" });
+    const paneMenu = page.getByRole("menu", { name: "All panes menu" });
     expectTerminalMenuAlignment(paneMenu.element());
     expect(paneMenu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(6);
     expect(

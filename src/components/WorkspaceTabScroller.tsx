@@ -128,7 +128,7 @@ export function WorkspaceTabScroller({
   useLayoutEffect(() => {
     const region = regionRef.current;
     if (!region) return;
-    const measure = () => setWidth(region.clientWidth);
+    const measure = () => setWidth(region.getBoundingClientRect().width);
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
@@ -569,7 +569,7 @@ export function WorkspaceTabScroller({
           ref={menuRef}
           className="session-tab-overflow-menu"
           role="menu"
-          aria-label={menuLabel}
+          aria-label={`${menuLabel} menu`}
           style={menuPosition}
           aria-hidden={menuClosing || undefined}
           inert={menuClosing || undefined}

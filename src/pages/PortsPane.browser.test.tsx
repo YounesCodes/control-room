@@ -587,9 +587,13 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   await page.getByRole("combobox", { name: "Binding scope" }).selectOptions("non-loopback");
   expect(chips()).toHaveLength(2);
   expect(screen.queryByRole("button", { name: /6379/ })).toBeNull();
-  expect((await axe.run(screen.getByRole("region", { name: "Port filters" }))).violations).toEqual(
-    [],
+  const filtersRegion = screen.getByRole("region", { name: "Port filters" });
+  await waitFor(() =>
+    expect(
+      filtersRegion.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
+    ).toBe(false),
   );
+  expect((await axe.run(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   await page.getByRole("button", { name: "Close port tools" }).click();
   await page.getByRole("button", { name: /443.*Listening/ }).click();
