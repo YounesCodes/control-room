@@ -104,7 +104,7 @@ describe("Workspace restoration", () => {
       restored.workspaces.map((workspace) => workspace.id),
     );
   });
-  it.each(["overview", "scratchpad"] as const)(
+  it.each(["overview", "scratchpad", "boot", "baselines"] as const)(
     "restores retired %s selections to Terminal",
     (view) => {
       const workspace = createRemoteWorkspace(connection("host"));
@@ -442,64 +442,5 @@ describe("Workspace restoration", () => {
     expect(remote.historyPaused).toBe(true);
     expect(remote.state).toBe("connecting");
     expect(restored.terminalGroups).toEqual([]);
-  });
-
-  it("keeps Boot Diagnostics and journal evidence out of persisted Workspace state", () => {
-    const state: PersistedWorkspaceState = {
-      workspaces: [
-        {
-          id: "workspace-a",
-          label: null,
-          connectionId: "connection-a",
-          localShellId: null,
-          view: "boot",
-          historyPaused: false,
-        },
-      ],
-      activeWorkspaceId: "workspace-a",
-      terminalLayout: null,
-    };
-    const restored = restoreWorkspaceState([connection("connection-a")], state);
-    const remote = restored.workspaces[0] as RemoteWorkspace;
-    remote.bootDiagnostics = {
-      id: "diagnostic-a",
-      collectedAt: "2026-08-31T12:00:00Z",
-      selectedBootId: "a".repeat(32),
-      boots: {
-        collectedAt: "2026-08-31T12:00:00Z",
-        data: [],
-        error: null,
-        permissionRequired: false,
-      },
-      timing: {
-        collectedAt: "2026-08-31T12:00:00Z",
-        data: null,
-        error: "Unavailable",
-        permissionRequired: false,
-      },
-      slowUnits: {
-        collectedAt: "2026-08-31T12:00:00Z",
-        data: [],
-        error: null,
-        permissionRequired: false,
-      },
-      failedUnits: {
-        collectedAt: "2026-08-31T12:00:00Z",
-        data: [],
-        error: null,
-        permissionRequired: false,
-      },
-      journal: {
-        collectedAt: "2026-08-31T12:00:00Z",
-        data: ["sensitive journal evidence"],
-        error: null,
-        permissionRequired: false,
-      },
-    };
-
-    const persisted = persistWorkspaceState(restored.workspaces, "workspace-a", []);
-
-    expect(persisted.workspaces[0]).not.toHaveProperty("bootDiagnostics");
-    expect(JSON.stringify(persisted)).not.toContain("sensitive journal evidence");
   });
 });

@@ -28,7 +28,6 @@ import {
 } from "react";
 import {
   RotateCcw,
-  Camera,
   ChevronDown,
   Clipboard,
   Columns2,
@@ -42,7 +41,6 @@ import {
   Minimize2,
   Network,
   Pencil,
-  Power,
   Plus,
   Rows2,
   Server,
@@ -125,17 +123,14 @@ import {
   workspaceTargetName,
 } from "./lib/workspace-target";
 import { DockerPane } from "./pages/DockerPane";
-import { BootDiagnosticsPane } from "./pages/BootDiagnosticsPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { PortsPane } from "./pages/PortsPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { navigateSystemdExplorer } from "./lib/systemd-units";
 import { SettingsPane } from "./pages/SettingsPane";
-import { BaselinesPane } from "./pages/BaselinesPane";
 import type {
   CachedList,
-  BootDiagnostics,
   ConnectionGroup,
   ConnectionState,
   ConnectionTag,
@@ -184,12 +179,10 @@ const navigation: {
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
-  { id: "services", label: "Systemd", icon: Server },
-  { id: "ports", label: "Ports", icon: Network },
   { id: "docker", label: "Docker", icon: DockerIcon },
-  { id: "boot", label: "Boot", icon: Power },
+  { id: "services", label: "Systemd", icon: Server },
   { id: "logs", label: "Logs", icon: FileClock },
-  { id: "baselines", label: "Baselines", icon: Camera },
+  { id: "ports", label: "Ports", icon: Network },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -926,6 +919,52 @@ export function App() {
     );
   }
 
+  /// Moves a header tab to `targetSlot` in whole-strip positions. Tabs ride
+  /// along as whole objects, so session, name, and connection survive; the
+  /// active tab stays active wherever it lands. In focus mode a slot may be a
+  /// terminal group, so the group moves as one block and its member
+  /// Workspaces land contiguously in pane order.
+  function moveTabTo(id: string, targetSlot: number) {
+    setWorkspaces((current) => {
+      if (!terminalFocusMode) {
+        const from = current.findIndex((workspace) => workspace.id === id);
+        if (from < 0) return current;
+        const to = Math.max(0, Math.min(targetSlot, current.length - 1));
+        if (to === from) return current;
+        const next = current.filter((workspace) => workspace.id !== id);
+        next.splice(to, 0, current[from]);
+        return next;
+      }
+      // Focus mode collapses each terminal group to one slot, so the reorder
+      // walks slots, not single Workspaces: a group keeps its members and a
+      // plain tab is a block of one.
+      const blocks: { id: string; members: Workspace[] }[] = [];
+      const listedGroups = new Set<string>();
+      for (const workspace of current) {
+        const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
+        if (group) {
+          if (listedGroups.has(group.id)) continue;
+          listedGroups.add(group.id);
+          const members = getTerminalLayoutIds(group.layout).flatMap((memberId) => {
+            const member = current.find((workspace) => workspace.id === memberId);
+            return member ? [member] : [];
+          });
+          blocks.push({ id: group.id, members });
+        } else {
+          blocks.push({ id: workspace.id, members: [workspace] });
+        }
+      }
+      const from = blocks.findIndex((block) => block.id === id);
+      if (from < 0) return current;
+      const to = Math.max(0, Math.min(targetSlot, blocks.length - 1));
+      if (to === from) return current;
+      const [moved] = blocks.splice(from, 1);
+      blocks.splice(to, 0, moved);
+      const next = blocks.flatMap((block) => block.members);
+      return next.length === current.length ? next : current;
+    });
+  }
+
   /// Patches the fields only a remote Workspace has: inspection caches,
   /// selections, and Enhanced History state. A local Workspace is left alone
   /// rather than given fields it has no use for.
@@ -1075,10 +1114,6 @@ export function App() {
         [containerId]: details,
       },
     });
-  }
-
-  function updateBootDiagnostics(id: string, bootDiagnostics: BootDiagnostics) {
-    updateRemoteWorkspace(id, { bootDiagnostics });
   }
 
   function rememberCapabilities(capabilities: HostCapabilities) {
@@ -2169,6 +2204,7 @@ export function App() {
               activeTabId={settingsOpen ? null : activeWorkspaceId}
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
+              onReorder={moveTabTo}
             >
               {terminalFocusMode
                 ? (() => {
@@ -2752,10 +2788,6 @@ export function App() {
                         connection={activeConnection}
                         cache={activeRemoteWorkspace.servicesCache}
                         portsCache={activeRemoteWorkspace.portsCache}
-                        bootSnapshot={activeRemoteWorkspace.bootDiagnostics}
-                        onBootSnapshotChange={(snapshot) =>
-                          updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
-                        }
                         onPortsCacheChange={(cache) =>
                           updatePortsCache(activeRemoteWorkspace.id, cache)
                         }
@@ -2779,9 +2811,6 @@ export function App() {
                           });
                           updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
                         }}
-                        onOpenBoot={() =>
-                          updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "boot" })
-                        }
                       />
                     ))}
                   {activeRemoteWorkspace.view === "ports" && (
@@ -2837,18 +2866,6 @@ export function App() {
                       focusId={activeRemoteWorkspace.containerSelectionId}
                     />
                   )}
-                  {activeRemoteWorkspace.view === "boot" && (
-                    <BootDiagnosticsPane
-                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      snapshot={activeRemoteWorkspace.bootDiagnostics}
-                      onSnapshotChange={(snapshot) =>
-                        updateBootDiagnostics(activeRemoteWorkspace.id, snapshot)
-                      }
-                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
-                    />
-                  )}
                   {activeRemoteWorkspace.view === "logs" && (
                     <LogsPane
                       key={activeRemoteWorkspace.id}
@@ -2867,16 +2884,6 @@ export function App() {
                       }
                       onSourceChange={(logSource) =>
                         updateRemoteWorkspace(activeRemoteWorkspace.id, { logSource })
-                      }
-                    />
-                  )}
-                  {activeRemoteWorkspace.view === "baselines" && (
-                    <BaselinesPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      selectedId={activeRemoteWorkspace.baselineSelectionId}
-                      onSelect={(baselineSelectionId) =>
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, { baselineSelectionId })
                       }
                     />
                   )}

@@ -53,9 +53,7 @@ describe("Workspace targets", () => {
       "portsCache",
       "containersCache",
       "containerDetailsCache",
-      "bootDiagnostics",
       "logSource",
-      "baselineSelectionId",
     ]) {
       expect(local).not.toHaveProperty(remoteOnly);
     }

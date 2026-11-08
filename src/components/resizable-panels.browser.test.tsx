@@ -216,9 +216,8 @@ function Fixture() {
                       "split",
                       "ports",
                       "systemd",
-                      "boot",
                       "logs",
-                      "baselines",
+                      "overview",
                       "history",
                       "scratchpad",
                     ].map((name) => (

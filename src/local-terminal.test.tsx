@@ -620,16 +620,7 @@ describe("Local Terminal", () => {
 
     expect(screen.queryByRole("navigation", { name: "Workspace features" })).toBeNull();
     expect(await screen.findByTestId(/^terminal-/)).toBeTruthy();
-    for (const view of [
-      "Overview",
-      "Systemd",
-      "Ports",
-      "Docker",
-      "Boot",
-      "Logs",
-      "Baselines",
-      "History",
-    ]) {
+    for (const view of ["Overview", "Systemd", "Ports", "Docker", "Boot", "Logs", "History"]) {
       expect(screen.queryByRole("button", { name: view })).toBeNull();
     }
 

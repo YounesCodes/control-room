@@ -105,20 +105,6 @@ describe("application hierarchy", () => {
     }
   });
 
-  it("keeps baseline capture manual and never schedules it", () => {
-    const baselinesSource = readFileSync(
-      new URL("./pages/BaselinesPane.tsx", import.meta.url),
-      "utf8",
-    );
-    expect(appSource).toContain('{ id: "baselines", label: "Baselines", icon: Camera }');
-    expect(baselinesSource).toContain("api.captureHostBaseline");
-    expect(baselinesSource).not.toContain("setInterval");
-    expect(baselinesSource).not.toContain("setTimeout");
-    expect(baselinesSource).toContain(
-      "Captured only when you ask. Control Room never collects in the background.",
-    );
-  });
-
   it("keeps one offerable list of local terminals behind Settings", () => {
     // Settings is where a shell is turned off, and it needs the full catalog to
     // turn it back on, so the filtering happens once for every launcher rather
@@ -265,6 +251,14 @@ describe("application hierarchy", () => {
     expect(tabScrollerSource).toMatch(/className="session-tab-content"[^>]*data-tauri-drag-region/);
     expect(appSource).toMatch(
       /className="session-window-drag-region"[\s\S]*?data-tauri-drag-region/,
+    );
+  });
+
+  it("parks Rename and Close while the workspace strip drags", () => {
+    // Hover and the held focus reveal the tab tools, so mid-drag they would
+    // float over the lifted chip. The strip keeps them parked until it rests.
+    expect(stylesSource).toMatch(
+      /\.session-tab-scroll-region\.dragging \.session-tab-close,\s*\.session-tab-scroll-region\.dragging \.session-tab-rename\s*\{[^}]*opacity: 0;/,
     );
   });
 

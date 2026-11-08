@@ -22,11 +22,10 @@ use zeroize::Zeroizing;
 
 use crate::{
     models::{
-        BootDiagnostics, BootRecord, BootSection, BootTiming, ConnectionRemote, ConnectionSummary,
-        DockerContainer, DockerContainerDetails, DockerMount, DockerNetworkAttachment,
-        DockerPublishedPort, EstablishedConnections, Filesystem, FirewallRule, FirewallStatus,
-        HostCapabilities, HostIdentity, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
-        SavedConnection, SlowBootUnit, StreamStarted, StreamStateEvent, SystemdUnit,
+        ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
+        DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, FirewallRule,
+        FirewallStatus, HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
+        SavedConnection, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -488,125 +487,6 @@ pub fn list_ports(
     parse_listening_sockets(&output.success_text()?)
 }
 
-const NO_DF_MARKER: &str = "__CR_NO_DF__";
-const MAX_FILESYSTEMS: usize = 200;
-
-/// Pseudo filesystems that describe the kernel rather than stored data. They
-/// add noise to a baseline comparison without saying anything about the host.
-const PSEUDO_FILESYSTEM_TYPES: [&str; 22] = [
-    "tmpfs",
-    "devtmpfs",
-    "ramfs",
-    "squashfs",
-    "overlay",
-    "efivarfs",
-    "proc",
-    "sysfs",
-    "cgroup",
-    "cgroup2",
-    "devpts",
-    "securityfs",
-    "debugfs",
-    "tracefs",
-    "fusectl",
-    "configfs",
-    "pstore",
-    "bpf",
-    "autofs",
-    "mqueue",
-    "hugetlbfs",
-    "nsfs",
-];
-
-/// Collects the stable evidence that says which Remote Host this is. The
-/// machine id is hashed on the host, so only a truncated fingerprint is read.
-pub fn collect_host_identity(connection: &SavedConnection) -> Result<HostIdentity, String> {
-    let command = r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; if test -r /etc/machine-id && command -v sha256sum >/dev/null 2>&1; then printf 'machine_fingerprint=%s\n' "$(tr -d '\n' < /etc/machine-id | sha256sum | cut -c1-16)"; fi"#;
-    let text =
-        RemoteCommandExecutor::execute(connection, "baseline_identity", command)?.success_text()?;
-    let values = parse_key_values(&text);
-    let read = |key: &str| {
-        values
-            .get(key)
-            .map(|value| bounded_text(value, 256))
-            .filter(|value| !value.is_empty())
-    };
-    Ok(HostIdentity {
-        hostname: read("hostname"),
-        machine_fingerprint: read("machine_fingerprint"),
-        os_id: read("os_id"),
-        os_version: read("os_version"),
-        kernel: read("kernel"),
-        architecture: read("architecture"),
-    })
-}
-
-pub fn list_filesystems(connection: &SavedConnection) -> Result<Vec<Filesystem>, String> {
-    let command = format!(
-        r#"LC_ALL=C; if command -v df >/dev/null 2>&1; then df -P -T 2>/dev/null; else printf '{NO_DF_MARKER}\n'; fi"#
-    );
-    let text =
-        RemoteCommandExecutor::execute(connection, "list_filesystems", &command)?.success_text()?;
-    parse_filesystems(&text)
-}
-
-fn parse_filesystems(text: &str) -> Result<Vec<Filesystem>, String> {
-    if text.contains(NO_DF_MARKER) {
-        return Err("The host has no df command".into());
-    }
-    let mut filesystems = Vec::new();
-    for line in text.lines().skip(1) {
-        if filesystems.len() >= MAX_FILESYSTEMS {
-            break;
-        }
-        if let Some(filesystem) = parse_filesystem(line) {
-            filesystems.push(filesystem);
-        }
-    }
-    filesystems.sort_by(|left, right| left.mount_point.cmp(&right.mount_point));
-    filesystems.dedup_by(|left, right| left.mount_point == right.mount_point);
-    Ok(filesystems)
-}
-
-fn parse_filesystem(line: &str) -> Option<Filesystem> {
-    // `df -P -T` prints Filesystem, Type, 1024-blocks, Used, Available,
-    // Capacity, then the mount point, which may contain spaces. The device
-    // path is read to find the field boundary and then dropped.
-    let mut fields = line.split_whitespace();
-    let device = fields.next()?;
-    let filesystem_type = fields.next()?;
-    let size_kib: u64 = fields.next()?.parse().ok()?;
-    let _used: u64 = fields.next()?.parse().ok()?;
-    let _available: u64 = fields.next()?.parse().ok()?;
-    let used_percent: u8 = fields.next()?.strip_suffix('%')?.parse().ok()?;
-    if used_percent > 100 {
-        return None;
-    }
-    let mount_point = line
-        .split_whitespace()
-        .skip(6)
-        .collect::<Vec<_>>()
-        .join(" ");
-    if device.is_empty() || !mount_point.starts_with('/') {
-        return None;
-    }
-    if PSEUDO_FILESYSTEM_TYPES.contains(&filesystem_type) {
-        return None;
-    }
-    if ["/proc", "/sys", "/dev", "/run"]
-        .iter()
-        .any(|prefix| mount_point == *prefix || mount_point.starts_with(&format!("{prefix}/")))
-    {
-        return None;
-    }
-    Some(Filesystem {
-        mount_point: bounded_text(&mount_point, 512),
-        filesystem_type: bounded_text(filesystem_type, 64),
-        size_kib,
-        used_percent,
-    })
-}
-
 pub fn inspect_container(
     connection: &SavedConnection,
     container_id: &str,
@@ -635,298 +515,6 @@ fn is_missing_container(stderr: &[u8]) -> bool {
     String::from_utf8_lossy(stderr)
         .to_ascii_lowercase()
         .contains("no such object")
-}
-
-pub fn collect_boot_diagnostics(
-    connection: &SavedConnection,
-    boot_id: Option<&str>,
-    elevation: Elevation,
-) -> Result<BootDiagnostics, String> {
-    if let Some(boot_id) = boot_id {
-        validate_boot_id(boot_id)?;
-    }
-    let command = boot_diagnostics_command(boot_id);
-    let output = RemoteCommandExecutor::execute_elevated(
-        connection,
-        "collect_boot_diagnostics",
-        &command,
-        &elevation,
-    )?;
-    let text = output.success_text()?;
-    let boots_result = parse_boot_records(&text);
-    let selected_boot_id = boot_id.map(str::to_string).or_else(|| {
-        boots_result
-            .as_ref()
-            .ok()
-            .and_then(|boots| boots.iter().find(|boot| boot.current))
-            .map(|boot| boot.id.clone())
-    });
-    Ok(BootDiagnostics {
-        id: Uuid::new_v4().to_string(),
-        collected_at: Utc::now().to_rfc3339(),
-        selected_boot_id,
-        boots: boot_section(boots_result),
-        timing: boot_section(parse_boot_timing(&text)),
-        slow_units: boot_section(parse_slow_boot_units(&text)),
-        failed_units: boot_section(parse_failed_boot_units(&text)),
-        journal: boot_section(parse_boot_journal(&text)),
-    })
-}
-
-fn validate_boot_id(boot_id: &str) -> Result<(), String> {
-    if boot_id.len() == 32
-        && boot_id
-            .chars()
-            .all(|character| character.is_ascii_hexdigit())
-    {
-        Ok(())
-    } else {
-        Err("Invalid boot ID".into())
-    }
-}
-
-fn boot_diagnostics_command(boot_id: Option<&str>) -> String {
-    let selector = boot_id.unwrap_or("0");
-    let script = format!(
-        r#"boot_selector='{selector}'
-current_boot=$(tr -d '-' </proc/sys/kernel/random/boot_id 2>/dev/null)
-if test "$boot_selector" = 0 || test "$boot_selector" = "$current_boot"; then current_selected=true; else current_selected=false; fi
-printf '__CR_BOOTS__\n'
-if ! command -v journalctl >/dev/null 2>&1; then printf '__CR_ERROR__\tjournalctl is not installed\n'
-elif journalctl --list-boots --no-pager --quiet >/dev/null 2>&1; then
-  journalctl --list-boots --no-pager --quiet 2>/dev/null | tail -n 10
-else printf '__CR_ERROR__\tBoot list unavailable\n'; fi
-printf '__CR_END__\n'
-printf '__CR_TIMING__\n'
-if test "$current_selected" != true; then printf '__CR_ERROR__\tTiming is available for the current boot only\n'
-elif command -v systemd-analyze >/dev/null 2>&1; then systemd-analyze time --no-pager 2>/dev/null || printf '__CR_ERROR__\tBoot timing unavailable\n'
-else printf '__CR_ERROR__\tsystemd-analyze is not installed\n'; fi
-printf '__CR_END__\n'
-printf '__CR_SLOW__\n'
-if test "$current_selected" != true; then printf '__CR_ERROR__\tSlow units are available for the current boot only\n'
-elif ! command -v systemd-analyze >/dev/null 2>&1; then printf '__CR_ERROR__\tsystemd-analyze is not installed\n'
-elif systemd-analyze blame --no-pager >/dev/null 2>&1; then systemd-analyze blame --no-pager 2>/dev/null | head -n 20
-else printf '__CR_ERROR__\tSlow-unit data unavailable\n'; fi
-printf '__CR_END__\n'
-printf '__CR_FAILED__\n'
-if test "$current_selected" != true; then printf '__CR_ERROR__\tFailed units are available for the current boot only\n'
-elif ! command -v systemctl >/dev/null 2>&1; then printf '__CR_ERROR__\tsystemctl is not installed\n'
-elif systemctl show --type=service,timer,mount,socket --state=failed --all --no-pager --property=Id >/dev/null 2>&1; then systemctl show --type=service,timer,mount,socket --state=failed --all --no-pager --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState 2>/dev/null
-else printf '__CR_ERROR__\tFailed-unit data unavailable\n'; fi
-printf '__CR_END__\n'
-printf '__CR_JOURNAL__\n'
-if ! command -v journalctl >/dev/null 2>&1; then printf '__CR_ERROR__\tjournalctl is not installed\n'
-elif journalctl --boot "$boot_selector" -n 1 --no-pager --quiet >/dev/null 2>&1; then journalctl --boot "$boot_selector" --priority=warning -n 30 --no-pager --quiet -o short-iso-precise 2>/dev/null
-else
-  journal_error=$(journalctl --boot "$boot_selector" -n 1 --no-pager --quiet 2>&1 >/dev/null)
-  if printf '%s' "$journal_error" | grep -Eqi 'permission denied|not permitted'; then printf '__CR_PERMISSION__\tBoot journal requires permission\n'; else printf '__CR_ERROR__\tBoot journal is unavailable\n'; fi
-fi
-printf '__CR_END__\n'"#
-    );
-    format!("env LC_ALL=C sh -c {}", shell_single_quote(&script))
-}
-
-fn shell_single_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
-#[derive(Debug)]
-struct BootSectionFailure {
-    message: String,
-    permission_required: bool,
-}
-
-fn boot_section<T>(result: Result<T, BootSectionFailure>) -> BootSection<T> {
-    let collected_at = Utc::now().to_rfc3339();
-    match result {
-        Ok(data) => BootSection {
-            collected_at,
-            data: Some(data),
-            error: None,
-            permission_required: false,
-        },
-        Err(failure) => BootSection {
-            collected_at,
-            data: None,
-            error: Some(failure.message),
-            permission_required: failure.permission_required,
-        },
-    }
-}
-
-fn boot_section_lines<'a>(text: &'a str, marker: &str) -> Result<Vec<&'a str>, BootSectionFailure> {
-    let start = text
-        .lines()
-        .position(|line| line == marker)
-        .ok_or_else(|| BootSectionFailure {
-            message: "Section was not returned by the host".into(),
-            permission_required: false,
-        })?;
-    let lines: Vec<_> = text
-        .lines()
-        .skip(start + 1)
-        .take_while(|line| *line != "__CR_END__")
-        .collect();
-    if let Some(message) = lines
-        .iter()
-        .find_map(|line| line.strip_prefix("__CR_PERMISSION__\t"))
-    {
-        return Err(BootSectionFailure {
-            message: bounded_boot_text(message, 160),
-            permission_required: true,
-        });
-    }
-    if let Some(message) = lines
-        .iter()
-        .find_map(|line| line.strip_prefix("__CR_ERROR__\t"))
-    {
-        return Err(BootSectionFailure {
-            message: bounded_boot_text(message, 160),
-            permission_required: false,
-        });
-    }
-    Ok(lines)
-}
-
-fn parse_boot_records(text: &str) -> Result<Vec<BootRecord>, BootSectionFailure> {
-    let lines = boot_section_lines(text, "__CR_BOOTS__")?;
-    Ok(lines
-        .into_iter()
-        .filter_map(|line| {
-            let mut values = line.split_whitespace();
-            let index: i32 = values.next()?.parse().ok()?;
-            let id = values.next()?;
-            validate_boot_id(id).ok()?;
-            Some(BootRecord {
-                index,
-                id: id.to_ascii_lowercase(),
-                range: bounded_boot_text(&values.collect::<Vec<_>>().join(" "), 220),
-                current: index == 0,
-            })
-        })
-        .take(10)
-        .collect())
-}
-
-fn parse_boot_timing(text: &str) -> Result<BootTiming, BootSectionFailure> {
-    let lines = boot_section_lines(text, "__CR_TIMING__")?;
-    let original = bounded_boot_text(&lines.join(" "), 500);
-    if original.is_empty() {
-        return Err(BootSectionFailure {
-            message: "Boot timing was empty".into(),
-            permission_required: false,
-        });
-    }
-    let kernel = boot_timing_segment(&original, "kernel");
-    let userspace = boot_timing_segment(&original, "userspace");
-    let total = original
-        .split(" = ")
-        .nth(1)
-        .map(boot_duration_prefix)
-        .filter(|value| !value.is_empty());
-    Ok(BootTiming {
-        total,
-        kernel,
-        userspace,
-        original,
-    })
-}
-
-/// Take the duration at the start of `value`, which systemd writes as one or
-/// more `<number><unit>` words: `7.797s`, but also `1min 33.000s` and
-/// `2h 5min 1.250s`. Reading only the first word would report a host that
-/// booted in `1min 33.000s` as `1min`, which understates exactly the slow boots
-/// this view exists to explain.
-fn boot_duration_prefix(value: &str) -> String {
-    let mut words = Vec::new();
-    for word in value.split_whitespace() {
-        let is_duration = word
-            .find(|character: char| !character.is_ascii_digit() && character != '.')
-            .is_some_and(|index| {
-                index > 0
-                    && matches!(
-                        &word[index..],
-                        "s" | "ms" | "us" | "min" | "h" | "d" | "w" | "y"
-                    )
-            });
-        if !is_duration {
-            break;
-        }
-        words.push(word);
-    }
-    words.join(" ")
-}
-
-/// Extract a single labelled `systemd-analyze time` segment (for example the
-/// value in front of `(kernel)` or `(userspace)`). `systemd-analyze` reports a
-/// variable set of segments — `(kernel) + (initrd) + (userspace)` on physical
-/// hosts, but only `(userspace)` on many containers and VMs — so each label is
-/// resolved independently and a missing label yields `None` rather than a
-/// fabricated value.
-fn boot_timing_segment(original: &str, label: &str) -> Option<String> {
-    let marker = format!(" ({label})");
-    let index = original.find(&marker)?;
-    let prefix = &original[..index];
-    let start = prefix
-        .rfind(" + ")
-        .map(|position| position + " + ".len())
-        .or_else(|| {
-            prefix
-                .rfind("finished in ")
-                .map(|position| position + "finished in ".len())
-        })
-        .unwrap_or(0);
-    let value = prefix[start..].trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(bounded_boot_text(value, 80))
-    }
-}
-
-fn parse_slow_boot_units(text: &str) -> Result<Vec<SlowBootUnit>, BootSectionFailure> {
-    let lines = boot_section_lines(text, "__CR_SLOW__")?;
-    Ok(lines
-        .into_iter()
-        .filter_map(|line| {
-            let line = line.trim();
-            let (duration, unit) = line.rsplit_once(char::is_whitespace)?;
-            validate_systemd_unit_id(unit).ok()?;
-            Some(SlowBootUnit {
-                unit: unit.into(),
-                duration: bounded_boot_text(duration.trim(), 80),
-            })
-        })
-        .take(20)
-        .collect())
-}
-
-fn parse_failed_boot_units(text: &str) -> Result<Vec<SystemdUnit>, BootSectionFailure> {
-    let lines = boot_section_lines(text, "__CR_FAILED__")?;
-    // `systemctl show --all` enumerates every unit of the requested types; keep
-    // only the failed ones so the Failed units section never reports healthy
-    // units even if a host ignores the `--state=failed` filter.
-    Ok(parse_systemd_units(&lines.join("\n"))
-        .into_iter()
-        .filter(|unit| unit.active_state == "failed")
-        .collect())
-}
-
-fn parse_boot_journal(text: &str) -> Result<Vec<String>, BootSectionFailure> {
-    let lines = boot_section_lines(text, "__CR_JOURNAL__")?;
-    Ok(lines
-        .into_iter()
-        .map(|line| bounded_boot_text(line, 500))
-        .take(30)
-        .collect())
-}
-
-fn bounded_boot_text(value: &str, maximum_chars: usize) -> String {
-    value
-        .chars()
-        .filter(|character| !character.is_control() || *character == '\t')
-        .take(maximum_chars)
-        .collect()
 }
 
 fn run_ssh(
@@ -1377,9 +965,9 @@ fn without_activation_supervisor(evidence: Vec<(u32, String)>) -> Vec<(u32, Stri
 /// The unit types the Systemd view actually lists, kept in step with
 /// `systemd_unit_list_command`.
 ///
-/// `validate_systemd_unit_id` accepts every canonical unit type because boot
-/// diagnostics legitimately reports `.target`, `.device`, and `.scope`. Ports
-/// needs the narrower set: correlating a listener to `init.scope` or
+/// `validate_systemd_unit_id` accepts every canonical unit type because
+/// journal reads legitimately reference `.target`, `.device`, and `.scope`.
+/// Ports needs the narrower set: correlating a listener to `init.scope` or
 /// `user.slice` would offer a click-through to a unit the Systemd view never
 /// shows, landing the user on an empty panel.
 fn is_navigable_systemd_unit(unit: &str) -> bool {
@@ -2585,74 +2173,6 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
         }
     }
 
-    const DF_OUTPUT: &str = "Filesystem     Type     1024-blocks     Used Available Capacity Mounted on\n\
-udev           devtmpfs     8123456        0   8123456       0% /dev\n\
-/dev/sda1      ext4        61234567 24123456  33876543      42% /\n\
-tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
-/dev/sdb1      xfs        104857600 52428800  52428800      50% /srv/data archive\n\
-/dev/sda15     vfat          523248     6100    517148       2% /boot/efi\n";
-
-    #[test]
-    fn filesystem_snapshot_keeps_real_mounts_and_drops_pseudo_ones() {
-        let filesystems = parse_filesystems(DF_OUTPUT).unwrap();
-        let mounts: Vec<&str> = filesystems
-            .iter()
-            .map(|filesystem| filesystem.mount_point.as_str())
-            .collect();
-        assert_eq!(mounts, vec!["/", "/boot/efi", "/srv/data archive"]);
-        let root = &filesystems[0];
-        assert_eq!(root.filesystem_type, "ext4");
-        assert_eq!(root.size_kib, 61_234_567);
-        assert_eq!(root.used_percent, 42);
-    }
-
-    #[test]
-    fn filesystem_rows_never_carry_the_device_path() {
-        let rendered = format!("{:?}", parse_filesystems(DF_OUTPUT).unwrap());
-        assert!(!rendered.contains("/dev/sda1"));
-        assert!(!rendered.contains("/dev/sdb1"));
-    }
-
-    #[test]
-    fn malformed_and_missing_filesystem_output_is_rejected_not_guessed() {
-        assert!(parse_filesystems("__CR_NO_DF__\n").is_err());
-        assert!(
-            parse_filesystems("Filesystem Type\ngarbage line here\n")
-                .unwrap()
-                .is_empty()
-        );
-        assert!(
-            parse_filesystems("Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 ext4 100 50 50 999% /\n")
-                .unwrap()
-                .is_empty()
-        );
-        assert!(
-            parse_filesystems("Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 ext4 100 50 50 50% relative\n")
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn duplicate_mount_points_collapse_to_one_row() {
-        let text = "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n\
-/dev/sda1 ext4 100 50 50 50% /\n\
-/dev/sda1 ext4 100 50 50 50% /\n";
-        assert_eq!(parse_filesystems(text).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn the_machine_fingerprint_is_hashed_on_the_host() {
-        let source = include_str!("remote.rs");
-        let command = source
-            .split("fn collect_host_identity")
-            .nth(1)
-            .expect("identity collector");
-        assert!(command.contains("sha256sum"));
-        assert!(command.contains("cut -c1-16"));
-        assert!(!command.contains("cat /etc/machine-id"));
-    }
-
     fn live_connection() -> SavedConnection {
         SavedConnection {
             id: "live-fixture".into(),
@@ -2687,36 +2207,11 @@ tmpfs          tmpfs        1636544     1234   1635310       1% /run\n\
     }
 
     #[test]
-    fn parses_complete_boot_diagnostics_without_losing_original_durations() {
-        let current = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let previous = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let output = format!(
-            "__CR_BOOTS__\n-1 {previous} Sat 2026-08-30 — Sat 2026-08-30\n 0 {current} Sun 2026-08-31 — Sun 2026-08-31\n__CR_END__\n__CR_TIMING__\nStartup finished in 3.245s (kernel) + 5.123s (userspace) = 8.368s graphical.target reached after 5.000s in userspace.\n__CR_END__\n__CR_SLOW__\n1min 2.345s backup.service\n2.400s network-online.target\n__CR_END__\n__CR_FAILED__\nId=backup.service\nDescription=Backup\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=enabled\n\n__CR_END__\n__CR_JOURNAL__\n2026-08-31 warning: bounded evidence\n__CR_END__\n"
-        );
-
-        let boots = parse_boot_records(&output).unwrap();
-        assert_eq!(boots.len(), 2);
-        assert!(boots[1].current);
-        let timing = parse_boot_timing(&output).unwrap();
-        assert_eq!(timing.kernel.as_deref(), Some("3.245s"));
-        assert_eq!(timing.userspace.as_deref(), Some("5.123s"));
-        assert_eq!(timing.total.as_deref(), Some("8.368s"));
-        let slow = parse_slow_boot_units(&output).unwrap();
-        assert_eq!(slow[0].duration, "1min 2.345s");
-        assert_eq!(slow[0].unit, "backup.service");
-        // Non-service unit types reported by `systemd-analyze blame` must not be
-        // dropped from the slow-unit list.
-        assert_eq!(slow[1].unit, "network-online.target");
-        assert_eq!(parse_failed_boot_units(&output).unwrap().len(), 1);
-        assert_eq!(parse_boot_journal(&output).unwrap().len(), 1);
-    }
-
-    #[test]
     fn ports_only_offers_navigation_to_units_the_systemd_view_lists() {
         // Real output: pid 1 runs under init.scope, and desktop or login
-        // sessions run under session-N.scope. Boot diagnostics widened the
-        // shared validator to accept those, which would have turned them into
-        // click-throughs to a unit the Systemd view never lists.
+        // sessions run under session-N.scope. The shared validator accepts
+        // those, which would have turned them into click-throughs to a unit
+        // the Systemd view never lists.
         let text = concat!(
             "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* ",
             "users:((\"sshd\",pid=1276,fd=3))
@@ -2747,138 +2242,9 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert!(!is_navigable_systemd_unit("init.scope"));
         assert!(!is_navigable_systemd_unit("user.slice"));
         assert!(!is_navigable_systemd_unit("multi-user.target"));
-        // The widened validator itself must keep accepting these for boot use.
+        // The shared validator itself still accepts these for journal reads.
         assert!(validate_systemd_unit_id("init.scope").is_ok());
         assert!(validate_systemd_unit_id("multi-user.target").is_ok());
-    }
-
-    #[test]
-    fn a_multi_word_boot_total_is_not_truncated_to_its_first_word() {
-        // Real output from a Debian host that takes over a minute to boot.
-        // Reading one word reported this as "1min".
-        let text = concat!(
-            "__CR_TIMING__
-",
-            "Startup finished in 12.830s (kernel) + 1min 20.170s (userspace) = 1min 33.000s
-",
-            "graphical.target reached after 1min 20.097s in userspace.
-",
-            "__CR_END__
-",
-        );
-        let timing = parse_boot_timing(text).unwrap();
-        assert_eq!(timing.total.as_deref(), Some("1min 33.000s"));
-        assert_eq!(timing.kernel.as_deref(), Some("12.830s"));
-        assert_eq!(timing.userspace.as_deref(), Some("1min 20.170s"));
-    }
-
-    #[test]
-    fn a_single_word_boot_total_still_stops_before_the_next_sentence() {
-        let text = concat!(
-            "__CR_TIMING__
-",
-            "Startup finished in 1.708s (kernel) + 6.089s (userspace) = 7.797s
-",
-            "graphical.target reached after 5.637s in userspace.
-",
-            "__CR_END__
-",
-        );
-        assert_eq!(
-            parse_boot_timing(text).unwrap().total.as_deref(),
-            Some("7.797s")
-        );
-    }
-
-    #[test]
-    fn boot_duration_prefix_stops_at_the_first_word_that_is_not_a_duration() {
-        assert_eq!(
-            boot_duration_prefix("7.797s graphical.target reached"),
-            "7.797s"
-        );
-        assert_eq!(
-            boot_duration_prefix("2h 5min 1.250s after"),
-            "2h 5min 1.250s"
-        );
-        assert_eq!(boot_duration_prefix("1min 33.000s"), "1min 33.000s");
-        // Not a duration, so nothing is taken rather than a wrong value shown.
-        assert_eq!(boot_duration_prefix("unavailable"), "");
-        assert_eq!(boot_duration_prefix("s"), "");
-        assert_eq!(boot_duration_prefix("12.5 seconds"), "");
-    }
-
-    #[test]
-    fn parse_boot_timing_handles_initrd_and_missing_kernel_segments() {
-        let with_initrd = "__CR_TIMING__\nStartup finished in 3.245s (kernel) + 4.5s (initrd) + 5.123s (userspace) = 12.868s\n__CR_END__\n";
-        let timing = parse_boot_timing(with_initrd).unwrap();
-        assert_eq!(timing.kernel.as_deref(), Some("3.245s"));
-        // Userspace must isolate its own segment, not swallow the initrd chunk.
-        assert_eq!(timing.userspace.as_deref(), Some("5.123s"));
-        assert_eq!(timing.total.as_deref(), Some("12.868s"));
-
-        // Containers and many VMs report only a userspace segment; kernel timing
-        // must read as unavailable rather than a fabricated value.
-        let no_kernel =
-            "__CR_TIMING__\nStartup finished in 2.456s (userspace) = 2.456s\n__CR_END__\n";
-        let timing = parse_boot_timing(no_kernel).unwrap();
-        assert_eq!(timing.kernel, None);
-        assert_eq!(timing.userspace.as_deref(), Some("2.456s"));
-        assert_eq!(timing.total.as_deref(), Some("2.456s"));
-    }
-
-    #[test]
-    fn parse_slow_boot_units_keeps_non_service_unit_types() {
-        let output = "__CR_SLOW__\n6.700s dev-sda1.device\n900ms swapfile.swap\n1.200s docker.socket\n__CR_END__\n";
-        let slow = parse_slow_boot_units(output).unwrap();
-        let units: Vec<&str> = slow.iter().map(|unit| unit.unit.as_str()).collect();
-        assert_eq!(units, ["dev-sda1.device", "swapfile.swap", "docker.socket"]);
-    }
-
-    #[test]
-    fn parse_failed_boot_units_reports_only_failed_units() {
-        // A host that ignores `--state=failed` returns every enumerated unit;
-        // the parser must still surface only the failed ones.
-        let output = "__CR_FAILED__\nId=ssh.service\nDescription=OpenSSH\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n\nId=backup.service\nDescription=Backup\nLoadState=loaded\nActiveState=failed\nSubState=failed\nUnitFileState=enabled\n\n__CR_END__\n";
-        let failed = parse_failed_boot_units(output).unwrap();
-        assert_eq!(failed.len(), 1);
-        assert_eq!(failed[0].id, "backup.service");
-    }
-
-    #[test]
-    fn boot_sections_preserve_partial_previous_and_permission_states() {
-        let output = "__CR_TIMING__\n__CR_ERROR__\tTiming is available for the current boot only\n__CR_END__\n__CR_JOURNAL__\n__CR_PERMISSION__\tBoot journal requires permission\n__CR_END__\n";
-        let timing = parse_boot_timing(output).unwrap_err();
-        assert_eq!(
-            timing.message,
-            "Timing is available for the current boot only"
-        );
-        assert!(!timing.permission_required);
-        let journal = parse_boot_journal(output).unwrap_err();
-        assert!(journal.permission_required);
-    }
-
-    #[test]
-    fn boot_sources_report_unavailable_sections() {
-        let output = "__CR_BOOTS__\n__CR_ERROR__\tjournalctl is not installed\n__CR_END__\n";
-        assert_eq!(
-            parse_boot_records(output).unwrap_err().message,
-            "journalctl is not installed"
-        );
-    }
-
-    #[test]
-    fn boot_commands_are_bounded_read_only_and_validate_selectors() {
-        let boot_id = "0123456789abcdef0123456789abcdef";
-        let command = boot_diagnostics_command(Some(boot_id));
-        assert!(command.contains("tail -n 10"));
-        assert!(command.contains("head -n 20"));
-        assert!(command.contains("-n 30"));
-        assert!(command.contains(boot_id));
-        assert!(validate_boot_id(boot_id).is_ok());
-        assert!(validate_boot_id("0; reboot").is_err());
-        for mutation in [" start ", " stop ", " restart ", " reset-failed "] {
-            assert!(!command.contains(mutation));
-        }
     }
 
     #[test]
@@ -3919,20 +3285,6 @@ esac
                 "the log request accepted {unit:?} (listed: {})",
                 !listed.is_empty()
             );
-
-            // The boot parser validates as it reads, because a slow-unit row is
-            // carried straight into a journal request for that unit. Its rows
-            // are `duration unit`, split on the last whitespace, so a name with
-            // whitespace in it is not a name that format can carry and is left
-            // out here rather than asserted about.
-            if unit.contains(char::is_whitespace) {
-                continue;
-            }
-            let slow = parse_slow_boot_units(&format!("__CR_SLOW__\n1.5s {unit}\n__CR_END__\n"));
-            assert!(
-                slow.map(|units| units.is_empty()).unwrap_or(true),
-                "slow boot units kept {unit:?}"
-            );
         }
     }
 
@@ -4083,7 +3435,6 @@ esac
         );
         let resources = collect_host_resources(&connection).unwrap();
         assert!(resources.memory_total_kib.is_some());
-        let _filesystems = list_filesystems(&connection).unwrap();
         match list_firewall(&connection, Elevation::None) {
             Ok(firewall) => assert!(!firewall.available || firewall.active.is_some()),
             Err(error) => assert!(error.to_ascii_lowercase().contains("permission"), "{error}"),
@@ -4091,7 +3442,6 @@ esac
         if capabilities.systemd_available {
             let services = list_services(&connection).unwrap();
             assert!(!services.is_empty());
-            let _boot = collect_boot_diagnostics(&connection, None, Elevation::None).unwrap();
         }
         if std::env::var("CONTROL_ROOM_TEST_EXPECT_PORTS").as_deref() == Ok("true") {
             let _ports = list_ports(&connection, Elevation::None).unwrap();
@@ -4111,16 +3461,6 @@ esac
         assert_eq!(capabilities.os_id.as_deref(), Some("ubuntu"));
         assert!(capabilities.systemd_available);
         assert!(capabilities.journald_available);
-
-        let identity = collect_host_identity(&connection).unwrap();
-        assert_eq!(identity.os_id.as_deref(), Some("ubuntu"));
-        assert_eq!(
-            identity.hostname.as_deref(),
-            capabilities.hostname.as_deref()
-        );
-        assert!(identity.machine_fingerprint.as_deref().is_some_and(
-            |value| value.len() == 16 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-        ));
 
         let resources = collect_host_resources(&connection).unwrap();
         assert!(resources.memory_total_kib.is_some_and(|value| value > 0));
@@ -4184,26 +3524,8 @@ esac
         assert!(!ports.is_empty());
         assert!(ports.iter().all(|socket| socket.port > 0));
 
-        let filesystems = list_filesystems(&connection).unwrap();
-        assert!(
-            filesystems
-                .iter()
-                .any(|filesystem| filesystem.mount_point == "/")
-        );
-
         let connections = list_connections(&connection, Elevation::None).unwrap();
         assert!(connections.total_established > 0);
-
-        let boot = collect_boot_diagnostics(&connection, None, Elevation::None).unwrap();
-        assert!(boot.selected_boot_id.is_some());
-        assert!(
-            boot.boots
-                .data
-                .as_ref()
-                .is_some_and(|boots| boots.iter().any(|item| item.current))
-        );
-        assert!(boot.timing.data.is_some() || boot.timing.error.is_some());
-        assert!(boot.journal.data.is_some() || boot.journal.error.is_some());
 
         match list_firewall(&connection, Elevation::None) {
             Ok(firewall) => assert!(!firewall.available || firewall.active.is_some()),
@@ -4222,48 +3544,5 @@ esac
                 "Docker inspection was not exercised because this account cannot access Docker without sudo"
             );
         }
-    }
-
-    #[test]
-    #[ignore = "requires the explicitly configured local Ubuntu VM"]
-    fn live_ubuntu_baseline_capture_is_ephemeral_and_typed() {
-        use crate::baselines::{self, BaselineCaptureRegistry, SectionReporter};
-        use crate::models::BaselineSection;
-
-        struct NoopReporter;
-        impl SectionReporter for NoopReporter {
-            fn report(&self, _: &BaselineSection, _: u32, _: u32) {}
-        }
-
-        let connection = live_connection();
-        let captured = baselines::capture(
-            &connection,
-            "local-ubuntu-live-test",
-            None,
-            None,
-            &Elevation::None,
-            &BaselineCaptureRegistry::default(),
-            &NoopReporter,
-        )
-        .unwrap();
-        assert_eq!(captured.connection_id, connection.id);
-        assert_eq!(captured.identity.os_id.as_deref(), Some("ubuntu"));
-        assert_eq!(captured.sections.len(), baselines::SECTION_KINDS.len());
-        for (section, kind) in captured.sections.iter().zip(baselines::SECTION_KINDS) {
-            assert_eq!(section.kind, kind);
-            assert_ne!(section.status, baselines::STATUS_SKIPPED);
-            assert!(section.schema_version > 0);
-        }
-        assert_eq!(captured.sections[0].status, baselines::STATUS_COLLECTED);
-        assert_eq!(captured.sections[1].status, baselines::STATUS_COLLECTED);
-        assert!(matches!(
-            captured.sections[3].status.as_str(),
-            baselines::STATUS_COLLECTED | baselines::STATUS_PARTIAL
-        ));
-        assert!(!captured.sections[3].entries.is_empty());
-        if captured.sections[3].status == baselines::STATUS_PARTIAL {
-            assert!(captured.sections[3].message.is_some());
-        }
-        assert_eq!(captured.sections[4].status, baselines::STATUS_COLLECTED);
     }
 }

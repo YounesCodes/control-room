@@ -7,7 +7,7 @@ Control Room runs on Windows 11 x64 and uses the Windows OpenSSH Client. Local t
 
 For an SSH terminal, you need a Linux host or a Windows 10 or 11 host with OpenSSH Server that accepts your SSH login. Windows shell detection requires noninteractive key or agent authentication. See [Connections](/control-room/connections/) to choose installed Windows shells, Windows Terminal profiles, or WSL distributions.
 
-Linux inspection views need their own tools: systemd for services and boot information, journald for service logs, `ss` for ports, and Docker for containers and their logs. Bash is needed only for optional command history. A host can support some views even when others are unavailable.
+Linux inspection views need their own tools: systemd for services, journald for service logs, `ss` for ports, and Docker for containers and their logs. Bash is needed only for optional command history. A host can support some views even when others are unavailable.
 
 The terminal can use normal OpenSSH password prompts. Inspection reads run separately and cannot ask for an SSH password. Use a key or an SSH agent for those reads. A key path in Control Room points to your existing file; the app does not copy it.
 
@@ -19,22 +19,22 @@ Docker inspection also needs an account that can read the Docker daemon. On Linu
 
 Control Room recognizes these distribution families:
 
-| Distribution                   | Systemd                 | Ports                                       | Docker         | Boot                      | Logs               | Baselines                                        |
-| ------------------------------ | ----------------------- | ------------------------------------------- | -------------- | ------------------------- | ------------------ | ------------------------------------------------ |
-| Debian and Ubuntu              | With systemd            | With iproute2                               | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Rocky Linux and AlmaLinux      | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Oracle Linux and CentOS Stream | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Amazon Linux 2023              | With systemd            | With iproute2; firewalld when installed     | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Fedora Server                  | With systemd            | With iproute2; firewalld numeric port rules | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| openSUSE Leap                  | With systemd            | With iproute2; firewalld when installed     | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Arch Linux                     | With systemd            | With iproute2                               | When installed | With systemd and journald | journald or Docker | Available sections are captured                  |
-| Alpine Linux                   | Unavailable with OpenRC | With iproute2; no systemd owner correlation | When installed | Unavailable with OpenRC   | Docker only        | Host, filesystem, port, and Docker sections only |
+| Distribution                   | Systemd                 | Ports                                       | Docker         | Logs               |
+| ------------------------------ | ----------------------- | ------------------------------------------- | -------------- | ------------------ |
+| Debian and Ubuntu              | With systemd            | With iproute2                               | When installed | journald or Docker |
+| Rocky Linux and AlmaLinux      | With systemd            | With iproute2; firewalld numeric port rules | When installed | journald or Docker |
+| Oracle Linux and CentOS Stream | With systemd            | With iproute2; firewalld numeric port rules | When installed | journald or Docker |
+| Amazon Linux 2023              | With systemd            | With iproute2; firewalld when installed     | When installed | journald or Docker |
+| Fedora Server                  | With systemd            | With iproute2; firewalld numeric port rules | When installed | journald or Docker |
+| openSUSE Leap                  | With systemd            | With iproute2; firewalld when installed     | When installed | journald or Docker |
+| Arch Linux                     | With systemd            | With iproute2                               | When installed | journald or Docker |
+| Alpine Linux                   | Unavailable with OpenRC | With iproute2; no systemd owner correlation | When installed | Docker only        |
 
 RHEL and SLES use the same inspection commands as Rocky or AlmaLinux and openSUSE Leap respectively, but they are not listed as validated targets until the live SSH suite passes on the actual vendor distributions.
 
-The distribution image checks cover `/etc/os-release`, host facts, uptime, and the account shell. Containers do not prove systemd, journald, boot diagnostics, firewall D-Bus access, or SSH behavior. Those need a booted VM or physical host.
+The distribution image checks cover `/etc/os-release`, host facts, uptime, and the account shell. Containers do not prove systemd, journald, firewall D-Bus access, or SSH behavior. Those need a booted VM or physical host.
 
-The portable views require ordinary POSIX shell tools. Systemd, Boot, and journald Logs require systemd and journald. Ports requires `ss` from iproute2. Enhanced History requires Bash. Docker inspection requires an accessible Docker daemon.
+The portable views require ordinary POSIX shell tools. Systemd and journald Logs require systemd and journald. Ports requires `ss` from iproute2. Enhanced History requires Bash. Docker inspection requires an accessible Docker daemon.
 
 ## Firewall inspection
 

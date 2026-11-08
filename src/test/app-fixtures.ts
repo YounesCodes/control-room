@@ -1,11 +1,7 @@
 import type {
   AppSettings,
-  BaselineComparison,
-  BootDiagnostics,
   DockerContainer,
   DockerContainerDetails,
-  HostBaseline,
-  HostBaselineSummary,
   HostCapabilities,
   HostResources,
   ListeningSocket,
@@ -152,104 +148,3 @@ export const socket: ListeningSocket = {
   systemdUnit: service.id,
   ownership: "known",
 };
-export function boot(): BootDiagnostics {
-  const collectedAt = new Date().toISOString();
-  return {
-    id: "boot-fixture",
-    collectedAt,
-    selectedBootId: "a".repeat(32),
-    boots: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: [
-        { id: "a".repeat(32), index: 0, range: "Current boot", current: true },
-        { id: "b".repeat(32), index: -1, range: "Previous boot", current: false },
-      ],
-    },
-    timing: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: { total: "8s", kernel: "3s", userspace: "5s", original: "8s total" },
-    },
-    slowUnits: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: [{ unit: service.id, duration: "2s" }],
-    },
-    failedUnits: { collectedAt, error: null, permissionRequired: false, data: [failedService] },
-    journal: {
-      collectedAt,
-      error: null,
-      permissionRequired: false,
-      data: ["warning: fixture boot evidence"],
-    },
-  };
-}
-export function baseline(id: string, label = id): HostBaseline {
-  return {
-    id,
-    connectionId: "host-a",
-    label,
-    schemaVersion: 1,
-    capturedAt: new Date().toISOString(),
-    pinned: false,
-    identity: {
-      hostname: "host-a",
-      machineFingerprint: "fixture",
-      osId: "ubuntu",
-      osVersion: "24.04",
-      kernel: "6.8",
-      architecture: "x86_64",
-    },
-    sections: [
-      {
-        kind: "host",
-        status: "collected",
-        schemaVersion: 1,
-        collectedAt: new Date().toISOString(),
-        message: null,
-        entries: [{ identity: "host", label: "host-a", facts: [{ name: "kernel", value: "6.8" }] }],
-      },
-    ],
-  };
-}
-export function summary(value: HostBaseline): HostBaselineSummary {
-  return {
-    ...value,
-    changesSincePrevious: null,
-    sections: value.sections.map((section) => ({
-      kind: section.kind,
-      status: section.status,
-      entryCount: section.entries.length,
-    })),
-  };
-}
-export function comparison(
-  base: HostBaseline,
-  target: HostBaseline,
-  live = false,
-): BaselineComparison {
-  return {
-    base: summary(base),
-    target: summary(target),
-    identityMatch: "same",
-    schemaCompatible: true,
-    targetIsLive: live,
-    sections: [
-      {
-        kind: "host",
-        baseStatus: "collected",
-        targetStatus: "collected",
-        comparable: true,
-        note: null,
-        added: [],
-        removed: [],
-        changed: [],
-        unchangedCount: 1,
-      },
-    ],
-  };
-}

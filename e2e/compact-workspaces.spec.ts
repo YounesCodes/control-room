@@ -85,7 +85,7 @@ describe("Compact native windows and live terminal arrangements", () => {
     await browser.setWindowSize(600, 480);
     await $("aria/Open navigation").click();
     await $(".host-main").click();
-    for (const view of ["Systemd", "Ports", "Docker", "Boot", "Logs", "Baselines", "History"]) {
+    for (const view of ["Systemd", "Ports", "Docker", "Logs", "History"]) {
       await $("aria/Open navigation").click();
       await $("nav[aria-label='Workspace features']")
         .$("button=" + view)

@@ -3,14 +3,13 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
 import * as fixtures from "./test/app-fixtures";
-import type { AppSettings, HistoryEntry, HostBaseline, PersistedWorkspaceState } from "./types";
+import type { AppSettings, HistoryEntry, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource-variable/inter/opsz.css";
 import "./styles.css";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
-  save: vi.fn(),
   listeners: new Map<string, Set<(event: { payload: any }) => void>>(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -32,14 +31,13 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ close: vi.fn(), minimize: vi.fn(), toggleMaximize: vi.fn() }),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ save: native.save, open: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 import { App } from "./App";
 
 let root: Root;
 let element: HTMLDivElement;
 let currentSettings: AppSettings;
 let persisted: PersistedWorkspaceState;
-let captures: HostBaseline[];
 let sequence: number;
 let streamOutput: { onmessage: (message: ArrayBuffer) => void } | null;
 const failures = new Map<string, string>();
@@ -168,8 +166,6 @@ async function respond(command: string, args: any = {}) {
         truncated: false,
         collectedAt: new Date().toISOString(),
       };
-    case "collect_boot_diagnostics":
-      return { ...fixtures.boot(), selectedBootId: args.bootId ?? "a".repeat(32) };
     case "start_journal_stream":
     case "start_docker_log_stream":
       streamOutput = args.output;
@@ -184,54 +180,7 @@ async function respond(command: string, args: any = {}) {
       return null;
     case "save_scratchpad_note":
       return { ...args.input, id: "note", createdAt: "", updatedAt: "" };
-    case "list_host_baselines":
-      return captures.map(fixtures.summary);
-    case "get_host_baseline":
-      return captures.find((capture) => capture.id === args.id);
-    case "capture_host_baseline": {
-      const capture = fixtures.baseline(
-        `capture-${++sequence}`,
-        args.request.label ?? "New baseline",
-      );
-      captures.unshift(capture);
-      args.progress.onmessage({
-        captureId: args.request.captureId,
-        kind: "host",
-        status: "collected",
-        message: null,
-        completed: 1,
-        total: 1,
-      });
-      return fixtures.summary(capture);
-    }
-    case "cancel_host_baseline":
-      return;
-    case "rename_host_baseline": {
-      const capture = captures.find((capture) => capture.id === args.id)!;
-      capture.label = args.label;
-      return fixtures.summary(capture);
-    }
-    case "set_host_baseline_pinned": {
-      const capture = captures.find((capture) => capture.id === args.id)!;
-      capture.pinned = args.pinned;
-      return fixtures.summary(capture);
-    }
-    case "delete_host_baseline":
-      captures = captures.filter((capture) => capture.id !== args.id);
-      return;
-    case "compare_host_baselines":
-      return fixtures.comparison(
-        captures.find((capture) => capture.id === args.baseId)!,
-        captures.find((capture) => capture.id === args.targetId)!,
-      );
-    case "compare_host_baseline_with_live":
-      return fixtures.comparison(
-        captures.find((capture) => capture.id === args.baseId)!,
-        fixtures.baseline("live", "Live state"),
-        true,
-      );
     case "open_documentation":
-    case "export_text_file":
       return;
     default:
       throw new Error(`Missing typed fixture for ${command}`);
@@ -268,11 +217,9 @@ beforeEach(async () => {
   overrides.clear();
   native.listeners.clear();
   native.invoke.mockReset();
-  native.save.mockReset();
   sequence = 0;
   streamOutput = null;
   currentSettings = { ...fixtures.settings };
-  captures = [fixtures.baseline("stored", "Stored baseline")];
   persisted = { workspaces: [], activeWorkspaceId: null, terminalGroups: [], terminalLayout: null };
   native.invoke.mockImplementation(respond);
   element = document.createElement("div");
@@ -620,21 +567,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
         const content = element.querySelector<HTMLElement>(".workspace-content")!;
         expect(content.scrollWidth).toBeLessThanOrEqual(content.clientWidth + 1);
         for (const node of element.querySelectorAll<HTMLElement>(
-          ".page-heading, .boot-heading, .history-tools, .log-controls, .settings-heading, .systemd-toolbar",
+          ".page-heading, .history-tools, .log-controls, .settings-heading, .systemd-toolbar",
         )) {
           expect(node.scrollWidth, node.className).toBeLessThanOrEqual(node.clientWidth + 1);
         }
       };
-      for (const view of [
-        "Systemd",
-        "Ports",
-        "Docker",
-        "Boot",
-        "Logs",
-        "Baselines",
-        "History",
-        "Terminal",
-      ]) {
+      for (const view of ["Systemd", "Ports", "Docker", "Logs", "History", "Terminal"]) {
         await open.click();
         await navigate(view);
         await expect
@@ -2560,7 +2498,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     ).toHaveLength(1);
   });
 
-  it("reports unsupported Docker and limited boot journal evidence", async () => {
+  it("reports unsupported Docker on its view without reaching for containers", async () => {
     overrides.set("refresh_capabilities", () => ({
       ...fixtures.capabilities(),
       dockerAvailable: false,
@@ -2571,23 +2509,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       dockerAvailable: false,
       dockerAccessible: false,
     }));
-    overrides.set("collect_boot_diagnostics", () => ({
-      ...fixtures.boot(),
-      journal: {
-        data: null,
-        collectedAt: "",
-        error: "permission denied",
-        permissionRequired: true,
-      },
-    }));
     failures.set("list_containers", "Docker is not installed on this host");
     await mount();
     await navigate("Docker");
     await expect
       .element(page.getByText(/Docker.*not.*(?:installed|available|detected)/i))
       .toBeVisible();
-    await navigate("Boot");
-    await expect.element(page.getByText(/permission denied/)).toBeVisible();
   });
 
   it.each([960, 1600])("keeps long inspection lists scrollable at %s px", async (width) => {
@@ -2629,9 +2556,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       truncated: false,
       collectedAt: new Date().toISOString(),
     }));
-    captures = records.map((index) =>
-      fixtures.baseline(`baseline-${index}`, `Example baseline ${index}`),
-    );
     await mount();
     async function checkList() {
       await vi.waitFor(() =>
@@ -2658,7 +2582,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
       expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     }
-    for (const view of ["Systemd", "Baselines"]) {
+    for (const view of ["Systemd"]) {
       await navigate(view);
       await checkList();
     }
@@ -2735,91 +2659,72 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
-  it.each([960, 1600])(
-    "scrolls long History, Boot, Logs, and Scratchpad content at %s px",
-    async (width) => {
-      await page.viewport(width, 700);
-      const records = Array.from({ length: 100 }, (_, index) => index);
-      overrides.set("get_history", () =>
-        records.map((index) => ({
-          id: `entry-${index}`,
-          connectionId: "host-a",
-          sessionId: "old-session",
-          command: `printf example-${index}`,
-          cwd: "/",
-          startedAt: "2026-10-13T00:00:00Z",
-          finishedAt: null,
-          exitCode: 0,
-          shell: "bash",
-        })),
+  it.each([960, 1600])("scrolls long History and Scratchpad content at %s px", async (width) => {
+    await page.viewport(width, 700);
+    const records = Array.from({ length: 100 }, (_, index) => index);
+    overrides.set("get_history", () =>
+      records.map((index) => ({
+        id: `entry-${index}`,
+        connectionId: "host-a",
+        sessionId: "old-session",
+        command: `printf example-${index}`,
+        cwd: "/",
+        startedAt: "2026-10-13T00:00:00Z",
+        finishedAt: null,
+        exitCode: 0,
+        shell: "bash",
+      })),
+    );
+    overrides.set("get_scratchpad_note", () => ({
+      id: "example-note",
+      scope: "connection",
+      ownerId: "host-a",
+      text: records.map((index) => `Example note ${index}`).join("\n"),
+      createdAt: "",
+      updatedAt: "",
+    }));
+    await mount();
+    await navigate("History");
+    await expect.element(page.getByText("printf example-99", { exact: true })).toBeInTheDocument();
+    {
+      const panel = element.querySelector<HTMLElement>(".feature-page")!;
+      expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
+        element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
       );
-      overrides.set("collect_boot_diagnostics", () => {
-        const snapshot = fixtures.boot();
-        return {
-          ...snapshot,
-          journal: {
-            ...snapshot.journal,
-            data: records.slice(0, 30).map((index) => `warning: example-${index}`),
-          },
-        };
-      });
-      overrides.set("get_scratchpad_note", () => ({
-        id: "example-note",
-        scope: "connection",
-        ownerId: "host-a",
-        text: records.map((index) => `Example note ${index}`).join("\n"),
-        createdAt: "",
-        updatedAt: "",
-      }));
-      await mount();
-      for (const view of ["History", "Boot"]) {
-        await navigate(view);
-        await expect
-          .element(
-            page.getByText(view === "History" ? "printf example-99" : "warning: example-29", {
-              exact: true,
-            }),
-          )
-          .toBeInTheDocument();
-        const panel = element.querySelector<HTMLElement>(".feature-page")!;
-        expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(
-          element.querySelector<HTMLElement>(".connection-section-content")!.clientHeight,
-        );
-        expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
-        panel.scrollTop = panel.scrollHeight;
-        expect(panel.scrollTop).toBeGreaterThan(0);
-        expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
-      }
-      await navigate("Terminal");
-      await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
-      await vi.waitFor(() =>
-        expect(
-          element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")?.value,
-        ).toContain("Example note 99"),
-      );
-      const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
-      expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
-      textarea.focus();
-      await userEvent.keyboard("{Control>}{End}{/Control}");
-      expect(textarea.scrollTop).toBeGreaterThan(0);
-      await navigate("Logs");
-      await page.getByRole("button", { name: "Start", exact: true }).click();
-      streamOutput!.onmessage(
-        new TextEncoder().encode(records.map((index) => `Example log ${index}`).join("\n")).buffer,
-      );
-      await expect.element(page.getByText(/Example log 99/)).toBeInTheDocument();
-      const output = element.querySelector<HTMLElement>("pre.log-output")!;
-      expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
-      output.scrollTop = output.scrollHeight;
-      expect(output.scrollTop).toBeGreaterThan(0);
-      await navigate("Docker");
-      await expect
-        .element(page.getByRole("heading", { name: "Containers", exact: true }))
-        .toBeVisible();
-      await navigate("Terminal");
-      await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
-    },
-  );
+      expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+      panel.scrollTop = panel.scrollHeight;
+      expect(panel.scrollTop).toBeGreaterThan(0);
+      expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    }
+    await navigate("Terminal");
+    await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
+    await vi.waitFor(() =>
+      expect(
+        element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")?.value,
+      ).toContain("Example note 99"),
+    );
+    const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
+    expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
+    textarea.focus();
+    await userEvent.keyboard("{Control>}{End}{/Control}");
+    expect(textarea.scrollTop).toBeGreaterThan(0);
+    await navigate("Logs");
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    streamOutput!.onmessage(
+      new TextEncoder().encode(records.map((index) => `Example log ${index}`).join("\n")).buffer,
+    );
+    await expect.element(page.getByText(/Example log 99/)).toBeInTheDocument();
+    const output = element.querySelector<HTMLElement>("pre.log-output")!;
+    expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
+    output.scrollTop = output.scrollHeight;
+    expect(output.scrollTop).toBeGreaterThan(0);
+    await navigate("Docker");
+    await expect
+      .element(page.getByRole("heading", { name: "Containers", exact: true }))
+      .toBeVisible();
+    await navigate("Terminal");
+    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+  });
 
   it("restores legacy Scratchpad pages to Terminal and opens notes from the palette", async () => {
     persisted.workspaces = [
@@ -3005,13 +2910,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("navigates every remote page through the real app and keeps the terminal Workspace", async () => {
     await mount();
+    expect(
+      Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-nav button")).map((button) =>
+        button.textContent?.trim(),
+      ),
+    ).toEqual(["Terminal", "Docker", "Systemd", "Logs", "Ports", "History"]);
     for (const [view, heading] of [
-      ["Systemd", "Systemd"],
       ["Docker", "Containers"],
-      ["Ports", "Ports"],
-      ["Boot", "Boot Diagnostics"],
+      ["Systemd", "Systemd"],
       ["Logs", "Logs"],
-      ["Baselines", "Baselines"],
+      ["Ports", "Ports"],
       ["History", "Command History"],
     ]) {
       await navigate(view);
@@ -3375,21 +3283,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByText(/No established/)).toBeVisible();
   });
 
-  it("reads previous boot evidence and follows a current failed unit to Logs", async () => {
-    await mount();
-    await navigate("Boot");
-    await page.getByRole("combobox", { name: "Boot", exact: true }).selectOptions("b".repeat(32));
-    await vi.waitFor(() =>
-      expect(native.invoke).toHaveBeenCalledWith(
-        "collect_boot_diagnostics",
-        expect.objectContaining({ bootId: "b".repeat(32) }),
-      ),
-    );
-    await page.getByRole("combobox", { name: "Boot", exact: true }).selectOptions("a".repeat(32));
-    await page.getByRole("button", { name: /View journal/ }).click();
-    await expect.element(page.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
-  });
-
   it("reports refresh failure, keeps existing Systemd data and recovers", async () => {
     await mount();
     await navigate("Systemd");
@@ -3435,48 +3328,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }),
     );
     expect(currentSettings.globalSudoEnabled).toBe(false);
-  });
-
-  it("captures, renames with cancellation and save recovery, pins and compares before deleting a baseline", async () => {
-    await mount();
-    await navigate("Baselines");
-    await page.getByRole("textbox", { name: "Baseline label" }).fill("Browser capture");
-    await page.getByRole("button", { name: "Capture baseline", exact: true }).click();
-    await expect.element(page.getByRole("button", { name: "Pin baseline" })).toBeVisible();
-    await page.getByRole("button", { name: "Rename baseline", exact: true }).click();
-    await page.getByRole("textbox", { name: "Baseline label" }).nth(1).fill("Discarded rename");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect
-      .element(page.getByRole("heading", { name: "Browser capture", exact: true }))
-      .toBeVisible();
-    await page.getByRole("button", { name: "Rename baseline", exact: true }).click();
-    await page.getByRole("textbox", { name: "Baseline label" }).nth(1).fill("Renamed capture");
-    failures.set("rename_host_baseline", "fixture rename failed");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect.element(page.getByText("fixture rename failed", { exact: true })).toBeVisible();
-    await expect
-      .element(page.getByRole("textbox", { name: "Baseline label" }).nth(1))
-      .toHaveValue("Renamed capture");
-    failures.delete("rename_host_baseline");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect
-      .element(page.getByRole("heading", { name: "Renamed capture", exact: true }))
-      .toBeVisible();
-    await page.getByRole("button", { name: "Pin baseline" }).click();
-    await expect.element(page.getByRole("button", { name: "Unpin baseline" })).toBeVisible();
-    const count = captures.length;
-    await page.getByRole("combobox").selectOptions("live");
-    await expect.element(page.getByText(/This read was not saved/)).toBeVisible();
-    expect(captures).toHaveLength(count);
-    await page.getByRole("button", { name: "Delete baseline", exact: true }).click();
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    expect(captures).toHaveLength(count);
-    await page.getByRole("button", { name: "Delete baseline", exact: true }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Delete baseline", exact: true })
-      .click();
-    await vi.waitFor(() => expect(captures).toHaveLength(count - 1));
   });
 
   it("drives the app command palette with a keyboard and checks the Settings page with axe", async () => {
@@ -3703,5 +3554,364 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(row.hasAttribute("data-removing")).toBe(true));
     await vi.waitFor(() => expect(row.isConnected).toBe(false));
     await expect.element(page.getByText("printf retained", { exact: true })).toBeVisible();
+  });
+
+  const stripTabLabels = (): (string | null)[] =>
+    Array.from(document.querySelectorAll<HTMLElement>(".session-tabs .session-tab-label")).map(
+      (label) => label.textContent,
+    );
+
+  const activeStripTab = () =>
+    document.querySelector(".session-tab-wrap.active .session-tab-main")?.textContent;
+
+  function stripTabMain(label: string) {
+    return Array.from(document.querySelectorAll<HTMLElement>(".session-tab-main")).find(
+      (button) => button.textContent === label,
+    );
+  }
+
+  it("reorders a workspace tab by dragging and saves the new order", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+    const alpha = stripTabMain("Fixture Alpha")!;
+    const beta = stripTabMain("Fixture Beta")!;
+
+    // A reorderable strip promises the drag on hover.
+    await userEvent.hover(beta);
+    expect(getComputedStyle(beta).cursor).toBe("grab");
+
+    // A real pointer drag of Beta onto Alpha's slot.
+    await userEvent.dragAndDrop(beta, alpha, { targetPosition: { x: 8, y: 15 } });
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Beta", "Fixture Alpha"]));
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-b", "tab-a"]),
+    );
+    // The active Workspace, its session, and its focus survive the reorder.
+    expect(activeStripTab()).toBe("Fixture Alpha");
+    expect(document.activeElement?.className).toContain("session-tab-main");
+
+    // The finished drag does not swallow the next click.
+    await userEvent.click(beta);
+    await vi.waitFor(() => expect(activeStripTab()).toBe("Fixture Beta"));
+  });
+
+  it("moves a focused workspace tab with Control and Shift arrow keys", async () => {
+    overrides.set("list_connections", () => [
+      fixtures.connection(),
+      fixtures.connection("host-b"),
+      { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
+    ]);
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-c",
+          label: null,
+          connectionId: "host-c",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() =>
+      expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta", "Fixture Gamma"]),
+    );
+
+    stripTabMain("Fixture Beta")!.focus();
+    await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
+    await vi.waitFor(() =>
+      expect(stripTabLabels()).toEqual(["Fixture Beta", "Fixture Alpha", "Fixture Gamma"]),
+    );
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual([
+        "tab-b",
+        "tab-a",
+        "tab-c",
+      ]),
+    );
+    // Moving a tab never moves the active Workspace with it.
+    expect(activeStripTab()).toBe("Fixture Alpha");
+  });
+
+  it("reorders a focus-mode group tab by dragging and saves the block order", async () => {
+    overrides.set("list_connections", () => [
+      fixtures.connection(),
+      fixtures.connection("host-b"),
+      { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
+    ]);
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-c",
+          label: null,
+          connectionId: "host-c",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [
+        {
+          id: "group-a",
+          name: "Fixture Group",
+          layout: {
+            kind: "split",
+            direction: "vertical",
+            first: { kind: "leaf", workspaceId: "tab-a" },
+            second: { kind: "leaf", workspaceId: "tab-b" },
+          },
+        },
+      ],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    const focusStrip = (): string[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(".session-tabs .session-tab-content > *"),
+      ).map((tab) =>
+        (tab.querySelector(".session-tab-main, .session-tab-group-main")?.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
+    const groupMain = () => document.querySelector<HTMLElement>(".session-tab-group-main")!;
+
+    // A reorderable strip promises the drag for group rows too.
+    await userEvent.hover(groupMain());
+    expect(getComputedStyle(groupMain()).cursor).toBe("grab");
+
+    // A real pointer drag of the group onto Gamma's slot.
+    const gamma = stripTabMain("Fixture Gamma")!;
+    await userEvent.dragAndDrop(groupMain(), gamma, { targetPosition: { x: 150, y: 15 } });
+    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Gamma", "Fixture Group 2"]));
+    const savedIds = () => persisted.workspaces.map((workspace) => workspace.id);
+    await vi.waitFor(() => expect(savedIds()).toEqual(["tab-c", "tab-a", "tab-b"]));
+
+    // The group stays one slot and keeps the active Workspace's group.
+    expect(document.querySelectorAll(".session-tab-group")).toHaveLength(1);
+    expect(document.querySelector(".session-tab-group.active")?.textContent).toContain(
+      "Fixture Group",
+    );
+
+    // The keyboard moves the whole group back one slot.
+    groupMain().focus();
+    await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
+    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
+    await vi.waitFor(() => expect(savedIds()).toEqual(["tab-a", "tab-b", "tab-c"]));
+  });
+
+  it("keeps a dragged tab pinned inside the strip when the pointer leaves it", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+
+    const alpha = stripTabMain("Fixture Alpha")!;
+    const content = document.querySelector<HTMLElement>(".session-tab-content")!;
+    const press = alpha.getBoundingClientRect();
+    const pointer = (node: HTMLElement, type: string, x: number) =>
+      node.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          isPrimary: true,
+          clientX: x,
+          clientY: press.top + press.height / 2,
+        }),
+      );
+    const expectPinnedInside = async (shot: string) => {
+      await vi.waitFor(() => {
+        const dragged = document.querySelector<HTMLElement>(".session-tab-dragged")!;
+        expect(dragged).toBeTruthy();
+        const box = dragged.getBoundingClientRect();
+        const bounds = content.getBoundingClientRect();
+        // The lifted tab stays inside the strip's borders, right to the half
+        // pixel, no matter how far outside the pointer travels.
+        expect(box.left).toBeGreaterThanOrEqual(bounds.left - 0.5);
+        expect(box.right).toBeLessThanOrEqual(bounds.right + 0.5);
+      });
+      await page.screenshot({ path: `../test-results/${shot}` });
+    };
+
+    // Throw the pointer far past both borders; the tab pins to each edge.
+    pointer(alpha, "pointerdown", press.left + 20);
+    pointer(content, "pointermove", window.innerWidth + 300);
+    await expectPinnedInside("drag-overshoot-right.png");
+    pointer(content, "pointermove", -300);
+    await expectPinnedInside("drag-overshoot-left.png");
+
+    // Releasing out there is a drop outside the strip, so the order reverts.
+    pointer(content, "pointerup", -300);
+    await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
+    expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]);
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-a", "tab-b"]),
+    );
+  });
+
+  it("parks Rename and Close while the strip drags", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+
+    const alpha = stripTabMain("Fixture Alpha")!;
+    const content = document.querySelector<HTMLElement>(".session-tab-content")!;
+    const press = alpha.getBoundingClientRect();
+    const y = press.top + press.height / 2;
+    const dispatch = (node: HTMLElement, type: string, x: number) =>
+      node.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          isPrimary: true,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    const draggedTab = () =>
+      document
+        .querySelector<HTMLElement>(".session-tab-dragged .session-tab-main")!
+        .closest(".session-tab-wrap")! as HTMLElement;
+    const toolOf = (className: string) => draggedTab().querySelector<HTMLElement>(className)!;
+
+    // Held focus, like the ride along the strip's hover, would reveal the
+    // tab tools; mid-drag they stay parked so the lifted chip reads as one
+    // clean piece.
+    alpha.focus();
+    dispatch(alpha, "pointerdown", press.left + 20);
+    dispatch(content, "pointermove", 460);
+    await vi.waitFor(() => expect(toolOf(".session-tab-close")).toBeTruthy());
+    await vi.waitFor(() => {
+      expect(getComputedStyle(toolOf(".session-tab-close")).opacity).toBe("0");
+      expect(getComputedStyle(toolOf(".session-tab-rename")).opacity).toBe("0");
+    });
+    await page.screenshot({ path: "../test-results/drag-parked-tools.png" });
+
+    // Outside the drag, focus on a tab reveals the tools again.
+    dispatch(content, "pointerup", 460);
+    await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
+    stripTabMain("Fixture Alpha")!.focus();
+    await vi.waitFor(() => {
+      const wrap = document.querySelector<HTMLElement>(".session-tab-wrap:focus-within")!;
+      expect(getComputedStyle(wrap.querySelector<HTMLElement>(".session-tab-close")!).opacity).toBe(
+        "1",
+      );
+      expect(
+        getComputedStyle(wrap.querySelector<HTMLElement>(".session-tab-rename")!).opacity,
+      ).toBe("1");
+    });
   });
 });

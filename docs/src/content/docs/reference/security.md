@@ -7,7 +7,7 @@ Control Room uses your Windows OpenSSH client. Commands you type in the terminal
 
 ## Host inspection
 
-The host views read systemd, journald, Docker, ports, filesystems, and boot information. They do not edit files or manage services and containers. Optional header resource reads pause while Settings is open, Focus Mode is active, or the window is hidden. An open terminal keeps its SSH session until you close it.
+The host views read systemd, journald, Docker, ports, and filesystems. They do not edit files or manage services and containers. Optional header resource reads pause while Settings is open, Focus Mode is active, or the window is hidden. An open terminal keeps its SSH session until you close it.
 
 ## Elevated reads
 
@@ -21,8 +21,8 @@ Administrator local shells use Windows Sudo in inline mode and require UAC appro
 
 ## Stored locally
 
-Control Room saves connections, groups and tags, settings, tab layout, your Scratchpad notes, cached host details, optional Bash command history, and baselines you choose to capture in a local SQLite database.
+Control Room saves connections, groups and tags, settings, tab layout, your Scratchpad notes, cached host details, and optional Bash command history in a local SQLite database.
 
 ## Never stored
 
-It does not save SSH or sudo passwords, private key contents, terminal output, fetched logs, boot diagnostics, or update installer bytes. A key path can be saved, but the key stays where it is. Notes and saved command history are local data, not encrypted secret storage.
+It does not save SSH or sudo passwords, private key contents, terminal output, fetched logs, or update installer bytes. A key path can be saved, but the key stays where it is. Notes and saved command history are local data, not encrypted secret storage.

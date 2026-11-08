@@ -80,9 +80,7 @@ export function createRemoteWorkspace(
     systemdSelectionId: null,
     containerSelectionId: null,
     containerDetailsCache: {},
-    bootDiagnostics: null,
     logSource: null,
-    baselineSelectionId: null,
   };
 }
 

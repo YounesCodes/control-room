@@ -64,7 +64,9 @@ active work. Bound dense lists and detail pages so wide windows do not stretch
 their contents across the screen.
 
 Use the connection rail for Saved Connections, search, grouping, and remote
-feature navigation. Local Workspaces are terminal-only, so do not show remote
+feature navigation. Order remote capabilities by expected frequency of use:
+Terminal, Docker, Systemd, Logs, Ports, then History. Local
+Workspaces are terminal-only, so do not show remote
 inspection navigation for them. Hide the capability navigation and its divider
 for local Workspaces so the connection list uses the available sidebar height.
 Scratchpad stays in the terminal toolbar for every Workspace kind.
@@ -133,6 +135,20 @@ Keep host selection and all inspection views in that drawer, with keyboard focus
 contained until it closes. Preserve rail widths when returning to a wide window.
 Reflow forms, toolbars, and Settings rather than reducing typography or scaling
 the application. Keep native window controls fixed and dialogs inside the viewport.
+
+Workspace tabs reorder by dragging them along the strip. A short threshold
+keeps plain clicks their own act; past it the tab lifts under a shadow,
+follows the pointer inside the strip's borders, and the tabs it passes
+slide one slot over in the same motion. Holding the
+lifted tab at an overflowing strip's edge pages the window open, so any tab
+can reach the first or last position. Dropping outside the strip, or Escape,
+restores the previous order; a finished drag never selects the dragged tab
+by the click that follows it. Reordering moves whole Workspaces, so the
+active terminal, its session, and its focus carry over, and Control+Shift
+with the arrow keys move a focused tab one slot. In focus mode the strip's
+group rows reorder the same way: a group moves as one block, keeping its
+member Workspaces together, while the per-pane strip stays focused on its
+panes. Saved order is the tab order itself, so a restart restores it.
 
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
@@ -417,12 +433,7 @@ command metadata may gain visual line breaks without rewriting copied content.
 Reuse inspector disclosure motion. Show Ports navigation only for services or sockets with a
 fresh, known listener ownership match to that exact unit. Opening Advanced may read
 listeners without elevation, sharing the Ports view's workspace cache. Hide the
-shortcut while ownership is unknown or its read is unavailable. Show Boot only
-when fresh current-boot diagnostics contain a matching slow-unit or failed-unit
-entry from a readable section. Opening Advanced may collect current boot evidence
-without elevation, sharing the Boot view's workspace snapshot. Hide unrelated,
-historical, or unavailable evidence. Current Boot
-unit rows link back to Systemd without attributing a cause.
+shortcut while ownership is unknown or its read is unavailable.
 
 ## Visual language
 
@@ -711,7 +722,7 @@ must look missing, not like zero. Keep unavailable, unsupported, skipped, and
 unchanged states distinct. Separate socket binding, firewall policy, and
 reachability claims.
 
-Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, logs, boot evidence, and saved baselines. Restore retired Overview selections to Terminal. A live baseline comparison should be visibly identified as live and unsaved.
+Keep resource readings in the optional host header. Host inspectors focus on services, containers, ports, and logs. Retired selections such as Overview, Boot, and Baselines fall back to Terminal.
 
 Control Room's own updater is quiet while the app is current. When an update is
 available, make its status and next action easy to find without a blocking

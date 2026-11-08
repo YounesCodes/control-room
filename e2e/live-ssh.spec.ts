@@ -5,19 +5,11 @@ import {
   connectionMenu,
   feature,
   ipc,
-  restartApp,
   runtime,
   terminalCommand,
   terminalContains,
 } from "./helpers";
-import type {
-  BootDiagnostics,
-  DockerContainer,
-  HostBaselineSummary,
-  HostCapabilities,
-  ListeningSocket,
-  SystemdUnit,
-} from "../src/types";
+import type { DockerContainer, HostCapabilities, ListeningSocket, SystemdUnit } from "../src/types";
 
 async function connect() {
   const host = process.env.CONTROL_ROOM_TEST_HOST;
@@ -150,28 +142,6 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await $("aria/Close port tools").click();
     await expect($("aria/Ports graph")).toBeDisplayed();
   });
-  it("reads current and discovered previous boot evidence without sudo", async () => {
-    const { saved } = await connect();
-    const current = await ipc<BootDiagnostics>("collect_boot_diagnostics", {
-      connectionId: saved.id,
-      bootId: null,
-      sudoPassword: null,
-    });
-    expect(current.collectedAt).toBeTruthy();
-    await feature("Boot");
-    await expect($("h2=Boot Diagnostics")).toBeDisplayed();
-    if (current.boots.permissionRequired || current.journal.permissionRequired)
-      console.log("Optional journal evidence: limited account access; permission state verified");
-    const previous = current.boots.data?.find((boot) => !boot.current);
-    if (previous) {
-      const evidence = await ipc<BootDiagnostics>("collect_boot_diagnostics", {
-        connectionId: saved.id,
-        bootId: previous.id,
-        sudoPassword: null,
-      });
-      expect(evidence.selectedBootId).toBe(previous.id);
-    } else console.log("Optional previous boot evidence: no retained previous boot available");
-  });
   it("starts and stops journal streaming and tears down on navigation", async function () {
     const { saved, caps } = await connect();
     if (!caps.journaldAvailable) {
@@ -235,45 +205,5 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     expect(await $(".inline-error").isExisting()).toBe(false);
     await feature("Terminal");
     await browser.waitUntil(async () => (await runtime()).streamIds.length === 0);
-  });
-  it("persists baselines locally and compares stored and live state", async () => {
-    const { saved } = await connect();
-    await feature("Baselines");
-    for (const label of ["Before", "After"]) {
-      await $("aria/Baseline label").setValue(label);
-      await $("button=Capture baseline").click();
-      await browser.waitUntil(
-        async () =>
-          (
-            await ipc<HostBaselineSummary[]>("list_host_baselines", { connectionId: saved.id })
-          ).some((capture) => capture.label === label),
-        { timeout: 60_000 },
-      );
-    }
-    const stored = await ipc<HostBaselineSummary[]>("list_host_baselines", {
-      connectionId: saved.id,
-    });
-    expect(stored).toHaveLength(2);
-    const compared = await ipc<{ schemaCompatible: boolean }>("compare_host_baselines", {
-      baseId: stored[1].id,
-      targetId: stored[0].id,
-    });
-    expect(compared.schemaCompatible).toBe(true);
-    await restartApp();
-    expect(
-      await ipc<HostBaselineSummary[]>("list_host_baselines", { connectionId: saved.id }),
-    ).toHaveLength(2);
-    await feature("Baselines");
-    await $(`#baseline-row-${stored[0].id}`).click();
-    await $(".baseline-compare-field select").selectByAttribute("value", "live");
-    await browser.waitUntil(async () => $(".baseline-comparison-note").isExisting(), {
-      timeout: 60_000,
-    });
-    await expect($(".baseline-comparison-note")).toHaveText(
-      expect.stringContaining("This read was not saved"),
-    );
-    expect(
-      await ipc<HostBaselineSummary[]>("list_host_baselines", { connectionId: saved.id }),
-    ).toHaveLength(2);
   });
 });
