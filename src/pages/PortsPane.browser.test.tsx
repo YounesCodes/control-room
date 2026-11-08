@@ -807,6 +807,25 @@ it("keeps warning signs and retry actions in one flowing line without splitting 
       const firstLineBounds = firstLine.getClientRects()[0]!;
       expect(signBounds.top).toBeGreaterThanOrEqual(firstLineBounds.top - 1.5);
       expect(signBounds.bottom).toBeLessThanOrEqual(firstLineBounds.bottom + 1.5);
+      // The sign's center opens on the mixed text band's middle: between cap
+      // top and baseline, where the capture note parks its glyph. The lowercase
+      // band's middle would read low and the line box's top would read high
+      // against the characters the sign flags.
+      const textNode = Array.from(warning.childNodes).find(
+        (child): child is Text => child.nodeType === Node.TEXT_NODE,
+      )!;
+      const first = document.createRange();
+      first.setStart(textNode, 0);
+      first.setEnd(textNode, 1);
+      const glyphs = document.createElement("canvas").getContext("2d")!;
+      const warningFont = getComputedStyle(warning);
+      glyphs.font = `${warningFont.fontWeight} ${warningFont.fontSize} ${warningFont.fontFamily}`;
+      const glyphBox = glyphs.measureText("F");
+      const baseline = first.getBoundingClientRect().bottom - glyphBox.fontBoundingBoxDescent;
+      const capTop = baseline - glyphBox.actualBoundingBoxAscent;
+      expect(
+        Math.abs((signBounds.top + signBounds.bottom) / 2 - (capTop + baseline) / 2),
+      ).toBeLessThan(1.2);
       const message = document.createRange();
       message.setStart(warning, 0);
       message.setEndBefore(button);

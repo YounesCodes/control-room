@@ -7776,10 +7776,10 @@ dd {
    half-bold, half-muted, or unsigned. The line flows as prose: a wrapping flex
    line would drop a long message below the sign and leave it stranded above,
    while inline flow keeps the sign beside the first line no matter how far the
-   message wraps. The sign rides 3px through the baseline so its center lands
-   on the text's optical band the way the capture note centers its own glyph:
-   vertical-align's top would park it on the line box's frontier, high above
-   the characters it flags. */
+   message wraps. The sign rides 2px through the baseline so its center opens
+   on the mixed text band's middle - between cap top and baseline, where the
+   capture note parks its own glyph: vertical-align's top leaves it floating
+   above the characters, while -3px sinks it to the lowercase band's middle. */
 .inline-warning {
   margin: 6px 0;
   color: var(--warning);
@@ -7789,7 +7789,7 @@ dd {
 
 .inline-warning svg {
   display: inline-block;
-  vertical-align: -3px;
+  vertical-align: -2px;
   margin: 0 6px 0 0;
 }
 
