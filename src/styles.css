@@ -7775,10 +7775,13 @@ dd {
    the app's strong step and the WarningSign glyph, so no warning line reads
    half-bold, half-muted, or unsigned. The line flows as prose: a wrapping flex
    line would drop a long message below the sign and leave it stranded above,
-   while inline flow keeps the sign beside the first line at the capture
-   note's measures no matter how far the message wraps. */
+   while inline flow keeps the sign beside the first line no matter how far the
+   message wraps. The sign rides 3px through the baseline so its center lands
+   on the text's optical band the way the capture note centers its own glyph:
+   vertical-align's top would park it on the line box's frontier, high above
+   the characters it flags. */
 .inline-warning {
-  margin: 4px 0;
+  margin: 6px 0;
   color: var(--warning);
   font-size: 11px;
   font-weight: 600;
@@ -7786,8 +7789,8 @@ dd {
 
 .inline-warning svg {
   display: inline-block;
-  vertical-align: top;
-  margin: 1px 6px 0 0;
+  vertical-align: -3px;
+  margin: 0 6px 0 0;
 }
 
 .inline-warning .link-button {

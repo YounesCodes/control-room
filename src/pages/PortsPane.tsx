@@ -32,6 +32,14 @@ import type {
 } from "../types";
 import { WarningSign } from "../components/WarningSign";
 
+// Remote readings arrive as raw command output with no guaranteed sentence
+// stop, and each reading line appends its inline recovery action right after
+// the message; a stop keeps "Retry" from gluing onto the sentence.
+function asSentence(message: string): string {
+  const trimmed = message.trim();
+  return /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
 export function PortsPane({
   connection,
   capabilities,
@@ -484,7 +492,7 @@ export function PortsPane({
                           {cache.items.length
                             ? "Showing saved results. Refresh failed: "
                             : "Listening ports unavailable: "}
-                          {cache.error}
+                          {asSentence(cache.error)}
                           <button
                             type="button"
                             className="link-button"
@@ -500,7 +508,7 @@ export function PortsPane({
                           {connections
                             ? "Showing saved connections. Refresh failed: "
                             : "Connections unavailable: "}
-                          {connectionsError}
+                          {asSentence(connectionsError)}
                           <button
                             type="button"
                             className="link-button"
@@ -516,7 +524,7 @@ export function PortsPane({
                           {containersCache.items.length
                             ? "Showing saved Docker mappings. Refresh failed: "
                             : "Docker mappings unavailable: "}
-                          {containersCache.error}
+                          {asSentence(containersCache.error)}
                           <button
                             type="button"
                             className="link-button"
@@ -529,7 +537,7 @@ export function PortsPane({
                       {firewallError && (
                         <p className="inline-warning">
                           <WarningSign />
-                          Firewall status unavailable: {firewallError}
+                          Firewall status unavailable: {asSentence(firewallError)}
                           {capabilities?.osId !== "windows" &&
                             firewallError.toLowerCase().includes("permission denied") && (
                               <button
@@ -545,7 +553,7 @@ export function PortsPane({
                       {ownerGap && (
                         <p className="inline-warning">
                           <WarningSign />
-                          {ownerGap.message}
+                          {asSentence(ownerGap.message)}
                           {ownerGap.offerSudo && (
                             <button
                               type="button"

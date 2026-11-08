@@ -811,6 +811,7 @@ it("keeps warning signs and retry actions in one flowing line without splitting 
       message.setStart(warning, 0);
       message.setEndBefore(button);
       const messageBounds = message.getBoundingClientRect();
+      expect(message.toString().trim()).toMatch(/[.!?…]$/);
       const messageLines = message.getClientRects();
       const messageEnd = messageLines[messageLines.length - 1]!;
       const bounds = button.getBoundingClientRect();
