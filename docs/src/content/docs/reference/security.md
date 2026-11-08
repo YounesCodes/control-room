@@ -21,7 +21,7 @@ Administrator local shells use Windows Sudo in inline mode and require UAC appro
 
 ## Stored locally
 
-Control Room saves connections, groups and tags, settings, tab layout, your Scratchpad notes, cached host details, optional Bash command history, and baselines you choose to capture in a local SQLite database.
+Control Room saves connections, groups and tags, settings, tab layout, your Scratchpad notes, cached host details, and optional Bash command history in a local SQLite database.
 
 ## Never stored
 

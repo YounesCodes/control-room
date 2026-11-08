@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BaselineProgress } from "../types";
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({
@@ -73,14 +72,6 @@ describe("IPC data and lifetime contracts", () => {
       output,
       remoteShellId: "wsl:Ubuntu",
     });
-  });
-  it("keeps baseline progress channels and cancellation IDs intact", async () => {
-    const progress = new Channel<BaselineProgress>();
-    const request = { connectionId: "host", captureId: "capture", label: null, sections: null };
-    await api.captureHostBaseline(request, progress);
-    await api.cancelHostBaseline("capture");
-    expect(invoke.mock.calls[0][1].progress).toBe(progress);
-    expect(invoke).toHaveBeenLastCalledWith("cancel_host_baseline", { captureId: "capture" });
   });
   it("uses bounded history defaults and preserves an explicit search limit", async () => {
     await api.history("host");

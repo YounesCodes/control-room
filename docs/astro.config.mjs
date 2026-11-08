@@ -67,7 +67,6 @@ export default defineConfig({
             { label: "Ports", slug: "inspection/ports" },
             { label: "Docker", slug: "inspection/docker" },
             { label: "Logs", slug: "inspection/logs" },
-            { label: "Baselines", slug: "inspection/baselines" },
           ],
         },
         {

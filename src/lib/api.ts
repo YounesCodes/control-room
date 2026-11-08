@@ -16,8 +16,6 @@ import type {
   HistoryInput,
   HistoryIntegrationStatus,
   HostCapabilities,
-  HostBaseline,
-  HostBaselineSummary,
   HostResources,
   HeaderMetric,
   HeaderMetrics,
@@ -32,11 +30,6 @@ import type {
   ScratchpadNoteInput,
   ScratchpadScope,
   SettingsContract,
-  BaselineCaptureRequest,
-  BaselineComparison,
-  BaselineProgress,
-  BaselineSectionKind,
-  BaselineTrace,
   SystemdUnit,
   SystemdInspection,
   SystemdReadSection,
@@ -278,46 +271,6 @@ export const api = {
       connectionId,
     ),
   stopLogStream: (streamId: string) => invoke<void>("stop_log_stream", { streamId }),
-  captureHostBaseline: (request: BaselineCaptureRequest, progress: Channel<BaselineProgress>) =>
-    invokeHostOperation<HostBaselineSummary>(
-      "capture_host_baseline",
-      { request, progress },
-      request.connectionId,
-    ),
-  cancelHostBaseline: (captureId: string) => invoke<void>("cancel_host_baseline", { captureId }),
-  listHostBaselines: (connectionId: string) =>
-    invoke<HostBaselineSummary[]>("list_host_baselines", { connectionId }),
-  getHostBaseline: (id: string) => invoke<HostBaseline>("get_host_baseline", { id }),
-  renameHostBaseline: (id: string, label: string | null) =>
-    invoke<HostBaselineSummary>("rename_host_baseline", { id, label }),
-  setHostBaselinePinned: (id: string, pinned: boolean) =>
-    invoke<HostBaselineSummary>("set_host_baseline_pinned", { id, pinned }),
-  deleteHostBaseline: (id: string) => invoke<void>("delete_host_baseline", { id }),
-  traceHostBaselineEntry: (connectionId: string, kind: BaselineSectionKind, identity: string) =>
-    invokeHostOperation<BaselineTrace>(
-      "trace_host_baseline_entry",
-      { connectionId, kind, identity },
-      connectionId,
-    ),
-  exportTextFile: (path: string, contents: string) =>
-    invoke<void>("export_text_file", { path, contents }),
-  compareHostBaselines: (baseId: string, targetId: string) =>
-    invoke<BaselineComparison>("compare_host_baselines", { baseId, targetId }),
-  compareHostBaselineWithLive: (
-    baseId: string,
-    captureId: string,
-    progress: Channel<BaselineProgress>,
-    connectionId?: string,
-  ) =>
-    invokeHostOperation<BaselineComparison>(
-      "compare_host_baseline_with_live",
-      {
-        baseId,
-        captureId,
-        progress,
-      },
-      connectionId,
-    ),
   history: (connectionId: string, search = "", limit = 500) =>
     invoke<HistoryEntry[]>("get_history", { connectionId, search, limit }),
   addHistory: (input: HistoryInput) => invoke<HistoryEntry>("add_history_entry", { input }),

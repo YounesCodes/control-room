@@ -54,7 +54,6 @@ describe("Workspace targets", () => {
       "containersCache",
       "containerDetailsCache",
       "logSource",
-      "baselineSelectionId",
     ]) {
       expect(local).not.toHaveProperty(remoteOnly);
     }

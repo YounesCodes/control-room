@@ -255,135 +255,6 @@ export interface DockerMount {
   propagation: string | null;
 }
 
-export interface HostIdentity {
-  hostname: string | null;
-  machineFingerprint: string | null;
-  osId: string | null;
-  osVersion: string | null;
-  kernel: string | null;
-  architecture: string | null;
-}
-
-export type BaselineSectionKind =
-  "host" | "systemdUnits" | "containers" | "listeners" | "filesystems";
-
-export type BaselineSectionStatus =
-  "collected" | "partial" | "unsupported" | "unavailable" | "skipped";
-
-export interface BaselineFact {
-  name: string;
-  value: string;
-}
-
-export interface BaselineEntry {
-  identity: string;
-  label: string;
-  facts: BaselineFact[];
-}
-
-export interface BaselineSection {
-  kind: BaselineSectionKind;
-  status: BaselineSectionStatus;
-  schemaVersion: number;
-  collectedAt: string;
-  message: string | null;
-  entries: BaselineEntry[];
-}
-
-export interface BaselineTracePoint {
-  baselineId: string;
-  label: string | null;
-  capturedAt: string;
-  sectionStatus: BaselineSectionStatus;
-  present: boolean;
-  facts: BaselineFact[];
-}
-
-export interface BaselineTrace {
-  kind: BaselineSectionKind;
-  identity: string;
-  label: string;
-  points: BaselineTracePoint[];
-}
-
-export interface HostBaseline {
-  id: string;
-  connectionId: string;
-  label: string | null;
-  schemaVersion: number;
-  capturedAt: string;
-  pinned: boolean;
-  identity: HostIdentity;
-  sections: BaselineSection[];
-}
-
-export interface BaselineSectionSummary {
-  kind: BaselineSectionKind;
-  status: BaselineSectionStatus;
-  entryCount: number;
-}
-
-export interface HostBaselineSummary {
-  id: string;
-  connectionId: string;
-  label: string | null;
-  schemaVersion: number;
-  capturedAt: string;
-  pinned: boolean;
-  identity: HostIdentity;
-  sections: BaselineSectionSummary[];
-  changesSincePrevious: number | null;
-}
-
-export interface BaselineCaptureRequest {
-  connectionId: string;
-  captureId: string;
-  label: string | null;
-  sections: BaselineSectionKind[] | null;
-}
-
-export interface BaselineProgress {
-  captureId: string;
-  kind: BaselineSectionKind;
-  status: BaselineSectionStatus;
-  message: string | null;
-  completed: number;
-  total: number;
-}
-
-export interface BaselineFactChange {
-  name: string;
-  baseValue: string | null;
-  targetValue: string | null;
-}
-
-export interface BaselineEntryChange {
-  identity: string;
-  label: string;
-  changes: BaselineFactChange[];
-}
-
-export interface BaselineSectionDiff {
-  kind: BaselineSectionKind;
-  baseStatus: BaselineSectionStatus;
-  targetStatus: BaselineSectionStatus;
-  comparable: boolean;
-  note: string | null;
-  added: BaselineEntry[];
-  removed: BaselineEntry[];
-  changed: BaselineEntryChange[];
-  unchangedCount: number;
-}
-
-export interface BaselineComparison {
-  base: HostBaselineSummary;
-  target: HostBaselineSummary;
-  identityMatch: "same" | "different" | "unknown";
-  schemaCompatible: boolean;
-  targetIsLive: boolean;
-  sections: BaselineSectionDiff[];
-}
-
 export type HistoryIntegrationStatus = "installed" | "not-installed" | "update-available";
 
 export interface HistoryEntry {
@@ -523,8 +394,7 @@ export interface LocalShellCatalog {
 }
 
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
-export type WorkspaceView =
-  "terminal" | "services" | "ports" | "docker" | "logs" | "baselines" | "history";
+export type WorkspaceView = "terminal" | "services" | "ports" | "docker" | "logs" | "history";
 
 export interface CachedList<T> {
   items: T[];
@@ -576,7 +446,6 @@ export interface RemoteWorkspace extends WorkspaceBase {
   containerSelectionId: string | null;
   containerDetailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   logSource: LogSourceSelection | null;
-  baselineSelectionId: string | null;
 }
 
 /// A Workspace on a local Windows shell. It is terminal-only: there is no
@@ -601,8 +470,8 @@ interface PersistedWorkspace {
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
   /** Older app versions persisted the standalone Scratchpad page and the
-   * retired Boot Diagnostics view. */
-  view: WorkspaceView | "scratchpad" | "overview" | "boot";
+   * retired Boot Diagnostics and Baselines views. */
+  view: WorkspaceView | "scratchpad" | "overview" | "boot" | "baselines";
   historyPaused: boolean;
 }
 

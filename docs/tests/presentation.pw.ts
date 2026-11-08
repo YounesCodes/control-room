@@ -12,7 +12,6 @@ const pages = [
   "reference/security/",
   "start-here/installation/",
   "reference/keyboard-shortcuts/",
-  "inspection/baselines/",
   "inspection/docker/",
   "inspection/logs/",
   "inspection/overview/",
@@ -109,7 +108,7 @@ for (const theme of ["dark", "light"]) {
 test("search, theme, anchors and mobile navigation retain native behavior", async ({ page }) => {
   await page.goto("start-here/installation/");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await page.locator(".pagefind-ui__search-input").fill("baselines");
+  await page.locator(".pagefind-ui__search-input").fill("ports");
   await expect(page.locator(".pagefind-ui__result-link").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("site-search dialog")).not.toBeVisible();
@@ -121,10 +120,10 @@ test("search, theme, anchors and mobile navigation retain native behavior", asyn
   await expect(page.locator("time")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator("starlight-menu-button button").click();
-  const baselines = page.locator('.sidebar-content a[href$="/inspection/baselines/"]');
-  await baselines.scrollIntoViewIfNeeded();
-  await baselines.click();
-  await expect(page.locator("h1")).toHaveText("Baselines");
+  const docker = page.locator('.sidebar-content a[href$="/inspection/docker/"]');
+  await docker.scrollIntoViewIfNeeded();
+  await docker.click();
+  await expect(page.locator("h1")).toHaveText("Docker");
   await expect(page.locator("starlight-menu-button button")).toHaveAttribute(
     "aria-expanded",
     "false",

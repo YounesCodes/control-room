@@ -15,6 +15,6 @@ description: Fix common SSH, inspection, Docker, and local shell problems.
 
 **A view shows partial results.** A command may be unavailable, access may be limited, or a result may have reached its size limit. The view labels that condition. Use the terminal if you need a broader check.
 
-**The window shows an error.** Read the message and select **Reload**. This restarts the app session; saved connections, settings, notes, and baselines stay on disk.
+**The window shows an error.** Read the message and select **Reload**. This restarts the app session; saved connections, settings, and notes stay on disk.
 
 **OpenSSH is missing.** Install or enable the Windows OpenSSH Client, then restart Control Room.

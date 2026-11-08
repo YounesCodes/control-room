@@ -8,7 +8,7 @@ Control Room gives you one place to work with Linux and Windows machines over SS
 
 - A real terminal with tabs and splits. It runs through the Windows OpenSSH client and ConPTY already on your machine, so your existing keys, `~/.ssh/config`, and ssh-agent keep working.
 - Saved connections with groups and tags, and several Workspaces per host.
-- Read-only views for systemd units, listening ports, Docker containers, logs, and baselines you can compare over time.
+- Read-only views for systemd units, listening ports, Docker containers, and logs.
 - Local terminals available, including administrator PowerShell and Command Prompt sessions.
 - Signed in-app updates: Control Room can update itself from inside the app.
 

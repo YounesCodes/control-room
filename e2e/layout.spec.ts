@@ -72,7 +72,7 @@ describe("Resizable panels in the native app", () => {
     await expect($("aria/Resize Connections panel")).toHaveAttribute("aria-valuenow", defaultWidth);
   });
 
-  it("saves content and split widths, shares them across hosts, restores and resets through SQLite", async () => {
+  it("saves content widths, shares them across hosts, restores and resets through SQLite", async () => {
     const create = async (name: string) => {
       await $(".sidebar-primary").click();
       await $("aria/Display name").setValue(name);
@@ -84,18 +84,14 @@ describe("Resizable panels in the native app", () => {
     await create("Layout host A");
     await create("Layout host B");
     await openOfflineConnection("Layout host A");
-    const openBaselines = async () => {
-      await $("nav[aria-label='Workspace features']").$("button=Baselines").click();
+    const openSystemd = async () => {
+      await $("nav[aria-label='Workspace features']").$("button=Systemd").click();
     };
-    await openBaselines();
-    let content = $("aria/Resize Baselines content");
+    await openSystemd();
+    let content = $("aria/Resize Services content");
     await content.click();
     await browser.keys("ArrowLeft");
     const contentWidth = Number(await content.getAttribute("aria-valuenow"));
-    let split = $("aria/Resize Baselines panes");
-    await split.click();
-    await browser.keys(["Shift", "ArrowLeft", "NULL"]);
-    const splitWidth = Number(await split.getAttribute("aria-valuenow"));
     const saved = async () =>
       (await browser.tauri.execute(({ core }) => core.invoke("get_workspace_state"))) as {
         panelSizes: Record<string, number>;
@@ -104,38 +100,33 @@ describe("Resizable panels in the native app", () => {
       };
     await browser.waitUntil(async () => {
       const state = await saved();
-      return (
-        state.panelSizes["content:baselines"] === contentWidth &&
-        state.panelSizes["split:Baselines"] === splitWidth
-      );
+      return state.panelSizes["content:services"] === contentWidth;
     });
     await openOfflineConnection("Layout host B");
-    await openBaselines();
-    await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
+    await openSystemd();
+    await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
     await browser.waitUntil(async () => {
       const state = await saved();
       return (
         state.workspaces.length === 2 &&
         state.workspaces.some(
-          (workspace) => workspace.id === state.activeWorkspaceId && workspace.view === "baselines",
+          (workspace) => workspace.id === state.activeWorkspaceId && workspace.view === "services",
         )
       );
     });
     await restartApp();
-    content = $("aria/Resize Baselines content");
-    split = $("aria/Resize Baselines panes");
+    content = $("aria/Resize Services content");
     await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
-    await expect(split).toHaveAttribute("aria-valuenow", String(splitWidth));
     const window = await browser.getWindowRect();
     await browser.setWindowSize(960, 640);
     await browser.waitUntil(
       async () => Number(await content.getAttribute("aria-valuenow")) < contentWidth,
     );
-    expect((await saved()).panelSizes["content:baselines"]).toBe(contentWidth);
+    expect((await saved()).panelSizes["content:services"]).toBe(contentWidth);
     await browser.setWindowSize(window.width, window.height);
     await expect(content).toHaveAttribute("aria-valuenow", String(contentWidth));
-    await split.doubleClick();
-    await browser.waitUntil(async () => !("split:Baselines" in (await saved()).panelSizes));
+    await content.doubleClick();
+    await browser.waitUntil(async () => !("content:services" in (await saved()).panelSizes));
     await $("aria/Reset layout").click();
     await browser.waitUntil(async () => Object.keys((await saved()).panelSizes).length === 0);
     for (const name of ["Layout host A", "Layout host B"]) {
@@ -150,7 +141,7 @@ describe("Resizable panels in the native app", () => {
   it("saves Hosts and Capabilities heights across native restarts and resets them", async () => {
     await addConnection("Layout host");
     await openOfflineConnection("Layout host");
-    await feature("Baselines");
+    await feature("History");
     let divider = $("aria/Resize Hosts and Capabilities");
     const original = Number(await divider.getAttribute("aria-valuenow"));
     await divider.dragAndDrop({ x: 0, y: -60 });

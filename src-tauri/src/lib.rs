@@ -1,4 +1,3 @@
-mod baselines;
 mod commands;
 mod database;
 mod documentation;
@@ -21,7 +20,6 @@ mod e2e;
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("desktop-e2e is only for debug test builds");
 
-use baselines::BaselineCaptureRegistry;
 use database::Database;
 use remote::{RemoteOperationLimiter, StreamManager};
 use session::SessionManager;
@@ -63,7 +61,6 @@ pub fn run() {
         .manage(updater::UpdaterState::default())
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
-        .manage(BaselineCaptureRegistry::default())
         .setup(|app| {
             #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
             if let Some(window) = app.get_webview_window("main") {
@@ -154,17 +151,6 @@ pub fn run() {
             commands::start_journal_stream,
             commands::start_docker_log_stream,
             commands::stop_log_stream,
-            commands::capture_host_baseline,
-            commands::cancel_host_baseline,
-            commands::list_host_baselines,
-            commands::get_host_baseline,
-            commands::rename_host_baseline,
-            commands::set_host_baseline_pinned,
-            commands::delete_host_baseline,
-            commands::trace_host_baseline_entry,
-            commands::export_text_file,
-            commands::compare_host_baselines,
-            commands::compare_host_baseline_with_live,
             commands::get_history,
             commands::add_history_entry,
             commands::delete_history_entry,
@@ -248,8 +234,8 @@ mod dev_window_title_tests {
     #[test]
     fn trims_git_output() {
         assert_eq!(
-            dev_window_title("  baselines-2.0-host-state-explorer\n"),
-            "baselines-2.0-host-state-explorer"
+            dev_window_title("  remove-unneeded-capability\n"),
+            "remove-unneeded-capability"
         );
     }
 
