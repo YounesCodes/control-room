@@ -87,7 +87,9 @@ with the same motion, and confirm ungrouping with its effect on the open termina
 Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected
 split pane on all four edges, above terminal content, without blocking input or
-divider interaction. Keep a thin window drag strip across the top of the Focus Mode
+divider interaction. Where a pane meets the window border, inset its frame one pixel
+and size panes in whole pixels so display scaling never hides a side. The pane row
+marks its selected tab without an underline, which would sit on that frame. Keep a thin window drag strip across the top of the Focus Mode
 tabs and terminal tools, ending at the fixed window controls, even when tabs overflow.
 Avoid a blank column between controls. Focus Mode
 header cells — tabs and buttons — fill the strip's full height so their highlight

@@ -2166,6 +2166,11 @@ code,
   width: var(--session-tab-width, 180px);
 }
 
+/* The selected pane's frame marks it below; an underline would sit on that frame. */
+.session-pane-tabs .session-tab-wrap.active {
+  border-bottom-color: transparent;
+}
+
 .session-tab-wrap {
   position: relative;
   display: flex;
@@ -2790,9 +2795,29 @@ code,
   pointer-events: none;
 }
 
+/* The window border already separates outer edges from the desktop. */
+.terminal-pane-layout .terminal-workspace-pane.edge-right::after {
+  border-right-color: transparent;
+}
+.terminal-pane-layout .terminal-workspace-pane.edge-bottom::after {
+  border-bottom-color: transparent;
+}
+
 .terminal-pane-layout .terminal-workspace-pane.active::after {
   z-index: 6;
   border: 1px solid var(--accent);
+}
+
+/* At the window border the selected frame sits one pixel in, so the border and
+   display scaling never swallow that side of the outline. */
+.terminal-pane-layout .terminal-workspace-pane.active.edge-left::after {
+  left: 1px;
+}
+.terminal-pane-layout .terminal-workspace-pane.active.edge-right::after {
+  right: 1px;
+}
+.terminal-pane-layout .terminal-workspace-pane.active.edge-bottom::after {
+  bottom: 1px;
 }
 
 .terminal-pane-layout .terminal-workspace-pane-visible {

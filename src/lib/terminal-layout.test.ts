@@ -19,6 +19,7 @@ import {
   terminalDropZone,
   getTerminalLayoutSurface,
   terminalLayoutFits,
+  terminalPaneOuterEdges,
 } from "./terminal-layout";
 
 describe("terminal pane tree", () => {
@@ -339,5 +340,19 @@ describe("terminal pane tree", () => {
       "vertical",
     );
     expect(selectTerminalTab(layout, "alpine")).toEqual(createTerminalLayout("alpine"));
+  });
+
+  it("names the sides of a pane that meet the window border", () => {
+    const layout = splitTerminalLayout(
+      splitTerminalLayout(createTerminalLayout("a"), "a", "b", "vertical"),
+      "b",
+      "c",
+      "horizontal",
+    );
+    const rects = getTerminalPaneRects(layout);
+    expect(terminalPaneOuterEdges(rects.a)).toEqual(["left", "bottom"]);
+    expect(terminalPaneOuterEdges(rects.b)).toEqual(["right"]);
+    expect(terminalPaneOuterEdges(rects.c)).toEqual(["right", "bottom"]);
+    expect(terminalPaneOuterEdges({ left: 33.333, top: 0, width: 33.333, height: 50 })).toEqual([]);
   });
 });

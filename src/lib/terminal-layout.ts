@@ -59,6 +59,18 @@ export function getTerminalPanePixels(
   };
 }
 
+/** Sides of a pane that meet the surface's left, right, or bottom edge, where the window border runs. */
+export function terminalPaneOuterEdges(
+  rectangle: TerminalPaneRect,
+): ("left" | "right" | "bottom")[] {
+  const tolerance = 0.01;
+  return [
+    ...(rectangle.left <= tolerance ? (["left"] as const) : []),
+    ...(rectangle.left + rectangle.width >= 100 - tolerance ? (["right"] as const) : []),
+    ...(rectangle.top + rectangle.height >= 100 - tolerance ? (["bottom"] as const) : []),
+  ];
+}
+
 export const MIN_TERMINAL_PANE_WIDTH = 280;
 export const MIN_TERMINAL_PANE_HEIGHT = 180;
 

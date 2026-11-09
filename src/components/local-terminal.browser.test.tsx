@@ -232,15 +232,22 @@ describe("Local Terminal Mode in the real App", () => {
       context.fillRect(0, 0, 1, 1);
       const expected = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
       context.drawImage(bitmap, 0, 0);
+      // At the window border the frame sits one pixel in so it is never swallowed.
+      const inset = (side: string) => (pane.classList.contains(`edge-${side}`) ? 1 : 0);
+      const [left, right, bottom] = [
+        inset("left"),
+        bitmap.width - 1 - inset("right"),
+        bitmap.height - 1 - inset("bottom"),
+      ];
       const edges = {
         top: [Math.floor(bitmap.width / 2), 0],
-        right: [bitmap.width - 1, Math.floor(bitmap.height / 2)],
-        bottom: [Math.floor(bitmap.width / 2), bitmap.height - 1],
-        left: [0, Math.floor(bitmap.height / 2)],
-        topLeft: [0, 0],
-        topRight: [bitmap.width - 1, 0],
-        bottomLeft: [0, bitmap.height - 1],
-        bottomRight: [bitmap.width - 1, bitmap.height - 1],
+        right: [right, Math.floor(bitmap.height / 2)],
+        bottom: [Math.floor(bitmap.width / 2), bottom],
+        left: [left, Math.floor(bitmap.height / 2)],
+        topLeft: [left, 0],
+        topRight: [right, 0],
+        bottomLeft: [left, bottom],
+        bottomRight: [right, bottom],
       };
       for (const [edge, [x, y]] of Object.entries(edges)) {
         const actual = [...context.getImageData(x, y, 1, 1).data].slice(0, 3);
@@ -526,6 +533,35 @@ describe("Local Terminal Mode in the real App", () => {
     await vi.waitFor(() => expect(paneBounds()[1].height).toBeCloseTo(paneBounds()[2].height, 0));
     await outer.dblClick({ position: { x: 12, y: 100 } });
     await vi.waitFor(() => expect(paneBounds()[0].width).toBeCloseTo(paneBounds()[1].width, 0));
+  });
+  it("keeps the selected pane's full frame inside a fractional window edge", async () => {
+    await page.viewport(960, 640);
+    mountApp(true);
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    await split("vertically");
+    // Display scaling leaves the terminal area a fraction of a pixel short of a whole size.
+    const content = container!.querySelector<HTMLElement>(".workspace-content")!;
+    content.style.flex = "none";
+    content.style.width = "calc(100% - 0.4px)";
+    content.style.height = "calc(100% - 0.4px)";
+    const active = () =>
+      container!.querySelector<HTMLElement>(".terminal-workspace-pane-visible.active")!;
+    await vi.waitFor(() => {
+      const bounds = content.getBoundingClientRect();
+      const pane = active().getBoundingClientRect();
+      expect(pane.right).toBeLessThanOrEqual(bounds.right + 0.01);
+      expect(pane.bottom).toBeLessThanOrEqual(bounds.bottom + 0.01);
+    });
+    expect(active().classList).toContain("edge-right");
+    expect(active().classList).toContain("edge-bottom");
+    const frame = getComputedStyle(active(), "::after");
+    expect([frame.right, frame.bottom, frame.left]).toEqual(["1px", "1px", "0px"]);
+    expect(frame.borderTopWidth).toBe("1px");
+    const paneTab = container!.querySelector<HTMLElement>(
+      ".session-pane-tabs .session-tab-wrap.active",
+    )!;
+    expect(getComputedStyle(paneTab).borderBottomColor).toBe("rgba(0, 0, 0, 0)");
+    await page.screenshot({ path: "../../test-results/terminal-edge-frame.png" });
   });
   it("resizes merged existing terminals and keeps each group's sizes independent", async () => {
     await page.viewport(960, 640);

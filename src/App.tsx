@@ -95,6 +95,7 @@ import {
   getTerminalLayoutSurface,
   resizeTerminalLayout,
   splitTerminalLayout,
+  terminalPaneOuterEdges,
 } from "./lib/terminal-layout";
 import type { TerminalSplitDirection } from "./lib/terminal-layout";
 import {
@@ -660,7 +661,10 @@ export function App() {
     const element = terminalLayoutViewportRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
 
-    function rememberSize(width: number, height: number, outerWidth: number, outerHeight: number) {
+    function rememberSize(...sizes: [number, number, number, number]) {
+      // Display scaling gives fractional boxes; rounding up would push the right and
+      // bottom panes, and the selected frame, past the clipped edge.
+      const [width, height, outerWidth, outerHeight] = sizes.map(Math.floor);
       setTerminalLayoutViewport((current) =>
         current.visible.width === width &&
         current.visible.height === height &&
@@ -2598,6 +2602,9 @@ export function App() {
                           "terminal-workspace-pane",
                           terminalVisible ? "terminal-workspace-pane-visible" : "",
                           workspace.id === activeWorkspace.id ? "active" : "",
+                          ...(terminalSplitMode && terminalVisible && paneRect
+                            ? terminalPaneOuterEdges(paneRect).map((side) => `edge-${side}`)
+                            : []),
                         ]
                           .filter(Boolean)
                           .join(" ")}
