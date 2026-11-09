@@ -2843,46 +2843,88 @@ code,
   cursor: row-resize;
 }
 
-/* A full-width, click-through row that only carries the pane's corner handle. */
+/* A full-width, click-through row that only carries the pane's corner grip. */
 .terminal-pane-heading {
   position: absolute;
   /* Above split dividers (8), whose hit area reaches into the pane corner. */
   z-index: 9;
   display: flex;
   justify-content: flex-end;
-  padding: 4px;
+  padding: 5px 6px;
   pointer-events: none;
 }
+/* A frosted chip keeps the grip legible over terminal text without a hard box. */
 .terminal-pane-heading .terminal-pane-grip {
-  display: flex;
-  width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--surface-chrome);
-  color: var(--text-muted);
+  display: grid;
+  width: 22px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(10 10 10 / 55%);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 6%);
   opacity: 0;
+  transform: scale(0.9);
   pointer-events: auto;
   touch-action: none;
   cursor: grab;
-  transition: opacity 120ms ease;
+  transition:
+    opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
 }
 .terminal-pane-heading.revealed .terminal-pane-grip,
 .terminal-pane-heading .terminal-pane-grip:focus-visible {
   opacity: 1;
+  transform: none;
 }
 .terminal-pane-heading .terminal-pane-grip:hover,
+.terminal-pane-heading.engaged .terminal-pane-grip {
+  background: var(--surface-overlay);
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 4px 14px rgb(0 0 0 / 50%);
+}
+.terminal-pane-heading.engaged .terminal-pane-grip,
 .terminal-pane-heading .terminal-pane-grip:focus-visible {
-  background: var(--fill-hover);
-  color: var(--text);
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 4px 14px rgb(0 0 0 / 50%);
 }
 .terminal-pane-grip:active {
   cursor: grabbing;
 }
+.terminal-pane-grip-dots {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  gap: 3px;
+  transition: gap var(--motion-fast) var(--ease);
+}
+.terminal-pane-grip-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 55%);
+  transition: background-color var(--motion-fast) var(--ease);
+}
+/* Under the pointer the dots spread a touch and brighten, like a grip being taken. */
+.terminal-pane-grip:hover .terminal-pane-grip-dots,
+.terminal-pane-heading.engaged .terminal-pane-grip-dots {
+  gap: 3px 4px;
+}
+.terminal-pane-grip:hover .terminal-pane-grip-dots i,
+.terminal-pane-grip:focus-visible .terminal-pane-grip-dots i,
+.terminal-pane-heading.engaged .terminal-pane-grip-dots i {
+  background: var(--text-strong);
+}
 @media (prefers-reduced-motion: reduce) {
-  .terminal-pane-heading .terminal-pane-grip {
+  .terminal-pane-heading .terminal-pane-grip,
+  .terminal-pane-grip-dots,
+  .terminal-pane-grip-dots i {
     transition: none;
   }
 }
@@ -2936,24 +2978,175 @@ code,
     transition: none;
   }
 }
-.terminal-arrange-body {
-  padding: 20px;
-}
-.terminal-arrange-body label {
+/* Arrange: the group as a live map. Tiles mirror the panes; each other pane's
+   center swaps and its edges dock, matching the pointer drop zones. */
+.terminal-arrange-menu {
+  position: fixed;
+  z-index: 40;
   display: grid;
-  gap: 8px;
-}
-.terminal-arrange-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
-.terminal-arrange-actions button {
-  padding: 8px 12px;
+  width: 288px;
+  gap: 10px;
   border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 12px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+.terminal-arrange-menu:focus {
+  outline: none;
+}
+.terminal-arrange-map {
+  position: relative;
   border-radius: var(--radius-sm);
-  background: var(--surface-raised);
+  background: #050505;
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+.terminal-arrange-tile {
+  position: absolute;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: #121212;
+}
+.terminal-arrange-tile.source {
+  border: 1px dashed rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 7%);
+}
+.terminal-arrange-tile-name {
+  display: flex;
+  max-width: calc(100% - 12px);
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  pointer-events: none;
+}
+.terminal-arrange-tile-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-arrange-tile.source .terminal-arrange-tile-name {
+  color: var(--text-strong);
+}
+.terminal-arrange-zone {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease);
+}
+.terminal-arrange-zone:focus-visible {
+  outline: none;
+}
+/* Each edge zone owns its quarter strip, and clip-path trims the strip's corners into
+   the drop zone's trapezoid, for paint and hit area alike. The strip's center always
+   lies inside its own shape, so pointing at or focusing a zone lands on that zone. */
+.terminal-arrange-zone[data-zone="center"] {
+  inset: 25%;
+}
+.terminal-arrange-zone[data-zone="left"] {
+  right: 75%;
+  clip-path: polygon(0 0, 100% 25%, 100% 75%, 0 100%);
+}
+.terminal-arrange-zone[data-zone="right"] {
+  left: 75%;
+  clip-path: polygon(100% 0, 0 25%, 0 75%, 100% 100%);
+}
+.terminal-arrange-zone[data-zone="top"] {
+  bottom: 75%;
+  clip-path: polygon(0 0, 100% 0, 75% 100%, 25% 100%);
+}
+.terminal-arrange-zone[data-zone="bottom"] {
+  top: 75%;
+  clip-path: polygon(25% 0, 75% 0, 100% 100%, 0 100%);
+}
+.terminal-arrange-zone[data-state="valid"]:hover,
+.terminal-arrange-zone[data-state="valid"]:focus-visible {
+  background: rgb(255 255 255 / 16%);
+}
+.terminal-arrange-zone[data-state="same"] {
+  cursor: default;
+}
+.terminal-arrange-zone[data-state="same"]:hover,
+.terminal-arrange-zone[data-state="same"]:focus-visible {
+  background: rgb(255 255 255 / 5%);
+}
+.terminal-arrange-zone[data-state="invalid"] {
+  cursor: not-allowed;
+}
+.terminal-arrange-zone[data-state="invalid"]:hover,
+.terminal-arrange-zone[data-state="invalid"]:focus-visible {
+  background: color-mix(in srgb, var(--failure) 30%, transparent);
+}
+/* Where the pane would land; glides as the pointer moves between zones. */
+.terminal-arrange-result {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 10%);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 55%);
+  pointer-events: none;
+  transition:
+    left var(--motion-fast) var(--ease),
+    top var(--motion-fast) var(--ease),
+    width var(--motion-fast) var(--ease),
+    height var(--motion-fast) var(--ease);
+}
+.terminal-arrange-caption {
+  min-height: 16px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+.terminal-arrange-caption.unavailable {
+  color: var(--failure);
+}
+.terminal-arrange-orientation {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #0d0d0d;
+  padding: 3px;
+}
+.terminal-arrange-orientation button {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+.terminal-arrange-orientation button:hover {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+.terminal-arrange-orientation button[aria-pressed="true"] {
+  background: var(--fill-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-arrange-result,
+  .terminal-arrange-zone {
+    transition: none;
+  }
 }
 
 .terminal-layout-divider[aria-orientation="horizontal"]::after {

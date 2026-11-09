@@ -2,12 +2,13 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
+  type ReactNode,
   type RefObject,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Move } from "lucide-react";
+import { Columns2, Rows2 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { Modal } from "./Modal";
 import {
   getTerminalPanePixels,
   getTerminalLayoutIds,
@@ -31,6 +32,8 @@ interface Props {
   panes: Record<string, TerminalPaneRect>;
   container: RefObject<HTMLDivElement | null>;
   labels: Record<string, string>;
+  /** Identity marks (shell logo or host OS) shown in the Arrange map. */
+  marks?: Record<string, ReactNode>;
   onChange: (layout: TerminalLayout) => void;
   onActivate: (id: string) => void;
 }
@@ -41,13 +44,8 @@ interface Drop {
   valid: boolean;
   reason: string;
 }
-const actions = [
-  ["center", "Swap"],
-  ["left", "Move left"],
-  ["right", "Move right"],
-  ["top", "Move up"],
-  ["bottom", "Move down"],
-] as const;
+
+const zones: TerminalDropZone[] = ["center", "left", "right", "top", "bottom"];
 
 const dropCaption: Record<TerminalDropZone, (target: string) => string> = {
   center: (target) => `Swap with ${target}`,
@@ -57,9 +55,34 @@ const dropCaption: Record<TerminalDropZone, (target: string) => string> = {
   bottom: (target) => `Dock below ${target}`,
 };
 
+const ARRANGE_WIDTH = 288;
+const ARRANGE_MAP_WIDTH = 264;
+const POPOVER_GAP = 6;
+const POPOVER_GUTTER = 8;
+
+/** Inset a surface percentage rectangle so neighboring map tiles keep a gutter. */
+function tileStyle(rect: TerminalPaneRect): CSSProperties {
+  return {
+    left: `calc(${rect.left}% + 2px)`,
+    top: `calc(${rect.top}% + 2px)`,
+    width: `calc(${rect.width}% - 4px)`,
+    height: `calc(${rect.height}% - 4px)`,
+  };
+}
+
+function arrangeMapHeight(viewport: TerminalLayoutViewport) {
+  const ratio =
+    viewport.width > 0 && Number.isFinite(viewport.height / viewport.width)
+      ? viewport.height / viewport.width
+      : 0.6;
+  return Math.round(Math.min(176, Math.max(104, ARRANGE_MAP_WIDTH * ratio)));
+}
+
 /**
- * One corner handle per pane: dragging it moves the pane, clicking it opens Arrange.
- * Only the handle captures pointers; selecting terminal text never starts a move.
+ * Each pane carries a small frosted grip in its top-right corner, shown on hover.
+ * Dragging it moves the pane; clicking it opens Arrange, a live map of the group where
+ * each pane's center swaps and its edges dock, previewed before anything changes.
+ * Only the grip captures pointers; selecting terminal text never starts a move.
  */
 export function TerminalLayoutControls({
   layout,
@@ -68,6 +91,7 @@ export function TerminalLayoutControls({
   panes,
   container,
   labels,
+  marks = {},
   onChange,
   onActivate,
 }: Props) {
@@ -81,11 +105,10 @@ export function TerminalLayoutControls({
     handle: HTMLButtonElement;
     moved: boolean;
   } | null>(null);
-  const [menu, setMenu] = useState<string | null>(null);
-  const [target, setTarget] = useState("");
+  const [menu, setMenu] = useState<{ id: string; style: CSSProperties } | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const grips = useRef(new Map<string, HTMLButtonElement>());
   const ids = getTerminalLayoutIds(layout);
-  const menuSplit = menu ? terminalParentSplitPath(layout, menu) : null;
   function cancel() {
     const current = pointer.current;
     pointer.current = null;
@@ -103,8 +126,11 @@ export function TerminalLayoutControls({
       }
     };
     document.addEventListener("keydown", keydown, true);
-    // Geometry or membership changes invalidate an in-flight pointer preview.
-    const resize = () => cancel();
+    // Geometry or membership changes invalidate an in-flight preview or an open map.
+    const resize = () => {
+      cancel();
+      setMenu(null);
+    };
     window.addEventListener("resize", resize);
     return () => {
       document.removeEventListener("keydown", keydown, true);
@@ -114,7 +140,7 @@ export function TerminalLayoutControls({
   useEffect(() => {
     cancel();
   }, [layout, viewport.width, viewport.height]);
-  // Reveal a pane's handle while the pointer is over that pane, without a header strip.
+  // Reveal a pane's grip while the pointer is over that pane, without a header strip.
   useEffect(() => {
     const surface = container.current;
     if (!surface) return;
@@ -141,9 +167,35 @@ export function TerminalLayoutControls({
       surface.removeEventListener("pointerleave", leave);
     };
   }, [container, panes]);
+
   function openArrange(id: string) {
-    setTarget(ids.find((other) => other !== id)!);
-    setMenu(id);
+    if (menu?.id === id) {
+      setMenu(null);
+      return;
+    }
+    const rect = grips.current.get(id)?.getBoundingClientRect();
+    if (!rect) return;
+    const height = arrangeMapHeight(viewport) + 112;
+    const left = Math.max(
+      POPOVER_GUTTER,
+      Math.min(
+        rect.left + rect.width / 2 - ARRANGE_WIDTH / 2,
+        window.innerWidth - ARRANGE_WIDTH - POPOVER_GUTTER,
+      ),
+    );
+    const below = window.innerHeight - rect.bottom - POPOVER_GAP - POPOVER_GUTTER;
+    setMenu({
+      id,
+      style:
+        below >= height || rect.top < height
+          ? { left, top: rect.bottom + POPOVER_GAP }
+          : { left, bottom: window.innerHeight - rect.top + POPOVER_GAP },
+    });
+  }
+  function closeArrange(returnFocus: boolean) {
+    const id = menu?.id;
+    setMenu(null);
+    if (returnFocus && id) grips.current.get(id)?.focus();
   }
 
   function proposal(source: string, destination: string, zone: TerminalDropZone): Drop {
@@ -201,20 +253,32 @@ export function TerminalLayoutControls({
     <>
       {ids.map((id) => {
         const rect = getTerminalPanePixels(panes[id], viewport);
-        const revealed = moving ? moving === id : hovered === id || menu === id;
+        const engaged = moving === id || menu?.id === id;
+        const revealed = moving ? moving === id : hovered === id || engaged;
         return (
           <div
-            className={revealed ? "terminal-pane-heading revealed" : "terminal-pane-heading"}
+            className={[
+              "terminal-pane-heading",
+              revealed ? "revealed" : "",
+              engaged ? "engaged" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             data-terminal-motion-id={`${id}-heading`}
             key={id}
             style={rect ? { left: rect.left, top: rect.top, width: rect.width } : undefined}
           >
             <button
+              ref={(element) => {
+                if (element) grips.current.set(id, element);
+                else grips.current.delete(id);
+              }}
               type="button"
               className="terminal-pane-grip"
               aria-label={`Arrange ${labels[id]}`}
               aria-haspopup="dialog"
-              title="Drag to swap or dock; click for arrange options"
+              aria-expanded={menu?.id === id}
+              title="Drag to move, click to arrange"
               onClick={(event) => {
                 // Pointer clicks are handled on pointerup so a drag never also opens Arrange.
                 if (event.detail === 0) openArrange(id);
@@ -241,6 +305,7 @@ export function TerminalLayoutControls({
                   Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
                 )
                   return;
+                if (!current.moved) setMenu(null);
                 current.moved = true;
                 setMoving(id);
                 setDrop(hit(id, event.clientX, event.clientY));
@@ -249,7 +314,11 @@ export function TerminalLayoutControls({
               onPointerCancel={cancel}
               onLostPointerCapture={cancel}
             >
-              <Move size={14} />
+              <span className="terminal-pane-grip-dots" aria-hidden="true">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <i key={index} />
+                ))}
+              </span>
             </button>
           </div>
         );
@@ -291,70 +360,176 @@ export function TerminalLayoutControls({
       </span>
       {menu &&
         createPortal(
-          <Modal
-            title={`Arrange ${labels[menu]}`}
-            onClose={() => setMenu(null)}
-            className="terminal-arrange-dialog"
-          >
-            <div className="terminal-arrange-body">
-              <label>
-                Target pane
-                <select
-                  aria-label="Target pane"
-                  value={target}
-                  onChange={(event) => setTarget(event.target.value)}
-                >
-                  {ids
-                    .filter((id) => id !== menu)
-                    .map((id) => (
-                      <option key={id} value={id}>
-                        {labels[id]}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <div className="terminal-arrange-actions">
-                {actions.map(([zone, name]) => (
-                  <button
-                    type="button"
-                    key={zone}
-                    disabled={!proposal(menu, target, zone).valid}
-                    onClick={() => {
-                      const result = proposal(menu, target, zone);
-                      if (!result.valid) return;
-                      onChange(result.layout);
-                      setMenu(null);
-                      onActivate(menu);
-                    }}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-              <div className="terminal-arrange-actions">
-                {(["vertical", "horizontal"] as const).map((direction) => (
-                  <button
-                    type="button"
-                    key={direction}
-                    aria-pressed={
-                      menuSplit !== null && terminalSplitDirection(layout, menuSplit) === direction
-                    }
-                    title="Saved split orientation; compact windows may temporarily rotate it"
-                    onClick={() => {
-                      const path = terminalParentSplitPath(layout, menu);
-                      if (path !== null) onChange(orientTerminalLayout(layout, path, direction));
-                      setMenu(null);
-                      onActivate(menu);
-                    }}
-                  >
-                    {direction === "vertical" ? "Side by side" : "Stacked"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Modal>,
+          <ArrangePopover
+            source={menu.id}
+            style={menu.style}
+            layout={layout}
+            viewport={viewport}
+            available={available}
+            panes={panes}
+            labels={labels}
+            marks={marks}
+            grip={grips.current.get(menu.id) ?? null}
+            proposal={proposal}
+            onApply={(next) => {
+              onChange(next);
+              setMenu(null);
+              onActivate(menu.id);
+            }}
+            onClose={closeArrange}
+          />,
           document.body,
         )}
     </>
+  );
+}
+
+interface ArrangeProps {
+  source: string;
+  style: CSSProperties;
+  layout: TerminalLayout;
+  viewport: TerminalLayoutViewport;
+  available: TerminalLayoutViewport;
+  panes: Record<string, TerminalPaneRect>;
+  labels: Record<string, string>;
+  marks: Record<string, ReactNode>;
+  grip: HTMLButtonElement | null;
+  proposal: (source: string, target: string, zone: TerminalDropZone) => Drop;
+  onApply: (layout: TerminalLayout) => void;
+  onClose: (returnFocus: boolean) => void;
+}
+
+/**
+ * Arrange as a map rather than a form: the group in miniature, with this pane marked
+ * as the one moving. Pointing at (or focusing) another pane's center or an edge
+ * previews the result in place and names it; choosing it applies the move.
+ */
+function ArrangePopover({
+  source,
+  style,
+  layout,
+  viewport,
+  available,
+  panes,
+  labels,
+  marks,
+  grip,
+  proposal,
+  onApply,
+  onClose,
+}: ArrangeProps) {
+  const root = useRef<HTMLDivElement>(null);
+  const [pick, setPick] = useState<Drop | null>(null);
+  const split = terminalParentSplitPath(layout, source);
+  const direction = split === null ? null : terminalSplitDirection(layout, split);
+  const result = pick?.valid
+    ? getTerminalLayoutSurface(pick.layout, available).panes[source]
+    : null;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    root.current?.focus();
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target || root.current?.contains(target) || grip?.contains(target)) return;
+      onCloseRef.current(false);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [grip]);
+
+  return (
+    <div
+      ref={root}
+      className="terminal-arrange-menu"
+      role="dialog"
+      aria-label={`Arrange ${labels[source]}`}
+      tabIndex={-1}
+      style={style}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose(true);
+      }}
+    >
+      <div
+        className="terminal-arrange-map"
+        style={{ height: arrangeMapHeight(viewport) }}
+        onPointerLeave={() => setPick(null)}
+      >
+        {Object.entries(panes).map(([id, rect]) => (
+          <div
+            key={id}
+            className={id === source ? "terminal-arrange-tile source" : "terminal-arrange-tile"}
+            style={tileStyle(rect)}
+          >
+            <span className="terminal-arrange-tile-name" aria-hidden="true">
+              {marks[id]}
+              <span>{labels[id]}</span>
+            </span>
+            {id !== source &&
+              zones.map((zone) => {
+                const option = proposal(source, id, zone);
+                const name = dropCaption[zone](labels[id]);
+                return (
+                  <button
+                    key={zone}
+                    type="button"
+                    className="terminal-arrange-zone"
+                    data-zone={zone}
+                    data-state={
+                      option.valid ? "valid" : option.reason === "Already here" ? "same" : "invalid"
+                    }
+                    aria-label={option.valid ? name : `${name}: ${option.reason.toLowerCase()}`}
+                    aria-disabled={!option.valid || undefined}
+                    onPointerEnter={() => setPick(option)}
+                    onFocus={() => setPick(option)}
+                    onBlur={() => setPick(null)}
+                    onClick={() => {
+                      if (option.valid) onApply(option.layout);
+                    }}
+                  />
+                );
+              })}
+          </div>
+        ))}
+        {result && (
+          <div className="terminal-arrange-result" style={tileStyle(result)} aria-hidden="true" />
+        )}
+      </div>
+      <p
+        className={
+          pick && !pick.valid ? "terminal-arrange-caption unavailable" : "terminal-arrange-caption"
+        }
+        aria-hidden="true"
+      >
+        {pick
+          ? pick.valid
+            ? dropCaption[pick.zone](labels[pick.target])
+            : pick.reason
+          : "Center swaps, edges dock"}
+      </p>
+      {split !== null && (
+        <div className="terminal-arrange-orientation" role="group" aria-label="Split orientation">
+          {(["vertical", "horizontal"] as const).map((option) => (
+            <button
+              type="button"
+              key={option}
+              aria-pressed={direction === option}
+              title="Saved split orientation; compact windows may temporarily rotate it"
+              onClick={() => {
+                if (direction !== option) onApply(orientTerminalLayout(layout, split, option));
+                else onClose(true);
+              }}
+            >
+              {option === "vertical" ? <Columns2 size={14} /> : <Rows2 size={14} />}
+              {option === "vertical" ? "Side by side" : "Stacked"}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -520,27 +520,21 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toEqual(["Arrange Command Prompt 2"]);
     await page.screenshot({ path: "../test-results/terminal-pane-handle.png" });
     await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
-    await page
-      .getByRole("combobox", { name: "Target pane" })
-      .selectOptions(
-        (
-          page
-            .getByRole("option", { name: "Command Prompt 2", exact: true })
-            .element() as HTMLOptionElement
-        ).value,
-      );
-    await page.getByRole("button", { name: "Swap", exact: true }).click();
+    // Arrange is a live map: pointing at a zone previews the move before choosing it.
+    const map = page.getByRole("dialog", { name: "Arrange Fixture Alpha" });
+    await map.getByRole("button", { name: "Dock below Command Prompt 2", exact: true }).hover();
+    await expect
+      .poll(() => element.ownerDocument.querySelector(".terminal-arrange-caption")?.textContent)
+      .toBe("Dock below Command Prompt 2");
+    expect(element.ownerDocument.querySelector(".terminal-arrange-result")).not.toBeNull();
+    await page.screenshot({ path: "../test-results/terminal-arrange-map.png" });
+    await map.getByRole("button", { name: "Swap with Command Prompt 2", exact: true }).click();
+    expect(element.ownerDocument.querySelector(".terminal-arrange-menu")).toBeNull();
     await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
     await page
-      .getByRole("combobox", { name: "Target pane" })
-      .selectOptions(
-        (
-          page
-            .getByRole("option", { name: "Command Prompt 2", exact: true })
-            .element() as HTMLOptionElement
-        ).value,
-      );
-    await page.getByRole("button", { name: "Move down", exact: true }).click();
+      .getByRole("dialog", { name: "Arrange Fixture Alpha" })
+      .getByRole("button", { name: "Dock below Command Prompt 2", exact: true })
+      .click();
     await expect
       .element(page.getByRole("separator", { name: "Resize terminal split 2" }))
       .toHaveAttribute("aria-orientation", "horizontal");

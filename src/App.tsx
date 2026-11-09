@@ -2716,6 +2716,12 @@ export function App() {
                         workspaceDisplayLabel(workspace, workspaces),
                       ]),
                     )}
+                    marks={Object.fromEntries(
+                      getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
+                        const workspace = workspaces.find((item) => item.id === id);
+                        return workspace ? [[id, workspaceMark(workspace)]] : [];
+                      }),
+                    )}
                     onChange={(layout) =>
                       setTerminalGroups((groups) =>
                         groups.map((group) =>

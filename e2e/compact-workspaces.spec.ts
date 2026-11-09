@@ -125,13 +125,11 @@ describe("Compact native windows and live terminal arrangements", () => {
         ),
       );
       await $("[aria-label='Arrange Command Prompt']").click();
-      await $(".terminal-arrange-dialog").waitForDisplayed();
-      await $("[role=dialog]")
-        .$("button=" + action)
-        .click();
+      await $(".terminal-arrange-menu").waitForDisplayed();
+      await $(".terminal-arrange-menu").$(`aria/${action}`).click();
     };
-    await arrange("Swap");
-    await arrange("Move down");
+    await arrange("Swap with Command Prompt 2");
+    await arrange("Dock below Command Prompt 2");
     await arrange("Side by side");
     const divider = $("aria/Resize terminal split 2");
     await divider.click();

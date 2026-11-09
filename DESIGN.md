@@ -125,12 +125,17 @@ small windows without overwriting the saved proportions. Reset a divider to equa
 sizes with a double-click or Enter.
 
 Split panes carry no header strip: the pane tabs already name them and offer Close.
-Each pane shows one small corner handle while the pointer is over it or the handle
-has keyboard focus. Dragging it moves the pane; clicking it opens Arrange. A center drop swaps leaves;
+Each pane shows a small frosted six-dot grip in its top-right corner while the
+pointer is over the pane or the grip has keyboard focus. Pointing at it spreads and
+brightens the dots; dragging or arranging rings it.
+Dragging it moves the pane; clicking it opens Arrange. A center drop swaps leaves;
 edge drops detach and dock the live pane. Preview the resulting position before
 committing as one outlined shape with a single caption, without per-zone labels; the
-preview glides between positions, and a cramped target turns red with its reason. Escape cancels. The Arrange menu
-offers the same moves and saved split orientation by keyboard. Keep terminals
+preview glides between positions, and a cramped target turns red with its reason. Escape cancels. Arrange is a popover
+anchored to the grip that maps the group in miniature, the moving pane dashed. Each
+other tile's center swaps and its edge trapezoids dock, matching the drop zones;
+pointing at or focusing one previews the landing spot and names the move, and an
+unavailable one says why. A segmented control below sets the saved split orientation. Keep terminals
 mounted in a flat keyed list; animate layout edits briefly without scaling text.
 When even responsive rotation cannot fit the group, scroll its surface locally
 and keep each terminal usable. Scrollbars and animated panes must not change the
