@@ -22,6 +22,15 @@ async function renameActive(name: string) {
   await $("button=Rename").click();
 }
 
+// Group tools reveal on the active group tab's hover, like Workspace tab tools.
+async function groupTool(selector: string) {
+  await $(".session-tab-group.active .session-tab-group-main").moveTo();
+  const tool = $(".session-tab-group.active").$(selector);
+  await tool.moveTo();
+  await tool.waitForClickable();
+  await tool.click();
+}
+
 describe("ConPTY and Workspace lifecycle", () => {
   it("selects hidden terminals from overflow without clipping tabs or restarting sessions", async () => {
     for (let index = 1; index <= 8; index++) {
@@ -85,7 +94,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
       "Build pane",
     );
-    await $("[aria-label^='Ungroup ']").click();
+    await groupTool("[aria-label^='Ungroup ']");
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
     const closeLogs = $("[aria-label='Close Renamed logs Workspace']");
@@ -193,7 +202,7 @@ describe("ConPTY and Workspace lifecycle", () => {
       if (name === "Second group") await openLocal();
       await $("aria/Split terminal").click();
       await $(".terminal-split-menu").$("button*=Command Prompt").click();
-      await $(".session-pane-tabs button[title='Rename terminal group']").click();
+      await groupTool("button[title='Rename terminal group']");
       await $("[role=dialog] input").setValue(name);
       await $("button=Rename").click();
     }
@@ -202,7 +211,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await terminalCommand("echo FIRST_GROUP_OK", "FIRST_GROUP_OK");
     await $("[aria-label='Open Second group 2 terminals']").click();
     await terminalCommand("echo SECOND_GROUP_OK", "SECOND_GROUP_OK");
-    await $("[aria-label='Ungroup Second group; terminals stay open']").click();
+    await groupTool("[aria-label='Ungroup Second group; terminals stay open']");
     await $("[role=dialog]").$("button=Ungroup").click();
     await expect($("[aria-label='Open Second group 2 terminals']")).not.toExist();
     expect((await runtime()).sessionIds).toHaveLength(4);
@@ -342,7 +351,7 @@ describe("ConPTY and Workspace lifecycle", () => {
       );
       expect(printed[0]).not.toContain("SECOND_PANE_ONLY");
       expect(printed[1]).not.toContain("FIRST_PANE_ONLY");
-      await $(".session-pane-tabs button[title='Rename terminal group']").click();
+      await groupTool("button[title='Rename terminal group']");
       await $("[role=dialog] input").setValue("Persistent pair");
       await $("button=Rename").click();
       await browser.waitUntil(

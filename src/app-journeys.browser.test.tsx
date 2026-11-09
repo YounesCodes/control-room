@@ -414,7 +414,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     begin("right");
     await expect
       .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
-      .toContain("Dock right");
+      .toContain("Dock right of Command Prompt");
+    await page.screenshot({ path: "../test-results/terminal-drop-dock-preview.png" });
     event("pointerup", -20, -20);
     await expect.poll(() => element.querySelector(".terminal-drop-layer")).toBeNull();
     expect(persisted.terminalGroups![0].layout).toEqual(original);
@@ -461,7 +462,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const dock = begin("bottom");
     await expect
       .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
-      .toContain("Dock bottom");
+      .toContain("Dock below Command Prompt");
     event("pointerup", dock.x, dock.y);
     await expect
       .poll(() => persisted.terminalGroups![0].layout)
@@ -1488,6 +1489,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
+    await userEvent.hover(element.querySelector(".session-tab-group-main")!);
     await page.getByRole("button", { name: /^Rename group / }).click();
     await page
       .getByRole("dialog", { name: "Rename terminal group" })

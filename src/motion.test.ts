@@ -81,12 +81,13 @@ describe("motion guardrails", () => {
     // Hovering reserves the action space by animating padding, so the label
     // and session dot glide instead of jumping, and Rename and Close ride in
     // from the right edge they occupy when hidden. This includes the focus
-    // mode pane tabs, which reveal the same controls the same way.
+    // mode pane tabs and group tabs, which reveal their tools the same way.
     expect(rule(".session-tab-main")).toContain("transition: padding var(--motion-med)");
     expect(stylesSource).toContain("transform: translateX(6px)");
     expect(stylesSource).toMatch(
-      /\.session-tab-wrap:hover \.session-tab-close,[\s\S]{0,400}?transform: translateX\(0\);/,
+      /\.session-tab-wrap:hover \.session-tab-close,[\s\S]{0,800}?\.session-tab-group:hover \.session-tab-close,[\s\S]{0,400}?transform: translateX\(0\);/,
     );
+    expect(rule(".session-tab-group-main")).toContain("transition: padding var(--motion-med)");
   });
 
   it("reveals brand colors on identity marks only where the user is headed", () => {

@@ -49,6 +49,14 @@ const actions = [
   ["bottom", "Move down"],
 ] as const;
 
+const dropCaption: Record<TerminalDropZone, (target: string) => string> = {
+  center: (target) => `Swap with ${target}`,
+  left: (target) => `Dock left of ${target}`,
+  right: (target) => `Dock right of ${target}`,
+  top: (target) => `Dock above ${target}`,
+  bottom: (target) => `Dock below ${target}`,
+};
+
 /**
  * One corner handle per pane: dragging it moves the pane, clicking it opens Arrange.
  * Only the handle captures pointers; selecting terminal text never starts a move.
@@ -247,39 +255,27 @@ export function TerminalLayoutControls({
         );
       })}
       {moving && (
+        // One preview of the result replaces per-zone labels: the shape shows where the
+        // pane lands and a single caption names the move.
         <div className="terminal-drop-layer" aria-hidden="true">
-          {Object.entries(panes)
-            .filter(([id]) => id !== moving)
-            .map(([id, rect]) => (
-              <div
-                key={id}
-                className={`terminal-drop-target${drop?.target === id ? (drop.valid ? " valid" : " invalid") : ""}`}
-                style={getTerminalPanePixels(rect, viewport) ?? undefined}
-              >
-                {actions.map(([zone, name]) => (
-                  <span
-                    key={zone}
-                    data-zone={zone}
-                    className={drop?.target === id && drop.zone === zone ? "selected" : ""}
-                  >
-                    {name}
-                  </span>
-                ))}
-              </div>
-            ))}
-          {preview && (
+          <div
+            className="terminal-drop-source"
+            style={getTerminalPanePixels(panes[moving], viewport) ?? undefined}
+          />
+          {drop && !drop.valid && (
             <div
-              className={`terminal-drop-preview${drop?.valid ? "" : " invalid"}`}
+              className="terminal-drop-target invalid"
+              style={getTerminalPanePixels(panes[drop.target], viewport) ?? undefined}
+            >
+              <span>{drop.reason}</span>
+            </div>
+          )}
+          {drop?.valid && preview && (
+            <div
+              className="terminal-drop-preview"
               style={getTerminalPanePixels(preview, viewport) ?? undefined}
             >
-              <span>
-                {labels[moving]} ·{" "}
-                {drop?.valid
-                  ? drop.zone === "center"
-                    ? `Swap with ${labels[drop.target]}`
-                    : `Dock ${drop.zone}`
-                  : drop?.reason}
-              </span>
+              <span>{dropCaption[drop.zone](labels[drop.target])}</span>
             </div>
           )}
         </div>

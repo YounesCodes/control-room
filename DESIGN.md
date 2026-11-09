@@ -82,8 +82,8 @@ scan. Give each split group one tab with a tiled-layout icon, its name, and pane
 Number new groups (Group 1, Group 2) rather than naming them after a member terminal. Show the active
 group's terminals in a separate compact pane row. Pane tabs reveal their
 individual Rename and Close controls on hover or keyboard focus, the same way
-every other tab does. Use labeled Rename group and Ungroup buttons
-at the row's end, and confirm ungrouping with its effect on the open terminals.
+every other tab does. Group tabs reveal Rename group (pencil) and Ungroup icons
+with the same motion, and confirm ungrouping with its effect on the open terminals.
 Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected
 split pane on all four edges, above terminal content, without blocking input or
@@ -126,7 +126,8 @@ Split panes carry no header strip: the pane tabs already name them and offer Clo
 Each pane shows one small corner handle while the pointer is over it or the handle
 has keyboard focus. Dragging it moves the pane; clicking it opens Arrange. A center drop swaps leaves;
 edge drops detach and dock the live pane. Preview the resulting position before
-committing and reject cramped targets. Escape cancels. The Arrange menu
+committing as one outlined shape with a single caption, without per-zone labels; the
+preview glides between positions, and a cramped target turns red with its reason. Escape cancels. The Arrange menu
 offers the same moves and saved split orientation by keyboard. Keep terminals
 mounted in a flat keyed list; animate layout edits briefly without scaling text.
 When even responsive rotation cannot fit the group, scroll its surface locally

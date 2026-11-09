@@ -1872,7 +1872,9 @@ code,
 /* Space for Rename and Close is reserved only on hover and focus; a lifted tab
    keeps its label full-width for the whole drag. */
 .session-tab-scroll-region.dragging .session-tab-wrap:hover .session-tab-main,
-.session-tab-scroll-region.dragging .session-tab-wrap:focus-within .session-tab-main {
+.session-tab-scroll-region.dragging .session-tab-wrap:focus-within .session-tab-main,
+.session-tab-scroll-region.dragging .session-tab-group:hover .session-tab-group-main,
+.session-tab-scroll-region.dragging .session-tab-group:focus-within .session-tab-group-main {
   padding-right: 8px;
 }
 
@@ -2046,6 +2048,7 @@ code,
 }
 
 .session-tab-group {
+  position: relative;
   display: flex;
   width: 220px;
   flex: none;
@@ -2091,6 +2094,8 @@ code,
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  /* Same reveal as Workspace tabs: the padding slides aside for Rename and Ungroup. */
+  transition: padding var(--motion-med) var(--ease);
 }
 
 .session-tab-group-main:hover,
@@ -2199,25 +2204,10 @@ code,
 }
 
 .session-tab-wrap:hover .session-tab-main,
-.session-tab-wrap:focus-within .session-tab-main {
+.session-tab-wrap:focus-within .session-tab-main,
+.session-tab-group:hover .session-tab-group-main,
+.session-tab-group:focus-within .session-tab-group-main {
   padding-right: 56px;
-}
-
-.session-group-action {
-  display: flex;
-  align-items: center;
-  flex: none;
-  gap: 5px;
-  padding: 0 10px;
-  border-left: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.session-group-action:hover {
-  background: var(--fill-hover);
-  color: var(--text-strong);
 }
 
 .session-tab-label {
@@ -2379,6 +2369,10 @@ code,
 .session-tab-wrap:hover .session-tab-rename,
 .session-tab-wrap:focus-within .session-tab-close,
 .session-tab-wrap:focus-within .session-tab-rename,
+.session-tab-group:hover .session-tab-close,
+.session-tab-group:hover .session-tab-rename,
+.session-tab-group:focus-within .session-tab-close,
+.session-tab-group:focus-within .session-tab-rename,
 .session-tab-close:focus-visible,
 .session-tab-rename:focus-visible {
   opacity: 1;
@@ -2873,70 +2867,49 @@ code,
   inset: 0;
   pointer-events: none;
 }
+.terminal-drop-source,
 .terminal-drop-target,
 .terminal-drop-preview {
   position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 12px;
 }
-.terminal-drop-target {
-  border: 2px dashed var(--border-strong);
-  background: rgb(0 0 0 / 35%);
+/* The lifted pane recedes so the preview reads as where it goes next. */
+.terminal-drop-source {
+  background: rgb(0 0 0 / 45%);
 }
-.terminal-drop-target > span {
-  position: absolute;
-  padding: 6px 8px;
-  background: var(--surface-overlay);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: 11px;
-}
-.terminal-drop-target [data-zone="center"] {
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-}
-.terminal-drop-target [data-zone="left"] {
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-.terminal-drop-target [data-zone="right"] {
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-.terminal-drop-target [data-zone="top"] {
-  left: 50%;
-  top: 8px;
-  transform: translateX(-50%);
-}
-.terminal-drop-target [data-zone="bottom"] {
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%);
-}
-.terminal-drop-target.valid,
-.terminal-drop-target .selected {
-  border-color: var(--accent);
-}
-.terminal-drop-target.invalid,
-.terminal-drop-preview.invalid {
-  border-color: var(--failure);
+.terminal-drop-target.invalid {
+  border: 2px solid var(--failure);
+  background: color-mix(in srgb, var(--failure) 10%, transparent);
 }
 .terminal-drop-preview {
   border: 2px solid var(--accent);
-  background: rgb(255 255 255 / 8%);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 7%);
+  transition:
+    left var(--motion-fast) var(--ease),
+    top var(--motion-fast) var(--ease),
+    width var(--motion-fast) var(--ease),
+    height var(--motion-fast) var(--ease);
 }
+.terminal-drop-target > span,
 .terminal-drop-preview > span {
-  display: block;
-  width: fit-content;
   max-width: 100%;
-  margin: 8px;
-  padding: 5px 8px;
+  padding: 5px 10px;
   overflow-wrap: anywhere;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
   color: var(--text);
-  font-size: 11px;
+  font-size: 11.5px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-drop-preview {
+    transition: none;
+  }
 }
 .terminal-arrange-body {
   padding: 20px;
@@ -8458,9 +8431,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   display: none;
 }
 @media (max-width: 859px) {
-  .session-group-action {
-    padding-inline: 8px;
-  }
   .terminal-appearance-layout {
     grid-template-columns: minmax(0, 1fr);
   }

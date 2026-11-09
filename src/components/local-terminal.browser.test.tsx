@@ -277,6 +277,22 @@ describe("Local Terminal Mode in the real App", () => {
       await vi.waitFor(() =>
         expect(paneRow.querySelector(".session-tab-wrap.active .session-tab-main")).toBe(first),
       );
+      // Group tools sit on the group tab and reveal like Workspace tab tools.
+      const groupTab = container!.querySelector<HTMLElement>(".session-tab-group")!;
+      const groupTools = [
+        ...groupTab.querySelectorAll<HTMLButtonElement>(".session-tab-rename, .session-tab-close"),
+      ];
+      expect(groupTools.map((tool) => tool.getAttribute("title"))).toEqual([
+        "Rename terminal group",
+        "Ungroup terminals; keep every terminal open",
+      ]);
+      expect(paneRow.querySelector("[title='Rename terminal group']")).toBeNull();
+      for (const tool of groupTools) expect(getComputedStyle(tool).opacity).toBe("0");
+      await userEvent.hover(groupTab.querySelector(".session-tab-group-main")!);
+      await vi.waitFor(() => {
+        for (const tool of groupTools)
+          expect(Number(getComputedStyle(tool).opacity)).toBeGreaterThan(0.9);
+      });
       await page.getByRole("button", { name: /^Rename group / }).click();
       await page.getByRole("textbox").fill("Build and logs");
       await page.getByRole("button", { name: "Rename", exact: true }).click();
@@ -305,6 +321,7 @@ describe("Local Terminal Mode in the real App", () => {
           .querySelector(".session-pane-tabs .session-tab-wrap.active .session-tab-main")
           ?.getAttribute("title"),
       ).toBe(first.getAttribute("title"));
+      await userEvent.hover(container!.querySelector(".session-tab-group-main")!);
       await page
         .getByRole("button", { name: "Ungroup Build and logs; terminals stay open" })
         .click();

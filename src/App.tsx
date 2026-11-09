@@ -31,6 +31,7 @@ import {
   ChevronDown,
   Clipboard,
   Columns2,
+  Ungroup,
   LayoutPanelLeft,
   Copy,
   FileClock,
@@ -2273,6 +2274,24 @@ export function App() {
                               )
                               .join("; ")}
                           </span>
+                          <button
+                            className="session-tab-rename"
+                            type="button"
+                            onClick={() => setRenameGroupTarget(group)}
+                            aria-label={`Rename group ${group.name}`}
+                            title="Rename terminal group"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            className="session-tab-close"
+                            type="button"
+                            onClick={() => confirmUngroup(group)}
+                            aria-label={`Ungroup ${group.name}; terminals stay open`}
+                            title="Ungroup terminals; keep every terminal open"
+                          >
+                            <Ungroup size={14} />
+                          </button>
                         </div>
                       );
                     });
@@ -2516,25 +2535,6 @@ export function App() {
                 return workspace ? [renderWorkspaceTab(workspace, true)] : [];
               })}
             </WorkspaceTabScroller>
-            <button
-              className="session-group-action"
-              type="button"
-              onClick={() => setRenameGroupTarget(activeTerminalGroup)}
-              aria-label={`Rename group ${activeTerminalGroup.name}`}
-              title="Rename terminal group"
-            >
-              <Pencil size={14} />
-              Rename group
-            </button>
-            <button
-              className="session-group-action"
-              type="button"
-              onClick={() => confirmUngroup(activeTerminalGroup)}
-              aria-label={`Ungroup ${activeTerminalGroup.name}; terminals stay open`}
-              title="Ungroup terminals; keep every terminal open"
-            >
-              Ungroup
-            </button>
           </nav>
         )}
 
