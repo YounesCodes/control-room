@@ -31,6 +31,7 @@ import {
   ChevronDown,
   Clipboard,
   Columns2,
+  LayoutPanelLeft,
   Copy,
   FileClock,
   FolderCog,
@@ -1074,7 +1075,7 @@ export function App() {
             ...current,
             {
               id: groupId,
-              name: nextTerminalGroupName(current, duplicateLabel(activeWorkspace)),
+              name: nextTerminalGroupName(current),
               layout: splitTerminalLayout(
                 createTerminalLayout(activeWorkspace.id),
                 activeWorkspace.id,
@@ -1184,7 +1185,7 @@ export function App() {
             ...current,
             {
               id: groupId,
-              name: nextTerminalGroupName(current, duplicateLabel(activeWorkspace)),
+              name: nextTerminalGroupName(current),
               layout: splitTerminalLayout(
                 createTerminalLayout(activeWorkspace.id),
                 activeWorkspace.id,
@@ -1953,7 +1954,7 @@ export function App() {
         {
           id: group.id,
           label: group.name,
-          icon: <Columns2 size={17} strokeWidth={1.8} />,
+          icon: <LayoutPanelLeft size={17} strokeWidth={1.8} />,
           detail: `${getTerminalLayoutIds(group.layout).length} terminals`,
           active: activeTerminalGroup?.id === group.id && !settingsOpen,
           onSelect: () => selectTerminalGroup(group),
@@ -2250,7 +2251,7 @@ export function App() {
                               aria-describedby={`terminal-group-status-${group.id}`}
                               title={`${group.name}: ${members.map(activityLabel).join(", ")}`}
                             >
-                              <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                              <LayoutPanelLeft size={13} strokeWidth={1.8} aria-hidden="true" />
                               <span>{group.name}</span> <small>{members.length}</small>
                               <span
                                 className={`presence presence-${state}${members.some(workspaceProcessing) ? " presence-busy" : ""}`}
@@ -2719,7 +2720,6 @@ export function App() {
                       setActiveWorkspaceId(id);
                       requestAnimationFrame(() => terminalHandlesRef.current.get(id)?.focus());
                     }}
-                    onClose={(id) => void closeWorkspace(id)}
                   />
                 )}
                 {!settingsOpen &&

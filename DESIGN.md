@@ -78,7 +78,8 @@ target beside its readings.
 
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
-scan. Give each split group one tab with its name and pane count. Show the active
+scan. Give each split group one tab with a tiled-layout icon, its name, and pane count.
+Number new groups (Group 1, Group 2) rather than naming them after a member terminal. Show the active
 group's terminals in a separate compact pane row. Pane tabs reveal their
 individual Rename and Close controls on hover or keyboard focus, the same way
 every other tab does. Use labeled Rename group and Ungroup buttons
@@ -121,9 +122,11 @@ their group and retain them when switching views. Constrain displayed sizes in
 small windows without overwriting the saved proportions. Reset a divider to equal
 sizes with a double-click or Enter.
 
-Move split terminals from their compact pane headers. A center drop swaps leaves;
+Split panes carry no header strip: the pane tabs already name them and offer Close.
+Each pane shows one small corner handle while the pointer is over it or the handle
+has keyboard focus. Dragging it moves the pane; clicking it opens Arrange. A center drop swaps leaves;
 edge drops detach and dock the live pane. Preview the resulting position before
-committing and reject cramped targets. Escape cancels. The pane's Arrange menu
+committing and reject cramped targets. Escape cancels. The Arrange menu
 offers the same moves and saved split orientation by keyboard. Keep terminals
 mounted in a flat keyed list; animate layout edits briefly without scaling text.
 When even responsive rotation cannot fit the group, scroll its surface locally

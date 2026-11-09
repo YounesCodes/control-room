@@ -368,7 +368,7 @@ describe("Local Terminal", () => {
         .querySelector(".local-shell-elevation"),
     ).not.toBeNull();
     await user.click(existing);
-    const panes = screen.getByRole("navigation", { name: /Terminals in .* group/ });
+    const panes = screen.getByRole("navigation", { name: /^Terminals in Group \d+$/ });
     expect(panes.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
     expect(panes.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
   });
@@ -864,12 +864,12 @@ describe("Local Terminal", () => {
     await openLocalShell(user, "Git Bash");
     await openNewTerminal(user, "Saved Connections: prod-web");
 
-    expect(screen.queryByRole("group", { name: "prod-web group" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
     expect(screen.queryByLabelText("Split terminal")).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
     await user.click(screen.getByLabelText("Focus terminal"));
-    expect(screen.queryByRole("group", { name: "prod-web group" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
     expect(screen.getByRole("button", { name: "New terminal" })).toBeTruthy();
     expect(screen.getByLabelText("Rename Git Bash Workspace")).toBeTruthy();
     expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
@@ -886,10 +886,10 @@ describe("Local Terminal", () => {
       "remote",
       "local",
     ]);
-    let splitGroup = screen.getByRole("group", { name: "prod-web group" });
-    expect(within(splitGroup).getByText("prod-web group")).toBeTruthy();
+    let splitGroup = screen.getByRole("group", { name: "Group 1" });
+    expect(within(splitGroup).getByText("Group 1")).toBeTruthy();
     expect(within(splitGroup).queryByText("prod-web")).toBeNull();
-    const paneTabs = screen.getByRole("navigation", { name: "Terminals in prod-web group" });
+    const paneTabs = screen.getByRole("navigation", { name: "Terminals in Group 1" });
     expect(within(paneTabs).getByText("prod-web")).toBeTruthy();
     expect(within(paneTabs).getByText("PowerShell 7")).toBeTruthy();
     expect(within(paneTabs).getByLabelText("Rename prod-web Workspace")).toBeTruthy();
@@ -901,7 +901,7 @@ describe("Local Terminal", () => {
     expect(screen.queryByTitle("Remove from terminal group")).toBeNull();
 
     await user.click(screen.getByLabelText("Exit terminal focus"));
-    expect(screen.queryByRole("group", { name: "prod-web group" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
     expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
     expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
@@ -909,7 +909,7 @@ describe("Local Terminal", () => {
     await user.click(screen.getByLabelText("Focus terminal"));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
 
-    await user.click(screen.getByLabelText("Rename group prod-web group"));
+    await user.click(screen.getByLabelText("Rename group Group 1"));
     const groupName = screen.getByRole("textbox", { name: /^Group name/ });
     await user.clear(groupName);
     await user.type(groupName, "Proxmox");
@@ -928,7 +928,7 @@ describe("Local Terminal", () => {
     await user.click(await screen.findByLabelText("Split terminal"));
     await user.click(await screen.findByRole("button", { name: "New local terminal: Git Bash" }));
     expect(screen.getByRole("group", { name: "Proxmox" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Group 1" })).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
 
     await user.click(screen.getByRole("button", { name: "Open Proxmox 2 terminals" }));
@@ -938,25 +938,25 @@ describe("Local Terminal", () => {
     await user.click(screen.getByLabelText("Ungroup Proxmox; terminals stay open"));
     await user.click(screen.getByRole("button", { name: "Ungroup" }));
     expect(screen.queryByRole("group", { name: "Proxmox" })).toBeNull();
-    expect(screen.getByRole("group", { name: "Git Bash group" }).classList).not.toContain("active");
+    expect(screen.getByRole("group", { name: "Group 1" }).classList).not.toContain("active");
     expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
     expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
     expect(await screen.findAllByTestId(/^terminal-/)).toHaveLength(4);
 
     await user.click(screen.getByLabelText("Exit terminal focus"));
-    expect(screen.queryByRole("group", { name: "Git Bash group" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
     expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
     await user.click(screen.getByLabelText("Focus terminal"));
     expect(screen.queryByRole("group", { name: "Proxmox" })).toBeNull();
-    expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Group 1" })).toBeTruthy();
     expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
     expect(screen.getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
-    await user.click(screen.getByRole("button", { name: "Open Git Bash group 2 terminals" }));
+    await user.click(screen.getByRole("button", { name: "Open Group 1 2 terminals" }));
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
   });
 
@@ -1031,7 +1031,7 @@ describe("Local Terminal", () => {
     await user.type(input, "  Logs العربية  ");
     await user.click(screen.getByRole("button", { name: "Rename" }));
     expect(screen.getByLabelText("Close Logs العربية Workspace")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open Git Bash group 3 terminals" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Group 1 3 terminals" })).toBeTruthy();
     // A blank label restores the shell name; it does not rename the group.
     await user.click(screen.getByLabelText("Rename Logs العربية Workspace"));
     await user.clear(screen.getByRole("textbox", { name: /Workspace label/ }));
@@ -1047,14 +1047,14 @@ describe("Local Terminal", () => {
     expect(api.closeSession).toHaveBeenCalledExactlyOnceWith(
       `${second.dataset.testid!.slice(9)}-session`,
     );
-    expect(screen.getByRole("button", { name: "Open Git Bash group 2 terminals" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Group 1 2 terminals" })).toBeTruthy();
     expect(first.isConnected && third.isConnected).toBe(true);
     expect(third.closest(".terminal-workspace-pane")?.classList.contains("active")).toBe(true);
-    await user.click(screen.getByLabelText("Ungroup Git Bash group; terminals stay open"));
+    await user.click(screen.getByLabelText("Ungroup Group 1; terminals stay open"));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.getByRole("group", { name: "Git Bash group" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Group 1" })).toBeTruthy();
     await user.click(screen.getByLabelText("Close Git Bash 2 Workspace"));
-    expect(screen.queryByRole("group", { name: "Git Bash group" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
     expect(first.closest(".terminal-workspace-pane")?.classList.contains("active")).toBe(true);
     await user.click(screen.getByLabelText("Close Git Bash Workspace"));
     expect(screen.queryByLabelText("Exit terminal focus")).toBeNull();

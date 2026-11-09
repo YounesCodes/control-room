@@ -18,14 +18,13 @@ function group(id: string, name: string, first: string, second?: string): Termin
 }
 
 describe("terminal groups", () => {
-  it("names groups without using their terminal count", () => {
-    expect(nextTerminalGroupName([])).toBe("Terminal group");
-    expect(nextTerminalGroupName([group("a", "Terminal group", "one")])).toBe("Terminal group 2");
-    expect(nextTerminalGroupName([], "Git Bash")).toBe("Git Bash group");
-    expect(nextTerminalGroupName([group("a", "Git Bash group", "one")], "Git Bash")).toBe(
-      "Git Bash group 2",
+  it("numbers groups instead of naming them after a member terminal", () => {
+    expect(nextTerminalGroupName([])).toBe("Group 1");
+    expect(nextTerminalGroupName([group("a", "Group 1", "one")])).toBe("Group 2");
+    expect(nextTerminalGroupName([group("a", "group 2", "one")])).toBe("Group 1");
+    expect(nextTerminalGroupName([group("a", "Group 1", "one"), group("b", "Builds", "two")])).toBe(
+      "Group 2",
     );
-    expect(nextTerminalGroupName([], "a".repeat(80))).toHaveLength(80);
   });
 
   it("keeps the first group when malformed state repeats a Workspace", () => {

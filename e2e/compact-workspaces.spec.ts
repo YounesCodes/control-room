@@ -158,7 +158,14 @@ describe("Compact native windows and live terminal arrangements", () => {
       expect((await saved()).terminalGroups![0].layout).toEqual(layout);
     }
     await browser.saveScreenshot("test-results/desktop/terminal-arrangement-native.png");
-    await $("[aria-label='Move Command Prompt']").click();
+    // Focus that pane's terminal body; its corner handle now opens Arrange on click.
+    const commandPromptPane = await browser.execute(() =>
+      document
+        .querySelector("[aria-label='Arrange Command Prompt']")!
+        .closest<HTMLElement>(".terminal-pane-heading")!
+        .dataset.terminalMotionId!.replace(/-heading$/, ""),
+    );
+    await $(`[data-workspace-id='${commandPromptPane}'] .xterm`).click();
     await terminalCommand("echo ARRANGEMENT_INPUT", "ARRANGEMENT_INPUT");
     await terminalContains("ARRANGEMENT_SCROLLBACK");
     await restartApp();

@@ -179,7 +179,7 @@ describe("Local Terminal Mode in the real App", () => {
       await userEvent.hover(paneTabByLabel("Background logs"));
       await page.getByRole("button", { name: "Close Background logs Workspace" }).click();
       await expect
-        .element(page.getByRole("button", { name: "Open Command Prompt group 2 terminals" }))
+        .element(page.getByRole("button", { name: "Open Group 1 2 terminals" }))
         .toBeVisible();
       expect(container!.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(2);
       expect(
@@ -277,7 +277,7 @@ describe("Local Terminal Mode in the real App", () => {
       await vi.waitFor(() =>
         expect(paneRow.querySelector(".session-tab-wrap.active .session-tab-main")).toBe(first),
       );
-      await page.getByRole("button", { name: /^Rename .* group$/ }).click();
+      await page.getByRole("button", { name: /^Rename group / }).click();
       await page.getByRole("textbox").fill("Build and logs");
       await page.getByRole("button", { name: "Rename", exact: true }).click();
       await expect

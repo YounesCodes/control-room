@@ -5,7 +5,7 @@ import {
   type RefObject,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { GripVertical, MoreHorizontal, X } from "lucide-react";
+import { Move } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Modal } from "./Modal";
 import {
@@ -33,7 +33,6 @@ interface Props {
   labels: Record<string, string>;
   onChange: (layout: TerminalLayout) => void;
   onActivate: (id: string) => void;
-  onClose: (id: string) => void;
 }
 interface Drop {
   target: string;
@@ -50,7 +49,10 @@ const actions = [
   ["bottom", "Move down"],
 ] as const;
 
-/** Only the header captures pointers; selecting terminal text never starts a move. */
+/**
+ * One corner handle per pane: dragging it moves the pane, clicking it opens Arrange.
+ * Only the handle captures pointers; selecting terminal text never starts a move.
+ */
 export function TerminalLayoutControls({
   layout,
   viewport,
@@ -60,7 +62,6 @@ export function TerminalLayoutControls({
   labels,
   onChange,
   onActivate,
-  onClose,
 }: Props) {
   const [moving, setMoving] = useState<string | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
@@ -74,6 +75,7 @@ export function TerminalLayoutControls({
   } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [target, setTarget] = useState("");
+  const [hovered, setHovered] = useState<string | null>(null);
   const ids = getTerminalLayoutIds(layout);
   const menuSplit = menu ? terminalParentSplitPath(layout, menu) : null;
   function cancel() {
@@ -104,6 +106,37 @@ export function TerminalLayoutControls({
   useEffect(() => {
     cancel();
   }, [layout, viewport.width, viewport.height]);
+  // Reveal a pane's handle while the pointer is over that pane, without a header strip.
+  useEffect(() => {
+    const surface = container.current;
+    if (!surface) return;
+    const move = (event: PointerEvent) => {
+      const bounds = surface.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return;
+      const x = ((event.clientX - bounds.left) / bounds.width) * 100;
+      const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+      const id =
+        Object.entries(panes).find(
+          ([, rect]) =>
+            x >= rect.left &&
+            x < rect.left + rect.width &&
+            y >= rect.top &&
+            y < rect.top + rect.height,
+        )?.[0] ?? null;
+      setHovered((current) => (current === id ? current : id));
+    };
+    const leave = () => setHovered(null);
+    surface.addEventListener("pointermove", move);
+    surface.addEventListener("pointerleave", leave);
+    return () => {
+      surface.removeEventListener("pointermove", move);
+      surface.removeEventListener("pointerleave", leave);
+    };
+  }, [container, panes]);
+  function openArrange(id: string) {
+    setTarget(ids.find((other) => other !== id)!);
+    setMenu(id);
+  }
 
   function proposal(source: string, destination: string, zone: TerminalDropZone): Drop {
     const next = rearrangeTerminalLayout(layout, source, destination, zone);
@@ -144,7 +177,12 @@ export function TerminalLayoutControls({
   function finish(event: ReactPointerEvent<HTMLButtonElement>) {
     const current = pointer.current;
     if (!current || current.id !== event.pointerId) return;
-    const result = current.moved ? hit(current.source, event.clientX, event.clientY) : null;
+    if (!current.moved) {
+      cancel();
+      openArrange(current.source);
+      return;
+    }
+    const result = hit(current.source, event.clientX, event.clientY);
     cancel();
     if (result?.valid) onChange(result.layout);
     onActivate(current.source);
@@ -153,83 +191,61 @@ export function TerminalLayoutControls({
     moving && drop ? getTerminalLayoutSurface(drop.layout, available).panes[moving] : null;
   return (
     <>
-      {ids.map((id) => (
-        <div
-          className="terminal-pane-heading"
-          data-terminal-motion-id={`${id}-heading`}
-          key={id}
-          style={
-            getTerminalPanePixels(panes[id], viewport)
-              ? {
-                  left: getTerminalPanePixels(panes[id], viewport)!.left,
-                  top: getTerminalPanePixels(panes[id], viewport)!.top,
-                  width: getTerminalPanePixels(panes[id], viewport)!.width,
-                }
-              : undefined
-          }
-        >
-          <button
-            type="button"
-            className="terminal-pane-grip"
-            aria-label={`Move ${labels[id]}`}
-            title={`Drag ${labels[id]} to swap or dock`}
-            onClick={(event) => {
-              if (event.detail === 0) onActivate(id);
-            }}
-            onPointerDown={(event) => {
-              if (event.button !== 0 || !event.isPrimary) return;
-              event.preventDefault();
-              event.currentTarget.focus();
-              event.currentTarget.setPointerCapture(event.pointerId);
-              pointer.current = {
-                id: event.pointerId,
-                source: id,
-                x: event.clientX,
-                y: event.clientY,
-                handle: event.currentTarget,
-                moved: false,
-              };
-            }}
-            onPointerMove={(event) => {
-              const current = pointer.current;
-              if (!current || current.id !== event.pointerId) return;
-              if (
-                !current.moved &&
-                Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
-              )
-                return;
-              current.moved = true;
-              setMoving(id);
-              setDrop(hit(id, event.clientX, event.clientY));
-            }}
-            onPointerUp={finish}
-            onPointerCancel={cancel}
-            onLostPointerCapture={cancel}
+      {ids.map((id) => {
+        const rect = getTerminalPanePixels(panes[id], viewport);
+        const revealed = moving ? moving === id : hovered === id || menu === id;
+        return (
+          <div
+            className={revealed ? "terminal-pane-heading revealed" : "terminal-pane-heading"}
+            data-terminal-motion-id={`${id}-heading`}
+            key={id}
+            style={rect ? { left: rect.left, top: rect.top, width: rect.width } : undefined}
           >
-            <GripVertical size={13} />
-            <span>{labels[id]}</span>
-          </button>
-          <button
-            type="button"
-            aria-label={`Arrange ${labels[id]}`}
-            title="Arrange pane"
-            onClick={() => {
-              setTarget(ids.find((other) => other !== id)!);
-              setMenu(id);
-            }}
-          >
-            <MoreHorizontal size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label={`Close pane ${labels[id]}`}
-            title="Close pane"
-            onClick={() => onClose(id)}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
+            <button
+              type="button"
+              className="terminal-pane-grip"
+              aria-label={`Arrange ${labels[id]}`}
+              aria-haspopup="dialog"
+              title="Drag to swap or dock; click for arrange options"
+              onClick={(event) => {
+                // Pointer clicks are handled on pointerup so a drag never also opens Arrange.
+                if (event.detail === 0) openArrange(id);
+              }}
+              onPointerDown={(event) => {
+                if (event.button !== 0 || !event.isPrimary) return;
+                event.preventDefault();
+                event.currentTarget.focus();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                pointer.current = {
+                  id: event.pointerId,
+                  source: id,
+                  x: event.clientX,
+                  y: event.clientY,
+                  handle: event.currentTarget,
+                  moved: false,
+                };
+              }}
+              onPointerMove={(event) => {
+                const current = pointer.current;
+                if (!current || current.id !== event.pointerId) return;
+                if (
+                  !current.moved &&
+                  Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
+                )
+                  return;
+                current.moved = true;
+                setMoving(id);
+                setDrop(hit(id, event.clientX, event.clientY));
+              }}
+              onPointerUp={finish}
+              onPointerCancel={cancel}
+              onLostPointerCapture={cancel}
+            >
+              <Move size={14} />
+            </button>
+          </div>
+        );
+      })}
       {moving && (
         <div className="terminal-drop-layer" aria-hidden="true">
           {Object.entries(panes)

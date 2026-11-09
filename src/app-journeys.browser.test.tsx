@@ -352,7 +352,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .element(
           page
             .getByRole("menu", { name: "All terminals menu" })
-            .getByRole("menuitem", { name: /Fixture Alpha group/ }),
+            .getByRole("menuitem", { name: /^Group 1/ }),
         )
         .toHaveAttribute("aria-current", "page");
       await userEvent.keyboard("{Escape}");
@@ -371,12 +371,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.poll(() => persisted.terminalGroups?.length).toBe(1);
     const original = structuredClone(persisted.terminalGroups![0].layout);
     const grip = page
-      .getByRole("button", { name: "Move Fixture Alpha", exact: true })
+      .getByRole("button", { name: "Arrange Fixture Alpha", exact: true })
       .element() as HTMLButtonElement;
     vi.spyOn(grip, "setPointerCapture").mockImplementation(() => undefined);
     const target = () =>
       page
-        .getByRole("button", { name: "Move Command Prompt", exact: true })
+        .getByRole("button", { name: "Arrange Command Prompt", exact: true })
         .element()
         .closest(".terminal-pane-heading")!
         .getBoundingClientRect();
@@ -397,7 +397,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const pane = element
         .querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")[1]
         .getBoundingClientRect();
-      event("pointerdown", from.left + 30, from.top + 14);
+      event("pointerdown", from.left + 12, from.top + 12);
       const x = zone === "right" ? to.right - 10 : to.left + to.width / 2;
       const y = zone === "bottom" ? pane.bottom - 10 : pane.top + pane.height / 2;
       event("pointermove", x, y);
@@ -442,11 +442,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     // The target is now above the source after the swap and compact reflow.
     const from = grip.getBoundingClientRect();
     const destination = page
-      .getByRole("button", { name: "Move Command Prompt", exact: true })
+      .getByRole("button", { name: "Arrange Command Prompt", exact: true })
       .element()
       .closest(".terminal-pane-heading")!
       .getBoundingClientRect();
-    event("pointerdown", from.left + 30, from.top + 14);
+    event("pointerdown", from.left + 12, from.top + 12);
     event("pointermove", destination.left + 10, destination.top + 80);
     await expect
       .poll(() => element.querySelector(".terminal-drop-target.invalid") !== null)
@@ -493,14 +493,31 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ).toHaveLength(3),
     );
     const terminals = [...element.querySelectorAll(".terminal-workspace-pane .xterm")];
-    const pane = (name: string) => page.getByRole("button", { name: `Move ${name}`, exact: true });
+    const handle = (name: string) =>
+      page.getByRole("button", { name: `Arrange ${name}`, exact: true });
+    const paneBody = (name: string) => {
+      const id = handle(name)
+        .element()
+        .closest<HTMLElement>(".terminal-pane-heading")!
+        .dataset.terminalMotionId!.replace(/-heading$/, "");
+      return element.querySelector<HTMLElement>(`[data-workspace-id="${id}"]`)!;
+    };
     await expect.poll(() => persisted.terminalGroups?.length).toBe(1);
     const original = structuredClone(persisted.terminalGroups!);
-    await userEvent.dragAndDrop(pane("Fixture Alpha"), pane("Command Prompt"), {
-      targetPosition: { x: 100, y: 14 },
-    });
+    // The corner handle carries the drag; releasing over the target body's center swaps.
+    await userEvent.dragAndDrop(handle("Fixture Alpha"), paneBody("Command Prompt"));
     await expect.poll(() => persisted.terminalGroups?.[0].layout).not.toEqual(original[0]?.layout);
-    // Releasing over the terminal body uses its center, rather than a header's top edge.
+    // Pane names live in the pane tabs; a pane shows only its handle, and only under the pointer.
+    expect(element.querySelector(".terminal-pane-heading")?.textContent).toBe("");
+    await userEvent.hover(paneBody("Command Prompt 2"));
+    await expect
+      .poll(() =>
+        [...element.querySelectorAll(".terminal-pane-heading.revealed button")].map((button) =>
+          button.getAttribute("aria-label"),
+        ),
+      )
+      .toEqual(["Arrange Command Prompt 2"]);
+    await page.screenshot({ path: "../test-results/terminal-pane-handle.png" });
     await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Target pane" })
@@ -541,7 +558,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
       native.invoke.mock.calls.filter(([command]) => command === "close_session"),
     ).toHaveLength(0);
     await page.screenshot({ path: "../test-results/terminal-rearranged.png" });
-    await page.getByRole("button", { name: "Close pane Fixture Alpha", exact: true }).click();
+    // Panes close from their pane tab, which reveals Close on hover like every tab.
+    await userEvent.hover(
+      [...element.querySelectorAll<HTMLElement>(".session-pane-tabs .session-tab-wrap")].find(
+        (tab) => tab.querySelector(".session-tab-label")?.textContent === "Fixture Alpha",
+      )!,
+    );
+    await page.getByRole("button", { name: "Close Fixture Alpha Workspace", exact: true }).click();
     await page.getByRole("button", { name: "Disconnect & close", exact: true }).click();
     await expect
       .poll(() => element.querySelectorAll(".terminal-workspace-pane-visible").length)
@@ -777,7 +800,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.poll(() => getComputedStyle(gitLogo).filter).toBe("none");
     await splitChoice.click();
     const pane = page
-      .getByRole("navigation", { name: /Terminals in .* group/ })
+      .getByRole("navigation", { name: /^Terminals in Group \d+$/ })
       .getByRole("button", { name: "Command Prompt", exact: true });
     const paneMark = pane.element().querySelector(".local-shell-mark")!;
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
@@ -1400,15 +1423,15 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
     const groupItem = page
       .getByRole("menu", { name: "All terminals menu" })
-      .getByRole("menuitem", { name: /^Fixture Alpha group/ });
-    await expect.element(groupItem).toHaveTextContent("Fixture Alpha group6 terminals");
+      .getByRole("menuitem", { name: /^Group 1/ });
+    await expect.element(groupItem).toHaveTextContent("Group 16 terminals");
     expectTerminalMenuAlignment(page.getByRole("menu", { name: "All terminals menu" }).element());
     expect(
-      groupItem.element().querySelector(".session-tab-menu-icon .lucide-columns-2"),
+      groupItem.element().querySelector(".session-tab-menu-icon .lucide-layout-panel-left"),
     ).not.toBeNull();
     await groupItem.click();
     await expect
-      .element(page.getByRole("button", { name: "Open Fixture Alpha group 6 terminals" }))
+      .element(page.getByRole("button", { name: "Open Group 1 6 terminals" }))
       .toBeVisible();
     await page.getByRole("button", { name: "All panes", exact: true }).click();
     const paneMenu = page.getByRole("menu", { name: "All panes menu" });
@@ -1465,7 +1488,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
-    await page.getByRole("button", { name: /^Rename .* group$/ }).click();
+    await page.getByRole("button", { name: /^Rename group / }).click();
     await page
       .getByRole("dialog", { name: "Rename terminal group" })
       .getByRole("textbox")
@@ -1768,7 +1791,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
       await expect
-        .element(page.getByRole("navigation", { name: /Terminals in .* group/ }))
+        .element(page.getByRole("navigation", { name: /^Terminals in Group \d+$/ }))
         .toBeVisible();
       expect(position()).toEqual(normalBounds);
       for (let index = 0; index < 10; index++) {

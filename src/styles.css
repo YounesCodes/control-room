@@ -2811,7 +2811,6 @@ code,
   inset: auto;
   min-height: 0;
   flex: 1;
-  margin-top: 28px;
 }
 
 .terminal-layout-divider {
@@ -2825,51 +2824,48 @@ code,
   cursor: row-resize;
 }
 
+/* A full-width, click-through row that only carries the pane's corner handle. */
 .terminal-pane-heading {
   position: absolute;
-  z-index: 5;
+  /* Above split dividers (8), whose hit area reaches into the pane corner. */
+  z-index: 9;
   display: flex;
-  height: 28px;
-  padding-inline: 5px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-chrome);
-}
-.terminal-pane-heading button {
-  display: flex;
-  min-width: 26px;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: var(--text-muted);
-}
-.terminal-pane-heading button:hover,
-.terminal-pane-heading button:focus-visible {
-  background: var(--fill-hover);
-  color: var(--text);
+  justify-content: flex-end;
+  padding: 4px;
+  pointer-events: none;
 }
 .terminal-pane-heading .terminal-pane-grip {
-  flex: 1;
-  min-width: 0;
-  justify-content: flex-start;
-  gap: 5px;
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-chrome);
+  color: var(--text-muted);
+  opacity: 0;
+  pointer-events: auto;
   touch-action: none;
   cursor: grab;
+  transition: opacity 120ms ease;
+}
+.terminal-pane-heading.revealed .terminal-pane-grip,
+.terminal-pane-heading .terminal-pane-grip:focus-visible {
+  opacity: 1;
+}
+.terminal-pane-heading .terminal-pane-grip:hover,
+.terminal-pane-heading .terminal-pane-grip:focus-visible {
+  background: var(--fill-hover);
+  color: var(--text);
 }
 .terminal-pane-grip:active {
   cursor: grabbing;
 }
-.terminal-pane-grip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-}
-.terminal-pane-heading > button:not(.terminal-pane-grip) {
-  opacity: 0;
-}
-.terminal-pane-heading:hover > button,
-.terminal-pane-heading:focus-within > button {
-  opacity: 1;
+@media (prefers-reduced-motion: reduce) {
+  .terminal-pane-heading .terminal-pane-grip {
+    transition: none;
+  }
 }
 .terminal-drop-layer {
   position: absolute;
@@ -2911,7 +2907,7 @@ code,
 }
 .terminal-drop-target [data-zone="top"] {
   left: 50%;
-  top: 34px;
+  top: 8px;
   transform: translateX(-50%);
 }
 .terminal-drop-target [data-zone="bottom"] {
@@ -2935,7 +2931,7 @@ code,
   display: block;
   width: fit-content;
   max-width: 100%;
-  margin: 34px 8px 0;
+  margin: 8px;
   padding: 5px 8px;
   overflow-wrap: anywhere;
   background: var(--surface-overlay);
