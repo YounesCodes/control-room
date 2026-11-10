@@ -23,6 +23,9 @@ const MAX_TAGS_PER_CONNECTION: usize = 5;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_HISTORY_CWD_BYTES: usize = 32_767;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
+/// Pages earlier releases could save as a tab's view. Saved state that still
+/// names one is rewritten on load rather than discarded.
+const REMOVED_WORKSPACE_VIEWS: [&str; 3] = ["overview", "boot", "baselines"];
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -737,6 +740,21 @@ impl Database {
             .ok()
             .and_then(|mut value| {
                 if let Some(object) = value.as_object_mut() {
+                    // Tabs left on a removed page reopen on their terminal.
+                    if let Some(workspaces) = object
+                        .get_mut("workspaces")
+                        .and_then(serde_json::Value::as_array_mut)
+                    {
+                        for workspace in workspaces {
+                            if let Some(view) = workspace.get_mut("view")
+                                && view
+                                    .as_str()
+                                    .is_some_and(|view| REMOVED_WORKSPACE_VIEWS.contains(&view))
+                            {
+                                *view = "terminal".into();
+                            }
+                        }
+                    }
                     let mut sizes = serde_json::Map::new();
                     if let Some(entries) = object
                         .get("panelSizes")
@@ -744,7 +762,11 @@ impl Database {
                     {
                         for (key, value) in entries {
                             let bounds = panel_size_bounds(key);
-                            if sizes.len() < 32
+                            let removed_page = key
+                                .strip_prefix("content:")
+                                .is_some_and(|view| REMOVED_WORKSPACE_VIEWS.contains(&view));
+                            if !removed_page
+                                && sizes.len() < 32
                                 && let Some((min, max)) = bounds
                                 && let Some(size) = value.as_f64()
                                 && size.is_finite()
@@ -1006,14 +1028,11 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             return Err("Workspace label is invalid".into());
         }
         if ![
-            "overview",
             "terminal",
             "services",
             "ports",
             "docker",
-            "boot",
             "logs",
-            "baselines",
             "history",
             "scratchpad",
         ]
@@ -1303,18 +1322,6 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 CREATE INDEX idx_scratchpad_notes_connection
                 ON scratchpad_notes(connection_id);
 
-                CREATE TABLE host_baselines (
-                    id TEXT PRIMARY KEY,
-                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
-                    label TEXT,
-                    schema_version INTEGER NOT NULL,
-                    captured_at TEXT NOT NULL,
-                    payload TEXT NOT NULL
-                );
-
-                CREATE INDEX idx_host_baselines_connection
-                ON host_baselines(connection_id, captured_at DESC);
-
                 PRAGMA user_version = 4;
                 "#,
             )
@@ -1383,51 +1390,9 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
-    // There is no step 7. It was held for command snippets (#37), which was
-    // closed without merging, so the number was never used and no database
-    // reports `user_version = 7`. The gap stays: renumbering this step to 7
-    // would re-run it on installs already at 8 or 9.
-    if version < 8 {
-        let transaction = connection
-            .transaction()
-            .map_err(|error| error.to_string())?;
-        transaction
-            .execute_batch(
-                r#"
-                CREATE TABLE IF NOT EXISTS host_baselines (
-                    id TEXT PRIMARY KEY,
-                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
-                    label TEXT,
-                    schema_version INTEGER NOT NULL,
-                    captured_at TEXT NOT NULL,
-                    payload TEXT NOT NULL
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_host_baselines_connection
-                ON host_baselines(connection_id, captured_at DESC);
-
-                PRAGMA user_version = 8;
-                "#,
-            )
-            .map_err(|error| error.to_string())?;
-        transaction.commit().map_err(|error| error.to_string())?;
-    }
-    if version < 9 {
-        let transaction = connection
-            .transaction()
-            .map_err(|error| error.to_string())?;
-        transaction
-            .execute_batch(
-                r#"
-                ALTER TABLE host_baselines
-                ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
-
-                PRAGMA user_version = 9;
-                "#,
-            )
-            .map_err(|error| error.to_string())?;
-        transaction.commit().map_err(|error| error.to_string())?;
-    }
+    // Versions 7 to 9 have no step. Released databases may report 8 or 9, so
+    // the numbers stay taken: renumbering a later step into the gap would
+    // re-run it on installs already past it.
     // Local terminal workspaces get their own scratchpad scope (#138). The
     // owner is the workspace UUID the frontend persists and restores verbatim,
     // so a note follows its terminal tab across restarts. There is no Saved
@@ -1653,6 +1618,12 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
+    // Releases up to 0.9.4 created a Baselines table. It is dropped outside
+    // the numbered steps so `user_version` stays put and the previous release
+    // can still open the file. Dropping the table also drops its index.
+    connection
+        .execute_batch("DROP TABLE IF EXISTS host_baselines;")
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -3070,7 +3041,7 @@ mod tests {
             panel_sizes: [
                 ("connections".into(), 320),
                 ("sidebar:hosts".into(), 250),
-                ("content:overview".into(), 720),
+                ("content:ports".into(), 720),
                 ("split:Docker".into(), 420),
             ]
             .into(),
@@ -3119,7 +3090,7 @@ mod tests {
             ..Default::default()
         };
         for sizes in [
-            serde_json::json!({"connections": 999, "unknown": 320, "content:ports": "bad", "split:Docker": -1, "content:overview": 799.6}),
+            serde_json::json!({"connections": 999, "unknown": 320, "content:ports": "bad", "split:Docker": -1, "content:docker": 799.6}),
             serde_json::json!("bad map"),
         ] {
             let mut payload = serde_json::to_value(&state).unwrap();
@@ -3135,7 +3106,7 @@ mod tests {
             if !loaded.panel_sizes.is_empty() {
                 assert_eq!(loaded.panel_sizes["connections"], 480);
                 assert_eq!(loaded.panel_sizes["split:Docker"], 240);
-                assert_eq!(loaded.panel_sizes["content:overview"], 800);
+                assert_eq!(loaded.panel_sizes["content:docker"], 800);
             }
         }
         drop(database);
@@ -3156,7 +3127,7 @@ mod tests {
             ("sidebar:hosts", 801),
             ("connections", 199),
             ("connections", 481),
-            ("content:overview", 359),
+            ("content:logs", 359),
             ("content:ports", 1601),
             ("split:Docker", 239),
             ("split:Docker", 901),
@@ -3412,12 +3383,13 @@ mod tests {
         assert_eq!(third.list_history(&saved.id, None, 50).unwrap().len(), 1);
     }
 
-    /// `user_version` 7 was held for a feature that never merged. Renumbering a
-    /// later step into the gap would re-run it on every install already past
-    /// it, and for step 8 that means recreating the baseline table. The gap is
-    /// permanent, and this is what says so to whoever tries to tidy it.
+    /// Versions 7 to 9 have no step. 7 was never released, and 8 and 9 only
+    /// built the removed Baselines table, but released databases can report
+    /// either. Renumbering a later step into the gap would re-run it on every
+    /// install already past it. The gap is permanent, and this is what says so
+    /// to whoever tries to tidy it.
     #[test]
-    fn the_unused_schema_version_stays_unused() {
+    fn the_unused_schema_versions_stay_unused() {
         let migrations = include_str!("database.rs")
             .split_once("fn migrate(")
             .expect("migrate is missing")
@@ -3426,17 +3398,124 @@ mod tests {
             .expect("migrate is not terminated")
             .0;
 
-        assert!(
-            !migrations.contains("PRAGMA user_version = 7"),
-            "step 7 was never released, so no database reports it"
-        );
-        for released in [1, 2, 3, 4, 5, 6, 8, 9, 10] {
+        for unused in [7, 8, 9] {
             assert!(
-                migrations.contains(&format!("PRAGMA user_version = {released}")),
+                !migrations.contains(&format!("PRAGMA user_version = {unused};")),
+                "step {unused} must stay empty"
+            );
+        }
+        for released in [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15] {
+            assert!(
+                migrations.contains(&format!("PRAGMA user_version = {released};")),
                 "migration step {released} disappeared"
             );
         }
         assert_eq!(LATEST_SCHEMA_VERSION, 15);
+    }
+
+    /// An install that ran a release with Baselines opens with the same schema
+    /// a fresh install gets, keeps everything else, and stays at the same
+    /// `user_version` so the previous release can still open it.
+    #[test]
+    fn baselines_storage_is_dropped_from_existing_databases() {
+        let directory = tempfile::tempdir().unwrap();
+        let fresh_path = directory.path().join("fresh.db");
+        drop(Database::open(&fresh_path).unwrap());
+        let fresh_schema = schema_of(&fresh_path);
+        assert!(
+            fresh_schema.iter().all(|entry| !entry.contains("baseline")),
+            "a fresh database must not create Baselines storage: {fresh_schema:?}"
+        );
+
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute_batch(&format!(
+                r#"
+                CREATE TABLE host_baselines (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    label TEXT,
+                    schema_version INTEGER NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    pinned INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX idx_host_baselines_connection
+                ON host_baselines(connection_id, captured_at DESC);
+                INSERT INTO host_baselines (id, connection_id, schema_version, captured_at, payload)
+                VALUES ('capture', '{}', 1, 'now', '{{}}');
+                "#,
+                saved.id
+            ))
+            .unwrap();
+        drop(database);
+
+        let reopened = Database::open(&path).unwrap();
+        assert_eq!(schema_of(&path), fresh_schema);
+        assert_eq!(reopened.list_connections().unwrap()[0].id, saved.id);
+        let version: i64 = reopened
+            .connection
+            .lock()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_SCHEMA_VERSION);
+    }
+
+    /// Tabs saved on Overview, Boot, or Baselines reopen on their terminal
+    /// instead of failing validation and taking every saved tab with them.
+    #[test]
+    fn saved_tabs_on_removed_pages_reopen_on_their_terminal() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        let connection_id = Uuid::new_v4().to_string();
+        let ids: Vec<String> = (0..4).map(|_| Uuid::new_v4().to_string()).collect();
+        let workspaces: Vec<_> = ["overview", "boot", "baselines", "docker"]
+            .iter()
+            .zip(&ids)
+            .map(|(view, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "label": null,
+                    "connectionId": connection_id,
+                    "localShellId": null,
+                    "view": view,
+                    "historyPaused": false,
+                })
+            })
+            .collect();
+        let payload = serde_json::json!({
+            "panelSizes": {"content:overview": 700, "content:boot": 700, "content:baselines": 700, "content:docker": 700},
+            "workspaces": workspaces,
+            "activeWorkspaceId": ids[2],
+            "terminalGroups": [],
+        });
+        database
+            .set_app_metadata("workspace_state", &payload.to_string())
+            .unwrap();
+
+        let loaded = database.get_workspace_state().unwrap();
+        assert_eq!(
+            loaded
+                .workspaces
+                .iter()
+                .map(|workspace| workspace.view.as_str())
+                .collect::<Vec<_>>(),
+            ["terminal", "terminal", "terminal", "docker"]
+        );
+        assert_eq!(loaded.active_workspace_id.as_deref(), Some(ids[2].as_str()));
+        assert_eq!(
+            loaded.panel_sizes,
+            [("content:docker".to_string(), 700)].into()
+        );
+        for view in REMOVED_WORKSPACE_VIEWS {
+            let mut state = loaded.clone();
+            state.workspaces[0].view = view.into();
+            assert!(database.save_workspace_state(&state).is_err(), "{view}");
+        }
     }
 
     /// A Saved Connection owns everything collected about that host. Deleting
