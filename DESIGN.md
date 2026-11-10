@@ -646,6 +646,9 @@ Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut
 list belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 
+When a hint sends the reader to a control elsewhere, show that control's icon
+beside its exact name, kept on one line, so the reader can spot the button.
+
 Keep Documentation in the titlebar beside Settings. It opens the public docs in
 the default browser and remains available in Settings. Hide it during terminal
 Focus Mode to keep the terminal controls compact.

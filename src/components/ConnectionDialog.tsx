@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileKey, Stethoscope } from "lucide-react";
+import { FileKey, FolderCog, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { MAX_TAGS_PER_CONNECTION, validateConnectionDraft } from "../lib/connection-validation";
@@ -235,7 +235,14 @@ export function ConnectionDialog({
                 ))}
               </div>
             ) : (
-              <small>Create tags from Manage groups and tags, then assign them here.</small>
+              <small>
+                Create tags from{" "}
+                <span className="control-reference">
+                  <FolderCog size={13} aria-hidden="true" />
+                  Manage groups and tags
+                </span>
+                , then assign them here.
+              </small>
             )}
             {!!knownTags.length && (
               <small>

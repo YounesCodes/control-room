@@ -6404,6 +6404,18 @@ dd {
   text-transform: uppercase;
 }
 
+/* Names a control elsewhere in the app with the icon it shows, so the reader
+   can recognize the button the hint points to. */
+.control-reference {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.control-reference svg {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
 .connection-tag-selector .connection-tag-badge {
   max-width: 160px;
   cursor: pointer;
