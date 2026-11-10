@@ -770,7 +770,7 @@ describe("critical UI in Chromium", () => {
   it("adds vertical breathing room on tall windows without widening controls or making short categories scroll", async () => {
     await page.viewport(1200, 640);
     mount(<SettingsFixture />);
-    const refresh = page.getByRole("combobox", { name: "Refresh host metrics" });
+    const refresh = page.getByRole("slider", { name: "Refresh host metrics" });
     await expect.element(refresh).toBeVisible();
     const before = refresh.element().getBoundingClientRect();
     const metrics = container!.querySelector(".host-metrics-settings")!;
@@ -960,20 +960,21 @@ describe("critical UI in Chromium", () => {
   });
 
   it("rounds the open dropdown and preserves option selection and keyboard dismissal", async () => {
-    await page.viewport(960, 640);
+    // Default log tail became a stepped slider; the narrow category picker is
+    // the Settings dropdown that remains on every machine.
+    await page.viewport(768, 640);
     mount(<SettingsFixture />);
-    await page.getByRole("button", { name: "Logs & History", exact: true }).click();
-    const select = page.getByRole("combobox", { name: "Default log tail" });
+    const select = page.getByRole("combobox", { name: "Settings category" });
     await select.click();
     expect(select.element().matches(":open")).toBe(true);
     expect(getComputedStyle(select.element(), "::picker(select)").borderRadius).toBe("6px");
     await page.screenshot({ path: "../../test-results/rounded-dropdown.png" });
-    await page.getByRole("option", { name: "500", exact: true }).click();
-    await expect.element(select).toHaveValue("500");
+    await page.getByRole("option", { name: "Logs & History", exact: true }).click();
+    await expect.element(select).toHaveValue("logs");
     await select.click();
     await userEvent.keyboard("{Escape}");
     expect(select.element().matches(":open")).toBe(false);
-    await expect.element(select).toHaveValue("500");
+    await expect.element(select).toHaveValue("logs");
   });
 
   it("keeps dark-outline checkboxes native, keyboard-operable and consistent across states", async () => {
@@ -1041,21 +1042,22 @@ describe("critical UI in Chromium", () => {
     mount(<SettingsFixture />);
     const search = page.getByRole("searchbox", { name: "Search settings" });
     await expect.element(search).toBeVisible();
-    const refresh = page.getByRole("combobox", { name: "Refresh host metrics" }).element();
-    expect(refresh.getBoundingClientRect().height).toBe(32);
-    expect(refresh.getBoundingClientRect().width).toBeLessThanOrEqual(200);
-    const refreshLabel = refresh.closest("label")!.querySelector("span")!.getBoundingClientRect();
-    const refreshBounds = refresh.getBoundingClientRect();
-    expect(refreshBounds.left - refreshLabel.right).toBeGreaterThanOrEqual(12);
-    expect(refreshBounds.left - refreshLabel.right).toBeLessThanOrEqual(18);
+    const refresh = page.getByRole("slider", { name: "Refresh host metrics" }).element();
+    const slider = refresh.closest(".step-slider")!;
+    const control = slider.querySelector(".step-slider-control")!.getBoundingClientRect();
+    expect(control.width).toBeLessThanOrEqual(280);
+    const refreshLabel = slider.querySelector(".step-slider-label")!.getBoundingClientRect();
+    expect(control.left - refreshLabel.right).toBeGreaterThanOrEqual(12);
+    expect(control.left - refreshLabel.right).toBeLessThanOrEqual(24);
+    // The label lines up with the track, and the tick labels sit clear below the thumb.
+    const track = slider.querySelector(".step-slider-track")!.getBoundingClientRect();
     expect(
-      Math.abs(
-        (refreshLabel.top + refreshLabel.bottom) / 2 -
-          (refreshBounds.top + refreshBounds.bottom) / 2,
-      ),
-    ).toBeLessThanOrEqual(1);
+      Math.abs((refreshLabel.top + refreshLabel.bottom) / 2 - (track.top + track.bottom) / 2),
+    ).toBeLessThanOrEqual(2);
+    const ticks = slider.querySelector(".step-slider-ticks")!.getBoundingClientRect();
+    expect(ticks.top).toBeGreaterThanOrEqual(refresh.getBoundingClientRect().bottom + 4);
     const choices = container!.querySelector(".host-metrics-choices")!.getBoundingClientRect();
-    expect(refreshBounds.top).toBeGreaterThanOrEqual(choices.bottom);
+    expect(control.top).toBeGreaterThanOrEqual(choices.bottom);
     await page.screenshot({ path: `../../test-results/settings-controls-general-${width}.png` });
     const field = search.element().closest(".search-field")!;
     const icon = field.querySelector("svg")!;
@@ -1111,9 +1113,15 @@ describe("critical UI in Chromium", () => {
     if (width > 900)
       await page.getByRole("button", { name: "Logs & History", exact: true }).click();
     else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("logs");
-    const tail = page.getByRole("combobox", { name: "Default log tail" }).element();
-    expect(tail.getBoundingClientRect().height).toBe(32);
-    expect(parseFloat(getComputedStyle(tail).fontSize)).toBeGreaterThanOrEqual(13);
+    const tail = page.getByRole("slider", { name: "Default log tail" }).element();
+    const tailSlider = tail.closest(".step-slider")!;
+    expect(tail.getBoundingClientRect().height).toBe(16);
+    expect(
+      parseFloat(getComputedStyle(tailSlider.querySelector(".step-slider-label")!).fontSize),
+    ).toBeGreaterThanOrEqual(13);
+    for (const tick of tailSlider.querySelectorAll(".step-slider-ticks > span"))
+      expect(parseFloat(getComputedStyle(tick).fontSize)).toBeGreaterThanOrEqual(10.5);
+    expect(tailSlider.getBoundingClientRect().right).toBeLessThanOrEqual(width);
     await page.screenshot({ path: `../../test-results/settings-controls-logs-${width}.png` });
   });
 

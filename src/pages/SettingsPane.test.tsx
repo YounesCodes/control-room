@@ -190,9 +190,11 @@ describe("Settings actions", () => {
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
-    fireEvent.change(screen.getByLabelText("Refresh host metrics"), {
-      target: { value: "10" },
-    });
+    // The slider steps over 2, 5, 10, and 30 seconds; the third stop is 10.
+    const refresh = screen.getByRole("slider", { name: "Refresh host metrics" });
+    expect(refresh.getAttribute("aria-valuetext")).toBe("Every 5 seconds");
+    fireEvent.change(refresh, { target: { value: "2" } });
+    expect(refresh.getAttribute("aria-valuetext")).toBe("Every 10 seconds");
     await userEvent.click(saveButton());
     expect(api.saveSettings).toHaveBeenCalledWith({
       ...settings,

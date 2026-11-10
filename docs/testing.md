@@ -62,7 +62,9 @@ Normal 1440×900, narrow 960×640, and compact 520×480 viewports run by default
 Use `--viewport normal`, `--viewport narrow`, or `--viewport compact` for one size.
 Compact covers the smaller window target from PR #188, even before that change
 lands. Captures show the current branch's layout without scaling or hiding its
-clipping. Settings starts on General & Monitoring. Systemd supports
+clipping. Settings starts on General & Monitoring; `monitoring` turns host
+metrics on, and `logs` opens Logs & History where the window shows that
+category. Systemd supports
 `populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it

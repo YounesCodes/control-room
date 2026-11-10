@@ -9,6 +9,7 @@ import {
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { LocalShellIcon } from "../components/LocalShellIcon";
+import { StepSlider } from "../components/StepSlider";
 import { api, errorMessage } from "../lib/api";
 import {
   DEFAULT_HEADER_METRICS,
@@ -572,24 +573,17 @@ export function SettingsPane({
                       </label>
                     ))}
                   </div>
-                  <label className="host-metrics-refresh">
-                    <span>Refresh host metrics</span>
-                    <select
-                      value={draft.hostMetricsIntervalSeconds ?? 5}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          hostMetricsIntervalSeconds: Number(event.target.value),
-                        })
-                      }
-                    >
-                      {[2, 5, 10, 30].map((seconds) => (
-                        <option value={seconds} key={seconds}>
-                          Every {seconds} seconds
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <StepSlider
+                    className="host-metrics-refresh"
+                    label="Refresh host metrics"
+                    options={[2, 5, 10, 30]}
+                    value={draft.hostMetricsIntervalSeconds ?? 5}
+                    format={(seconds) => `Every ${seconds} seconds`}
+                    tick={(seconds) => `${seconds}s`}
+                    onChange={(seconds) =>
+                      setDraft({ ...draft, hostMetricsIntervalSeconds: seconds })
+                    }
+                  />
                 </fieldset>
                 <small>Monitoring pauses while Settings is open or the window is hidden.</small>
                 {draft.hostMetricsEnabled &&
@@ -788,19 +782,13 @@ export function SettingsPane({
                 )}
               </SettingsSection>
               <SettingsSection id="logs" {...sectionProps}>
-                <label>
-                  <span>Default log tail</span>
-                  <select
-                    value={draft.defaultLogTail}
-                    onChange={(event) =>
-                      setDraft({ ...draft, defaultLogTail: Number(event.target.value) })
-                    }
-                  >
-                    {logTailOptions.map((count) => (
-                      <option key={count}>{count}</option>
-                    ))}
-                  </select>
-                </label>
+                <StepSlider
+                  label="Default log tail"
+                  options={logTailOptions}
+                  value={draft.defaultLogTail}
+                  format={(count) => `${count} lines`}
+                  onChange={(count) => setDraft({ ...draft, defaultLogTail: count })}
+                />
                 <label className="checkbox-label">
                   <input
                     type="checkbox"

@@ -6,10 +6,21 @@
   },
   "scenarios": {
     "settings": {
-      "states": ["populated"],
+      "states": ["populated", "monitoring", "logs"],
       "ready": ".app-shell",
-      "prepare": { "populated": [{ "role": "button", "name": "Open Settings" }] },
-      "settled": { "populated": ".settings-page" },
+      "prepare": {
+        "populated": [{ "role": "button", "name": "Open Settings" }],
+        "monitoring": [{ "role": "button", "name": "Open Settings" }],
+        "logs": [
+          { "role": "button", "name": "Open Settings" },
+          { "role": "button", "name": "Logs & History", "optional": true }
+        ]
+      },
+      "settled": {
+        "populated": ".settings-page",
+        "monitoring": ".settings-page",
+        "logs": ".settings-page"
+      },
       "motion": {
         "description": "Settings category reveal, General to Terminal",
         "target": ".settings-form",

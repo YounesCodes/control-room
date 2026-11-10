@@ -940,9 +940,213 @@ code,
   gap: 8px 16px;
 }
 
-.host-metrics-refresh select {
-  width: 176px;
-  min-width: 0;
+/* Stepped slider for settings with a few fixed choices. The native range
+   input sits over a drawn track so keyboard, pointer, and screen-reader
+   behaviour stay native. Stops, fill, ticks, and the value bubble share one
+   position formula so the thumb always lands exactly on a stop. */
+.step-slider {
+  --step-thumb: 16px;
+  display: flex;
+  max-width: 640px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+/* Line the label up with the track, not with the track and ticks together. */
+.step-slider-label {
+  align-self: flex-start;
+  margin-top: -1px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.step-slider-control {
+  position: relative;
+  flex: none;
+  width: 260px;
+  max-width: calc(100% - 12px);
+  height: 36px;
+  margin-inline: 6px;
+}
+
+.step-slider-track {
+  position: absolute;
+  top: 5px;
+  right: 0;
+  left: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.step-slider-fill,
+.step-slider-stop,
+.step-slider-bubble,
+.step-slider-ticks > span {
+  --step-at: calc(var(--step-thumb) / 2 + (100% - var(--step-thumb)) * var(--step));
+}
+
+.step-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--step-at);
+  border-radius: inherit;
+  background: var(--text-muted);
+  transition: width var(--motion-fast) var(--ease);
+}
+
+.step-slider-stop {
+  position: absolute;
+  top: 50%;
+  left: var(--step-at);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transform: translate(-50%, -50%);
+}
+
+.step-slider-stop[data-reached] {
+  background: var(--app-bg);
+}
+
+.step-slider input[type="range"] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  width: 100%;
+  height: var(--step-thumb);
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.step-slider input[type="range"]:focus-visible {
+  outline: none;
+}
+
+.step-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--step-thumb);
+  background: transparent;
+}
+
+.step-slider input[type="range"]::-webkit-slider-thumb {
+  width: var(--step-thumb);
+  height: var(--step-thumb);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--app-bg);
+  appearance: none;
+  transition:
+    transform var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
+}
+
+.step-slider input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb,
+.step-slider[data-dragging] input[type="range"]::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+/* Keyboard focus rings the thumb, not the whole slider box. */
+.step-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px var(--app-bg),
+    0 0 0 5px var(--accent);
+}
+
+.step-slider input[type="range"]:disabled {
+  cursor: not-allowed;
+}
+
+.step-slider-bubble {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 2px);
+  left: var(--step-at);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  padding: 3px 8px;
+  color: var(--text-strong);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 3px);
+  transition:
+    opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease),
+    left var(--motion-fast) var(--ease);
+}
+
+.step-slider-bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--border-strong);
+  transform: translateX(-50%);
+}
+
+.step-slider-control:hover .step-slider-bubble,
+.step-slider:focus-within .step-slider-bubble,
+.step-slider[data-dragging] .step-slider-bubble {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.step-slider:has(input:disabled) .step-slider-bubble {
+  display: none;
+}
+
+.step-slider-ticks {
+  position: absolute;
+  top: 22px;
+  right: 0;
+  left: 0;
+  height: 14px;
+}
+
+.step-slider-ticks > span {
+  position: absolute;
+  left: var(--step-at);
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.step-slider-ticks > span[data-selected] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.step-slider:has(input:disabled) .step-slider-ticks > span {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-slider-fill,
+  .step-slider-bubble,
+  .step-slider input[type="range"]::-webkit-slider-thumb {
+    transition: none;
+  }
 }
 .host-metrics-options:disabled {
   opacity: 0.6;
@@ -6075,7 +6279,7 @@ dd {
   width: 72px;
 }
 
-.settings-form input:not([type="checkbox"], [type="color"]),
+.settings-form input:not([type="checkbox"], [type="color"], [type="range"]),
 .settings-form select,
 .settings-category-select select {
   min-height: 32px;
@@ -6088,13 +6292,13 @@ dd {
   line-height: 20px;
 }
 
-.settings-form input:not([type="checkbox"], [type="color"]):hover:not(:disabled),
+.settings-form input:not([type="checkbox"], [type="color"], [type="range"]):hover:not(:disabled),
 .settings-form select:hover:not(:disabled),
 .settings-category-select select:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
 
-.settings-form input:not([type="checkbox"], [type="color"]):focus-visible,
+.settings-form input:not([type="checkbox"], [type="color"], [type="range"]):focus-visible,
 .settings-form select:focus-visible,
 .settings-category-select select:focus-visible {
   border-color: var(--text-muted);

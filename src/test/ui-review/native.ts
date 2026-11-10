@@ -53,7 +53,8 @@ const tags =
       ]
     : [];
 const metricsSettings =
-  scenario === "dialogs" && state === "metrics"
+  (scenario === "dialogs" && state === "metrics") ||
+  (scenario === "settings" && state === "monitoring")
     ? { ...settings, hostMetricsEnabled: true }
     : settings;
 const workspace: PersistedWorkspaceState = {
