@@ -1495,10 +1495,12 @@ code,
   white-space: nowrap;
 }
 
+/* Tags start under the host name, in the text column, so the row reads as one
+   block instead of a second row hanging under the OS mark. */
 .host-tag-summary {
   display: flex;
   min-width: 0;
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
@@ -1520,11 +1522,14 @@ code,
   white-space: nowrap;
 }
 
+/* Secondary to the host name and no louder than its address line, but large
+   enough to read at a glance. */
 .host-tag-summary .connection-tag-badge {
-  min-height: 21px;
+  min-height: 17px;
   max-width: 92px;
-  padding: 2px 8px;
-  font-size: 11px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .host-menu {

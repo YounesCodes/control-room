@@ -110,7 +110,8 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "list_connections":
-      result = [host];
+      // Dialog states also review how assigned tags sit in the sidebar row.
+      result = [{ ...host, tags }];
       break;
     case "list_connection_groups":
       result = groups;
