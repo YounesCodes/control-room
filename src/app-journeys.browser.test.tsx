@@ -203,6 +203,13 @@ async function mount() {
   else await expect.poll(() => element.querySelector(".sidebar")?.hasAttribute("inert")).toBe(true);
 }
 async function navigate(name: string) {
+  // A viewport change reaches the shell through a ResizeObserver; wait until the shell
+  // agrees with the window, or a just-narrowed window still looks wide here and the
+  // feature navigation stays shut inside the closed drawer.
+  const compact = window.innerWidth < 860;
+  await expect
+    .poll(() => element.querySelector(".app-shell")?.hasAttribute("data-compact"))
+    .toBe(compact);
   if (element.querySelector(".sidebar")?.hasAttribute("inert"))
     await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   await page

@@ -578,6 +578,13 @@ describe("Local Terminal Mode in the real App", () => {
       .click();
     await page.getByRole("button", { name: "New terminal", exact: true }).click();
     await page.getByRole("button", { name: /^Split right,/ }).click();
+    // Joining a group adds the pane row above the terminals. The surface must follow
+    // the shorter area at once: a frame of overflow would flash a scrollbar, narrow the
+    // terminals by its width, and resize every session. Observing adds no delay.
+    const content = container!.querySelector<HTMLElement>(".workspace-content")!;
+    const widths = new Set<number>([content.clientWidth]);
+    const watcher = new ResizeObserver(() => widths.add(content.clientWidth));
+    watcher.observe(content);
     await page.getByRole("button", { name: /^Existing terminals:/ }).click();
     const divider = page.getByRole("separator", { name: "Resize terminal split 1" });
     await expect.element(divider).toBeVisible();
@@ -589,6 +596,8 @@ describe("Local Terminal Mode in the real App", () => {
     );
     // The existing terminal is the second tree leaf but the first mounted pane.
     await vi.waitFor(() => expect(paneBounds()[0].width).toBeCloseTo(initial - 50, 0));
+    watcher.disconnect();
+    expect([...widths]).toHaveLength(1);
     const selected = paneBounds()[0].width;
     const firstGroup = container!
       .querySelector<HTMLButtonElement>(".session-tab-group-main")!

@@ -598,6 +598,10 @@ export function App() {
         )
       : { panes: {}, dividers: [], viewport: visibleTerminalSpace };
   const terminalPaneRects = terminalGeometry.panes;
+  /// Only a group larger than the window gives its surface explicit pixels to scroll.
+  const terminalSurfaceScrolls =
+    terminalGeometry.viewport.width > visibleTerminalSpace.width ||
+    terminalGeometry.viewport.height > visibleTerminalSpace.height;
   useTerminalLayoutMotion(
     terminalLayoutSurfaceRef,
     JSON.stringify(activeTerminalGroup?.layout ?? activeWorkspaceId, (key, value) =>
@@ -2544,10 +2548,16 @@ export function App() {
                 className="terminal-layout-surface"
                 style={
                   terminalSplitMode && Number.isFinite(terminalGeometry.viewport.width)
-                    ? {
-                        width: terminalGeometry.viewport.width,
-                        height: terminalGeometry.viewport.height,
-                      }
+                    ? terminalSurfaceScrolls
+                      ? {
+                          width: terminalGeometry.viewport.width,
+                          height: terminalGeometry.viewport.height,
+                        }
+                      : // A fitting group follows its container at once. Pixel sizes would
+                        // lag one observer pass behind a shrinking container (the pane row
+                        // appearing, say), overflow it, and flash a scrollbar that narrows
+                        // and resizes every terminal.
+                        { width: "100%", height: "100%" }
                     : undefined
                 }
               >
