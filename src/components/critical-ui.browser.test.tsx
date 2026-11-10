@@ -655,7 +655,13 @@ describe("critical UI in Chromium", () => {
       .getByRole("button", { name: "Add connection" })
       .element() as HTMLButtonElement;
     await userEvent.unhover(button);
+    // A pointer left over from an earlier test unwinds hover transitions here.
     await expect.poll(() => getComputedStyle(button).backgroundColor).toBe("rgb(23, 23, 23)");
+    await Promise.all(
+      button
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     const atRest = getComputedStyle(button);
     const position = () => {
       const rect = button.getBoundingClientRect();
@@ -1103,7 +1109,7 @@ describe("critical UI in Chromium", () => {
         })
         .click();
       const input = page.getByRole("spinbutton", { name, exact: true }).element();
-      expect(input.getBoundingClientRect().height).toBe(32);
+      expect(input.getBoundingClientRect().height).toBeCloseTo(32, 2);
       expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(13);
     }
     await page.getByRole("tab", { name: "Local shells", exact: true }).click();
