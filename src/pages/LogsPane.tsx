@@ -1020,7 +1020,7 @@ export function LogsPane({
   );
 }
 
-function sourceLabel(items: (SystemdUnit | DockerContainer)[], id: string): string {
+function sourceLabel(items: { id: string; name?: string }[], id: string): string {
   const item = items.find((source) => source.id === id);
-  return item && "name" in item ? item.name : id;
+  return item?.name ?? id;
 }
