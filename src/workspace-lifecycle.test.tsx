@@ -282,8 +282,8 @@ function focusStripLabels(): string[] {
 }
 
 function groupTab(name: string): HTMLElement {
-  // The group row's scope keeps the aria name short: only its own button.
-  return within(screen.getByRole("group", { name })).getByRole("button");
+  // The group row's scope keeps the aria name short; Rename and Ungroup sit beside it.
+  return within(screen.getByRole("group", { name })).getByRole("button", { name: /^Open / });
 }
 
 async function renderFocusGroupedApp() {

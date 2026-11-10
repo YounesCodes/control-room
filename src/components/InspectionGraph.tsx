@@ -295,7 +295,15 @@ export function InspectionGraph({
         : node.bottom > bounds.bottom - 64
           ? bounds.bottom - 64 - node.bottom
           : 0;
-    if (dx || dy) setView((current) => ({ ...current, x: current.x + dx, y: current.y + dy }));
+    if (focusing && contentRef.current) {
+      // Keyboard focus interrupts the glide. Apply the reveal to the same rendered
+      // camera that produced the measured chip bounds.
+      const pose = new DOMMatrixReadOnly(getComputedStyle(contentRef.current).transform);
+      setFocusing(false);
+      setView({ scale: pose.a, x: pose.e + dx, y: pose.f + dy });
+    } else if (dx || dy) {
+      setView((current) => ({ ...current, x: current.x + dx, y: current.y + dy }));
+    }
   }
 
   return (

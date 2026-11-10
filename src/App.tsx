@@ -30,7 +30,8 @@ import {
   RotateCcw,
   ChevronDown,
   Clipboard,
-  Columns2,
+  Ungroup,
+  LayoutPanelLeft,
   Copy,
   FileClock,
   FolderCog,
@@ -42,7 +43,6 @@ import {
   Network,
   Pencil,
   Plus,
-  Rows2,
   Server,
   Settings,
   ShieldAlert,
@@ -71,7 +71,9 @@ import { HostOsIcon } from "./components/HostOsIcon";
 import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
-import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
+import { WorkspaceTabScroller, type TabDragOut } from "./components/WorkspaceTabScroller";
+import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
+import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
@@ -88,11 +90,21 @@ import {
   createTerminalLayout,
   getTerminalLayoutIds,
   getTerminalPanePixels,
-  getResponsiveTerminalGeometry,
-  resizeTerminalLayout,
+  insertTerminalBeside,
+  terminalDropZone,
+  terminalLayoutFits,
+  getTerminalDividerHandles,
+  getTerminalLayoutSurface,
+  resizeTerminalHandle,
   splitTerminalLayout,
+  terminalPaneOuterEdges,
 } from "./lib/terminal-layout";
-import type { TerminalSplitDirection } from "./lib/terminal-layout";
+import type {
+  TerminalDropZone,
+  TerminalLayout,
+  TerminalPaneRect,
+  TerminalSplitDirection,
+} from "./lib/terminal-layout";
 import {
   deleteTerminalGroup,
   nextTerminalGroupName,
@@ -203,24 +215,58 @@ interface AnchoredPopover {
 }
 
 const POPOVER_GAP = 6;
+
+interface TabSplit {
+  id: string;
+  target: string;
+  zone: TerminalDropZone;
+  layout: TerminalLayout;
+  valid: boolean;
+  reason: string;
+}
+
+const tabSplitCaption: Record<TerminalDropZone, (target: string) => string> = {
+  center: (target) => target,
+  left: (target) => `Split left of ${target}`,
+  right: (target) => `Split right of ${target}`,
+  top: (target) => `Split above ${target}`,
+  bottom: (target) => `Split below ${target}`,
+};
+const NEW_TERMINAL_MENU_WIDTH = 272;
+const NEW_TERMINAL_MENU_HEIGHT = 480;
 // Wide enough that a popover opened from a window-edge trigger, such as
 // Scratchpad, sits clear of the window corner instead of hugging its border.
 const POPOVER_GUTTER = 12;
 
-function anchoredPopoverAt(rect: DOMRect, width: number, preferredHeight: number): AnchoredPopover {
+/// Positions a fixed popover beside its anchor. `zoom` is the CSS zoom the popover
+/// renders under: its offsets and size scale by it, so the measurement happens in
+/// viewport pixels and the result is converted back into the popover's own pixels.
+function anchoredPopoverAt(
+  rect: DOMRect,
+  width: number,
+  preferredHeight: number,
+  zoom = 1,
+): AnchoredPopover {
+  const scale = zoom > 0 ? zoom : 1;
   const below = window.innerHeight - rect.bottom - POPOVER_GAP - POPOVER_GUTTER;
   const above = rect.top - POPOVER_GAP - POPOVER_GUTTER;
-  const useAbove = below < preferredHeight && above > below;
+  const useAbove = below < preferredHeight * scale && above > below;
+  const right = Math.max(
+    POPOVER_GUTTER,
+    Math.min(window.innerWidth - rect.right, window.innerWidth - width * scale - POPOVER_GUTTER),
+  );
   return {
-    right: Math.max(
-      POPOVER_GUTTER,
-      Math.min(window.innerWidth - rect.right, window.innerWidth - width - POPOVER_GUTTER),
-    ),
+    right: right / scale,
     ...(useAbove
-      ? { bottom: window.innerHeight - rect.top + POPOVER_GAP }
-      : { top: rect.bottom + POPOVER_GAP }),
-    maxHeight: Math.max(0, Math.min(preferredHeight, useAbove ? above : below)),
+      ? { bottom: (window.innerHeight - rect.top + POPOVER_GAP) / scale }
+      : { top: (rect.bottom + POPOVER_GAP) / scale }),
+    maxHeight: Math.max(0, Math.min(preferredHeight, (useAbove ? above : below) / scale)),
   };
+}
+
+/** The CSS zoom an element renders under (1 where the engine does not report it). */
+function cssZoomOf(element: Element | null): number {
+  return (element as (Element & { currentCSSZoom?: number }) | null)?.currentCSSZoom ?? 1;
 }
 
 export function App() {
@@ -283,6 +329,10 @@ export function App() {
   const [dialogConnection, setDialogConnection] = useState<SavedConnection | "new" | null>(null);
   const [panelSizes, setPanelSizes] = useState<PanelSizes>({});
   const shellSize = usePanelWidth();
+  const compactShell = shellSize.width > 0 && shellSize.width < 860;
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const railMax = Math.max(
     PANEL_LIMITS.connections.min,
     Math.min(PANEL_LIMITS.connections.max, (shellSize.width || 840) - 360),
@@ -307,30 +357,31 @@ export function App() {
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
   const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
-  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  /// New terminal opens a tab or splits the focused view; it reopens on "tab".
+  const [newTerminalMode, setNewTerminalMode] = useState<"tab" | "split">("tab");
+  /// A terminal tab carried from the strip over the terminal view, and where it would split.
+  const [tabSplit, setTabSplit] = useState<TabSplit | null>(null);
   const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
-  const splitMenuButtonRef = useRef<HTMLButtonElement>(null);
   const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
   // The closing transitions keep fading popovers mounted for a beat without
   // delaying focus return or dismissal itself.
   const { present: newTerminalMenuPresent, closing: newTerminalMenuClosing } =
     usePopoverExit(newTerminalMenuOpen);
-  const { present: splitMenuPresent, closing: splitMenuClosing } = usePopoverExit(splitMenuOpen);
   const { present: scratchpadPresent, closing: scratchpadClosing } = usePopoverExit(scratchpadOpen);
   const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
   const closingWorkspaceIdsRef = useRef(new Set<string>());
   const terminalLayoutViewportRef = useRef<HTMLDivElement>(null);
-  const [terminalLayoutViewport, setTerminalLayoutViewport] = useState({
-    width: Number.POSITIVE_INFINITY,
-    height: Number.POSITIVE_INFINITY,
+  const terminalLayoutSurfaceRef = useRef<HTMLDivElement>(null);
+  const [terminalLayoutViewport, setTerminalLayoutViewport] = useState(() => {
+    const unmeasured = { width: Infinity, height: Infinity };
+    return { visible: unmeasured, available: unmeasured };
   });
   // Anchored geometry for the terminal popovers, measured when they open.
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<AnchoredPopover | null>(null);
-  const [splitMenuAt, setSplitMenuAt] = useState<AnchoredPopover | null>(null);
   const [scratchpadAt, setScratchpadAt] = useState<AnchoredPopover | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
@@ -495,6 +546,7 @@ export function App() {
 
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const hasActiveWorkspace = activeWorkspace !== null;
   const tabArrangementKey = [
     terminalFocusMode ? "focus" : "normal",
     ...workspaces.map((workspace) => workspace.id),
@@ -565,11 +617,64 @@ export function App() {
   const ungroupedWorkspaces = workspaces.filter(
     (workspace) => !groupedWorkspaceIds.has(workspace.id),
   );
+  const { visible: visibleTerminalSpace, available: availableTerminalSpace } =
+    terminalLayoutViewport;
   const terminalGeometry =
     terminalSplitMode && activeTerminalGroup
-      ? getResponsiveTerminalGeometry(activeTerminalGroup.layout, terminalLayoutViewport)
-      : { panes: {}, dividers: [] };
+      ? getTerminalLayoutSurface(
+          activeTerminalGroup.layout,
+          visibleTerminalSpace,
+          availableTerminalSpace,
+        )
+      : { panes: {}, dividers: [], viewport: visibleTerminalSpace };
   const terminalPaneRects = terminalGeometry.panes;
+  /// Only a group larger than the window gives its surface explicit pixels to scroll.
+  const terminalSurfaceScrolls =
+    terminalGeometry.viewport.width > visibleTerminalSpace.width ||
+    terminalGeometry.viewport.height > visibleTerminalSpace.height;
+  useTerminalLayoutMotion(
+    terminalLayoutSurfaceRef,
+    JSON.stringify(activeTerminalGroup?.layout ?? activeWorkspaceId, (key, value) =>
+      key === "ratio" ? undefined : value,
+    ),
+    `${visibleTerminalSpace.width}:${visibleTerminalSpace.height}:${availableTerminalSpace.width}:${availableTerminalSpace.height}:${terminalFocusMode}`,
+    JSON.stringify(activeTerminalGroup?.layout ?? activeWorkspaceId),
+  );
+  useEffect(() => {
+    if (!navigationOpen || !compactShell) return;
+    const sidebar = sidebarRef.current;
+    const items = () =>
+      [
+        ...(sidebar?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input, [tabindex='0']",
+        ) ?? []),
+      ].filter((node) => node.getClientRects().length > 0);
+    items()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-app-popover]")) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setNavigationOpen(false);
+        navigationButtonRef.current?.focus();
+      }
+      if (event.key !== "Tab") return;
+      const elements = items();
+      const first = elements[0];
+      const last = elements.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => document.removeEventListener("keydown", keydown);
+  }, [compactShell, navigationOpen]);
+  useEffect(() => {
+    setNavigationOpen(false);
+  }, [activeWorkspaceId, activeWorkspace?.view, settingsOpen, terminalFocusMode]);
   const existingSplitCandidates = terminalFocusMode
     ? ungroupedWorkspaces.filter((workspace) => workspace.id !== activeWorkspaceId)
     : [];
@@ -603,19 +708,40 @@ export function App() {
     const element = terminalLayoutViewportRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
 
-    function rememberSize(width: number, height: number) {
+    function rememberSize(...sizes: [number, number, number, number]) {
+      // Display scaling gives fractional boxes; rounding up would push the right and
+      // bottom panes, and the selected frame, past the clipped edge.
+      const [width, height, outerWidth, outerHeight] = sizes.map(Math.floor);
       setTerminalLayoutViewport((current) =>
-        current.width === width && current.height === height ? current : { width, height },
+        current.visible.width === width &&
+        current.visible.height === height &&
+        current.available.width === outerWidth &&
+        current.available.height === outerHeight
+          ? current
+          : { visible: { width, height }, available: { width: outerWidth, height: outerHeight } },
       );
     }
 
-    rememberSize(element.clientWidth, element.clientHeight);
+    rememberSize(
+      element.clientWidth,
+      element.clientHeight,
+      element.offsetWidth,
+      element.offsetHeight,
+    );
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) rememberSize(entry.contentRect.width, entry.contentRect.height);
+      if (!entry) return;
+      // A fallback scrollbar may shrink the visible box, but must not rotate the split again.
+      const outer = entry.borderBoxSize?.[0];
+      rememberSize(
+        entry.contentRect.width,
+        entry.contentRect.height,
+        outer?.inlineSize ?? element.offsetWidth,
+        outer?.blockSize ?? element.offsetHeight,
+      );
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [loading, activeWorkspace?.id]);
+  }, [loading, hasActiveWorkspace]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
@@ -669,7 +795,8 @@ export function App() {
           return;
         }
         // Do not stack the palette on top of a modal dialog (connection or sudo).
-        if (dialogConnection !== null || document.querySelector('[role="dialog"]')) return;
+        if (dialogConnection !== null || document.querySelector('[role="dialog"]:not([inert])'))
+          return;
         event.preventDefault();
         setPaletteOpen(true);
       }
@@ -755,42 +882,21 @@ export function App() {
     shellSize.width,
   ]);
 
+  // The palette's Split enters Focus Mode and opens New terminal in the same turn;
+  // its button moves with that layout, so the menu re-anchors to where it landed.
   useLayoutEffect(() => {
-    if (!splitMenuOpen || !terminalFocusMode) return;
-    const rect = splitMenuButtonRef.current?.getBoundingClientRect();
-    if (rect) setSplitMenuAt(anchoredPopoverAt(rect, 264, 480));
-  }, [splitMenuOpen, terminalFocusMode]);
-
-  useEffect(() => {
-    if (!splitMenuOpen) return;
-
-    function dismissMenu(event: PointerEvent) {
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-terminal-split-menu]")) return;
-      setSplitMenuOpen(false);
-    }
-
-    function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setSplitMenuOpen(false);
-        splitMenuButtonRef.current?.focus();
-      }
-    }
-
-    function dismissOnResize() {
-      setSplitMenuOpen(false);
-      splitMenuButtonRef.current?.focus();
-    }
-
-    document.addEventListener("pointerdown", dismissMenu);
-    document.addEventListener("keydown", dismissMenuWithKeyboard);
-    window.addEventListener("resize", dismissOnResize);
-    return () => {
-      document.removeEventListener("pointerdown", dismissMenu);
-      document.removeEventListener("keydown", dismissMenuWithKeyboard);
-      window.removeEventListener("resize", dismissOnResize);
-    };
-  }, [splitMenuOpen]);
+    if (!newTerminalMenuOpen) return;
+    const rect = newTerminalButtonRef.current?.getBoundingClientRect();
+    if (rect)
+      setNewTerminalMenuAt(
+        anchoredPopoverAt(
+          rect,
+          NEW_TERMINAL_MENU_WIDTH,
+          NEW_TERMINAL_MENU_HEIGHT,
+          cssZoomOf(newTerminalButtonRef.current),
+        ),
+      );
+  }, [newTerminalMenuOpen, terminalFocusMode]);
 
   const connectionSections = useMemo(
     () => organizeConnections(connections, connectionGroups, hostSearch, ungroupedCollapsed),
@@ -931,7 +1037,6 @@ export function App() {
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
     transitionFocusMode("enter", () => {
-      setSplitMenuOpen(false);
       setNewTerminalMenuOpen(false);
       setTerminalFocusMode(true);
     });
@@ -939,7 +1044,6 @@ export function App() {
 
   function exitTerminalFocus() {
     transitionFocusMode("exit", () => {
-      setSplitMenuOpen(false);
       setNewTerminalMenuOpen(false);
       setTerminalFocusMode(false);
     });
@@ -950,7 +1054,6 @@ export function App() {
     closeSettings(() => {
       updateWorkspace(activeWorkspace.id, { view: "terminal" });
       setNewTerminalMenuOpen(false);
-      setSplitMenuOpen(false);
       setScratchpadOpen(true);
     });
   }
@@ -963,7 +1066,7 @@ export function App() {
     terminalGroupActiveWorkspaceRef.current.set(group.id, nextId);
     setActiveWorkspaceId(nextId);
     updateWorkspace(nextId, { view: "terminal" });
-    setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
   }
 
   function selectWorkspaceTab(workspace: Workspace) {
@@ -1000,7 +1103,7 @@ export function App() {
             ...current,
             {
               id: groupId,
-              name: nextTerminalGroupName(current, duplicateLabel(activeWorkspace)),
+              name: nextTerminalGroupName(current),
               layout: splitTerminalLayout(
                 createTerminalLayout(activeWorkspace.id),
                 activeWorkspace.id,
@@ -1012,7 +1115,7 @@ export function App() {
     );
     terminalGroupActiveWorkspaceRef.current.set(groupId, workspace.id);
     setActiveWorkspaceId(workspace.id);
-    setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
   }
 
   function updateServicesCache(id: string, servicesCache: CachedList<SystemdUnit>) {
@@ -1110,7 +1213,7 @@ export function App() {
             ...current,
             {
               id: groupId,
-              name: nextTerminalGroupName(current, duplicateLabel(activeWorkspace)),
+              name: nextTerminalGroupName(current),
               layout: splitTerminalLayout(
                 createTerminalLayout(activeWorkspace.id),
                 activeWorkspace.id,
@@ -1122,7 +1225,7 @@ export function App() {
     );
     terminalGroupActiveWorkspaceRef.current.set(groupId, workspace.id);
     setActiveWorkspaceId(workspace.id);
-    setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
   }
 
   function removeTerminalGroup(groupId: string) {
@@ -1166,7 +1269,7 @@ export function App() {
         if (split) splitWithNewWorkspace(workspace);
         else openWorkspace(workspace);
       } else {
-        setSplitMenuOpen(false);
+        setNewTerminalMenuOpen(false);
         setRemoteShellRequest({ connection, split });
       }
     });
@@ -1194,17 +1297,21 @@ export function App() {
   /// Opens the chooser under its own control, measured at the moment it opens:
   /// a consistent gap below the button, flipped above it when the window has
   /// no room, and clamped so neither edge pushes the menu off screen.
-  const NEW_TERMINAL_MENU_WIDTH = 248;
-  const NEW_TERMINAL_MENU_HEIGHT = 420;
-  function openNewTerminalMenu() {
+  function openNewTerminalMenu(mode: "tab" | "split" = "tab") {
     if (newTerminalMenuOpen) {
       setNewTerminalMenuOpen(false);
       return;
     }
+    setNewTerminalMode(mode);
     const rect = newTerminalButtonRef.current?.getBoundingClientRect();
     if (rect) {
       setNewTerminalMenuAt(
-        anchoredPopoverAt(rect, NEW_TERMINAL_MENU_WIDTH, NEW_TERMINAL_MENU_HEIGHT),
+        anchoredPopoverAt(
+          rect,
+          NEW_TERMINAL_MENU_WIDTH,
+          NEW_TERMINAL_MENU_HEIGHT,
+          cssZoomOf(newTerminalButtonRef.current),
+        ),
       );
     }
     setNewTerminalMenuOpen(true);
@@ -1225,17 +1332,6 @@ export function App() {
         }
       })
       .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
-  }
-
-  /// Split's chooser anchors to its own button with the same geometry.
-  function openSplitMenu() {
-    if (splitMenuOpen) {
-      setSplitMenuOpen(false);
-      return;
-    }
-    const rect = splitMenuButtonRef.current?.getBoundingClientRect();
-    if (rect) setSplitMenuAt(anchoredPopoverAt(rect, 264, 480));
-    setSplitMenuOpen(true);
   }
 
   /// Split's targets. It keeps its own order and its own extra group: a split
@@ -1285,6 +1381,67 @@ export function App() {
     },
   ];
   const canSplitTerminal = splitTargetGroups.some((group) => group.options.length > 0);
+  /// Splitting acts on the focused terminal view, so New terminal offers it only there.
+  const splitAvailable = terminalFocusMode && !settingsOpen && activeWorkspace?.view === "terminal";
+  const splitting = splitAvailable && newTerminalMode === "split";
+
+  /// Where a terminal tab dragged out of the strip would split the focused view: the pane
+  /// under the pointer and its nearest edge. The center is not a split, so it only hints.
+  function tabSplitAt(id: string, x: number, y: number): TabSplit | null {
+    if (!splitAvailable || !activeWorkspace) return null;
+    const bounds = terminalLayoutSurfaceRef.current?.getBoundingClientRect();
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
+    const left = ((x - bounds.left) / bounds.width) * 100;
+    const top = ((y - bounds.top) / bounds.height) * 100;
+    const layout = activeTerminalGroup?.layout ?? createTerminalLayout(activeWorkspace.id);
+    const panes: Record<string, TerminalPaneRect> = activeTerminalGroup
+      ? terminalPaneRects
+      : { [activeWorkspace.id]: { left: 0, top: 0, width: 100, height: 100 } };
+    for (const [target, rect] of Object.entries(panes)) {
+      const zone = terminalDropZone(
+        (left - rect.left) / rect.width,
+        (top - rect.top) / rect.height,
+      );
+      if (!zone) continue;
+      if (zone === "center")
+        return { id, target, zone, layout, valid: false, reason: "Move toward an edge to split" };
+      const next = insertTerminalBeside(layout, id, target, zone);
+      return {
+        id,
+        target,
+        zone,
+        layout: next,
+        valid: next !== layout && terminalLayoutFits(next, availableTerminalSpace),
+        reason: "Not enough room",
+      };
+    }
+    return null;
+  }
+
+  function splitWithDraggedTab(id: string, x: number, y: number) {
+    const split = tabSplitAt(id, x, y);
+    setTabSplit(null);
+    if (!split?.valid) return;
+    updateWorkspace(id, { view: "terminal" });
+    const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
+    setTerminalGroups((current) =>
+      activeTerminalGroup
+        ? current.map((item) =>
+            item.id === activeTerminalGroup.id ? { ...item, layout: split.layout } : item,
+          )
+        : [...current, { id: groupId, name: nextTerminalGroupName(current), layout: split.layout }],
+    );
+    terminalGroupActiveWorkspaceRef.current.set(groupId, id);
+    setActiveWorkspaceId(id);
+  }
+
+  /// In Focus Mode a terminal tab outside the focused view can be dragged onto it to split.
+  const tabDragOut: TabDragOut = {
+    accepts: (id) => existingSplitCandidates.some((workspace) => workspace.id === id),
+    move: (id, x, y) => setTabSplit(tabSplitAt(id, x, y)),
+    drop: splitWithDraggedTab,
+    cancel: () => setTabSplit(null),
+  };
 
   /// The targets "New terminal" offers: everything saved, plus every shell this
   /// machine actually has. Each one opens its own Workspace, so choosing the
@@ -1645,7 +1802,10 @@ export function App() {
         <button
           className="host-main"
           type="button"
-          onClick={() => openConnection(connection)}
+          onClick={() => {
+            openConnection(connection);
+            setNavigationOpen(false);
+          }}
           aria-describedby={`connection-session-${connection.id}`}
         >
           <span className="target-mark">
@@ -1764,6 +1924,40 @@ export function App() {
     });
   }
 
+  /// One outline where the dragged terminal would land, captioned like pane moves.
+  function renderTabSplitPreview(split: TabSplit) {
+    const label = (id: string) => {
+      const workspace = workspaces.find((item) => item.id === id);
+      return workspace ? workspaceDisplayLabel(workspace, workspaces) : "";
+    };
+    const targetRect = activeTerminalGroup
+      ? terminalPaneRects[split.target]
+      : { left: 0, top: 0, width: 100, height: 100 };
+    const landing = split.valid
+      ? getTerminalLayoutSurface(split.layout, visibleTerminalSpace, availableTerminalSpace).panes[
+          split.id
+        ]
+      : null;
+    const pixels = (rect: TerminalPaneRect | undefined | null) =>
+      (rect && getTerminalPanePixels(rect, terminalGeometry.viewport)) ?? undefined;
+    return (
+      <div className="terminal-drop-layer" aria-hidden="true">
+        {landing ? (
+          <div className="terminal-drop-preview" style={pixels(landing)}>
+            <span>{tabSplitCaption[split.zone](label(split.target))}</span>
+          </div>
+        ) : (
+          <div
+            className={`terminal-drop-target ${split.zone === "center" ? "hint" : "invalid"}`}
+            style={pixels(targetRect)}
+          >
+            <span>{split.reason}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderWorkspaceTab(workspace: Workspace, grouped = false) {
     return (
       <div
@@ -1876,7 +2070,7 @@ export function App() {
         {
           id: group.id,
           label: group.name,
-          icon: <Columns2 size={17} strokeWidth={1.8} />,
+          icon: <LayoutPanelLeft size={17} strokeWidth={1.8} />,
           detail: `${getTerminalLayoutIds(group.layout).length} terminals`,
           active: activeTerminalGroup?.id === group.id && !settingsOpen,
           onSelect: () => selectTerminalGroup(group),
@@ -1901,6 +2095,7 @@ export function App() {
     <div
       ref={shellSize.ref}
       data-focus-toggle={focusToggleAvailable ? "visible" : "hidden"}
+      data-compact={compactShell || undefined}
       className={
         settingsOpen
           ? "app-shell settings-mode"
@@ -1909,12 +2104,26 @@ export function App() {
             : "app-shell"
       }
       style={
-        !terminalFocusMode && !settingsOpen
+        !terminalFocusMode && !settingsOpen && !compactShell
           ? { gridTemplateColumns: `${railWidth}px minmax(0, 1fr)` }
           : undefined
       }
     >
       <header className="app-bar" data-tauri-drag-region>
+        {!terminalFocusMode && !settingsOpen && (
+          <button
+            ref={navigationButtonRef}
+            type="button"
+            className="app-bar-button compact-navigation-toggle"
+            aria-label="Open navigation"
+            aria-expanded={navigationOpen}
+            aria-controls="connection-navigation"
+            onClick={() => setNavigationOpen((open) => !open)}
+            title="Connections and views"
+          >
+            <Server size={18} />
+          </button>
+        )}
         {!settingsOpen &&
           !terminalFocusMode &&
           settingsContract?.current.hostMetricsEnabled &&
@@ -1977,7 +2186,23 @@ export function App() {
         <WindowControls />
       </div>
 
-      <aside className={activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}>
+      {compactShell && navigationOpen && !settingsOpen && !terminalFocusMode && (
+        <button
+          type="button"
+          className="navigation-backdrop"
+          aria-label="Close navigation"
+          onClick={() => {
+            setNavigationOpen(false);
+            navigationButtonRef.current?.focus();
+          }}
+        />
+      )}
+      <aside
+        ref={sidebarRef}
+        id="connection-navigation"
+        inert={compactShell && !navigationOpen}
+        className={`${activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}${navigationOpen ? " navigation-open" : ""}`}
+      >
         <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
           <span data-tauri-drag-region>Connections</span>
           <span data-tauri-drag-region>{connections.length}</span>
@@ -2052,9 +2277,13 @@ export function App() {
                       aria-current={
                         activeRemoteWorkspace.view === id && !settingsOpen ? "page" : undefined
                       }
-                      onClick={() =>
-                        closeSettings(() => updateWorkspace(activeRemoteWorkspace.id, { view: id }))
-                      }
+                      onClick={() => {
+                        closeSettings(() =>
+                          updateWorkspace(activeRemoteWorkspace.id, { view: id }),
+                        );
+                        setNavigationOpen(false);
+                        if (compactShell) navigationButtonRef.current?.focus();
+                      }}
                     >
                       <Icon size={17} strokeWidth={1.8} /> {label}
                     </button>
@@ -2093,6 +2322,7 @@ export function App() {
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
               onReorder={moveTabTo}
+              onDragOut={splitAvailable ? tabDragOut : undefined}
             >
               {terminalFocusMode
                 ? (() => {
@@ -2136,9 +2366,8 @@ export function App() {
                               aria-current={active ? "page" : undefined}
                               aria-label={`Open ${group.name} ${members.length} ${members.length === 1 ? "terminal" : "terminals"}`}
                               aria-describedby={`terminal-group-status-${group.id}`}
-                              title={`${group.name}: ${members.map(activityLabel).join(", ")}`}
                             >
-                              <Columns2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                              <LayoutPanelLeft size={13} strokeWidth={1.8} aria-hidden="true" />
                               <span>{group.name}</span> <small>{members.length}</small>
                               <span
                                 className={`presence presence-${state}${members.some(workspaceProcessing) ? " presence-busy" : ""}`}
@@ -2160,6 +2389,24 @@ export function App() {
                               )
                               .join("; ")}
                           </span>
+                          <button
+                            className="session-tab-rename"
+                            type="button"
+                            onClick={() => setRenameGroupTarget(group)}
+                            aria-label={`Rename group ${group.name}`}
+                            title="Rename terminal group"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            className="session-tab-close"
+                            type="button"
+                            onClick={() => confirmUngroup(group)}
+                            aria-label={`Ungroup ${group.name}; terminals stay open`}
+                            title="Ungroup terminals; keep every terminal open"
+                          >
+                            <Ungroup size={14} />
+                          </button>
                         </div>
                       );
                     });
@@ -2175,12 +2422,16 @@ export function App() {
                     : "session-new-terminal session-new-terminal-empty"
                 }
                 type="button"
-                onClick={openNewTerminalMenu}
-                disabled={!canOpenNewTerminal}
+                onClick={() => openNewTerminalMenu()}
+                disabled={!canOpenNewTerminal && !splitAvailable}
                 aria-haspopup="dialog"
                 aria-label="New terminal"
                 aria-expanded={newTerminalMenuOpen}
-                title="Open a terminal for a Saved Connection or a local shell"
+                title={
+                  splitAvailable
+                    ? "Open a terminal in a new tab or split this view"
+                    : "Open a terminal for a Saved Connection or a local shell"
+                }
               >
                 <Plus size={16} />
                 {!workspaces.length && <span>New terminal</span>}
@@ -2190,10 +2441,11 @@ export function App() {
                 <TerminalTargetMenu
                   label="New terminal"
                   className="new-terminal-menu"
-                  groups={newTerminalGroups}
+                  groups={splitting ? splitTargetGroups : newTerminalGroups}
                   style={newTerminalMenuAt ?? undefined}
                   closing={newTerminalMenuClosing}
                   footer={
+                    !splitting &&
                     administratorGroupOffered &&
                     !administratorLocalShells.length && (
                       <details className="terminal-administrator-setup">
@@ -2210,19 +2462,56 @@ export function App() {
                     setNewTerminalMenuOpen(false);
                     newTerminalButtonRef.current?.focus();
                   }}
-                />
+                >
+                  {splitAvailable && (
+                    <div className="terminal-open-modes" role="group" aria-label="Open as">
+                      {(
+                        [
+                          ["tab", null, "New tab", "New tab"],
+                          ["vertical", "vertical", "Split right", "Split right, side by side"],
+                          ["horizontal", "horizontal", "Split down", "Split down, top and bottom"],
+                        ] as const
+                      ).map(([preview, direction, label, name]) => {
+                        const active = direction
+                          ? splitting && splitDirection === direction
+                          : !splitting;
+                        return (
+                          <button
+                            key={preview}
+                            className={active ? "active" : ""}
+                            type="button"
+                            disabled={direction !== null && !canSplitTerminal}
+                            onClick={() => {
+                              setNewTerminalMode(direction ? "split" : "tab");
+                              if (direction) setSplitDirection(direction);
+                            }}
+                            aria-pressed={active}
+                            aria-label={name}
+                          >
+                            {/* A miniature of the result; the filled tile is the new terminal. */}
+                            <span className={`terminal-open-preview ${preview}`} aria-hidden="true">
+                              <i />
+                              <i />
+                              {preview === "tab" && <i />}
+                            </span>
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TerminalTargetMenu>
               )}
             </span>
             {terminalFocusMode && (
               <div
                 className="session-window-drag-region"
                 data-tauri-drag-region
-                title="Drag to move window"
                 aria-hidden="true"
               />
             )}
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
-              <div className="session-tab-actions" data-terminal-split-menu>
+              <div className="session-tab-actions">
                 <div
                   className="session-terminal-actions"
                   role="group"
@@ -2303,71 +2592,6 @@ export function App() {
                     }}
                   />
                 )}
-                {terminalFocusMode && (
-                  <>
-                    <button
-                      ref={splitMenuButtonRef}
-                      className="session-strip-button"
-                      type="button"
-                      onClick={openSplitMenu}
-                      disabled={
-                        !connections.length &&
-                        !existingSplitCandidates.length &&
-                        !offeredShells.length
-                      }
-                      aria-label="Split terminal"
-                      aria-haspopup="dialog"
-                      aria-expanded={splitMenuOpen}
-                      title={
-                        activeTerminalGroup
-                          ? "Add a terminal to this group"
-                          : "Create a group with another terminal"
-                      }
-                    >
-                      <Columns2 size={15} />
-                    </button>
-                    {splitMenuPresent && (
-                      <TerminalTargetMenu
-                        label="Split terminal"
-                        className="terminal-split-menu"
-                        groups={splitTargetGroups}
-                        style={splitMenuAt ?? undefined}
-                        closing={splitMenuClosing}
-                        onClose={() => {
-                          setSplitMenuOpen(false);
-                          splitMenuButtonRef.current?.focus();
-                        }}
-                      >
-                        <div className="terminal-split-directions" aria-label="Split direction">
-                          <button
-                            className={splitDirection === "vertical" ? "active" : ""}
-                            type="button"
-                            onClick={() => setSplitDirection("vertical")}
-                            aria-pressed={splitDirection === "vertical"}
-                          >
-                            <Columns2 size={14} />
-                            <span>
-                              Split vertically
-                              <small>Side by side</small>
-                            </span>
-                          </button>
-                          <button
-                            className={splitDirection === "horizontal" ? "active" : ""}
-                            type="button"
-                            onClick={() => setSplitDirection("horizontal")}
-                            aria-pressed={splitDirection === "horizontal"}
-                          >
-                            <Rows2 size={14} />
-                            <span>
-                              Split horizontally
-                              <small>Top and bottom</small>
-                            </span>
-                          </button>
-                        </div>
-                      </TerminalTargetMenu>
-                    )}
-                  </>
-                )}
               </div>
             )}
           </nav>
@@ -2403,25 +2627,6 @@ export function App() {
                 return workspace ? [renderWorkspaceTab(workspace, true)] : [];
               })}
             </WorkspaceTabScroller>
-            <button
-              className="session-group-action"
-              type="button"
-              onClick={() => setRenameGroupTarget(activeTerminalGroup)}
-              aria-label={`Rename group ${activeTerminalGroup.name}`}
-              title="Rename terminal group"
-            >
-              <Pencil size={14} />
-              Rename group
-            </button>
-            <button
-              className="session-group-action"
-              type="button"
-              onClick={() => confirmUngroup(activeTerminalGroup)}
-              aria-label={`Ungroup ${activeTerminalGroup.name}; terminals stay open`}
-              title="Ungroup terminals; keep every terminal open"
-            >
-              Ungroup
-            </button>
           </nav>
         )}
 
@@ -2458,160 +2663,222 @@ export function App() {
                 terminalSplitMode ? "workspace-content terminal-pane-layout" : "workspace-content"
               }
             >
-              <Suspense fallback={<LoadingState label="Opening terminal…" />}>
-                {workspaces.map((workspace) => {
-                  const terminalVisible =
-                    !settingsOpen &&
-                    activeWorkspace.view === "terminal" &&
-                    visibleTerminalIds.includes(workspace.id);
-                  const paneRect = terminalPaneRects[workspace.id];
-                  const panePixels =
-                    paneRect && getTerminalPanePixels(paneRect, terminalLayoutViewport);
-                  return (
-                    <div
-                      className={[
-                        "terminal-workspace-pane",
-                        terminalVisible ? "terminal-workspace-pane-visible" : "",
-                        workspace.id === activeWorkspace.id ? "active" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      key={workspace.id}
-                      aria-hidden={!terminalVisible || undefined}
-                      style={
-                        terminalSplitMode && terminalVisible && paneRect
-                          ? (panePixels ?? {
-                              left: `${paneRect.left}%`,
-                              top: `${paneRect.top}%`,
-                              width: `${paneRect.width}%`,
-                              height: `${paneRect.height}%`,
+              <div
+                ref={terminalLayoutSurfaceRef}
+                className="terminal-layout-surface"
+                style={
+                  terminalSplitMode && Number.isFinite(terminalGeometry.viewport.width)
+                    ? terminalSurfaceScrolls
+                      ? {
+                          width: terminalGeometry.viewport.width,
+                          height: terminalGeometry.viewport.height,
+                        }
+                      : // A fitting group follows its container at once. Pixel sizes would
+                        // lag one observer pass behind a shrinking container (the pane row
+                        // appearing, say), overflow it, and flash a scrollbar that narrows
+                        // and resizes every terminal.
+                        { width: "100%", height: "100%" }
+                    : undefined
+                }
+              >
+                <Suspense fallback={<LoadingState label="Opening terminal…" />}>
+                  {workspaces.map((workspace) => {
+                    const terminalVisible =
+                      !settingsOpen &&
+                      activeWorkspace.view === "terminal" &&
+                      visibleTerminalIds.includes(workspace.id);
+                    const paneRect = terminalPaneRects[workspace.id];
+                    const panePixels =
+                      paneRect && getTerminalPanePixels(paneRect, terminalGeometry.viewport);
+                    return (
+                      <div
+                        className={[
+                          "terminal-workspace-pane",
+                          terminalVisible ? "terminal-workspace-pane-visible" : "",
+                          workspace.id === activeWorkspace.id ? "active" : "",
+                          ...(terminalSplitMode && terminalVisible && paneRect
+                            ? terminalPaneOuterEdges(paneRect).map((side) => `edge-${side}`)
+                            : []),
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        key={workspace.id}
+                        data-workspace-id={workspace.id}
+                        aria-hidden={!terminalVisible || undefined}
+                        style={
+                          terminalSplitMode && terminalVisible && paneRect
+                            ? (panePixels ?? {
+                                left: `${paneRect.left}%`,
+                                top: `${paneRect.top}%`,
+                                width: `${paneRect.width}%`,
+                                height: `${paneRect.height}%`,
+                              })
+                            : undefined
+                        }
+                      >
+                        <TerminalPane
+                          ref={(handle) => {
+                            if (handle) terminalHandlesRef.current.set(workspace.id, handle);
+                            else terminalHandlesRef.current.delete(workspace.id);
+                          }}
+                          workspace={workspace}
+                          settings={settings}
+                          visible={terminalVisible}
+                          active={terminalVisible && workspace.id === activeWorkspace.id}
+                          onActivate={() => {
+                            const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
+                            if (group) {
+                              terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
+                            }
+                            setActiveWorkspaceId(workspace.id);
+                          }}
+                          onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
+                          onState={(state, reason) => {
+                            updateWorkspace(workspace.id, {
+                              state,
+                              reason,
+                              restored: false,
+                              connectRequested:
+                                state === "disconnected" || state === "error"
+                                  ? false
+                                  : workspace.connectRequested,
+                            });
+                            // Host capability discovery is a Remote Host read.
+                            // Nothing is detected about the local machine.
+                            if (state === "connected" && isRemoteWorkspace(workspace)) {
+                              detectConnectionCapabilities(workspace.connectionId);
+                            }
+                          }}
+                          onSelectionChange={(hasSelection) =>
+                            setTerminalHasSelection((current) =>
+                              current[workspace.id] === hasSelection
+                                ? current
+                                : { ...current, [workspace.id]: hasSelection },
+                            )
+                          }
+                          onActivity={(kind) =>
+                            setTerminalActivity((current) => ({
+                              ...current,
+                              [workspace.id]:
+                                kind === "bell" || current[workspace.id] !== "bell"
+                                  ? kind
+                                  : current[workspace.id],
+                            }))
+                          }
+                          onTitle={(title) =>
+                            setTerminalTitles((current) => {
+                              if ((current[workspace.id] ?? null) === title) return current;
+                              const next = { ...current };
+                              if (title) next[workspace.id] = title;
+                              else delete next[workspace.id];
+                              return next;
                             })
-                          : undefined
-                      }
-                    >
-                      <TerminalPane
-                        ref={(handle) => {
-                          if (handle) terminalHandlesRef.current.set(workspace.id, handle);
-                          else terminalHandlesRef.current.delete(workspace.id);
-                        }}
-                        workspace={workspace}
-                        settings={settings}
-                        visible={terminalVisible}
-                        active={terminalVisible && workspace.id === activeWorkspace.id}
-                        onActivate={() => {
-                          const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
-                          if (group) {
-                            terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
                           }
-                          setActiveWorkspaceId(workspace.id);
-                        }}
-                        onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
-                        onState={(state, reason) => {
-                          updateWorkspace(workspace.id, {
-                            state,
-                            reason,
-                            restored: false,
-                            connectRequested:
-                              state === "disconnected" || state === "error"
-                                ? false
-                                : workspace.connectRequested,
-                          });
-                          // Host capability discovery is a Remote Host read.
-                          // Nothing is detected about the local machine.
-                          if (state === "connected" && isRemoteWorkspace(workspace)) {
-                            detectConnectionCapabilities(workspace.connectionId);
+                          onProcessing={(busy) =>
+                            setTerminalProcessing((current) => {
+                              if (!!current[workspace.id] === busy) return current;
+                              const next = { ...current };
+                              if (busy) next[workspace.id] = true;
+                              else delete next[workspace.id];
+                              return next;
+                            })
                           }
-                        }}
-                        onSelectionChange={(hasSelection) =>
-                          setTerminalHasSelection((current) =>
-                            current[workspace.id] === hasSelection
-                              ? current
-                              : { ...current, [workspace.id]: hasSelection },
-                          )
-                        }
-                        onActivity={(kind) =>
-                          setTerminalActivity((current) => ({
-                            ...current,
-                            [workspace.id]:
-                              kind === "bell" || current[workspace.id] !== "bell"
-                                ? kind
-                                : current[workspace.id],
-                          }))
-                        }
-                        onTitle={(title) =>
-                          setTerminalTitles((current) => {
-                            if ((current[workspace.id] ?? null) === title) return current;
-                            const next = { ...current };
-                            if (title) next[workspace.id] = title;
-                            else delete next[workspace.id];
-                            return next;
-                          })
-                        }
-                        onProcessing={(busy) =>
-                          setTerminalProcessing((current) => {
-                            if (!!current[workspace.id] === busy) return current;
-                            const next = { ...current };
-                            if (busy) next[workspace.id] = true;
-                            else delete next[workspace.id];
-                            return next;
-                          })
-                        }
-                        findRequest={terminalFindRequests[workspace.id] ?? 0}
-                        onReconnect={() =>
-                          updateWorkspace(workspace.id, {
-                            connectRequested: true,
-                            restored: false,
-                            reconnectToken: workspace.reconnectToken + 1,
-                          })
-                        }
-                      />
-                    </div>
-                  );
-                })}
-              </Suspense>
-              {!settingsOpen &&
-                activeTerminalGroup &&
-                terminalGeometry.dividers.map((divider, index) => {
-                  const vertical = divider.direction === "vertical";
-                  const { rectangle } = divider;
-                  const changeRatio = (ratio: number) =>
-                    setTerminalGroups((groups) =>
-                      groups.map((group) =>
-                        group.id === activeTerminalGroup.id
-                          ? {
-                              ...group,
-                              layout: resizeTerminalLayout(group.layout, divider.path, ratio),
-                            }
-                          : group,
-                      ),
+                          findRequest={terminalFindRequests[workspace.id] ?? 0}
+                          onReconnect={() =>
+                            updateWorkspace(workspace.id, {
+                              connectRequested: true,
+                              restored: false,
+                              reconnectToken: workspace.reconnectToken + 1,
+                            })
+                          }
+                        />
+                      </div>
                     );
-                  return (
-                    <ResizeDivider
-                      key={`${activeTerminalGroup.id}:${divider.path}:${divider.direction}`}
-                      label={`Resize terminal split ${index + 1}`}
-                      orientation={vertical ? "vertical" : "horizontal"}
-                      value={divider.position}
-                      min={divider.min}
-                      max={divider.max}
-                      className="terminal-layout-divider"
-                      style={
-                        vertical
-                          ? {
-                              left: `${rectangle.left + (rectangle.width * divider.position) / divider.size}%`,
-                              top: `${rectangle.top}%`,
-                              height: `${rectangle.height}%`,
-                            }
-                          : {
-                              top: `${rectangle.top + (rectangle.height * divider.position) / divider.size}%`,
-                              left: `${rectangle.left}%`,
-                              width: `${rectangle.width}%`,
-                            }
-                      }
-                      onChange={(size) => changeRatio(size / divider.size)}
-                      onReset={() => changeRatio(0.5)}
-                    />
-                  );
-                })}
+                  })}
+                </Suspense>
+                {tabSplit && renderTabSplitPreview(tabSplit)}
+                {!settingsOpen && activeTerminalGroup && (
+                  <TerminalLayoutControls
+                    key={activeTerminalGroup.id}
+                    layout={activeTerminalGroup.layout}
+                    viewport={terminalGeometry.viewport}
+                    available={availableTerminalSpace}
+                    panes={terminalPaneRects}
+                    container={terminalLayoutSurfaceRef}
+                    labels={Object.fromEntries(
+                      workspaces.map((workspace) => [
+                        workspace.id,
+                        workspaceDisplayLabel(workspace, workspaces),
+                      ]),
+                    )}
+                    marks={Object.fromEntries(
+                      getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
+                        const workspace = workspaces.find((item) => item.id === id);
+                        return workspace ? [[id, workspaceMark(workspace)]] : [];
+                      }),
+                    )}
+                    onChange={(layout) =>
+                      setTerminalGroups((groups) =>
+                        groups.map((group) =>
+                          group.id === activeTerminalGroup.id ? { ...group, layout } : group,
+                        ),
+                      )
+                    }
+                    onActivate={(id) => {
+                      setActiveWorkspaceId(id);
+                      requestAnimationFrame(() => terminalHandlesRef.current.get(id)?.focus());
+                    }}
+                  />
+                )}
+                {!settingsOpen &&
+                  activeTerminalGroup &&
+                  getTerminalDividerHandles(
+                    activeTerminalGroup.layout,
+                    terminalGeometry.dividers,
+                    visibleTerminalSpace,
+                    availableTerminalSpace,
+                  ).map((divider, index) => {
+                    const vertical = divider.direction === "vertical";
+                    const { rectangle } = divider;
+                    const changeRatio = (ratio: number) =>
+                      setTerminalGroups((groups) =>
+                        groups.map((group) =>
+                          group.id === activeTerminalGroup.id
+                            ? {
+                                ...group,
+                                layout: resizeTerminalHandle(group.layout, divider, ratio),
+                              }
+                            : group,
+                        ),
+                      );
+                    return (
+                      <ResizeDivider
+                        key={`${activeTerminalGroup.id}:${divider.path}:${divider.direction}`}
+                        label={`Resize terminal split ${index + 1}`}
+                        orientation={vertical ? "vertical" : "horizontal"}
+                        value={divider.position}
+                        min={divider.min}
+                        max={divider.max}
+                        className="terminal-layout-divider"
+                        style={
+                          vertical
+                            ? {
+                                left: `${rectangle.left + (rectangle.width * divider.position) / divider.size}%`,
+                                top: `${rectangle.top}%`,
+                                height: `${rectangle.height}%`,
+                              }
+                            : {
+                                top: `${rectangle.top + (rectangle.height * divider.position) / divider.size}%`,
+                                left: `${rectangle.left}%`,
+                                width: `${rectangle.width}%`,
+                              }
+                        }
+                        onChange={(size) => changeRatio(size / divider.size)}
+                        onReset={() => changeRatio(0.5)}
+                      />
+                    );
+                  })}
+              </div>
               {/* Inspection views need a Remote Host and its Saved
                   Connection. A local Workspace renders its terminal only. */}
               {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
@@ -2783,11 +3050,21 @@ export function App() {
         ) : (
           <section className="empty-workspace">
             <h1>{connections.length ? "Select a connection" : "No connections yet"}</h1>
-            <p>
-              {connections.length
-                ? "Choose a saved connection from the sidebar to open it."
-                : "Use Add connection in the sidebar to save an SSH destination."}
-            </p>
+            {compactShell ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setNavigationOpen(true)}
+              >
+                Connections
+              </button>
+            ) : (
+              <p>
+                {connections.length
+                  ? "Choose a saved connection from the sidebar to open it."
+                  : "Use Add connection in the sidebar to save an SSH destination."}
+              </p>
+            )}
             {!connections.length && (
               <p className="empty-workspace-note">
                 The connection editor can test read-only inspection access before you save.
@@ -2922,7 +3199,7 @@ export function App() {
             if (!activeWorkspace) return;
             closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
           }}
-          onNewTerminal={openNewTerminalMenu}
+          onNewTerminal={() => openNewTerminalMenu()}
           onReconnect={() =>
             activeWorkspace &&
             updateWorkspace(activeWorkspace.id, {
@@ -2942,7 +3219,8 @@ export function App() {
           }}
           onSplitTerminal={() => {
             enterTerminalFocus();
-            setSplitMenuOpen(true);
+            setNewTerminalMode("split");
+            setNewTerminalMenuOpen(true);
           }}
           onOpenScratchpad={openScratchpad}
           onRenameWorkspace={() => activeWorkspace && renameWorkspace(activeWorkspace)}

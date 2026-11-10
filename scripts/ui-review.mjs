@@ -115,7 +115,7 @@ if (options?.help) {
        npm run ui:motion -- --scenario settings [--viewport all|${Object.keys(registry.viewports).join("|")}]
 All viewports by default. PNGs and manifest.json: test-results/ui-review/SCENARIO/STATE/VIEWPORT/TYPE/
 Exit codes: 0 captured, 1 capture failed, 2 invalid arguments. One session at a time.
-Motion samples real transitions with normal motion; screenshots default to reduced motion.
+Motion samples real transitions. Still screenshots finish animations before capture.
 ${JSON.stringify(registry, null, 2)}`);
 } else if (options) {
   const deadline = setTimeout(() => {
@@ -172,7 +172,6 @@ ${JSON.stringify(registry, null, 2)}`);
         state: options.state,
         viewport: { name, ...viewport },
         captureType: options.type,
-        reducedMotion: options.type === "motion" ? "no-preference" : "reduce",
         status: "failed",
         pathsRelativeTo: "manifest directory",
         results: [],
@@ -186,7 +185,6 @@ ${JSON.stringify(registry, null, 2)}`);
       try {
         context = await browser.newContext({
           viewport,
-          reducedMotion: manifest.reducedMotion,
           locale: "en-US",
           timezoneId: "UTC",
           deviceScaleFactor: 1,
@@ -213,13 +211,6 @@ ${JSON.stringify(registry, null, 2)}`);
           if (action.last) locator = locator.last();
           await locator.click();
         }
-        manifest.observedReducedMotion = await page.evaluate(() =>
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "reduce"
-            : "no-preference",
-        );
-        if (manifest.observedReducedMotion !== manifest.reducedMotion)
-          throw new Error("Browser motion preference differs from the requested capture mode");
         if (definition.settled?.[options.state])
           await page.locator(definition.settled[options.state]).waitFor();
         await page.evaluate(() => document.fonts.ready);

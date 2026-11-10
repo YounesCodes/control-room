@@ -212,7 +212,6 @@ export function ResizeDivider({
       aria-valuemax={max}
       aria-valuenow={value}
       aria-valuetext={`${value} pixels`}
-      title={`${label}. Drag or use ${horizontal ? "Up and Down" : "Left and Right"} arrows. Double-click or press Enter to reset.`}
       className={`resize-divider ${className}${dragging ? " dragging" : ""}`}
       onDoubleClick={onReset}
       onKeyDown={(event) => {

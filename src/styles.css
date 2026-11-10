@@ -184,7 +184,7 @@ h3 {
 html,
 body,
 #root {
-  /* Tauri owns the native 960 x 640 minimum. WebView2 can report a fractional
+  /* Tauri owns the native 520 x 480 minimum. WebView2 can report a fractional
      content size just below that boundary after Windows scaling, so the web
      root must follow the actual viewport instead of forcing one extra pixel. */
   min-width: 0;
@@ -1872,7 +1872,9 @@ code,
 /* Space for Rename and Close is reserved only on hover and focus; a lifted tab
    keeps its label full-width for the whole drag. */
 .session-tab-scroll-region.dragging .session-tab-wrap:hover .session-tab-main,
-.session-tab-scroll-region.dragging .session-tab-wrap:focus-within .session-tab-main {
+.session-tab-scroll-region.dragging .session-tab-wrap:focus-within .session-tab-main,
+.session-tab-scroll-region.dragging .session-tab-group:hover .session-tab-group-main,
+.session-tab-scroll-region.dragging .session-tab-group:focus-within .session-tab-group-main {
   padding-right: 8px;
 }
 
@@ -1885,6 +1887,12 @@ code,
     transform var(--motion-med) var(--ease),
     background-color var(--motion-fast) var(--ease),
     border-bottom-color var(--motion-fast) var(--ease);
+}
+
+/* A tab carried out toward the terminal view waits, dimmed, in its own slot. */
+.session-tab-scroll-region.dragging-out .session-tab-dragged {
+  opacity: 0.55;
+  box-shadow: none;
 }
 
 .session-tab-dragged {
@@ -2046,6 +2054,7 @@ code,
 }
 
 .session-tab-group {
+  position: relative;
   display: flex;
   width: 220px;
   flex: none;
@@ -2091,6 +2100,8 @@ code,
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  /* Same reveal as Workspace tabs: the padding slides aside for Rename and Ungroup. */
+  transition: padding var(--motion-med) var(--ease);
 }
 
 .session-tab-group-main:hover,
@@ -2161,6 +2172,11 @@ code,
   width: var(--session-tab-width, 180px);
 }
 
+/* The selected pane's frame marks it below; an underline would sit on that frame. */
+.session-pane-tabs .session-tab-wrap.active {
+  border-bottom-color: transparent;
+}
+
 .session-tab-wrap {
   position: relative;
   display: flex;
@@ -2199,25 +2215,10 @@ code,
 }
 
 .session-tab-wrap:hover .session-tab-main,
-.session-tab-wrap:focus-within .session-tab-main {
+.session-tab-wrap:focus-within .session-tab-main,
+.session-tab-group:hover .session-tab-group-main,
+.session-tab-group:focus-within .session-tab-group-main {
   padding-right: 56px;
-}
-
-.session-group-action {
-  display: flex;
-  align-items: center;
-  flex: none;
-  gap: 5px;
-  padding: 0 10px;
-  border-left: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.session-group-action:hover {
-  background: var(--fill-hover);
-  color: var(--text-strong);
 }
 
 .session-tab-label {
@@ -2379,6 +2380,10 @@ code,
 .session-tab-wrap:hover .session-tab-rename,
 .session-tab-wrap:focus-within .session-tab-close,
 .session-tab-wrap:focus-within .session-tab-rename,
+.session-tab-group:hover .session-tab-close,
+.session-tab-group:hover .session-tab-rename,
+.session-tab-group:focus-within .session-tab-close,
+.session-tab-group:focus-within .session-tab-rename,
 .session-tab-close:focus-visible,
 .session-tab-rename:focus-visible {
   opacity: 1;
@@ -2505,51 +2510,122 @@ code,
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-.terminal-split-directions {
+.terminal-open-modes {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
-  padding-bottom: 7px;
+  padding: 3px 3px 9px;
 }
 
-.terminal-split-directions button {
+/* New terminal's mode cards show the result in miniature above a short label. */
+.terminal-open-modes button {
   display: flex;
   min-width: 0;
-  min-height: 42px;
+  flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 9px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: #111;
-  padding: 0 8px;
+  padding: 13px 8px 10px;
   color: var(--text-muted);
-  text-align: left;
+  font-size: 11.5px;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    border-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
 }
 
-.terminal-split-directions button:hover,
-.terminal-split-directions button.active {
+.terminal-open-modes button:hover,
+.terminal-open-modes button.active {
   border-color: #565656;
   background: var(--fill-active);
   color: var(--text-strong);
 }
 
-.terminal-split-directions button.active {
+.terminal-open-modes button.active {
   border-color: var(--accent);
 }
 
-.terminal-split-directions button > span {
+.terminal-open-preview {
   display: flex;
-  min-width: 0;
-  flex-direction: column;
+  width: 40px;
+  height: 26px;
   gap: 2px;
-  font-size: 11px;
 }
 
-.terminal-split-directions small {
-  color: var(--text-faint);
-  font-size: 10px;
+.terminal-open-preview.horizontal {
+  flex-direction: column;
+}
+
+/* A new tab: two tab chips above one view; the filled chip is the new tab. */
+.terminal-open-preview.tab {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 6px 1fr;
+}
+
+.terminal-open-preview.tab i:nth-child(1) {
+  grid-area: 1 / 1;
+}
+
+.terminal-open-preview.tab i:nth-child(2) {
+  grid-area: 1 / 2;
+}
+
+.terminal-open-preview.tab i:nth-child(3) {
+  grid-area: 2 / 1 / 3 / 4;
+  background: transparent;
+}
+
+.terminal-open-preview.tab i:nth-child(2) {
+  background: rgb(255 255 255 / 14%);
+}
+
+.terminal-open-modes button.active .terminal-open-preview.tab i:nth-child(2) {
+  background: rgb(255 255 255 / 32%);
+}
+
+.terminal-open-modes button.active .terminal-open-preview.tab i:nth-child(3) {
+  background: transparent;
+}
+
+.terminal-open-modes button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.terminal-open-preview i {
+  flex: 1;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.7;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    opacity var(--motion-fast) var(--ease);
+}
+
+/* The second tile is where the new terminal opens. */
+.terminal-open-preview i:last-child {
+  background: rgb(255 255 255 / 14%);
+}
+
+.terminal-open-modes button:hover .terminal-open-preview i,
+.terminal-open-modes button.active .terminal-open-preview i {
+  opacity: 1;
+}
+
+.terminal-open-modes button.active .terminal-open-preview i:last-child {
+  background: rgb(255 255 255 / 32%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-open-modes button,
+  .terminal-open-preview i {
+    transition: none;
+  }
 }
 
 .terminal-target-menu strong {
@@ -2677,15 +2753,7 @@ code,
   top: auto;
   right: auto;
   bottom: auto;
-  width: 248px;
-}
-
-.terminal-split-menu {
-  position: fixed;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  width: 264px;
+  width: 272px;
 }
 
 /* ==========================================================================
@@ -2762,7 +2830,19 @@ code,
 }
 
 .terminal-pane-layout {
-  overflow: hidden;
+  overflow: auto;
+}
+
+.terminal-layout-surface {
+  position: absolute;
+  inset: 0;
+}
+
+.terminal-pane-layout .terminal-layout-surface {
+  position: relative;
+  inset: auto;
+  /* Keep rounded pane edges and animated headings out of the scroll size. */
+  overflow: clip;
 }
 
 .terminal-pane-layout .terminal-workspace-pane {
@@ -2773,11 +2853,7 @@ code,
   overflow: hidden;
 }
 
-.terminal-pane-layout .terminal-workspace-pane.active {
-  z-index: 1;
-}
-
-/* Paint the frame above terminal backgrounds, inside the pane's rectangle. */
+/* Paint the frame inside the pane's rectangle. */
 .terminal-pane-layout .terminal-workspace-pane::after {
   content: "";
   position: absolute;
@@ -2788,8 +2864,29 @@ code,
   pointer-events: none;
 }
 
+/* The window border already separates outer edges from the desktop. */
+.terminal-pane-layout .terminal-workspace-pane.edge-right::after {
+  border-right-color: transparent;
+}
+.terminal-pane-layout .terminal-workspace-pane.edge-bottom::after {
+  border-bottom-color: transparent;
+}
+
 .terminal-pane-layout .terminal-workspace-pane.active::after {
+  z-index: 6;
   border: 1px solid var(--accent);
+}
+
+/* At the window border the selected frame sits one pixel in, so the border and
+   display scaling never swallow that side of the outline. */
+.terminal-pane-layout .terminal-workspace-pane.active.edge-left::after {
+  left: 1px;
+}
+.terminal-pane-layout .terminal-workspace-pane.active.edge-right::after {
+  right: 1px;
+}
+.terminal-pane-layout .terminal-workspace-pane.active.edge-bottom::after {
+  bottom: 1px;
 }
 
 .terminal-pane-layout .terminal-workspace-pane-visible {
@@ -2813,6 +2910,317 @@ code,
   height: 24px;
   transform: translateY(-50%);
   cursor: row-resize;
+}
+
+/* A full-width, click-through row that only carries the pane's corner grip. */
+.terminal-pane-heading {
+  position: absolute;
+  /* Above split dividers (8), whose hit area reaches into the pane corner. */
+  z-index: 9;
+  display: flex;
+  justify-content: flex-end;
+  padding: 5px 6px;
+  pointer-events: none;
+}
+/* A frosted chip keeps the grip legible over terminal text without a hard box. */
+.terminal-pane-heading .terminal-pane-grip {
+  display: grid;
+  width: 22px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(10 10 10 / 55%);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 6%);
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  transition:
+    opacity var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
+}
+.terminal-pane-heading.revealed .terminal-pane-grip,
+.terminal-pane-heading .terminal-pane-grip:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+.terminal-pane-heading .terminal-pane-grip:hover,
+.terminal-pane-heading.engaged .terminal-pane-grip {
+  background: var(--surface-overlay);
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 4px 14px rgb(0 0 0 / 50%);
+}
+.terminal-pane-heading.engaged .terminal-pane-grip,
+.terminal-pane-heading .terminal-pane-grip:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 4px 14px rgb(0 0 0 / 50%);
+}
+.terminal-pane-grip:active {
+  cursor: grabbing;
+}
+.terminal-pane-grip-dots {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  gap: 3px;
+  transition: gap var(--motion-fast) var(--ease);
+}
+.terminal-pane-grip-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 55%);
+  transition: background-color var(--motion-fast) var(--ease);
+}
+/* Under the pointer the dots spread a touch and brighten, like a grip being taken. */
+.terminal-pane-grip:hover .terminal-pane-grip-dots,
+.terminal-pane-heading.engaged .terminal-pane-grip-dots {
+  gap: 3px 4px;
+}
+.terminal-pane-grip:hover .terminal-pane-grip-dots i,
+.terminal-pane-grip:focus-visible .terminal-pane-grip-dots i,
+.terminal-pane-heading.engaged .terminal-pane-grip-dots i {
+  background: var(--text-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-pane-heading .terminal-pane-grip,
+  .terminal-pane-grip-dots,
+  .terminal-pane-grip-dots i {
+    transition: none;
+  }
+}
+.terminal-drop-layer {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  pointer-events: none;
+}
+.terminal-drop-source,
+.terminal-drop-target,
+.terminal-drop-preview {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+/* The lifted pane recedes so the preview reads as where it goes next. */
+.terminal-drop-source {
+  background: rgb(0 0 0 / 45%);
+}
+/* A tab carried over a pane's center: not a split, so a quiet hint toward the edges. */
+.terminal-drop-target.hint {
+  border: 2px dashed var(--border-strong);
+  background: rgb(255 255 255 / 3%);
+}
+.terminal-drop-target.invalid {
+  border: 2px solid var(--failure);
+  background: color-mix(in srgb, var(--failure) 10%, transparent);
+}
+.terminal-drop-preview {
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 7%);
+  transition:
+    left var(--motion-fast) var(--ease),
+    top var(--motion-fast) var(--ease),
+    width var(--motion-fast) var(--ease),
+    height var(--motion-fast) var(--ease);
+}
+.terminal-drop-target > span,
+.terminal-drop-preview > span {
+  max-width: 100%;
+  padding: 5px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  font-size: 11.5px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-drop-preview {
+    transition: none;
+  }
+}
+/* Arrange: the group as a live map. Tiles mirror the panes; each other pane's
+   center swaps and its edges dock, matching the pointer drop zones. */
+.terminal-arrange-menu {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  width: 288px;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 12px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+.terminal-arrange-menu:focus {
+  outline: none;
+}
+.terminal-arrange-map {
+  position: relative;
+  border-radius: var(--radius-sm);
+  background: #050505;
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+.terminal-arrange-tile {
+  position: absolute;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: #121212;
+}
+.terminal-arrange-tile.source {
+  border: 1px dashed rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 7%);
+}
+.terminal-arrange-tile-name {
+  display: flex;
+  max-width: calc(100% - 12px);
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  pointer-events: none;
+}
+.terminal-arrange-tile-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-arrange-tile.source .terminal-arrange-tile-name {
+  color: var(--text-strong);
+}
+.terminal-arrange-zone {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease);
+}
+.terminal-arrange-zone:focus-visible {
+  outline: none;
+}
+/* Each edge zone owns its quarter strip, and clip-path trims the strip's corners into
+   the drop zone's trapezoid, for paint and hit area alike. The strip's center always
+   lies inside its own shape, so pointing at or focusing a zone lands on that zone. */
+.terminal-arrange-zone[data-zone="center"] {
+  inset: 25%;
+}
+.terminal-arrange-zone[data-zone="left"] {
+  right: 75%;
+  clip-path: polygon(0 0, 100% 25%, 100% 75%, 0 100%);
+}
+.terminal-arrange-zone[data-zone="right"] {
+  left: 75%;
+  clip-path: polygon(100% 0, 0 25%, 0 75%, 100% 100%);
+}
+.terminal-arrange-zone[data-zone="top"] {
+  bottom: 75%;
+  clip-path: polygon(0 0, 100% 0, 75% 100%, 25% 100%);
+}
+.terminal-arrange-zone[data-zone="bottom"] {
+  top: 75%;
+  clip-path: polygon(25% 0, 75% 0, 100% 100%, 0 100%);
+}
+.terminal-arrange-zone[data-state="valid"]:hover,
+.terminal-arrange-zone[data-state="valid"]:focus-visible {
+  background: rgb(255 255 255 / 16%);
+}
+.terminal-arrange-zone[data-state="same"] {
+  cursor: default;
+}
+.terminal-arrange-zone[data-state="same"]:hover,
+.terminal-arrange-zone[data-state="same"]:focus-visible {
+  background: rgb(255 255 255 / 5%);
+}
+.terminal-arrange-zone[data-state="invalid"] {
+  cursor: not-allowed;
+}
+.terminal-arrange-zone[data-state="invalid"]:hover,
+.terminal-arrange-zone[data-state="invalid"]:focus-visible {
+  background: color-mix(in srgb, var(--failure) 30%, transparent);
+}
+/* Where the pane would land; glides as the pointer moves between zones. */
+.terminal-arrange-result {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 10%);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 55%);
+  pointer-events: none;
+  transition:
+    left var(--motion-fast) var(--ease),
+    top var(--motion-fast) var(--ease),
+    width var(--motion-fast) var(--ease),
+    height var(--motion-fast) var(--ease);
+}
+.terminal-arrange-caption {
+  min-height: 16px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+.terminal-arrange-caption.unavailable {
+  color: var(--failure);
+}
+.terminal-arrange-orientation {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #0d0d0d;
+  padding: 3px;
+}
+.terminal-arrange-orientation button {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+.terminal-arrange-orientation button:hover {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+.terminal-arrange-orientation button[aria-pressed="true"] {
+  background: var(--fill-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-arrange-result,
+  .terminal-arrange-zone {
+    transition: none;
+  }
 }
 
 .terminal-layout-divider[aria-orientation="horizontal"]::after {
@@ -3760,12 +4168,6 @@ dd {
 .systemd-scope-switch [aria-pressed="true"] {
   background: transparent;
 }
-@media (prefers-reduced-motion: reduce) {
-  .systemd-mode-switch[data-animated]::before,
-  .systemd-scope-switch::before {
-    transition: none;
-  }
-}
 .systemd-toolbar-actions {
   margin-left: auto;
   display: flex;
@@ -4600,30 +5002,6 @@ dd {
     visibility: hidden;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .systemd-graph-exit-scene {
-    display: none;
-  }
-  .systemd-connection,
-  .systemd-connection.edge-reverse {
-    animation: none;
-  }
-  .systemd-presence > * {
-    animation: none !important;
-  }
-  .systemd-graph-node,
-  .systemd-unit-reveal,
-  .systemd-inspector.arch-detail {
-    animation: none;
-  }
-  .systemd-inventory {
-    transition: none;
-  }
-  .systemd-selection-indicator[data-glide] {
-    transition: none;
-  }
-}
-
 .unit-scope-note {
   display: block;
   margin-top: 3px;
@@ -7136,19 +7514,6 @@ kbd {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-delay: 0s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    transition-delay: 0s !important;
-  }
-}
-
 /* Shared inspection canvas */
 .ports-page {
   position: absolute;
@@ -7794,11 +8159,6 @@ details[open] > .inspector-disclosure-body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  details[open] > .inspector-disclosure-body {
-    animation: none;
-  }
-}
 .port-owner-actions {
   display: flex;
   flex-wrap: wrap;
@@ -8115,8 +8475,11 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   width: 12px;
 }
 
+/* Straddle the sidebar edge: one pixel in the sidebar, one on the divider's own
+   column. The pixel beyond lies under the title bar and tab strip, which stack
+   above the divider and would halve the line along the top of the window. */
 .connections-divider::after {
-  left: 0;
+  left: -1px;
 }
 
 .connection-section {
@@ -8334,13 +8697,94 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .arch-focusing,
-  .graph-toolbar {
-    transition: none;
+/* Compact windows keep content wide; Connections and views share a drawer. */
+.compact-navigation-toggle,
+.navigation-backdrop {
+  display: none;
+}
+.app-shell[data-compact]:not(.terminal-focus-mode):not(.settings-mode) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell[data-compact] .app-bar,
+.app-shell[data-compact] .workspace-shell {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.app-shell[data-compact] .app-bar {
+  justify-content: space-between;
+}
+.app-shell[data-compact] .app-bar > .host-metrics {
+  min-width: 0;
+  flex: 1;
+}
+.app-shell[data-compact] .compact-navigation-toggle {
+  display: flex;
+  flex: 0 0 40px;
+}
+.app-shell[data-compact] .sidebar {
+  display: none;
+}
+.app-shell[data-compact]:not(.settings-mode):not(.terminal-focus-mode) .sidebar.navigation-open {
+  position: fixed;
+  z-index: 60;
+  inset: 42px auto 0 0;
+  display: flex;
+  width: min(300px, calc(100vw - 56px));
+  box-shadow: var(--shadow-popover);
+}
+.app-shell[data-compact] .navigation-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 42px 0 0;
+  display: block;
+  background: rgb(0 0 0 / 55%);
+}
+.app-shell[data-compact] .connections-divider {
+  display: none;
+}
+@media (max-width: 859px) {
+  .terminal-appearance-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
-
-  .arch-detail {
-    animation: none;
+  .terminal-appearance-preview {
+    position: static;
+  }
+  .settings-page {
+    --settings-gutter: 16px;
+  }
+  .settings-heading-text p {
+    display: none;
+  }
+  .history-page,
+  .logs-page,
+  .boot-page {
+    padding: 16px;
+  }
+  .boot-heading-actions,
+  .history-tools,
+  .history-tools-actions,
+  .toolbar-actions {
+    flex-wrap: wrap;
+  }
+  .page-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .log-controls .source-select,
+  .log-controls .log-search {
+    min-width: 0;
+    flex: 1 1 200px;
+  }
+  .modal-header h2 {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .modal-header {
+    min-height: 51px;
+    height: auto;
+    padding-block: 10px;
+  }
+  .modal-header > button {
+    flex-shrink: 0;
   }
 }

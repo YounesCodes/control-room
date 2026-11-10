@@ -78,15 +78,18 @@ target beside its readings.
 
 Normal mode keeps each Workspace independently selectable. Focus mode reduces
 chrome around terminal work and makes split panes and terminal groups easy to
-scan. Give each split group one tab with its name and pane count. Show the active
+scan. Give each split group one tab with a tiled-layout icon, its name, and pane count.
+Number new groups (Group 1, Group 2) rather than naming them after a member terminal. Show the active
 group's terminals in a separate compact pane row. Pane tabs reveal their
 individual Rename and Close controls on hover or keyboard focus, the same way
-every other tab does. Use labeled Rename group and Ungroup buttons
-at the row's end, and confirm ungrouping with its effect on the open terminals.
+every other tab does. Group tabs reveal Rename group (pencil) and Ungroup icons
+with the same motion, and confirm ungrouping with its effect on the open terminals.
 Keep inactive groups' member tabs out of that row. The active
 Workspace, group, and pane need a clear non-text state cue. Frame the selected
 split pane on all four edges, above terminal content, without blocking input or
-divider interaction. Keep a thin window drag strip across the top of the Focus Mode
+divider interaction. Where a pane meets the window border, inset its frame one pixel
+and size panes in whole pixels so display scaling never hides a side. The pane row
+marks its selected tab without an underline, which would sit on that frame. Keep a thin window drag strip across the top of the Focus Mode
 tabs and terminal tools, ending at the fixed window controls, even when tabs overflow.
 Avoid a blank column between controls. Focus Mode
 header cells — tabs and buttons — fill the strip's full height so their highlight
@@ -104,22 +107,59 @@ Keep the same button and screen position in both modes, including split groups
 and overflowing tabs, so toggling never moves it away from the pointer.
 Outside Terminal, collapse its titlebar slot and fade and slide the button out;
 reverse the motion when Terminal returns. Keep native window controls fixed and
-make the hidden button inert. Reduced motion applies the layout change immediately.
+make the hidden button inert.
 Entering and leaving Focus Mode coordinates the sidebar and titlebar exit/entrance,
 tab-strip movement, pane controls, and workspace bounds in one short transition.
 Keep terminal text at its original pixel size and native window controls fixed.
 Preserve the live terminal sessions and keyboard focus. Reverse promptly when the
-user toggles again. Reduced motion and unsupported webviews apply the state immediately.
+user toggles again. Unsupported webviews apply the state immediately.
 Apply focus state synchronously. Documentation, Settings, and native window
 controls appear immediately on exit, outside the animated workspace. Use a short
 live workspace slide and sidebar fade rather than captured terminal frames or
 animated terminal scaling; resize the terminal once per toggle.
 
+New terminal is also how a terminal is split: in Focus Mode its menu opens with
+three mode cards, New tab, Split right, and Split down, each showing the result in
+miniature with the new terminal's tile filled above a one-line label. It reopens on
+New tab; the split cards switch the targets to split targets, including terminals
+already open. There is no separate Split button. A terminal's tab can also be
+dragged from the strip onto the focused view: carried below the strip it waits,
+dimmed, in its own slot, while the view previews the split at the nearest edge of the
+pane under the pointer, captioned like pane moves; a pane's center only hints toward
+the edges. Back in the strip the drag reorders again, and Escape cancels.
+
 Every terminal split has a draggable, keyboard-operable divider, including nested
-splits and groups that mix local and remote terminals. Save pane proportions with
+splits and groups that mix local and remote terminals. Where two perpendicular
+dividers line up across another, offer each half of the crossed divider on its own,
+so every row or column of a grid resizes independently; dragging a half regroups the
+tree around it with identical geometry. Once the halves part, the other line spans
+its whole side, as tiled layouts require. Save pane proportions with
 their group and retain them when switching views. Constrain displayed sizes in
 small windows without overwriting the saved proportions. Reset a divider to equal
 sizes with a double-click or Enter.
+
+Split panes carry no header strip: the pane tabs already name them and offer Close.
+Each pane shows a small frosted six-dot grip in its top-right corner while the
+pointer is over the pane or the grip has keyboard focus. Pointing at it spreads and
+brightens the dots; dragging or arranging rings it.
+Dragging it moves the pane; clicking it opens Arrange. A center drop swaps leaves;
+edge drops detach and dock the live pane. Preview the resulting position before
+committing as one outlined shape with a single caption, without per-zone labels; the
+preview glides between positions, and a cramped target turns red with its reason. Escape cancels. Arrange is a popover
+anchored to the grip that maps the group in miniature, the moving pane dashed. Each
+other tile's center swaps and its edge trapezoids dock, matching the drop zones;
+pointing at or focusing one previews the landing spot and names the move, and an
+unavailable one says why. A segmented control below sets the saved split orientation. Keep terminals
+mounted in a flat keyed list; animate layout edits briefly without scaling text.
+When even responsive rotation cannot fit the group, scroll its surface locally
+and keep each terminal usable. Scrollbars and animated panes must not change the
+responsive split direction. Window resizing never changes saved directions or ratios.
+
+Compact windows replace the Connections rail with a titlebar navigation drawer.
+Keep host selection and all inspection views in that drawer, with keyboard focus
+contained until it closes. Preserve rail widths when returning to a wide window.
+Reflow forms, toolbars, and Settings rather than reducing typography or scaling
+the application. Keep native window controls fixed and dialogs inside the viewport.
 
 Workspace tabs reorder by dragging them along the strip. A short threshold
 keeps plain clicks their own act; past it the tab lifts under a shadow,
@@ -138,8 +178,9 @@ panes. Saved order is the tab order itself, so a restart restores it.
 When Workspace tabs overflow, keep New terminal outside the scrolling list.
 Use equal-width tabs that shrink within readable limits. When they no longer fit,
 show a window of complete tabs with previous/next controls; never paint a partial
-tab at either edge. The All terminals menu lists full names and marks the selected
-item at the right edge. Keep icons and names aligned at the left. Include shell
+tab at either edge. When space runs out, keep the All terminals menu and show as
+many complete tabs as fit. The menu lists full names and marks the selected item
+at the right edge. Keep icons and names aligned at the left. Include shell
 logos and remote host OS marks beside each entry, and a group icon for split groups.
 The pane row has its own All panes menu. Selecting a hidden item reveals its
 complete tab, including in focus mode. Keep overflow menus within the window
@@ -221,9 +262,8 @@ smoothly zooms and centers it in the graph area beside the inspector, then
 slides a closable inspector in from the right. Give the inspector equal top and
 bottom canvas gutters. Slide zoom controls to the lower-left when it opens,
 then back to the lower-right when it closes, keeping its footer clear.
-Reduced motion moves the controls immediately. Direct pan and zoom interrupt
-the camera transition. Reduced motion applies the framing immediately. Keep the
-inspector heading and actions fixed,
+Direct pan and zoom interrupt the camera transition. Keep the inspector heading
+and actions fixed,
 with grouped label/value rows in a separately scrolling body. Use a thin
 scrollbar that fades when the body is not hovered. Keep every binding,
 firewall, ownership, and endpoint field available there, with the
@@ -258,7 +298,7 @@ Ports includes publications by default without a separate Docker-only filter.
 The container inspector repeats the selected image logo beside its title, using
 the same generic fallback for unknown images. Docker and Ports inspector sections
 share a short fade-and-slide reveal when expanded. Keep native disclosure keyboard
-behavior and show section content immediately when reduced motion is requested.
+behavior.
 
 Systemd starts with a compact unit inventory: name, description, and one meaningful
 state. Start without a selected unit; loading or refreshing never picks one.
@@ -286,7 +326,7 @@ open inspector immediately. Keep keyboard focus on the row and scroll it into
 view, including in virtual inventories. The inspector itself also accepts Up/Down;
 leave its fields, disclosures, and scrollable evidence to their native keys.
 Keep the panel in place while its new identity and content briefly fade and slide
-into view. Skip these transitions under reduced motion.
+into view.
 
 The dependency view uses the shared graph controls, pan/zoom camera behavior, and
 closable inspector. Its links represent systemd evidence rather than host grouping.
@@ -294,10 +334,10 @@ Default the inventory to Focused: services, timers, sockets, and paths, excludin
 routine systemd, D-Bus, login-session, and module-loader units. Always include
 failed units of every type. Keep unknown application services visible, including
 stopped and disabled services. Offer a visible Focused / All units switch with a
-sliding selection fill and reduced-motion fallback. Reveal the updated inventory
+sliding selection fill. Reveal the updated inventory
 with a short fade and vertical slide in either direction, preserving its live rows,
-scrolling, and focus. Retarget an interrupted reveal from its rendered position;
-skip the reveal under reduced motion. Show visible and total counts
+scrolling, and focus. Retarget an interrupted reveal from its rendered position.
+Show visible and total counts
 when they differ. Search and explicit type filters reach the whole inventory;
 dependency graphs always retain all reported unit types. Keep the scope with the
 workspace and let a filtered selection reveal itself in All units.
@@ -340,8 +380,8 @@ Expanded nodes keep a visible Collapse control. Collapsing removes unreachable
 expanded descendants while keeping shared branches. Restore a collapsed branch with Expand.
 Reveal connectors in their arrow direction while nodes move 8px into place over 240ms.
 Keep removed nodes and edges as inert,
-visual-only snapshots for a 240ms fade and slight movement, cancel ghosts when nodes reappear, and skip
-exit retention under reduced motion. Preserve layout slots during collapse as well.
+visual-only snapshots for a 240ms fade and slight movement. Cancel ghosts when
+nodes reappear and preserve layout slots during collapse.
 Double-click or Shift+Enter refocuses
 the graph. Selection, filters, root, and expansion stay with the workspace during
 navigation. Changed SSH targets discard that context and use separate detail caches.
@@ -369,7 +409,7 @@ as Focused / All units. Use symmetric easing so expansion and contraction feel e
 Measure its position and width so it fits the unequal
 labels, follows window-size changes, and reverses from its current
 pose on rapid switching. Apply the same sliding fill to Dependencies, Ordering,
-and Activation. Place the initial fill immediately and skip motion when reduced motion is requested.
+and Activation. Place the initial fill immediately.
 Refresh runtime properties for the inspected service periodically without inserting
 loading text or resetting open sections. Pause reads in hidden windows and stop
 when the inspector closes. Keep the last reading with an error if refresh fails;
@@ -377,8 +417,8 @@ never replace unavailable memory with zero.
 Interpolate service memory, CPU time, task and restart counts, and uptime briefly
 between readings with tabular digits, starting
 from the displayed value if a newer reading arrives mid-transition. Show the first
-reading immediately. Reduced motion uses the latest value directly, and assistive
-technology reads the collected value rather than intermediate animation frames.
+reading immediately. Assistive technology reads the collected value rather than
+intermediate animation frames.
 Name the graph action Dependency graph. Keep the full target in its accessible
 name and tooltip, and show it beside the action and in the graph heading. Cap the
 visible name at 24 characters. Let the card fit its text. Keep scope and relationship
@@ -400,7 +440,7 @@ Reserve search space in both states so opening it does not resize or move the vi
 switch or refresh action. Scope/category controls may move with the field's expansion.
 Truncate names based on available pane
 width, independently of search visibility. Animate only the search field within
-that space; skip its motion when reduced motion is requested.
+that space.
 Opening Dependency graph focuses the selected unit, including a selected neighbor of a previously explored root. Inventory
 row clicks only toggle inspection; double-clicks must not change views.
 Use a separately scrolling body and fixed actions. Unit inspectors adapt to services,
@@ -416,8 +456,7 @@ effective properties. Render code with selectable, wrapping monospace text and
 restrained syntax colors. Give long command and schedule fields the full inspector
 width. Preserve the original host text, including whitespace, quotes, and escapes;
 command metadata may gain visual line breaks without rewriting copied content.
-Reuse inspector disclosure motion. Reduced motion removes camera, node, and
-disclosure animation. Show Ports navigation only for services or sockets with a
+Reuse inspector disclosure motion. Show Ports navigation only for services or sockets with a
 fresh, known listener ownership match to that exact unit. Opening Advanced may read
 listeners without elevation, sharing the Ports view's workspace cache. Hide the
 shortcut while ownership is unknown or its read is unavailable.
@@ -487,7 +526,7 @@ window lacks the room, and keeps its edges inside the window gutters; a menu
 dismisses rather than floating away from its anchor after a resize. Live states —
 connecting, new terminal output, a bell, a downloaded update — use small
 one-purpose cues that rest once their point is made. Never animate the terminal
-surface itself. Respect `prefers-reduced-motion`. Use Lucide icons
+surface itself. Use Lucide icons
 consistently, except for the shared Phosphor Bold magnifiers used by every search
 and zoom control. Keep their filled silhouettes and use matching plus/minus
 variants for zoom. Pair icon-only actions with accessible names and tooltips
@@ -567,7 +606,7 @@ the only cue.
 Exited containers use neutral gray; reserve red for failed or dead containers.
 Connecting sessions and foreground host reads or terminal commands replace the
 solid dot with a neutral gray rotating ring. This also applies to
-pane and group tabs. Reduced motion keeps the open ring without rotation.
+pane and group tabs.
 Command activity uses shell markers where available, otherwise the return of
 the rendered prompt, including commands recalled from shell history. Blank or
 whitespace-only submissions and command editing stay idle. A pause in output
@@ -631,7 +670,7 @@ terminal font, size, and color controls with one shared live preview that stays 
 behavior separate from appearance and local shell availability.
 Arrange colors in a compact grid; stack the preview above its controls on narrow
 windows. Category changes reveal the whole form together with the Systemd unit fade and
-vertical motion, preserving draft controls and respecting reduced motion.
+vertical motion, preserving draft controls.
 Terminal uses a persistent row of Appearance, Tabs & naming, and Local shells tabs.
 Separate tabs with thin vertical bars and mark the selected tab with bold text
 without outlines or filled backgrounds. These automatically selected tabs use
@@ -683,9 +722,9 @@ Give disk read and write rates separate fixed slots with right-aligned values so
 digit and unit changes cannot push the direction labels or neighboring readings.
 Reserve percentage and trend slots even when a chart is unavailable. Right-align
 percentage readouts so their percent signs stay anchored as digits change.
-Animation frames never become samples. Show first readings, new targets, unavailable
-values, and reduced-motion updates immediately. A refresh cue runs only while a reading is in progress;
-stale and paused charts rest. Respect reduced motion throughout.
+Animation frames never become samples. Show first readings, new targets, and
+unavailable values immediately. A refresh cue runs only while a reading is in
+progress. Stale and paused charts rest.
 Use one compact status button to open reading details, separated from
 the numeric readings. Keep Live compact and let longer status labels use only
 the space they need. Keep the active host name in its tooltip, accessible label,
@@ -729,7 +768,6 @@ installing, and keep the app's updates clearly distinct from any host package in
 - Pair color with text, shape, position, or another cue.
 - Keep controls usable at the supported minimum window size and do not rely on
   motion to communicate state.
-- Honor reduced-motion preferences.
 
 ## Maintaining this guide
 

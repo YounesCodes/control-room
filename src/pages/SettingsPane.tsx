@@ -240,7 +240,7 @@ export function SettingsPane({
     if (previousView.current === view) return;
     previousView.current = view;
     const form = formRef.current;
-    if (!form?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!form?.animate) return;
     const styles = getComputedStyle(document.documentElement);
     const time = /^(\d*\.?\d+)(ms|s)$/.exec(styles.getPropertyValue("--motion-med").trim());
     const animation = form.animate(
@@ -402,7 +402,6 @@ export function SettingsPane({
                   : "settings-status"
               }
               role={message ? "status" : undefined}
-              title={message ?? undefined}
             >
               {message ?? (dirty ? "Unsaved changes" : "")}
             </p>

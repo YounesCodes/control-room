@@ -15,7 +15,7 @@ interface TerminalLayoutSplit {
   second: TerminalLayout;
 }
 
-interface TerminalPaneRect {
+export interface TerminalPaneRect {
   left: number;
   top: number;
   width: number;
@@ -59,8 +59,167 @@ export function getTerminalPanePixels(
   };
 }
 
-const MIN_TERMINAL_PANE_WIDTH = 280;
-const MIN_TERMINAL_PANE_HEIGHT = 180;
+/** Sides of a pane that meet the surface's left, right, or bottom edge, where the window border runs. */
+export function terminalPaneOuterEdges(
+  rectangle: TerminalPaneRect,
+): ("left" | "right" | "bottom")[] {
+  const tolerance = 0.01;
+  return [
+    ...(rectangle.left <= tolerance ? (["left"] as const) : []),
+    ...(rectangle.left + rectangle.width >= 100 - tolerance ? (["right"] as const) : []),
+    ...(rectangle.top + rectangle.height >= 100 - tolerance ? (["bottom"] as const) : []),
+  ];
+}
+
+export const MIN_TERMINAL_PANE_WIDTH = 280;
+export const MIN_TERMINAL_PANE_HEIGHT = 180;
+
+export type TerminalDropZone = "center" | "left" | "right" | "top" | "bottom";
+
+function validMembers(layout: TerminalLayout, source: string, target: string): boolean {
+  const ids = getTerminalLayoutIds(layout);
+  return (
+    source !== target &&
+    ids.includes(source) &&
+    ids.includes(target) &&
+    new Set(ids).size === ids.length
+  );
+}
+
+/** Exchange leaves, keeping all split geometry and session identities. */
+export function swapTerminalLayout(
+  layout: TerminalLayout,
+  source: string,
+  target: string,
+): TerminalLayout {
+  if (!validMembers(layout, source, target)) return layout;
+  function visit(node: TerminalLayout): TerminalLayout {
+    if (node.kind === "leaf") {
+      if (node.workspaceId === source) return createTerminalLayout(target);
+      if (node.workspaceId === target) return createTerminalLayout(source);
+      return node;
+    }
+    const first = visit(node.first);
+    const second = visit(node.second);
+    return first === node.first && second === node.second ? node : { ...node, first, second };
+  }
+  return visit(layout);
+}
+
+/** Detach first, collapse its ancestors, then dock beside the surviving target. */
+export function dockTerminalLayout(
+  layout: TerminalLayout,
+  source: string,
+  target: string,
+  edge: Exclude<TerminalDropZone, "center">,
+): TerminalLayout {
+  if (!validMembers(layout, source, target) || !["left", "right", "top", "bottom"].includes(edge))
+    return layout;
+  const remaining = removeTerminalFromLayout(layout, source)!;
+  function visit(node: TerminalLayout): TerminalLayout {
+    if (node.kind === "leaf") {
+      if (node.workspaceId !== target) return node;
+      const moved = createTerminalLayout(source);
+      const before = edge === "left" || edge === "top";
+      return {
+        kind: "split",
+        direction: edge === "left" || edge === "right" ? "vertical" : "horizontal",
+        first: before ? moved : node,
+        second: before ? node : moved,
+      };
+    }
+    const first = visit(node.first);
+    const second = visit(node.second);
+    return first === node.first && second === node.second ? node : { ...node, first, second };
+  }
+  const result = visit(remaining);
+  return JSON.stringify(result) === JSON.stringify(layout) ? layout : result;
+}
+
+export function terminalSplitDirection(
+  layout: TerminalLayout,
+  path: string,
+): TerminalSplitDirection | null {
+  if (layout.kind === "leaf") return null;
+  if (path === "") return layout.direction;
+  const [child, ...rest] = path.split(".");
+  return child === "first" || child === "second"
+    ? terminalSplitDirection(layout[child], rest.join("."))
+    : null;
+}
+
+export function orientTerminalLayout(
+  layout: TerminalLayout,
+  path: string,
+  direction: TerminalSplitDirection,
+): TerminalLayout {
+  if (layout.kind === "leaf" || !["vertical", "horizontal"].includes(direction)) return layout;
+  if (path === "") return layout.direction === direction ? layout : { ...layout, direction };
+  const [child, ...rest] = path.split(".");
+  if (child !== "first" && child !== "second") return layout;
+  const next = orientTerminalLayout(layout[child], rest.join("."), direction);
+  return next === layout[child] ? layout : { ...layout, [child]: next };
+}
+
+export function terminalParentSplitPath(
+  layout: TerminalLayout,
+  workspaceId: string,
+): string | null {
+  function visit(node: TerminalLayout, path: string): string | null {
+    if (node.kind === "leaf") return null;
+    if (
+      (node.first.kind === "leaf" && node.first.workspaceId === workspaceId) ||
+      (node.second.kind === "leaf" && node.second.workspaceId === workspaceId)
+    )
+      return path;
+    return (
+      visit(node.first, path ? `${path}.first` : "first") ??
+      visit(node.second, path ? `${path}.second` : "second")
+    );
+  }
+  return visit(layout, "");
+}
+
+/** Coordinates are relative to the target pane; corners choose the nearest edge. */
+/** Bring a terminal from outside the layout in beside `target`, on the given edge. */
+export function insertTerminalBeside(
+  layout: TerminalLayout,
+  workspaceId: string,
+  target: string,
+  edge: Exclude<TerminalDropZone, "center">,
+): TerminalLayout {
+  if (terminalLayoutContains(layout, workspaceId) || !terminalLayoutContains(layout, target))
+    return layout;
+  return dockTerminalLayout(
+    splitTerminalLayout(layout, target, workspaceId, "vertical"),
+    workspaceId,
+    target,
+    edge,
+  );
+}
+
+export function terminalDropZone(x: number, y: number): TerminalDropZone | null {
+  if (![x, y].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1) return null;
+  const edges = [
+    { zone: "left", distance: x },
+    { zone: "right", distance: 1 - x },
+    { zone: "top", distance: y },
+    { zone: "bottom", distance: 1 - y },
+  ] as const;
+  const nearest = edges.reduce((a, b) => (a.distance <= b.distance ? a : b));
+  return nearest.distance < 0.25 ? nearest.zone : "center";
+}
+
+export function rearrangeTerminalLayout(
+  layout: TerminalLayout,
+  source: string,
+  target: string,
+  zone: TerminalDropZone,
+): TerminalLayout {
+  return zone === "center"
+    ? swapTerminalLayout(layout, source, target)
+    : dockTerminalLayout(layout, source, target, zone);
+}
 
 export function createTerminalLayout(workspaceId: string): TerminalLayout {
   return { kind: "leaf", workspaceId };
@@ -120,13 +279,21 @@ export function pruneTerminalLayout(
   layout: TerminalLayout | null | undefined,
   workspaceIds: Set<string>,
 ): TerminalLayout | null {
-  if (!layout) return null;
-  if (layout.kind === "leaf") return workspaceIds.has(layout.workspaceId) ? layout : null;
-  const first = pruneTerminalLayout(layout.first, workspaceIds);
-  const second = pruneTerminalLayout(layout.second, workspaceIds);
-  if (!first) return second;
-  if (!second) return first;
-  return { ...layout, first, second };
+  const seen = new Set<string>();
+  function visit(node: TerminalLayout | null | undefined): TerminalLayout | null {
+    if (!node) return null;
+    if (node.kind === "leaf") {
+      if (!workspaceIds.has(node.workspaceId) || seen.has(node.workspaceId)) return null;
+      seen.add(node.workspaceId);
+      return node;
+    }
+    const first = visit(node.first);
+    const second = visit(node.second);
+    if (!first) return second;
+    if (!second) return first;
+    return first === node.first && second === node.second ? node : { ...node, first, second };
+  }
+  return visit(layout);
 }
 
 export function selectTerminalTab(layout: TerminalLayout, workspaceId: string): TerminalLayout {
@@ -170,6 +337,7 @@ export function getResponsiveTerminalPaneRects(
 export function getResponsiveTerminalGeometry(
   layout: TerminalLayout,
   viewport: TerminalLayoutViewport,
+  adapt = true,
 ): { panes: Record<string, TerminalPaneRect>; dividers: TerminalLayoutDivider[] } {
   const rectangles: Record<string, TerminalPaneRect> = {};
   const dividers: TerminalLayoutDivider[] = [];
@@ -188,20 +356,30 @@ export function getResponsiveTerminalGeometry(
     const verticalRoom = available.width / 2 / MIN_TERMINAL_PANE_WIDTH;
     const horizontalRoom = available.height / 2 / MIN_TERMINAL_PANE_HEIGHT;
     const direction =
-      node.direction === "vertical" && verticalRoom < 1 && horizontalRoom > verticalRoom
+      adapt && node.direction === "vertical" && verticalRoom < 1 && horizontalRoom > verticalRoom
         ? "horizontal"
-        : node.direction === "horizontal" && horizontalRoom < 1 && verticalRoom > horizontalRoom
+        : adapt &&
+            node.direction === "horizontal" &&
+            horizontalRoom < 1 &&
+            verticalRoom > horizontalRoom
           ? "vertical"
           : node.direction;
 
     const size = direction === "vertical" ? available.width : available.height;
-    // Crowded layouts still allow every divider to move. Window constraints
-    // affect only the displayed ratio, leaving the saved preference intact.
-    const minimum = direction === "vertical" ? MIN_TERMINAL_PANE_WIDTH : MIN_TERMINAL_PANE_HEIGHT;
+    const dimension = direction === "vertical" ? "width" : "height";
+    const leafMinimum =
+      direction === "vertical" ? MIN_TERMINAL_PANE_WIDTH : MIN_TERMINAL_PANE_HEIGHT;
+    const firstMinimum = adapt ? leafMinimum : terminalLayoutMinimum(node.first)[dimension];
+    const secondMinimum = adapt ? leafMinimum : terminalLayoutMinimum(node.second)[dimension];
+    const crowded = firstMinimum + secondMinimum > size;
     const minRatio =
-      Number.isFinite(size) && size > 0 ? Math.max(0.05, Math.min(minimum / size, 0.2)) : 0.05;
+      Number.isFinite(size) && size > 0
+        ? firstMinimum / (crowded ? firstMinimum + secondMinimum : size)
+        : 0.05;
+    const maxRatio =
+      Number.isFinite(size) && size > 0 ? (crowded ? minRatio : 1 - secondMinimum / size) : 0.95;
     const savedRatio = Number.isFinite(node.ratio) ? (node.ratio ?? 0.5) : 0.5;
-    const ratio = Math.max(minRatio, Math.min(1 - minRatio, savedRatio));
+    const ratio = Math.max(minRatio, Math.min(maxRatio, savedRatio));
     if (Number.isFinite(size) && size > 0) {
       dividers.push({
         path,
@@ -210,7 +388,7 @@ export function getResponsiveTerminalGeometry(
         position: size * ratio,
         size,
         min: size * minRatio,
-        max: size * (1 - minRatio),
+        max: size * maxRatio,
       });
     }
     const childPath = (child: string) => (path ? `${path}.${child}` : child);
@@ -249,4 +427,158 @@ export function getResponsiveTerminalGeometry(
 
   visit(layout, { left: 0, top: 0, width: 100, height: 100 }, viewport, "");
   return { panes: rectangles, dividers };
+}
+
+function terminalLayoutMinimum(layout: TerminalLayout): TerminalLayoutViewport {
+  if (layout.kind === "leaf")
+    return { width: MIN_TERMINAL_PANE_WIDTH, height: MIN_TERMINAL_PANE_HEIGHT };
+  const first = terminalLayoutMinimum(layout.first);
+  const second = terminalLayoutMinimum(layout.second);
+  return layout.direction === "vertical"
+    ? { width: first.width + second.width, height: Math.max(first.height, second.height) }
+    : { width: Math.max(first.width, second.width), height: first.height + second.height };
+}
+
+/** Choose directions before scrollbars take space, then size panes in the visible viewport. */
+export function getTerminalLayoutSurface(
+  layout: TerminalLayout,
+  visible: TerminalLayoutViewport,
+  available = visible,
+) {
+  const requestedMinimum = terminalLayoutMinimum(layout);
+  let temporary = layout;
+  if (requestedMinimum.width > available.width || requestedMinimum.height > available.height) {
+    const responsive = getResponsiveTerminalGeometry(layout, available);
+    for (const divider of responsive.dividers)
+      temporary = orientTerminalLayout(temporary, divider.path, divider.direction);
+  }
+  const minimum = temporary === layout ? requestedMinimum : terminalLayoutMinimum(temporary);
+  const viewport = {
+    width: Math.max(visible.width, minimum.width),
+    height: Math.max(visible.height, minimum.height),
+  };
+  return { viewport, ...getResponsiveTerminalGeometry(temporary, viewport, false) };
+}
+
+/** A divider handle: a split's whole divider, or one half of a divider two lined-up
+ *  perpendicular splits cross. `transpose` names the crossed split to regroup first. */
+export interface TerminalDividerHandle extends TerminalLayoutDivider {
+  transpose: string | null;
+}
+
+function childPath(path: string, child: "first" | "second") {
+  return path ? `${path}.${child}` : child;
+}
+
+function terminalNodeAt(layout: TerminalLayout, path: string): TerminalLayout | null {
+  if (path === "") return layout;
+  if (layout.kind === "leaf") return null;
+  const [child, ...rest] = path.split(".");
+  return child === "first" || child === "second"
+    ? terminalNodeAt(layout[child], rest.join("."))
+    : null;
+}
+
+/**
+ * Regroups a crossed split the other way round with identical geometry: two columns
+ * that are each split at the same height become two rows each split at the same
+ * width, and vice versa. Anything else is returned unchanged.
+ */
+export function transposeTerminalCross(layout: TerminalLayout, path: string): TerminalLayout {
+  const node = terminalNodeAt(layout, path);
+  if (
+    !node ||
+    node.kind !== "split" ||
+    node.first.kind !== "split" ||
+    node.second.kind !== "split" ||
+    node.first.direction === node.direction ||
+    node.second.direction !== node.first.direction
+  )
+    return layout;
+  const outer = { direction: node.direction, ratio: node.ratio };
+  const crossed: TerminalLayout = {
+    kind: "split",
+    direction: node.first.direction,
+    ratio: node.first.ratio,
+    first: { kind: "split", ...outer, first: node.first.first, second: node.second.first },
+    second: { kind: "split", ...outer, first: node.first.second, second: node.second.second },
+  };
+  if (crossed.ratio === undefined) delete crossed.ratio;
+  for (const half of [crossed.first, crossed.second])
+    if (half.kind === "split" && half.ratio === undefined) delete half.ratio;
+  function replace(current: TerminalLayout, rest: string): TerminalLayout {
+    if (rest === "" || current.kind === "leaf") return crossed;
+    const [child, ...tail] = rest.split(".") as ["first" | "second", ...string[]];
+    return { ...current, [child]: replace(current[child], tail.join(".")) };
+  }
+  return replace(layout, path);
+}
+
+/** The point along a divider's own axis where it sits, as a surface percentage. */
+function dividerLine(divider: TerminalLayoutDivider) {
+  const { rectangle } = divider;
+  return divider.direction === "vertical"
+    ? rectangle.left + (rectangle.width * divider.position) / divider.size
+    : rectangle.top + (rectangle.height * divider.position) / divider.size;
+}
+
+/**
+ * The dividers to offer for a surface. Where both children of a split are split the
+ * other way and their dividers line up, the split's divider is offered as two halves,
+ * so each row (or column) of the cross resizes on its own; dragging a half regroups
+ * the tree around it first (see transposeTerminalCross). Splits shown rotated for a
+ * small window keep their whole divider.
+ */
+export function getTerminalDividerHandles(
+  layout: TerminalLayout,
+  dividers: TerminalLayoutDivider[],
+  visible: TerminalLayoutViewport,
+  available = visible,
+): TerminalDividerHandle[] {
+  const byPath = new Map(dividers.map((divider) => [divider.path, divider]));
+  const saved = (divider: TerminalLayoutDivider | undefined) =>
+    !!divider && terminalSplitDirection(layout, divider.path) === divider.direction;
+  return dividers.flatMap((divider): TerminalDividerHandle[] => {
+    const whole = [{ ...divider, transpose: null }];
+    const first = byPath.get(childPath(divider.path, "first"));
+    const second = byPath.get(childPath(divider.path, "second"));
+    if (
+      !saved(divider) ||
+      !saved(first) ||
+      !saved(second) ||
+      first!.direction === divider.direction ||
+      second!.direction !== first!.direction ||
+      Math.abs(dividerLine(first!) - dividerLine(second!)) > 0.01
+    )
+      return whole;
+    const transposed = transposeTerminalCross(layout, divider.path);
+    const halves = getTerminalLayoutSurface(transposed, visible, available).dividers.filter(
+      (candidate) =>
+        candidate.path === childPath(divider.path, "first") ||
+        candidate.path === childPath(divider.path, "second"),
+    );
+    return halves.length === 2 && halves.every((half) => half.direction === divider.direction)
+      ? halves.map((half) => ({ ...half, transpose: divider.path }))
+      : whole;
+  });
+}
+
+/** Applies a handle's new ratio, regrouping a crossed split first when the handle is a half. */
+export function resizeTerminalHandle(
+  layout: TerminalLayout,
+  handle: Pick<TerminalDividerHandle, "path" | "transpose">,
+  ratio: number,
+): TerminalLayout {
+  const base =
+    handle.transpose === null ? layout : transposeTerminalCross(layout, handle.transpose);
+  return resizeTerminalLayout(base, handle.path, ratio);
+}
+
+export function terminalLayoutFits(
+  layout: TerminalLayout,
+  viewport: TerminalLayoutViewport,
+): boolean {
+  if (!Number.isFinite(viewport.width) || !Number.isFinite(viewport.height)) return false;
+  const surface = getTerminalLayoutSurface(layout, viewport);
+  return surface.viewport.width <= viewport.width && surface.viewport.height <= viewport.height;
 }

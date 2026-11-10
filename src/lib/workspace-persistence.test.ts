@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createTerminalLayout, splitTerminalLayout, resizeTerminalLayout } from "./terminal-layout";
+import {
+  createTerminalLayout,
+  splitTerminalLayout,
+  resizeTerminalLayout,
+  swapTerminalLayout,
+  dockTerminalLayout,
+  orientTerminalLayout,
+} from "./terminal-layout";
 import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
 import { createRemoteWorkspace } from "./workspace-target";
 import type {
@@ -76,6 +83,25 @@ describe("Workspace restoration", () => {
     expect(saved.terminalGroups).toEqual(state.terminalGroups);
     expect(restoreWorkspaceState([connection("host")], saved, [powershell]).terminalGroups).toEqual(
       state.terminalGroups,
+    );
+    const rearranged = orientTerminalLayout(
+      dockTerminalLayout(
+        swapTerminalLayout(restored.terminalGroups[0].layout, "local", "logs"),
+        "logs",
+        "remote",
+        "left",
+      ),
+      "",
+      "horizontal",
+    );
+    const moved = persistWorkspaceState(restored.workspaces, "logs", [
+      { ...restored.terminalGroups[0], layout: rearranged },
+    ]);
+    const reopened = restoreWorkspaceState([connection("host")], moved, [powershell]);
+    expect(reopened.terminalGroups[0].layout).toEqual(rearranged);
+    expect(reopened.activeWorkspaceId).toBe("logs");
+    expect(reopened.workspaces.map((workspace) => workspace.id)).toEqual(
+      restored.workspaces.map((workspace) => workspace.id),
     );
   });
   it("restores a retired Scratchpad selection to Terminal", () => {

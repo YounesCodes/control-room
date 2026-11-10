@@ -14,18 +14,11 @@ export function terminalGroupForWorkspace(
   return groups.find((group) => getTerminalLayoutIds(group.layout).includes(workspaceId)) ?? null;
 }
 
-export function nextTerminalGroupName(groups: TerminalGroup[], workspaceName?: string): string {
+/** Name new groups by their lowest free number; members and order change after creation. */
+export function nextTerminalGroupName(groups: TerminalGroup[]): string {
   const names = new Set(groups.map((group) => group.name.trim().toLocaleLowerCase()));
-  const baseName = workspaceName?.trim() ? `${workspaceName.trim()} group` : "Terminal group";
-  const candidate = (suffix?: number) => {
-    const ending = suffix ? ` ${suffix}` : "";
-    const available = 80 - ending.length;
-    return `${[...baseName].slice(0, available).join("").trimEnd()}${ending}`;
-  };
-  const first = candidate();
-  if (!names.has(first.toLocaleLowerCase())) return first;
-  for (let suffix = 2; ; suffix += 1) {
-    const name = candidate(suffix);
+  for (let number = 1; ; number += 1) {
+    const name = `Group ${number}`;
     if (!names.has(name.toLocaleLowerCase())) return name;
   }
 }

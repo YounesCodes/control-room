@@ -22,6 +22,7 @@ import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
 
 export interface TerminalPaneHandle {
+  focus: () => void;
   copySelection: () => void;
   pasteClipboard: () => void;
 }
@@ -115,6 +116,7 @@ export function TerminalPane({
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
 
   useImperativeHandle(ref, () => ({
+    focus: () => terminalRef.current?.focus(),
     copySelection,
     pasteClipboard,
   }));
@@ -619,7 +621,8 @@ export function TerminalPane({
     // would yank focus back from a menu the user just opened.
     const focusOwner = document.activeElement;
     const popoverOwnsFocus =
-      focusOwner instanceof Element && focusOwner.closest("[data-app-popover]") !== null;
+      focusOwner instanceof Element &&
+      focusOwner.closest("[data-app-popover]:not([inert])") !== null;
     if (active && !wasActiveRef.current && !popoverOwnsFocus) terminal.focus();
     wasActiveRef.current = active;
   }, [settings, visible, active]);

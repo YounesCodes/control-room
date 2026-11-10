@@ -227,3 +227,11 @@ export async function scratchpadNote() {
   await browser.waitUntil(async () => (await editor.getAttribute("readonly")) === null);
   return note;
 }
+
+/** Splitting starts from New terminal: open it and choose a split mode card. */
+export async function openSplitMenu(direction: "vertically" | "horizontally" = "vertically") {
+  await $("aria/New terminal").click();
+  await $(".new-terminal-menu")
+    .$(`button*=${direction === "vertically" ? "Split right" : "Split down"}`)
+    .click();
+}

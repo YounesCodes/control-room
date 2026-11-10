@@ -24,8 +24,7 @@ export function usePopoverExit(open: boolean): { present: boolean; closing: bool
       return;
     }
     if (unmounted) return;
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const timer = setTimeout(() => setUnmounted(true), reducedMotion ? 0 : POPOVER_EXIT_MS);
+    const timer = setTimeout(() => setUnmounted(true), POPOVER_EXIT_MS);
     return () => clearTimeout(timer);
   }, [open, unmounted]);
 

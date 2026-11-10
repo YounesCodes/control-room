@@ -188,26 +188,24 @@ it.each([360, 1280])("slides the relationship category selection fill at %ipx", 
     const next = within(group).getByRole("button", { name });
     next.click();
     await waitFor(() => expect(next.getAttribute("aria-pressed")).toBe("true"));
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const animations = await waitFor(() => {
-        const active = group
-          .getAnimations({ subtree: true })
-          .filter(
-            (animation) =>
-              animation instanceof CSSTransition &&
-              (animation.effect as KeyframeEffect).target === group,
-          );
-        expect(active).toHaveLength(2);
-        return active;
-      });
-      for (const animation of animations) {
-        animation.pause();
-        animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
-      }
-      expect(pose().x).toBeGreaterThan(Math.min(previous.offsetLeft, next.offsetLeft));
-      expect(pose().x).toBeLessThan(Math.max(previous.offsetLeft, next.offsetLeft));
-      for (const animation of animations) animation.finish();
+    const animations = await waitFor(() => {
+      const active = group
+        .getAnimations({ subtree: true })
+        .filter(
+          (animation) =>
+            animation instanceof CSSTransition &&
+            (animation.effect as KeyframeEffect).target === group,
+        );
+      expect(active).toHaveLength(2);
+      return active;
+    });
+    for (const animation of animations) {
+      animation.pause();
+      animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
     }
+    expect(pose().x).toBeGreaterThan(Math.min(previous.offsetLeft, next.offsetLeft));
+    expect(pose().x).toBeLessThan(Math.max(previous.offsetLeft, next.offsetLeft));
+    for (const animation of animations) animation.finish();
     expect(pose().x).toBeCloseTo(next.offsetLeft, 2);
     expect(pose().width).toBeCloseTo(next.offsetWidth, 2);
     previous = next;
@@ -254,46 +252,39 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
   const style = getComputedStyle(view, "::before");
   expect(style.transitionDuration.split(",")[0]).toBe(duration);
   expect(style.transitionTimingFunction.startsWith(easing)).toBe(true);
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    const forward = await waitFor(() => {
-      expect(transitions()).toHaveLength(2);
-      return transitions();
-    });
-    for (const animation of forward) {
-      animation.pause();
-      const duration = Number(animation.effect!.getTiming().duration);
-      animation.currentTime = duration / 4;
-      const early = animation.effect!.getComputedTiming().progress!;
-      animation.currentTime = (duration * 3) / 4;
-      const late = animation.effect!.getComputedTiming().progress!;
-      expect(early + late).toBeCloseTo(1, 2);
-      animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
-    }
-    const midway = pose();
-    expect(midway.x).toBeGreaterThan(explorer.offsetLeft);
-    expect(midway.x).toBeLessThan(relationships.offsetLeft);
-    expect(midway.width).toBeGreaterThan(explorer.offsetWidth);
-    expect(midway.width).toBeLessThan(relationships.offsetWidth);
-    explorer.click();
-    const reversed = await waitFor(() => {
-      const next = transitions();
-      expect(next).toHaveLength(2);
-      expect(next.every((animation) => !forward.includes(animation))).toBe(true);
-      return next;
-    });
-    for (const animation of reversed) {
-      const first = (animation.effect as KeyframeEffect).getKeyframes()[0];
-      if (animation.transitionProperty === "transform")
-        expect(new DOMMatrixReadOnly(first.transform as string).m41).toBeCloseTo(midway.x, 2);
-      if (animation.transitionProperty === "width")
-        expect(parseFloat(first.width as string)).toBeCloseTo(midway.width, 1);
-      animation.finish();
-    }
-  } else {
-    aligned(relationships);
-    expect(transitions()).toHaveLength(0);
-    explorer.click();
-    await waitFor(() => expect(explorer.getAttribute("aria-pressed")).toBe("true"));
+  const forward = await waitFor(() => {
+    expect(transitions()).toHaveLength(2);
+    return transitions();
+  });
+  for (const animation of forward) {
+    animation.pause();
+    const duration = Number(animation.effect!.getTiming().duration);
+    animation.currentTime = duration / 4;
+    const early = animation.effect!.getComputedTiming().progress!;
+    animation.currentTime = (duration * 3) / 4;
+    const late = animation.effect!.getComputedTiming().progress!;
+    expect(early + late).toBeCloseTo(1, 2);
+    animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+  }
+  const midway = pose();
+  expect(midway.x).toBeGreaterThan(explorer.offsetLeft);
+  expect(midway.x).toBeLessThan(relationships.offsetLeft);
+  expect(midway.width).toBeGreaterThan(explorer.offsetWidth);
+  expect(midway.width).toBeLessThan(relationships.offsetWidth);
+  explorer.click();
+  const reversed = await waitFor(() => {
+    const next = transitions();
+    expect(next).toHaveLength(2);
+    expect(next.every((animation) => !forward.includes(animation))).toBe(true);
+    return next;
+  });
+  for (const animation of reversed) {
+    const first = (animation.effect as KeyframeEffect).getKeyframes()[0];
+    if (animation.transitionProperty === "transform")
+      expect(new DOMMatrixReadOnly(first.transform as string).m41).toBeCloseTo(midway.x, 2);
+    if (animation.transitionProperty === "width")
+      expect(parseFloat(first.width as string)).toBeCloseTo(midway.width, 1);
+    animation.finish();
   }
   aligned(explorer);
   await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
@@ -621,15 +612,7 @@ it("reveals the inventory on scope changes and continues an interrupted reveal w
   expect(document.activeElement).toBe(all);
   expect(screen.getByRole("button", { name: /database.service Database/ })).toBe(database);
   expect(database.getAttribute("aria-pressed")).toBe("true");
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    expect(reveal()).toBeUndefined();
-    focused.click();
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: /data.mount Application data/ })).toBeNull(),
-    );
-    expect(reveal()).toBeUndefined();
-    return;
-  }
+
   const animation = await waitFor(() => {
     expect(reveal()).toBeTruthy();
     return reveal()!;
@@ -692,31 +675,27 @@ it("keeps the scope switch accessible at narrow widths and preserves complete gr
   expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
   const selectedFill = getComputedStyle(scope, "::before");
   const duration = parseFloat(selectedFill.transitionDuration);
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-    expect(duration).toBeLessThanOrEqual(0.001);
-  else expect(duration).toBe(0.18);
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    // Sample the rendered fill between the two options, including reversal.
-    screen.getByRole("button", { name: "All units" }).click();
-    const slide = await waitFor(() => {
-      const transition = scope
-        .getAnimations({ subtree: true })
-        .find(
-          (animation) =>
-            animation instanceof CSSTransition && animation.transitionProperty === "transform",
-        );
-      expect(transition).toBeTruthy();
-      return transition!;
-    });
-    slide.pause();
-    slide.currentTime = 90;
-    const offset = new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41;
-    expect(offset).toBeGreaterThan(0);
-    expect(offset).toBeLessThan(bounds.width / 2);
-    screen.getByRole("button", { name: "Focused" }).click();
-    await settleMotion();
-    expect(new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41).toBe(0);
-  }
+  expect(duration).toBe(0.18);
+  // Sample the rendered fill between the two options, including reversal.
+  screen.getByRole("button", { name: "All units" }).click();
+  const slide = await waitFor(() => {
+    const transition = scope
+      .getAnimations({ subtree: true })
+      .find(
+        (animation) =>
+          animation instanceof CSSTransition && animation.transitionProperty === "transform",
+      );
+    expect(transition).toBeTruthy();
+    return transition!;
+  });
+  slide.pause();
+  slide.currentTime = 90;
+  const offset = new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41;
+  expect(offset).toBeGreaterThan(0);
+  expect(offset).toBeLessThan(bounds.width / 2);
+  screen.getByRole("button", { name: "Focused" }).click();
+  await settleMotion();
+  expect(new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41).toBe(0);
   screen.getByRole("button", { name: "Focused" }).focus();
   await userEvent.keyboard("{Tab}{Enter}");
   expect(screen.getByRole("button", { name: "All units", pressed: true })).toBeTruthy();
@@ -729,30 +708,23 @@ it("glides one shared service highlight and retargets it during rapid switching"
   await page.getByRole("button", { name: /^a.service Database/ }).click();
   await settleMotion();
   const marker = document.querySelector<HTMLElement>(".systemd-selection-indicator")!;
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   await page.getByRole("button", { name: /^c.service Database/ }).click();
   expect(document.querySelectorAll(".systemd-selection-indicator")).toHaveLength(1);
   expect(document.querySelector(".systemd-selection-indicator")).toBe(marker);
   expect(screen.getByRole("heading", { name: "c.service" })).toBeTruthy();
-  if (!reduced) {
-    const motion = marker.getAnimations()[0];
-    motion.pause();
-    motion.currentTime = 80;
-    const middle = new DOMMatrix(getComputedStyle(marker).transform).m42;
-    expect(middle).toBeGreaterThan(0);
-    expect(middle).toBeLessThan(88);
-    await page.getByRole("button", { name: /^b.service Database/ }).click();
-    const retargeted = marker.getAnimations()[0];
-    retargeted.pause();
-    retargeted.currentTime = 0;
-    expect(Math.abs(new DOMMatrix(getComputedStyle(marker).transform).m42 - middle)).toBeLessThan(
-      1,
-    );
-    retargeted.finish();
-  } else {
-    expect(marker.getAnimations()).toHaveLength(0);
-    await page.getByRole("button", { name: /^b.service Database/ }).click();
-  }
+  const motion = marker.getAnimations()[0];
+  motion.pause();
+  motion.currentTime = 80;
+  const middle = new DOMMatrix(getComputedStyle(marker).transform).m42;
+  expect(middle).toBeGreaterThan(0);
+  expect(middle).toBeLessThan(88);
+  await page.getByRole("button", { name: /^b.service Database/ }).click();
+  const retargeted = marker.getAnimations()[0];
+  retargeted.pause();
+  retargeted.currentTime = 0;
+  expect(Math.abs(new DOMMatrix(getComputedStyle(marker).transform).m42 - middle)).toBeLessThan(1);
+  retargeted.finish();
   await settleMotion();
   expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44);
   expect(marker.getBoundingClientRect().height).toBe(44);
@@ -967,17 +939,15 @@ it("switches units immediately with arrows and keeps late details out of the cur
   expect(screen.getByRole("complementary")).toBe(inspector);
   expect(document.activeElement).toBe(within(list).getByRole("button", { name: /^c.service/ }));
   const heading = inspector.querySelector<HTMLElement>("header")!;
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  expect(getComputedStyle(heading).animationName).toBe(reduced ? "none" : "systemd-unit-in");
-  if (!reduced) {
-    const animation = heading.getAnimations()[0];
-    animation.pause();
-    animation.currentTime = 0;
-    const start = getComputedStyle(heading);
-    expect(Number(start.opacity)).toBeLessThan(1);
-    expect(new DOMMatrix(start.transform).m42).toBeGreaterThan(0);
-    animation.finish();
-  }
+
+  expect(getComputedStyle(heading).animationName).toBe("systemd-unit-in");
+  const animation = heading.getAnimations()[0];
+  animation.pause();
+  animation.currentTime = 0;
+  const start = getComputedStyle(heading);
+  expect(Number(start.opacity)).toBeLessThan(1);
+  expect(new DOMMatrix(start.transform).m42).toBeGreaterThan(0);
+  animation.finish();
   for (const id of ["b.service", "a.service", "c.service"]) {
     pending.get(id)!(
       systemdInspection(id, {
@@ -1077,39 +1047,35 @@ it("does not flash the field when search is dismissed during the icon's travel",
   renderPane();
   await page.getByRole("button", { name: "Find units", exact: true }).click();
   const search = document.querySelector<HTMLElement>(".systemd-inline-search")!;
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduced) {
-    const opening = search
-      .getAnimations()
-      .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
-    opening.pause();
-    opening.currentTime = 80;
-    expect(Number(getComputedStyle(search).opacity)).toBe(0);
-  }
+
+  const opening = search
+    .getAnimations()
+    .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
+  opening.pause();
+  opening.currentTime = 80;
+  expect(Number(getComputedStyle(search).opacity)).toBe(0);
   const width = search.getBoundingClientRect().width;
   await userEvent.keyboard("{Escape}");
-  if (!reduced) {
-    const closing = search
-      .getAnimations()
-      .find((item) => (item as CSSAnimation).animationName === "systemd-search-out")!;
-    closing.pause();
-    closing.currentTime = 0;
-    expect(Number(getComputedStyle(search).opacity)).toBe(0);
-    expect(search.getBoundingClientRect().width).toBeLessThanOrEqual(width + 1);
-    closing.currentTime = 60;
-    expect(Number(getComputedStyle(search).opacity)).toBe(0);
-    const partial = search.getBoundingClientRect().width;
-    await userEvent.keyboard("{Enter}");
-    const reopened = search
-      .getAnimations()
-      .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
-    reopened.pause();
-    reopened.currentTime = 0;
-    expect(Math.abs(search.getBoundingClientRect().width - partial)).toBeLessThanOrEqual(1);
-    expect(Number(getComputedStyle(search).opacity)).toBe(0);
-    reopened.finish();
-    await userEvent.keyboard("{Escape}");
-  }
+  const closing = search
+    .getAnimations()
+    .find((item) => (item as CSSAnimation).animationName === "systemd-search-out")!;
+  closing.pause();
+  closing.currentTime = 0;
+  expect(Number(getComputedStyle(search).opacity)).toBe(0);
+  expect(search.getBoundingClientRect().width).toBeLessThanOrEqual(width + 1);
+  closing.currentTime = 60;
+  expect(Number(getComputedStyle(search).opacity)).toBe(0);
+  const partial = search.getBoundingClientRect().width;
+  await userEvent.keyboard("{Enter}");
+  const reopened = search
+    .getAnimations()
+    .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
+  reopened.pause();
+  reopened.currentTime = 0;
+  expect(Math.abs(search.getBoundingClientRect().width - partial)).toBeLessThanOrEqual(1);
+  expect(Number(getComputedStyle(search).opacity)).toBe(0);
+  reopened.finish();
+  await userEvent.keyboard("{Escape}");
   await waitFor(() => expect(document.querySelector(".systemd-inline-search")).toBeNull());
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find units" }));
 });
@@ -1125,26 +1091,24 @@ it.each([360, 960, 1400])(
     expect(input.closest(".systemd-heading")).toBeTruthy();
     expect(document.querySelector(".systemd-tools-panel")).toBeNull();
     const search = input.closest<HTMLElement>(".systemd-inline-search")!;
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const animation = search
-        .getAnimations()
-        .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
-      animation.pause();
-      animation.currentTime = 0;
-      const start = search.getBoundingClientRect().width;
-      const iconStart = screen
-        .getByRole("button", { name: "Find units" })
-        .getBoundingClientRect().left;
-      animation.currentTime = 120;
-      expect(search.getBoundingClientRect().width).toBeGreaterThan(start);
-      expect(
-        screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().left,
-      ).toBeLessThan(iconStart);
-      expect(Number(getComputedStyle(search).opacity)).toBe(0);
-      animation.currentTime = 260;
-      expect(Number(getComputedStyle(search).opacity)).toBeGreaterThan(0);
-      animation.finish();
-    }
+    const animation = search
+      .getAnimations()
+      .find((item) => (item as CSSAnimation).animationName === "systemd-search-in")!;
+    animation.pause();
+    animation.currentTime = 0;
+    const start = search.getBoundingClientRect().width;
+    const iconStart = screen
+      .getByRole("button", { name: "Find units" })
+      .getBoundingClientRect().left;
+    animation.currentTime = 120;
+    expect(search.getBoundingClientRect().width).toBeGreaterThan(start);
+    expect(
+      screen.getByRole("button", { name: "Find units" }).getBoundingClientRect().left,
+    ).toBeLessThan(iconStart);
+    expect(Number(getComputedStyle(search).opacity)).toBe(0);
+    animation.currentTime = 260;
+    expect(Number(getComputedStyle(search).opacity)).toBeGreaterThan(0);
+    animation.finish();
     await settleMotion();
     const header = document.querySelector(".systemd-heading")!.getBoundingClientRect();
     const box = search.getBoundingClientRect();
@@ -1179,17 +1143,15 @@ it.each([360, 960, 1400])(
     expect((await audit()).violations).toEqual([]);
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("textbox", { name: "Search units" })).toBeNull();
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const closing = search
-        .getAnimations()
-        .find((item) => (item as CSSAnimation).animationName === "systemd-search-out")!;
-      closing.pause();
-      closing.currentTime = 0;
-      const expanded = search.getBoundingClientRect().width;
-      closing.currentTime = 150;
-      expect(search.getBoundingClientRect().width).toBeLessThan(expanded);
-      closing.finish();
-    }
+    const closing = search
+      .getAnimations()
+      .find((item) => (item as CSSAnimation).animationName === "systemd-search-out")!;
+    closing.pause();
+    closing.currentTime = 0;
+    const expanded = search.getBoundingClientRect().width;
+    closing.currentTime = 150;
+    expect(search.getBoundingClientRect().width).toBeLessThan(expanded);
+    closing.finish();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find units" }));
     await page.getByRole("button", { name: "Filter and sort units" }).click();
     await settleMotion();
@@ -1279,14 +1241,12 @@ it("refits and zooms in both directions on show more and show less, including in
     }
   };
   await page.getByRole("button", { name: /Show more/ }).click();
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    const firstFrame = focused.getBoundingClientRect();
-    expect(
-      Math.abs(
-        firstFrame.top + firstFrame.height / 2 - beforeExpansion.top - beforeExpansion.height / 2,
-      ),
-    ).toBeLessThan(40);
-  }
+  const firstFrame = focused.getBoundingClientRect();
+  expect(
+    Math.abs(
+      firstFrame.top + firstFrame.height / 2 - beforeExpansion.top - beforeExpansion.height / 2,
+    ),
+  ).toBeLessThan(40);
   await contained();
   expect(scale()).toBeLessThan(initial);
   const first = scale();
@@ -1550,34 +1510,32 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
   await waitFor(() => expect(count()).toBe(7));
   await page.getByRole("button", { name: /Show more/ }).click();
   expect(count()).toBe(13);
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    const node = screen
-      .getByRole("button", { name: /^branch-11.service/ })
-      .closest<HTMLElement>(".systemd-graph-node")!;
-    const animation = node
-      .getAnimations()
-      .find((item) => (item as CSSAnimation).animationName === "systemd-node-in")!;
-    animation.pause();
-    animation.currentTime = 0;
-    const start = new DOMMatrix(getComputedStyle(node).transform);
-    animation.currentTime = 120;
-    const middle = new DOMMatrix(getComputedStyle(node).transform);
-    expect(start.m42).toBeGreaterThanOrEqual(8);
-    expect(middle.m42).toBeLessThan(start.m42);
-    expect(middle.m42).toBeGreaterThan(0);
-    animation.finish();
-    expect(new DOMMatrix(getComputedStyle(node).transform).m42).toBe(0);
-    const edge = document.querySelector<SVGGElement>(
-      '.systemd-connection[aria-label*="branch-11.service"]',
-    )!;
-    const reveal = edge.getAnimations()[0];
-    reveal.pause();
-    reveal.currentTime = 0;
-    const clipped = getComputedStyle(edge).clipPath;
-    reveal.currentTime = 120;
-    expect(getComputedStyle(edge).clipPath).not.toBe(clipped);
-    reveal.finish();
-  }
+  const node = screen
+    .getByRole("button", { name: /^branch-11.service/ })
+    .closest<HTMLElement>(".systemd-graph-node")!;
+  const animation = node
+    .getAnimations()
+    .find((item) => (item as CSSAnimation).animationName === "systemd-node-in")!;
+  animation.pause();
+  animation.currentTime = 0;
+  const start = new DOMMatrix(getComputedStyle(node).transform);
+  animation.currentTime = 120;
+  const middle = new DOMMatrix(getComputedStyle(node).transform);
+  expect(start.m42).toBeGreaterThanOrEqual(8);
+  expect(middle.m42).toBeLessThan(start.m42);
+  expect(middle.m42).toBeGreaterThan(0);
+  animation.finish();
+  expect(new DOMMatrix(getComputedStyle(node).transform).m42).toBe(0);
+  const edge = document.querySelector<SVGGElement>(
+    '.systemd-connection[aria-label*="branch-11.service"]',
+  )!;
+  const reveal = edge.getAnimations()[0];
+  reveal.pause();
+  reveal.currentTime = 0;
+  const clipped = getComputedStyle(edge).clipPath;
+  reveal.currentTime = 120;
+  expect(getComputedStyle(edge).clipPath).not.toBe(clipped);
+  reveal.finish();
   await page.getByRole("button", { name: "Show less" }).click();
   expect(count()).toBe(7);
   await page.getByRole("button", { name: /Show more/ }).click();
@@ -1591,23 +1549,21 @@ it("reverses show-more and branch expansion with animated, noninteractive exits"
   await page.getByRole("button", { name: "Collapse " + neighbors[0] }).click();
   expect(count()).toBe(13);
   expect(screen.queryByRole("button", { name: /^leaf.service/ })).toBeNull();
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    const ghost = document.querySelector<HTMLElement>(
-      '.systemd-graph-ghost[data-unit="leaf.service"]',
-    )!;
-    expect(ghost).toBeTruthy();
-    expect(getComputedStyle(ghost.parentElement!).animationName).toBe("systemd-node-out");
-    const fade = ghost.parentElement!.getAnimations()[0];
-    fade.pause();
-    fade.currentTime = 0;
-    const startOpacity = Number(getComputedStyle(ghost.parentElement!).opacity);
-    fade.currentTime = 120;
-    const halfwayOpacity = Number(getComputedStyle(ghost.parentElement!).opacity);
-    expect(halfwayOpacity).toBeGreaterThan(0);
-    expect(halfwayOpacity).toBeLessThan(startOpacity);
-    fade.finish();
-    expect(ghost.closest("[inert][aria-hidden=true]")).toBeTruthy();
-  }
+  const ghost = document.querySelector<HTMLElement>(
+    '.systemd-graph-ghost[data-unit="leaf.service"]',
+  )!;
+  expect(ghost).toBeTruthy();
+  expect(getComputedStyle(ghost.parentElement!).animationName).toBe("systemd-node-out");
+  const fade = ghost.parentElement!.getAnimations()[0];
+  fade.pause();
+  fade.currentTime = 0;
+  const startOpacity = Number(getComputedStyle(ghost.parentElement!).opacity);
+  fade.currentTime = 120;
+  const halfwayOpacity = Number(getComputedStyle(ghost.parentElement!).opacity);
+  expect(halfwayOpacity).toBeGreaterThan(0);
+  expect(halfwayOpacity).toBeLessThan(startOpacity);
+  fade.finish();
+  expect(ghost.closest("[inert][aria-hidden=true]")).toBeTruthy();
   await page.getByRole("button", { name: "Expand " + neighbors[0] }).click();
   expect(count()).toBe(14);
   expect(document.querySelector('.systemd-graph-ghost[data-unit="leaf.service"]')).toBeNull();
@@ -1672,7 +1628,7 @@ it("explains meaningful dependency line styles and keeps ordering and activation
 it("slides relationship controls and filter panels out without leaving focusable duplicates", async () => {
   await page.viewport(1280, 800);
   renderPane();
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   expect(
     (screen.getByRole("button", { name: /^Dependency graph(?: |$)/ }) as HTMLButtonElement)
       .disabled,
@@ -1681,18 +1637,16 @@ it("slides relationship controls and filter panels out without leaving focusable
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
   await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();
   const group = screen.getByRole("group", { name: "Relationship category" });
-  expect(getComputedStyle(group).animationName).toBe(reduced ? "none" : "systemd-controls-in");
+  expect(getComputedStyle(group).animationName).toBe("systemd-controls-in");
   await page.getByRole("button", { name: "Explorer", exact: true }).click();
   expect(screen.queryByRole("group", { name: "Relationship category" })).toBeNull();
-  if (!reduced) {
-    expect(group.parentElement?.hasAttribute("inert")).toBe(true);
-    expect(getComputedStyle(group).animationName).toBe("systemd-slide-out");
-  }
+  expect(group.parentElement?.hasAttribute("inert")).toBe(true);
+  expect(getComputedStyle(group).animationName).toBe("systemd-slide-out");
   await page.getByRole("button", { name: "Filter and sort units" }).click();
   const panel = screen.getByRole("region", { name: "Unit filters" });
   await userEvent.keyboard("{Escape}");
   expect(screen.queryByRole("region", { name: "Unit filters" })).toBeNull();
-  if (!reduced) expect(panel.parentElement?.hasAttribute("inert")).toBe(true);
+  expect(panel.parentElement?.hasAttribute("inert")).toBe(true);
   await waitFor(() => expect(document.querySelectorAll("[data-leaving]")).toHaveLength(0));
   await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
   expect(screen.getAllByRole("button", { name: /^Dependency graph(?: |$)/ })).toHaveLength(1);
@@ -1873,18 +1827,16 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
   expect(
     Math.abs(panelBox.top + panelBox.height / 2 - canvasBox.top - canvasBox.height / 2),
   ).toBeLessThan(1);
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    expect(getComputedStyle(panel).animationDelay).toBe("0s");
-    const entrance = panel
-      .getAnimations()
-      .find(
-        (animation) => (animation as CSSAnimation).animationName === "systemd-graph-inspector-in",
-      )!;
-    expect(entrance).toBeTruthy();
-    const effect = entrance.effect as KeyframeEffect;
-    expect(Number(effect.getTiming().duration)).toBe(160);
-    expect(Number(effect.getKeyframes()[0].opacity)).toBeGreaterThanOrEqual(0.65);
-  }
+  expect(getComputedStyle(panel).animationDelay).toBe("0s");
+  const entrance = panel
+    .getAnimations()
+    .find(
+      (animation) => (animation as CSSAnimation).animationName === "systemd-graph-inspector-in",
+    )!;
+  expect(entrance).toBeTruthy();
+  const effect = entrance.effect as KeyframeEffect;
+  expect(Number(effect.getTiming().duration)).toBe(160);
+  expect(Number(effect.getKeyframes()[0].opacity)).toBeGreaterThanOrEqual(0.65);
   await userEvent.keyboard("{Escape}");
   await waitFor(() => expect(document.activeElement?.textContent).toContain("database.service"));
   await page.getByRole("button", { name: /^database.service/ }).dblClick();
@@ -2008,16 +1960,14 @@ it.each([360, 960, 1400])(
     expect(getComputedStyle(marker).borderTopStyle).toBe("solid");
     expect(getComputedStyle(marker).borderTopWidth).toBe("1px");
     expect(getComputedStyle(row, "::before").content).toBe("none");
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const entrance = inspector
-        .getAnimations()
-        .find((animation) => (animation as CSSAnimation).animationName === "systemd-inspector-in")!;
-      expect(entrance).toBeTruthy();
-      const effect = entrance.effect as KeyframeEffect;
-      const first = effect.getKeyframes()[0];
-      expect(new DOMMatrix(String(first.transform)).m41).toBeGreaterThanOrEqual(32);
-      expect(Number(effect.getTiming().duration)).toBeGreaterThanOrEqual(220);
-    }
+    const entrance = inspector
+      .getAnimations()
+      .find((animation) => (animation as CSSAnimation).animationName === "systemd-inspector-in")!;
+    expect(entrance).toBeTruthy();
+    const effect = entrance.effect as KeyframeEffect;
+    const first = effect.getKeyframes()[0];
+    expect(new DOMMatrix(String(first.transform)).m41).toBeGreaterThanOrEqual(32);
+    expect(Number(effect.getTiming().duration)).toBeGreaterThanOrEqual(220);
     expect(inspector.getBoundingClientRect().width).toBeLessThanOrEqual(
       Math.min(400, width - 24) + 0.1,
     );
@@ -2035,15 +1985,13 @@ it.each([360, 960, 1400])(
     body.scrollTop = body.scrollHeight;
     expect(body.scrollTop).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Close details" }).click();
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const exiting = document.querySelector<HTMLElement>("[data-leaving] > .systemd-inspector")!;
-      expect(exiting).toBeTruthy();
-      expect(getComputedStyle(exiting).animationName).toBe("systemd-slide-out");
-      expect(exiting.parentElement?.hasAttribute("inert")).toBe(true);
-      await waitFor(() =>
-        expect(document.querySelector("[data-leaving] > .systemd-inspector")).toBeNull(),
-      );
-    }
+    const exiting = document.querySelector<HTMLElement>("[data-leaving] > .systemd-inspector")!;
+    expect(exiting).toBeTruthy();
+    expect(getComputedStyle(exiting).animationName).toBe("systemd-slide-out");
+    expect(exiting.parentElement?.hasAttribute("inert")).toBe(true);
+    await waitFor(() =>
+      expect(document.querySelector("[data-leaving] > .systemd-inspector")).toBeNull(),
+    );
     await page.viewport(width, 800);
     await page.getByRole("button", { name: /worker.service Queue worker/ }).click();
     await page.getByRole("button", { name: /^Dependency graph(?: |$)/, exact: true }).click();

@@ -13,7 +13,6 @@ export default defineConfig({
     browser: {
       enabled: true,
       provider: playwright({
-        contextOptions: { reducedMotion: "reduce" },
         // Exercise native scrollbar clicks and drags in headless Chromium too.
         launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] },
       }),

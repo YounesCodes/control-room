@@ -160,11 +160,7 @@ export function SystemdToolbar({
         <h2 title={snapshot} tabIndex={0}>
           Systemd
         </h2>
-        <span
-          className="systemd-unit-count"
-          data-count-width={total + " / " + total + " units"}
-          title={visible + " units in inventory; " + total + " collected"}
-        >
+        <span className="systemd-unit-count" data-count-width={total + " / " + total + " units"}>
           <span>{visible !== total ? visible + " / " + total + " units" : total + " units"}</span>
         </span>
         {failed > 0 && (
@@ -191,7 +187,6 @@ export function SystemdToolbar({
               type="button"
               aria-label="Explorer"
               aria-pressed={!graph}
-              title="Unit inventory"
               onClick={() => onMode("inventory")}
             >
               <List size={14} />
@@ -241,7 +236,6 @@ export function SystemdToolbar({
                 <button
                   type="button"
                   aria-pressed={state.scope === "all"}
-                  title="Include every unit type and system service"
                   onClick={() => onChange({ scope: "all" })}
                 >
                   All units

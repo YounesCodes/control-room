@@ -115,23 +115,19 @@ export function SystemdGraph({
       }
       if (expansionChanged || (shapeChanged && !interrupted.current)) {
         cancelFitFrame();
-        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-          fit(true, overview.current);
-        } else {
-          // Normalize the new scene without moving its root on screen, then
-          // animate from that pose on the next frame instead of jumping first.
-          const view = renderedView();
-          setMoving(false);
-          setView({
-            ...view,
-            x: view.x + (before.x - after.x) * view.scale,
-            y: view.y + (before.y - after.y) * view.scale,
-          });
-          fitFrame.current = requestAnimationFrame(() => {
-            fitFrame.current = null;
-            fitRef.current(true, overview.current);
-          });
-        }
+        // Normalize the new scene without moving its root on screen, then
+        // animate from that pose on the next frame instead of jumping first.
+        const view = renderedView();
+        setMoving(false);
+        setView({
+          ...view,
+          x: view.x + (before.x - after.x) * view.scale,
+          y: view.y + (before.y - after.y) * view.scale,
+        });
+        fitFrame.current = requestAnimationFrame(() => {
+          fitFrame.current = null;
+          fitRef.current(true, overview.current);
+        });
       } else if (before.x !== after.x || before.y !== after.y) {
         setView((view) => ({
           ...view,

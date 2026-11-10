@@ -493,7 +493,7 @@ describe("critical UI in Chromium", () => {
     await page.getByRole("button", { name: "Add many terminals" }).click();
     const picker = page.getByRole("button", { name: "All terminals", exact: true });
     await picker.click();
-    const menu = page.getByRole("menu", { name: "All terminals" });
+    const menu = page.getByRole("menu", { name: "All terminals menu" });
     await expect.element(menu).toBeVisible();
     expect(menu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(20);
     const active = menu.getByRole("menuitem", { name: /^Terminal 20 / });
@@ -514,6 +514,7 @@ describe("critical UI in Chromium", () => {
       .toBeVisible();
     await picker.click();
     await userEvent.keyboard("{End}");
+    await expect.poll(() => getComputedStyle(menu.element()).opacity).toBe("1");
     const bounds = menu.element().getBoundingClientRect();
     expect(bounds.left).toBeGreaterThanOrEqual(8);
     expect(bounds.right).toBeLessThanOrEqual(792);
@@ -540,6 +541,44 @@ describe("critical UI in Chromium", () => {
     await page.getByRole("button", { name: "Remove terminal" }).click();
     await expect.element(picker).not.toBeInTheDocument();
     expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+  });
+
+  it("reopens the overflow menu quickly while an earlier menu is still exiting", async () => {
+    await page.viewport(800, 640);
+    mount(<TabOverflowFixture longNames />);
+    await page.getByRole("button", { name: "Add many terminals" }).click();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    const menu = page.getByRole("menu", { name: "All terminals menu" });
+
+    // Selecting an item starts the menu's 110 ms exit while the fading element
+    // stays mounted. The strip must still own exactly one control named
+    // "All terminals" in that window, so a second rapid interaction — the
+    // native selector used by the E2E suite — resolves unambiguously.
+    await picker.click();
+    await userEvent.keyboard("{Home}{Enter}");
+    expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
+    await picker.click();
+    await expect.element(menu).toBeVisible();
+    expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
+
+    // Keyboard navigation still lands on the active item after the reopen.
+    await expect.element(menu.getByRole("menuitem", { name: /^Terminal 1 / })).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    await expect.element(menu.getByRole("menuitem", { name: /^Terminal 20 / })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(picker).toHaveFocus();
+
+    // Trigger-only toggling across the exit window reuses one menu and keeps
+    // keyboard focus moving back into it after the reopen.
+    await picker.click();
+    await expect.element(menu).toBeVisible();
+    await picker.click();
+    await expect.element(menu).not.toBeInTheDocument();
+    await picker.click();
+    await expect.element(menu).toBeVisible();
+    await expect.element(menu.getByRole("menuitem", { name: /^Terminal 1 / })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(picker).toHaveFocus();
   });
 
   it("traps dialog focus, closes on Escape, and restores the trigger", async () => {
@@ -975,41 +1014,26 @@ describe("critical UI in Chromium", () => {
     expect(getComputedStyle(input).outlineStyle).toBe("solid");
   });
 
-  it("reveals Settings categories as one form, cancels interrupted motion and respects reduced motion", async () => {
+  it("reveals Settings categories as one form and cancels interrupted motion", async () => {
     await page.viewport(1200, 720);
     mount(<SettingsFixture />);
     await expect.element(page.getByRole("searchbox", { name: "Search settings" })).toBeVisible();
-    const original = window.matchMedia.bind(window);
-    let reduced = false;
-    const media = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
-      const result = original(query);
-      if (query.includes("prefers-reduced-motion"))
-        Object.defineProperty(result, "matches", { value: reduced });
-      return result;
-    });
-    try {
-      const form = container!.querySelector("form")!;
-      const font = form.querySelector('input[type="number"]');
-      await page.getByRole("button", { name: "Terminal", exact: true }).click();
-      const first = form.getAnimations()[0];
-      expect(first).toBeDefined();
-      first.pause();
-      first.currentTime = 60;
-      expect(Number(getComputedStyle(form).opacity)).toBeLessThan(1);
-      expect(getComputedStyle(form).transform).not.toBe("none");
-      await page.getByRole("tab", { name: "Tabs & naming", exact: true }).click();
-      await expect.poll(() => first.playState).toBe("idle");
-      const panelAnimation = form.getAnimations()[0];
-      expect(panelAnimation).toBeDefined();
-      await page.getByRole("button", { name: "Logs & History", exact: true }).click();
-      await expect.poll(() => panelAnimation.playState).toBe("idle");
-      expect(form.querySelector('input[type="number"]')).toBe(font);
-      reduced = true;
-      await page.getByRole("button", { name: "General & Monitoring", exact: true }).click();
-      expect(form.getAnimations()).toHaveLength(0);
-    } finally {
-      media.mockRestore();
-    }
+    const form = container!.querySelector("form")!;
+    const font = form.querySelector('input[type="number"]');
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const first = form.getAnimations()[0];
+    expect(first).toBeDefined();
+    first.pause();
+    first.currentTime = 60;
+    expect(Number(getComputedStyle(form).opacity)).toBeLessThan(1);
+    expect(getComputedStyle(form).transform).not.toBe("none");
+    await page.getByRole("tab", { name: "Tabs & naming", exact: true }).click();
+    await expect.poll(() => first.playState).toBe("idle");
+    const panelAnimation = form.getAnimations()[0];
+    expect(panelAnimation).toBeDefined();
+    await page.getByRole("button", { name: "Logs & History", exact: true }).click();
+    await expect.poll(() => panelAnimation.playState).toBe("idle");
+    expect(form.querySelector('input[type="number"]')).toBe(font);
   });
 
   it.each([768, 1200])("integrates search and shell preferences at %ipx", async (width) => {
@@ -1185,13 +1209,12 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
   });
 
-  it("honors reduced motion while keeping dialog keyboard focus usable", async () => {
-    expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(true);
+  it("returns keyboard focus after dismissing an animated dialog", async () => {
     mount(<ModalFixture />);
     await page.getByRole("button", { name: "Open dialog" }).click();
     await expect.element(page.getByRole("dialog", { name: "Example dialog" })).toBeVisible();
     const modal = page.getByRole("dialog", { name: "Example dialog" }).element();
-    expect(parseFloat(getComputedStyle(modal).animationDuration)).toBeLessThanOrEqual(0.00001);
+    expect(getComputedStyle(modal).animationName).toBe("dialog-in");
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("button", { name: "Open dialog" })).toHaveFocus();
   });
