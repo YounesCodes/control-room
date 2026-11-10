@@ -175,7 +175,17 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "start_journal_stream":
       result = { streamId: "example-stream" };
-      setTimeout(() => args.output.onmessage(new TextEncoder().encode(journalOutput).buffer), 0);
+      // A followed journal the account may not read prints nothing on stdout;
+      // journalctl's hint arrives on stderr and becomes a stream notice.
+      setTimeout(() => {
+        if (state === "restricted")
+          listeners
+            .get("stream-notice")
+            ?.forEach((callback) =>
+              callback({ payload: { streamId: "example-stream", notice: "journal-restricted" } }),
+            );
+        else args.output.onmessage(new TextEncoder().encode(journalOutput).buffer);
+      }, 20);
       break;
     case "stop_log_stream":
       break;

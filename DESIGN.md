@@ -653,6 +653,8 @@ error lines with a margin bar, number color, and quiet tint; the filters say the
 levels come from a level the line states, then words in the message, not journal
 priority. Search highlights
 matches and counts them. The log region is keyboard-scrollable and not a live region.
+When the host hides entries, such as a journal the account cannot read, say so with a
+recovery action; never leave an empty stream to look like a quiet unit.
 
 Keep the command palette searchable and keyboard-operable. Make shortcuts
 discoverable through the palette, tooltips, or nearby hints. The full shortcut

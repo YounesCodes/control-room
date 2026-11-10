@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -9,13 +9,16 @@ import type {
   LogSourceSelection,
   SavedConnection,
   SystemdUnit,
+  StreamNoticeEvent,
   StreamStateEvent,
 } from "../types";
 
 let outputHandler: ((message: ArrayBuffer) => void) | undefined;
 const events = vi.hoisted(() => ({
   handler: null as ((event: { payload: StreamStateEvent }) => void) | null,
+  notice: null as ((event: { payload: StreamNoticeEvent }) => void) | null,
   dispose: vi.fn(),
+  disposeNotice: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -26,7 +29,11 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(async (_name: string, handler: typeof events.handler) => {
+  listen: vi.fn(async (name: string, handler: never) => {
+    if (name === "stream-notice") {
+      events.notice = handler;
+      return events.disposeNotice;
+    }
     events.handler = handler;
     return events.dispose;
   }),
@@ -227,6 +234,7 @@ describe("LogsPane reading position", () => {
     view.unmount();
     expect(api.stopLogStream).toHaveBeenCalledExactlyOnceWith("stream-a");
     expect(events.dispose).toHaveBeenCalledOnce();
+    expect(events.disposeNotice).toHaveBeenCalledOnce();
   });
 
   it("stops a stream whose start completes after the pane unmounts", async () => {
@@ -844,5 +852,107 @@ describe("LogsPane stream lifecycle while switching", () => {
     expect(await screen.findByText("[docker worker] stream started")).toBeTruthy();
     expect(screen.getByRole("log").textContent).not.toContain("REMOVED_CONTAINER_LINE");
     expect(api.startDockerLogStream.mock.calls.at(-1)?.[1]).toBe("container-b");
+  });
+});
+
+describe("LogsPane restricted journal access", () => {
+  const cron: SystemdUnit = { ...service, id: "cron.service", description: "Cron" };
+  const warning = /can’t read the system journal/;
+  let streams = 0;
+
+  function mount(windowsHost = false) {
+    return render(
+      <LogsPane
+        connection={connection}
+        windowsHost={windowsHost}
+        settings={settings}
+        logTailOptions={[200]}
+        servicesCache={{ ...servicesCache, items: [service, cron] }}
+        containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+        selectedSource={{ type: "systemd", id: service.id }}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={vi.fn()}
+      />,
+    );
+  }
+  const notice = (streamId: string) =>
+    act(async () => events.notice?.({ payload: { streamId, notice: "journal-restricted" } }));
+  async function startRestricted() {
+    mount();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+    await chunk("-- No entries --\n");
+    await notice("stream-1");
+    return screen.findByText(warning);
+  }
+
+  beforeEach(() => {
+    streams = 0;
+    outputHandler = undefined;
+    events.handler = null;
+    events.notice = null;
+    api.startJournalStream.mockImplementation(async () => ({ streamId: `stream-${++streams}` }));
+    api.stopLogStream.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("explains an empty journal the account is not allowed to read", async () => {
+    const banner = await startRestricted();
+    expect(banner.closest("[role='status']")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry with sudo" })).toBeTruthy();
+    expect(await screen.findByText("-- No entries --")).toBeTruthy();
+  });
+
+  it("keeps the warning after a one-shot read ends", async () => {
+    await startRestricted();
+    await act(async () =>
+      events.handler?.({ payload: { streamId: "stream-1", state: "stopped", reason: null } }),
+    );
+    await screen.findByText("Stopped");
+    expect(screen.getByText(warning)).toBeTruthy();
+  });
+
+  it("rereads with sudo into a fresh view and clears the warning", async () => {
+    await startRestricted();
+    await userEvent.click(screen.getByRole("button", { name: "Retry with sudo" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/password/i), "example-password");
+    await userEvent.click(within(dialog).getByRole("button", { name: /retry|continue|run|ok/i }));
+    await waitFor(() => expect(api.startJournalStream).toHaveBeenCalledTimes(2));
+    expect(api.startJournalStream.mock.calls.at(-1)?.[4]).toBe("example-password");
+    await screen.findByText("Streaming");
+    expect(screen.queryByText(warning)).toBeNull();
+    expect(screen.queryByText("-- No entries --")).toBeNull();
+    expect(screen.getAllByText("[systemd ssh.service] stream started")).toHaveLength(1);
+  });
+
+  it("applies a notice that arrives before the start request returns", async () => {
+    let finish!: (value: { streamId: string }) => void;
+    api.startJournalStream.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    mount();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Starting…");
+    await notice("early-stream");
+    expect(screen.queryByText(warning)).toBeNull();
+    await act(async () => finish({ streamId: "early-stream" }));
+    expect(await screen.findByText(warning)).toBeTruthy();
+  });
+
+  it("ignores notices from other streams and clears on another unit", async () => {
+    await startRestricted();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Unit" }), "cron.service");
+    await screen.findByText("[systemd cron.service] stream started");
+    expect(screen.queryByText(warning)).toBeNull();
+    await notice("stream-1");
+    await notice("unrelated-stream");
+    expect(screen.queryByText(warning)).toBeNull();
+    await notice("stream-2");
+    expect(await screen.findByText(warning)).toBeTruthy();
   });
 });

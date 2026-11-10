@@ -25,7 +25,7 @@ use crate::{
         ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
         DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, FirewallRule,
         FirewallStatus, HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
-        SavedConnection, StreamStarted, StreamStateEvent, SystemdUnit,
+        SavedConnection, StreamNoticeEvent, StreamStarted, StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, validate_container_id,
@@ -42,6 +42,11 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
 const MAX_STRUCTURED_QUEUE_WAIT: Duration = Duration::from_secs(4);
 const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
+/// journalctl's stderr hint (under LC_ALL=C) when the account may only read
+/// its own entries. A followed journal never exits, so exit diagnostics would
+/// never show it; the stream reports it as soon as it appears.
+const JOURNAL_RESTRICTED_HINT: &[u8] = b"not seeing messages from other users and the system";
+pub const JOURNAL_RESTRICTED_NOTICE: &str = "journal-restricted";
 const MAX_FIREWALL_RULES: usize = 200;
 const MAX_CONNECTION_ROWS: usize = 4000;
 const MAX_CONNECTION_GROUPS: usize = 200;
@@ -1861,7 +1866,13 @@ impl StreamManager {
             }
         });
 
-        let stderr_reader = thread::spawn(move || read_stream_diagnostics(stderr));
+        let notice_app = app.clone();
+        let notice_id = stream_id.clone();
+        let stderr_reader = thread::spawn(move || {
+            read_stream_diagnostics(stderr, |notice| {
+                emit_stream_notice(&notice_app, &notice_id, notice)
+            })
+        });
         let wait_id = stream_id.clone();
         let wait_app = app;
         let streams = self.streams.clone();
@@ -1953,15 +1964,27 @@ fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
     )
 }
 
-fn read_stream_diagnostics(mut reader: impl Read) -> Vec<u8> {
+fn read_stream_diagnostics(
+    mut reader: impl Read,
+    mut on_notice: impl FnMut(&'static str),
+) -> Vec<u8> {
     let mut diagnostics = Vec::new();
     let mut buffer = [0_u8; 16 * 1024];
+    let mut restricted = false;
     while let Ok(count) = reader.read(&mut buffer) {
         if count == 0 {
             break;
         }
         let remaining = STREAM_DIAGNOSTIC_LIMIT.saturating_sub(diagnostics.len());
         diagnostics.extend_from_slice(&buffer[..count.min(remaining)]);
+        if !restricted
+            && diagnostics
+                .windows(JOURNAL_RESTRICTED_HINT.len())
+                .any(|window| window == JOURNAL_RESTRICTED_HINT)
+        {
+            restricted = true;
+            on_notice(JOURNAL_RESTRICTED_NOTICE);
+        }
     }
     diagnostics
 }
@@ -1980,6 +2003,16 @@ fn classify_stream_exit(
         return ("stopped", None);
     }
     ("error", Some(classify_failure(exit_code, diagnostics)))
+}
+
+fn emit_stream_notice(app: &AppHandle, stream_id: &str, notice: &str) {
+    let _ = app.emit(
+        "stream-notice",
+        StreamNoticeEvent {
+            stream_id: stream_id.into(),
+            notice: notice.into(),
+        },
+    );
 }
 
 fn emit_stream_state(app: &AppHandle, stream_id: &str, state: &str, reason: Option<String>) {
@@ -2929,12 +2962,42 @@ esac
 
         let total = STREAM_DIAGNOSTIC_LIMIT * 3;
         let read = Arc::new(AtomicUsize::new(0));
-        let diagnostics = read_stream_diagnostics(CountingReader {
-            inner: Cursor::new(vec![b'x'; total]),
-            read: read.clone(),
-        });
+        let diagnostics = read_stream_diagnostics(
+            CountingReader {
+                inner: Cursor::new(vec![b'x'; total]),
+                read: read.clone(),
+            },
+            |_| panic!("no notice expected"),
+        );
         assert_eq!(diagnostics.len(), STREAM_DIAGNOSTIC_LIMIT);
         assert_eq!(read.load(Ordering::SeqCst), total);
+    }
+
+    #[test]
+    fn restricted_journal_hint_is_reported_once_while_the_stream_runs() {
+        /// Delivers a few bytes per read, as SSH does, so the hint spans reads.
+        struct Trickle(Cursor<Vec<u8>>);
+        impl Read for Trickle {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let limit = buffer.len().min(7);
+                self.0.read(&mut buffer[..limit])
+            }
+        }
+        let stderr = b"Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n      Pass -q to turn off this notice.\nHint: You are currently not seeing messages from other users and the system.\n";
+        let mut notices = Vec::new();
+        let diagnostics =
+            read_stream_diagnostics(Trickle(Cursor::new(stderr.to_vec())), |notice| {
+                notices.push(notice)
+            });
+        assert_eq!(notices, [JOURNAL_RESTRICTED_NOTICE]);
+        assert_eq!(diagnostics, stderr);
+
+        let mut unrelated = Vec::new();
+        read_stream_diagnostics(
+            Cursor::new(b"Failed to add filter for units: No data available\n".to_vec()),
+            |notice| unrelated.push(notice),
+        );
+        assert!(unrelated.is_empty());
     }
 
     #[test]

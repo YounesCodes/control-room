@@ -32,6 +32,7 @@ import type {
   LogSourceSelection,
   LogSourceType,
   SavedConnection,
+  StreamNoticeEvent,
   StreamStateEvent,
   SystemdUnit,
 } from "../types";
@@ -177,6 +178,8 @@ export function LogsPane({
   const [unreadLines, setUnreadLines] = useState(0);
   const [wrapLines, setWrapLines] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // journalctl reported that this account cannot see system entries.
+  const [journalRestricted, setJournalRestricted] = useState(false);
   const [sudoPurpose, setSudoPurpose] = useState<SudoPurpose | null>(null);
 
   const activeBufferRef = useRef(new BoundedLogBuffer());
@@ -197,6 +200,7 @@ export function LogsPane({
   // Whether the reader wants a stream running, independent of render timing.
   const wantsStreamRef = useRef(false);
   const earlyStateRef = useRef(new Map<string, StreamStateEvent>());
+  const earlyNoticeRef = useRef(new Set<string>());
   const outputRef = useRef<HTMLDivElement>(null);
   const previousLastLineRef = useRef(0);
   const servicesCacheRef = useRef(servicesCache);
@@ -281,6 +285,20 @@ export function LogsPane({
     }
   }
 
+  function applyStreamNotice(payload: StreamNoticeEvent) {
+    if (payload.notice !== "journal-restricted") return;
+    if (payload.streamId === streamIdRef.current) setJournalRestricted(true);
+    else if (startingRef.current) {
+      const notices = earlyNoticeRef.current;
+      notices.add(payload.streamId);
+      while (notices.size > MAX_EARLY_STREAM_EVENTS) {
+        const oldest = notices.values().next().value;
+        if (oldest === undefined) break;
+        notices.delete(oldest);
+      }
+    }
+  }
+
   async function loadSources(
     type: LogSourceType,
     force = false,
@@ -336,6 +354,7 @@ export function LogsPane({
   useEffect(() => {
     let listenerDisposed = false;
     let unlisten: (() => void) | undefined;
+    let unlistenNotice: (() => void) | undefined;
     void listen<StreamStateEvent>("stream-state-changed", ({ payload }) => {
       applyStreamState(payload);
     })
@@ -346,9 +365,18 @@ export function LogsPane({
       .catch((caught) => {
         if (!listenerDisposed) setError(`Log event listener failed: ${errorMessage(caught)}`);
       });
+    void listen<StreamNoticeEvent>("stream-notice", ({ payload }) => {
+      applyStreamNotice(payload);
+    })
+      .then((dispose) => {
+        if (listenerDisposed) dispose();
+        else unlistenNotice = dispose;
+      })
+      .catch(() => undefined);
     return () => {
       listenerDisposed = true;
       unlisten?.();
+      unlistenNotice?.();
     };
   }, []);
 
@@ -438,6 +466,7 @@ export function LogsPane({
     if (fresh) clearBuffers();
     const generation = ++streamGenerationRef.current;
     setError(null);
+    setJournalRestricted(false);
     setSudoPurpose(null);
     setPaused(false);
     pausedRef.current = false;
@@ -446,6 +475,7 @@ export function LogsPane({
     setStreamStatus("starting");
     startingRef.current = true;
     earlyStateRef.current.clear();
+    earlyNoticeRef.current.clear();
     decoderRef.current = new TextDecoder();
     const targetItems = target.type === "systemd" ? servicesCache.items : containersCache.items;
     activeBufferRef.current.append(
@@ -485,6 +515,7 @@ export function LogsPane({
       streamIdRef.current = started.streamId;
       startingRef.current = false;
       setStreamStatus("running");
+      if (earlyNoticeRef.current.delete(started.streamId)) setJournalRestricted(true);
       const earlyState = earlyStateRef.current.get(started.streamId);
       if (earlyState) {
         earlyStateRef.current.delete(started.streamId);
@@ -520,6 +551,7 @@ export function LogsPane({
   function showSource(type: LogSourceType, id: string) {
     clearBuffers();
     setError(null);
+    setJournalRestricted(false);
     if (!wantsStreamRef.current) return;
     if (id) void start(null, { type, id, tail, follow }, true);
     else void stopStream();
@@ -770,6 +802,23 @@ export function LogsPane({
       {sourceCache.error && (
         <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
       )}
+      {journalRestricted && (
+        <div className="inline-warning" role="status">
+          <span>
+            This account can’t read the system journal, so this unit’s entries may be missing. Use
+            sudo, or add the account to the adm or systemd-journal group.
+          </span>
+          {!windowsHost && (
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => setSudoPurpose("stream")}
+            >
+              Retry with sudo
+            </button>
+          )}
+        </div>
+      )}
       {error && (
         <div className="inline-error" role="alert">
           <span>{error}</span>
@@ -941,7 +990,9 @@ export function LogsPane({
           connectionLabel={connection.displayName}
           onClose={() => setSudoPurpose(null)}
           onSubmit={(password) =>
-            sudoPurpose === "sources" ? loadSources("docker", true, password) : start(password)
+            sudoPurpose === "sources"
+              ? loadSources("docker", true, password)
+              : start(password, undefined, true)
           }
         />
       )}

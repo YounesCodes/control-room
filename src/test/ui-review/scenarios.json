@@ -61,10 +61,11 @@
       }
     },
     "logs": {
-      "states": ["stopped", "populated", "errors", "search"],
+      "states": ["stopped", "populated", "errors", "search", "restricted"],
       "ready": ".app-shell",
       "prepare": {
         "populated": [{ "role": "button", "name": "Start" }],
+        "restricted": [{ "role": "button", "name": "Start" }],
         "errors": [
           { "role": "button", "name": "Start" },
           { "selector": ".log-line[data-level='error']", "wait": true },
@@ -80,7 +81,8 @@
         "stopped": ".logs-page .log-empty",
         "populated": ".logs-page .log-line:nth-child(49)",
         "errors": ".log-level-filter [data-level='error'][aria-pressed='true']",
-        "search": ".logs-page .log-match-count"
+        "search": ".logs-page .log-match-count",
+        "restricted": ".logs-page .inline-warning[role='status']"
       }
     }
   }
