@@ -26,21 +26,22 @@ if (state === "overflow") {
   units[0].id = `example-${"long-unit-name-".repeat(12)}worker.service`;
   units[0].description = "Synthetic long description. ".repeat(15);
 }
+const workspaceView = { systemd: "services", scratchpad: "terminal" }[scenario] as
+  "services" | "terminal" | undefined;
 const workspace: PersistedWorkspaceState = {
-  workspaces:
-    scenario === "systemd"
-      ? [
-          {
-            id: "example-workspace",
-            connectionId: host.id,
-            localShellId: null,
-            label: null,
-            view: "services",
-            historyPaused: false,
-          },
-        ]
-      : [],
-  activeWorkspaceId: scenario === "systemd" ? "example-workspace" : null,
+  workspaces: workspaceView
+    ? [
+        {
+          id: "example-workspace",
+          connectionId: host.id,
+          localShellId: null,
+          label: null,
+          view: workspaceView,
+          historyPaused: false,
+        },
+      ]
+    : [],
+  activeWorkspaceId: workspaceView ? "example-workspace" : null,
   terminalGroups: [],
   terminalLayout: null,
 };
@@ -129,6 +130,20 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "acknowledge_session_output":
     case "close_session":
     case "write_session":
+      break;
+    case "get_scratchpad_note":
+      result = {
+        id: `example-${args.scope}-note`,
+        scope: args.scope,
+        ownerId: args.ownerId,
+        connectionId: args.connectionId ?? null,
+        text:
+          args.scope === "global"
+            ? "Shared reminder for every terminal"
+            : "sudo journalctl -u worker.service -n 200\nsystemctl status backup.service",
+        createdAt: "2026-11-01T10:00:00Z",
+        updatedAt: "2026-11-01T10:00:00Z",
+      };
       break;
     case "list_services":
       serviceReads++;

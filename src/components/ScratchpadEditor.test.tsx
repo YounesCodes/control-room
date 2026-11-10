@@ -47,6 +47,18 @@ const connection: SavedConnection = {
   updatedAt: "",
   lastConnectedAt: null,
 };
+/** The editor renders read-only while its note loads; wait until it accepts edits. */
+async function loadedNote(label: string) {
+  const editor = await screen.findByLabelText(label);
+  await waitFor(() => expect(editor).toHaveProperty("readOnly", false));
+  return editor;
+}
+
+/** The visible note's save state; the other note stays mounted but hidden. */
+function savedLocally() {
+  return waitFor(() => expect(screen.getByRole("status").textContent).toBe("Saved locally"));
+}
+
 function savedNote(input: ScratchpadNoteInput): ScratchpadNote {
   return {
     id: "33333333-3333-4333-8333-333333333333",
@@ -66,7 +78,7 @@ describe("Scratchpad note editing", () => {
         }),
     );
     render(<NotePopup connection={connection} />);
-    const editor = await screen.findByLabelText("Connection note");
+    const editor = await loadedNote("Connection note");
     fireEvent.change(editor, { target: { value: "first version" } });
     await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalledTimes(1), { timeout: 2000 });
     fireEvent.change(editor, { target: { value: "newer version" } });
@@ -100,11 +112,11 @@ describe("Scratchpad note editing", () => {
       );
       api.deleteScratchpadNote.mockRejectedValueOnce(new Error("database locked"));
       render(<NotePopup connection={connection} />);
-      const editor = await screen.findByLabelText("Connection note");
+      const editor = await loadedNote("Connection note");
       fireEvent.change(editor, { target: { value: "keep newer text" } });
       if (saveState === "saved") {
         await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalled(), { timeout: 2_000 });
-        await screen.findByText("Saved locally");
+        await savedLocally();
       }
       // Keep queued deletion in one event turn so it cannot race the debounce.
       fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
@@ -132,7 +144,7 @@ describe("Scratchpad note editing", () => {
 
   it("autosaves plain text without rendering pasted HTML", async () => {
     render(<NotePopup connection={connection} />);
-    const editor = await screen.findByLabelText("Connection note");
+    const editor = await loadedNote("Connection note");
     const text = '<img src=x onerror="alert(1)">\n<script>alert(2)</script>';
     fireEvent.change(editor, { target: { value: text } });
 
@@ -145,7 +157,7 @@ describe("Scratchpad note editing", () => {
       connectionId: connection.id,
       text,
     });
-    await screen.findByText("Saved locally");
+    await savedLocally();
     expect(window.localStorage.getItem(scratchpadDraftKey("connection", connection.id))).toBeNull();
   });
 
@@ -153,7 +165,7 @@ describe("Scratchpad note editing", () => {
     const user = userEvent.setup();
     api.saveScratchpadNote.mockRejectedValueOnce(new Error("disk full"));
     render(<NotePopup connection={connection} />);
-    const editor = await screen.findByLabelText("Connection note");
+    const editor = await loadedNote("Connection note");
     fireEvent.change(editor, { target: { value: "Do not lose this" } });
 
     await screen.findByText(/Autosave failed.*disk full/, {}, { timeout: 2_000 });
@@ -161,7 +173,7 @@ describe("Scratchpad note editing", () => {
       "Do not lose this",
     );
     await user.click(screen.getByRole("button", { name: "Retry save" }));
-    await screen.findByText("Saved locally");
+    await savedLocally();
     expect(api.saveScratchpadNote).toHaveBeenCalledTimes(2);
     expect(window.localStorage.getItem(scratchpadDraftKey("connection", connection.id))).toBeNull();
   });
@@ -172,15 +184,16 @@ describe("Scratchpad note editing", () => {
     api.scratchpadNote.mockRejectedValueOnce(new Error("database busy"));
     render(<NotePopup connection={connection} />);
 
-    expect(await screen.findByLabelText("Connection note")).toHaveProperty(
-      "value",
-      "Recovered draft",
-    );
+    expect(await loadedNote("Connection note")).toHaveProperty("value", "Recovered draft");
     await new Promise((resolve) => window.setTimeout(resolve, 700));
     expect(api.saveScratchpadNote).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Retry load" }));
-    await waitFor(() => expect(api.scratchpadNote).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        api.scratchpadNote.mock.calls.filter(([scope]) => scope === "connection"),
+      ).toHaveLength(2),
+    );
     await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalled(), { timeout: 2_000 });
   });
 
@@ -195,7 +208,7 @@ describe("Scratchpad note editing", () => {
       }),
     );
     render(<NotePopup connection={connection} />);
-    const editor = await screen.findByLabelText("Connection note");
+    const editor = await loadedNote("Connection note");
 
     fireEvent.change(editor, { target: { value: "Original tex" } });
     fireEvent.keyDown(editor, { key: "z", ctrlKey: true });
@@ -225,7 +238,7 @@ describe("Scratchpad note editing", () => {
           : null,
     );
     render(<NotePopup connection={connection} />);
-    await screen.findByLabelText("Connection note");
+    await loadedNote("Connection note");
     await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
 
     expect(await screen.findByLabelText("Global note")).toHaveProperty("value", "Shared reminder");
@@ -240,5 +253,50 @@ describe("Scratchpad note editing", () => {
     await waitFor(() =>
       expect(api.deleteScratchpadNote).toHaveBeenCalledWith("global", "global", null),
     );
+  });
+
+  it("switches notes in place without reloading or dropping unsaved edits", async () => {
+    const user = userEvent.setup();
+    api.scratchpadNote.mockImplementation(
+      async (scope: string, ownerId: string): Promise<ScratchpadNote | null> =>
+        savedNote({
+          scope: scope as ScratchpadNoteInput["scope"],
+          ownerId,
+          connectionId: scope === "connection" ? ownerId : null,
+          text: scope === "global" ? "Shared reminder" : "Host reminder",
+        }),
+    );
+    render(<NotePopup connection={connection} />);
+    const connectionEditor = await loadedNote("Connection note");
+    const globalEditor = await loadedNote("Global note");
+    fireEvent.change(connectionEditor, { target: { value: "Host reminder, edited" } });
+
+    await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
+    // Already loaded: the switch shows the global note at once and focuses it.
+    expect(screen.getByRole("textbox", { name: "Global note" })).toBe(globalEditor);
+    expect(globalEditor).toHaveProperty("value", "Shared reminder");
+    expect(document.activeElement).toBe(globalEditor);
+    expect(screen.queryByRole("textbox", { name: "Connection note" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Connection note for Host A" }));
+    expect(screen.getByRole("textbox", { name: "Connection note" })).toBe(connectionEditor);
+    expect(connectionEditor).toHaveProperty("value", "Host reminder, edited");
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", false);
+    expect(api.scratchpadNote).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the editor layout read-only while a note loads", async () => {
+    const loads: ((note: ScratchpadNote | null) => void)[] = [];
+    api.scratchpadNote.mockImplementation(() => new Promise((resolve) => loads.push(resolve)));
+    render(<NotePopup connection={connection} />);
+    const editor = screen.getByRole("textbox", { name: "Connection note" });
+    expect(editor).toHaveProperty("readOnly", true);
+    expect(screen.getByRole("status").textContent).toBe("Loading…");
+    fireEvent.change(editor, { target: { value: "typed too early" } });
+    expect(editor).toHaveProperty("value", "");
+
+    for (const load of loads) load(null);
+    await waitFor(() => expect(editor).toHaveProperty("readOnly", false));
+    expect(screen.getByRole("textbox", { name: "Connection note" })).toBe(editor);
   });
 });

@@ -3,6 +3,8 @@ import { ClipboardCopy, Globe2, SquareTerminal, TerminalSquare } from "lucide-re
 import { ScratchpadEditor } from "./ScratchpadEditor";
 import type { ScratchpadScope } from "../types";
 
+type NoteSelection = "terminal" | "global";
+
 /**
  * The Scratchpad popover anchored to the terminal action strip.
  *
@@ -38,10 +40,15 @@ export function TerminalScratchpad({
   closing?: boolean;
   style?: CSSProperties;
 }) {
-  const [selection, setSelection] = useState<"terminal" | "global">("terminal");
-  const scope = selection === "global" ? "global" : terminalScope;
-  const [text, setText] = useState("");
+  const [selection, setSelection] = useState<NoteSelection>("terminal");
+  const [texts, setTexts] = useState<Record<NoteSelection, string>>({ terminal: "", global: "" });
+  const text = texts[selection];
   const rootRef = useRef<HTMLDivElement>(null);
+  const notesRef = useRef<Record<NoteSelection, HTMLDivElement | null>>({
+    terminal: null,
+    global: null,
+  });
+  const shownSelection = useRef(selection);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const terminalLabel = terminalScope === "local" ? "Terminal" : "Connection";
@@ -49,8 +56,28 @@ export function TerminalScratchpad({
     terminalScope === "local"
       ? `Terminal note for ${ownerLabel}`
       : `Connection note for ${ownerLabel}`;
-  const scopedOwnerId = scope === "global" ? "global" : ownerId;
-  useLayoutEffect(() => setText(""), [scope, scopedOwnerId]);
+  const terminalNoteKey = `${terminalScope}:${ownerId}`;
+  useLayoutEffect(() => setTexts((current) => ({ ...current, terminal: "" })), [terminalNoteKey]);
+
+  useLayoutEffect(() => {
+    // Both notes stay mounted, so a switch only reveals the other editor; it
+    // never waits on a load. The revealed note fades up while the switch's
+    // fill slides across, and takes focus as a freshly opened note would.
+    if (shownSelection.current === selection) return;
+    shownSelection.current = selection;
+    const note = notesRef.current[selection];
+    note?.querySelector("textarea")?.focus();
+    if (!note?.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const styles = getComputedStyle(document.documentElement);
+    const time = /^(\d*\.?\d+)(ms|s)$/.exec(styles.getPropertyValue("--motion-med").trim());
+    // Opacity only: shifting the note would push its border into the
+    // popover's scroll edge and flash a scrollbar mid-switch.
+    const animation = note.animate([{ opacity: 0.35 }, { opacity: 1 }], {
+      duration: time ? Number(time[1]) * (time[2] === "s" ? 1000 : 1) : 160,
+      easing: styles.getPropertyValue("--ease").trim() || "ease-out",
+    });
+    return () => animation.cancel();
+  }, [selection]);
 
   useEffect(() => {
     // Clicks outside the popover close it, except on its own trigger button,
@@ -71,7 +98,7 @@ export function TerminalScratchpad({
     // when a quick reopen cancels the closing transition, since the popover
     // element stayed mounted and autoFocus never runs a second time.
     if (closing) return;
-    rootRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    notesRef.current[shownSelection.current]?.querySelector("textarea")?.focus();
   }, [closing]);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -106,7 +133,7 @@ export function TerminalScratchpad({
       <div className="scratchpad-popover-scope" role="group" aria-label="Scratchpad scope">
         <button
           type="button"
-          aria-pressed={scope === terminalScope}
+          aria-pressed={selection === "terminal"}
           aria-label={terminalAriaLabel}
           title={ownerLabel}
           onClick={() => setSelection("terminal")}
@@ -120,7 +147,7 @@ export function TerminalScratchpad({
         </button>
         <button
           type="button"
-          aria-pressed={scope === "global"}
+          aria-pressed={selection === "global"}
           aria-label="Global note for all connections"
           onClick={() => setSelection("global")}
         >
@@ -128,13 +155,37 @@ export function TerminalScratchpad({
           <span>Global</span>
         </button>
       </div>
-      <ScratchpadEditor
-        key={`${scope}:${scopedOwnerId}`}
-        scope={scope}
-        ownerId={scopedOwnerId}
-        connectionId={scope === "connection" ? ownerId : null}
-        onTextChange={setText}
-      />
+      <div
+        ref={(node) => {
+          notesRef.current.terminal = node;
+        }}
+        className="scratchpad-popover-note"
+        hidden={selection !== "terminal"}
+      >
+        <ScratchpadEditor
+          key={terminalNoteKey}
+          scope={terminalScope}
+          ownerId={ownerId}
+          connectionId={terminalScope === "connection" ? ownerId : null}
+          onTextChange={(terminalText) =>
+            setTexts((current) => ({ ...current, terminal: terminalText }))
+          }
+        />
+      </div>
+      <div
+        ref={(node) => {
+          notesRef.current.global = node;
+        }}
+        className="scratchpad-popover-note"
+        hidden={selection !== "global"}
+      >
+        <ScratchpadEditor
+          scope="global"
+          ownerId="global"
+          connectionId={null}
+          onTextChange={(globalText) => setTexts((current) => ({ ...current, global: globalText }))}
+        />
+      </div>
       <div className="scratchpad-popover-actions">
         <button
           className="secondary-button"

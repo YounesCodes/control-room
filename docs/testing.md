@@ -64,9 +64,11 @@ Compact covers the smaller window target from PR #188, even before that change
 lands. Captures show the current branch's layout without scaling or hiding its
 clipping. Settings starts on General & Monitoring. Systemd supports
 `populated`, `empty`, `loading`, `error`,
-`stale`, and `overflow`; populated states open the real unit inspector. Data is
+`stale`, and `overflow`; populated states open the real unit inspector.
+Scratchpad opens the popover on a remote terminal in `populated` and switches it
+to the global note in `global`. Data is
 synthetic and network requests outside the fixture server are blocked. No local
-environment files are loaded. Both scenarios render the real `App`, including
+environment files are loaded. Every scenario renders the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the
 app's own full-window Settings layout. Manifests record measured shell and
 pane bounds; captures fail if the fixture bypasses the expected shell geometry.
@@ -77,8 +79,9 @@ The CLI prints a JSON line identifying each manifest under the ignored directory
 PNG paths, and verification limits. A failed capture writes its error there;
 `test-results/ui-review/session.json` also records startup failures and links the
 latest session's manifests.
-Still captures use reduced motion. Motion uses normal motion and triggers the real
-Settings category reveal. It saves before/start/midpoint/after PNGs with timeline
+Still captures use reduced motion. Motion uses normal motion and triggers the
+scenario's real transition: the Settings category reveal or the Scratchpad note
+switch. It saves before/start/midpoint/after PNGs with timeline
 positions and computed poses, failing if no changing transition is found. The
 animation is paused at each sample for reproducibility. These frames prove visible
 poses, not frame pacing, dropped frames, or real-time performance.
