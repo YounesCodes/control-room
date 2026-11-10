@@ -517,7 +517,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const menuBox = menu.element().getBoundingClientRect();
     const triggerBox = trigger.element().getBoundingClientRect();
     expect(menuBox.top).toBeCloseTo(triggerBox.bottom + 6, 0);
-    expect(window.innerWidth - menuBox.right).toBeGreaterThanOrEqual(8);
+    expect(window.innerWidth - menuBox.right).toBeGreaterThanOrEqual(12);
     expect(menuBox.left).toBeGreaterThanOrEqual(0);
     // The menu opens with its first row active — highlighted, with its brand
     // revealed, like a native menu's selection — while the others rest neutral.
@@ -650,14 +650,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .poll(() => popup.element().getBoundingClientRect().top)
         .toBeCloseTo(trigger.element().getBoundingClientRect().bottom + 6, 0);
       expect(popup.element().getBoundingClientRect().right).toBeCloseTo(
-        Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 8),
+        Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 12),
         0,
       );
       await page.viewport(1040, 680);
       await expect
         .poll(() => popup.element().getBoundingClientRect().right)
         .toBeCloseTo(
-          Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 8),
+          Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 12),
           0,
         );
       const node = popup.element();

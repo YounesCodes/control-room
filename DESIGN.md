@@ -173,7 +173,8 @@ Scratchpad opens from the terminal toolbar or command palette as a compact
 overlay anchored to its own button. Keep a gutter from the window edge and
 reposition it when the window resizes. A remote terminal edits its connection
 note, a local terminal edits its own tab's note, and both can switch to the shared
-global note. Follow the selected split pane without mixing note owners, and
+global note. Switching between them never reloads or resizes the popover.
+Follow the selected split pane without mixing note owners, and
 retain Global selection across pane changes. Keep autosave, recovery drafts,
 Undo, Redo, Clear, and confirmed Delete in this editor. Pasting note text never
 runs it. Restore legacy Scratchpad pages to Terminal without changing saved notes.

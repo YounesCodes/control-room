@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Eraser, Redo2, RefreshCw, Trash2, Undo2 } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { ErrorState, LoadingState } from "./PanelState";
+import { ErrorState } from "./PanelState";
 import { api, errorMessage } from "../lib/api";
 import {
   MAX_SCRATCHPAD_CHARS,
@@ -91,6 +91,13 @@ export function ScratchpadEditor({
       mountedRef.current = false;
     };
   }, [connectionId, loadVersion, ownerId, scope]);
+
+  useLayoutEffect(() => {
+    // The note arrives after the textarea mounted and may already hold focus,
+    // where assigning its value leaves the caret at the end. Open it at the
+    // top instead, like a note that was there from the start.
+    if (loaded) textareaRef.current?.setSelectionRange(0, 0);
+  }, [loaded]);
 
   function setEditedText(nextText: string) {
     const currentText = textRef.current;
@@ -243,8 +250,9 @@ export function ScratchpadEditor({
     }
   }
 
-  if (!loaded) return <LoadingState label="Loading Scratchpad…" />;
-  if (loadFailed && !text && error) {
+  // A loading note keeps the editor's own layout, read-only, so opening the
+  // popover or switching its note never swaps in a differently sized panel.
+  if (loaded && loadFailed && !text && error) {
     return (
       <ErrorState
         message={error}
@@ -261,13 +269,15 @@ export function ScratchpadEditor({
         : "Global note";
   const saveState = (
     <span className={`scratchpad-save-state scratchpad-save-${status}`} role="status">
-      {status === "saving"
-        ? "Saving…"
-        : status === "unsaved"
-          ? "Waiting to save"
-          : status === "error"
-            ? "Not saved"
-            : "Saved locally"}
+      {!loaded
+        ? "Loading…"
+        : status === "saving"
+          ? "Saving…"
+          : status === "unsaved"
+            ? "Waiting to save"
+            : status === "error"
+              ? "Not saved"
+              : "Saved locally"}
     </span>
   );
   return (
@@ -339,10 +349,14 @@ export function ScratchpadEditor({
         aria-label={scopeLabel}
         value={text}
         maxLength={MAX_SCRATCHPAD_CHARS}
+        readOnly={!loaded}
+        aria-busy={!loaded || undefined}
         autoFocus
-        onChange={(event) => setEditedText(event.target.value)}
+        onChange={(event) => {
+          if (loaded) setEditedText(event.target.value);
+        }}
         onKeyDown={(event) => {
-          if (!(event.ctrlKey || event.metaKey)) return;
+          if (!loaded || !(event.ctrlKey || event.metaKey)) return;
           const key = event.key.toLowerCase();
           if (key === "z") {
             event.preventDefault();
@@ -353,7 +367,13 @@ export function ScratchpadEditor({
             redoEdit();
           }
         }}
-        placeholder={scope === "global" ? "Notes for every terminal…" : "Notes for this terminal…"}
+        placeholder={
+          !loaded
+            ? ""
+            : scope === "global"
+              ? "Notes for every terminal…"
+              : "Notes for this terminal…"
+        }
         spellCheck={false}
       />
       {error && <p className="inline-error">{error}</p>}

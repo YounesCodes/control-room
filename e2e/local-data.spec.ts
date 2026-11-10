@@ -9,14 +9,16 @@ import {
   openOfflineConnection,
   openScratchpad,
   restartApp,
+  scratchpadNote,
   runtime,
   terminalCommand,
 } from "./helpers";
 import type { HistoryEntry, ScratchpadNote, PersistedWorkspaceState } from "../src/types";
 
 async function note(text: string) {
-  await $("textarea[aria-label='Connection note']").setValue(text);
-  await expect($(".scratchpad-save-state")).toHaveText("Saved locally");
+  const shown = await scratchpadNote();
+  await shown.$("textarea[aria-label='Connection note']").setValue(text);
+  await expect(shown.$(".scratchpad-save-state")).toHaveText("Saved locally");
 }
 
 describe("Local data in remote Workspaces", () => {
@@ -27,8 +29,9 @@ describe("Local data in remote Workspaces", () => {
     await openScratchpad();
     await note("First connection note");
     await $("aria/Global note for all connections").click();
-    await $("textarea[aria-label='Global note']").setValue("Shared global note");
-    await expect($(".scratchpad-save-state")).toHaveText("Saved locally");
+    const global = await scratchpadNote();
+    await global.$("textarea[aria-label='Global note']").setValue("Shared global note");
+    await expect(global.$(".scratchpad-save-state")).toHaveText("Saved locally");
     await openOfflineConnection("Second offline host");
     await openScratchpad();
     await $("aria/Connection note for Second offline host").click();
@@ -57,14 +60,15 @@ describe("Local data in remote Workspaces", () => {
     await openOfflineConnection("Note owner");
     await openScratchpad();
     await note("Keep this note");
-    await $("aria/Clear text").click();
+    const shown = await scratchpadNote();
+    await shown.$("aria/Clear text").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("");
-    await $("aria/Undo").click();
+    await shown.$("aria/Undo").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("Keep this note");
-    await $(".scratchpad-popover").$("aria/Delete note").click();
+    await shown.$("aria/Delete note").click();
     await $("button=Cancel").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("Keep this note");
-    await $(".scratchpad-popover").$("aria/Delete note").click();
+    await shown.$("aria/Delete note").click();
     await $(".modal-backdrop [role=dialog]").$("button=Delete note").click();
     await expect($("textarea[aria-label='Connection note']")).toHaveValue("");
   });

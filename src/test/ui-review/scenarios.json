@@ -18,6 +18,28 @@
         "option": "terminal"
       }
     },
+    "scratchpad": {
+      "states": ["populated", "global"],
+      "ready": ".app-shell",
+      "prepare": {
+        "populated": [{ "selector": "[data-scratchpad-trigger]" }],
+        "global": [
+          { "selector": "[data-scratchpad-trigger]" },
+          { "role": "button", "name": "Global note for all connections" }
+        ]
+      },
+      "settled": {
+        "populated": ".scratchpad-popover textarea[aria-label='Connection note']",
+        "global": ".scratchpad-popover textarea[aria-label='Global note']"
+      },
+      "motion": {
+        "description": "Scratchpad note switch, Connection to Global",
+        "target": ".scratchpad-popover-note:not([hidden])",
+        "button": "Global note for all connections",
+        "select": "Scratchpad scope",
+        "option": "global"
+      }
+    },
     "systemd": {
       "states": ["populated", "empty", "loading", "error", "stale", "overflow"],
       "ready": ".app-shell",

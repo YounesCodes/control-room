@@ -193,7 +193,7 @@ const WindowsServicesPane = lazy(() =>
 
 /// Fixed geometry for a popover anchored to its trigger: a consistent 6px gap
 /// below the trigger (flipping above when the window lacks the room), clamped
-/// to 8px window-edge gutters, and a max height that keeps long lists
+/// to 12px window-edge gutters, and a max height that keeps long lists
 /// scrolling inside the popup instead of off the window.
 interface AnchoredPopover {
   top?: number;
@@ -203,7 +203,9 @@ interface AnchoredPopover {
 }
 
 const POPOVER_GAP = 6;
-const POPOVER_GUTTER = 8;
+// Wide enough that a popover opened from a window-edge trigger, such as
+// Scratchpad, sits clear of the window corner instead of hugging its border.
+const POPOVER_GUTTER = 12;
 
 function anchoredPopoverAt(rect: DOMRect, width: number, preferredHeight: number): AnchoredPopover {
   const below = window.innerHeight - rect.bottom - POPOVER_GAP - POPOVER_GUTTER;
