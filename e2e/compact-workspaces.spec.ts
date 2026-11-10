@@ -1,6 +1,7 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import {
+  openSplitMenu,
   addConnection,
   ipc,
   openLocal,
@@ -17,8 +18,8 @@ describe("Compact native windows and live terminal arrangements", () => {
     await browser.setWindowSize(1180, 700);
     await openLocal();
     await $("aria/Focus terminal").click();
-    await $("aria/Split terminal").click();
-    await $(".terminal-split-menu [aria-label='New local terminal: Command Prompt']").click();
+    await openSplitMenu();
+    await $(".new-terminal-menu [aria-label='New local terminal: Command Prompt']").click();
     await terminalCommand("echo STABLE_SPLIT_INPUT", "STABLE_SPLIT_INPUT");
     const sessions = (await runtime()).sessionIds;
     expect(sessions).toHaveLength(2);
@@ -110,8 +111,8 @@ describe("Compact native windows and live terminal arrangements", () => {
     await terminalCommand("echo ARRANGEMENT_SCROLLBACK", "ARRANGEMENT_SCROLLBACK");
     await $("aria/Focus terminal").click();
     for (let index = 0; index < 2; index++) {
-      await $("aria/Split terminal").click();
-      await $(".terminal-split-menu [aria-label='New local terminal: Command Prompt']").click();
+      await openSplitMenu();
+      await $(".new-terminal-menu [aria-label='New local terminal: Command Prompt']").click();
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
     const sessions = (await runtime()).sessionIds;

@@ -1,6 +1,7 @@
 import "./isolation";
 import { $, $$, browser, expect } from "@wdio/globals";
 import {
+  openSplitMenu,
   closeWorkspace,
   ipc,
   openLocal,
@@ -78,8 +79,8 @@ describe("ConPTY and Workspace lifecycle", () => {
     await renameActive("Original pane");
     await $("aria/Focus terminal").click();
     for (const name of ["Logs pane", "Build pane"]) {
-      await $("aria/Split terminal").click();
-      await $(".terminal-split-menu").$("button*=Command Prompt").click();
+      await openSplitMenu();
+      await $(".new-terminal-menu").$("button*=Command Prompt").click();
       await renameActive(name);
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
@@ -200,8 +201,8 @@ describe("ConPTY and Workspace lifecycle", () => {
     await $("aria/Focus terminal").click();
     for (const name of ["First group", "Second group"]) {
       if (name === "Second group") await openLocal();
-      await $("aria/Split terminal").click();
-      await $(".terminal-split-menu").$("button*=Command Prompt").click();
+      await openSplitMenu();
+      await $(".new-terminal-menu").$("button*=Command Prompt").click();
       await groupTool("button[title='Rename terminal group']");
       await $("[role=dialog] input").setValue(name);
       await $("button=Rename").click();
@@ -311,13 +312,12 @@ describe("ConPTY and Workspace lifecycle", () => {
     await terminalCommand("echo SEARCH_CLOSED_OK", "SEARCH_CLOSED_OK");
   });
 
-  for (const direction of ["vertically", "horizontally"]) {
+  for (const direction of ["vertically", "horizontally"] as const) {
     it(`splits ${direction}, routes input, renames the group and restores its layout`, async () => {
       await openLocal();
       await $("aria/Focus terminal").click();
-      await $("aria/Split terminal").click();
-      await $(`button*=Split ${direction}`).click();
-      await $(".terminal-split-menu").$("button*=Command Prompt").click();
+      await openSplitMenu(direction);
+      await $(".new-terminal-menu").$("button*=Command Prompt").click();
       await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
       const panes = await browser.execute(() =>
         Array.from(document.querySelectorAll(".terminal-workspace-pane-visible"), (pane) => {

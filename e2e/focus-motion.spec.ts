@@ -1,7 +1,7 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { openLocal, runtime, terminalCommand } from "./helpers";
+import { openSplitMenu, openLocal, runtime, terminalCommand } from "./helpers";
 
 describe("Focus Mode live layout in WebView2", () => {
   it("interpolates both directions and keeps split sessions alive through rapid toggles", async () => {
@@ -79,8 +79,8 @@ describe("Focus Mode live layout in WebView2", () => {
     await browser.waitUntil(() =>
       browser.execute(() => !document.documentElement.dataset.focusTransition),
     );
-    await $("aria/Split terminal").click();
-    await $(".terminal-split-menu").$("aria/New local terminal: Command Prompt").click();
+    await openSplitMenu();
+    await $(".new-terminal-menu").$("aria/New local terminal: Command Prompt").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     const splitSessions = (await runtime()).sessionIds;
     await browser.execute(() => {

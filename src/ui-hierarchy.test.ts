@@ -335,12 +335,12 @@ describe("application hierarchy", () => {
 
   it("keeps groups inside focus mode and outlines the active group and pane", () => {
     expect(appSource.match(/<WindowControls \/>/g)).toHaveLength(1);
-    expect(appSource).toContain('aria-label="Split terminal"');
+    expect(appSource).not.toContain('aria-label="Split terminal"');
+    expect(appSource).toContain('"Split right, side by side"');
     expect(appSource).toContain('aria-label="New terminal"');
     expect(appSource).toContain("session-pane-tabs");
     expect(appSource).not.toContain("openFocusGroup");
-    expect(appSource).toContain("Split vertically");
-    expect(appSource).toContain("Split horizontally");
+    expect(appSource).toContain("Split down, top and bottom");
     expect(appSource).toContain("New from Saved Connections");
     expect(appSource).not.toContain("Remove from terminal group");
     expect(appSource).toContain("Ungroup terminals; keep every terminal open");

@@ -106,8 +106,12 @@ function paneBounds() {
 }
 
 async function split(direction: "vertically" | "horizontally") {
-  await page.getByRole("button", { name: "Split terminal", exact: true }).click();
-  await page.getByRole("button", { name: new RegExp(`Split ${direction}`) }).click();
+  await page.getByRole("button", { name: "New terminal", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: new RegExp(`^${direction === "vertically" ? "Split right" : "Split down"},`),
+    })
+    .click();
   await page
     .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
     .click();
@@ -572,7 +576,8 @@ describe("Local Terminal Mode in the real App", () => {
       .getByRole("dialog", { name: "New terminal" })
       .getByRole("button", { name: /Command Prompt/ })
       .click();
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await page.getByRole("button", { name: "New terminal", exact: true }).click();
+    await page.getByRole("button", { name: /^Split right,/ }).click();
     await page.getByRole("button", { name: /^Existing terminals:/ }).click();
     const divider = page.getByRole("separator", { name: "Resize terminal split 1" });
     await expect.element(divider).toBeVisible();

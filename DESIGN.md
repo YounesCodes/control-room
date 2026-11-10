@@ -118,8 +118,11 @@ controls appear immediately on exit, outside the animated workspace. Use a short
 live workspace slide and sidebar fade rather than captured terminal frames or
 animated terminal scaling; resize the terminal once per toggle.
 
-The Split menu's direction cards show the result in miniature, the new terminal's
-tile filled, above a one-line label.
+New terminal is also how a terminal is split: in Focus Mode its menu opens with
+three mode cards, New tab, Split right, and Split down, each showing the result in
+miniature with the new terminal's tile filled above a one-line label. It reopens on
+New tab; the split cards switch the targets to split targets, including terminals
+already open. There is no separate Split button.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Save pane proportions with

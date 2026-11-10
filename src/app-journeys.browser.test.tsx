@@ -234,6 +234,12 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+/** Splitting starts from New terminal: open it and choose a split mode card. */
+async function openSplit(card: "Split right" | "Split down" = "Split right") {
+  await page.getByRole("button", { name: "New terminal", exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(`^${card},`) }).click();
+}
+
 describe("complete app journeys with typed IPC fixtures", () => {
   it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
     await mount();
@@ -261,7 +267,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
   it("animates live pane bounds without scaling text", async () => {
     await mount();
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
@@ -290,7 +296,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(panes.map((pane) => pane.querySelector(".xterm"))).toEqual(xterms);
     animations.forEach((animation) => animation.finish());
     await page.screenshot({ path: "../test-results/terminal-stacked.png" });
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
@@ -311,7 +317,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     await page.viewport(width * 1.5, (width === 1180 ? 700 : 480) * 1.5);
     element.querySelector<HTMLElement>(".app-shell")!.style.zoom = "1.5";
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
@@ -343,28 +349,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
       .toHaveAttribute("aria-orientation", width === 1180 ? "vertical" : "horizontal");
     if (width === 520) {
-      expect(element.querySelector(".session-tabs .session-tab-content")!.childElementCount).toBe(
-        0,
-      );
-      const picker = page.getByRole("button", { name: "All terminals", exact: true });
-      await picker.click();
-      await expect
-        .element(
-          page
-            .getByRole("menu", { name: "All terminals menu" })
-            .getByRole("menuitem", { name: /^Group 1/ }),
-        )
-        .toHaveAttribute("aria-current", "page");
-      await userEvent.keyboard("{Escape}");
-      await expect.element(picker).toHaveFocus();
-      await expect.poll(() => element.querySelector(".session-tab-overflow-menu")).toBeNull();
+      // With New terminal also covering splits, the compact strip keeps the group tab
+      // itself in view rather than collapsing it into the All terminals picker.
+      const strip = element.querySelector<HTMLElement>(".session-tabs")!.getBoundingClientRect();
+      const group = element.querySelector<HTMLElement>(".session-tab-group")!;
+      expect(group.getAttribute("aria-label")).toBe("Group 1");
+      expect(group.getBoundingClientRect().right).toBeLessThanOrEqual(strip.right + 0.5);
+      expect(element.querySelector(".session-tab-group.active")).not.toBeNull();
     }
     await page.screenshot({ path: `../test-results/terminal-split-scaled-${width}.png` });
   });
   it("previews pointer swaps and docks, cancels Escape/outside drops and rejects cramped targets", async () => {
     await mount();
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
@@ -476,7 +474,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     const split = async () => {
-      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await openSplit();
       await page
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
@@ -783,7 +781,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.keyboard("{Enter}");
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     await expect.poll(() => color(mark)).toBe(white);
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     const splitChoice = page.getByRole("button", {
       name: "New local terminal: Git Bash",
       exact: true,
@@ -791,17 +789,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const gitLogo = splitChoice.element().querySelector<HTMLImageElement>(".local-shell-mark img")!;
     await vi.waitFor(() => expect(gitLogo.naturalWidth).toBeGreaterThan(0));
     expect(getComputedStyle(gitLogo).filter).toBe("grayscale(1) brightness(0.85)");
-    // Direction cards keep their label on one line beside a miniature of the result.
-    const directions = [
+    // Mode cards keep their label on one line beneath a miniature of the result.
+    const modes = [
       ...element.ownerDocument.querySelectorAll<HTMLElement>(
-        ".terminal-split-directions button > span:last-child",
+        ".terminal-open-modes button > span:last-child",
       ),
     ];
-    expect(directions.map((label) => label.textContent)).toEqual([
-      "Side by side",
-      "Top and bottom",
+    expect(modes.map((label) => label.textContent)).toEqual([
+      "New tab",
+      "Split right",
+      "Split down",
     ]);
-    for (const label of directions) expect(label.getBoundingClientRect().height).toBeLessThan(20);
+    for (const label of modes) expect(label.getBoundingClientRect().height).toBeLessThan(20);
     await page.screenshot({ path: "../test-results/terminal-split-menu.png" });
     await userEvent.hover(splitChoice.element());
     await expect.poll(() => getComputedStyle(gitLogo).filter).toBe("none");
@@ -1086,20 +1085,32 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
-  it("anchors the split menu and returns keyboard focus when dismissed", async () => {
+  it("anchors New terminal, switches it to splitting, and returns focus when dismissed", async () => {
     await mount();
     await navigate("Terminal");
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    const trigger = page.getByRole("button", { name: "Split terminal", exact: true });
+    const trigger = page.getByRole("button", { name: "New terminal", exact: true });
     await trigger.click();
-    const menu = page.getByRole("dialog", { name: "Split terminal", exact: true });
+    const menu = page.getByRole("dialog", { name: "New terminal", exact: true });
     await expect.element(menu).toBeVisible();
     await expect
       .poll(() => menu.element().getBoundingClientRect().top)
       .toBeCloseTo(trigger.element().getBoundingClientRect().bottom + 6, 0);
+    // It opens as a new tab; the split cards say what they do and change the targets.
+    await expect
+      .element(menu.getByRole("button", { name: "New tab", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
+    expect(menu.element().querySelector("[data-terminal-target]")).toBe(document.activeElement);
+    await expect.element(menu.getByText("New from Saved Connections")).not.toBeInTheDocument();
+    await menu.getByRole("button", { name: "Split down, top and bottom", exact: true }).click();
+    await expect
+      .element(menu.getByRole("button", { name: "Split down, top and bottom", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
+    await expect.element(menu.getByText("New from Saved Connections")).toBeVisible();
     await expect
       .element(menu.getByRole("button", { name: "New local terminal: Command Prompt" }))
-      .toHaveFocus();
+      .toBeVisible();
+    await page.screenshot({ path: "../test-results/new-terminal-split-modes.png" });
     const node = menu.element();
     await userEvent.keyboard("{Escape}");
     await expect.element(trigger).toHaveFocus();
@@ -1248,8 +1259,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/processing-terminal.png" });
 
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
-    await page.getByRole("button", { name: /^Split vertically/ }).click();
+    await openSplit();
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
@@ -1408,7 +1418,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toHaveAttribute("aria-current", "page");
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     for (let index = 0; index < 5; index++) {
-      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await openSplit();
       await page
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
@@ -1491,7 +1501,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     );
     await page.screenshot({ path: "../test-results/terminal-header-normal.png" });
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     await page
       .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
       .click();
@@ -1794,7 +1804,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .toBeLessThanOrEqual(actions.getBoundingClientRect().left);
       expect(strip.offsetHeight).toBe(42);
       await page.screenshot({ path: `../test-results/focus-toggle-focus-${width}.png` });
-      await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+      await openSplit();
       await page
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
@@ -2513,7 +2523,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .not.toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await page.getByRole("button", { name: "Split terminal", exact: true }).click();
+    await openSplit();
     await expect
       .element(page.getByRole("button", { name: /Command Prompt/ }))
       .not.toBeInTheDocument();

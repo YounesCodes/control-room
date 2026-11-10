@@ -2504,17 +2504,17 @@ code,
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-.terminal-split-directions {
+.terminal-open-modes {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
   padding: 3px 3px 9px;
 }
 
-/* Direction cards show the result in miniature above a short label. */
-.terminal-split-directions button {
+/* New terminal's mode cards show the result in miniature above a short label. */
+.terminal-open-modes button {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -2532,29 +2532,66 @@ code,
     color var(--motion-fast) var(--ease);
 }
 
-.terminal-split-directions button:hover,
-.terminal-split-directions button.active {
+.terminal-open-modes button:hover,
+.terminal-open-modes button.active {
   border-color: #565656;
   background: var(--fill-active);
   color: var(--text-strong);
 }
 
-.terminal-split-directions button.active {
+.terminal-open-modes button.active {
   border-color: var(--accent);
 }
 
-.terminal-split-preview {
+.terminal-open-preview {
   display: flex;
   width: 40px;
   height: 26px;
   gap: 2px;
 }
 
-.terminal-split-preview.horizontal {
+.terminal-open-preview.horizontal {
   flex-direction: column;
 }
 
-.terminal-split-preview i {
+/* A new tab: two tab chips above one view; the filled chip is the new tab. */
+.terminal-open-preview.tab {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 6px 1fr;
+}
+
+.terminal-open-preview.tab i:nth-child(1) {
+  grid-area: 1 / 1;
+}
+
+.terminal-open-preview.tab i:nth-child(2) {
+  grid-area: 1 / 2;
+}
+
+.terminal-open-preview.tab i:nth-child(3) {
+  grid-area: 2 / 1 / 3 / 4;
+  background: transparent;
+}
+
+.terminal-open-preview.tab i:nth-child(2) {
+  background: rgb(255 255 255 / 14%);
+}
+
+.terminal-open-modes button.active .terminal-open-preview.tab i:nth-child(2) {
+  background: rgb(255 255 255 / 32%);
+}
+
+.terminal-open-modes button.active .terminal-open-preview.tab i:nth-child(3) {
+  background: transparent;
+}
+
+.terminal-open-modes button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.terminal-open-preview i {
   flex: 1;
   border: 1px solid currentColor;
   border-radius: 2px;
@@ -2565,22 +2602,22 @@ code,
 }
 
 /* The second tile is where the new terminal opens. */
-.terminal-split-preview i:last-child {
+.terminal-open-preview i:last-child {
   background: rgb(255 255 255 / 14%);
 }
 
-.terminal-split-directions button:hover .terminal-split-preview i,
-.terminal-split-directions button.active .terminal-split-preview i {
+.terminal-open-modes button:hover .terminal-open-preview i,
+.terminal-open-modes button.active .terminal-open-preview i {
   opacity: 1;
 }
 
-.terminal-split-directions button.active .terminal-split-preview i:last-child {
+.terminal-open-modes button.active .terminal-open-preview i:last-child {
   background: rgb(255 255 255 / 32%);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .terminal-split-directions button,
-  .terminal-split-preview i {
+  .terminal-open-modes button,
+  .terminal-open-preview i {
     transition: none;
   }
 }
@@ -2710,15 +2747,7 @@ code,
   top: auto;
   right: auto;
   bottom: auto;
-  width: 248px;
-}
-
-.terminal-split-menu {
-  position: fixed;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  width: 264px;
+  width: 272px;
 }
 
 /* ==========================================================================

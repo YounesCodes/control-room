@@ -30,7 +30,6 @@ import {
   RotateCcw,
   ChevronDown,
   Clipboard,
-  Columns2,
   Ungroup,
   LayoutPanelLeft,
   Copy,
@@ -207,22 +206,39 @@ interface AnchoredPopover {
 }
 
 const POPOVER_GAP = 6;
+const NEW_TERMINAL_MENU_WIDTH = 272;
+const NEW_TERMINAL_MENU_HEIGHT = 480;
 const POPOVER_GUTTER = 8;
 
-function anchoredPopoverAt(rect: DOMRect, width: number, preferredHeight: number): AnchoredPopover {
+/// Positions a fixed popover beside its anchor. `zoom` is the CSS zoom the popover
+/// renders under: its offsets and size scale by it, so the measurement happens in
+/// viewport pixels and the result is converted back into the popover's own pixels.
+function anchoredPopoverAt(
+  rect: DOMRect,
+  width: number,
+  preferredHeight: number,
+  zoom = 1,
+): AnchoredPopover {
+  const scale = zoom > 0 ? zoom : 1;
   const below = window.innerHeight - rect.bottom - POPOVER_GAP - POPOVER_GUTTER;
   const above = rect.top - POPOVER_GAP - POPOVER_GUTTER;
-  const useAbove = below < preferredHeight && above > below;
+  const useAbove = below < preferredHeight * scale && above > below;
+  const right = Math.max(
+    POPOVER_GUTTER,
+    Math.min(window.innerWidth - rect.right, window.innerWidth - width * scale - POPOVER_GUTTER),
+  );
   return {
-    right: Math.max(
-      POPOVER_GUTTER,
-      Math.min(window.innerWidth - rect.right, window.innerWidth - width - POPOVER_GUTTER),
-    ),
+    right: right / scale,
     ...(useAbove
-      ? { bottom: window.innerHeight - rect.top + POPOVER_GAP }
-      : { top: rect.bottom + POPOVER_GAP }),
-    maxHeight: Math.max(0, Math.min(preferredHeight, useAbove ? above : below)),
+      ? { bottom: (window.innerHeight - rect.top + POPOVER_GAP) / scale }
+      : { top: (rect.bottom + POPOVER_GAP) / scale }),
+    maxHeight: Math.max(0, Math.min(preferredHeight, (useAbove ? above : below) / scale)),
   };
+}
+
+/** The CSS zoom an element renders under (1 where the engine does not report it). */
+function cssZoomOf(element: Element | null): number {
+  return (element as (Element & { currentCSSZoom?: number }) | null)?.currentCSSZoom ?? 1;
 }
 
 export function App() {
@@ -313,19 +329,18 @@ export function App() {
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
   const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
-  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  /// New terminal opens a tab or splits the focused view; it reopens on "tab".
+  const [newTerminalMode, setNewTerminalMode] = useState<"tab" | "split">("tab");
   const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   // Focus goes back to the control that opened the menu, so dismissing with
   // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
-  const splitMenuButtonRef = useRef<HTMLButtonElement>(null);
   const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
   // The closing transitions keep fading popovers mounted for a beat without
   // delaying focus return or dismissal itself.
   const { present: newTerminalMenuPresent, closing: newTerminalMenuClosing } =
     usePopoverExit(newTerminalMenuOpen);
-  const { present: splitMenuPresent, closing: splitMenuClosing } = usePopoverExit(splitMenuOpen);
   const { present: scratchpadPresent, closing: scratchpadClosing } = usePopoverExit(scratchpadOpen);
   const terminalGroupActiveWorkspaceRef = useRef(new Map<string, string>());
   const closingWorkspaceIdsRef = useRef(new Set<string>());
@@ -337,7 +352,6 @@ export function App() {
   });
   // Anchored geometry for the terminal popovers, measured when they open.
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<AnchoredPopover | null>(null);
-  const [splitMenuAt, setSplitMenuAt] = useState<AnchoredPopover | null>(null);
   const [scratchpadAt, setScratchpadAt] = useState<AnchoredPopover | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
@@ -834,42 +848,21 @@ export function App() {
     shellSize.width,
   ]);
 
+  // The palette's Split enters Focus Mode and opens New terminal in the same turn;
+  // its button moves with that layout, so the menu re-anchors to where it landed.
   useLayoutEffect(() => {
-    if (!splitMenuOpen || !terminalFocusMode) return;
-    const rect = splitMenuButtonRef.current?.getBoundingClientRect();
-    if (rect) setSplitMenuAt(anchoredPopoverAt(rect, 264, 480));
-  }, [splitMenuOpen, terminalFocusMode]);
-
-  useEffect(() => {
-    if (!splitMenuOpen) return;
-
-    function dismissMenu(event: PointerEvent) {
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-terminal-split-menu]")) return;
-      setSplitMenuOpen(false);
-    }
-
-    function dismissMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setSplitMenuOpen(false);
-        splitMenuButtonRef.current?.focus();
-      }
-    }
-
-    function dismissOnResize() {
-      setSplitMenuOpen(false);
-      splitMenuButtonRef.current?.focus();
-    }
-
-    document.addEventListener("pointerdown", dismissMenu);
-    document.addEventListener("keydown", dismissMenuWithKeyboard);
-    window.addEventListener("resize", dismissOnResize);
-    return () => {
-      document.removeEventListener("pointerdown", dismissMenu);
-      document.removeEventListener("keydown", dismissMenuWithKeyboard);
-      window.removeEventListener("resize", dismissOnResize);
-    };
-  }, [splitMenuOpen]);
+    if (!newTerminalMenuOpen) return;
+    const rect = newTerminalButtonRef.current?.getBoundingClientRect();
+    if (rect)
+      setNewTerminalMenuAt(
+        anchoredPopoverAt(
+          rect,
+          NEW_TERMINAL_MENU_WIDTH,
+          NEW_TERMINAL_MENU_HEIGHT,
+          cssZoomOf(newTerminalButtonRef.current),
+        ),
+      );
+  }, [newTerminalMenuOpen, terminalFocusMode]);
 
   const connectionSections = useMemo(
     () => organizeConnections(connections, connectionGroups, hostSearch, ungroupedCollapsed),
@@ -1010,7 +1003,6 @@ export function App() {
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
     transitionFocusMode("enter", () => {
-      setSplitMenuOpen(false);
       setNewTerminalMenuOpen(false);
       setTerminalFocusMode(true);
     });
@@ -1018,7 +1010,6 @@ export function App() {
 
   function exitTerminalFocus() {
     transitionFocusMode("exit", () => {
-      setSplitMenuOpen(false);
       setNewTerminalMenuOpen(false);
       setTerminalFocusMode(false);
     });
@@ -1029,7 +1020,6 @@ export function App() {
     closeSettings(() => {
       updateWorkspace(activeWorkspace.id, { view: "terminal" });
       setNewTerminalMenuOpen(false);
-      setSplitMenuOpen(false);
       setScratchpadOpen(true);
     });
   }
@@ -1042,7 +1032,7 @@ export function App() {
     terminalGroupActiveWorkspaceRef.current.set(group.id, nextId);
     setActiveWorkspaceId(nextId);
     updateWorkspace(nextId, { view: "terminal" });
-    setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
   }
 
   function selectWorkspaceTab(workspace: Workspace) {
@@ -1091,7 +1081,7 @@ export function App() {
     );
     terminalGroupActiveWorkspaceRef.current.set(groupId, workspace.id);
     setActiveWorkspaceId(workspace.id);
-    setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
   }
 
   function updateServicesCache(id: string, servicesCache: CachedList<SystemdUnit>) {
@@ -1201,7 +1191,7 @@ export function App() {
     );
     terminalGroupActiveWorkspaceRef.current.set(groupId, workspace.id);
     setActiveWorkspaceId(workspace.id);
-    setSplitMenuOpen(false);
+    setNewTerminalMenuOpen(false);
   }
 
   function removeTerminalGroup(groupId: string) {
@@ -1245,7 +1235,7 @@ export function App() {
         if (split) splitWithNewWorkspace(workspace);
         else openWorkspace(workspace);
       } else {
-        setSplitMenuOpen(false);
+        setNewTerminalMenuOpen(false);
         setRemoteShellRequest({ connection, split });
       }
     });
@@ -1273,17 +1263,21 @@ export function App() {
   /// Opens the chooser under its own control, measured at the moment it opens:
   /// a consistent gap below the button, flipped above it when the window has
   /// no room, and clamped so neither edge pushes the menu off screen.
-  const NEW_TERMINAL_MENU_WIDTH = 248;
-  const NEW_TERMINAL_MENU_HEIGHT = 420;
-  function openNewTerminalMenu() {
+  function openNewTerminalMenu(mode: "tab" | "split" = "tab") {
     if (newTerminalMenuOpen) {
       setNewTerminalMenuOpen(false);
       return;
     }
+    setNewTerminalMode(mode);
     const rect = newTerminalButtonRef.current?.getBoundingClientRect();
     if (rect) {
       setNewTerminalMenuAt(
-        anchoredPopoverAt(rect, NEW_TERMINAL_MENU_WIDTH, NEW_TERMINAL_MENU_HEIGHT),
+        anchoredPopoverAt(
+          rect,
+          NEW_TERMINAL_MENU_WIDTH,
+          NEW_TERMINAL_MENU_HEIGHT,
+          cssZoomOf(newTerminalButtonRef.current),
+        ),
       );
     }
     setNewTerminalMenuOpen(true);
@@ -1304,17 +1298,6 @@ export function App() {
         }
       })
       .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
-  }
-
-  /// Split's chooser anchors to its own button with the same geometry.
-  function openSplitMenu() {
-    if (splitMenuOpen) {
-      setSplitMenuOpen(false);
-      return;
-    }
-    const rect = splitMenuButtonRef.current?.getBoundingClientRect();
-    if (rect) setSplitMenuAt(anchoredPopoverAt(rect, 264, 480));
-    setSplitMenuOpen(true);
   }
 
   /// Split's targets. It keeps its own order and its own extra group: a split
@@ -1364,6 +1347,9 @@ export function App() {
     },
   ];
   const canSplitTerminal = splitTargetGroups.some((group) => group.options.length > 0);
+  /// Splitting acts on the focused terminal view, so New terminal offers it only there.
+  const splitAvailable = terminalFocusMode && !settingsOpen && activeWorkspace?.view === "terminal";
+  const splitting = splitAvailable && newTerminalMode === "split";
 
   /// The targets "New terminal" offers: everything saved, plus every shell this
   /// machine actually has. Each one opens its own Workspace, so choosing the
@@ -2310,12 +2296,16 @@ export function App() {
                     : "session-new-terminal session-new-terminal-empty"
                 }
                 type="button"
-                onClick={openNewTerminalMenu}
-                disabled={!canOpenNewTerminal}
+                onClick={() => openNewTerminalMenu()}
+                disabled={!canOpenNewTerminal && !splitAvailable}
                 aria-haspopup="dialog"
                 aria-label="New terminal"
                 aria-expanded={newTerminalMenuOpen}
-                title="Open a terminal for a Saved Connection or a local shell"
+                title={
+                  splitAvailable
+                    ? "Open a terminal in a new tab or split this view"
+                    : "Open a terminal for a Saved Connection or a local shell"
+                }
               >
                 <Plus size={16} />
                 {!workspaces.length && <span>New terminal</span>}
@@ -2325,10 +2315,11 @@ export function App() {
                 <TerminalTargetMenu
                   label="New terminal"
                   className="new-terminal-menu"
-                  groups={newTerminalGroups}
+                  groups={splitting ? splitTargetGroups : newTerminalGroups}
                   style={newTerminalMenuAt ?? undefined}
                   closing={newTerminalMenuClosing}
                   footer={
+                    !splitting &&
                     administratorGroupOffered &&
                     !administratorLocalShells.length && (
                       <details className="terminal-administrator-setup">
@@ -2345,7 +2336,45 @@ export function App() {
                     setNewTerminalMenuOpen(false);
                     newTerminalButtonRef.current?.focus();
                   }}
-                />
+                >
+                  {splitAvailable && (
+                    <div className="terminal-open-modes" role="group" aria-label="Open as">
+                      {(
+                        [
+                          ["tab", null, "New tab", "New tab"],
+                          ["vertical", "vertical", "Split right", "Split right, side by side"],
+                          ["horizontal", "horizontal", "Split down", "Split down, top and bottom"],
+                        ] as const
+                      ).map(([preview, direction, label, name]) => {
+                        const active = direction
+                          ? splitting && splitDirection === direction
+                          : !splitting;
+                        return (
+                          <button
+                            key={preview}
+                            className={active ? "active" : ""}
+                            type="button"
+                            disabled={direction !== null && !canSplitTerminal}
+                            onClick={() => {
+                              setNewTerminalMode(direction ? "split" : "tab");
+                              if (direction) setSplitDirection(direction);
+                            }}
+                            aria-pressed={active}
+                            aria-label={name}
+                          >
+                            {/* A miniature of the result; the filled tile is the new terminal. */}
+                            <span className={`terminal-open-preview ${preview}`} aria-hidden="true">
+                              <i />
+                              <i />
+                              {preview === "tab" && <i />}
+                            </span>
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TerminalTargetMenu>
               )}
             </span>
             {terminalFocusMode && (
@@ -2357,7 +2386,7 @@ export function App() {
               />
             )}
             {!settingsOpen && activeWorkspace?.view === "terminal" && (
-              <div className="session-tab-actions" data-terminal-split-menu>
+              <div className="session-tab-actions">
                 <div
                   className="session-terminal-actions"
                   role="group"
@@ -2437,76 +2466,6 @@ export function App() {
                       scratchpadButtonRef.current?.focus();
                     }}
                   />
-                )}
-                {terminalFocusMode && (
-                  <>
-                    <button
-                      ref={splitMenuButtonRef}
-                      className="session-strip-button"
-                      type="button"
-                      onClick={openSplitMenu}
-                      disabled={
-                        !connections.length &&
-                        !existingSplitCandidates.length &&
-                        !offeredShells.length
-                      }
-                      aria-label="Split terminal"
-                      aria-haspopup="dialog"
-                      aria-expanded={splitMenuOpen}
-                      title={
-                        activeTerminalGroup
-                          ? "Add a terminal to this group"
-                          : "Create a group with another terminal"
-                      }
-                    >
-                      <Columns2 size={15} />
-                    </button>
-                    {splitMenuPresent && (
-                      <TerminalTargetMenu
-                        label="Split terminal"
-                        className="terminal-split-menu"
-                        groups={splitTargetGroups}
-                        style={splitMenuAt ?? undefined}
-                        closing={splitMenuClosing}
-                        onClose={() => {
-                          setSplitMenuOpen(false);
-                          splitMenuButtonRef.current?.focus();
-                        }}
-                      >
-                        <div
-                          className="terminal-split-directions"
-                          role="group"
-                          aria-label="Split direction"
-                        >
-                          {(
-                            [
-                              ["vertical", "Split vertically", "Side by side"],
-                              ["horizontal", "Split horizontally", "Top and bottom"],
-                            ] as const
-                          ).map(([direction, name, label]) => (
-                            <button
-                              key={direction}
-                              className={splitDirection === direction ? "active" : ""}
-                              type="button"
-                              onClick={() => setSplitDirection(direction)}
-                              aria-pressed={splitDirection === direction}
-                              aria-label={`${name}, ${label.toLowerCase()}`}
-                            >
-                              {/* A miniature of the result: the new terminal is the filled tile. */}
-                              <span
-                                className={`terminal-split-preview ${direction}`}
-                                aria-hidden="true"
-                              >
-                                <i />
-                                <i />
-                              </span>
-                              <span>{label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </TerminalTargetMenu>
-                    )}
-                  </>
                 )}
               </div>
             )}
@@ -3103,7 +3062,7 @@ export function App() {
             if (!activeWorkspace) return;
             closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
           }}
-          onNewTerminal={openNewTerminalMenu}
+          onNewTerminal={() => openNewTerminalMenu()}
           onReconnect={() =>
             activeWorkspace &&
             updateWorkspace(activeWorkspace.id, {
@@ -3123,7 +3082,8 @@ export function App() {
           }}
           onSplitTerminal={() => {
             enterTerminalFocus();
-            setSplitMenuOpen(true);
+            setNewTerminalMode("split");
+            setNewTerminalMenuOpen(true);
           }}
           onOpenScratchpad={openScratchpad}
           onRenameWorkspace={() => activeWorkspace && renameWorkspace(activeWorkspace)}

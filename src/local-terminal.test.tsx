@@ -169,6 +169,12 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>, name: st
   await user.click(within(sidebar).getAllByRole("button", { name: new RegExp(name) })[0]);
 }
 
+/** Splitting starts from New terminal: open it and choose Split right. */
+async function openSplit(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "New terminal" }));
+  await user.click(await screen.findByRole("button", { name: /^Split right,/ }));
+}
+
 describe("Local Terminal", () => {
   afterEach(cleanup);
 
@@ -354,7 +360,7 @@ describe("Local Terminal", () => {
     expect(newShell.querySelector(".local-shell-icon-powershell-7")).not.toBeNull();
     await user.click(newShell);
     await user.click(screen.getByLabelText("Focus terminal"));
-    await user.click(screen.getByRole("button", { name: "Split terminal" }));
+    await openSplit(user);
     const existing = screen.getByRole("button", { name: "Existing terminals: Git Bash" });
     expect(existing.querySelector(".local-shell-icon-git-bash")).not.toBeNull();
     expect(
@@ -865,7 +871,10 @@ describe("Local Terminal", () => {
     await openNewTerminal(user, "Saved Connections: prod-web");
 
     expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
-    expect(screen.queryByLabelText("Split terminal")).toBeNull();
+    // Outside Focus Mode, New terminal only opens tabs.
+    await user.click(screen.getByRole("button", { name: "New terminal" }));
+    expect(screen.queryByRole("button", { name: /^Split right/ })).toBeNull();
+    await user.keyboard("{Escape}");
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
     await user.click(screen.getByLabelText("Focus terminal"));
@@ -875,7 +884,7 @@ describe("Local Terminal", () => {
     expect(screen.getByLabelText("Rename prod-web Workspace")).toBeTruthy();
     expect(document.querySelectorAll(".terminal-workspace-pane-visible")).toHaveLength(1);
 
-    await user.click(await screen.findByLabelText("Split terminal"));
+    await openSplit(user);
     await user.click(
       await screen.findByRole("button", { name: "New local terminal: PowerShell 7" }),
     );
@@ -925,7 +934,7 @@ describe("Local Terminal", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /^Git Bash$/ }));
-    await user.click(await screen.findByLabelText("Split terminal"));
+    await openSplit(user);
     await user.click(await screen.findByRole("button", { name: "New local terminal: Git Bash" }));
     expect(screen.getByRole("group", { name: "Proxmox" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Group 1" })).toBeTruthy();
@@ -1015,7 +1024,7 @@ describe("Local Terminal", () => {
     await openLocalShell(user, "Git Bash");
     await user.click(screen.getByLabelText("Focus terminal"));
     for (let index = 0; index < 2; index++) {
-      await user.click(screen.getByLabelText("Split terminal"));
+      await openSplit(user);
       await user.click(screen.getByRole("button", { name: "New local terminal: Git Bash" }));
     }
     const [first, second, third] = screen.getAllByTestId(/^terminal-/);
@@ -1066,7 +1075,7 @@ describe("Local Terminal", () => {
     render(<App />);
     await openLocalShell(user, "Git Bash");
     await user.click(screen.getByLabelText("Focus terminal"));
-    await user.click(screen.getByLabelText("Split terminal"));
+    await openSplit(user);
     await user.click(screen.getByRole("button", { name: "New local terminal: PowerShell 7" }));
     const [first, closing] = screen.getAllByTestId(/^terminal-/);
     await user.click(within(closing).getByText("report session"));
