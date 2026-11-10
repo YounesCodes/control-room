@@ -20,6 +20,10 @@ import {
   getTerminalLayoutSurface,
   terminalLayoutFits,
   terminalPaneOuterEdges,
+  getTerminalDividerHandles,
+  resizeTerminalHandle,
+  transposeTerminalCross,
+  type TerminalLayout,
 } from "./terminal-layout";
 
 describe("terminal pane tree", () => {
@@ -354,5 +358,70 @@ describe("terminal pane tree", () => {
     expect(terminalPaneOuterEdges(rects.b)).toEqual(["right"]);
     expect(terminalPaneOuterEdges(rects.c)).toEqual(["right", "bottom"]);
     expect(terminalPaneOuterEdges({ left: 33.333, top: 0, width: 33.333, height: 50 })).toEqual([]);
+  });
+
+  describe("crossed splits", () => {
+    // Two columns, each split at the same height: a cross.
+    const grid = (): TerminalLayout => {
+      let layout = splitTerminalLayout(createTerminalLayout("a"), "a", "c", "vertical");
+      layout = splitTerminalLayout(layout, "a", "b", "horizontal");
+      return splitTerminalLayout(layout, "c", "d", "horizontal");
+    };
+    const viewport = { width: 1200, height: 800 };
+    const handles = (layout: TerminalLayout) =>
+      getTerminalDividerHandles(
+        layout,
+        getTerminalLayoutSurface(layout, viewport).dividers,
+        viewport,
+      );
+
+    it("regroups a cross into rows without moving any pane", () => {
+      const layout = resizeTerminalLayout(grid(), "", 0.4);
+      const rows = transposeTerminalCross(layout, "");
+      expect(rows).toMatchObject({ direction: "horizontal", first: { direction: "vertical" } });
+      expect(getTerminalPaneRects(rows)).toEqual(getTerminalPaneRects(layout));
+      expect(transposeTerminalCross(rows, "")).toEqual(layout);
+    });
+
+    it("offers each half of a crossed divider on its own", () => {
+      const offered = handles(grid());
+      expect(offered.map(({ path, direction, transpose }) => [path, direction, transpose])).toEqual(
+        [
+          ["first", "vertical", ""],
+          ["second", "vertical", ""],
+          ["first", "horizontal", null],
+          ["second", "horizontal", null],
+        ],
+      );
+      const [top, bottom] = offered;
+      expect(top.rectangle).toMatchObject({ top: 0, height: 50 });
+      expect(bottom.rectangle).toMatchObject({ top: 50, height: 50 });
+    });
+
+    it("resizes only the row whose half is dragged", () => {
+      const before = getTerminalPaneRects(grid());
+      const [top] = handles(grid());
+      const after = getTerminalPaneRects(resizeTerminalHandle(grid(), top, 0.3));
+      expect(after.a.width).toBeCloseTo(30);
+      expect(after.c.width).toBeCloseTo(70);
+      expect(after.b).toEqual(before.b);
+      expect(after.d).toEqual(before.d);
+    });
+
+    it("keeps a whole divider where the crossing lines do not meet", () => {
+      const staggered = resizeTerminalLayout(grid(), "first", 0.3);
+      expect(handles(staggered).map(({ path, transpose }) => [path, transpose])).toEqual([
+        ["", null],
+        ["first", null],
+        ["second", null],
+      ]);
+      const nested = splitTerminalLayout(
+        splitTerminalLayout(createTerminalLayout("a"), "a", "b", "vertical"),
+        "b",
+        "c",
+        "horizontal",
+      );
+      expect(handles(nested).every(({ transpose }) => transpose === null)).toBe(true);
+    });
   });
 });

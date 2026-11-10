@@ -443,6 +443,120 @@ export function getTerminalLayoutSurface(
   return { viewport, ...getResponsiveTerminalGeometry(temporary, viewport, false) };
 }
 
+/** A divider handle: a split's whole divider, or one half of a divider two lined-up
+ *  perpendicular splits cross. `transpose` names the crossed split to regroup first. */
+export interface TerminalDividerHandle extends TerminalLayoutDivider {
+  transpose: string | null;
+}
+
+function childPath(path: string, child: "first" | "second") {
+  return path ? `${path}.${child}` : child;
+}
+
+function terminalNodeAt(layout: TerminalLayout, path: string): TerminalLayout | null {
+  if (path === "") return layout;
+  if (layout.kind === "leaf") return null;
+  const [child, ...rest] = path.split(".");
+  return child === "first" || child === "second"
+    ? terminalNodeAt(layout[child], rest.join("."))
+    : null;
+}
+
+/**
+ * Regroups a crossed split the other way round with identical geometry: two columns
+ * that are each split at the same height become two rows each split at the same
+ * width, and vice versa. Anything else is returned unchanged.
+ */
+export function transposeTerminalCross(layout: TerminalLayout, path: string): TerminalLayout {
+  const node = terminalNodeAt(layout, path);
+  if (
+    !node ||
+    node.kind !== "split" ||
+    node.first.kind !== "split" ||
+    node.second.kind !== "split" ||
+    node.first.direction === node.direction ||
+    node.second.direction !== node.first.direction
+  )
+    return layout;
+  const outer = { direction: node.direction, ratio: node.ratio };
+  const crossed: TerminalLayout = {
+    kind: "split",
+    direction: node.first.direction,
+    ratio: node.first.ratio,
+    first: { kind: "split", ...outer, first: node.first.first, second: node.second.first },
+    second: { kind: "split", ...outer, first: node.first.second, second: node.second.second },
+  };
+  if (crossed.ratio === undefined) delete crossed.ratio;
+  for (const half of [crossed.first, crossed.second])
+    if (half.kind === "split" && half.ratio === undefined) delete half.ratio;
+  function replace(current: TerminalLayout, rest: string): TerminalLayout {
+    if (rest === "" || current.kind === "leaf") return crossed;
+    const [child, ...tail] = rest.split(".") as ["first" | "second", ...string[]];
+    return { ...current, [child]: replace(current[child], tail.join(".")) };
+  }
+  return replace(layout, path);
+}
+
+/** The point along a divider's own axis where it sits, as a surface percentage. */
+function dividerLine(divider: TerminalLayoutDivider) {
+  const { rectangle } = divider;
+  return divider.direction === "vertical"
+    ? rectangle.left + (rectangle.width * divider.position) / divider.size
+    : rectangle.top + (rectangle.height * divider.position) / divider.size;
+}
+
+/**
+ * The dividers to offer for a surface. Where both children of a split are split the
+ * other way and their dividers line up, the split's divider is offered as two halves,
+ * so each row (or column) of the cross resizes on its own; dragging a half regroups
+ * the tree around it first (see transposeTerminalCross). Splits shown rotated for a
+ * small window keep their whole divider.
+ */
+export function getTerminalDividerHandles(
+  layout: TerminalLayout,
+  dividers: TerminalLayoutDivider[],
+  visible: TerminalLayoutViewport,
+  available = visible,
+): TerminalDividerHandle[] {
+  const byPath = new Map(dividers.map((divider) => [divider.path, divider]));
+  const saved = (divider: TerminalLayoutDivider | undefined) =>
+    !!divider && terminalSplitDirection(layout, divider.path) === divider.direction;
+  return dividers.flatMap((divider): TerminalDividerHandle[] => {
+    const whole = [{ ...divider, transpose: null }];
+    const first = byPath.get(childPath(divider.path, "first"));
+    const second = byPath.get(childPath(divider.path, "second"));
+    if (
+      !saved(divider) ||
+      !saved(first) ||
+      !saved(second) ||
+      first!.direction === divider.direction ||
+      second!.direction !== first!.direction ||
+      Math.abs(dividerLine(first!) - dividerLine(second!)) > 0.01
+    )
+      return whole;
+    const transposed = transposeTerminalCross(layout, divider.path);
+    const halves = getTerminalLayoutSurface(transposed, visible, available).dividers.filter(
+      (candidate) =>
+        candidate.path === childPath(divider.path, "first") ||
+        candidate.path === childPath(divider.path, "second"),
+    );
+    return halves.length === 2 && halves.every((half) => half.direction === divider.direction)
+      ? halves.map((half) => ({ ...half, transpose: divider.path }))
+      : whole;
+  });
+}
+
+/** Applies a handle's new ratio, regrouping a crossed split first when the handle is a half. */
+export function resizeTerminalHandle(
+  layout: TerminalLayout,
+  handle: Pick<TerminalDividerHandle, "path" | "transpose">,
+  ratio: number,
+): TerminalLayout {
+  const base =
+    handle.transpose === null ? layout : transposeTerminalCross(layout, handle.transpose);
+  return resizeTerminalLayout(base, handle.path, ratio);
+}
+
 export function terminalLayoutFits(
   layout: TerminalLayout,
   viewport: TerminalLayoutViewport,

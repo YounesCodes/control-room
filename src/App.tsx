@@ -90,8 +90,9 @@ import {
   createTerminalLayout,
   getTerminalLayoutIds,
   getTerminalPanePixels,
+  getTerminalDividerHandles,
   getTerminalLayoutSurface,
-  resizeTerminalLayout,
+  resizeTerminalHandle,
   splitTerminalLayout,
   terminalPaneOuterEdges,
 } from "./lib/terminal-layout";
@@ -2708,7 +2709,12 @@ export function App() {
                 )}
                 {!settingsOpen &&
                   activeTerminalGroup &&
-                  terminalGeometry.dividers.map((divider, index) => {
+                  getTerminalDividerHandles(
+                    activeTerminalGroup.layout,
+                    terminalGeometry.dividers,
+                    visibleTerminalSpace,
+                    availableTerminalSpace,
+                  ).map((divider, index) => {
                     const vertical = divider.direction === "vertical";
                     const { rectangle } = divider;
                     const changeRatio = (ratio: number) =>
@@ -2717,7 +2723,7 @@ export function App() {
                           group.id === activeTerminalGroup.id
                             ? {
                                 ...group,
-                                layout: resizeTerminalLayout(group.layout, divider.path, ratio),
+                                layout: resizeTerminalHandle(group.layout, divider, ratio),
                               }
                             : group,
                         ),

@@ -570,6 +570,61 @@ describe("Local Terminal Mode in the real App", () => {
     expect(getComputedStyle(paneTab).borderBottomColor).toBe("rgba(0, 0, 0, 0)");
     await page.screenshot({ path: "../../test-results/terminal-edge-frame.png" });
   });
+  it("resizes each row of a two-by-two grid on its own", async () => {
+    await page.viewport(1400, 800);
+    mountApp(true);
+    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
+    await split("vertically");
+    await split("horizontally");
+    // Split the left column too, so the grid's horizontal dividers line up.
+    await userEvent.click(
+      container!.querySelector<HTMLElement>(".session-pane-tabs .session-tab-main")!,
+    );
+    await split("horizontally");
+    await expect.poll(() => paneBounds().length).toBe(4);
+    const grid = () => {
+      const panes = paneBounds().sort((a, b) => a.top - b.top || a.left - b.left);
+      return { topLeft: panes[0], topRight: panes[1], bottomLeft: panes[2], bottomRight: panes[3] };
+    };
+    const settled = async () =>
+      await expect
+        .poll(() =>
+          [...container!.querySelectorAll<HTMLElement>(".terminal-workspace-pane-visible")].every(
+            (pane) => pane.getAnimations().length === 0,
+          ),
+        )
+        .toBe(true);
+    await settled();
+    const layout = () =>
+      JSON.stringify(paneBounds().map((r) => [r.left, r.top, r.width, r.height]));
+    expect(grid().topLeft.width, layout()).toBeCloseTo(grid().bottomLeft.width, 0);
+    expect(grid().topLeft.height, layout()).toBeCloseTo(grid().topRight.height, 0);
+    // The crossed vertical divider is offered as two halves, one per row.
+    const handles = [
+      ...container!.querySelectorAll<HTMLElement>(
+        '.terminal-layout-divider[aria-orientation="vertical"]',
+      ),
+    ];
+    expect(handles).toHaveLength(2);
+    const before = grid();
+    const top = handles.find(
+      (handle) => handle.getBoundingClientRect().bottom <= before.bottomLeft.top + 13,
+    )!;
+    top.focus();
+    await userEvent.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    // The same handle keeps focus through the regrouping, so a second step lands too.
+    await vi.waitFor(() => expect(document.activeElement).toBe(top));
+    await userEvent.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    await vi.waitFor(() => expect(grid().topLeft.width).toBeCloseTo(before.topLeft.width - 100, 0));
+    await settled();
+    const after = grid();
+    expect(after.topRight.width).toBeCloseTo(before.topRight.width + 100, 0);
+    expect(after.bottomLeft.width).toBeCloseTo(before.bottomLeft.width, 0);
+    expect(after.bottomRight.width).toBeCloseTo(before.bottomRight.width, 0);
+    // Heights still resize per column: the rows were not merged into one line.
+    expect(after.topLeft.height).toBeCloseTo(before.topLeft.height, 0);
+    await page.screenshot({ path: "../../test-results/terminal-grid-row-resize.png" });
+  });
   it("resizes merged existing terminals and keeps each group's sizes independent", async () => {
     await page.viewport(960, 640);
     mountApp();

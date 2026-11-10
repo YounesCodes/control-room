@@ -125,7 +125,11 @@ New tab; the split cards switch the targets to split targets, including terminal
 already open. There is no separate Split button.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
-splits and groups that mix local and remote terminals. Save pane proportions with
+splits and groups that mix local and remote terminals. Where two perpendicular
+dividers line up across another, offer each half of the crossed divider on its own,
+so every row or column of a grid resizes independently; dragging a half regroups the
+tree around it with identical geometry. Once the halves part, the other line spans
+its whole side, as tiled layouts require. Save pane proportions with
 their group and retain them when switching views. Constrain displayed sizes in
 small windows without overwriting the saved proportions. Reset a divider to equal
 sizes with a double-click or Enter.
