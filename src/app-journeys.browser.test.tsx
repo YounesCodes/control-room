@@ -1085,6 +1085,47 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
+  it("paints the Connections divider's hover line at one width down the whole window", async () => {
+    await mount();
+    await navigate("Terminal");
+    const divider = page.getByRole("separator", { name: "Resize Connections panel" });
+    // The edge explains itself; no hover tooltip.
+    expect(divider.element().hasAttribute("title")).toBe(false);
+    await userEvent.hover(divider.element());
+    await expect
+      .poll(() => getComputedStyle(divider.element(), "::after").backgroundColor)
+      .not.toBe("rgba(0, 0, 0, 0)");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const shell = element.querySelector<HTMLElement>(".app-shell")!;
+    const origin = shell.getBoundingClientRect();
+    const edge = divider.element().getBoundingClientRect().left - origin.left;
+    const screenshot = await page.screenshot({
+      element: shell,
+      base64: true,
+      path: "../test-results/connections-divider-hover.png",
+    });
+    const bitmap = new Image();
+    bitmap.src = `data:image/png;base64,${screenshot.base64}`;
+    await bitmap.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(bitmap, 0, 0);
+    // Count the lit pixels across the edge at the title bar, the tab strip, and below.
+    const width = (y: number) => {
+      const row = context.getImageData(Math.round(edge) - 6, y, 12, 1).data;
+      let lit = 0;
+      for (let index = 0; index < row.length; index += 4) {
+        if (row[index] + row[index + 1] + row[index + 2] > 3 * 90) lit++;
+      }
+      return lit;
+    };
+    const rows = [12, 30, 60, 200, Math.floor(bitmap.height * 0.8)];
+    const widths = rows.map(width);
+    expect(widths[0]).toBeGreaterThanOrEqual(2);
+    expect(new Set(widths).size, `lit widths by row ${rows}: ${widths}`).toBe(1);
+  });
   it("anchors New terminal, switches it to splitting, and returns focus when dismissed", async () => {
     await mount();
     await navigate("Terminal");

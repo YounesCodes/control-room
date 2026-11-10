@@ -2183,6 +2183,7 @@ export function App() {
           min={PANEL_LIMITS.connections.min}
           max={railMax}
           className="connections-divider"
+          explain={false}
           onChange={(next) => setPanelSize("connections", next)}
           onReset={() => setPanelSize("connections", null)}
         />

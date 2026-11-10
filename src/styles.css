@@ -8447,8 +8447,11 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   width: 12px;
 }
 
+/* Straddle the sidebar edge: one pixel in the sidebar, one on the divider's own
+   column. The pixel beyond lies under the title bar and tab strip, which stack
+   above the divider and would halve the line along the top of the window. */
 .connections-divider::after {
-  left: 0;
+  left: -1px;
 }
 
 .connection-section {
