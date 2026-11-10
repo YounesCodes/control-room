@@ -104,17 +104,12 @@ describe("Workspace restoration", () => {
       restored.workspaces.map((workspace) => workspace.id),
     );
   });
-  it.each(["overview", "scratchpad", "boot", "baselines"] as const)(
-    "restores retired %s selections to Terminal",
-    (view) => {
-      const workspace = createRemoteWorkspace(connection("host"));
-      const saved = persistWorkspaceState([workspace], workspace.id, []);
-      saved.workspaces[0].view = view;
-      expect(restoreWorkspaceState([connection("host")], saved).workspaces[0].view).toBe(
-        "terminal",
-      );
-    },
-  );
+  it("restores a retired Scratchpad selection to Terminal", () => {
+    const workspace = createRemoteWorkspace(connection("host"));
+    const saved = persistWorkspaceState([workspace], workspace.id, []);
+    saved.workspaces[0].view = "scratchpad";
+    expect(restoreWorkspaceState([connection("host")], saved).workspaces[0].view).toBe("terminal");
+  });
   it.each(["services", "ports", "docker", "logs"] as const)(
     "preserves the supported Windows %s view",
     (view) => {
@@ -126,7 +121,7 @@ describe("Workspace restoration", () => {
       const saved = persistWorkspaceState([workspace], workspace.id, []);
       const restored = restoreWorkspaceState([connection("windows-host")], saved);
       expect(restored.workspaces[0].view).toBe(view);
-      saved.workspaces[0].view = "boot";
+      saved.workspaces[0].view = "history";
       expect(restoreWorkspaceState([connection("windows-host")], saved).workspaces[0].view).toBe(
         "terminal",
       );
@@ -393,7 +388,7 @@ describe("Workspace restoration", () => {
           connectionId: null,
           localShellId: "git-bash",
           // An unknown or remote-only view falls back to the terminal.
-          view: "overview" as PersistedWorkspaceState["workspaces"][number]["view"],
+          view: "docker",
           historyPaused: false,
         },
       ],

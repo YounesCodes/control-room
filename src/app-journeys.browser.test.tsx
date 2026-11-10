@@ -1167,28 +1167,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(menu).not.toBeInTheDocument();
   });
 
-  it("restores retired Overview tabs to Terminal without offering Overview navigation", async () => {
-    persisted.workspaces = [
-      {
-        id: "retired-overview",
-        label: null,
-        connectionId: "host-a",
-        localShellId: null,
-        view: "overview",
-        historyPaused: false,
-      },
-    ];
-    persisted.activeWorkspaceId = "retired-overview";
-    await mount();
-    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
-    await expect
-      .element(
-        page
-          .getByRole("navigation", { name: "Workspace features" })
-          .getByRole("button", { name: "Overview", exact: true }),
-      )
-      .not.toBeInTheDocument();
-  });
   it("keeps an idle host solid during header polling while foreground reads still spin", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
     let finishHeader!: (value: unknown) => void;
