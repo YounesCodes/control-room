@@ -3515,9 +3515,11 @@ code,
 }
 
 /* Terminal/Global read as one segmented control: a single quiet well with
-   two segments, where the active note scope raises its fill instead of
-   drawing its own bordered button. */
+   two segments, where one raised fill slides under the active note scope
+   instead of each button drawing its own. */
 .scratchpad-popover-scope {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex: none;
   gap: 2px;
@@ -3555,8 +3557,23 @@ code,
   background: var(--fill-hover);
 }
 
-.scratchpad-popover-scope button[aria-pressed="true"] {
+.scratchpad-popover-scope::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 2px auto 2px 2px;
+  width: calc(50% - 3px);
+  border-radius: 3px;
   background: var(--fill-active);
+  transition: transform var(--motion-med) var(--ease);
+}
+
+.scratchpad-popover-scope:has(button:last-child[aria-pressed="true"])::before {
+  transform: translateX(calc(100% + 2px));
+}
+
+.scratchpad-popover-scope button[aria-pressed="true"] {
+  background: transparent;
   color: var(--text-strong);
 }
 

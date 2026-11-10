@@ -205,7 +205,7 @@ const WindowsServicesPane = lazy(() =>
 
 /// Fixed geometry for a popover anchored to its trigger: a consistent 6px gap
 /// below the trigger (flipping above when the window lacks the room), clamped
-/// to 8px window-edge gutters, and a max height that keeps long lists
+/// to 12px window-edge gutters, and a max height that keeps long lists
 /// scrolling inside the popup instead of off the window.
 interface AnchoredPopover {
   top?: number;
@@ -234,7 +234,9 @@ const tabSplitCaption: Record<TerminalDropZone, (target: string) => string> = {
 };
 const NEW_TERMINAL_MENU_WIDTH = 272;
 const NEW_TERMINAL_MENU_HEIGHT = 480;
-const POPOVER_GUTTER = 8;
+// Wide enough that a popover opened from a window-edge trigger, such as
+// Scratchpad, sits clear of the window corner instead of hugging its border.
+const POPOVER_GUTTER = 12;
 
 /// Positions a fixed popover beside its anchor. `zoom` is the CSS zoom the popover
 /// renders under: its offsets and size scale by it, so the measurement happens in

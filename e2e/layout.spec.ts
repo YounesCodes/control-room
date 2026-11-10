@@ -15,12 +15,13 @@ describe("Resizable panels in the native app", () => {
     await addConnection("Scratchpad host");
     await openOfflineConnection("Scratchpad host");
     await openScratchpad();
-    await $(".scratchpad-editor textarea").waitForDisplayed();
     const fitsWindow = () =>
       browser.execute(() => {
         const pad = document.querySelector<HTMLElement>(".scratchpad-popover")!;
         const bounds = pad.getBoundingClientRect();
-        const editor = pad.querySelector("textarea")!.getBoundingClientRect();
+        const editor = pad
+          .querySelector(".scratchpad-popover-note:not([hidden]) textarea")!
+          .getBoundingClientRect();
         return (
           bounds.left >= 0 &&
           bounds.top >= 0 &&
