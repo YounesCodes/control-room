@@ -2,7 +2,7 @@ import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
-  Clipboard,
+  Copy,
   Eraser,
   Info,
   MoreHorizontal,
@@ -143,7 +143,7 @@ function HistoryEntryRow({
             {copied ? (
               <Check size={15} aria-hidden="true" />
             ) : (
-              <Clipboard size={15} aria-hidden="true" />
+              <Copy size={15} aria-hidden="true" />
             )}
           </button>
           <button
