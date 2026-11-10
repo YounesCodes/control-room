@@ -324,9 +324,9 @@ describe("application hierarchy", () => {
 
   it("keeps terminal actions visible in focus mode", () => {
     expect(appSource).toContain("terminalFocusMode");
-    expect(appSource).toContain(
-      'aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}',
-    );
+    expect(appSource).toContain('"Exit terminal focus"');
+    expect(appSource).toContain('"Focus terminal"');
+    expect(appSource).toContain("aria-label={focusToggleLabel}");
     expect(stylesSource).toMatch(
       /\.terminal-focus-mode \.app-bar,[\s\S]*\.terminal-focus-mode \.sidebar\s*\{[^}]*display: none;/,
     );

@@ -550,7 +550,12 @@ export function App() {
   const activeTerminalIds = activeTerminalGroup
     ? getTerminalLayoutIds(activeTerminalGroup.layout)
     : [];
-  const terminalSplitMode = activeTerminalGroup !== null && activeTerminalIds.length > 1;
+  // Host views take the whole workspace, so a group's split layout applies only
+  // while its Terminal is showing.
+  const terminalSplitMode =
+    activeTerminalGroup !== null &&
+    activeTerminalIds.length > 1 &&
+    activeWorkspace?.view === "terminal";
   const visibleTerminalIds =
     terminalFocusMode && activeTerminalGroup
       ? activeTerminalIds
@@ -927,7 +932,7 @@ export function App() {
   }
 
   function enterTerminalFocus() {
-    if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
+    if (!activeWorkspace || settingsOpen) return;
     transitionFocusMode("enter", () => {
       setSplitMenuOpen(false);
       setNewTerminalMenuOpen(false);
@@ -1894,7 +1899,15 @@ export function App() {
   });
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
-  const focusToggleAvailable = !settingsOpen && activeWorkspace?.view === "terminal";
+  const focusToggleAvailable = !settingsOpen && Boolean(activeWorkspace);
+  const focusToggleLabel =
+    activeWorkspace?.view === "terminal"
+      ? terminalFocusMode
+        ? "Exit terminal focus"
+        : "Focus terminal"
+      : terminalFocusMode
+        ? "Exit focus"
+        : "Focus view";
   return (
     <div
       ref={shellSize.ref}
@@ -1966,9 +1979,9 @@ export function App() {
           aria-hidden={!focusToggleAvailable}
           disabled={!focusToggleAvailable}
           onClick={terminalFocusMode ? exitTerminalFocus : enterTerminalFocus}
-          aria-label={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+          aria-label={focusToggleLabel}
           aria-pressed={terminalFocusMode}
-          title={terminalFocusMode ? "Exit terminal focus" : "Focus terminal"}
+          title={focusToggleLabel}
         >
           {terminalFocusMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>

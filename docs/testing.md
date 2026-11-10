@@ -64,7 +64,8 @@ Compact covers the smaller window target from PR #188, even before that change
 lands. Captures show the current branch's layout without scaling or hiding its
 clipping. Settings starts on General & Monitoring. Systemd supports
 `populated`, `empty`, `loading`, `error`,
-`stale`, and `overflow`; populated states open the real unit inspector. Data is
+`stale`, `overflow`, and `focus`; populated states open the real unit inspector,
+and `focus` then enters Focus Mode from the Systemd view. Data is
 synthetic and network requests outside the fixture server are blocked. No local
 environment files are loaded. Both scenarios render the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the

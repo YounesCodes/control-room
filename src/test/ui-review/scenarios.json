@@ -19,7 +19,7 @@
       }
     },
     "systemd": {
-      "states": ["populated", "empty", "loading", "error", "stale", "overflow"],
+      "states": ["populated", "empty", "loading", "error", "stale", "overflow", "focus"],
       "ready": ".app-shell",
       "prepare": {
         "populated": [{ "selector": ".systemd-inventory .dense-row", "last": true }],
@@ -27,7 +27,11 @@
           { "selector": ".systemd-inventory .dense-row", "last": true },
           { "role": "button", "name": "Refresh systemd units" }
         ],
-        "overflow": [{ "selector": ".systemd-inventory .dense-row", "last": true }]
+        "overflow": [{ "selector": ".systemd-inventory .dense-row", "last": true }],
+        "focus": [
+          { "selector": ".systemd-inventory .dense-row", "last": true },
+          { "role": "button", "name": "Focus view" }
+        ]
       },
       "settled": {
         "populated": ".systemd-memory-value > [aria-hidden]",
@@ -35,7 +39,8 @@
         "overflow": ".systemd-memory-value > [aria-hidden]",
         "loading": ".connection-section .panel-state[aria-live]",
         "empty": ".systemd-inventory .panel-state",
-        "error": ".connection-section .panel-state-error"
+        "error": ".connection-section .panel-state-error",
+        "focus": ".systemd-memory-value > [aria-hidden]"
       }
     }
   }

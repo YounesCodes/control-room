@@ -1385,7 +1385,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
   }
 
-  it("collapses the focus button slot outside Terminal without leaving a titlebar gap", async () => {
+  it("keeps the focus button slot in every host view without a titlebar gap", async () => {
     await page.viewport(960, 700);
     await mount();
     await navigate("Terminal");
@@ -1395,7 +1395,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await navigate(view);
       await expect
         .poll(() => element.querySelector(".app-window-actions")!.getBoundingClientRect().width)
-        .toBeCloseTo(nativeBounds.width + (view === "Terminal" ? 40 : 0));
+        .toBeCloseTo(nativeBounds.width + 40);
       const settings = page
         .getByRole("button", { name: "Open Settings" })
         .element()
@@ -1403,11 +1403,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const actions = element.querySelector(".app-window-actions")!.getBoundingClientRect();
       expect(actions.left - settings.right).toBeLessThanOrEqual(3);
       expect(controls.getBoundingClientRect().left).toBe(nativeBounds.left);
-      if (view !== "Terminal") {
-        expect(actions.width).toBeCloseTo(controls.getBoundingClientRect().width);
-        expect(element.querySelector(".app-focus-toggle")).toHaveAttribute("inert");
-        expect(element.querySelector(".app-focus-toggle")).toHaveAttribute("aria-hidden", "true");
-      }
+      expect(element.querySelector(".app-focus-toggle")).not.toHaveAttribute("inert");
     }
   });
 
@@ -1462,36 +1458,39 @@ describe("complete app journeys with typed IPC fixtures", () => {
     }
   });
 
-  it("animates the focus slot out and back while native window controls stay fixed", async () => {
+  it("offers Focus Mode from host views without moving the toggle", async () => {
     await page.viewport(960, 700);
     await mount();
     await navigate("Terminal");
-    const actions = element.querySelector(".app-window-actions")!;
+    const shell = element.querySelector<HTMLElement>(".app-shell")!;
+    const focus = element.querySelector<HTMLButtonElement>(".app-focus-toggle")!;
     const controls = element.querySelector(".window-controls")!;
-    const focus = element.querySelector(".app-focus-toggle")!;
-    const bar = element.querySelector(".app-bar")!;
-    const initial = controls.getBoundingClientRect().left;
-    const style = document.createElement("style");
-    style.id = "focus-slot-motion-test";
-    style.textContent =
-      ".app-window-actions, .app-bar, .app-window-actions .app-focus-toggle { transition-duration: 10s !important; transition-timing-function: linear !important; }";
-    document.head.append(style);
-    for (const view of ["Docker", "Terminal"]) {
-      await navigate(view);
-      // Flush layout before inspecting the real CSS transitions.
-      actions.getBoundingClientRect();
-      const animations = [actions, focus, bar].flatMap((node) => node.getAnimations());
-      expect(animations.length).toBeGreaterThan(0);
-      for (const animation of animations) {
-        animation.pause();
-        animation.currentTime = 5000;
-      }
-      expect(actions.getBoundingClientRect().width).toBeCloseTo(158, 0);
-      expect(Number(getComputedStyle(focus).opacity)).toBeCloseTo(0.5);
-      expect(controls.getBoundingClientRect().left).toBeCloseTo(initial);
-      for (const animation of animations) animation.finish();
-      expect(actions.getBoundingClientRect().width).toBeCloseTo(view === "Terminal" ? 178 : 138);
-    }
+    const focusLeft = focus.getBoundingClientRect().left;
+    const controlsLeft = controls.getBoundingClientRect().left;
+    await navigate("Docker");
+    expect(shell.dataset.focusToggle).toBe("visible");
+    expect(focus.disabled).toBe(false);
+    expect(focus.getBoundingClientRect().left).toBeCloseTo(focusLeft);
+    await page.getByRole("button", { name: "Focus view", exact: true }).click();
+    expect(focus.getAttribute("aria-pressed")).toBe("true");
+    expect(shell).toHaveClass("terminal-focus-mode");
+    expect(getComputedStyle(element.querySelector(".sidebar")!).display).toBe("none");
+    expect(element.querySelector(".terminal-workspace-pane-visible")).toBeNull();
+    expect(element.querySelector(".workspace-content")).not.toHaveClass("terminal-pane-layout");
+    expect(focus.getBoundingClientRect().left).toBeCloseTo(focusLeft);
+    expect(controls.getBoundingClientRect().left).toBeCloseTo(controlsLeft);
+    await page.getByRole("button", { name: "Exit focus", exact: true }).click();
+    expect(focus.getAttribute("aria-pressed")).toBe("false");
+    await expect
+      .element(
+        page
+          .getByRole("navigation", { name: "Workspace features" })
+          .getByRole("button", { name: "Docker", exact: true }),
+      )
+      .toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    expect(shell.dataset.focusToggle).toBe("hidden");
+    expect(focus.disabled).toBe(true);
   });
 
   it("slides sidebar status left to reveal connection actions on hover and focus", async () => {
@@ -1813,15 +1812,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await navigate(view);
         const header = element.querySelector<HTMLElement>(".app-bar")!;
         expect(header.getBoundingClientRect().top).toBeLessThanOrEqual(1);
-        if (view === "Terminal")
-          await expect
-            .poll(() => element.querySelector(".app-focus-toggle")!.getBoundingClientRect().width)
-            .toBe(40);
+        await expect
+          .poll(() => element.querySelector(".app-focus-toggle")!.getBoundingClientRect().width)
+          .toBe(40);
         const buttons = [
           ".update-indicator-button",
           '[aria-label="Open documentation"]',
           '[aria-label="Open Settings"]',
-          ...(view === "Terminal" ? [".app-focus-toggle"] : []),
+          ".app-focus-toggle",
         ].map((selector) => element.querySelector(selector)!);
         const glyphs = buttons.map((button) =>
           button.querySelector("svg")!.getBoundingClientRect(),

@@ -102,9 +102,11 @@ or its session.
 Anchor the Focus terminal toggle beside the window controls at the top right.
 Keep the same button and screen position in both modes, including split groups
 and overflowing tabs, so toggling never moves it away from the pointer.
-Outside Terminal, collapse its titlebar slot and fade and slide the button out;
-reverse the motion when Terminal returns. Keep native window controls fixed and
-make the hidden button inert. Reduced motion applies the layout change immediately.
+Offer the same toggle in every host view, labeled Focus view there; Focus Mode
+hides the sidebar and gives that view the full workspace. Only Settings collapses
+its titlebar slot, fading and sliding the button out and reversing the motion on
+return. Keep native window controls fixed and make the hidden button inert.
+Reduced motion applies the layout change immediately.
 Entering and leaving Focus Mode coordinates the sidebar and titlebar exit/entrance,
 tab-strip movement, pane controls, and workspace bounds in one short transition.
 Keep terminal text at its original pixel size and native window controls fixed.

@@ -232,6 +232,9 @@ ${JSON.stringify(registry, null, 2)}`);
           return {
             shell: box(".app-shell"),
             compactNavigation: document.querySelector(".app-shell").hasAttribute("data-compact"),
+            focusMode: document
+              .querySelector(".app-shell")
+              .classList.contains("terminal-focus-mode"),
             header: box(".app-bar"),
             sidebar: box(".sidebar"),
             tabs: box(".session-tabs"),
@@ -243,24 +246,29 @@ ${JSON.stringify(registry, null, 2)}`);
         const {
           shell,
           compactNavigation,
+          focusMode,
           header,
           sidebar,
           tabs,
           content,
           settings: settingsBounds,
         } = manifest.layout;
-        if (!shell || !header || header.height <= 0 || Math.abs(shell.width - viewport.width) > 1)
+        // Focus Mode hides the titlebar and rail by design.
+        const headerShown = header && header.height > 0;
+        const railExpected = !compactNavigation && !focusMode;
+        if (!shell || (!headerShown && !focusMode) || Math.abs(shell.width - viewport.width) > 1)
           throw new Error(
             "Capture must render the App shell at the requested viewport without scaling",
           );
         if (
           options.scenario === "systemd" &&
-          ((!compactNavigation && (!sidebar || sidebar.width <= 0)) ||
+          ((railExpected && (!sidebar || sidebar.width <= 0)) ||
+            (focusMode && (headerShown || sidebar?.width > 0)) ||
             !tabs ||
             !content ||
-            (!compactNavigation && content.left < sidebar.right - 1) ||
-            content.top < Math.max(header.bottom, tabs.bottom) - 1 ||
-            (!compactNavigation && content.width >= viewport.width - 1))
+            (railExpected && content.left < sidebar.right - 1) ||
+            content.top < Math.max(headerShown ? header.bottom : 0, tabs.bottom) - 1 ||
+            (railExpected && content.width >= viewport.width - 1))
         )
           throw new Error(
             "Systemd capture must respect the real rail, titlebar, and workspace tabs",
