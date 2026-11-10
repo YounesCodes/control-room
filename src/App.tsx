@@ -44,7 +44,6 @@ import {
   Network,
   Pencil,
   Plus,
-  Rows2,
   Server,
   Settings,
   ShieldAlert,
@@ -2474,31 +2473,36 @@ export function App() {
                           splitMenuButtonRef.current?.focus();
                         }}
                       >
-                        <div className="terminal-split-directions" aria-label="Split direction">
-                          <button
-                            className={splitDirection === "vertical" ? "active" : ""}
-                            type="button"
-                            onClick={() => setSplitDirection("vertical")}
-                            aria-pressed={splitDirection === "vertical"}
-                          >
-                            <Columns2 size={14} />
-                            <span>
-                              Split vertically
-                              <small>Side by side</small>
-                            </span>
-                          </button>
-                          <button
-                            className={splitDirection === "horizontal" ? "active" : ""}
-                            type="button"
-                            onClick={() => setSplitDirection("horizontal")}
-                            aria-pressed={splitDirection === "horizontal"}
-                          >
-                            <Rows2 size={14} />
-                            <span>
-                              Split horizontally
-                              <small>Top and bottom</small>
-                            </span>
-                          </button>
+                        <div
+                          className="terminal-split-directions"
+                          role="group"
+                          aria-label="Split direction"
+                        >
+                          {(
+                            [
+                              ["vertical", "Split vertically", "Side by side"],
+                              ["horizontal", "Split horizontally", "Top and bottom"],
+                            ] as const
+                          ).map(([direction, name, label]) => (
+                            <button
+                              key={direction}
+                              className={splitDirection === direction ? "active" : ""}
+                              type="button"
+                              onClick={() => setSplitDirection(direction)}
+                              aria-pressed={splitDirection === direction}
+                              aria-label={`${name}, ${label.toLowerCase()}`}
+                            >
+                              {/* A miniature of the result: the new terminal is the filled tile. */}
+                              <span
+                                className={`terminal-split-preview ${direction}`}
+                                aria-hidden="true"
+                              >
+                                <i />
+                                <i />
+                              </span>
+                              <span>{label}</span>
+                            </button>
+                          ))}
                         </div>
                       </TerminalTargetMenu>
                     )}

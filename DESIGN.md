@@ -118,6 +118,9 @@ controls appear immediately on exit, outside the animated workspace. Use a short
 live workspace slide and sidebar fade rather than captured terminal frames or
 animated terminal scaling; resize the terminal once per toggle.
 
+The Split menu's direction cards show the result in miniature, the new terminal's
+tile filled, above a one-line label.
+
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Save pane proportions with
 their group and retain them when switching views. Constrain displayed sizes in

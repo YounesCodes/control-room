@@ -791,6 +791,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const gitLogo = splitChoice.element().querySelector<HTMLImageElement>(".local-shell-mark img")!;
     await vi.waitFor(() => expect(gitLogo.naturalWidth).toBeGreaterThan(0));
     expect(getComputedStyle(gitLogo).filter).toBe("grayscale(1) brightness(0.85)");
+    // Direction cards keep their label on one line beside a miniature of the result.
+    const directions = [
+      ...element.ownerDocument.querySelectorAll<HTMLElement>(
+        ".terminal-split-directions button > span:last-child",
+      ),
+    ];
+    expect(directions.map((label) => label.textContent)).toEqual([
+      "Side by side",
+      "Top and bottom",
+    ]);
+    for (const label of directions) expect(label.getBoundingClientRect().height).toBeLessThan(20);
+    await page.screenshot({ path: "../test-results/terminal-split-menu.png" });
     await userEvent.hover(splitChoice.element());
     await expect.poll(() => getComputedStyle(gitLogo).filter).toBe("none");
     await splitChoice.click();
