@@ -275,7 +275,7 @@ describe("Local Terminal Mode desktop", () => {
     await expect($("aria/Saved connections")).toBeDisplayed();
     await $('button[aria-label="New terminal"]').click();
     await expect($(".new-terminal-menu")).toBeDisplayed();
-    await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
+    await $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`).click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await $("button=Add connection").click();
     await expect($("[role=dialog]")).toBeDisplayed();

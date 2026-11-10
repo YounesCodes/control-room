@@ -199,8 +199,7 @@ export function DockerPane({
     cache.loading ? "Reading Docker containers…" : null,
   ]
     .filter(Boolean)
-    .join("
-");
+    .join("\n");
 
   useEffect(() => {
     if (cache.error) setTools("info");

@@ -57,7 +57,11 @@ const sections = {
     "sudo permissions root passwordless structured operations",
   ],
   updates: ["app", "Control Room updates", "version automatic check download restart"],
-  ssh: ["app", "SSH environment", "ssh.exe openssh executable config agent paths platform diagnostics"],
+  ssh: [
+    "app",
+    "SSH environment",
+    "ssh.exe openssh executable config agent paths platform diagnostics",
+  ],
 } satisfies Record<string, [Category, string, string]>;
 
 const terminalTabs = [

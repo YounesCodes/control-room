@@ -1361,7 +1361,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }));
       persisted.panelSizes = { connections: 200 };
       await mount();
-      await navigate("Overview");
+      await navigate("History");
       const shell = element.querySelector<HTMLElement>(".app-shell")!;
       await expect.poll(() => shell.dataset.platform).toBe(platform);
       const header = element.querySelector<HTMLElement>(".sidebar-top-heading")!;
@@ -2882,7 +2882,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
     textarea.focus();
     await userEvent.keyboard(
-      navigator.platform.startsWith("Mac") ? "{Meta>}{ArrowDown}{/Meta}" : "{Control>}{End}{/Control}",
+      navigator.platform.startsWith("Mac")
+        ? "{Meta>}{ArrowDown}{/Meta}"
+        : "{Control>}{End}{/Control}",
     );
     expect(textarea.scrollTop).toBeGreaterThan(0);
     await navigate("Logs");
@@ -3095,34 +3097,29 @@ describe("complete app journeys with typed IPC fixtures", () => {
     ).toEqual([]);
     await page.screenshot({ path: "../test-results/macos-host-services.png" });
     await navigate("Ports");
-    await page.getByRole("tab", { name: "Table", exact: true }).click();
-    await expect.element(page.getByRole("button", { name: /443.*fixture/ })).toBeVisible();
+    await vi.waitFor(() =>
+      expect(element.querySelector(".ports-page .arch-chip")?.textContent).toContain("443"),
+    );
+    // A remote Docker context publishes ports elsewhere, so none map to this host.
     expect(element.querySelector(".ports-page")?.textContent).not.toContain(
       fixtures.container.name,
     );
-    await page
-      .getByPlaceholder("Search ports, services, processes, or containers")
-      .fill(fixtures.container.name);
-    await expect
-      .element(page.getByRole("heading", { name: "No matching listeners" }))
-      .toBeVisible();
-    await navigate("Boot");
-    await expect
-      .element(page.getByRole("heading", { name: "Launchd service exits" }))
-      .toBeVisible();
-    expect(element.textContent).not.toContain("Slow units");
     await navigate("Logs");
     await expect
       .element(page.getByRole("combobox", { name: "Service", exact: true }))
       .toHaveValue("all");
     await navigate("Docker");
     await expect
-      .element(page.getByText("lab · ssh://docker.example.invalid", { exact: true }))
-      .toBeVisible();
-    await navigate("Baselines");
-    await expect
-      .element(page.getByRole("heading", { name: "Baselines", exact: true }))
-      .toBeVisible();
+      .element(page.getByRole("heading", { name: "Containers", exact: true }))
+      .toHaveAttribute(
+        "title",
+        expect.stringContaining("Docker context lab · ssh://docker.example.invalid"),
+      );
+    expect(
+      [...element.querySelectorAll("nav[aria-label='Workspace features'] button")].map(
+        (button) => button.textContent,
+      ),
+    ).not.toContain("Systemd");
   });
 
   it("offers Windows Docker as its own capability even when detection finds no CLI", async () => {

@@ -109,6 +109,7 @@ it.each(["local", "remote"])(
         : createRemoteWorkspace(connection());
     root.render(
       <TerminalPane
+        platform="windows"
         workspace={{ ...workspace, state: "connected" }}
         settings={settings}
         visible
@@ -513,6 +514,7 @@ it("puts the reconnect action on the ended-session notice", async () => {
   const onReconnect = vi.fn();
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createRemoteWorkspace(connection()),
         state: "error",
@@ -567,6 +569,7 @@ it("labels the notice action Restart for an ended local shell", async () => {
   root = createRoot(container);
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createLocalWorkspace({
           id: "test-shell",
@@ -597,6 +600,7 @@ it("keeps the notice action off live sessions", async () => {
   root = createRoot(container);
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createRemoteWorkspace(connection()),
         state: "connected",

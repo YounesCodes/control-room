@@ -627,87 +627,6 @@ fn parse_firewall(text: &str) -> FirewallStatus {
         collected_at: Utc::now().to_rfc3339(),
     }
 }
-pub(crate) fn identity(c: &SavedConnection) -> Result<HostIdentity, String> {
-    let text = read(
-        c,
-        "macos_identity",
-        r#"printf 'hostname=%s\nos_version=%s\nkernel=%s\narchitecture=%s\n' "$(hostname)" "$(sw_vers -productVersion)" "$(uname -r)" "$(uname -m)"; identity=$(/usr/sbin/ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformUUID/ {printf "%s",$4}'); if test -n "$identity"; then printf '%s' "$identity" | /usr/bin/shasum -a 256 | cut -c1-16; fi"#,
-        &Elevation::None,
-    )?;
-    let values: HashMap<_, _> = text.lines().filter_map(|l| l.split_once('=')).collect();
-    let get = |k| {
-        values
-            .get(k)
-            .filter(|v| !v.is_empty())
-            .map(|v| v.to_string())
-    };
-    let fingerprint = text
-        .lines()
-        .last()
-        .filter(|v| v.len() == 16 && v.bytes().all(|b| b.is_ascii_hexdigit()))
-        .map(str::to_owned);
-    Ok(HostIdentity {
-        hostname: get("hostname"),
-        machine_fingerprint: fingerprint,
-        os_id: Some("macos".into()),
-        os_version: get("os_version"),
-        kernel: get("kernel"),
-        architecture: get("architecture"),
-    })
-}
-pub(crate) fn filesystems(c: &SavedConnection) -> Result<Vec<Filesystem>, String> {
-    let text = read(
-        c,
-        "macos_filesystems",
-        "df -kP || exit $?; printf '\\n__CR_MOUNTS__\\n'; mount",
-        &Elevation::None,
-    )?;
-    parse_filesystems(&text)
-}
-fn parse_filesystems(text: &str) -> Result<Vec<Filesystem>, String> {
-    let (df, mount) = text
-        .split_once("__CR_MOUNTS__")
-        .ok_or("macOS filesystem response is incomplete")?;
-    let types: HashMap<_, _> = mount
-        .lines()
-        .filter_map(|l| {
-            let (_, r) = l.split_once(" on ")?;
-            let (path, kind) = r.rsplit_once(" (")?;
-            Some((path, kind.split([',', ')']).next()?))
-        })
-        .collect();
-    let mut results = vec![];
-    for line in df.lines().skip(1) {
-        let f: Vec<_> = line.split_whitespace().collect();
-        if f.len() < 6 || results.len() >= 200 {
-            continue;
-        }
-        let mut path = line;
-        for _ in 0..5 {
-            path = path
-                .trim_start()
-                .trim_start_matches(|c: char| !c.is_whitespace());
-        }
-        let path = path.trim_start().to_string();
-        let kind = types.get(path.as_str()).copied().unwrap_or("unknown");
-        if kind == "devfs" || kind == "autofs" {
-            continue;
-        }
-        if let (Ok(size), Ok(used)) = (
-            f[1].parse::<u64>(),
-            f[4].trim_end_matches('%').parse::<u8>(),
-        ) && used <= 100
-        {
-            results.push(Filesystem {
-                mount_point: path,
-                filesystem_type: kind.into(),
-                size_kib: size,
-                used_percent: used,
-            });
-        }
-    }
-    Ok(results)
-}
 pub(crate) fn log_command(service: &str, lines: u16, follow: bool) -> Result<String, String> {
     if !LOG_TAIL_OPTIONS.contains(&lines) {
         return Err("Unsupported log tail length".into());
@@ -762,149 +681,6 @@ case "$pid" in ''|*[!0-9]*) ;; *) predicate="($predicate) OR processIdentifier =
     }))
 }
 
-pub(crate) fn boot(
-    c: &SavedConnection,
-    selected: Option<&str>,
-    elevation: &Elevation,
-) -> Result<BootDiagnostics, String> {
-    let text = read(
-        c,
-        "macos_boots",
-        r#"printf 'epoch='; sysctl -n kern.boottime | awk '{gsub(/,/,"",$4);print $4}'; printf 'uuid='; sysctl -n kern.bootsessionuuid; TZ=UTC last -wy -n 20 reboot"#,
-        &Elevation::None,
-    )?;
-    let (records, epochs) = parse_boots(&text)?;
-    let selected = selected
-        .map(str::to_ascii_lowercase)
-        .unwrap_or_else(|| records[0].id.clone());
-    let index = records
-        .iter()
-        .position(|r| r.id == selected)
-        .ok_or("That boot is not present in this Mac's reboot records")?;
-    let start = epochs[index];
-    let end = if index > 0 {
-        format!(" --end @{}", epochs[index - 1])
-    } else {
-        String::new()
-    };
-    let log_script = format!(
-        "/bin/bash -o pipefail -c {}",
-        quote(&format!(
-            "/usr/bin/log show --start @{start}{end} --style syslog --predicate 'messageType == error OR messageType == fault' | tail -n 30"
-        ))
-    );
-    let journal = read(c, "macos_boot_logs", &log_script, elevation);
-    let failures = if index > 0 {
-        Err("Historical launchd exit states are not retained by macOS.".into())
-    } else {
-        services(c).map(|s| {
-            s.into_iter()
-                .filter(|s| s.active_state == "failed")
-                .collect::<Vec<_>>()
-        })
-    };
-    let collected_at = Utc::now().to_rfc3339();
-    let unavailable = |message: &str| BootSection {
-        collected_at: collected_at.clone(),
-        data: None,
-        error: Some(message.into()),
-        permission_required: false,
-    };
-    let journal = match journal {
-        Ok(logs) => BootSection {
-            collected_at: collected_at.clone(),
-            data: Some(
-                logs.lines()
-                    .filter(|line| {
-                        !line.trim().is_empty()
-                            && !line.starts_with("Timestamp")
-                            && !line.starts_with("Filtering the log data")
-                    })
-                    .map(str::to_owned)
-                    .collect(),
-            ),
-            error: None,
-            permission_required: false,
-        },
-        Err(e) => BootSection {
-            collected_at: collected_at.clone(),
-            data: None,
-            permission_required: e.to_lowercase().contains("permission"),
-            error: Some(e),
-        },
-    };
-    let failed_units = match failures {
-        Ok(s) => BootSection {
-            collected_at: collected_at.clone(),
-            data: Some(s),
-            error: None,
-            permission_required: false,
-        },
-        Err(e) => BootSection {
-            collected_at: collected_at.clone(),
-            data: None,
-            error: Some(e),
-            permission_required: false,
-        },
-    };
-    Ok(BootDiagnostics {
-        id: uuid::Uuid::new_v4().to_string(),
-        collected_at: collected_at.clone(),
-        selected_boot_id: Some(selected),
-        boots: BootSection {
-            collected_at: collected_at.clone(),
-            data: Some(records),
-            error: None,
-            permission_required: false,
-        },
-        timing: unavailable("macOS does not expose systemd kernel/userspace boot timing."),
-        slow_units: BootSection {
-            collected_at: collected_at.clone(),
-            data: None,
-            error: Some("macOS does not expose per-service boot durations.".into()),
-            permission_required: false,
-        },
-        failed_units,
-        journal,
-    })
-}
-fn parse_boots(text: &str) -> Result<(Vec<BootRecord>, Vec<i64>), String> {
-    let fields: HashMap<_, _> = text.lines().filter_map(|l| l.split_once('=')).collect();
-    let epoch = fields
-        .get("epoch")
-        .and_then(|s| s.trim().parse::<i64>().ok())
-        .ok_or("macOS boot time was unavailable")?;
-    let uuid = fields
-        .get("uuid")
-        .map(|s| s.trim().replace('-', "").to_ascii_lowercase())
-        .filter(|s| s.len() == 32 && s.bytes().all(|c| c.is_ascii_hexdigit()))
-        .ok_or("macOS boot identifier was unavailable")?;
-    let date = chrono::DateTime::from_timestamp(epoch, 0).ok_or("Invalid macOS boot time")?;
-    let mut records = vec![BootRecord {
-        index: 0,
-        id: uuid,
-        range: date.to_rfc3339(),
-        current: true,
-    }];
-    let mut epochs = vec![epoch];
-    for row in text.lines().filter_map(|l| l.strip_prefix("reboot time")) {
-        let parts = row.split_whitespace().take(5).collect::<Vec<_>>().join(" ");
-        if let Ok(date) = chrono::NaiveDateTime::parse_from_str(&parts, "%a %b %e %Y %H:%M") {
-            let stamp = date.and_utc().timestamp();
-            if stamp < epoch - 60 && !epochs.contains(&stamp) {
-                records.push(BootRecord {
-                    index: -(records.len() as i32),
-                    id: format!("{stamp:032x}"),
-                    range: format!("{} UTC (reboot record)", date.format("%Y-%m-%d %H:%M")),
-                    current: false,
-                });
-                epochs.push(stamp);
-            }
-        }
-    }
-    Ok((records, epochs))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -953,25 +729,6 @@ mod tests {
         assert_eq!(fw.backend.as_deref(), Some("macos"));
         assert!(fw.active.is_some());
         assert!(fw.packet_filter.is_some());
-        let id = identity(&c).unwrap();
-        assert_eq!(id.os_id.as_deref(), Some("macos"));
-        assert!(id.machine_fingerprint.is_some());
-        assert!(
-            filesystems(&c)
-                .unwrap()
-                .iter()
-                .any(|f| f.mount_point == "/" && f.filesystem_type == "apfs")
-        );
-        let b = boot(&c, None, &Elevation::None).unwrap();
-        assert!(b.boots.data.as_ref().unwrap()[0].current);
-        assert!(b.failed_units.error.is_none());
-        assert!(b.journal.error.is_none(), "{:?}", b.journal.error);
-        if let Some(previous) = b.boots.data.unwrap().iter().find(|b| !b.current) {
-            let old = boot(&c, Some(&previous.id), &Elevation::None).unwrap();
-            assert!(old.failed_units.data.is_none());
-            assert!(old.failed_units.error.is_some());
-        }
-        assert!(boot(&c, Some("injected; date"), &Elevation::None).is_err());
         read(
             &c,
             "test_macos_logs",
@@ -1083,13 +840,6 @@ launchctl bootstrap gui/$(id -u) {path}/job.plist || exit $?; printf 'gui/%s/{la
         assert_eq!(f.rules[0].to, "/Applications/Test App.app");
     }
     #[test]
-    fn macos_df_preserves_mount_paths_and_filters_pseudo_filesystems() {
-        let f=parse_filesystems("Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk1 100 25 75 25% /Volumes/My  Disk\ndevfs 1 1 0 100% /dev\n__CR_MOUNTS__\n/dev/disk1 on /Volumes/My  Disk (apfs, local)\ndevfs on /dev (devfs, local)\n").unwrap();
-        assert_eq!(f.len(), 1);
-        assert_eq!(f[0].mount_point, "/Volumes/My  Disk");
-        assert_eq!(f[0].filesystem_type, "apfs");
-    }
-    #[test]
     fn rejects_predicate_and_shell_injection_in_log_sources() {
         for s in [
             "bad' OR TRUE",
@@ -1111,14 +861,5 @@ launchctl bootstrap gui/$(id -u) {path}/job.plist || exit $?; printf 'gui/%s/{la
         );
         assert!(log_command("all", 0, false).is_err());
         assert_eq!(quote("a'b"), "'a'\\''b'");
-    }
-    #[test]
-    fn macos_boots_keep_actual_current_uuid_and_timestamp_previous_records() {
-        let (b,e)=parse_boots("epoch=1792986910\nuuid=2263C9E5-27E0-4236-B8F1-9A22C19AA9C7\nreboot time Mon Oct 26 2026 03:55\nreboot time Sun Oct 25 2026 03:32\n").unwrap();
-        assert_eq!(b.len(), 2);
-        assert_eq!(b[0].id, "2263c9e527e04236b8f19a22c19aa9c7");
-        assert!(e[1] < e[0]);
-        assert!(!b[1].current);
-        assert!(parse_boots("epoch=nan\nuuid=invalid").is_err());
     }
 }

@@ -4,7 +4,6 @@ import { FileClock, RefreshCw, Search } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
-import type { SystemdStateFilter } from "../lib/systemd-units";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
 import type { CachedList, LogSourceSelection, SavedConnection, SystemdUnit } from "../types";
 
@@ -27,7 +26,7 @@ export function LaunchdServicesPane({
     () => focusId ?? reconcileSelection(cache.items, null),
   );
   const [search, setSearch] = useState("");
-  const [stateFilter, setStateFilter] = useState<SystemdStateFilter>("all");
+  const [stateFilter, setStateFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const cacheRef = useRef(cache);
   const requestRef = useRef(0);
@@ -89,7 +88,8 @@ export function LaunchdServicesPane({
     setTypeFilter("all");
   }
 
-  if (cache.loading && !cache.items.length) return <LoadingState label="Reading launchd services…" />;
+  if (cache.loading && !cache.items.length)
+    return <LoadingState label="Reading launchd services…" />;
   if (cache.error && !cache.items.length) {
     return (
       <ErrorState
@@ -135,7 +135,7 @@ export function LaunchdServicesPane({
           <select
             aria-label="Service state"
             value={stateFilter}
-            onChange={(event) => setStateFilter(event.target.value as SystemdStateFilter)}
+            onChange={(event) => setStateFilter(event.target.value)}
           >
             <option value="all">All states</option>
             <option value="failed">Failed</option>
@@ -172,9 +172,7 @@ export function LaunchdServicesPane({
             </button>
           ))}
           {!filtered.length && (
-            <EmptyState
-              title={cache.items.length ? "No matching services" : "No services found"}
-            />
+            <EmptyState title={cache.items.length ? "No matching services" : "No services found"} />
           )}
         </div>
       </div>

@@ -1,9 +1,11 @@
+import { isMac } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { openSplitMenu, openLocal, runtime, terminalCommand } from "./helpers";
 
-describe("Focus Mode live layout in WebView2", () => {
+// Samples WebView2 frame timing. The macOS suites cover Focus Mode entry and exit.
+(isMac ? describe.skip : describe)("Focus Mode live layout in WebView2", () => {
   it("interpolates both directions and keeps split sessions alive through rapid toggles", async () => {
     await openLocal();
     await terminalCommand("echo FOCUS_LIVE", "FOCUS_LIVE");

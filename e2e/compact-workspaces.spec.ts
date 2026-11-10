@@ -1,3 +1,4 @@
+import { isMac } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import {
@@ -13,7 +14,8 @@ import {
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
-describe("Compact native windows and live terminal arrangements", () => {
+// Compact layouts apply below 860px. Mac windows keep a 960px minimum width.
+(isMac ? describe.skip : describe)("Compact native windows and live terminal arrangements", () => {
   it("settles a side-by-side split without scrolling or wobbling", async () => {
     await browser.setWindowSize(1180, 700);
     await openLocal();

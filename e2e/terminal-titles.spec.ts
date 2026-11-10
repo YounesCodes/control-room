@@ -1,8 +1,11 @@
+import { isMac } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { openLocal, runtime, terminalCommand, terminalContains } from "./helpers";
 
-describe("Shell-reported terminal titles", () => {
+// Drives cmd.exe syntax and Windows ConPTY title forwarding. Title parsing is
+// platform-neutral and covered by the terminal surface browser tests.
+(isMac ? describe.skip : describe)("Shell-reported terminal titles", () => {
   it("shows only the program, restores identity on prompt return and preserves manual names", async () => {
     await openLocal();
     await terminalCommand("echo TITLE_READY", "TITLE_READY");

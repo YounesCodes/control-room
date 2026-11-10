@@ -567,7 +567,7 @@ describe("HistoryPane", () => {
     await screen.findByText("Integration not installed");
     api.historyIntegrationStatus.mockRejectedValueOnce(new Error("SSH unavailable"));
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await screen.findByText(/could not check the remote Bash integration/);
+    await screen.findByText(/could not check the remote shell integration/);
     expect(screen.getByText("Status unavailable")).toBeTruthy();
   });
   it("keeps refresh busy until the remote integration check also settles", async () => {
@@ -666,7 +666,7 @@ describe("HistoryPane", () => {
     api.history.mockResolvedValue([]);
     render(<HistoryPane {...props()} />);
     expect(await screen.findByText("No saved commands")).toBeTruthy();
-    expect(screen.getByText(/could not check the remote Bash integration/)).toBeTruthy();
+    expect(screen.getByText(/could not check the remote shell integration/)).toBeTruthy();
     expect(screen.queryByText(/Reconnect this connection or open a new terminal, then/)).toBeNull();
   });
 
