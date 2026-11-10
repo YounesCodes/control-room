@@ -203,6 +203,17 @@ describe("PortsPane", () => {
     expect(screen.getByText("No ports match the current filters")).toBeTruthy();
     expect(element.querySelector(".panel-state .spinner")).toBeNull();
   });
+
+  it("says ports could not be read, not that filters hid them, when nothing loaded", () => {
+    renderPane(
+      null,
+      { ...sockets, items: [], error: "Connection timed out" },
+      { ...containers, items: [] },
+    );
+    const graph = screen.getByRole("region", { name: "Ports graph" });
+    expect(within(graph).getByText("Listening ports unavailable")).toBeTruthy();
+    expect(screen.queryByText("No ports match the current filters")).toBeNull();
+  });
   it("shows a spinner before the first listener read has returned", () => {
     const { container: element } = renderPane(
       null,

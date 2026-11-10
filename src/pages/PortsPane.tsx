@@ -381,7 +381,9 @@ export function PortsPane({
               ? "Connections unavailable"
               : cache.loading
                 ? "Reading listening ports…"
-                : kind === "listeners" && cache.error
+                : // An empty graph after a failed read is missing data, not a
+                  // filter result. The overview says so too when nothing loaded.
+                  cache.error && (kind === "listeners" || !cache.items.length)
                   ? "Listening ports unavailable"
                   : kind === "connections" && !connections?.groups.length
                     ? "No established connections"
