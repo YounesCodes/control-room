@@ -216,5 +216,14 @@ export async function openScratchpad() {
   await feature("Terminal");
   const trigger = $("[data-scratchpad-trigger]");
   if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
-  await $(".scratchpad-popover textarea").waitForDisplayed();
+  await scratchpadNote();
+}
+
+/** The Scratchpad note on show, once loaded; the other note stays mounted but hidden. */
+export async function scratchpadNote() {
+  const note = $(".scratchpad-popover-note:not([hidden])");
+  const editor = note.$("textarea");
+  await editor.waitForDisplayed();
+  await browser.waitUntil(async () => (await editor.getAttribute("readonly")) === null);
+  return note;
 }
