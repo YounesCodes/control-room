@@ -783,17 +783,19 @@ it("keeps warning retry actions below long messages without splitting their labe
     await page.viewport(width, 760);
     for (const name of ["Retry ports", "Retry connections", "Retry Docker", "Retry with sudo"]) {
       const button = screen.getByRole("button", { name });
-      const warning = button.closest(".inline-warning")!;
-      const message = document.createRange();
-      message.setStart(warning, 0);
-      message.setEndBefore(button);
+      const warning = button.closest(".reading-warning")!;
+      const message = warning.querySelector(".reading-warning-detail")!.getBoundingClientRect();
       const bounds = button.getBoundingClientRect();
-      expect(bounds.height).toBeLessThanOrEqual(
-        parseFloat(getComputedStyle(button).lineHeight) + 1,
-      );
-      expect(bounds.top).toBeGreaterThanOrEqual(message.getBoundingClientRect().bottom + 8);
-      expect(bounds.right).toBeLessThanOrEqual(warning.getBoundingClientRect().right - 12);
+      // One line of label, below the whole reason and inside the row.
+      expect(bounds.height).toBeLessThanOrEqual(30);
       expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
+      expect(bounds.top).toBeGreaterThanOrEqual(message.bottom + 4);
+      expect(bounds.left).toBeCloseTo(message.left, 0);
+      expect(bounds.right).toBeLessThanOrEqual(warning.getBoundingClientRect().right);
+      // The reason is readable muted text, not amber like the warning icon.
+      expect(getComputedStyle(warning.querySelector(".reading-warning-detail")!).color).toBe(
+        "rgb(173, 173, 170)",
+      );
     }
   }
   vi.mocked(api.listPorts).mockClear().mockResolvedValueOnce(sockets.items);

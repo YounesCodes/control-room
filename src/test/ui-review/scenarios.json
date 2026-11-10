@@ -41,14 +41,23 @@
       }
     },
     "dialogs": {
-      "states": ["connection", "groups", "rename", "metrics"],
+      "states": ["connection", "connection-error", "groups", "groups-no-tags", "rename", "metrics"],
       "ready": ".app-shell",
       "prepare": {
         "connection": [
           { "selector": ".compact-navigation-toggle", "optional": true },
           { "role": "button", "name": "Add connection" }
         ],
+        "connection-error": [
+          { "selector": ".compact-navigation-toggle", "optional": true },
+          { "role": "button", "name": "Add connection" },
+          { "selector": ".connection-form button[type='submit']" }
+        ],
         "groups": [
+          { "selector": ".compact-navigation-toggle", "optional": true },
+          { "role": "button", "name": "Manage groups and tags" }
+        ],
+        "groups-no-tags": [
           { "selector": ".compact-navigation-toggle", "optional": true },
           { "role": "button", "name": "Manage groups and tags" }
         ],
@@ -60,9 +69,18 @@
       },
       "settled": {
         "connection": ".modal.connection-dialog",
+        "connection-error": ".connection-form .inline-error",
+        "groups-no-tags": ".connection-groups-dialog .connection-tag-create",
         "groups": ".connection-groups-dialog .connection-tag-manage-list:not(:empty)",
         "rename": ".modal.prompt-dialog",
         "metrics": ".host-metrics-panel"
+      }
+    },
+    "ports": {
+      "states": ["warnings"],
+      "ready": ".app-shell",
+      "settled": {
+        "warnings": "[role='region'][aria-label='Ports reading warnings']"
       }
     },
     "systemd": {

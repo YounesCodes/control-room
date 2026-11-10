@@ -44,6 +44,20 @@ it("opens dialogs over existing organization and live host readings", async () =
   expect(await (await fixture("populated")).invoke("list_connection_groups")).toEqual([]);
 });
 
+it("fails every Ports read the way an unreachable host does", async () => {
+  const native = await fixture("warnings", "ports");
+  expect(await native.invoke("get_workspace_state")).toMatchObject({
+    workspaces: [expect.objectContaining({ view: "ports" })],
+  });
+  await expect(native.invoke("list_ports")).rejects.toThrow("Connection timed out");
+  await expect(native.invoke("list_containers")).rejects.toThrow("Connection timed out");
+  await expect(native.invoke("inspect_connections")).rejects.toThrow("queue was busy");
+  await expect(native.invoke("inspect_firewall")).rejects.toThrow("queue was busy");
+  expect(await (await fixture("groups-no-tags", "dialogs")).invoke("list_connection_tags")).toEqual(
+    [],
+  );
+});
+
 it("keeps empty, failed, and stale inventories distinct", async () => {
   expect(await (await fixture("empty")).invoke("list_services")).toEqual([]);
   await expect((await fixture("error")).invoke("list_services")).rejects.toThrow(

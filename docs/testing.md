@@ -66,9 +66,11 @@ clipping. Settings starts on General & Monitoring. Systemd supports
 `populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it
-to the global note in `global`. Dialogs opens Add connection in `connection`,
-groups and tags with existing entries in `groups`, Rename workspace in `rename`,
-and the host readings panel, with an unreported GPU, in `metrics`. Data is
+to the global note in `global`. Dialogs opens Add connection in `connection`
+and after an empty submit in `connection-error`, groups and tags with existing
+entries in `groups` and without tags in `groups-no-tags`, Rename workspace in
+`rename`, and the host readings panel, with an unreported GPU, in `metrics`.
+Ports `warnings` fails every Ports read as an unreachable host does. Data is
 synthetic and network requests outside the fixture server are blocked. No local
 environment files are loaded. Every scenario renders the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the

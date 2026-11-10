@@ -26,9 +26,17 @@ if (state === "overflow") {
   units[0].id = `example-${"long-unit-name-".repeat(12)}worker.service`;
   units[0].description = "Synthetic long description. ".repeat(15);
 }
-const workspaceView = { systemd: "services", scratchpad: "terminal", dialogs: "terminal" }[
-  scenario
-] as "services" | "terminal" | undefined;
+const workspaceView = {
+  systemd: "services",
+  scratchpad: "terminal",
+  dialogs: "terminal",
+  ports: "ports",
+}[scenario] as "services" | "terminal" | "ports" | undefined;
+// An unreachable host fails each Ports read: two with the SSH timeout, two
+// behind it in the busy remote queue.
+const portsTimeout =
+  "Connection timed out: ssh: connect to host 192.0.2.10 port 22: Connection timed out";
+const portsQueueBusy = "Remote operation queue was busy for 4 seconds";
 // Dialogs show organization that already exists, so their lists are populated.
 const groups =
   scenario === "dialogs"
@@ -38,7 +46,7 @@ const groups =
       ]
     : [];
 const tags =
-  scenario === "dialogs"
+  scenario === "dialogs" && state !== "groups-no-tags"
     ? [
         { id: "example-tag-critical", name: "critical", color: "#c2410c" },
         { id: "example-tag-docker", name: "docker", color: "#2563eb" },
@@ -110,6 +118,12 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "list_connection_tags":
       result = tags;
       break;
+    case "list_ports":
+    case "list_containers":
+      throw new Error(portsTimeout);
+    case "inspect_connections":
+    case "inspect_firewall":
+      throw new Error(portsQueueBusy);
     case "sample_header_metrics":
       // GPU stays unreported so the unavailable reading is reviewed too.
       result = {

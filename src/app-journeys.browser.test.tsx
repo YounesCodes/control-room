@@ -2978,7 +2978,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByText("Docker is not installed on this host.", { exact: true }))
       .toBeVisible();
-    await expect.element(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Retry containers", exact: true }))
+      .toBeVisible();
     await navigate("Logs");
     await expect
       .element(page.getByText("Docker is not installed on this host.", { exact: true }))

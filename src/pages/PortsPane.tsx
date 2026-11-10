@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
+import { ReadingWarnings, type ReadingWarning } from "../components/ReadingWarnings";
 import { PortsGraph } from "../components/ports/PortsGraph";
 import { api, errorMessage } from "../lib/api";
 import {
@@ -253,13 +254,74 @@ export function PortsPane({
         : null
       : ownerGapNotice(cache.items, portsElevated);
 
-  const hasWarnings = !!(
-    cache.error ||
-    firewallError ||
-    connectionsError ||
-    containersCache.error ||
-    ownerGap
-  );
+  const firewallOffersSudo =
+    !!firewallError &&
+    capabilities?.osId !== "windows" &&
+    firewallError.toLowerCase().includes("permission denied");
+  const readingWarnings: ReadingWarning[] = [
+    cache.error && {
+      id: "ports",
+      source: "Listening ports",
+      state: cache.items.length ? "Saved results shown" : "Unavailable",
+      detail: cache.error,
+      action: { label: "Retry", accessibleName: "Retry ports", onClick: () => loadPorts(true) },
+    },
+    connectionsError && {
+      id: "connections",
+      source: "Connections",
+      state: connections ? "Saved connections shown" : "Unavailable",
+      detail: connectionsError,
+      action: {
+        label: "Retry",
+        accessibleName: "Retry connections",
+        onClick: () => loadConnections(true),
+      },
+    },
+    containersCache.error && {
+      id: "docker",
+      source: "Docker mappings",
+      state: containersCache.items.length ? "Saved mappings shown" : "Unavailable",
+      detail: containersCache.error,
+      action: {
+        label: "Retry",
+        accessibleName: "Retry Docker",
+        onClick: () => loadContainers(true),
+      },
+    },
+    firewallError && {
+      id: "firewall",
+      source: "Firewall status",
+      state: "Unavailable",
+      detail: firewallError,
+      // A busy queue or timeout is worth retrying as is; only a permission
+      // error is worth a sudo password.
+      action: firewallOffersSudo
+        ? {
+            label: "Retry with sudo",
+            accessibleName: "Retry with sudo",
+            onClick: () => setFirewallSudo(true),
+          }
+        : {
+            label: "Retry",
+            accessibleName: "Retry firewall",
+            onClick: () => void loadFirewall(),
+          },
+    },
+    ownerGap && {
+      id: "owners",
+      source: "Process owners",
+      state: "Incomplete",
+      detail: ownerGap.message,
+      action: ownerGap.offerSudo
+        ? {
+            label: "Retry with sudo",
+            accessibleName: "Resolve owners with sudo",
+            onClick: () => setPortsSudo(true),
+          }
+        : undefined,
+    },
+  ].filter((warning): warning is ReadingWarning => !!warning);
+  const hasWarnings = readingWarnings.length > 0;
   const snapshotDescription = [
     collectedAt ? "Last collected at " + collectedAt : null,
     cache.items.length + " listening port" + (cache.items.length === 1 ? "" : "s"),
@@ -471,86 +533,7 @@ export function PortsPane({
                     </button>
                   </header>
                 )}
-                {tools === "info" && (
-                  <>
-                    <div className="ports-reading-body">
-                      {cache.error && (
-                        <p className="inline-warning">
-                          {cache.items.length
-                            ? "Showing saved results. Refresh failed: "
-                            : "Listening ports unavailable: "}
-                          {cache.error}
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => loadPorts(true)}
-                          >
-                            Retry ports
-                          </button>
-                        </p>
-                      )}
-                      {connectionsError && (
-                        <p className="inline-warning">
-                          {connections
-                            ? "Showing saved connections. Refresh failed: "
-                            : "Connections unavailable: "}
-                          {connectionsError}
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => loadConnections(true)}
-                          >
-                            Retry connections
-                          </button>
-                        </p>
-                      )}
-                      {containersCache.error && (
-                        <p className="inline-warning">
-                          {containersCache.items.length
-                            ? "Showing saved Docker mappings. Refresh failed: "
-                            : "Docker mappings unavailable: "}
-                          {containersCache.error}
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => loadContainers(true)}
-                          >
-                            Retry Docker
-                          </button>
-                        </p>
-                      )}
-                      {firewallError && (
-                        <p className="inline-warning">
-                          Firewall status unavailable: {firewallError}
-                          {capabilities?.osId !== "windows" &&
-                            firewallError.toLowerCase().includes("permission denied") && (
-                              <button
-                                type="button"
-                                className="link-button"
-                                onClick={() => setFirewallSudo(true)}
-                              >
-                                Retry with sudo
-                              </button>
-                            )}
-                        </p>
-                      )}
-                      {ownerGap && (
-                        <p className="inline-warning">
-                          {ownerGap.message}
-                          {ownerGap.offerSudo && (
-                            <button
-                              type="button"
-                              className="link-button"
-                              onClick={() => setPortsSudo(true)}
-                            >
-                              Resolve owners with sudo
-                            </button>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </>
-                )}
+                {tools === "info" && <ReadingWarnings warnings={readingWarnings} />}
                 {tools === "search" && (
                   <div className="search-field ports-search-field">
                     <Search size={15} />

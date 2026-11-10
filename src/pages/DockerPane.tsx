@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
+import { ReadingWarnings } from "../components/ReadingWarnings";
 import { DockerContainerInspector } from "../components/DockerContainerInspector";
 import { ContainerImageIcon } from "../components/ContainerImageIcon";
 import { InspectionGraph } from "../components/InspectionGraph";
@@ -417,24 +418,28 @@ export function DockerPane({
                     </label>
                   </div>
                 )}
-                {tools === "info" && (
-                  <div className="ports-reading-body">
-                    <p className="inline-warning">
-                      <span>
-                        {cache.items.length ? "Showing saved results. Refresh failed: " : ""}
-                        {cache.error}
-                      </span>
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() =>
-                          permissionError ? setSudoPurpose("list") : load(null, true)
-                        }
-                      >
-                        {permissionError ? "Retry with sudo" : "Retry"}
-                      </button>
-                    </p>
-                  </div>
+                {tools === "info" && cache.error && (
+                  <ReadingWarnings
+                    warnings={[
+                      {
+                        id: "containers",
+                        source: "Containers",
+                        state: cache.items.length ? "Saved results shown" : "Unavailable",
+                        detail: cache.error,
+                        action: permissionError
+                          ? {
+                              label: "Retry with sudo",
+                              accessibleName: "Retry with sudo",
+                              onClick: () => setSudoPurpose("list"),
+                            }
+                          : {
+                              label: "Retry",
+                              accessibleName: "Retry containers",
+                              onClick: () => load(null, true),
+                            },
+                      },
+                    ]}
+                  />
                 )}
               </div>
             )}

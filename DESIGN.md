@@ -559,6 +559,13 @@ shells, including before the first tab opens. Keep administrator shells in their
 own group. When setup is needed, put instructions in a collapsed disclosure
 below the targets so ordinary launches stay compact.
 
+Reading warnings list one quiet row per affected read: a small amber icon, the
+source and its state (Unavailable, or saved results shown) on one line, the
+reported reason in muted text beneath, and a compact action. Visible actions
+say Retry; each one's accessible name says which read it repeats. Offer sudo
+only for a permission error. Inline form and action errors use an alert icon
+and the message on a faint red tint, without a bordered red box.
+
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting
 it as current. Give errors a recovery action when one exists, and preserve the
