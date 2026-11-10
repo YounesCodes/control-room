@@ -105,7 +105,8 @@ Capture failures fail the step; absent artifacts do not fail uploads.
 
 To add a scenario, register its states and ready selector in
 `src/test/ui-review/scenarios.json`, including focused preparation actions and
-state-specific settled selectors. Configure synthetic native responses in
+state-specific settled selectors. Actions click by default; `"wait": true` waits for
+the target and `"fill"` types text into it. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
 server aliases Tauri imports to that browser-only module; the product build does
 not. Prefer the real App layout over duplicated shell markup. Keep ready

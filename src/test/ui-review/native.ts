@@ -26,8 +26,29 @@ if (state === "overflow") {
   units[0].id = `example-${"long-unit-name-".repeat(12)}worker.service`;
   units[0].description = "Synthetic long description. ".repeat(15);
 }
-const workspaceView = { systemd: "services", scratchpad: "terminal" }[scenario] as
-  "services" | "terminal" | undefined;
+const workspaceView = { systemd: "services", scratchpad: "terminal", logs: "logs" }[scenario] as
+  "services" | "terminal" | "logs" | undefined;
+const journalMessages = [
+  "Started example-worker.service - Example queue worker.",
+  "worker: connected to queue example at 10.0.0.12:5672",
+  "worker: processing batch 4812 (128 jobs)",
+  "worker: batch 4812 finished in 1.84s",
+  "worker: warning: queue depth 1200 exceeds soft limit 1000",
+  "worker: processing batch 4813 (128 jobs)",
+  "worker: error: job 99172 failed: upstream returned 503 Service Unavailable",
+  "worker: retrying job 99172 in 5s (attempt 2 of 5)",
+  'worker: request payload={"id":99172,"tenant":"example","items":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],"trace":"0f4c2a9e7b1d4c6a8e3f5b2d9c7a1e4f"} status=retry',
+  "worker: batch 4813 finished in 2.07s",
+  "worker: debug: heartbeat ok",
+];
+const journalOutput = Array.from({ length: 48 }, (_, index) => {
+  const second = String(index % 60).padStart(2, "0");
+  const micros = String(104233 + index * 7919).slice(0, 6);
+  return `2026-11-01T09:58:${second}.${micros}+00:00 example-host worker[1234]: ${
+    journalMessages[index % journalMessages.length]
+  }
+`;
+}).join("");
 const workspace: PersistedWorkspaceState = {
   workspaces: workspaceView
     ? [
@@ -151,6 +172,12 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       if (state === "error" || (state === "stale" && serviceReads > 1))
         throw new Error("Synthetic read failure. Try again.");
       result = state === "empty" ? [] : units;
+      break;
+    case "start_journal_stream":
+      result = { streamId: "example-stream" };
+      setTimeout(() => args.output.onmessage(new TextEncoder().encode(journalOutput).buffer), 0);
+      break;
+    case "stop_log_stream":
       break;
     case "inspect_systemd_unit": {
       const unit = units.find((unit) => unit.id === args.unit);

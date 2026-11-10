@@ -201,7 +201,7 @@ describe("LogsPane reading position", () => {
     expect(screen.getByRole("checkbox", { name: "Receive new lines" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Start" }));
     const output = await screen.findByText(/stream started/);
-    const pre = output.closest("pre") as HTMLPreElement;
+    const pre = output.closest("[role='log']") as HTMLDivElement;
     Object.defineProperties(pre, {
       scrollHeight: { configurable: true, value: 1000 },
       clientHeight: { configurable: true, value: 200 },
@@ -222,7 +222,7 @@ describe("LogsPane reading position", () => {
   it("stops the native stream and unregisters the listener on unmount", async () => {
     const view = mountLogs();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    await screen.findByText("Stream active");
+    await screen.findByText("Streaming");
     view.unmount();
     expect(api.stopLogStream).toHaveBeenCalledExactlyOnceWith("stream-a");
     expect(events.dispose).toHaveBeenCalledOnce();
@@ -238,7 +238,7 @@ describe("LogsPane reading position", () => {
     );
     const view = mountLogs();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    await screen.findByText("Starting stream");
+    await screen.findByText("Starting…");
     view.unmount();
     await act(async () => finish({ streamId: "late-stream" }));
     expect(api.stopLogStream).toHaveBeenCalledWith("late-stream");
@@ -257,7 +257,7 @@ describe("LogsPane reading position", () => {
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     await act(async () => finish({ streamId: "cancelled-stream" }));
     expect(api.stopLogStream).toHaveBeenCalledWith("cancelled-stream");
-    expect(screen.getByText("Stream stopped")).toBeTruthy();
+    expect(screen.getByText("Stopped")).toBeTruthy();
   });
 
   it("applies an error event received before the start IPC returns", async () => {
@@ -277,18 +277,18 @@ describe("LogsPane reading position", () => {
     );
     await act(async () => finish({ streamId: "early-stream" }));
     expect(await screen.findByText("journal access failed")).toBeTruthy();
-    expect(screen.getByText("Stream stopped")).toBeTruthy();
+    expect(screen.getByText("Stopped")).toBeTruthy();
   });
 
   it("ignores output and state events from a stopped stream after a new stream starts", async () => {
     mountLogs();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     const oldOutput = outputHandler;
-    await screen.findByText("Stream active");
+    await screen.findByText("Streaming");
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     api.startJournalStream.mockResolvedValueOnce({ streamId: "stream-b" });
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    await screen.findByText("Stream active");
+    await screen.findByText("Streaming");
     await act(async () => {
       oldOutput?.(new TextEncoder().encode("OLD_OUTPUT\n").buffer);
       events.handler?.({
@@ -298,17 +298,17 @@ describe("LogsPane reading position", () => {
     await chunk("NEW_OUTPUT\n");
     expect(await screen.findByText(/NEW_OUTPUT/)).toBeTruthy();
     expect(screen.queryByText(/OLD_OUTPUT|old failure/)).toBeNull();
-    expect(screen.getByText("Stream active")).toBeTruthy();
+    expect(screen.getByText("Streaming")).toBeTruthy();
   });
 
   it("buffers received output during pause and drains it on resume", async () => {
     mountLogs();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    await screen.findByText("Stream active");
+    await screen.findByText("Streaming");
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     await chunk("BUFFERED_LINE\n");
     expect(screen.queryByText(/BUFFERED_LINE/)).toBeNull();
-    expect(screen.getByText("Rendering paused")).toBeTruthy();
+    expect(screen.getByText("Paused")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
     expect(await screen.findByText(/BUFFERED_LINE/)).toBeTruthy();
     expect(api.stopLogStream).not.toHaveBeenCalled();
@@ -318,11 +318,11 @@ describe("LogsPane reading position", () => {
     api.stopLogStream.mockRejectedValueOnce(new Error("Could not stop reader"));
     mountLogs();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    await screen.findByText("Stream active");
+    await screen.findByText("Streaming");
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(await screen.findByText(/Could not stop reader/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
-    await screen.findByText("Stream stopped");
+    await screen.findByText("Stopped");
   });
 
   it("shows startup failures and permits another start", async () => {
@@ -331,7 +331,158 @@ describe("LogsPane reading position", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     expect(await screen.findByText("Remote host is offline")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    await screen.findByText("Stream active");
+    await screen.findByText("Streaming");
     expect(screen.queryByText("Remote host is offline")).toBeNull();
+  });
+});
+
+describe("LogsPane reading aids", () => {
+  const journal = [
+    "2026-11-01T09:58:01.000001+00:00 host-a worker[1]: batch 1 finished",
+    "2026-11-01T09:58:02.000001+00:00 host-a worker[1]: warning: queue depth high",
+    "2026-11-01T09:58:03.000001+00:00 host-a worker[1]: error: job 7 failed",
+    "2026-11-01T09:58:04.000001+00:00 host-a worker[1]: batch 2 finished",
+  ].join("\n");
+
+  beforeEach(() => {
+    outputHandler = undefined;
+    events.handler = null;
+    api.startJournalStream.mockResolvedValue({ streamId: "stream-a" });
+    api.stopLogStream.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  async function streamJournal() {
+    mountLogs();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+    await chunk(`${journal}\n`);
+    await screen.findByText(/batch 2 finished/);
+    return screen.getByRole("log", { name: "Log output for ssh.service" });
+  }
+
+  it("counts warning and error lines and filters to one level", async () => {
+    const log = await streamJournal();
+    const errors = screen.getByRole("button", { name: /^Errors/ });
+    expect(errors.textContent).toBe("Errors1");
+    expect(screen.getByRole("button", { name: /^Warnings/ }).textContent).toBe("Warnings1");
+    expect(screen.getByRole("button", { name: /^All/ }).textContent).toBe("All4");
+
+    await userEvent.click(errors);
+    expect(errors.getAttribute("aria-pressed")).toBe("true");
+    expect(log.textContent).toContain("job 7 failed");
+    expect(log.textContent).not.toContain("batch 1 finished");
+    expect(log.textContent).not.toContain("stream started");
+    expect(log.querySelector("[data-level='error']")?.getAttribute("data-line")).toBe("4");
+  });
+
+  it("explains an empty filter result and returns to all lines", async () => {
+    await streamJournal();
+    await userEvent.type(screen.getByRole("textbox", { name: "Search loaded lines" }), "nothing");
+    expect(await screen.findByText("No loaded lines match “nothing”.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Show all lines" }));
+    expect(await screen.findByText(/batch 1 finished/)).toBeTruthy();
+    expect(
+      (screen.getByRole("textbox", { name: "Search loaded lines" }) as HTMLInputElement).value,
+    ).toBe("");
+  });
+
+  it("marks search matches, counts them, and clears with Escape", async () => {
+    const log = await streamJournal();
+    const search = screen.getByRole("textbox", { name: "Search loaded lines" });
+    await userEvent.type(search, "FINISHED");
+    expect(await screen.findByText("2 matches")).toBeTruthy();
+    expect([...log.querySelectorAll("mark")].map((mark) => mark.textContent)).toEqual([
+      "finished",
+      "finished",
+    ]);
+    await userEvent.keyboard("{Escape}");
+    expect((search as HTMLInputElement).value).toBe("");
+    await waitFor(() => expect(log.querySelectorAll("mark")).toHaveLength(0));
+  });
+
+  it("focuses search with Ctrl+F", async () => {
+    mountLogs();
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "Search loaded lines" }),
+    );
+  });
+
+  it("keeps the log scrollable by keyboard without announcing every line", async () => {
+    const log = await streamJournal();
+    expect(log.tabIndex).toBe(0);
+    expect(log.getAttribute("aria-live")).toBe("off");
+    // Line numbers are CSS-generated, so copied text and reading order hold only host output.
+    expect(log.querySelector(".log-line")?.textContent).toBe(
+      "[systemd ssh.service] stream started",
+    );
+  });
+
+  it("restarts the stream when a different unit is chosen while streaming", async () => {
+    const other: SystemdUnit = { ...service, id: "cron.service", description: "Cron" };
+    render(
+      <LogsPane
+        connection={connection}
+        settings={settings}
+        logTailOptions={[200]}
+        servicesCache={{ ...servicesCache, items: [service, other] }}
+        containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+        selectedSource={{ type: "systemd", id: service.id }}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+    api.startJournalStream.mockResolvedValueOnce({ streamId: "stream-b" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Unit" }), "cron.service");
+    await waitFor(() => expect(api.stopLogStream).toHaveBeenCalledWith("stream-a"));
+    await waitFor(() =>
+      expect(api.startJournalStream.mock.calls.at(-1)?.slice(0, 2)).toEqual([
+        "connection-a",
+        "cron.service",
+      ]),
+    );
+    expect(await screen.findByText("[systemd cron.service] stream started")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
+  });
+
+  it("does not start a stream when the unit changes while stopped", async () => {
+    const other: SystemdUnit = { ...service, id: "cron.service", description: "Cron" };
+    render(
+      <LogsPane
+        connection={connection}
+        settings={settings}
+        logTailOptions={[200]}
+        servicesCache={{ ...servicesCache, items: [service, other] }}
+        containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
+        selectedSource={{ type: "systemd", id: service.id }}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={vi.fn()}
+      />,
+    );
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Unit" }), "cron.service");
+    expect(api.startJournalStream).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        "Start reads the last 200 lines of cron.service, then new lines as they arrive.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("reports how many lines are waiting while paused", async () => {
+    await streamJournal();
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await chunk("held one\nheld two\n");
+    expect(await screen.findByText("2 new lines waiting")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(screen.queryByText(/new lines waiting/)).toBeNull();
+    expect(await screen.findByText(/held two/)).toBeTruthy();
   });
 });
