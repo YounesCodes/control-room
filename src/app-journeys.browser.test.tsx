@@ -33,6 +33,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 import { App } from "./App";
+import { tabKey, shiftTabKey } from "./test/keyboard";
 
 let root: Root;
 let element: HTMLDivElement;
@@ -2411,7 +2412,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
           expect(
             Math.abs(glyph.left + glyph.width / 2 - (button.left + button.width / 2)),
           ).toBeLessThanOrEqual(0.5);
-          expect(glyph.top).toBe(glyphs[0].top);
+          // WebKit on macOS may snap icons to half pixels independently.
+          expect(Math.abs(glyph.top - glyphs[0].top)).toBeLessThanOrEqual(0.5);
         }
         await page.screenshot({
           element: header,
@@ -2957,6 +2959,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .poll(() => element.querySelector(".terminal-workspace-pane.active .xterm-rows")?.textContent)
       .toContain("fixture$");
+    // Audit the settled popover; a slower runner can still be fading it in.
+    await Promise.all(
+      popup
+        .element()
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     expect((await axe.run(popup.element())).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/scratchpad-popup.png" });
     await popup.getByRole("button", { name: "Delete note", exact: true }).click();
@@ -3289,7 +3298,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
     await userEvent.hover(ports.element());
     await vi.waitFor(() => expect(color()).toBe(resting));
-    await userEvent.keyboard("{Tab}");
+    await userEvent.keyboard(tabKey);
     (docker.element() as HTMLElement).focus();
     await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
   });
@@ -3454,8 +3463,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const searchField = element.querySelector<HTMLElement>(".ports-search-field")!;
     const searchPanel = element.querySelector<HTMLElement>("#ports-tools")!;
     expect(searchPanel.querySelectorAll("button")).toHaveLength(1);
-    expect(searchPanel.getBoundingClientRect().width).toBe(
+    expect(searchPanel.getBoundingClientRect().width).toBeCloseTo(
       searchField.getBoundingClientRect().width,
+      0,
     );
     expect(searchPanel.getBoundingClientRect().height).toBe(
       searchField.getBoundingClientRect().height,
@@ -3709,13 +3719,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(document.activeElement).toBe(more.element());
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
     await more.click();
-    await userEvent.keyboard("{Tab}");
+    await userEvent.keyboard(tabKey);
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
     expect(document.activeElement).toBe(
       page.getByRole("textbox", { name: "Search commands" }).element(),
     );
     await more.click();
-    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    await userEvent.keyboard(shiftTabKey);
     expect(document.activeElement).toBe(more.element());
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
 

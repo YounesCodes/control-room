@@ -970,6 +970,12 @@ describe("critical UI in Chromium", () => {
     await expect
       .element(page.getByRole("group", { name: "Local terminal", exact: true }))
       .toBeVisible();
+    // Audit settled colors; a slower runner can still be fading the results in.
+    await Promise.all(
+      container!
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     expect(
       (await axe.run(container!, { rules: { region: { enabled: false } } })).violations,
     ).toEqual([]);

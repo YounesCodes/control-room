@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ContainerImageIcon } from "./ContainerImageIcon";
 import catalog from "../assets/container-logos/catalog.json";
 import "../styles.css";
+import { tabKey, shiftTabKey } from "../test/keyboard";
 
 afterEach(cleanup);
 function Fixture() {
@@ -36,9 +37,11 @@ it("keeps logos neutral at rest and reveals brand colors on hover, keyboard focu
   await waitFor(() => expect(color()).toBe(branded));
   await page.getByRole("button", { name: "Custom image" }).click();
   await waitFor(() => expect(color()).toBe(neutral));
-  await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+  // WebKit does not focus buttons on click; start keyboard travel from there.
+  screen.getByRole("button", { name: "Custom image" }).focus();
+  await userEvent.keyboard(shiftTabKey);
   await waitFor(() => expect(color()).toBe(branded));
-  await userEvent.keyboard("{Enter}{Tab}");
+  await userEvent.keyboard("{Enter}" + tabKey);
   await waitFor(() => expect(color()).toBe(branded));
   const mask = getComputedStyle(icon).maskImage;
   const url = mask.slice(5, -2);

@@ -6246,9 +6246,10 @@ dd {
 }
 
 /* The save result belongs next to the control that produced it, so it is a line
-   of text in the bar rather than a banner in the form. */
+   of text in the bar rather than a banner in the form. 21ch keeps a 24px gap
+   from the centered search at 960px, including macOS WebKit's wider ch. */
 .settings-status {
-  width: 22ch;
+  width: 21ch;
   text-align: right;
   flex: none;
   overflow: hidden;
