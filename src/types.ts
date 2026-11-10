@@ -469,9 +469,8 @@ interface PersistedWorkspace {
   connectionId: string | null;
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
-  /** Older app versions persisted the standalone Scratchpad page and the
-   * retired Boot Diagnostics and Baselines views. */
-  view: WorkspaceView | "scratchpad" | "overview" | "boot" | "baselines";
+  /** Older app versions persisted the standalone Scratchpad page. */
+  view: WorkspaceView | "scratchpad";
   historyPaused: boolean;
 }
 
