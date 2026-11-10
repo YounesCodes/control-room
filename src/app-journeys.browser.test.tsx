@@ -2080,6 +2080,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const status = host.querySelector<HTMLElement>(".host-session-status")!;
     const menu = host.querySelector<HTMLButtonElement>(".host-menu")!;
     const away = page.getByRole("button", { name: "Focus terminal", exact: true });
+    // The focus toggle fades in, staying hidden until its first frame.
+    await expect.element(away).toBeVisible();
     away.element().focus();
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
     const rightGap = () =>
@@ -2088,7 +2090,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(getComputedStyle(menu).opacity).toBe("0");
     const width = host.getBoundingClientRect().width;
     expect(getComputedStyle(main).transitionProperty).toBe("padding");
-    await userEvent.hover(host);
+    // The row text carries live terminal status, so hover the row through its
+    // stably named main button rather than a locator built from that text.
+    await userEvent.hover(page.getByRole("button", { name: /^Ubuntu host Fixture Alpha/ }).first());
     await expect.poll(rightGap).toBeCloseTo(36, 0);
     expect(status.getBoundingClientRect().right).toBeLessThan(menu.getBoundingClientRect().left);
     expect(getComputedStyle(menu).opacity).toBe("1");

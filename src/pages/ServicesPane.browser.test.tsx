@@ -730,7 +730,8 @@ it("glides one shared service highlight and retargets it during rapid switching"
   expect(Math.abs(new DOMMatrix(getComputedStyle(marker).transform).m42 - middle)).toBeLessThan(1);
   retargeted.finish();
   await settleMotion();
-  expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44);
+  // The glide can start after the first settle check on slower runners.
+  await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44));
   expect(marker.getBoundingClientRect().height).toBe(44);
   expect(getComputedStyle(marker).borderRadius).not.toBe("0px");
   const row = document.querySelector<HTMLElement>(".systemd-inventory .selected-row")!;
@@ -738,7 +739,8 @@ it("glides one shared service highlight and retargets it during rapid switching"
   row.focus();
   await userEvent.keyboard("{ArrowDown}");
   await settleMotion();
-  expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(88);
+  // The glide can start after the first settle check on slower runners.
+  await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(88));
   expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true");
   expect(getComputedStyle(document.activeElement!).outlineStyle).toBe("none");
   await page.getByRole("button", { name: "Find units", exact: true }).click();
