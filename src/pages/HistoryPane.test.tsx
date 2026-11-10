@@ -670,10 +670,10 @@ describe("HistoryPane", () => {
     expect(screen.queryByText(/Reconnect this connection or open a new terminal, then/)).toBeNull();
   });
 
-  it("describes resuming recording on the Resume button", async () => {
+  it("labels the Resume button without a redundant tooltip", async () => {
     render(<HistoryPane {...props()} paused />);
     const resume = await screen.findByRole("button", { name: "Resume" });
-    expect(resume.title).toBe("Resume recording for this Workspace");
+    expect(resume.title).toBe("");
   });
 
   it("avoids capture guidance based on a cached integration status after a failed refresh", async () => {

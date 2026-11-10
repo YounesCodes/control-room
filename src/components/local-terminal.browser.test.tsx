@@ -158,8 +158,11 @@ describe("Local Terminal Mode in the real App", () => {
             ?.closest("button"),
         ).toBe(control);
       }
+      // The group tab needs no tooltip: the Panes row lists its terminals. A pane tab
+      // near the window's left edge still keeps its tooltip inside the window.
       const groupButton = container!.querySelector<HTMLButtonElement>(".session-tab-group-main")!;
-      await userEvent.hover(groupButton);
+      expect(groupButton.hasAttribute("title")).toBe(false);
+      await userEvent.hover(paneTabs[0].querySelector<HTMLElement>(".session-tab-main")!);
       await expect.element(page.getByRole("tooltip")).toBeVisible();
       expect(
         page.getByRole("tooltip").element().getBoundingClientRect().left,

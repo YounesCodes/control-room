@@ -565,7 +565,6 @@ export function HistoryPane({
             type="button"
             onClick={() => onPausedChange(!paused)}
             disabled={!globalEnabled || !connection.historyEnabled}
-            title={`${paused ? "Resume" : "Pause"} recording for this Workspace`}
           >
             {paused ? <Play size={14} /> : <Pause size={14} />}
             {paused ? "Resume" : "Pause"}

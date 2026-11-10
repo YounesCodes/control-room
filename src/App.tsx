@@ -2243,7 +2243,6 @@ export function App() {
                               aria-current={active ? "page" : undefined}
                               aria-label={`Open ${group.name} ${members.length} ${members.length === 1 ? "terminal" : "terminals"}`}
                               aria-describedby={`terminal-group-status-${group.id}`}
-                              title={`${group.name}: ${members.map(activityLabel).join(", ")}`}
                             >
                               <LayoutPanelLeft size={13} strokeWidth={1.8} aria-hidden="true" />
                               <span>{group.name}</span> <small>{members.length}</small>
@@ -2385,7 +2384,6 @@ export function App() {
               <div
                 className="session-window-drag-region"
                 data-tauri-drag-region
-                title="Drag to move window"
                 aria-hidden="true"
               />
             )}

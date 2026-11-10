@@ -141,7 +141,6 @@ export function TerminalScratchpad({
           type="button"
           disabled={!text}
           onClick={() => void copyNote()}
-          title="Copy the note to the clipboard"
         >
           <ClipboardCopy size={14} /> Copy
         </button>
@@ -150,7 +149,6 @@ export function TerminalScratchpad({
           type="button"
           disabled={!text || !canPaste}
           onClick={() => onPaste(text)}
-          title="Insert the note into the terminal without running it"
         >
           <TerminalSquare size={14} /> Paste into terminal
         </button>

@@ -402,7 +402,6 @@ export function SettingsPane({
                   : "settings-status"
               }
               role={message ? "status" : undefined}
-              title={message ?? undefined}
             >
               {message ?? (dirty ? "Unsaved changes" : "")}
             </p>

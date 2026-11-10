@@ -97,7 +97,6 @@ function MetricCell({
       data-overflow={overflow || undefined}
       data-available={value !== "Unavailable" && value !== "Reading"}
       data-tauri-drag-region
-      title={`${HEADER_METRIC_LABELS[metric]}: ${value}. ${headerMetricDetail(metric, sample)}`}
     >
       <span className="host-metric-label" aria-hidden="true" data-tauri-drag-region>
         {HEADER_METRIC_LABELS[metric]}
