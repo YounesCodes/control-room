@@ -1096,8 +1096,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await navigate("Terminal");
     const divider = page.getByRole("separator", { name: "Resize Connections panel" });
-    // The edge explains itself; no hover tooltip.
+    // Dividers explain themselves; none shows a hover tooltip.
     expect(divider.element().hasAttribute("title")).toBe(false);
+    expect(element.querySelectorAll(".resize-divider[title]")).toHaveLength(0);
     await userEvent.hover(divider.element());
     await expect
       .poll(() => getComputedStyle(divider.element(), "::after").backgroundColor)

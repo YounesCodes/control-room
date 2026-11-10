@@ -148,7 +148,6 @@ export function ResizeDivider({
   onReset,
   className = "",
   style,
-  explain = true,
 }: {
   label: string;
   orientation?: "vertical" | "horizontal";
@@ -159,8 +158,6 @@ export function ResizeDivider({
   onReset: () => void;
   className?: string;
   style?: CSSProperties;
-  /** Show the hover tooltip with drag and keyboard hints; off where the edge speaks for itself. */
-  explain?: boolean;
 }) {
   const drag = useRef<{ id: number; start: number; size: number } | null>(null);
   const horizontal = orientation === "horizontal";
@@ -215,11 +212,6 @@ export function ResizeDivider({
       aria-valuemax={max}
       aria-valuenow={value}
       aria-valuetext={`${value} pixels`}
-      title={
-        explain
-          ? `${label}. Drag or use ${horizontal ? "Up and Down" : "Left and Right"} arrows. Double-click or press Enter to reset.`
-          : undefined
-      }
       className={`resize-divider ${className}${dragging ? " dragging" : ""}`}
       onDoubleClick={onReset}
       onKeyDown={(event) => {
