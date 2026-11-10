@@ -11,6 +11,8 @@ In Git Bash, OpenCode and other OpenTUI apps use the main terminal screen by def
 
 Enable **Local Terminal Mode** in [Settings](/control-room/reference/settings/#local-terminal) to start your default local terminal in Focus Mode when Control Room opens. Startup uses an enabled standard shell without administrator elevation. The Connections sidebar is hidden in Focus Mode. Exit focus to show it again.
 
+On macOS, the launcher offers installed zsh, Bash, and fish. Shells start in your home directory as login shells. Local Terminal Mode, tabs, splits, search, and saved terminal layouts work on both platforms.
+
 ## Administrator shells
 
 **Run as administrator** is available for PowerShell 7, Windows PowerShell, and Command Prompt. Windows asks for UAC confirmation each time.

@@ -1,0 +1,115 @@
+name: macOS
+
+on:
+  pull_request:
+    paths-ignore: ["**/*.md", "LICENSE", ".gitignore", ".gitattributes"]
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md", "LICENSE", ".gitignore", ".gitattributes"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  native:
+    name: Native tests (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+          cache-on-failure: true
+      - name: Verify native runner architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: test "$(uname -m)" = "$EXPECTED_ARCH"
+      - run: npm ci
+      - run: npm run check:version
+      - run: npm run check:rust
+      - run: npx playwright install webkit
+      - name: Check the UI in WebKit
+        env:
+          CONTROL_ROOM_TEST_BROWSER: webkit
+        run: npm run test:browser
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e --lib e2e::tests
+      - run: npm run test:desktop:build
+      - run: npm run test:desktop
+      - name: Sanitize failure diagnostics
+        id: sanitize
+        if: failure()
+        run: node scripts/sanitize-e2e-results.mjs
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.sanitize.outcome == 'success'
+        with:
+          name: macos-${{ matrix.arch }}-diagnostics
+          path: test-results/desktop-sanitized/
+          if-no-files-found: ignore
+
+  bundle:
+    name: App and DMG (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - run: npm ci
+      - name: Build ad-hoc signed test bundles
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: npm run tauri build -- --target ${{ matrix.target }}
+      - name: Verify and archive the application
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          root="src-tauri/target/$TARGET/release/bundle"
+          codesign --verify --deep --strict "$root/macos/Control Room.app"
+          tar -czf "Control-Room-$TARGET.app.tar.gz" -C "$root/macos" 'Control Room.app'
+          cp "$root"/dmg/*.dmg .
+          shasum -a 256 ./*.dmg ./*.app.tar.gz > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: control-room-${{ matrix.target }}
+          path: |
+            *.app.tar.gz
+            *.dmg
+            SHA256SUMS.txt
+          if-no-files-found: error

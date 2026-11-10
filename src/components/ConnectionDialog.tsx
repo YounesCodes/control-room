@@ -157,7 +157,7 @@ export function ConnectionDialog({
             required
             spellCheck={false}
           />
-          <small>Uses your Windows OpenSSH configuration.</small>
+          <small>Uses your local OpenSSH configuration.</small>
         </label>
         <div className="form-row">
           <label>

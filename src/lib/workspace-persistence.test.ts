@@ -8,7 +8,7 @@ import {
   orientTerminalLayout,
 } from "./terminal-layout";
 import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
-import { createRemoteWorkspace } from "./workspace-target";
+import { createLocalWorkspace, createRemoteWorkspace } from "./workspace-target";
 import type {
   LocalShellProfile,
   PersistedWorkspaceState,
@@ -20,6 +20,13 @@ const powershell: LocalShellProfile = {
   id: "powershell-7",
   label: "PowerShell 7",
   kind: "powershell-7",
+  elevated: false,
+};
+
+const zsh: LocalShellProfile = {
+  id: "zsh",
+  label: "zsh",
+  kind: "zsh",
   elevated: false,
 };
 
@@ -42,6 +49,21 @@ function connection(id: string): SavedConnection {
 }
 
 describe("Workspace restoration", () => {
+  it("restores an installed Mac shell with a fresh process and prunes unavailable profiles", () => {
+    const local = createLocalWorkspace(zsh);
+    const remote = createRemoteWorkspace(connection("linux-host"));
+    const saved = persistWorkspaceState([local, remote], local.id, []);
+    const restored = restoreWorkspaceState([connection("linux-host")], saved, [zsh]);
+    expect(restored.workspaces[0]).toMatchObject({
+      kind: "local",
+      shell: zsh,
+      sessionId: null,
+      connectRequested: true,
+    });
+    const windows = restoreWorkspaceState([connection("linux-host")], saved, [powershell]);
+    expect(windows.workspaces).toHaveLength(1);
+    expect(windows.workspaces[0].kind).toBe("remote");
+  });
   it("round-trips independent nested split sizes in a mixed local and remote group", () => {
     const state: PersistedWorkspaceState = {
       workspaces: ["local", "remote", "logs"].map((id) => ({
