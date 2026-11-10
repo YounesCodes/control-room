@@ -640,7 +640,9 @@ must preserve the reading position, count newer lines, and provide a direct
 return to the latest line. Wrapping is a view choice and must not change the
 stream.
 Logs reads in the order of the task: what to read, how much, then one Start/Stop
-control that keeps its footprint. Changing the source while streaming restarts it.
+control that keeps its footprint. The view shows one source: choosing another clears
+it, and while streaming the newest choice restarts the stream in a fresh view. Never
+disable the source controls during a restart; keyboard focus must stay in place.
 View controls (search, level filters, wrap, clear) sit on the log frame they
 affect. Pausing holds lines, never drops them, and says how many are waiting.
 Render log text in the terminal font and size. Keep the host text intact: dim
@@ -648,7 +650,8 @@ timestamp and source prefixes rather than rewriting them, strip only terminal es
 and keep line numbers as generated content so they are neither copied nor read
 aloud. Wrapped text hangs under its message, not the gutter. Mark warning and
 error lines with a margin bar, number color, and quiet tint; the filters say the
-levels come from words in the message, not journal priority. Search highlights
+levels come from a level the line states, then words in the message, not journal
+priority. Search highlights
 matches and counts them. The log region is keyboard-scrollable and not a live region.
 
 Keep the command palette searchable and keyboard-operable. Make shortcuts

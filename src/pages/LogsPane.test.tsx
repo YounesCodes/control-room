@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AppSettings,
   CachedList,
+  LogSourceSelection,
   SavedConnection,
   SystemdUnit,
   StreamStateEvent,
@@ -484,5 +485,364 @@ describe("LogsPane reading aids", () => {
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
     expect(screen.queryByText(/new lines waiting/)).toBeNull();
     expect(await screen.findByText(/held two/)).toBeTruthy();
+  });
+});
+
+describe("LogsPane source switching", () => {
+  const cron: SystemdUnit = { ...service, id: "cron.service", description: "Cron" };
+  const backup: SystemdUnit = { ...service, id: "backup.service", description: "Backup" };
+  const containers = [
+    { id: "container-a", name: "api" },
+    { id: "container-b", name: "worker" },
+  ] as import("../types").DockerContainer[];
+  const errorLines =
+    "2026-11-01T09:58:01.000001+00:00 host-a sshd[1]: error: OLD_SOURCE_FAILURE\n" +
+    "2026-11-01T09:58:02.000001+00:00 host-a sshd[1]: warning: OLD_SOURCE_WARNING\n";
+  let streams = 0;
+
+  function mountSources(selected: LogSourceSelection = { type: "systemd", id: service.id }) {
+    return render(
+      <LogsPane
+        connection={connection}
+        settings={settings}
+        logTailOptions={[100, 200]}
+        servicesCache={{ ...servicesCache, items: [service, cron, backup] }}
+        containersCache={{ items: containers, fetchedAt: Date.now(), loading: false, error: null }}
+        selectedSource={selected}
+        onServicesCacheChange={vi.fn()}
+        onContainersCacheChange={vi.fn()}
+        onSourceChange={vi.fn()}
+      />,
+    );
+  }
+  const unitSelect = () => screen.getByRole("combobox", { name: "Unit" });
+  const log = () => screen.queryByRole("log");
+  const count = (name: string) =>
+    screen.getByRole("button", { name: new RegExp(`^${name}`) }).textContent;
+
+  async function streamOldSource() {
+    mountSources();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+    await chunk(errorLines);
+    await screen.findByText(/OLD_SOURCE_FAILURE/);
+    expect(count("Errors")).toBe("Errors1");
+  }
+
+  beforeEach(() => {
+    streams = 0;
+    outputHandler = undefined;
+    events.handler = null;
+    api.startJournalStream.mockImplementation(async () => ({ streamId: `stream-${++streams}` }));
+    api.startDockerLogStream.mockImplementation(async () => ({
+      streamId: `docker-${++streams}`,
+    }));
+    api.stopLogStream.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("starts the new unit in a fresh view while streaming", async () => {
+    await streamOldSource();
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    expect(await screen.findByText("[systemd cron.service] stream started")).toBeTruthy();
+    expect(log()?.textContent).not.toMatch(/OLD_SOURCE|ssh\.service/);
+    expect(count("Errors")).toBe("Errors0");
+    expect(count("Warnings")).toBe("Warnings0");
+    await chunk("2026-11-01T09:59:00.000001+00:00 host-a cron[2]: error: NEW_SOURCE_FAILURE\n");
+    await screen.findByText(/NEW_SOURCE_FAILURE/);
+    expect(count("Errors")).toBe("Errors1");
+  });
+
+  it("clears the previous unit lines when the unit changes while stopped", async () => {
+    await streamOldSource();
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await screen.findByText("Stopped");
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    expect(log()).toBeNull();
+    expect(count("Errors")).toBe("Errors0");
+    expect(
+      screen.getByText(
+        "Start reads the last 200 lines of cron.service, then new lines as they arrive.",
+      ),
+    ).toBeTruthy();
+    expect(api.startJournalStream).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops held and partial lines from the previous unit", async () => {
+    await streamOldSource();
+    await chunk("PARTIAL_OLD_LINE");
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await chunk("\n2026-11-01T09:58:03.000001+00:00 host-a sshd[1]: error: HELD_OLD_LINE\n");
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await screen.findByText("[systemd cron.service] stream started");
+    await screen.findByText("Streaming");
+    expect(log()?.textContent).not.toMatch(/HELD_OLD_LINE|PARTIAL_OLD_LINE|OLD_SOURCE/);
+    expect(count("Errors")).toBe("Errors0");
+    expect(screen.queryByText(/new lines? waiting/)).toBeNull();
+  });
+
+  it("ignores late output and state from the previous unit stream", async () => {
+    await streamOldSource();
+    const oldOutput = outputHandler;
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await screen.findByText("[systemd cron.service] stream started");
+    await act(async () => oldOutput?.(new TextEncoder().encode("error: LATE_OLD_OUTPUT\n").buffer));
+    await act(async () =>
+      events.handler?.({ payload: { streamId: "stream-1", state: "error", reason: "old gone" } }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(log()?.textContent).not.toContain("LATE_OLD_OUTPUT");
+    expect(screen.queryByText("old gone")).toBeNull();
+    expect(count("Errors")).toBe("Errors0");
+    expect(screen.getByText("Streaming")).toBeTruthy();
+  });
+
+  it("clears systemd lines when switching to Docker and streams the first container", async () => {
+    await streamOldSource();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Source" }), "docker");
+    expect(await screen.findByText("[docker api] stream started")).toBeTruthy();
+    expect(api.startDockerLogStream.mock.calls.at(-1)?.slice(0, 2)).toEqual([
+      "connection-a",
+      "container-a",
+    ]);
+    expect(log()?.textContent).not.toContain("OLD_SOURCE");
+    expect(count("Errors")).toBe("Errors0");
+  });
+
+  it("clears systemd lines when switching to Docker while stopped", async () => {
+    await streamOldSource();
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await screen.findByText("Stopped");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Source" }), "docker");
+    await screen.findByRole("combobox", { name: "Container" });
+    expect(log()).toBeNull();
+    expect(count("Errors")).toBe("Errors0");
+    expect(api.startDockerLogStream).not.toHaveBeenCalled();
+  });
+
+  it("clears one container lines when switching to another", async () => {
+    mountSources({ type: "docker", id: "container-a" });
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+    await chunk("ERROR API_CONTAINER_FAILURE\n");
+    await screen.findByText(/API_CONTAINER_FAILURE/);
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Container" }),
+      "container-b",
+    );
+    expect(await screen.findByText("[docker worker] stream started")).toBeTruthy();
+    expect(log()?.textContent).not.toContain("API_CONTAINER_FAILURE");
+    expect(count("Errors")).toBe("Errors0");
+  });
+
+  it("streams the last unit chosen when stops resolve out of order", async () => {
+    await streamOldSource();
+    const pending: (() => void)[] = [];
+    api.stopLogStream.mockImplementation(
+      () => new Promise<void>((resolve) => pending.push(() => resolve())),
+    );
+    fireEvent.change(unitSelect(), { target: { value: "cron.service" } });
+    fireEvent.change(unitSelect(), { target: { value: "backup.service" } });
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+    // Resolve the newest request first, then the older one.
+    await act(async () => {
+      for (const resolve of [...pending].reverse()) resolve();
+    });
+    api.stopLogStream.mockResolvedValue(undefined);
+    await screen.findByText("[systemd backup.service] stream started");
+    await screen.findByText("Streaming");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const started = api.startJournalStream.mock.calls.map((call) => call[1]);
+    expect(started.at(-1)).toBe("backup.service");
+    expect(started).not.toContain("cron.service");
+    expect((unitSelect() as HTMLSelectElement).value).toBe("backup.service");
+    expect(log()?.textContent).not.toMatch(/cron\.service|OLD_SOURCE/);
+  });
+
+  it("clears the previous unit error when another unit is chosen", async () => {
+    api.startJournalStream.mockRejectedValueOnce(new Error("journal access failed for ssh"));
+    mountSources();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("journal access failed for ssh");
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    expect(screen.queryByText("journal access failed for ssh")).toBeNull();
+  });
+
+  it("rereads into a fresh view when the line count changes while streaming", async () => {
+    await streamOldSource();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Lines" }), "100");
+    await waitFor(() => expect(api.startJournalStream).toHaveBeenCalledTimes(2));
+    expect(api.startJournalStream.mock.calls.at(-1)?.slice(1, 3)).toEqual(["ssh.service", 100]);
+    await screen.findByText("Streaming");
+    expect(log()?.textContent).not.toContain("OLD_SOURCE");
+    expect(screen.getAllByText("[systemd ssh.service] stream started")).toHaveLength(1);
+  });
+
+  it("keeps earlier lines above a divider when the same unit starts again", async () => {
+    await streamOldSource();
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await screen.findByText("Stopped");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+    expect(screen.getAllByText("[systemd ssh.service] stream started")).toHaveLength(2);
+    expect(log()?.textContent).toContain("OLD_SOURCE_FAILURE");
+  });
+});
+
+describe("LogsPane stream lifecycle while switching", () => {
+  const cron: SystemdUnit = { ...service, id: "cron.service", description: "Cron" };
+  const backup: SystemdUnit = { ...service, id: "backup.service", description: "Backup" };
+  let streams = 0;
+
+  function props(overrides: Partial<Parameters<typeof LogsPane>[0]> = {}) {
+    return {
+      connection,
+      settings,
+      logTailOptions: [200],
+      servicesCache: { ...servicesCache, items: [service, cron, backup] },
+      containersCache: { items: [], fetchedAt: Date.now(), loading: false, error: null },
+      selectedSource: { type: "systemd", id: service.id } as LogSourceSelection,
+      onServicesCacheChange: vi.fn(),
+      onContainersCacheChange: vi.fn(),
+      onSourceChange: vi.fn(),
+      ...overrides,
+    };
+  }
+  const unitSelect = () => screen.getByRole("combobox", { name: "Unit" }) as HTMLSelectElement;
+  async function startStreaming() {
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Streaming");
+  }
+
+  beforeEach(() => {
+    streams = 0;
+    outputHandler = undefined;
+    events.handler = null;
+    api.startJournalStream.mockImplementation(async () => ({ streamId: `stream-${++streams}` }));
+    api.startDockerLogStream.mockImplementation(async () => ({
+      streamId: `docker-${++streams}`,
+    }));
+    api.stopLogStream.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("stops the previous stream once when units change in quick succession", async () => {
+    render(<LogsPane {...props()} />);
+    await startStreaming();
+    let release!: () => void;
+    api.stopLogStream.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (release = () => resolve())),
+    );
+    fireEvent.change(unitSelect(), { target: { value: "cron.service" } });
+    fireEvent.change(unitSelect(), { target: { value: "backup.service" } });
+    await act(async () => release());
+    await screen.findByText("[systemd backup.service] stream started");
+    await screen.findByText("Streaming");
+    expect(api.stopLogStream.mock.calls.filter(([id]) => id === "stream-1")).toHaveLength(1);
+    expect(screen.queryByText(/Could not stop/)).toBeNull();
+    expect(api.startJournalStream.mock.calls.map((call) => call[1])).toEqual([
+      "ssh.service",
+      "backup.service",
+    ]);
+  });
+
+  it("keeps the unit selector enabled and focused during a restart", async () => {
+    render(<LogsPane {...props()} />);
+    await startStreaming();
+    let release!: () => void;
+    api.stopLogStream.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (release = () => resolve())),
+    );
+    unitSelect().focus();
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    expect(screen.getByText("Stopping…")).toBeTruthy();
+    expect(unitSelect().disabled).toBe(false);
+    expect(document.activeElement).toBe(unitSelect());
+    await act(async () => release());
+    await screen.findByText("Streaming");
+    expect(document.activeElement).toBe(unitSelect());
+  });
+
+  it("cancels a pending restart when Stop is pressed", async () => {
+    render(<LogsPane {...props()} />);
+    await startStreaming();
+    let finish!: (value: { streamId: string }) => void;
+    api.startJournalStream.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await screen.findByText("Starting…");
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await act(async () => finish({ streamId: "late-cron" }));
+    expect(api.stopLogStream).toHaveBeenCalledWith("late-cron");
+    expect(screen.getByText("Stopped")).toBeTruthy();
+    await userEvent.selectOptions(unitSelect(), "backup.service");
+    expect(api.startJournalStream).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a stream that already ended as stopped", async () => {
+    render(<LogsPane {...props()} />);
+    await startStreaming();
+    api.stopLogStream.mockRejectedValueOnce(new Error("Log Stream is no longer active"));
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await screen.findByText("Stopped");
+    expect(screen.queryByText(/Could not stop/)).toBeNull();
+  });
+
+  it("does not restart after the stream ends on its own", async () => {
+    render(<LogsPane {...props()} />);
+    await startStreaming();
+    await act(async () =>
+      events.handler?.({ payload: { streamId: "stream-1", state: "stopped", reason: null } }),
+    );
+    await screen.findByText("Stopped");
+    await userEvent.selectOptions(unitSelect(), "cron.service");
+    expect(api.startJournalStream).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("log")).toBeNull();
+  });
+
+  it("restarts with the replacement when a refreshed list drops the streamed container", async () => {
+    const containers = [
+      { id: "container-a", name: "api" },
+      { id: "container-b", name: "worker" },
+    ] as import("../types").DockerContainer[];
+    const view = render(
+      <LogsPane
+        {...props({
+          containersCache: {
+            items: containers,
+            fetchedAt: Date.now(),
+            loading: false,
+            error: null,
+          },
+          selectedSource: { type: "docker", id: "container-a" },
+        })}
+      />,
+    );
+    await startStreaming();
+    await chunk("ERROR REMOVED_CONTAINER_LINE\n");
+    await screen.findByText(/REMOVED_CONTAINER_LINE/);
+    view.rerender(
+      <LogsPane
+        {...props({
+          containersCache: {
+            items: [containers[1]],
+            fetchedAt: Date.now(),
+            loading: false,
+            error: null,
+          },
+          selectedSource: { type: "docker", id: "container-a" },
+        })}
+      />,
+    );
+    expect(await screen.findByText("[docker worker] stream started")).toBeTruthy();
+    expect(screen.getByRole("log").textContent).not.toContain("REMOVED_CONTAINER_LINE");
+    expect(api.startDockerLogStream.mock.calls.at(-1)?.[1]).toBe("container-b");
   });
 });

@@ -17,9 +17,9 @@ In **Logs**, choose a systemd unit or Docker container, choose the last 50, 100,
   <figcaption>A service log stream. Example data shown.</figcaption>
 </figure>
 
-**Receive new lines** keeps reading after the initial lines load. **Stop** ends the stream. Changing the source, line count, or **Receive new lines** while a stream runs restarts it with the new choice. **Pause** holds new lines while you read; the stream keeps running, and the status shows how many lines are waiting. **Resume** shows them.
+**Receive new lines** keeps reading after the initial lines load. **Stop** ends the stream. The view shows one source at a time: choosing another unit or container clears it. While a stream runs, changing the source, line count, or **Receive new lines** restarts it with the new choice in a fresh view. Starting the same source again keeps earlier lines above a divider. **Pause** holds new lines while you read; the stream keeps running, and the status shows how many lines are waiting. **Resume** shows them.
 
-Lines that mention warnings or errors are marked in the margin. **Warnings** and **Errors** show only those lines, with a count for each. The app finds them by words such as `warning`, `error`, `failed`, or `fatal` in the message, not by the journal priority.
+Lines that mention warnings or errors are marked in the margin. **Warnings** and **Errors** show only those lines, with a count for each. A level the line states itself, such as `level=info`, `"log.level": "WARN"`, `[error]`, or `FATAL:`, decides. Otherwise the app looks for words such as `warning`, `error`, `failed`, or `fatal` in the message. It does not read the journal priority.
 
 Search shows the loaded lines that contain your text and highlights each match. Press `Ctrl+F` to search and `Escape` to clear it. Timestamps and host names are dimmed so messages stand out. Line numbers are not copied with the text. You can turn line wrapping off or clear the view.
 

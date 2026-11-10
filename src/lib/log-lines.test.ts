@@ -49,6 +49,36 @@ describe("parseLogLine", () => {
     expect(logLevel("terror and errand are words")).toBeNull();
   });
 
+  it("prefers the level a line states over words in its message", () => {
+    expect(
+      logLevel(
+        '{"@timestamp":"2026-11-01T09:58:12Z", "log.level": "INFO", "message":"retry failed"}',
+      ),
+    ).toBeNull();
+    expect(logLevel('{"log.level": "WARN", "message":"disk watermark exceeded"}')).toBe("warning");
+    expect(logLevel('time="2026-11-01" level=info msg="previous attempt failed"')).toBeNull();
+    expect(logLevel('{"level":"error","msg":"request done"}')).toBe("error");
+    expect(logLevel(" UTC [36] FATAL:  terminating connection")).toBe("error");
+    expect(logLevel(" UTC [26] LOG:  could not receive data: connection failed")).toBeNull();
+    expect(logLevel("[11/09/26 14:02:43] WARNING  WARNING:app:User exists")).toBe("warning");
+    expect(logLevel("2026/11/01 09:58:12 [error] 12#0: upstream timed out")).toBe("error");
+    expect(logLevel(" sshd: info: retrying after failure")).toBeNull();
+    expect(logLevel(" worker: error: job 7 failed")).toBe("error");
+    // Ordinary words are not stated levels; the message words decide.
+    expect(logLevel("Information about the failed job")).toBe("error");
+    expect(logLevel("anonymous usage and error information")).toBe("error");
+  });
+
+  it("dims a trailing UTC zone in database timestamps", () => {
+    const line = parseLogLine("2026-10-13 11:52:54.568 UTC [36] FATAL:  terminating connection");
+    expect(line.segments.slice(0, 3).map((segment) => [segment.role, segment.text])).toEqual([
+      ["date", "2026-10-13 "],
+      ["time", "11:52:54.568"],
+      ["zone", " UTC"],
+    ]);
+    expect(line.level).toBe("error");
+  });
+
   it("marks Control Room stream starts and journalctl separators", () => {
     expect(parseLogLine("[systemd worker.service] stream started").marker).toBe(true);
     expect(parseLogLine("[docker api] stream started").marker).toBe(true);

@@ -23,7 +23,7 @@ const TERMINAL_ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b
 // ISO 8601 at the start of a line: journalctl short-iso(-precise) and most
 // application loggers. The date and zone read as context; the time stays scannable.
 const ISO_PREFIX =
-  /^(\d{4}-\d{2}-\d{2}[T ])(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)(Z|[+-]\d{2}:?\d{2})?(?=\s)/;
+  /^(\d{4}-\d{2}-\d{2}[T ])(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
 // journalctl's "host identifier[pid]:" (kernel lines carry no PID).
 const JOURNAL_SOURCE = /^(\s+)(\S+ (?:[^\s:[\]]+\[\d+\]|kernel):)(?=\s|$)/;
 const STREAM_MARKER = /^\[(?:systemd|docker) .+\] stream started$/;
@@ -36,7 +36,54 @@ export function cleanLogText(line: string): string {
   return line.replace(TERMINAL_ESCAPES, "").replace(/\r+$/, "");
 }
 
+const LEVEL_WORDS: Record<string, LogLevel | null> = {
+  emerg: "error",
+  emergency: "error",
+  alert: "error",
+  crit: "error",
+  critical: "error",
+  fatal: "error",
+  panic: "error",
+  severe: "error",
+  err: "error",
+  error: "error",
+  warn: "warning",
+  warning: "warning",
+  notice: null,
+  info: null,
+  information: null,
+  log: null,
+  debug: null,
+  trace: null,
+  verbose: null,
+};
+// level=error, "level":"warn", "log.level": "INFO", severity=ERROR, ...
+const FIELD_LEVEL =
+  /(?:^|[\s{,;(])["']?(?:log\.)?(?:level|lvl|loglevel|severity)["']?\s*[=:]\s*["']?([A-Za-z]+)/;
+
+/**
+ * The level a line states itself: a level field, or an upper-case, bracketed,
+ * or colon-terminated level among the first few words (`WARNING`, `[error]`,
+ * `FATAL:`, `info:`). Returns undefined when the line states none.
+ */
+export function statedLogLevel(message: string): LogLevel | null | undefined {
+  const field = FIELD_LEVEL.exec(message)?.[1].toLowerCase();
+  if (field && field in LEVEL_WORDS) return LEVEL_WORDS[field];
+  for (const token of message.trimStart().split(/\s+/, 5)) {
+    const match = /^[[(<]?([A-Za-z]+)([\])>:]*)$/.exec(token);
+    if (!match) continue;
+    const [, word, close] = match;
+    const lower = word.toLowerCase();
+    if (!(lower in LEVEL_WORDS)) continue;
+    const marked = token !== word && (close || /^[[(<]/.test(token));
+    if (word === word.toUpperCase() || marked) return LEVEL_WORDS[lower];
+  }
+  return undefined;
+}
+
 export function logLevel(message: string): LogLevel | null {
+  const stated = statedLogLevel(message);
+  if (stated !== undefined) return stated;
   if (ERROR_TERMS.test(message)) return "error";
   if (WARNING_TERMS.test(message)) return "warning";
   return null;

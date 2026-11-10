@@ -46,12 +46,13 @@ const LEVEL_FILTERS: { value: LogLevelFilter; label: string; title?: string }[] 
   {
     value: "warning",
     label: "Warnings",
-    title: "Loaded lines that mention warn, warning, or deprecated",
+    title: "Loaded lines with a warning level, or that mention warn, warning, or deprecated",
   },
   {
     value: "error",
     label: "Errors",
-    title: "Loaded lines that mention error, failed, fatal, critical, panic, or exception",
+    title:
+      "Loaded lines with an error level, or that mention error, failed, fatal, critical, panic, or exception",
   },
 ];
 const numberFormat = new Intl.NumberFormat("en-US");
@@ -191,6 +192,10 @@ export function LogsPane({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const disposedRef = useRef(false);
   const startingRef = useRef(false);
+  // The newest Start request wins; superseded requests exit after their stop.
+  const startRequestRef = useRef(0);
+  // Whether the reader wants a stream running, independent of render timing.
+  const wantsStreamRef = useRef(false);
   const earlyStateRef = useRef(new Map<string, StreamStateEvent>());
   const outputRef = useRef<HTMLDivElement>(null);
   const previousLastLineRef = useRef(0);
@@ -267,6 +272,7 @@ export function LogsPane({
     }
     if (payload.state === "error") setError(payload.reason ?? "Log stream failed");
     if (payload.state !== "running") {
+      wantsStreamRef.current = false;
       finishDecoder();
       drainPausedBuffer();
       streamIdRef.current = null;
@@ -324,6 +330,7 @@ export function LogsPane({
     if (next === sourceId) return;
     setSourceId(next);
     onSourceChange(next ? { type: sourceType, id: next } : null);
+    showSource(sourceType, next);
   }, [sourceType, sourceId, servicesCache.items, containersCache.items, explicitSystemdSource]);
 
   useEffect(() => {
@@ -378,10 +385,12 @@ export function LogsPane({
   }, []);
 
   async function stop(): Promise<boolean> {
+    // Claim the stream so an overlapping stop or restart never stops it twice.
     const streamId = streamIdRef.current;
+    streamIdRef.current = null;
     finishDecoder();
     drainPausedBuffer();
-    streamGenerationRef.current += 1;
+    const generation = ++streamGenerationRef.current;
     startingRef.current = false;
     if (!streamId) {
       setStreamStatus("stopped");
@@ -390,21 +399,43 @@ export function LogsPane({
     setStreamStatus("stopping");
     try {
       await api.stopLogStream(streamId);
-      if (streamIdRef.current === streamId) streamIdRef.current = null;
-      setStreamStatus("stopped");
-      return true;
     } catch (caught) {
-      if (streamIdRef.current === streamId) setStreamStatus("running");
-      setError(`Could not stop Log Stream: ${errorMessage(caught)}`);
-      return false;
+      const message = errorMessage(caught);
+      // The stream already ended; its state event may still be on the way.
+      if (!/no longer active/i.test(message)) {
+        if (generation === streamGenerationRef.current && streamIdRef.current === null) {
+          streamIdRef.current = streamId;
+          setStreamStatus("running");
+        }
+        setError(`Could not stop Log Stream: ${message}`);
+        return false;
+      }
     }
+    if (generation === streamGenerationRef.current) setStreamStatus("stopped");
+    return true;
+  }
+
+  /** Stops at the reader's request and cancels any Start still in progress. */
+  function stopStream() {
+    wantsStreamRef.current = false;
+    startRequestRef.current += 1;
+    return stop();
   }
 
   async function start(
     sudoPassword: string | null = null,
     target: StreamTarget = { type: sourceType, id: sourceId, tail, follow },
+    fresh = false,
   ) {
-    if (!target.id || !(await stop())) return;
+    if (!target.id) return;
+    const request = ++startRequestRef.current;
+    wantsStreamRef.current = true;
+    const stopped = await stop();
+    if (request !== startRequestRef.current || disposedRef.current) return;
+    if (!stopped) return;
+    // A different source or line count starts in an empty view; stop() may have
+    // drained held or partial lines from the previous stream.
+    if (fresh) clearBuffers();
     const generation = ++streamGenerationRef.current;
     setError(null);
     setSudoPurpose(null);
@@ -462,6 +493,7 @@ export function LogsPane({
     } catch (caught) {
       if (generation !== streamGenerationRef.current) return;
       const message = errorMessage(caught);
+      wantsStreamRef.current = false;
       startingRef.current = false;
       setError(message);
       setStreamStatus("stopped");
@@ -484,27 +516,37 @@ export function LogsPane({
 
   const streaming = streamStatus === "running" || streamStatus === "starting";
 
-  /** Changing what to read while streaming restarts the stream with the new choice. */
-  function restartIfStreaming(target: StreamTarget) {
-    if (streaming) void start(null, target);
+  /** The view shows one source; a different source starts from an empty view. */
+  function showSource(type: LogSourceType, id: string) {
+    clearBuffers();
+    setError(null);
+    if (!wantsStreamRef.current) return;
+    if (id) void start(null, { type, id, tail, follow }, true);
+    else void stopStream();
   }
 
   function selectSource(id: string) {
+    if (id === sourceId) return;
     setSourceId(id);
     onSourceChange({ type: sourceType, id });
-    restartIfStreaming({ type: sourceType, id, tail, follow });
+    showSource(sourceType, id);
   }
 
-  async function changeType(next: LogSourceType) {
-    const wasStreaming = streaming;
-    if (!(await stop())) return;
-    setSourceType(next);
+  function changeType(next: LogSourceType) {
+    if (next === sourceType) return;
     const items = next === "systemd" ? servicesCache.items : containersCache.items;
     const nextId = items[0]?.id ?? "";
+    setSourceType(next);
     setSourceId(nextId);
     onSourceChange(nextId ? { type: next, id: nextId } : null);
     void loadSources(next);
-    if (wasStreaming && nextId) void start(null, { type: next, id: nextId, tail, follow });
+    showSource(next, nextId);
+  }
+
+  /** Line count and follow changes reread the same source. */
+  function changeReadOptions(options: { tail: number; follow: boolean }) {
+    if (wantsStreamRef.current)
+      void start(null, { type: sourceType, id: sourceId, ...options }, true);
   }
 
   function clearBuffers() {
@@ -653,8 +695,7 @@ export function LogsPane({
           <span>Source</span>
           <select
             value={sourceType}
-            onChange={(event) => void changeType(event.target.value as LogSourceType)}
-            disabled={streamStatus === "stopping"}
+            onChange={(event) => changeType(event.target.value as LogSourceType)}
           >
             {!windowsHost && <option value="systemd">systemd</option>}
             <option value="docker">Docker</option>
@@ -665,7 +706,7 @@ export function LogsPane({
           <select
             value={sourceId}
             onChange={(event) => selectSource(event.target.value)}
-            disabled={streamStatus === "stopping" || !sourceId}
+            disabled={!sourceId}
           >
             {!sourceId && <option value="">No {sourceNoun}s found</option>}
             {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
@@ -685,9 +726,8 @@ export function LogsPane({
             onChange={(event) => {
               const next = Number(event.target.value);
               setTail(next);
-              restartIfStreaming({ type: sourceType, id: sourceId, tail: next, follow });
+              changeReadOptions({ tail: next, follow });
             }}
-            disabled={streamStatus === "stopping"}
           >
             {logTailOptions.map((count) => (
               <option key={count}>{count}</option>
@@ -701,9 +741,8 @@ export function LogsPane({
             onChange={(event) => {
               const next = event.target.checked;
               setFollow(next);
-              restartIfStreaming({ type: sourceType, id: sourceId, tail, follow: next });
+              changeReadOptions({ tail, follow: next });
             }}
-            disabled={streamStatus === "stopping"}
           />{" "}
           Receive new lines
         </label>
@@ -711,11 +750,11 @@ export function LogsPane({
           <button
             className="secondary-button compact-button log-start"
             type="button"
-            onClick={() => void (streaming ? stop() : start())}
-            disabled={streamStatus === "stopping" || (!streaming && !sourceId)}
+            onClick={() => void (streamStatus === "stopped" ? start() : stopStream())}
+            disabled={streamStatus === "stopping" || (streamStatus === "stopped" && !sourceId)}
           >
-            {streaming ? <Square size={13} /> : <Play size={14} />}
-            {streaming ? "Stop" : "Start"}
+            {streamStatus === "stopped" ? <Play size={14} /> : <Square size={13} />}
+            {streamStatus === "stopped" ? "Start" : "Stop"}
           </button>
           <button
             className="toolbar-button"
