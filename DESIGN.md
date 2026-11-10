@@ -199,7 +199,9 @@ it should restore that preference. Provide individual divider resets and a
 visible Reset layout action for all panel sizes. Use a thin hover line within
 a larger drag target that stays clear of neighboring scrollbar gutters.
 The host list and capability navigation share a horizontal
-divider and scroll independently as their available heights shrink.
+divider and scroll independently as their available heights shrink. By default
+the capability navigation takes only the height its items need, leaving no
+empty space or scrollbar below them.
 Scrollbar thumbs appear only while their own scrollable section is hovered,
 including terminal panes, fading in and out rather than snapping. Keep
 scrollbar space reserved so revealing a thumb does not shift content or change
