@@ -20,6 +20,7 @@ export class BoundedLogBuffer {
   private partial = "";
   private partialBytes = 0;
   private totalBytes = 0;
+  private dropped = 0;
 
   constructor(
     private readonly maxLines = DEFAULT_LOG_MAX_LINES,
@@ -47,6 +48,7 @@ export class BoundedLogBuffer {
     this.partial = "";
     this.partialBytes = 0;
     this.totalBytes = 0;
+    this.dropped = 0;
   }
 
   snapshot(): string {
@@ -59,6 +61,11 @@ export class BoundedLogBuffer {
 
   get byteCount(): number {
     return this.totalBytes + this.partialBytes;
+  }
+
+  /** One-based number of the oldest retained line since the last clear. */
+  get firstLineNumber(): number {
+    return this.dropped + 1;
   }
 
   get lineCount(): number {
@@ -77,6 +84,7 @@ export class BoundedLogBuffer {
     ) {
       this.totalBytes -= this.lines[this.head].bytes;
       this.head += 1;
+      this.dropped += 1;
     }
 
     if (this.head > 1_000 && this.head * 2 > this.lines.length) {

@@ -1,12 +1,28 @@
 import { Search } from "../components/MagnifierIcon";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText } from "lucide-react";
+import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText, X } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
 import { ErrorState, LoadingState } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
+import {
+  highlightSegments,
+  LogLineCache,
+  lineMatches,
+  type LogLevelFilter,
+  type ParsedLogLine,
+} from "../lib/log-lines";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
 import { isSystemdUnitName } from "../lib/systemd-units";
 import type {
@@ -16,13 +32,106 @@ import type {
   LogSourceSelection,
   LogSourceType,
   SavedConnection,
+  StreamNoticeEvent,
   StreamStateEvent,
   SystemdUnit,
 } from "../types";
 
 type StreamStatus = "stopped" | "starting" | "running" | "stopping";
 type SudoPurpose = "sources" | "stream";
+type StreamTarget = { type: LogSourceType; id: string; tail: number; follow: boolean };
 const MAX_EARLY_STREAM_EVENTS = 16;
+const HELD_LINES_DELAY = 400;
+const LEVEL_FILTERS: { value: LogLevelFilter; label: string; title?: string }[] = [
+  { value: "all", label: "All" },
+  {
+    value: "warning",
+    label: "Warnings",
+    title: "Loaded lines with a warning level, or that mention warn, warning, or deprecated",
+  },
+  {
+    value: "error",
+    label: "Errors",
+    title:
+      "Loaded lines with an error level, or that mention error, failed, fatal, critical, panic, or exception",
+  },
+];
+const numberFormat = new Intl.NumberFormat("en-US");
+
+const CHUNK_LINES = 100;
+const LINE_HEIGHT = 1.55;
+type LogRowData = { number: number; line: ParsedLogLine };
+
+function LogRow({ number, line, query }: LogRowData & { query: string }) {
+  const parts = query ? highlightSegments(line.segments, query) : null;
+  const content = line.segments.map((segment, index) => {
+    const text = parts
+      ? parts[index].map((part, partIndex) =>
+          part.match ? <mark key={partIndex}>{part.text}</mark> : part.text,
+        )
+      : segment.text;
+    // Message text stays unwrapped to keep large buffers light.
+    return segment.role === "message" ? (
+      <Fragment key={index}>{text}</Fragment>
+    ) : (
+      <span key={index} className={`log-${segment.role}`}>
+        {text}
+      </span>
+    );
+  });
+  return (
+    <div
+      className="log-line"
+      data-line={number}
+      data-level={line.level ?? undefined}
+      data-marker={line.marker || undefined}
+    >
+      {line.marker ? <span className="log-marker">{content}</span> : content}
+    </div>
+  );
+}
+
+/** Rows render in fixed blocks so a flush only re-renders the blocks it changed. */
+const LogChunk = memo(
+  function LogChunk({
+    rows,
+    query,
+    estimatedHeight,
+  }: {
+    rows: LogRowData[];
+    query: string;
+    estimatedHeight: number;
+  }) {
+    return (
+      <div
+        className="log-chunk"
+        style={{ containIntrinsicBlockSize: `auto ${Math.ceil(rows.length * estimatedHeight)}px` }}
+      >
+        {rows.map((row) => (
+          <LogRow key={row.number} number={row.number} line={row.line} query={query} />
+        ))}
+      </div>
+    );
+  },
+  (previous, next) =>
+    previous.query === next.query &&
+    previous.estimatedHeight === next.estimatedHeight &&
+    previous.rows.length === next.rows.length &&
+    previous.rows.every(
+      (row, index) => row.number === next.rows[index].number && row.line === next.rows[index].line,
+    ),
+);
+
+function chunkRows(rows: LogRowData[]): { key: number; rows: LogRowData[] }[] {
+  const chunks: { key: number; rows: LogRowData[] }[] = [];
+  for (const row of rows) {
+    const key = Math.floor((row.number - 1) / CHUNK_LINES);
+    const last = chunks.at(-1);
+    if (last?.key === key) last.rows.push(row);
+    else chunks.push({ key, rows: [row] });
+  }
+  return chunks;
+}
 
 export function LogsPane({
   connection,
@@ -60,13 +169,17 @@ export function LogsPane({
   const [follow, setFollow] = useState(true);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("stopped");
   const [paused, setPaused] = useState(false);
-  const [logs, setLogs] = useState("");
+  const [logs, setLogs] = useState({ text: "", firstLine: 1 });
+  const [heldLines, setHeldLines] = useState(0);
+  const [levelFilter, setLevelFilter] = useState<LogLevelFilter>("all");
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [atLatest, setAtLatest] = useState(true);
   const [unreadLines, setUnreadLines] = useState(0);
   const [wrapLines, setWrapLines] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // journalctl reported that this account cannot see system entries.
+  const [journalRestricted, setJournalRestricted] = useState(false);
   const [sudoPurpose, setSudoPurpose] = useState<SudoPurpose | null>(null);
 
   const activeBufferRef = useRef(new BoundedLogBuffer());
@@ -77,11 +190,19 @@ export function LogsPane({
   const streamGenerationRef = useRef(0);
   const sourceRequestRef = useRef(0);
   const flushTimerRef = useRef<number | null>(null);
+  const heldTimerRef = useRef<number | null>(null);
+  const lineCacheRef = useRef(new LogLineCache());
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const disposedRef = useRef(false);
   const startingRef = useRef(false);
+  // The newest Start request wins; superseded requests exit after their stop.
+  const startRequestRef = useRef(0);
+  // Whether the reader wants a stream running, independent of render timing.
+  const wantsStreamRef = useRef(false);
   const earlyStateRef = useRef(new Map<string, StreamStateEvent>());
-  const outputRef = useRef<HTMLPreElement>(null);
-  const previousLineCountRef = useRef(0);
+  const earlyNoticeRef = useRef(new Set<string>());
+  const outputRef = useRef<HTMLDivElement>(null);
+  const previousLastLineRef = useRef(0);
   const servicesCacheRef = useRef(servicesCache);
   const containersCacheRef = useRef(containersCache);
   servicesCacheRef.current = servicesCache;
@@ -90,7 +211,10 @@ export function LogsPane({
   function flushNow() {
     if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current);
     flushTimerRef.current = null;
-    setLogs(activeBufferRef.current.snapshot());
+    setLogs({
+      text: activeBufferRef.current.snapshot(),
+      firstLine: activeBufferRef.current.firstLineNumber,
+    });
   }
 
   function scheduleFlush() {
@@ -101,10 +225,20 @@ export function LogsPane({
     );
   }
 
+  function clearHeldLines() {
+    if (heldTimerRef.current !== null) window.clearTimeout(heldTimerRef.current);
+    heldTimerRef.current = null;
+    setHeldLines(0);
+  }
+
   function appendChunk(chunk: string) {
     if (!chunk) return;
     if (pausedRef.current) {
       pausedBufferRef.current.append(chunk);
+      heldTimerRef.current ??= window.setTimeout(() => {
+        heldTimerRef.current = null;
+        if (pausedRef.current) setHeldLines(pausedBufferRef.current.lineCount);
+      }, HELD_LINES_DELAY);
     } else {
       activeBufferRef.current.append(chunk);
       scheduleFlush();
@@ -123,6 +257,7 @@ export function LogsPane({
     }
     pausedRef.current = false;
     setPaused(false);
+    clearHeldLines();
     flushNow();
   }
 
@@ -141,11 +276,26 @@ export function LogsPane({
     }
     if (payload.state === "error") setError(payload.reason ?? "Log stream failed");
     if (payload.state !== "running") {
+      wantsStreamRef.current = false;
       finishDecoder();
       drainPausedBuffer();
       streamIdRef.current = null;
       startingRef.current = false;
       setStreamStatus("stopped");
+    }
+  }
+
+  function applyStreamNotice(payload: StreamNoticeEvent) {
+    if (payload.notice !== "journal-restricted") return;
+    if (payload.streamId === streamIdRef.current) setJournalRestricted(true);
+    else if (startingRef.current) {
+      const notices = earlyNoticeRef.current;
+      notices.add(payload.streamId);
+      while (notices.size > MAX_EARLY_STREAM_EVENTS) {
+        const oldest = notices.values().next().value;
+        if (oldest === undefined) break;
+        notices.delete(oldest);
+      }
     }
   }
 
@@ -198,11 +348,13 @@ export function LogsPane({
     if (next === sourceId) return;
     setSourceId(next);
     onSourceChange(next ? { type: sourceType, id: next } : null);
+    showSource(sourceType, next);
   }, [sourceType, sourceId, servicesCache.items, containersCache.items, explicitSystemdSource]);
 
   useEffect(() => {
     let listenerDisposed = false;
     let unlisten: (() => void) | undefined;
+    let unlistenNotice: (() => void) | undefined;
     void listen<StreamStateEvent>("stream-state-changed", ({ payload }) => {
       applyStreamState(payload);
     })
@@ -213,9 +365,18 @@ export function LogsPane({
       .catch((caught) => {
         if (!listenerDisposed) setError(`Log event listener failed: ${errorMessage(caught)}`);
       });
+    void listen<StreamNoticeEvent>("stream-notice", ({ payload }) => {
+      applyStreamNotice(payload);
+    })
+      .then((dispose) => {
+        if (listenerDisposed) dispose();
+        else unlistenNotice = dispose;
+      })
+      .catch(() => undefined);
     return () => {
       listenerDisposed = true;
       unlisten?.();
+      unlistenNotice?.();
     };
   }, []);
 
@@ -225,10 +386,26 @@ export function LogsPane({
   }, [search]);
 
   useEffect(() => {
+    function keydown(event: KeyboardEvent) {
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.key.toLowerCase() !== "f")
+        return;
+      if (document.querySelector('[role="dialog"]:not([inert])')) return;
+      const input = searchInputRef.current;
+      if (!input) return;
+      event.preventDefault();
+      input.focus();
+      input.select();
+    }
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, []);
+
+  useEffect(() => {
     return () => {
       disposedRef.current = true;
       streamGenerationRef.current += 1;
       if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current);
+      if (heldTimerRef.current !== null) window.clearTimeout(heldTimerRef.current);
       const streamId = streamIdRef.current;
       streamIdRef.current = null;
       if (streamId) void api.stopLogStream(streamId).catch(() => undefined);
@@ -236,10 +413,12 @@ export function LogsPane({
   }, []);
 
   async function stop(): Promise<boolean> {
+    // Claim the stream so an overlapping stop or restart never stops it twice.
     const streamId = streamIdRef.current;
+    streamIdRef.current = null;
     finishDecoder();
     drainPausedBuffer();
-    streamGenerationRef.current += 1;
+    const generation = ++streamGenerationRef.current;
     startingRef.current = false;
     if (!streamId) {
       setStreamStatus("stopped");
@@ -248,32 +427,59 @@ export function LogsPane({
     setStreamStatus("stopping");
     try {
       await api.stopLogStream(streamId);
-      if (streamIdRef.current === streamId) streamIdRef.current = null;
-      setStreamStatus("stopped");
-      return true;
     } catch (caught) {
-      if (streamIdRef.current === streamId) setStreamStatus("running");
-      setError(`Could not stop Log Stream: ${errorMessage(caught)}`);
-      return false;
+      const message = errorMessage(caught);
+      // The stream already ended; its state event may still be on the way.
+      if (!/no longer active/i.test(message)) {
+        if (generation === streamGenerationRef.current && streamIdRef.current === null) {
+          streamIdRef.current = streamId;
+          setStreamStatus("running");
+        }
+        setError(`Could not stop Log Stream: ${message}`);
+        return false;
+      }
     }
+    if (generation === streamGenerationRef.current) setStreamStatus("stopped");
+    return true;
   }
 
-  async function start(sudoPassword: string | null = null) {
-    if (!sourceId || !(await stop())) return;
+  /** Stops at the reader's request and cancels any Start still in progress. */
+  function stopStream() {
+    wantsStreamRef.current = false;
+    startRequestRef.current += 1;
+    return stop();
+  }
+
+  async function start(
+    sudoPassword: string | null = null,
+    target: StreamTarget = { type: sourceType, id: sourceId, tail, follow },
+    fresh = false,
+  ) {
+    if (!target.id) return;
+    const request = ++startRequestRef.current;
+    wantsStreamRef.current = true;
+    const stopped = await stop();
+    if (request !== startRequestRef.current || disposedRef.current) return;
+    if (!stopped) return;
+    // A different source or line count starts in an empty view; stop() may have
+    // drained held or partial lines from the previous stream.
+    if (fresh) clearBuffers();
     const generation = ++streamGenerationRef.current;
     setError(null);
+    setJournalRestricted(false);
     setSudoPurpose(null);
     setPaused(false);
     pausedRef.current = false;
     pausedBufferRef.current.clear();
+    clearHeldLines();
     setStreamStatus("starting");
     startingRef.current = true;
     earlyStateRef.current.clear();
+    earlyNoticeRef.current.clear();
     decoderRef.current = new TextDecoder();
-    const sourceName = sourceOptions.find((source) => source.id === sourceId);
-    const label = sourceName && "name" in sourceName ? sourceName.name : sourceId;
+    const targetItems = target.type === "systemd" ? servicesCache.items : containersCache.items;
     activeBufferRef.current.append(
-      `${activeBufferRef.current.byteCount ? "\n" : ""}[${sourceType} ${label}] stream started\n`,
+      `${activeBufferRef.current.byteCount ? "\n" : ""}[${target.type} ${sourceLabel(targetItems, target.id)}] stream started\n`,
     );
     flushNow();
 
@@ -285,20 +491,20 @@ export function LogsPane({
 
     try {
       const started =
-        sourceType === "systemd"
+        target.type === "systemd"
           ? await api.startJournalStream(
               connection.id,
-              sourceId,
-              tail,
-              follow,
+              target.id,
+              target.tail,
+              target.follow,
               sudoPassword,
               output,
             )
           : await api.startDockerLogStream(
               connection.id,
-              sourceId,
-              tail,
-              follow,
+              target.id,
+              target.tail,
+              target.follow,
               sudoPassword,
               output,
             );
@@ -309,6 +515,7 @@ export function LogsPane({
       streamIdRef.current = started.streamId;
       startingRef.current = false;
       setStreamStatus("running");
+      if (earlyNoticeRef.current.delete(started.streamId)) setJournalRestricted(true);
       const earlyState = earlyStateRef.current.get(started.streamId);
       if (earlyState) {
         earlyStateRef.current.delete(started.streamId);
@@ -317,6 +524,7 @@ export function LogsPane({
     } catch (caught) {
       if (generation !== streamGenerationRef.current) return;
       const message = errorMessage(caught);
+      wantsStreamRef.current = false;
       startingRef.current = false;
       setError(message);
       setStreamStatus("stopped");
@@ -329,6 +537,7 @@ export function LogsPane({
     const next = !pausedRef.current;
     pausedRef.current = next;
     setPaused(next);
+    if (!next) clearHeldLines();
     if (!next && pausedBufferRef.current.byteCount) {
       activeBufferRef.current.append(pausedBufferRef.current.snapshot());
       pausedBufferRef.current.clear();
@@ -336,46 +545,96 @@ export function LogsPane({
     }
   }
 
-  async function changeType(next: LogSourceType) {
-    if (!(await stop())) return;
-    setSourceType(next);
+  const streaming = streamStatus === "running" || streamStatus === "starting";
+
+  /** The view shows one source; a different source starts from an empty view. */
+  function showSource(type: LogSourceType, id: string) {
+    clearBuffers();
+    setError(null);
+    setJournalRestricted(false);
+    if (!wantsStreamRef.current) return;
+    if (id) void start(null, { type, id, tail, follow }, true);
+    else void stopStream();
+  }
+
+  function selectSource(id: string) {
+    if (id === sourceId) return;
+    setSourceId(id);
+    onSourceChange({ type: sourceType, id });
+    showSource(sourceType, id);
+  }
+
+  function changeType(next: LogSourceType) {
+    if (next === sourceType) return;
     const items = next === "systemd" ? servicesCache.items : containersCache.items;
     const nextId = items[0]?.id ?? "";
+    setSourceType(next);
     setSourceId(nextId);
     onSourceChange(nextId ? { type: next, id: nextId } : null);
     void loadSources(next);
+    showSource(next, nextId);
+  }
+
+  /** Line count and follow changes reread the same source. */
+  function changeReadOptions(options: { tail: number; follow: boolean }) {
+    if (wantsStreamRef.current)
+      void start(null, { type: sourceType, id: sourceId, ...options }, true);
   }
 
   function clearBuffers() {
     activeBufferRef.current.clear();
     pausedBufferRef.current.clear();
+    clearHeldLines();
     flushNow();
     setAtLatest(true);
     setUnreadLines(0);
   }
 
-  const displayedLogs = useMemo(() => {
-    if (!searchQuery.trim()) return logs;
-    const query = searchQuery.toLowerCase();
-    return logs
-      .split("\n")
-      .filter((line) => line.toLowerCase().includes(query))
-      .join("\n");
-  }, [logs, searchQuery]);
+  function clearSearch() {
+    setSearch("");
+    setSearchQuery("");
+  }
+
+  const lines = useMemo(() => {
+    const raw = logs.text.split("\n");
+    if (raw.at(-1) === "") raw.pop();
+    const cache = lineCacheRef.current;
+    return raw.map((text, index) => ({ number: logs.firstLine + index, line: cache.get(text) }));
+  }, [logs]);
+  const levelCounts = useMemo(() => {
+    const counts = { all: 0, warning: 0, error: 0 };
+    for (const { line } of lines) {
+      if (line.marker) continue;
+      counts.all += 1;
+      if (line.level) counts[line.level] += 1;
+    }
+    return counts;
+  }, [lines]);
+  const query = searchQuery.trim();
+  const filtering = Boolean(query) || levelFilter !== "all";
+  const visibleLines = useMemo(
+    () =>
+      filtering
+        ? lines.filter(({ line }) => !line.marker && lineMatches(line, query, levelFilter))
+        : lines,
+    [lines, query, levelFilter, filtering],
+  );
+  const visibleChunks = useMemo(() => chunkRows(visibleLines), [visibleLines]);
+  const lastLine = logs.firstLine + lines.length - 1;
+  const gutterDigits = Math.max(3, String(Math.max(lastLine, 1)).length);
 
   useLayoutEffect(() => {
-    const lineCount = logs ? logs.split("\n").length : 0;
-    const added = Math.max(0, lineCount - previousLineCountRef.current);
-    previousLineCountRef.current = lineCount;
+    const added = Math.max(0, lastLine - previousLastLineRef.current);
+    previousLastLineRef.current = lastLine;
     const output = outputRef.current;
-    if (!output || searchQuery.trim()) return;
+    if (!output || filtering) return;
     if (atLatest) {
       output.scrollTop = output.scrollHeight;
       setUnreadLines(0);
     } else if (added > 0) {
       setUnreadLines((current) => current + added);
     }
-  }, [logs, searchQuery, atLatest]);
+  }, [lastLine, logs, filtering, atLatest]);
 
   function handleOutputScroll() {
     const output = outputRef.current;
@@ -394,7 +653,6 @@ export function LogsPane({
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
   const sourceOptions = sourceCache.items;
-  const controlsLocked = streamStatus !== "stopped";
   if (sourceCache.loading && !sourceCache.items.length && !explicitSystemdSource)
     return <LoadingState label="Finding available log sources…" />;
   if (sourceCache.error && !sourceCache.items.length && !explicitSystemdSource) {
@@ -425,54 +683,43 @@ export function LogsPane({
     );
   }
 
+  const sourceNoun = sourceType === "systemd" ? "unit" : "container";
+  const selectedLabel = sourceId ? sourceLabel(sourceOptions, sourceId) : "";
   const statusLabel =
     streamStatus === "starting"
-      ? "Starting stream"
+      ? "Starting…"
       : streamStatus === "stopping"
-        ? "Stopping stream"
+        ? "Stopping…"
         : streamStatus === "running"
           ? paused
-            ? "Rendering paused"
-            : "Stream active"
-          : "Stream stopped";
+            ? "Paused"
+            : "Streaming"
+          : "Stopped";
+  const statusTone =
+    streamStatus === "running"
+      ? paused
+        ? "status-paused"
+        : "status-connected"
+      : streamStatus === "stopped"
+        ? "status-disconnected"
+        : "status-connecting";
 
   return (
     <section className="feature-page logs-page">
       <header className="page-heading compact-heading">
         <div>
           <h2>Logs</h2>
-          <p role="status" aria-live="polite">
-            {statusLabel}
+          <p className="log-status">
+            <span className={`status-dot ${statusTone}`} aria-hidden="true" />
+            <span role="status" aria-live="polite">
+              {statusLabel}
+            </span>
+            {streamStatus === "running" && paused && heldLines > 0 && (
+              <span className="log-status-detail">
+                {numberFormat.format(heldLines)} new {heldLines === 1 ? "line" : "lines"} waiting
+              </span>
+            )}
           </p>
-        </div>
-        <div className="toolbar-actions">
-          <button
-            className="toolbar-button"
-            type="button"
-            onClick={() => start()}
-            disabled={!sourceId || streamStatus !== "stopped"}
-          >
-            <Play size={14} /> Start
-          </button>
-          <button
-            className="toolbar-button"
-            type="button"
-            onClick={togglePause}
-            disabled={streamStatus !== "running"}
-          >
-            {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? "Resume" : "Pause"}
-          </button>
-          <button
-            className="toolbar-button"
-            type="button"
-            onClick={() => stop()}
-            disabled={streamStatus === "stopped" || streamStatus === "stopping"}
-          >
-            <Square size={13} /> Stop
-          </button>
-          <button className="toolbar-button" type="button" onClick={clearBuffers}>
-            <Eraser size={14} /> Clear view
-          </button>
         </div>
       </header>
       <div className="log-controls">
@@ -480,8 +727,7 @@ export function LogsPane({
           <span>Source</span>
           <select
             value={sourceType}
-            onChange={(event) => void changeType(event.target.value as LogSourceType)}
-            disabled={controlsLocked}
+            onChange={(event) => changeType(event.target.value as LogSourceType)}
           >
             {!windowsHost && <option value="systemd">systemd</option>}
             <option value="docker">Docker</option>
@@ -491,12 +737,10 @@ export function LogsPane({
           <span>{sourceType === "systemd" ? "Unit" : "Container"}</span>
           <select
             value={sourceId}
-            onChange={(event) => {
-              setSourceId(event.target.value);
-              onSourceChange({ type: sourceType, id: event.target.value });
-            }}
-            disabled={controlsLocked}
+            onChange={(event) => selectSource(event.target.value)}
+            disabled={!sourceId}
           >
+            {!sourceId && <option value="">No {sourceNoun}s found</option>}
             {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
               <option value={sourceId}>{sourceId}</option>
             )}
@@ -511,8 +755,11 @@ export function LogsPane({
           <span>Lines</span>
           <select
             value={tail}
-            onChange={(event) => setTail(Number(event.target.value))}
-            disabled={controlsLocked}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              setTail(next);
+              changeReadOptions({ tail: next, follow });
+            }}
           >
             {logTailOptions.map((count) => (
               <option key={count}>{count}</option>
@@ -523,30 +770,54 @@ export function LogsPane({
           <input
             type="checkbox"
             checked={follow}
-            onChange={(event) => setFollow(event.target.checked)}
-            disabled={controlsLocked}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setFollow(next);
+              changeReadOptions({ tail, follow: next });
+            }}
           />{" "}
           Receive new lines
         </label>
-        <label className="search-field log-search">
-          <Search size={15} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search loaded lines"
-          />
-        </label>
-        <button
-          className="secondary-button compact-button"
-          type="button"
-          aria-pressed={wrapLines}
-          onClick={() => setWrapLines((current) => !current)}
-        >
-          <WrapText size={14} /> Wrap lines
-        </button>
+        <div className="log-transport">
+          <button
+            className="secondary-button compact-button log-start"
+            type="button"
+            onClick={() => void (streamStatus === "stopped" ? start() : stopStream())}
+            disabled={streamStatus === "stopping" || (streamStatus === "stopped" && !sourceId)}
+          >
+            {streamStatus === "stopped" ? <Play size={14} /> : <Square size={13} />}
+            {streamStatus === "stopped" ? "Start" : "Stop"}
+          </button>
+          <button
+            className="toolbar-button"
+            type="button"
+            onClick={togglePause}
+            disabled={streamStatus !== "running"}
+            title={paused ? undefined : "Hold new lines while you read. The stream keeps running."}
+          >
+            {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? "Resume" : "Pause"}
+          </button>
+        </div>
       </div>
       {sourceCache.error && (
         <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
+      )}
+      {journalRestricted && (
+        <div className="inline-warning" role="status">
+          <span>
+            This account can’t read the system journal, so this unit’s entries may be missing. Use
+            sudo, or add the account to the adm or systemd-journal group.
+          </span>
+          {!windowsHost && (
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => setSudoPurpose("stream")}
+            >
+              Retry with sudo
+            </button>
+          )}
+        </div>
       )}
       {error && (
         <div className="inline-error" role="alert">
@@ -562,43 +833,174 @@ export function LogsPane({
           )}
         </div>
       )}
-      {displayedLogs ? (
-        <div className="log-output-shell">
-          <pre
-            ref={outputRef}
-            className={wrapLines ? "log-output log-output-wrapped" : "log-output"}
-            onScroll={handleOutputScroll}
-          >
-            {displayedLogs}
-          </pre>
-          {!searchQuery.trim() && !atLatest && (
-            <button className="log-jump-latest" type="button" onClick={jumpToLatest}>
-              <ArrowDown size={14} />
-              Jump to latest{unreadLines > 0 ? ` · ${unreadLines} new` : ""}
+      <div className="log-panel">
+        <div className="log-view-bar">
+          <label className="search-field log-search">
+            <Search size={15} />
+            <input
+              ref={searchInputRef}
+              value={search}
+              aria-label="Search loaded lines"
+              aria-keyshortcuts="Control+F"
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || !search) return;
+                event.preventDefault();
+                event.stopPropagation();
+                clearSearch();
+              }}
+              placeholder="Search loaded lines"
+            />
+            {query && (
+              <span className="log-match-count" aria-live="polite">
+                {numberFormat.format(visibleLines.length)}{" "}
+                {visibleLines.length === 1 ? "match" : "matches"}
+              </span>
+            )}
+            {search && (
+              <button
+                className="log-search-clear"
+                type="button"
+                aria-label="Clear search"
+                title="Clear search (Esc)"
+                onClick={() => {
+                  clearSearch();
+                  searchInputRef.current?.focus();
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </label>
+          <div className="log-view-tools">
+            <div className="log-level-filter" role="group" aria-label="Show lines">
+              {LEVEL_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  aria-pressed={levelFilter === filter.value}
+                  data-level={filter.value}
+                  data-found={levelCounts[filter.value] > 0 || undefined}
+                  title={filter.title}
+                  onClick={() => setLevelFilter(filter.value)}
+                >
+                  {filter.label}
+                  <span className="log-count">
+                    {numberFormat.format(levelCounts[filter.value])}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Wrap lines"
+              title="Wrap lines"
+              aria-pressed={wrapLines}
+              onClick={() => setWrapLines((current) => !current)}
+            >
+              <WrapText size={15} />
             </button>
-          )}
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Clear view"
+              title="Clear view"
+              disabled={!lines.length}
+              onClick={clearBuffers}
+            >
+              <Eraser size={15} />
+            </button>
+          </div>
         </div>
-      ) : (
-        <div className="log-output log-empty">
-          <FileClock size={24} aria-hidden="true" />
-          <p>
-            {searchQuery.trim()
-              ? "No loaded lines match your search."
-              : sourceId
-                ? "Press Start to stream this source's output here."
-                : "Choose a source, then press Start to stream its output here."}
-          </p>
-        </div>
-      )}
+        {visibleLines.length ? (
+          <div className="log-output-shell">
+            <div
+              ref={outputRef}
+              className={wrapLines ? "log-output log-output-wrapped" : "log-output"}
+              role="log"
+              aria-live="off"
+              aria-label={selectedLabel ? `Log output for ${selectedLabel}` : "Log output"}
+              tabIndex={0}
+              style={
+                {
+                  fontFamily: settings.terminalFontFamily,
+                  fontSize: settings.terminalFontSize,
+                  "--log-gutter": `${gutterDigits}ch`,
+                } as CSSProperties
+              }
+              onScroll={handleOutputScroll}
+            >
+              <div className="log-lines">
+                {visibleChunks.map((chunk) => (
+                  <LogChunk
+                    key={chunk.key}
+                    rows={chunk.rows}
+                    query={query}
+                    estimatedHeight={settings.terminalFontSize * LINE_HEIGHT}
+                  />
+                ))}
+              </div>
+            </div>
+            {!filtering && !atLatest && (
+              <button className="log-jump-latest" type="button" onClick={jumpToLatest}>
+                <ArrowDown size={14} />
+                Jump to latest
+                {unreadLines > 0 && (
+                  <span className="log-count">{numberFormat.format(unreadLines)} new</span>
+                )}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="log-empty">
+            <FileClock size={24} aria-hidden="true" />
+            {filtering && lines.length ? (
+              <>
+                <p>
+                  {query
+                    ? `No loaded ${levelFilter === "all" ? "" : `${levelFilter} `}lines match “${query}”.`
+                    : `No loaded lines mention ${levelFilter === "error" ? "errors" : "warnings"}.`}
+                </p>
+                <button
+                  className="inline-action"
+                  type="button"
+                  onClick={() => {
+                    clearSearch();
+                    setLevelFilter("all");
+                  }}
+                >
+                  Show all lines
+                </button>
+              </>
+            ) : (
+              <p>
+                {streaming
+                  ? `Waiting for output from ${selectedLabel}…`
+                  : sourceId
+                    ? `Start reads the last ${tail} lines of ${selectedLabel}${follow ? ", then new lines as they arrive" : ""}.`
+                    : `Choose a ${sourceNoun} to read its logs.`}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
       {sudoPurpose && (
         <CredentialDialog
           connectionLabel={connection.displayName}
           onClose={() => setSudoPurpose(null)}
           onSubmit={(password) =>
-            sudoPurpose === "sources" ? loadSources("docker", true, password) : start(password)
+            sudoPurpose === "sources"
+              ? loadSources("docker", true, password)
+              : start(password, undefined, true)
           }
         />
       )}
     </section>
   );
+}
+
+function sourceLabel(items: (SystemdUnit | DockerContainer)[], id: string): string {
+  const item = items.find((source) => source.id === id);
+  return item && "name" in item ? item.name : id;
 }

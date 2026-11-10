@@ -526,6 +526,12 @@ export interface StreamStateEvent {
   reason: string | null;
 }
 
+/** A running stream's stderr changed what its output means. */
+export interface StreamNoticeEvent {
+  streamId: string;
+  notice: "journal-restricted";
+}
+
 export interface CatalogFont {
   id: string;
   family: string;

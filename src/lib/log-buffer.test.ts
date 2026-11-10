@@ -9,6 +9,17 @@ describe("BoundedLogBuffer", () => {
     expect(buffer.lineCount).toBe(3);
   });
 
+  it("numbers retained lines from the first line since clearing", () => {
+    const buffer = new BoundedLogBuffer(3, 1_000);
+    buffer.append("one\ntwo\n");
+    expect(buffer.firstLineNumber).toBe(1);
+    buffer.append("three\nfour\nfive\n");
+    expect(buffer.firstLineNumber).toBe(3);
+    buffer.clear();
+    buffer.append("again\n");
+    expect(buffer.firstLineNumber).toBe(1);
+  });
+
   it("keeps partial lines across chunks", () => {
     const buffer = new BoundedLogBuffer(10, 1_000);
     buffer.append("partial");

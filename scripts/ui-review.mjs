@@ -209,7 +209,9 @@ ${JSON.stringify(registry, null, 2)}`);
             ? page.locator(action.selector)
             : page.getByRole(action.role, { name: action.name, exact: true });
           if (action.last) locator = locator.last();
-          await locator.click();
+          if (action.wait) await locator.first().waitFor();
+          else if (action.fill !== undefined) await locator.fill(action.fill);
+          else await locator.click();
         }
         if (definition.settled?.[options.state])
           await page.locator(definition.settled[options.state]).waitFor();

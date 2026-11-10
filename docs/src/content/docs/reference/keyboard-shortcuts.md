@@ -12,6 +12,7 @@ description: Keys for the current tab and terminal.
 | `Ctrl+Shift+V`          | Paste the clipboard into the terminal.                                      |
 | `Ctrl+Shift+W`          | Close the current tab.                                                      |
 | `Ctrl+Shift+Left/Right` | Move the focused workspace tab one slot in the header.                      |
+| `Ctrl+F`                | Search the loaded lines in Logs. `Escape` clears the search.                |
 | `Up` / `Down`           | Switch Systemd inventory units and update the inspector.                    |
 | Arrow keys              | Select a nearby graph node in that direction in Systemd, Ports, and Docker. |
 | `Home` / `End`          | Focus the first or last row or graph node.                                  |
