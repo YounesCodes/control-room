@@ -66,7 +66,9 @@ clipping. Settings starts on General & Monitoring. Systemd supports
 `populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it
-to the global note in `global`. Data is
+to the global note in `global`. Dialogs opens Add connection in `connection`,
+groups and tags with existing entries in `groups`, Rename workspace in `rename`,
+and the host readings panel, with an unreported GPU, in `metrics`. Data is
 synthetic and network requests outside the fixture server are blocked. No local
 environment files are loaded. Every scenario renders the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the
@@ -105,7 +107,9 @@ Capture failures fail the step; absent artifacts do not fail uploads.
 
 To add a scenario, register its states and ready selector in
 `src/test/ui-review/scenarios.json`, including focused preparation actions and
-state-specific settled selectors. Configure synthetic native responses in
+state-specific settled selectors. Mark a preparation click `"optional": true`
+when only some viewports render its target, such as the compact navigation
+toggle. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
 server aliases Tauri imports to that browser-only module; the product build does
 not. Prefer the real App layout over duplicated shell markup. Keep ready

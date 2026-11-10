@@ -608,7 +608,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }
       await open.click();
       await page.getByRole("button", { name: "Add connection", exact: true }).click();
-      const dialog = page.getByRole("dialog", { name: "Add Saved Connection", exact: true });
+      const dialog = page.getByRole("dialog", { name: "Add connection", exact: true });
       await expect.element(dialog).toBeVisible();
       const bounds = dialog.element().getBoundingClientRect();
       expect(bounds.left).toBeGreaterThanOrEqual(0);
@@ -1735,10 +1735,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await expect.element(page.getByText("Stale", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
-    await expect.element(page.getByText(/Last reading time Unavailable/)).toBeVisible();
+    await expect.element(page.getByText(/Update time unknown/)).toBeVisible();
     expect(element.querySelector(".host-metrics-panel")!.textContent).not.toContain("Invalid Date");
     sampledAt = new Date().toISOString();
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh readings", exact: true }).click();
     await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
   });
   it("keeps whole priority readings in the titlebar and exposes the rest through the status button", async () => {
@@ -2067,7 +2067,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(io).toHaveAccessibleName("Disk I/O: Read 0 B/s · Write 0 B/s");
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
     for (let index = 0; index < 11; index++) {
-      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await page.getByRole("button", { name: "Refresh readings", exact: true }).click();
       await expect.poll(() => sequence).toBe(index + 2);
       await expect.poll(() => strip.hasAttribute("data-sampling")).toBe(false);
     }
@@ -2093,7 +2093,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const lastPath = path.getAttribute("d");
     failures.set("sample_header_metrics", "Fixture offline");
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh readings", exact: true }).click();
     await expect.poll(() => strip.dataset.state).toBe("stale");
     expect(trigger.getBoundingClientRect().width).toBeLessThanOrEqual(80);
     expect(positions()).toEqual(before);
@@ -2139,7 +2139,17 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page.viewport(width, 700);
       await mount();
       await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
-      await expect.element(page.getByText("This host did not report a reading")).toBeVisible();
+      const gpuDetail = await vi.waitFor(() => {
+        const row = [...element.querySelectorAll(".host-metrics-panel dl > div")].find(
+          (item) => item.querySelector("dt")?.textContent === "GPU",
+        );
+        if (!row) throw new Error("GPU details are not open");
+        return row;
+      });
+      // A missing GPU reading stays a muted "Unavailable", never a zero, with no caption.
+      expect(gpuDetail.querySelector("strong")).toHaveAttribute("data-unavailable");
+      expect(gpuDetail.textContent).toContain("Unavailable");
+      expect(gpuDetail.querySelector("small")).toBeNull();
       const close = page.getByRole("button", { name: "Close host metrics" });
       await expect.element(close).toHaveFocus();
       await userEvent.keyboard("{Escape}");
@@ -2167,7 +2177,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(badge.parentElement).toHaveClass("host-metrics-trigger");
       expect(element.querySelector(".host-metrics")!.textContent).not.toContain("Fixture Alpha");
       expect(badge.parentElement?.getAttribute("title")).toContain("Fixture Alpha");
-      expect(badge.getAttribute("aria-label")).toContain("latest host reading is current");
+      expect(badge.getAttribute("aria-label")).toBe("Readings refresh automatically.");
       expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(
         element.querySelector(".host-metrics-values")!.getBoundingClientRect().left,
       );
@@ -3019,7 +3029,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("textbox", { name: "SSH destination" }).fill("changed.example.invalid");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect
-      .element(page.getByRole("dialog", { name: "Edit Saved Connection" }))
+      .element(page.getByRole("dialog", { name: "Edit connection" }))
       .not.toBeInTheDocument();
     await expect
       .element(page.getByRole("button", { name: "Clear unit filter" }))

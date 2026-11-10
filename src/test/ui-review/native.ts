@@ -26,8 +26,28 @@ if (state === "overflow") {
   units[0].id = `example-${"long-unit-name-".repeat(12)}worker.service`;
   units[0].description = "Synthetic long description. ".repeat(15);
 }
-const workspaceView = { systemd: "services", scratchpad: "terminal" }[scenario] as
-  "services" | "terminal" | undefined;
+const workspaceView = { systemd: "services", scratchpad: "terminal", dialogs: "terminal" }[
+  scenario
+] as "services" | "terminal" | undefined;
+// Dialogs show organization that already exists, so their lists are populated.
+const groups =
+  scenario === "dialogs"
+    ? [
+        { id: "example-group-lab", name: "Homelab", position: 0, collapsed: false },
+        { id: "example-group-cloud", name: "Cloud", position: 1, collapsed: false },
+      ]
+    : [];
+const tags =
+  scenario === "dialogs"
+    ? [
+        { id: "example-tag-critical", name: "critical", color: "#c2410c" },
+        { id: "example-tag-docker", name: "docker", color: "#2563eb" },
+      ]
+    : [];
+const metricsSettings =
+  scenario === "dialogs" && state === "metrics"
+    ? { ...settings, hostMetricsEnabled: true }
+    : settings;
 const workspace: PersistedWorkspaceState = {
   workspaces: workspaceView
     ? [
@@ -85,8 +105,26 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       result = [host];
       break;
     case "list_connection_groups":
+      result = groups;
+      break;
     case "list_connection_tags":
-      result = [];
+      result = tags;
+      break;
+    case "sample_header_metrics":
+      // GPU stays unreported so the unavailable reading is reviewed too.
+      result = {
+        sampledAt: "2026-11-01T10:00:00Z",
+        cpuPercent: 12,
+        memoryTotalKib: 8074035,
+        memoryAvailableKib: 5872025,
+        gpuPercent: null,
+        diskTotalKib: null,
+        diskFreeKib: null,
+        diskLabel: null,
+        diskReadBytesPerSecond: 13 * 1024 * 1024,
+        diskWriteBytesPerSecond: 2.3 * 1024 * 1024,
+        uptimeSeconds: 324000,
+      };
       break;
     case "list_local_shells":
       result = {
@@ -97,7 +135,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "get_settings_contract":
-      result = { current: settings, defaults: settings, logTailOptions: [50, 100, 200, 500, 1000] };
+      result = {
+        current: metricsSettings,
+        defaults: settings,
+        logTailOptions: [50, 100, 200, 500, 1000],
+      };
       break;
     case "get_workspace_state":
       result = workspace;

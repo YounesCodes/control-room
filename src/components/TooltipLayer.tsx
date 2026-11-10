@@ -63,9 +63,14 @@ export function TooltipLayer() {
       setTooltip(null);
     }
 
+    // An open menu or panel already shows what its trigger's tooltip describes,
+    // and the tooltip would sit on top of it.
+    const expanded = (target: HTMLElement) => target.getAttribute("aria-expanded") === "true";
+
     function show(target: HTMLElement, delayed: boolean) {
       if (activeRef.current === target) return;
       restoreTitle();
+      if (expanded(target)) return;
       const text = target.title.trim();
       if (!text) return;
       if (
@@ -129,13 +134,14 @@ export function TooltipLayer() {
 
     const observer = new MutationObserver(() => {
       const active = activeRef.current;
-      if (active && (!active.isConnected || active.hasAttribute("title"))) restoreTitle();
+      if (active && (!active.isConnected || active.hasAttribute("title") || expanded(active)))
+        restoreTitle();
     });
     observer.observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["title"],
+      attributeFilter: ["title", "aria-expanded"],
     });
 
     document.addEventListener("pointerover", pointerOver);

@@ -542,6 +542,10 @@ Interactive controls need clear default, hover, selected, focus-visible, and
 disabled states. Use the established button hierarchy: one primary action for
 the main decision, secondary actions for alternatives, danger styling for
 confirmed destructive work, and labelled icon buttons for compact controls.
+An unavailable primary action recedes to an outline with faint text rather than
+a faded fill, so it never outweighs the enabled buttons beside it. Icon-only
+delete buttons in lists stay neutral until hovered or focused, then turn red.
+Selected text uses a neutral gray highlight, never the system blue.
 Checkboxes use a compact dark square, a quiet gray outline, and a white tick
 when selected. Keep a dark selected fill, a lighter hover border, and a clear
 keyboard focus ring. Retain native checkbox semantics, disabled and mixed states,
@@ -571,6 +575,19 @@ Use app dialogs for confirmation and editing. Give them an accessible title,
 move keyboard focus into the dialog, keep focus within it, and return focus when
 it closes. Keep destructive actions explicit. Place contextual menus near their
 trigger and within the window.
+
+Write dialog titles in sentence case, naming the action the way the button that
+opened it does, such as Add connection or Rename workspace. A confirmation's
+question is the dialog's content, so it uses normal text color. Let the title,
+placeholders, and defaults explain a form instead of an introductory paragraph:
+hide a label visually when the title already names the only field, mark neither
+required nor optional fields when example placeholders and default values make
+the difference plain, and state a consequence in the confirmation where it
+applies. Lay a form's fields on one grid so every row shares the same column
+edges. Put a check such as Test structured access at the leading edge of the
+footer, apart from Cancel and the primary action. Size a dialog to its content;
+a single field does not need a form's width. A trigger's tooltip stays hidden
+while the menu or panel it opened is showing.
 
 ### Navigation and terminal work
 
@@ -723,8 +740,10 @@ pauses, and never invent points for missing readings. Trends use a fixed
 numeric readings briefly with the same motion as service runtime values, including
 percentages, transfer rates, and uptime in the header and details. Keep labels and
 opacity steady. Use measured samples for trends, accessible names, and tooltips.
-Give disk read and write rates separate fixed slots with right-aligned values so
-digit and unit changes cannot push the direction labels or neighboring readings.
+Give header disk read and write rates separate fixed slots so digit and unit
+changes cannot push the direction labels or neighboring readings, with each
+value starting beside its own R or W. The details stack Read above Write with
+right-aligned values.
 Reserve percentage and trend slots even when a chart is unavailable. Right-align
 percentage readouts so their percent signs stay anchored as digits change.
 Animation frames never become samples. Show first readings, new targets, and
@@ -739,7 +758,10 @@ details as ordinary click targets. Use green
 for Live, amber for Stale, and red for Unavailable, paired with text and icons. Keep
 Settings and native window controls reachable at narrow widths.
 Host details must open with a keyboard or click
-and include the last reading time and refresh errors. Pause header reads
+and include the last reading time and refresh errors. Refresh sits as an icon
+beside Close in the details header. Captions appear only for facts a value
+cannot show, such as used and total memory; an unavailable reading is a muted
+value without a caption. Pause header reads
 in Settings and hidden windows. Never treat an unavailable GPU reading as zero.
 Label read/write throughput as Disk I/O. Keep filesystem fullness out of the header.
 Show I/O in binary bytes per second, with separate Read and Write values in the

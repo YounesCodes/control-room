@@ -26,6 +26,24 @@ it("restores a Systemd workspace in the real App with synthetic data", async () 
   });
 });
 
+it("opens dialogs over existing organization and live host readings", async () => {
+  const native = await fixture("metrics", "dialogs");
+  expect(await native.invoke("get_workspace_state")).toMatchObject({
+    workspaces: [expect.objectContaining({ view: "terminal" })],
+  });
+  expect(await native.invoke("list_connection_groups")).toHaveLength(2);
+  expect(await native.invoke("list_connection_tags")).toHaveLength(2);
+  expect(await native.invoke("get_settings_contract")).toMatchObject({
+    current: { hostMetricsEnabled: true },
+  });
+  expect(await native.invoke("sample_header_metrics")).toMatchObject({ gpuPercent: null });
+  const groups = await fixture("groups", "dialogs");
+  expect(await groups.invoke("get_settings_contract")).not.toMatchObject({
+    current: { hostMetricsEnabled: true },
+  });
+  expect(await (await fixture("populated")).invoke("list_connection_groups")).toEqual([]);
+});
+
 it("keeps empty, failed, and stale inventories distinct", async () => {
   expect(await (await fixture("empty")).invoke("list_services")).toEqual([]);
   await expect((await fixture("error")).invoke("list_services")).rejects.toThrow(

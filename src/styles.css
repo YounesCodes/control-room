@@ -109,6 +109,7 @@
   --fill-selected: #2a2a2a;
   --fill-control: #171717;
   --fill-control-hover: #242424;
+  --fill-text-selection: #474747;
 
   /* Text roles. */
   --text-strong: #fff;
@@ -149,6 +150,12 @@ h3 {
 
 * {
   box-sizing: border-box;
+}
+
+/* Selected text keeps the neutral palette instead of the system blue. */
+::selection {
+  background: var(--fill-text-selection);
+  color: var(--text-strong);
 }
 
 .sr-only {
@@ -738,9 +745,11 @@ code,
 .host-metric[data-metric="diskIo"] {
   min-width: 166px;
 }
+/* Fixed slots keep changing rates from moving W or the next reading. Each value
+   starts beside its own letter so "R 0 B/s" and "W 0 B/s" read as pairs. */
 .host-metric[data-metric="diskIo"] .host-metric-value {
   display: inline-grid;
-  grid-template-columns: 1ch 9ch 1ch 9ch;
+  grid-template-columns: max-content 9ch max-content 9ch;
   column-gap: 4px;
   align-items: baseline;
 }
@@ -751,21 +760,22 @@ code,
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: right;
+  text-align: left;
 }
+/* Details stack Read over Write with right-aligned values, a two-row table. */
 .host-metric-detail-value > strong:has(.host-metric-direction) {
   display: inline-grid;
-  grid-template-columns: 4ch 9ch 7ch 9ch;
-  column-gap: 4px;
+  grid-template-columns: auto auto;
+  column-gap: 12px;
+  row-gap: 3px;
   align-items: baseline;
 }
 .host-metric-detail-value .host-metric-direction {
   margin-left: 0;
+  font-size: 11px;
 }
 .host-metric-detail-value > strong:has(.host-metric-direction) .animated-number {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-align: right;
 }
 .host-metric[data-metric="uptime"] {
@@ -855,13 +865,21 @@ code,
 .host-metrics-panel footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+}
+.host-metrics-panel footer {
+  justify-content: flex-end;
 }
 .host-metrics-panel h3 {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   margin: 0;
   overflow-wrap: anywhere;
+}
+.host-metrics-panel strong[data-unavailable] {
+  color: var(--text-faint);
+  font-weight: 500;
 }
 .host-metrics-panel p {
   color: var(--text-muted);
@@ -3637,6 +3655,12 @@ code,
   font-size: 12.5px;
 }
 
+/* In a dialog the message is the content the reader must answer, not a caption. */
+.modal-copy {
+  color: var(--text);
+  line-height: 1.5;
+}
+
 .compact-heading {
   align-items: center;
   margin-bottom: 15px;
@@ -3812,6 +3836,15 @@ dd {
   color: var(--on-accent);
 }
 
+/* A faded light fill reads as a heavy grey slab that outweighs the enabled
+   buttons beside it. An unavailable primary action recedes to an outline. */
+.primary-button:disabled {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  opacity: 1;
+}
+
 .secondary-button {
   background: var(--fill-control);
   color: var(--text);
@@ -3834,6 +3867,12 @@ dd {
 
 .danger-text {
   color: var(--failure);
+}
+
+/* A delete icon in every row would repeat a column of red. Icon-only delete
+   buttons stay neutral until they are pointed at or focused. */
+.icon-button.danger-text:not(:hover, :focus-visible) {
+  color: var(--text-muted);
 }
 
 /* ==========================================================================
@@ -6330,7 +6369,7 @@ dd {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 13px;
+  gap: 12px;
 }
 
 .modal.connection-dialog {
@@ -6357,7 +6396,6 @@ dd {
   padding-bottom: 7px;
 }
 
-.connection-form > .form-row,
 .connection-key-field,
 .connection-organization-fields,
 .connection-form > .elevation-field,
@@ -6372,9 +6410,28 @@ dd {
   gap: 5px;
 }
 
+.connection-form .elevation-field {
+  margin-top: 4px;
+}
+
+.connection-form .elevation-field .checkbox-label {
+  min-height: 24px;
+}
+
+/* Indent the explanation to the checkbox text so it reads as part of it. */
+.connection-form .elevation-field > small {
+  padding-left: 24px;
+}
+
 .connection-form .modal-actions {
   margin: 0 -16px -16px;
   padding: 12px 16px;
+}
+
+/* Testing access is a check, not a way to finish the dialog. Keep it apart
+   from Cancel and Save. */
+.connection-form .connection-test-button {
+  margin-right: auto;
 }
 
 @media (max-width: 640px) {
@@ -6471,6 +6528,10 @@ dd {
   font-size: 12.5px;
 }
 
+.connection-organization-heading:first-child {
+  margin-top: 0;
+}
+
 .connection-group-create {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6486,17 +6547,9 @@ dd {
   gap: 7px;
 }
 
-.connection-group-create label > span {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
 .connection-tag-create {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px auto;
+  grid-template-columns: minmax(0, 1fr) 32px auto;
   align-items: end;
   gap: 9px;
   margin-top: 10px;
@@ -6509,29 +6562,38 @@ dd {
   gap: 7px;
 }
 
-.connection-tag-create label > span {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
+/* Same height as the name field beside it, with the round swatch used by the
+   tag rows below so the new color reads as the same control. */
 .connection-tag-create .connection-tag-color-field input {
-  width: 48px;
-  height: 36px;
-  padding: 3px;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
   cursor: pointer;
 }
 
+.connection-tag-create .connection-tag-color-field input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.connection-tag-create .connection-tag-color-field input::-webkit-color-swatch {
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+}
+
 .connection-group-list {
-  margin-top: 18px;
+  margin-top: 14px;
   border-top: 1px solid var(--border);
 }
 
 .connection-tag-manage-list {
-  margin-top: 18px;
+  margin-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+/* With nothing listed, the create field alone says the section is empty. */
+.connection-group-list:empty,
+.connection-tag-manage-list:empty {
+  display: none;
 }
 
 .connection-group-manage-row {
@@ -6600,25 +6662,6 @@ dd {
   font-size: 11.5px;
 }
 
-.connection-groups-empty {
-  margin: 18px 0 0;
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-.form-row {
-  display: flex;
-  gap: 13px;
-}
-
-.form-row > * {
-  flex: 1;
-}
-
-.port-field {
-  max-width: 170px;
-}
-
 .input-action {
   display: flex;
   gap: 8px;
@@ -6649,6 +6692,11 @@ dd {
   background: var(--surface-overlay);
   box-shadow: var(--shadow-modal);
   animation: dialog-in var(--motion-med) var(--ease);
+}
+
+/* One field needs less width than a form. */
+.modal.prompt-dialog {
+  width: min(420px, calc(100vw - 40px));
 }
 
 .modal-header {
@@ -6815,15 +6863,6 @@ dd {
   background: var(--surface-overlay);
   position: sticky;
   bottom: 0;
-}
-.remote-shell-actions > span {
-  flex: 1;
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .remote-shell-error {
   display: flex;

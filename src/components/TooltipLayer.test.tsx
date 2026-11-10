@@ -49,6 +49,43 @@ describe("TooltipLayer", () => {
     expect(screen.getByRole("tooltip").textContent).toBe("New name");
   });
 
+  it("keeps help off a trigger while the menu or panel it opened is showing", async () => {
+    const view = render(
+      <>
+        <button title="Readings for Example host" aria-expanded={false}>
+          Live
+        </button>
+        <TooltipLayer />
+      </>,
+    );
+    const trigger = screen.getByRole("button");
+    fireEvent.focusIn(trigger);
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    view.rerender(
+      <>
+        <button title="Readings for Example host" aria-expanded>
+          Live
+        </button>
+        <TooltipLayer />
+      </>,
+    );
+    await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+    expect(trigger.title).toBe("Readings for Example host");
+    fireEvent.focusIn(trigger);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    view.rerender(
+      <>
+        <button title="Readings for Example host" aria-expanded={false}>
+          Live
+        </button>
+        <TooltipLayer />
+      </>,
+    );
+    fireEvent.focusOut(trigger);
+    fireEvent.focusIn(trigger);
+    expect(screen.getByRole("tooltip").textContent).toBe("Readings for Example host");
+  });
+
   it("dismisses help when its terminal tab is removed", async () => {
     const view = render(
       <>

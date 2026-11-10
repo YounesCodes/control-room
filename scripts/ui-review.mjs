@@ -209,6 +209,9 @@ ${JSON.stringify(registry, null, 2)}`);
             ? page.locator(action.selector)
             : page.getByRole(action.role, { name: action.name, exact: true });
           if (action.last) locator = locator.last();
+          // Optional steps cover layout-only controls, such as the compact
+          // navigation toggle that other viewports never render.
+          if (action.optional && !(await locator.isVisible())) continue;
           await locator.click();
         }
         if (definition.settled?.[options.state])

@@ -1558,7 +1558,7 @@ export function App() {
   function deleteConnection(connection: SavedConnection) {
     setConfirmState({
       title: "Delete connection",
-      message: `Delete the Saved Connection “${connection.displayName}” and its History? This cannot be undone.`,
+      message: `Delete “${connection.displayName}” and its saved command history? This cannot be undone.`,
       confirmLabel: "Delete connection",
       danger: true,
       onConfirm: () => void performDeleteConnection(connection),
@@ -2005,7 +2005,7 @@ export function App() {
           type="button"
           onClick={() => renameWorkspace(workspace)}
           aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
-          title={grouped ? `Rename terminal: ${duplicateLabel(workspace)}` : "Rename Workspace"}
+          title={grouped ? `Rename terminal: ${duplicateLabel(workspace)}` : "Rename workspace"}
         >
           <Pencil size={12} />
         </button>
@@ -3120,7 +3120,7 @@ export function App() {
 
       {renameTarget && (
         <PromptDialog
-          title="Rename Workspace"
+          title="Rename workspace"
           label="Workspace label"
           description={
             isLocalWorkspace(renameTarget)

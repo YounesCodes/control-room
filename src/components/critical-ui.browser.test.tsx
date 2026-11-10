@@ -347,7 +347,7 @@ describe("critical UI in Chromium", () => {
         />,
       );
       await expect.element(page.getByRole("textbox", { name: "Display name" })).toHaveFocus();
-      const dialog = page.getByRole("dialog", { name: "Add Saved Connection" }).element();
+      const dialog = page.getByRole("dialog", { name: "Add connection" }).element();
       expect(dialog.scrollHeight).toBeLessThanOrEqual(dialog.clientHeight);
       const bounds = dialog.getBoundingClientRect();
       for (const name of ["Tag 5", "Browse", "Test structured access", "Add connection"]) {

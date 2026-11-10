@@ -129,13 +129,13 @@ export function ConnectionDialog({
 
   return (
     <Modal
-      title={connection ? "Edit Saved Connection" : "Add Saved Connection"}
+      title={connection ? "Edit connection" : "Add connection"}
       onClose={onClose}
       className="connection-dialog"
     >
       <form className="form-stack connection-form" onSubmit={submit} noValidate>
         <label>
-          <span>Display name (required)</span>
+          <span>Display name</span>
           <input
             autoFocus
             aria-label="Display name"
@@ -147,7 +147,7 @@ export function ConnectionDialog({
           />
         </label>
         <label>
-          <span>SSH destination (required)</span>
+          <span>SSH destination</span>
           <input
             aria-label="SSH destination"
             value={destination}
@@ -159,33 +159,31 @@ export function ConnectionDialog({
           />
           <small>Uses your Windows OpenSSH configuration.</small>
         </label>
-        <div className="form-row">
-          <label>
-            <span>Username (required)</span>
-            <input
-              aria-label="Username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="e.g. root"
-              maxLength={64}
-              required
-              spellCheck={false}
-            />
-          </label>
-          <label className="port-field">
-            <span>Port override</span>
-            <input
-              value={port}
-              onChange={(event) => setPort(event.target.value)}
-              type="number"
-              min="1"
-              max="65535"
-              placeholder="SSH default"
-            />
-          </label>
-        </div>
+        <label>
+          <span>Username</span>
+          <input
+            aria-label="Username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="e.g. root"
+            maxLength={64}
+            required
+            spellCheck={false}
+          />
+        </label>
+        <label>
+          <span>Port</span>
+          <input
+            value={port}
+            onChange={(event) => setPort(event.target.value)}
+            type="number"
+            min="1"
+            max="65535"
+            placeholder="SSH default"
+          />
+        </label>
         <label className="connection-key-field">
-          <span>Existing private key override</span>
+          <span>Private key</span>
           <div className="input-action">
             <input
               value={identityFile}
@@ -197,9 +195,6 @@ export function ConnectionDialog({
               <FileKey size={15} /> Browse
             </button>
           </div>
-          <small>
-            The key stays in its existing location and is never copied into Control Room.
-          </small>
         </label>
         <div className="connection-organization-fields">
           <label>
@@ -278,7 +273,7 @@ export function ConnectionDialog({
         {error && <p className="inline-error">{error}</p>}
         <footer className="modal-actions">
           <button
-            className="secondary-button"
+            className="secondary-button connection-test-button"
             type="button"
             onClick={testStructuredAccess}
             disabled={saving || testing}

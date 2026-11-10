@@ -40,6 +40,31 @@
         "option": "global"
       }
     },
+    "dialogs": {
+      "states": ["connection", "groups", "rename", "metrics"],
+      "ready": ".app-shell",
+      "prepare": {
+        "connection": [
+          { "selector": ".compact-navigation-toggle", "optional": true },
+          { "role": "button", "name": "Add connection" }
+        ],
+        "groups": [
+          { "selector": ".compact-navigation-toggle", "optional": true },
+          { "role": "button", "name": "Manage groups and tags" }
+        ],
+        "rename": [
+          { "selector": ".session-tab-main" },
+          { "role": "button", "name": "Rename Example host Workspace" }
+        ],
+        "metrics": [{ "selector": ".host-metrics-trigger" }]
+      },
+      "settled": {
+        "connection": ".modal.connection-dialog",
+        "groups": ".connection-groups-dialog .connection-tag-manage-list:not(:empty)",
+        "rename": ".modal.prompt-dialog",
+        "metrics": ".host-metrics-panel"
+      }
+    },
     "systemd": {
       "states": ["populated", "empty", "loading", "error", "stale", "overflow"],
       "ready": ".app-shell",
