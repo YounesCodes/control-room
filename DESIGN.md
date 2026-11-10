@@ -122,7 +122,11 @@ New terminal is also how a terminal is split: in Focus Mode its menu opens with
 three mode cards, New tab, Split right, and Split down, each showing the result in
 miniature with the new terminal's tile filled above a one-line label. It reopens on
 New tab; the split cards switch the targets to split targets, including terminals
-already open. There is no separate Split button.
+already open. There is no separate Split button. A terminal's tab can also be
+dragged from the strip onto the focused view: carried below the strip it waits,
+dimmed, in its own slot, while the view previews the split at the nearest edge of the
+pane under the pointer, captioned like pane moves; a pane's center only hints toward
+the edges. Back in the strip the drag reorders again, and Escape cancels.
 
 Every terminal split has a draggable, keyboard-operable divider, including nested
 splits and groups that mix local and remote terminals. Where two perpendicular

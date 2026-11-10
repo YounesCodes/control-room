@@ -23,6 +23,7 @@ import {
   getTerminalDividerHandles,
   resizeTerminalHandle,
   transposeTerminalCross,
+  insertTerminalBeside,
   type TerminalLayout,
 } from "./terminal-layout";
 
@@ -423,5 +424,25 @@ describe("terminal pane tree", () => {
       );
       expect(handles(nested).every(({ transpose }) => transpose === null)).toBe(true);
     });
+  });
+
+  it("brings an outside terminal in beside a target on the chosen edge", () => {
+    const single = createTerminalLayout("a");
+    expect(getTerminalPaneRects(insertTerminalBeside(single, "x", "a", "left")).x).toMatchObject({
+      left: 0,
+      width: 50,
+    });
+    expect(getTerminalPaneRects(insertTerminalBeside(single, "x", "a", "bottom")).x).toMatchObject({
+      top: 50,
+      height: 50,
+    });
+    const pair = splitTerminalLayout(single, "a", "b", "vertical");
+    const above = getTerminalPaneRects(insertTerminalBeside(pair, "x", "b", "top"));
+    expect(above.x).toEqual({ left: 50, top: 0, width: 50, height: 50 });
+    expect(above.b).toEqual({ left: 50, top: 50, width: 50, height: 50 });
+    expect(above.a).toEqual({ left: 0, top: 0, width: 50, height: 100 });
+    // Already a member, or no such target: nothing to insert.
+    expect(insertTerminalBeside(pair, "a", "b", "left")).toBe(pair);
+    expect(insertTerminalBeside(pair, "x", "missing", "left")).toBe(pair);
   });
 });

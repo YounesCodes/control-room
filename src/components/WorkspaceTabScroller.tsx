@@ -33,6 +33,17 @@ interface WorkspaceTabScrollerProps {
   /// Moves tab `id` to `targetIndex`, expressed in whole-strip positions.
   /// Absent rejects reordering: group rows and the pane strip pass none.
   onReorder?: (id: string, targetIndex: number) => void;
+  /// Carrying a lifted tab below the strip hands it here instead of reordering, so
+  /// the terminal view can take it (a Focus Mode split). `accepts` says which tabs may
+  /// leave; `move` and `drop` get pointer positions; `cancel` ends a carry.
+  onDragOut?: TabDragOut;
+}
+
+export interface TabDragOut {
+  accepts: (id: string) => boolean;
+  move: (id: string, x: number, y: number) => void;
+  drop: (id: string, x: number, y: number) => void;
+  cancel: () => void;
 }
 
 const MIN_TAB_WIDTH = 160;
@@ -44,6 +55,8 @@ const DRAG_START_PX = 4;
 /// Holding the lifted tab this close to an overflowing strip's edge pages the window.
 const DRAG_EDGE_PX = 28;
 const DRAG_STEP_MS = 350;
+/// How far below the strip the pointer must go before a tab leaves it.
+const DRAG_OUT_PX = 12;
 
 interface DragGeometry {
   tabWidth: number;
@@ -70,6 +83,10 @@ interface ActiveDrag {
   id: string;
   fromIndex: number;
   pointerX: number;
+  /// Where the drag began, so a tab carried out of the strip waits in its own slot.
+  startX: number;
+  /// True while the tab is carried below the strip toward the terminal view.
+  out: boolean;
   geometry: DragGeometry;
 }
 
@@ -89,7 +106,10 @@ export function WorkspaceTabScroller({
   arrangementKey,
   menuLabel = "All terminals",
   onReorder,
+  onDragOut,
 }: WorkspaceTabScrollerProps) {
+  const dragOutRef = useRef(onDragOut);
+  dragOutRef.current = onDragOut;
   const regionRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -117,6 +137,7 @@ export function WorkspaceTabScroller({
   const [dragging, setDragging] = useState<ActiveDrag | null>(null);
   const frameRef = useRef<number | null>(null);
   const pointerXRef = useRef<number | null>(null);
+  const pointerYRef = useRef<number | null>(null);
   const dragScrollRef = useRef<{ direction: -1 | 0 | 1; timer: number | null }>({
     direction: 0,
     timer: null,
@@ -214,25 +235,43 @@ export function WorkspaceTabScroller({
     dragScrollRef.current = { direction, timer };
   }
 
+  /// A lifted tab leaves the strip once the pointer is well below it and the owner
+  /// accepts that tab; until then it reorders as usual.
+  function carriedOut(active: ActiveDrag, y: number) {
+    return y > active.geometry.bottom + DRAG_OUT_PX && !!dragOutRef.current?.accepts(active.id);
+  }
+
   function flushDragFrame() {
     frameRef.current = null;
     const active = activeDragRef.current;
     if (!active) return;
     const x = pointerXRef.current;
+    const y = pointerYRef.current;
     pointerXRef.current = null;
-    if (x === null) return;
-    const next = { ...active, pointerX: x };
+    pointerYRef.current = null;
+    if (x === null || y === null) return;
+    const out = carriedOut(active, y);
+    // Carried out, the tab waits in its own slot while the terminal view previews.
+    const next = { ...active, pointerX: out ? active.startX : x, out };
     activeDragRef.current = next;
     setDragging(next);
-    steerDragScroll(x, next.geometry);
+    if (out) {
+      stopDragScroll();
+      dragOutRef.current?.move(active.id, x, y);
+    } else {
+      if (active.out) dragOutRef.current?.cancel();
+      steerDragScroll(x, next.geometry);
+    }
   }
 
   function finishDrag() {
+    if (activeDragRef.current?.out) dragOutRef.current?.cancel();
     if (frameRef.current !== null) {
       cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     }
     pointerXRef.current = null;
+    pointerYRef.current = null;
     stopDragScroll();
     pendingDragRef.current = null;
     activeDragRef.current = null;
@@ -240,6 +279,7 @@ export function WorkspaceTabScroller({
     disarmClickSuppression();
   }
 
+  const moveDragRef = useRef<(event: PointerEvent) => void>(() => undefined);
   const finishDragRef = useRef(finishDrag);
   finishDragRef.current = finishDrag;
   const stopDragScrollRef = useRef(stopDragScroll);
@@ -314,6 +354,24 @@ export function WorkspaceTabScroller({
     return { index, tab };
   }
 
+  /// Until a press becomes a drag the strip has no pointer capture, so a quick pull
+  /// straight down could leave it within a single event and never start the drag.
+  /// The window follows the press until it ends, wherever the pointer goes.
+  function followPendingPress(pointerId: number) {
+    const follow = (event: PointerEvent) => {
+      if (event.pointerId === pointerId) moveDragRef.current(event);
+    };
+    const stop = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", follow);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointermove", follow);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  }
+
   function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (!onReorder || count < 2 || activeDragRef.current || pendingDragRef.current) return;
     if (event.button !== 0 || !event.isPrimary) return;
@@ -328,6 +386,7 @@ export function WorkspaceTabScroller({
     if (!id) return;
     // Capture is taken when the drag activates, not here: a pointerdown
     // capture would retarget the plain click that selects a tab.
+    followPendingPress(event.pointerId);
     pendingDragRef.current = {
       pointerId: event.pointerId,
       id,
@@ -345,11 +404,12 @@ export function WorkspaceTabScroller({
     };
   }
 
-  function moveDrag(event: ReactPointerEvent<HTMLDivElement>) {
+  function moveDrag(event: PointerEvent | ReactPointerEvent<HTMLDivElement>) {
     const active = activeDragRef.current;
     if (active && active.pointerId === event.pointerId) {
       event.preventDefault();
       pointerXRef.current = event.clientX;
+      pointerYRef.current = event.clientY;
       if (frameRef.current === null) frameRef.current = requestAnimationFrame(flushDragFrame);
       return;
     }
@@ -374,18 +434,32 @@ export function WorkspaceTabScroller({
       id: pending.id,
       fromIndex: pending.fromIndex,
       pointerX: event.clientX,
+      startX: pending.startX,
+      out: false,
       geometry: pending.geometry,
     };
     pendingDragRef.current = null;
     setDragging(activeDragRef.current);
     steerDragScroll(event.clientX, activeDragRef.current.geometry);
+    // The move that starts the drag also counts: a quick pull straight down leaves
+    // the strip at once.
+    pointerXRef.current = event.clientX;
+    pointerYRef.current = event.clientY;
+    if (frameRef.current === null) frameRef.current = requestAnimationFrame(flushDragFrame);
   }
+
+  moveDragRef.current = moveDrag;
 
   function releaseDrag(event: ReactPointerEvent<HTMLDivElement>) {
     pendingDragRef.current = null;
     const active = activeDragRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
+    const out = carriedOut(active, event.clientY);
     finishDrag();
+    if (out) {
+      dragOutRef.current?.drop(active.id, event.clientX, event.clientY);
+      return;
+    }
     if (!onReorder) return;
     const { geometry } = active;
     // Dropping outside the strip rearranges nothing.
@@ -463,6 +537,7 @@ export function WorkspaceTabScroller({
         "session-tab-scroll-region",
         onReorder ? "can-reorder" : "",
         activeDrag ? "dragging" : "",
+        activeDrag?.out ? "dragging-out" : "",
       ]
         .filter(Boolean)
         .join(" ")}

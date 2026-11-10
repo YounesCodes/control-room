@@ -3709,6 +3709,93 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(activeStripTab()).toBe("Fixture Beta"));
   });
 
+  it("splits the focused terminal by dragging another tab onto it", async () => {
+    persisted = {
+      workspaces: [
+        {
+          id: "tab-a",
+          label: null,
+          connectionId: "host-a",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+        {
+          id: "tab-b",
+          label: null,
+          connectionId: "host-b",
+          localShellId: null,
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "tab-a",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    const beta = stripTabMain("Fixture Beta")!;
+    const surface = () =>
+      element.querySelector<HTMLElement>(".terminal-layout-surface")!.getBoundingClientRect();
+    const pointer = (type: string, x: number, y: number) =>
+      beta.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 23,
+          isPrimary: true,
+          button: 0,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    const caption = () => element.querySelector(".terminal-drop-layer")?.textContent ?? null;
+    const from = beta.getBoundingClientRect();
+    const view = surface();
+
+    // Carried below the strip, the tab previews a split at the nearest edge of the pane.
+    pointer("pointerdown", from.left + 20, from.top + 10);
+    pointer("pointermove", view.left + 12, view.top + view.height / 2);
+    await expect.poll(caption).toBe("Split left of Fixture Alpha");
+    expect(element.querySelector(".session-tab-scroll-region.dragging-out")).not.toBeNull();
+    await page.screenshot({ path: "../test-results/tab-split-preview.png" });
+    // The center is not a split; it points toward the edges instead.
+    pointer("pointermove", view.left + view.width / 2, view.top + view.height / 2);
+    await expect.poll(caption).toBe("Move toward an edge to split");
+    expect(element.querySelector(".terminal-drop-target.hint")).not.toBeNull();
+    // Back in the strip it reorders again, and the preview goes away.
+    pointer("pointermove", from.left + 20, from.top + 10);
+    await expect.poll(caption).toBeNull();
+    pointer("pointermove", view.left + view.width / 2, view.bottom - 12);
+    await expect.poll(caption).toBe("Split below Fixture Alpha");
+    // Escape cancels the carry without splitting or reordering.
+    await userEvent.keyboard("{Escape}");
+    await expect.poll(caption).toBeNull();
+    expect(persisted.terminalGroups).toEqual([]);
+    expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]);
+
+    // A real drag dropped on the right edge splits the focused terminal there.
+    await userEvent.dragAndDrop(
+      beta,
+      element.querySelector<HTMLElement>(".terminal-layout-surface")!,
+      { targetPosition: { x: view.width - 12, y: view.height / 2 } },
+    );
+    await vi.waitFor(() =>
+      expect(persisted.terminalGroups?.[0]?.layout).toMatchObject({
+        kind: "split",
+        direction: "vertical",
+        first: { workspaceId: "tab-a" },
+        second: { workspaceId: "tab-b" },
+      }),
+    );
+    await expect
+      .poll(() => element.querySelectorAll(".terminal-workspace-pane-visible").length)
+      .toBe(2);
+    expect(element.querySelector(".terminal-drop-layer")).toBeNull();
+  });
+
   it("moves a focused workspace tab with Control and Shift arrow keys", async () => {
     overrides.set("list_connections", () => [
       fixtures.connection(),

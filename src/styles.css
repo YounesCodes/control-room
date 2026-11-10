@@ -1889,6 +1889,12 @@ code,
     border-bottom-color var(--motion-fast) var(--ease);
 }
 
+/* A tab carried out toward the terminal view waits, dimmed, in its own slot. */
+.session-tab-scroll-region.dragging-out .session-tab-dragged {
+  opacity: 0.55;
+  box-shadow: none;
+}
+
 .session-tab-dragged {
   z-index: 30;
   background: var(--surface-chrome);
@@ -3008,6 +3014,11 @@ code,
 /* The lifted pane recedes so the preview reads as where it goes next. */
 .terminal-drop-source {
   background: rgb(0 0 0 / 45%);
+}
+/* A tab carried over a pane's center: not a split, so a quiet hint toward the edges. */
+.terminal-drop-target.hint {
+  border: 2px dashed var(--border-strong);
+  background: rgb(255 255 255 / 3%);
 }
 .terminal-drop-target.invalid {
   border: 2px solid var(--failure);

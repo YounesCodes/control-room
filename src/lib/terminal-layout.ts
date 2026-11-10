@@ -181,6 +181,23 @@ export function terminalParentSplitPath(
 }
 
 /** Coordinates are relative to the target pane; corners choose the nearest edge. */
+/** Bring a terminal from outside the layout in beside `target`, on the given edge. */
+export function insertTerminalBeside(
+  layout: TerminalLayout,
+  workspaceId: string,
+  target: string,
+  edge: Exclude<TerminalDropZone, "center">,
+): TerminalLayout {
+  if (terminalLayoutContains(layout, workspaceId) || !terminalLayoutContains(layout, target))
+    return layout;
+  return dockTerminalLayout(
+    splitTerminalLayout(layout, target, workspaceId, "vertical"),
+    workspaceId,
+    target,
+    edge,
+  );
+}
+
 export function terminalDropZone(x: number, y: number): TerminalDropZone | null {
   if (![x, y].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1) return null;
   const edges = [

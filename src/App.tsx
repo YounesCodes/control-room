@@ -71,7 +71,7 @@ import { HostOsIcon } from "./components/HostOsIcon";
 import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
-import { WorkspaceTabScroller } from "./components/WorkspaceTabScroller";
+import { WorkspaceTabScroller, type TabDragOut } from "./components/WorkspaceTabScroller";
 import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
 import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
@@ -90,13 +90,21 @@ import {
   createTerminalLayout,
   getTerminalLayoutIds,
   getTerminalPanePixels,
+  insertTerminalBeside,
+  terminalDropZone,
+  terminalLayoutFits,
   getTerminalDividerHandles,
   getTerminalLayoutSurface,
   resizeTerminalHandle,
   splitTerminalLayout,
   terminalPaneOuterEdges,
 } from "./lib/terminal-layout";
-import type { TerminalSplitDirection } from "./lib/terminal-layout";
+import type {
+  TerminalDropZone,
+  TerminalLayout,
+  TerminalPaneRect,
+  TerminalSplitDirection,
+} from "./lib/terminal-layout";
 import {
   deleteTerminalGroup,
   nextTerminalGroupName,
@@ -207,6 +215,23 @@ interface AnchoredPopover {
 }
 
 const POPOVER_GAP = 6;
+
+interface TabSplit {
+  id: string;
+  target: string;
+  zone: TerminalDropZone;
+  layout: TerminalLayout;
+  valid: boolean;
+  reason: string;
+}
+
+const tabSplitCaption: Record<TerminalDropZone, (target: string) => string> = {
+  center: (target) => target,
+  left: (target) => `Split left of ${target}`,
+  right: (target) => `Split right of ${target}`,
+  top: (target) => `Split above ${target}`,
+  bottom: (target) => `Split below ${target}`,
+};
 const NEW_TERMINAL_MENU_WIDTH = 272;
 const NEW_TERMINAL_MENU_HEIGHT = 480;
 const POPOVER_GUTTER = 8;
@@ -332,6 +357,8 @@ export function App() {
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   /// New terminal opens a tab or splits the focused view; it reopens on "tab".
   const [newTerminalMode, setNewTerminalMode] = useState<"tab" | "split">("tab");
+  /// A terminal tab carried from the strip over the terminal view, and where it would split.
+  const [tabSplit, setTabSplit] = useState<TabSplit | null>(null);
   const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   // Focus goes back to the control that opened the menu, so dismissing with
@@ -1356,6 +1383,64 @@ export function App() {
   const splitAvailable = terminalFocusMode && !settingsOpen && activeWorkspace?.view === "terminal";
   const splitting = splitAvailable && newTerminalMode === "split";
 
+  /// Where a terminal tab dragged out of the strip would split the focused view: the pane
+  /// under the pointer and its nearest edge. The center is not a split, so it only hints.
+  function tabSplitAt(id: string, x: number, y: number): TabSplit | null {
+    if (!splitAvailable || !activeWorkspace) return null;
+    const bounds = terminalLayoutSurfaceRef.current?.getBoundingClientRect();
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
+    const left = ((x - bounds.left) / bounds.width) * 100;
+    const top = ((y - bounds.top) / bounds.height) * 100;
+    const layout = activeTerminalGroup?.layout ?? createTerminalLayout(activeWorkspace.id);
+    const panes: Record<string, TerminalPaneRect> = activeTerminalGroup
+      ? terminalPaneRects
+      : { [activeWorkspace.id]: { left: 0, top: 0, width: 100, height: 100 } };
+    for (const [target, rect] of Object.entries(panes)) {
+      const zone = terminalDropZone(
+        (left - rect.left) / rect.width,
+        (top - rect.top) / rect.height,
+      );
+      if (!zone) continue;
+      if (zone === "center")
+        return { id, target, zone, layout, valid: false, reason: "Move toward an edge to split" };
+      const next = insertTerminalBeside(layout, id, target, zone);
+      return {
+        id,
+        target,
+        zone,
+        layout: next,
+        valid: next !== layout && terminalLayoutFits(next, availableTerminalSpace),
+        reason: "Not enough room",
+      };
+    }
+    return null;
+  }
+
+  function splitWithDraggedTab(id: string, x: number, y: number) {
+    const split = tabSplitAt(id, x, y);
+    setTabSplit(null);
+    if (!split?.valid) return;
+    updateWorkspace(id, { view: "terminal" });
+    const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
+    setTerminalGroups((current) =>
+      activeTerminalGroup
+        ? current.map((item) =>
+            item.id === activeTerminalGroup.id ? { ...item, layout: split.layout } : item,
+          )
+        : [...current, { id: groupId, name: nextTerminalGroupName(current), layout: split.layout }],
+    );
+    terminalGroupActiveWorkspaceRef.current.set(groupId, id);
+    setActiveWorkspaceId(id);
+  }
+
+  /// In Focus Mode a terminal tab outside the focused view can be dragged onto it to split.
+  const tabDragOut: TabDragOut = {
+    accepts: (id) => existingSplitCandidates.some((workspace) => workspace.id === id),
+    move: (id, x, y) => setTabSplit(tabSplitAt(id, x, y)),
+    drop: splitWithDraggedTab,
+    cancel: () => setTabSplit(null),
+  };
+
   /// The targets "New terminal" offers: everything saved, plus every shell this
   /// machine actually has. Each one opens its own Workspace, so choosing the
   /// active target again is a second independent terminal rather than a no-op.
@@ -1837,6 +1922,40 @@ export function App() {
     });
   }
 
+  /// One outline where the dragged terminal would land, captioned like pane moves.
+  function renderTabSplitPreview(split: TabSplit) {
+    const label = (id: string) => {
+      const workspace = workspaces.find((item) => item.id === id);
+      return workspace ? workspaceDisplayLabel(workspace, workspaces) : "";
+    };
+    const targetRect = activeTerminalGroup
+      ? terminalPaneRects[split.target]
+      : { left: 0, top: 0, width: 100, height: 100 };
+    const landing = split.valid
+      ? getTerminalLayoutSurface(split.layout, visibleTerminalSpace, availableTerminalSpace).panes[
+          split.id
+        ]
+      : null;
+    const pixels = (rect: TerminalPaneRect | undefined | null) =>
+      (rect && getTerminalPanePixels(rect, terminalGeometry.viewport)) ?? undefined;
+    return (
+      <div className="terminal-drop-layer" aria-hidden="true">
+        {landing ? (
+          <div className="terminal-drop-preview" style={pixels(landing)}>
+            <span>{tabSplitCaption[split.zone](label(split.target))}</span>
+          </div>
+        ) : (
+          <div
+            className={`terminal-drop-target ${split.zone === "center" ? "hint" : "invalid"}`}
+            style={pixels(targetRect)}
+          >
+            <span>{split.reason}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderWorkspaceTab(workspace: Workspace, grouped = false) {
     return (
       <div
@@ -2201,6 +2320,7 @@ export function App() {
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
               onReorder={moveTabTo}
+              onDragOut={splitAvailable ? tabDragOut : undefined}
             >
               {terminalFocusMode
                 ? (() => {
@@ -2674,6 +2794,7 @@ export function App() {
                     );
                   })}
                 </Suspense>
+                {tabSplit && renderTabSplitPreview(tabSplit)}
                 {!settingsOpen && activeTerminalGroup && (
                   <TerminalLayoutControls
                     key={activeTerminalGroup.id}
