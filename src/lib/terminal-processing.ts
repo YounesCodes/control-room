@@ -109,8 +109,14 @@ export class TerminalProcessing {
   }
 
   /** The rendered screen after output. `prompt` is the line the cursor rests
-   *  on, or null when the cursor is not on a readable line. */
-  output(prompt: string | null, alternate = false, status: readonly string[] = []) {
+   *  on, or null when the cursor is not on a readable line. `status` may be a
+   *  function: only a coding agent's status area is ever read, so callers on
+   *  the output path need not gather it for every chunk. */
+  output(
+    prompt: string | null,
+    alternate = false,
+    status: readonly string[] | (() => readonly string[]) = [],
+  ) {
     // A returning shell prompt also clears progress left behind by a killed
     // program. Do not require a clean program exit to recover the indicator.
     if (!alternate && samePrompt(this.prompt ?? "", prompt ?? "")) {
@@ -130,7 +136,7 @@ export class TerminalProcessing {
       this.program = true;
       this.editing = false;
       this.inputLine = "";
-      const activity = agentActivity(status);
+      const activity = agentActivity(typeof status === "function" ? status() : status);
       if (activity !== null) this.agentBusy = activity;
       this.setBusy(this.agentBusy);
       return;

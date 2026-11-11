@@ -18,6 +18,7 @@ import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { TerminalTitle } from "../lib/terminal-title";
 import { readTerminalView } from "../lib/terminal-screen";
+import { deferHiddenSelectionRepaint } from "../lib/terminal-selection-repaint";
 import { isRemoteWorkspace } from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, SessionStateEvent, Workspace } from "../types";
 
@@ -77,6 +78,7 @@ export function TerminalPane({
   const wasActiveRef = useRef(false);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
+  const selectionRepaintRef = useRef<{ flush: () => void } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string | null>(null);
   const sessionGenerationRef = useRef(0);
@@ -208,6 +210,7 @@ export function TerminalPane({
     terminalRef.current = terminal;
     fitRef.current = fit;
     searchRef.current = search;
+    selectionRepaintRef.current = deferHiddenSelectionRepaint(terminal, () => visibleRef.current);
 
     const selectionDisposable = terminal.onSelectionChange(() =>
       onSelectionChangeRef.current?.(terminal.hasSelection()),
@@ -434,6 +437,7 @@ export function TerminalPane({
       terminalRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
+      selectionRepaintRef.current = null;
     };
   }, []);
 
@@ -518,8 +522,12 @@ export function TerminalPane({
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         if (!sessionIdRef.current && !acceptingInputRef.current) return;
-        const view = readTerminalView(terminal, true);
-        processingRef.current?.output(view.line, view.alternate, view.status);
+        const view = readTerminalView(terminal);
+        processingRef.current?.output(
+          view.line,
+          view.alternate,
+          () => readTerminalView(terminal, true).status,
+        );
         acknowledge(bytes.byteLength);
       });
     };
@@ -614,7 +622,10 @@ export function TerminalPane({
     terminal.options.fontFamily = settings.terminalFontFamily;
     terminal.options.fontSize = settings.terminalFontSize;
     terminal.options.scrollback = settings.terminalScrollback;
-    if (visible) fitRef.current?.fit();
+    if (visible) {
+      fitRef.current?.fit();
+      selectionRepaintRef.current?.flush();
+    }
     // Focus on the transition to active only, and never take focus from an
     // app-owned popover or dialog: React re-runs this effect when a Suspense
     // boundary settles while the pane is already active, and refocusing then

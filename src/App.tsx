@@ -18,6 +18,7 @@ import {
   type ComponentType,
   useCallback,
   lazy,
+  memo,
   Suspense,
   useEffect,
   useLayoutEffect,
@@ -75,6 +76,7 @@ import { WorkspaceTabScroller, type TabDragOut } from "./components/WorkspaceTab
 import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
 import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
+import { useLatestHandlers } from "./hooks/use-latest-handlers";
 import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
 import { hostProcessing } from "./lib/host-processing";
@@ -140,6 +142,7 @@ import { ServicesPane } from "./pages/ServicesPane";
 import { navigateSystemdExplorer } from "./lib/systemd-units";
 import { SettingsPane } from "./pages/SettingsPane";
 import type {
+  AppSettings,
   CachedList,
   ConnectionGroup,
   ConnectionState,
@@ -202,6 +205,195 @@ const TerminalPane = lazy(() =>
 const WindowsServicesPane = lazy(() =>
   import("./pages/WindowsServicesPane").then((module) => ({ default: module.WindowsServicesPane })),
 );
+
+type TerminalHandlers = {
+  handle: (id: string, handle: TerminalPaneHandle | null) => void;
+  activate: (workspace: Workspace) => void;
+  session: (workspace: Workspace, sessionId: string | null) => void;
+  state: (workspace: Workspace, state: ConnectionState, reason: string | null) => void;
+  selection: (workspace: Workspace, hasSelection: boolean) => void;
+  activity: (workspace: Workspace, kind: "output" | "bell") => void;
+  title: (workspace: Workspace, title: string | null) => void;
+  processing: (workspace: Workspace, busy: boolean) => void;
+  reconnect: (workspace: Workspace) => void;
+};
+
+/// One terminal, rendered again only when its own Workspace, visibility, or
+/// find request changes. App renders for many unrelated reasons, and every open
+/// terminal used to repeat that work each time.
+const WorkspaceTerminal = memo(function WorkspaceTerminal({
+  workspace,
+  settings,
+  visible,
+  active,
+  findRequest,
+  handlers,
+}: {
+  workspace: Workspace;
+  settings: AppSettings;
+  visible: boolean;
+  active: boolean;
+  findRequest: number;
+  handlers: TerminalHandlers;
+}) {
+  const id = workspace.id;
+  const ref = useCallback(
+    (handle: TerminalPaneHandle | null) => {
+      handlers.handle(id, handle);
+    },
+    [handlers, id],
+  );
+  return (
+    <TerminalPane
+      ref={ref}
+      workspace={workspace}
+      settings={settings}
+      visible={visible}
+      active={active}
+      onActivate={() => handlers.activate(workspace)}
+      onSession={(sessionId) => handlers.session(workspace, sessionId)}
+      onState={(state, reason) => handlers.state(workspace, state, reason)}
+      onSelectionChange={(hasSelection) => handlers.selection(workspace, hasSelection)}
+      onActivity={(kind) => handlers.activity(workspace, kind)}
+      onTitle={(title) => handlers.title(workspace, title)}
+      onProcessing={(busy) => handlers.processing(workspace, busy)}
+      findRequest={findRequest}
+      onReconnect={() => handlers.reconnect(workspace)}
+    />
+  );
+});
+
+type InspectionHandlers = {
+  servicesCache: (id: string, cache: CachedList<SystemdUnit>) => void;
+  containersCache: (id: string, cache: CachedList<DockerContainer>) => void;
+  portsCache: (id: string, cache: CachedList<ListeningSocket>) => void;
+  containerDetailsCache: (
+    id: string,
+    containerId: string,
+    details: CachedValue<DockerContainerDetails>,
+  ) => void;
+  patch: (id: string, patch: Partial<Omit<RemoteWorkspace, "kind">>) => void;
+  viewLogs: (id: string, source: LogSourceSelection) => void;
+  openSystemd: (id: string, unit: string) => void;
+  openSystemdPorts: (workspace: RemoteWorkspace, unit: string) => void;
+  openPort: (id: string, endpoint: PublishedPortSelection) => void;
+  connectionChanged: (workspace: RemoteWorkspace, saved: SavedConnection) => void;
+  paste: (command: string) => void;
+};
+
+/// The active remote Workspace's inspection view. It renders again when that
+/// Workspace or what it shows changes, not on every App render: these views
+/// hold the largest lists in the app.
+const WorkspaceInspection = memo(function WorkspaceInspection({
+  workspace,
+  windowsHost,
+  capabilities,
+  settings,
+  logTailOptions,
+  focusUnit,
+  focusEndpoint,
+  handlers,
+}: {
+  workspace: RemoteWorkspace;
+  windowsHost: boolean;
+  capabilities: HostCapabilities | null;
+  settings: AppSettings;
+  logTailOptions: number[];
+  focusUnit: string | undefined;
+  focusEndpoint: (PublishedPortSelection & { workspaceId: string }) | undefined;
+  handlers: InspectionHandlers;
+}) {
+  const id = workspace.id;
+  const connection = workspace.connectionSnapshot;
+  return (
+    <>
+      {workspace.view === "services" &&
+        (windowsHost ? (
+          <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
+            <WindowsServicesPane key={id} connection={connection} />
+          </Suspense>
+        ) : (
+          <ServicesPane
+            key={id}
+            connection={connection}
+            cache={workspace.servicesCache}
+            portsCache={workspace.portsCache}
+            onPortsCacheChange={(cache) => handlers.portsCache(id, cache)}
+            onCacheChange={(cache) => handlers.servicesCache(id, cache)}
+            onViewLogs={(source) => handlers.viewLogs(id, source)}
+            focusId={workspace.systemdSelectionId}
+            initialState={workspace.systemdExplorer}
+            onStateChange={(systemdExplorer) => handlers.patch(id, { systemdExplorer })}
+            onSelectionChange={(systemdSelectionId) => handlers.patch(id, { systemdSelectionId })}
+            onOpenPorts={(unit) => handlers.openSystemdPorts(workspace, unit)}
+          />
+        ))}
+      {workspace.view === "ports" && (
+        <PortsPane
+          focusUnit={focusUnit}
+          focusEndpoint={focusEndpoint}
+          key={id}
+          connection={connection}
+          capabilities={capabilities}
+          globalSudoEnabled={settings.globalSudoEnabled}
+          cache={workspace.portsCache}
+          containersCache={workspace.containersCache}
+          onCacheChange={(cache) => handlers.portsCache(id, cache)}
+          onContainersCacheChange={(cache) => handlers.containersCache(id, cache)}
+          onOpenSystemd={(unit) => handlers.openSystemd(id, unit)}
+          onOpenContainer={(containerSelectionId) =>
+            handlers.patch(id, { view: "docker", containerSelectionId })
+          }
+          onViewLogs={(source) => handlers.viewLogs(id, source)}
+        />
+      )}
+      {workspace.view === "docker" && (
+        <DockerPane
+          onOpenPort={(endpoint) => handlers.openPort(id, endpoint)}
+          key={id}
+          connection={connection}
+          windowsHost={windowsHost}
+          cache={workspace.containersCache}
+          capabilities={capabilities}
+          detailsCache={workspace.containerDetailsCache}
+          onCacheChange={(cache) => handlers.containersCache(id, cache)}
+          onDetailsCacheChange={(containerId, details) =>
+            handlers.containerDetailsCache(id, containerId, details)
+          }
+          onViewLogs={(source) => handlers.viewLogs(id, source)}
+          focusId={workspace.containerSelectionId}
+        />
+      )}
+      {workspace.view === "logs" && (
+        <LogsPane
+          key={id}
+          connection={connection}
+          windowsHost={windowsHost}
+          settings={settings}
+          logTailOptions={logTailOptions}
+          servicesCache={workspace.servicesCache}
+          containersCache={workspace.containersCache}
+          selectedSource={workspace.logSource}
+          onServicesCacheChange={(cache) => handlers.servicesCache(id, cache)}
+          onContainersCacheChange={(cache) => handlers.containersCache(id, cache)}
+          onSourceChange={(logSource) => handlers.patch(id, { logSource })}
+        />
+      )}
+      {workspace.view === "history" && (
+        <HistoryPane
+          key={id}
+          connection={connection}
+          paused={workspace.historyPaused}
+          globalEnabled={settings.globalHistoryEnabled}
+          onPausedChange={(historyPaused) => handlers.patch(id, { historyPaused })}
+          onConnectionChanged={(saved) => handlers.connectionChanged(workspace, saved)}
+          onPaste={handlers.paste}
+          canPaste={Boolean(workspace.sessionId)}
+        />
+      )}
+    </>
+  );
+});
 
 /// Fixed geometry for a popover anchored to its trigger: a consistent 6px gap
 /// below the trigger (flipping above when the window lacks the room), clamped
@@ -311,7 +503,7 @@ export function App() {
   }, [workspaces, portFocus]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
-  const [environment, setEnvironment] = useState(emptyEnvironment);
+  const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -433,10 +625,16 @@ export function App() {
 
   useEffect(() => {
     let current = true;
+    // Reading the SSH environment runs ssh-add, which can take seconds when the
+    // agent is slow to answer. Nothing on the first screen needs the result, so
+    // the app opens without waiting for it.
+    void api.environment().then(
+      (value) => current && setEnvironment(value),
+      () => current && setEnvironment(emptyEnvironment),
+    );
     void Promise.allSettled([
       api.listConnections(),
       api.settingsContract(),
-      api.environment(),
       api.workspaceState(),
       api.listConnectionGroups(),
       api.listConnectionTags(),
@@ -446,7 +644,6 @@ export function App() {
         ([
           connectionsResult,
           settingsResult,
-          environmentResult,
           workspaceStateResult,
           groupsResult,
           tagsResult,
@@ -528,7 +725,6 @@ export function App() {
           } else {
             setBootError(`Could not load Settings: ${errorMessage(settingsResult.reason)}`);
           }
-          if (environmentResult.status === "fulfilled") setEnvironment(environmentResult.value);
           if (groupsResult.status === "fulfilled") setConnectionGroups(groupsResult.value);
           else
             setActionError(
@@ -1135,14 +1331,18 @@ export function App() {
     containerId: string,
     details: CachedValue<DockerContainerDetails>,
   ) {
-    const workspace = workspaces.find((item) => item.id === id);
-    if (!workspace || !isRemoteWorkspace(workspace)) return;
-    updateRemoteWorkspace(id, {
-      containerDetailsCache: {
-        ...workspace.containerDetailsCache,
-        [containerId]: details,
-      },
-    });
+    // Details for several containers can arrive in one turn; each builds on
+    // the cache as it is then, not as it was when the view last rendered.
+    setWorkspaces((current) =>
+      current.map((workspace) =>
+        workspace.id === id && isRemoteWorkspace(workspace)
+          ? {
+              ...workspace,
+              containerDetailsCache: { ...workspace.containerDetailsCache, [containerId]: details },
+            }
+          : workspace,
+      ),
+    );
   }
 
   function rememberCapabilities(capabilities: HostCapabilities) {
@@ -2055,6 +2255,108 @@ export function App() {
     );
   }
 
+  const terminalHandlers = useLatestHandlers<TerminalHandlers>({
+    handle(id, handle) {
+      if (handle) terminalHandlesRef.current.set(id, handle);
+      else terminalHandlesRef.current.delete(id);
+    },
+    activate(workspace) {
+      const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
+      if (group) terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
+      setActiveWorkspaceId(workspace.id);
+    },
+    session(workspace, sessionId) {
+      updateWorkspace(workspace.id, { sessionId });
+    },
+    state(workspace, state, reason) {
+      updateWorkspace(workspace.id, {
+        state,
+        reason,
+        restored: false,
+        connectRequested:
+          state === "disconnected" || state === "error" ? false : workspace.connectRequested,
+      });
+      // Host capability discovery is a Remote Host read. Nothing is detected
+      // about the local machine.
+      if (state === "connected" && isRemoteWorkspace(workspace)) {
+        detectConnectionCapabilities(workspace.connectionId);
+      }
+    },
+    selection(workspace, hasSelection) {
+      setTerminalHasSelection((current) =>
+        current[workspace.id] === hasSelection
+          ? current
+          : { ...current, [workspace.id]: hasSelection },
+      );
+    },
+    // Output reports arrive once per pty read. Only a change is new state: a
+    // background build must not render the app again for every chunk it prints.
+    activity(workspace, kind) {
+      setTerminalActivity((current) => {
+        const next =
+          kind === "bell" || current[workspace.id] !== "bell" ? kind : current[workspace.id];
+        return current[workspace.id] === next ? current : { ...current, [workspace.id]: next };
+      });
+    },
+    title(workspace, title) {
+      setTerminalTitles((current) => {
+        if ((current[workspace.id] ?? null) === title) return current;
+        const next = { ...current };
+        if (title) next[workspace.id] = title;
+        else delete next[workspace.id];
+        return next;
+      });
+    },
+    processing(workspace, busy) {
+      setTerminalProcessing((current) => {
+        if (!!current[workspace.id] === busy) return current;
+        const next = { ...current };
+        if (busy) next[workspace.id] = true;
+        else delete next[workspace.id];
+        return next;
+      });
+    },
+    reconnect(workspace) {
+      updateWorkspace(workspace.id, {
+        connectRequested: true,
+        restored: false,
+        reconnectToken: workspace.reconnectToken + 1,
+      });
+    },
+  });
+  const inspectionHandlers = useLatestHandlers<InspectionHandlers>({
+    servicesCache: updateServicesCache,
+    containersCache: updateContainersCache,
+    portsCache: updatePortsCache,
+    containerDetailsCache: updateContainerDetailsCache,
+    patch: updateRemoteWorkspace,
+    viewLogs: openLogs,
+    openSystemd,
+    openSystemdPorts(workspace, unit) {
+      setSystemdPortFocus({
+        workspaceId: workspace.id,
+        unit,
+        target: connectionTargetKey(workspace.connectionSnapshot),
+      });
+      updateRemoteWorkspace(workspace.id, { view: "ports" });
+    },
+    openPort(id, endpoint) {
+      setPortFocus({ ...endpoint, workspaceId: id });
+      updateRemoteWorkspace(id, { view: "ports" });
+    },
+    connectionChanged(workspace, saved) {
+      saveConnection(saved);
+      updateRemoteWorkspace(workspace.id, {
+        connectionSnapshot: {
+          ...workspace.connectionSnapshot,
+          historyEnabled: saved.historyEnabled,
+          updatedAt: saved.updatedAt,
+        },
+      });
+    },
+    paste: pasteIntoTerminal,
+  });
+
   if (loading) return <LoadingState label="Starting Control Room…" />;
   if (!settingsContract) return <ErrorState message={bootError ?? "Could not load Settings."} />;
   const settings = settingsContract.current;
@@ -2716,81 +3018,13 @@ export function App() {
                             : undefined
                         }
                       >
-                        <TerminalPane
-                          ref={(handle) => {
-                            if (handle) terminalHandlesRef.current.set(workspace.id, handle);
-                            else terminalHandlesRef.current.delete(workspace.id);
-                          }}
+                        <WorkspaceTerminal
                           workspace={workspace}
                           settings={settings}
                           visible={terminalVisible}
                           active={terminalVisible && workspace.id === activeWorkspace.id}
-                          onActivate={() => {
-                            const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
-                            if (group) {
-                              terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
-                            }
-                            setActiveWorkspaceId(workspace.id);
-                          }}
-                          onSession={(sessionId) => updateWorkspace(workspace.id, { sessionId })}
-                          onState={(state, reason) => {
-                            updateWorkspace(workspace.id, {
-                              state,
-                              reason,
-                              restored: false,
-                              connectRequested:
-                                state === "disconnected" || state === "error"
-                                  ? false
-                                  : workspace.connectRequested,
-                            });
-                            // Host capability discovery is a Remote Host read.
-                            // Nothing is detected about the local machine.
-                            if (state === "connected" && isRemoteWorkspace(workspace)) {
-                              detectConnectionCapabilities(workspace.connectionId);
-                            }
-                          }}
-                          onSelectionChange={(hasSelection) =>
-                            setTerminalHasSelection((current) =>
-                              current[workspace.id] === hasSelection
-                                ? current
-                                : { ...current, [workspace.id]: hasSelection },
-                            )
-                          }
-                          onActivity={(kind) =>
-                            setTerminalActivity((current) => ({
-                              ...current,
-                              [workspace.id]:
-                                kind === "bell" || current[workspace.id] !== "bell"
-                                  ? kind
-                                  : current[workspace.id],
-                            }))
-                          }
-                          onTitle={(title) =>
-                            setTerminalTitles((current) => {
-                              if ((current[workspace.id] ?? null) === title) return current;
-                              const next = { ...current };
-                              if (title) next[workspace.id] = title;
-                              else delete next[workspace.id];
-                              return next;
-                            })
-                          }
-                          onProcessing={(busy) =>
-                            setTerminalProcessing((current) => {
-                              if (!!current[workspace.id] === busy) return current;
-                              const next = { ...current };
-                              if (busy) next[workspace.id] = true;
-                              else delete next[workspace.id];
-                              return next;
-                            })
-                          }
                           findRequest={terminalFindRequests[workspace.id] ?? 0}
-                          onReconnect={() =>
-                            updateWorkspace(workspace.id, {
-                              connectRequested: true,
-                              restored: false,
-                              reconnectToken: workspace.reconnectToken + 1,
-                            })
-                          }
+                          handlers={terminalHandlers}
                         />
                       </div>
                     );
@@ -2887,142 +3121,23 @@ export function App() {
                   section={activeRemoteWorkspace.view}
                   layout={panelLayout}
                 >
-                  {activeRemoteWorkspace.view === "services" &&
-                    (windowsWorkspace ? (
-                      <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
-                        <WindowsServicesPane
-                          key={activeRemoteWorkspace.id}
-                          connection={activeConnection}
-                        />
-                      </Suspense>
-                    ) : (
-                      <ServicesPane
-                        key={activeRemoteWorkspace.id}
-                        connection={activeConnection}
-                        cache={activeRemoteWorkspace.servicesCache}
-                        portsCache={activeRemoteWorkspace.portsCache}
-                        onPortsCacheChange={(cache) =>
-                          updatePortsCache(activeRemoteWorkspace.id, cache)
-                        }
-                        onCacheChange={(cache) =>
-                          updateServicesCache(activeRemoteWorkspace.id, cache)
-                        }
-                        onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
-                        focusId={activeRemoteWorkspace.systemdSelectionId}
-                        initialState={activeRemoteWorkspace.systemdExplorer}
-                        onStateChange={(systemdExplorer) =>
-                          updateRemoteWorkspace(activeRemoteWorkspace.id, { systemdExplorer })
-                        }
-                        onSelectionChange={(systemdSelectionId) =>
-                          updateRemoteWorkspace(activeRemoteWorkspace.id, { systemdSelectionId })
-                        }
-                        onOpenPorts={(unit) => {
-                          setSystemdPortFocus({
-                            workspaceId: activeRemoteWorkspace.id,
-                            unit,
-                            target: connectionTargetKey(activeConnection),
-                          });
-                          updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
-                        }}
-                      />
-                    ))}
-                  {activeRemoteWorkspace.view === "ports" && (
-                    <PortsPane
-                      focusUnit={
-                        systemdPortFocus?.workspaceId === activeRemoteWorkspace.id &&
-                        systemdPortFocus.target === connectionTargetKey(activeConnection)
-                          ? systemdPortFocus.unit
-                          : undefined
-                      }
-                      focusEndpoint={
-                        portFocus?.workspaceId === activeRemoteWorkspace.id ? portFocus : undefined
-                      }
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      capabilities={hostCapabilities[activeConnection.id] ?? null}
-                      globalSudoEnabled={settings.globalSudoEnabled}
-                      cache={activeRemoteWorkspace.portsCache}
-                      containersCache={activeRemoteWorkspace.containersCache}
-                      onCacheChange={(cache) => updatePortsCache(activeRemoteWorkspace.id, cache)}
-                      onContainersCacheChange={(cache) =>
-                        updateContainersCache(activeRemoteWorkspace.id, cache)
-                      }
-                      onOpenSystemd={(unit) => openSystemd(activeRemoteWorkspace.id, unit)}
-                      onOpenContainer={(containerSelectionId) =>
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
-                          view: "docker",
-                          containerSelectionId,
-                        })
-                      }
-                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
-                    />
-                  )}
-                  {activeRemoteWorkspace.view === "docker" && (
-                    <DockerPane
-                      onOpenPort={(endpoint) => {
-                        setPortFocus({ ...endpoint, workspaceId: activeRemoteWorkspace.id });
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, { view: "ports" });
-                      }}
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      windowsHost={windowsWorkspace}
-                      cache={activeRemoteWorkspace.containersCache}
-                      capabilities={hostCapabilities[activeConnection.id] ?? null}
-                      detailsCache={activeRemoteWorkspace.containerDetailsCache}
-                      onCacheChange={(cache) =>
-                        updateContainersCache(activeRemoteWorkspace.id, cache)
-                      }
-                      onDetailsCacheChange={(containerId, details) =>
-                        updateContainerDetailsCache(activeRemoteWorkspace.id, containerId, details)
-                      }
-                      onViewLogs={(source) => openLogs(activeRemoteWorkspace.id, source)}
-                      focusId={activeRemoteWorkspace.containerSelectionId}
-                    />
-                  )}
-                  {activeRemoteWorkspace.view === "logs" && (
-                    <LogsPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      windowsHost={windowsWorkspace}
-                      settings={settings}
-                      logTailOptions={settingsContract.logTailOptions}
-                      servicesCache={activeRemoteWorkspace.servicesCache}
-                      containersCache={activeRemoteWorkspace.containersCache}
-                      selectedSource={activeRemoteWorkspace.logSource}
-                      onServicesCacheChange={(cache) =>
-                        updateServicesCache(activeRemoteWorkspace.id, cache)
-                      }
-                      onContainersCacheChange={(cache) =>
-                        updateContainersCache(activeRemoteWorkspace.id, cache)
-                      }
-                      onSourceChange={(logSource) =>
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, { logSource })
-                      }
-                    />
-                  )}
-                  {activeRemoteWorkspace.view === "history" && (
-                    <HistoryPane
-                      key={activeRemoteWorkspace.id}
-                      connection={activeConnection}
-                      paused={activeRemoteWorkspace.historyPaused}
-                      globalEnabled={settings.globalHistoryEnabled}
-                      onPausedChange={(historyPaused) =>
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, { historyPaused })
-                      }
-                      onConnectionChanged={(saved) => {
-                        saveConnection(saved);
-                        updateRemoteWorkspace(activeRemoteWorkspace.id, {
-                          connectionSnapshot: {
-                            ...activeRemoteWorkspace.connectionSnapshot,
-                            historyEnabled: saved.historyEnabled,
-                            updatedAt: saved.updatedAt,
-                          },
-                        });
-                      }}
-                      onPaste={pasteIntoTerminal}
-                      canPaste={Boolean(activeRemoteWorkspace.sessionId)}
-                    />
-                  )}
+                  <WorkspaceInspection
+                    workspace={activeRemoteWorkspace}
+                    windowsHost={windowsWorkspace}
+                    capabilities={hostCapabilities[activeConnection.id] ?? null}
+                    settings={settings}
+                    logTailOptions={settingsContract.logTailOptions}
+                    focusUnit={
+                      systemdPortFocus?.workspaceId === activeRemoteWorkspace.id &&
+                      systemdPortFocus.target === connectionTargetKey(activeConnection)
+                        ? systemdPortFocus.unit
+                        : undefined
+                    }
+                    focusEndpoint={
+                      portFocus?.workspaceId === activeRemoteWorkspace.id ? portFocus : undefined
+                    }
+                    handlers={inspectionHandlers}
+                  />
                 </ConnectionSection>
               )}
             </div>
@@ -3077,7 +3192,7 @@ export function App() {
                 <kbd>P</kbd> Command palette
               </span>
             </div>
-            {!environment.sshPath && (
+            {environment && !environment.sshPath && (
               <p className="inline-warning">
                 Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
               </p>
