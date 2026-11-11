@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -44,17 +45,26 @@ vi.mock("./components/WindowControls", () => ({
   WindowControls: () => <div data-testid="window-controls" />,
 }));
 
+/// How many times each Workspace's terminal has rendered.
+const paneRenders = vi.hoisted(() => new Map<string, number>());
+
 vi.mock("./components/TerminalPane", () => ({
   TerminalPane: ({
     workspace,
     onSession,
     onState,
+    onActivity,
   }: {
     workspace: { id: string; reconnectToken: number };
     onSession: (sessionId: string) => void;
     onState: (state: string, reason?: string | null) => void;
+    onActivity: (kind: "output" | "bell") => void;
   }) => (
     <div data-testid={`terminal-${workspace.id}`} data-reconnect-token={workspace.reconnectToken}>
+      {void paneRenders.set(workspace.id, (paneRenders.get(workspace.id) ?? 0) + 1)}
+      <button type="button" className="test-pty" onClick={() => onActivity("output")}>
+        {`output ${workspace.id}`}
+      </button>
       {/* The pty reporting a started session and a state change. That is the
           only way a Workspace acquires either, and both arrive whenever the
           host answers rather than when the UI is ready for them. */}
@@ -131,7 +141,7 @@ function restoredState(connectionIds: string[]): PersistedWorkspaceState {
 
 /// A hidden Workspace's pane is `aria-hidden`, so role queries skip it. The
 /// stand-in pty controls are reached through the pane itself.
-function ptyButton(workspaceId: string, action: "start" | "connect"): HTMLElement {
+function ptyButton(workspaceId: string, action: "start" | "connect" | "output"): HTMLElement {
   return within(screen.getByTestId(`terminal-${workspaceId}`)).getByText(
     `${action} ${workspaceId}`,
   );
@@ -654,6 +664,106 @@ describe("App Workspace behavior", () => {
 
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(api.deleteScratchpadNote).not.toHaveBeenCalled();
+  });
+
+  it("does not render open terminals again for unrelated app state", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    api.listConnections.mockResolvedValue([first, second]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id]));
+    render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-1")).toBeTruthy();
+    await waitFor(() => expect(api.cachedCapabilities).toHaveBeenCalledTimes(2));
+    const rendered = new Map(paneRenders);
+
+    // Filtering the rail and opening a dialog both render App.
+    await user.type(
+      screen.getByRole("textbox", { name: "Filter connections by name, group, or tag" }),
+      "host",
+    );
+    await user.click(screen.getByRole("button", { name: "Manage groups and tags" }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+
+    expect(new Map(paneRenders)).toEqual(rendered);
+
+    // A terminal still renders for its own Workspace.
+    await user.keyboard("{Escape}");
+    fireEvent.click(ptyButton("workspace-1", "connect"));
+    await waitFor(() =>
+      expect(paneRenders.get("workspace-1")).toBeGreaterThan(rendered.get("workspace-1")!),
+    );
+    expect(paneRenders.get("workspace-0")).toBe(rendered.get("workspace-0"));
+  });
+
+  it("renders nothing again for repeated output from a background terminal", async () => {
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    api.listConnections.mockResolvedValue([first, second]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id]));
+    let commits = 0;
+    render(
+      <Profiler id="app" onRender={() => (commits += 1)}>
+        <App />
+      </Profiler>,
+    );
+    expect(await screen.findByTestId("terminal-workspace-1")).toBeTruthy();
+    await waitFor(() => expect(api.cachedCapabilities).toHaveBeenCalledTimes(2));
+
+    // The first report is new state; a pty then reports once per read.
+    fireEvent.click(ptyButton("workspace-1", "output"));
+    fireEvent.click(ptyButton("workspace-1", "output"));
+    const settled = commits;
+    for (let read = 0; read < 20; read += 1) fireEvent.click(ptyButton("workspace-1", "output"));
+
+    expect(commits).toBe(settled);
+  });
+
+  it("saves the layout only when what is saved changes", async () => {
+    const user = userEvent.setup();
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    api.workspaceState.mockResolvedValue(restoredState([saved.id]));
+    render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+    await waitFor(() => expect(api.saveWorkspaceState).toHaveBeenCalled());
+    const saves = api.saveWorkspaceState.mock.calls.length;
+
+    // A session connecting changes the Workspace, but nothing that is saved.
+    fireEvent.click(ptyButton("workspace-0", "connect"));
+    fireEvent.click(ptyButton("workspace-0", "output"));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(api.saveWorkspaceState).toHaveBeenCalledTimes(saves);
+
+    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
+    await waitFor(() => expect(api.saveWorkspaceState).toHaveBeenCalledTimes(saves + 1));
+    expect(lastSavedWorkspaceIds()).toEqual([]);
+  });
+
+  it("opens before the SSH environment has been read", async () => {
+    const user = userEvent.setup();
+    let answer: (value: unknown) => void = () => {};
+    api.environment.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(<App />);
+
+    // The first screen is there while the probe is still running, and it does
+    // not yet claim that OpenSSH is missing.
+    expect(await screen.findByRole("heading", { name: "No connections yet" })).toBeTruthy();
+    expect(screen.queryByText(/OpenSSH was not detected/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open Settings" }));
+    await user.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    // Platform, SSH executable, SSH config, and SSH agent.
+    expect(screen.getAllByText("Checking…")).toHaveLength(4);
+
+    answer({
+      platform: "windows",
+      sshPath: null,
+      sshConfigPath: "example-config",
+      sshAgentAvailable: false,
+      platformSupported: true,
+    });
+    expect(await screen.findByText("Not detected")).toBeTruthy();
+    expect(screen.queryByText("Checking…")).toBeNull();
   });
 
   it("reorders a dragged Workspace tab and keeps the active terminal live", async () => {

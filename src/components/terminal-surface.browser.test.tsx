@@ -320,6 +320,51 @@ it("refits terminal columns and rows and resizes the same session when its pane 
   await expect.element(page.getByText("RESIZED_SESSION_OK", { exact: true })).toBeVisible();
 });
 
+it("does not repaint a hidden terminal while it prints, then shows the output", async () => {
+  container = document.createElement("div");
+  Object.assign(container.style, { position: "relative", width: "800px", height: "500px" });
+  document.body.append(container);
+  root = createRoot(container);
+  const workspace = createLocalWorkspace({
+    id: "test-shell",
+    label: "Test shell",
+    kind: "command-prompt",
+    elevated: false,
+  });
+  const pane = (visible: boolean) => (
+    <TerminalPane
+      platform="windows"
+      workspace={workspace}
+      settings={settings}
+      visible={visible}
+      active={visible}
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+    />
+  );
+  root.render(pane(false));
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  // xterm learns that it is hidden a frame after it opens.
+  for (let frame = 0; frame < 4; frame += 1)
+    await new Promise((painted) => requestAnimationFrame(painted));
+  // xterm's DOM renderer measures each character it paints. Hidden, every one
+  // of those measurements forces a document layout and is never cached.
+  const measured = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get");
+  const lines = Array.from({ length: 80 }, (_, index) => `HIDDEN_OUTPUT ${index}\r\n`).join("");
+  session.output!.onmessage!(new TextEncoder().encode(lines).buffer);
+  await vi.waitFor(() => expect(session.acknowledgeSessionOutput).toHaveBeenCalled());
+  for (let frame = 0; frame < 4; frame += 1)
+    await new Promise((painted) => requestAnimationFrame(painted));
+
+  expect(container.querySelector(".xterm-rows")!.textContent).not.toContain("HIDDEN_OUTPUT");
+  expect(measured).not.toHaveBeenCalled();
+  measured.mockRestore();
+
+  root.render(pane(true));
+  await expect.element(page.getByText("HIDDEN_OUTPUT 79", { exact: true })).toBeVisible();
+});
+
 function paintedPixels(canvas: HTMLCanvasElement) {
   const pixels = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
   let count = 0;

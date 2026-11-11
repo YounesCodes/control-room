@@ -188,7 +188,8 @@ export function SettingsPane({
   /** Every local shell this machine has, the hidden ones included: Settings is
    *  where they are turned back on, so it cannot be handed a filtered list. */
   localShells: LocalShellProfile[];
-  environment: EnvironmentInfo;
+  /** Null until the SSH environment has been read. */
+  environment: EnvironmentInfo | null;
   /** The running version, read from Tauri package metadata rather than any
    *  constant in this file. */
   appVersion: string | null;
@@ -218,9 +219,9 @@ export function SettingsPane({
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
   const platformLabel =
-    environment.platform === "windows"
+    environment?.platform === "windows"
       ? "Windows"
-      : environment.platform === "macos"
+      : environment?.platform === "macos"
         ? "macOS"
         : "Unsupported platform";
   const [category, setCategory] = useState<Category>("general");
@@ -897,22 +898,26 @@ export function SettingsPane({
                 <dl className="detail-list">
                   <div>
                     <dt>Platform</dt>
-                    <dd>{platformLabel}</dd>
+                    <dd>{environment ? platformLabel : "Checking…"}</dd>
                   </div>
                   <div>
                     <dt>SSH executable</dt>
-                    <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
+                    <dd className="technical">
+                      {environment ? (environment.sshPath ?? "Not detected") : "Checking…"}
+                    </dd>
                   </div>
                   <div>
                     <dt>SSH config</dt>
-                    <dd className="technical">{environment.sshConfigPath}</dd>
+                    <dd className="technical">{environment?.sshConfigPath ?? "Checking…"}</dd>
                   </div>
                   <div>
                     <dt>SSH agent</dt>
                     <dd>
-                      {environment.sshAgentAvailable
-                        ? "Available, identity loaded"
-                        : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
+                      {!environment
+                        ? "Checking…"
+                        : environment.sshAgentAvailable
+                          ? "Available, identity loaded"
+                          : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
                     </dd>
                   </div>
                 </dl>

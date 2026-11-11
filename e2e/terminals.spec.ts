@@ -104,7 +104,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await $("aria/Focus terminal").click();
     for (const name of ["Logs pane", "Build pane"]) {
       await openSplitMenu();
-      await $(".new-terminal-menu").$(`button*=${localShellLabel}`).click();
+      await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
       await renameActive(name);
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
@@ -231,7 +231,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     for (const name of ["First group", "Second group"]) {
       if (name === "Second group") await openLocal();
       await openSplitMenu();
-      await $(".new-terminal-menu").$(`button*=${localShellLabel}`).click();
+      await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
       await groupTool("button[title='Rename terminal group']");
       await $("[role=dialog] input").setValue(name);
       await $("button=Rename").click();
@@ -358,7 +358,7 @@ describe("Native PTY and Workspace lifecycle", () => {
       await openLocal();
       await $("aria/Focus terminal").click();
       await openSplitMenu(direction);
-      await $(".new-terminal-menu").$(`button*=${localShellLabel}`).click();
+      await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
       await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
       const panes = await browser.execute(() =>
         Array.from(document.querySelectorAll(".terminal-workspace-pane-visible"), (pane) => {

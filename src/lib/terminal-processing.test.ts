@@ -299,6 +299,21 @@ describe("terminal processing with an interactive program", () => {
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });
 
+  it("reads the status area only while a coding agent runs", () => {
+    const status = vi.fn(() => ["esc to interrupt"]);
+    const changed = vi.fn();
+    const tracker = new TerminalProcessing(changed);
+    tracker.input(bytes("make\r"), prompt);
+    tracker.output(busyLine, false, status);
+    tracker.output(returnedLine, false, status);
+    expect(status).not.toHaveBeenCalled();
+
+    tracker.input(bytes("codex\r"), prompt);
+    tracker.output("Welcome", true, status);
+    expect(status).toHaveBeenCalledOnce();
+    expect(changed).toHaveBeenLastCalledWith(true);
+  });
+
   /** Starts an agent from the prompt and lets it take the alternate screen,
    *  the way a coding agent draws its own composer. */
   function launchAgent() {

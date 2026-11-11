@@ -334,9 +334,7 @@ describe("application hierarchy", () => {
   });
 
   it("keeps groups inside focus mode and outlines the active group and pane", () => {
-    expect(appSource.match(/<WindowControls platform=\{environment\.platform\} \/>/g)).toHaveLength(
-      1,
-    );
+    expect(appSource.match(/<WindowControls platform=\{clientPlatform\} \/>/g)).toHaveLength(1);
     expect(appSource).not.toContain('aria-label="Split terminal"');
     expect(appSource).toContain('"Split right, side by side"');
     expect(appSource).toContain('aria-label="New terminal"');
