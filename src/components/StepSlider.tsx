@@ -22,15 +22,18 @@ export function StepSlider({
   value,
   format,
   tick = String,
+  unit,
   onChange,
   className,
 }: {
   label: string;
+  /** Unit of the bare numbers under the stops, shown in the label: "(lines)". */
+  unit?: string;
   options: number[];
   value: number;
   /** Full value text for screen readers, such as "Every 5 seconds". */
   format: (value: number) => string;
-  /** Short label under each stop, such as "5s". */
+  /** Short label under each stop; bare numbers when `unit` names them. */
   tick?: (value: number) => string;
   onChange: (value: number) => void;
   className?: string;
@@ -55,6 +58,12 @@ export function StepSlider({
     >
       <label className="step-slider-label" htmlFor={id}>
         {label}
+        {unit && (
+          <>
+            {" "}
+            <span className="step-slider-label-unit">({unit})</span>
+          </>
+        )}
       </label>
       <div className="step-slider-control">
         <div className="step-slider-track" aria-hidden="true">

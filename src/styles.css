@@ -948,14 +948,26 @@ code,
   --step-thumb: 16px;
   display: flex;
   max-width: 640px;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 8px 20px;
+}
+
+/* The unit belongs to the label but stays quieter than the setting's name. */
+.step-slider-label > .step-slider-label-unit {
+  color: var(--text-faint);
+  font-weight: 500;
 }
 
 /* Line the label up with the track, not with the track and ticks together. */
+/* Settings labels are flex columns; this one keeps its name and unit on one line. */
+.settings-form .step-slider > .step-slider-label,
 .step-slider-label {
+  display: block;
+  flex: none;
   align-self: flex-start;
+  white-space: nowrap;
   margin-top: -1px;
   color: var(--text-muted);
   font-size: 13px;

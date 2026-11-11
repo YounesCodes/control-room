@@ -548,7 +548,9 @@ delete buttons in lists stay neutral until hovered or focused, then turn red.
 Selected text uses a neutral gray highlight, never the system blue.
 A setting with a few ordered numeric choices, such as the host metrics refresh
 interval or the default log tail, uses the stepped slider: a native range input
-over a track with a stop and a short label for each choice. The emphasized label
+over a track with a stop and a bare-number label for each choice, with the unit
+named once in a muted suffix on the setting's label, such as "Default log tail
+(lines)", kept on one line. The emphasized label
 is the visible value, so no popup repeats it; screen readers hear the full value,
 such as "Every 5 seconds". Keyboard focus rings the thumb rather than the whole
 control.

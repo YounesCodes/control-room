@@ -576,10 +576,10 @@ export function SettingsPane({
                   <StepSlider
                     className="host-metrics-refresh"
                     label="Refresh host metrics"
+                    unit="seconds"
                     options={[2, 5, 10, 30]}
                     value={draft.hostMetricsIntervalSeconds ?? 5}
                     format={(seconds) => `Every ${seconds} seconds`}
-                    tick={(seconds) => `${seconds}s`}
                     onChange={(seconds) =>
                       setDraft({ ...draft, hostMetricsIntervalSeconds: seconds })
                     }
@@ -784,6 +784,7 @@ export function SettingsPane({
               <SettingsSection id="logs" {...sectionProps}>
                 <StepSlider
                   label="Default log tail"
+                  unit="lines"
                   options={logTailOptions}
                   value={draft.defaultLogTail}
                   format={(count) => `${count} lines`}

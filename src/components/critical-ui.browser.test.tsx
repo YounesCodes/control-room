@@ -770,7 +770,7 @@ describe("critical UI in Chromium", () => {
   it("adds vertical breathing room on tall windows without widening controls or making short categories scroll", async () => {
     await page.viewport(1200, 640);
     mount(<SettingsFixture />);
-    const refresh = page.getByRole("slider", { name: "Refresh host metrics" });
+    const refresh = page.getByRole("slider", { name: "Refresh host metrics (seconds)" });
     await expect.element(refresh).toBeVisible();
     const before = refresh.element().getBoundingClientRect();
     const metrics = container!.querySelector(".host-metrics-settings")!;
@@ -1042,7 +1042,7 @@ describe("critical UI in Chromium", () => {
     mount(<SettingsFixture />);
     const search = page.getByRole("searchbox", { name: "Search settings" });
     await expect.element(search).toBeVisible();
-    const refresh = page.getByRole("slider", { name: "Refresh host metrics" }).element();
+    const refresh = page.getByRole("slider", { name: "Refresh host metrics (seconds)" }).element();
     const slider = refresh.closest(".step-slider")!;
     const control = slider.querySelector(".step-slider-control")!.getBoundingClientRect();
     expect(control.width).toBeLessThanOrEqual(280);
@@ -1113,7 +1113,7 @@ describe("critical UI in Chromium", () => {
     if (width > 900)
       await page.getByRole("button", { name: "Logs & History", exact: true }).click();
     else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("logs");
-    const tail = page.getByRole("slider", { name: "Default log tail" }).element();
+    const tail = page.getByRole("slider", { name: "Default log tail (lines)" }).element();
     const tailSlider = tail.closest(".step-slider")!;
     expect(tail.getBoundingClientRect().height).toBe(16);
     expect(
