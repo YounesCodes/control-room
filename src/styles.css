@@ -984,18 +984,30 @@ code,
   margin-inline: 6px;
 }
 
+/* The track ends at the first and last stops, with only its rounded cap
+   (half its height) beyond them, rather than reaching out to the thumb's
+   full travel. */
+.step-slider {
+  --step-track-cap: 3px;
+}
+
 .step-slider-track {
   position: absolute;
   top: 5px;
-  right: 0;
-  left: 0;
+  right: calc(var(--step-thumb) / 2 - var(--step-track-cap));
+  left: calc(var(--step-thumb) / 2 - var(--step-track-cap));
   height: 6px;
   border-radius: 3px;
   background: var(--border);
 }
 
+/* Inside the track, positions count from its caps; under it, from the
+   thumb's travel. Both land on the same pixels. */
 .step-slider-fill,
-.step-slider-stop,
+.step-slider-stop {
+  --step-at: calc(var(--step-track-cap) + (100% - var(--step-track-cap) * 2) * var(--step));
+}
+
 .step-slider-ticks > span {
   --step-at: calc(var(--step-thumb) / 2 + (100% - var(--step-thumb)) * var(--step));
 }
