@@ -14,8 +14,8 @@ export function stepIndex(options: number[], value: number): number {
 
 /// A slider over a few fixed choices. The native range input keeps keyboard,
 /// pointer, and screen-reader behaviour; the track, stops, and labels are drawn
-/// around it. A value bubble follows the thumb while it is hovered, focused, or
-/// dragged.
+/// around it. The emphasized label under the thumb is the visible value; a
+/// separate value bubble would only repeat it.
 export function StepSlider({
   label,
   options,
@@ -28,7 +28,7 @@ export function StepSlider({
   label: string;
   options: number[];
   value: number;
-  /** Full value text for the bubble and screen readers, such as "Every 5 seconds". */
+  /** Full value text for screen readers, such as "Every 5 seconds". */
   format: (value: number) => string;
   /** Short label under each stop, such as "5s". */
   tick?: (value: number) => string;
@@ -83,9 +83,6 @@ export function StepSlider({
           onPointerCancel={() => setDragging(false)}
           onBlur={() => setDragging(false)}
         />
-        <output className="step-slider-bubble" htmlFor={id} aria-hidden="true">
-          {format(options[index])}
-        </output>
         <div className="step-slider-ticks" aria-hidden="true">
           {options.map((option, step) => (
             <span

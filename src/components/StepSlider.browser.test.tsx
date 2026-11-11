@@ -52,19 +52,20 @@ describe("StepSlider", () => {
     expect(stepIndex([2, 5, 10, 30], 25)).toBe(3);
   });
 
-  it("steps with the keyboard, names its value, and shows the bubble on focus", async () => {
+  it("steps with the keyboard and moves the emphasized label with its value", async () => {
     await page.viewport(900, 400);
     mount(<Fixture />);
     const slider = page.getByRole("slider", { name: "Refresh host metrics" });
     await expect.element(slider).toHaveAttribute("aria-valuetext", "Every 5 seconds");
-    const bubble = host!.querySelector<HTMLElement>(".step-slider-bubble")!;
-    expect(getComputedStyle(bubble).opacity).toBe("0");
+    const selected = () => host!.querySelector(".step-slider-ticks > [data-selected]")?.textContent;
+    expect(selected()).toBe("5s");
     (slider.element() as HTMLInputElement).focus();
     await userEvent.keyboard("{ArrowRight}");
     await expect.element(slider).toHaveAttribute("aria-valuetext", "Every 10 seconds");
     expect(page.getByTestId("value").element().textContent).toBe("10");
-    await expect.poll(() => getComputedStyle(bubble).opacity).toBe("1");
-    expect(bubble.textContent).toBe("Every 10 seconds");
+    expect(selected()).toBe("10s");
+    // The label is the visible value; no popup repeats it.
+    expect(host!.querySelector(".step-slider-bubble")).toBeNull();
     await page.screenshot({
       element: host!.querySelector(".settings-form")!,
       path: "../../test-results/step-slider-focus.png",
@@ -75,7 +76,7 @@ describe("StepSlider", () => {
     expect(page.getByTestId("value").element().textContent).toBe("2");
   });
 
-  it("keeps the thumb, stops, ticks, and bubble on the same positions", async () => {
+  it("keeps the thumb, stops, and ticks on the same positions", async () => {
     await page.viewport(900, 400);
     mount(<Fixture initial={10} />);
     await expect
@@ -101,7 +102,7 @@ describe("StepSlider", () => {
     expect(page.getByTestId("value").element().textContent).toBe("2");
   });
 
-  it("ignores tick clicks and hides the bubble inside a disabled fieldset", async () => {
+  it("ignores tick clicks inside a disabled fieldset", async () => {
     await page.viewport(900, 400);
     mount(<Fixture disabled />);
     await expect
@@ -110,6 +111,5 @@ describe("StepSlider", () => {
     const ticks = [...host!.querySelectorAll<HTMLElement>(".step-slider-ticks > span")];
     ticks[3].click();
     expect(page.getByTestId("value").element().textContent).toBe("5");
-    expect(getComputedStyle(host!.querySelector(".step-slider-bubble")!).display).toBe("none");
   });
 });
