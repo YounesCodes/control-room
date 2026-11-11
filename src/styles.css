@@ -984,11 +984,11 @@ code,
   margin-inline: 6px;
 }
 
-/* The track ends at the first and last stops, with only its rounded cap
-   (half its height) beyond them, rather than reaching out to the thumb's
-   full travel. */
+/* The track ends just past the first and last stops, rather than reaching
+   out to the thumb's full travel. The cap leaves the end dot an even margin
+   inside the rounded end instead of crowding its edge. */
 .step-slider {
-  --step-track-cap: 3px;
+  --step-track-cap: 5px;
 }
 
 .step-slider-track {
