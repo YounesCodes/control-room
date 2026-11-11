@@ -144,6 +144,10 @@ ${JSON.stringify(registry, null, 2)}`);
           ].map((name) => [name, path.join(root, "src/test/ui-review/native.ts")]),
         ),
       },
+      // Scan only the fixture page. Vite otherwise crawls every HTML file under
+      // the checkout, and local coverage, build, and worktree output can hold
+      // the first page load past its timeout.
+      optimizeDeps: { entries: ["ui-review/index.html"] },
       logLevel: "error",
       server: { host: "127.0.0.1", port: 0, open: false, hmr: false },
     });
