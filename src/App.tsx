@@ -2213,7 +2213,8 @@ export function App() {
             title="Reset all panel sizes"
             onClick={() => setPanelSizes({})}
           >
-            <RotateCcw size={14} />
+            {/* Sized to read as the same icon set as groups-and-tags below it. */}
+            <RotateCcw size={16} />
           </button>
         </div>
         <div className="sidebar-filter-row">
