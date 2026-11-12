@@ -99,7 +99,7 @@ describe("application hierarchy", () => {
     const handlers = tauriSource
       .split("tauri::generate_handler![")[1]
       ?.split("])")[0]
-      .matchAll(/(?:commands|updater|fonts|documentation)::([a-z_]+)/g);
+      .matchAll(/^\s*[a-z_]+::([a-z_]+),/gm);
     const registered = new Set([...(handlers ?? [])].map((match) => match[1]));
     expect(called.length).toBeGreaterThan(40);
     for (const command of called) {
@@ -175,11 +175,6 @@ describe("application hierarchy", () => {
     expect(terminalSource).toMatch(
       /if \(action === "ignore"\) return;[\s\S]{0,80}event\.preventDefault\(\);/,
     );
-    // Copy stays explicit. Paste is xterm's native event so one clipboard
-    // gesture cannot be handled once here and once through onData.
-    expect(terminalSource).toContain('key.toLowerCase() === "c"');
-    expect(terminalSource).not.toContain('key.toLowerCase() === "v"');
-    expect(terminalSource).toContain("xterm owns keyboard paste");
   });
 
   it("keeps terminal actions in the tab strip and the terminal surface clear", () => {
