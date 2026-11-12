@@ -215,6 +215,8 @@ ${JSON.stringify(registry, null, 2)}`);
           // Hover steps reveal controls that only appear under the pointer,
           // such as a Saved Connection's actions button.
           if (action.hover) await locator.hover();
+          else if (action.scroll) await locator.scrollIntoViewIfNeeded();
+          else if (action.option) await locator.selectOption(action.option);
           else await locator.click();
         }
         if (definition.settled?.[options.state])

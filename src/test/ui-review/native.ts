@@ -104,8 +104,8 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
   switch (command) {
     case "get_environment_info":
       result = {
-        sshPath: "example-ssh",
-        sshConfigPath: "example-config",
+        sshPath: "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
+        sshConfigPath: "C:\\Users\\example\\.ssh\\config",
         sshAgentAvailable: false,
         platformSupported: true,
       };

@@ -599,3 +599,29 @@ describe("Settings actions", () => {
     );
   });
 });
+
+describe("Settings SSH environment", () => {
+  afterEach(cleanup);
+
+  function agentRow(sshAgentAvailable: boolean) {
+    renderPane({ environment: { ...environment, sshAgentAvailable } });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    return screen.getByText("ssh-agent").parentElement!;
+  }
+
+  it("leads with the agent state and offers a check only when no identity is loaded", () => {
+    expect(agentRow(true).querySelector("dd")?.textContent).toBe("Identity loaded");
+    cleanup();
+    const missing = agentRow(false);
+    expect(missing.textContent).toContain("No identity loaded");
+    expect(missing.querySelector("code")?.textContent).toBe("ssh-add -l");
+  });
+
+  it("marks a missing ssh.exe instead of printing it as a path", () => {
+    renderPane({ environment: { ...environment, sshPath: null } });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    const row = screen.getByText("ssh.exe").parentElement!;
+    expect(row.querySelector("dd")?.textContent).toBe("Not detected");
+    expect(row.querySelector(".technical")).toBeNull();
+  });
+});

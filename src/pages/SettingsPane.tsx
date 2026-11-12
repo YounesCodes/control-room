@@ -873,10 +873,19 @@ export function SettingsPane({
                 </div>
               </SettingsSection>
               <SettingsSection id="ssh" {...sectionProps}>
-                <dl className="detail-list">
+                <dl className="detail-list settings-ssh">
                   <div>
                     <dt>ssh.exe</dt>
-                    <dd className="technical">{environment.sshPath ?? "Not detected"}</dd>
+                    {environment.sshPath ? (
+                      <dd className="technical">{environment.sshPath}</dd>
+                    ) : (
+                      <dd>
+                        <span className="settings-ssh-state">
+                          <span className="status-dot status-error" aria-hidden="true" />
+                          Not detected
+                        </span>
+                      </dd>
+                    )}
                   </div>
                   <div>
                     <dt>OpenSSH config</dt>
@@ -885,9 +894,19 @@ export function SettingsPane({
                   <div>
                     <dt>ssh-agent</dt>
                     <dd>
-                      {environment.sshAgentAvailable
-                        ? "Available, identity loaded"
-                        : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
+                      <span className="settings-ssh-state">
+                        <span
+                          className={`status-dot${environment.sshAgentAvailable ? " status-connected" : ""}`}
+                          aria-hidden="true"
+                        />
+                        {environment.sshAgentAvailable ? "Identity loaded" : "No identity loaded"}
+                      </span>
+                      {!environment.sshAgentAvailable && (
+                        <span className="settings-ssh-hint">
+                          The agent may be stopped or holding no keys. Check with{" "}
+                          <code>ssh-add -l</code> in a terminal.
+                        </span>
+                      )}
                     </dd>
                   </div>
                 </dl>

@@ -6,7 +6,7 @@
   },
   "scenarios": {
     "settings": {
-      "states": ["populated", "monitoring", "logs"],
+      "states": ["populated", "monitoring", "logs", "diagnostics"],
       "ready": ".app-shell",
       "prepare": {
         "populated": [{ "role": "button", "name": "Open Settings" }],
@@ -14,12 +14,19 @@
         "logs": [
           { "role": "button", "name": "Open Settings" },
           { "role": "button", "name": "Logs & History", "optional": true }
+        ],
+        "diagnostics": [
+          { "role": "button", "name": "Open Settings" },
+          { "role": "button", "name": "App & Diagnostics", "optional": true },
+          { "role": "combobox", "name": "Settings category", "option": "app", "optional": true },
+          { "selector": ".settings-ssh", "scroll": true }
         ]
       },
       "settled": {
         "populated": ".settings-page",
         "monitoring": ".settings-page",
-        "logs": ".settings-page"
+        "logs": ".settings-page",
+        "diagnostics": ".settings-ssh"
       },
       "motion": {
         "description": "Settings category reveal, General to Terminal",
