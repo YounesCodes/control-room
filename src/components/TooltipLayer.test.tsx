@@ -28,6 +28,34 @@ describe("TooltipLayer", () => {
     expect(target.title).toBe("Rename Workspace");
   });
 
+  it("does not show help when the window returns focus to the last control", () => {
+    render(
+      <>
+        <button type="button" title="Open Settings">
+          icon
+        </button>
+        <button type="button" title="Search">
+          icon
+        </button>
+        <TooltipLayer />
+      </>,
+    );
+    const [settings, search] = screen.getAllByRole("button");
+
+    fireEvent.focusIn(settings);
+    fireEvent.blur(window);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    // Switching back to the app restores focus without any key or pointer input.
+    fireEvent.focus(window);
+    fireEvent.focusIn(settings);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    // The next focus the user moves still shows help.
+    fireEvent.keyDown(document, { key: "Tab" });
+    fireEvent.focusIn(search);
+    expect(screen.getByRole("tooltip").textContent).toBe("Search");
+  });
+
   it("dismisses stale help when a renamed target changes its title without restoring the old name", async () => {
     const view = render(
       <>

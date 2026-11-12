@@ -116,7 +116,25 @@ export function TooltipLayer() {
       restoreTitle();
     }
 
+    // Returning to the window refocuses the last control without the user
+    // moving focus, which would pop its help wherever that control sits. Skip
+    // that restored focus; the next key or pointer press ends the window.
+    let restoringWindowFocus = false;
+
+    function windowBlur() {
+      restoringWindowFocus = true;
+      restoreTitle();
+    }
+
+    function userInput() {
+      restoringWindowFocus = false;
+    }
+
     function focusIn(event: FocusEvent) {
+      if (restoringWindowFocus) {
+        restoringWindowFocus = false;
+        return;
+      }
       const target = titledElement(event.target);
       if (target) show(target, false);
     }
@@ -129,6 +147,7 @@ export function TooltipLayer() {
     }
 
     function keyDown(event: KeyboardEvent) {
+      userInput();
       if (event.key === "Escape") restoreTitle();
     }
 
@@ -148,8 +167,9 @@ export function TooltipLayer() {
     document.addEventListener("pointerout", pointerOut);
     document.addEventListener("focusin", focusIn);
     document.addEventListener("focusout", focusOut);
-    document.addEventListener("keydown", keyDown);
-    window.addEventListener("blur", restoreTitle);
+    document.addEventListener("keydown", keyDown, true);
+    document.addEventListener("pointerdown", userInput, true);
+    window.addEventListener("blur", windowBlur);
     window.addEventListener("scroll", restoreTitle, true);
     window.addEventListener("resize", restoreTitle);
     return () => {
@@ -157,9 +177,10 @@ export function TooltipLayer() {
       document.removeEventListener("pointerout", pointerOut);
       document.removeEventListener("focusin", focusIn);
       document.removeEventListener("focusout", focusOut);
-      document.removeEventListener("keydown", keyDown);
+      document.removeEventListener("keydown", keyDown, true);
+      document.removeEventListener("pointerdown", userInput, true);
       observer.disconnect();
-      window.removeEventListener("blur", restoreTitle);
+      window.removeEventListener("blur", windowBlur);
       window.removeEventListener("scroll", restoreTitle, true);
       window.removeEventListener("resize", restoreTitle);
       restoreTitle();
