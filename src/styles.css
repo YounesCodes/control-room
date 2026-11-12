@@ -6581,6 +6581,12 @@ dd {
 .connection-form input:not([type="checkbox"]),
 .connection-form select {
   min-width: 0;
+}
+
+/* Text inputs centre their line on their own. The styled select lays its
+   20px line from the top of its content box, so extra padding pushed
+   "Ungrouped" toward the bottom edge; it keeps the shared select padding. */
+.connection-form input:not([type="checkbox"]) {
   padding-top: 7px;
   padding-bottom: 7px;
 }
