@@ -575,7 +575,7 @@ export function SettingsPane({
                   </div>
                   <StepSlider
                     className="host-metrics-refresh"
-                    label="Refresh host metrics"
+                    label="Host metrics refresh interval"
                     unit="seconds"
                     options={[2, 5, 10, 30]}
                     value={draft.hostMetricsIntervalSeconds ?? 5}

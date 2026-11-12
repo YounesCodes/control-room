@@ -192,7 +192,7 @@ describe("Settings actions", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
     // The slider steps over 2, 5, 10, and 30 seconds; the third stop is 10.
     // The label names the unit, so the stops can show bare numbers.
-    const refresh = screen.getByRole("slider", { name: "Refresh host metrics (seconds)" });
+    const refresh = screen.getByRole("slider", { name: "Host metrics refresh interval (seconds)" });
     expect(refresh.getAttribute("aria-valuetext")).toBe("Every 5 seconds");
     fireEvent.change(refresh, { target: { value: "2" } });
     expect(refresh.getAttribute("aria-valuetext")).toBe("Every 10 seconds");
