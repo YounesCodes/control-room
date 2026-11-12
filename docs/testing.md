@@ -69,7 +69,9 @@ category. Systemd supports
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it
 to the global note in `global`. Dialogs opens Add connection in `connection`
-and after an empty submit in `connection-error`, groups and tags with existing
+and after an empty submit in `connection-error`, Edit connection after Test
+structured access succeeds in `connection-test` and fails in
+`connection-test-error`, groups and tags with existing
 entries in `groups` and without tags in `groups-no-tags`, Rename workspace in
 `rename`, and the host readings panel, with an unreported GPU, in `metrics`.
 Ports `warnings` fails every Ports read as an unreachable host does. Data is
@@ -113,7 +115,8 @@ To add a scenario, register its states and ready selector in
 `src/test/ui-review/scenarios.json`, including focused preparation actions and
 state-specific settled selectors. Mark a preparation click `"optional": true`
 when only some viewports render its target, such as the compact navigation
-toggle. Configure synthetic native responses in
+toggle. Use `"hover": true` to hover instead of click, for controls that only
+appear under the pointer. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
 server aliases Tauri imports to that browser-only module; the product build does
 not. Prefer the real App layout over duplicated shell markup. Keep ready

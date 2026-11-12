@@ -195,3 +195,61 @@ describe("ConnectionDialog elevation", () => {
     );
   });
 });
+
+describe("ConnectionDialog structured access test", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(cleanup);
+
+  function renderDialog() {
+    render(
+      <ConnectionDialog
+        connection={connection}
+        groups={[]}
+        knownTags={[]}
+        globalSudoEnabled={false}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+  }
+
+  it("lists each detected dependency under the result", async () => {
+    api.testConnection.mockResolvedValue({
+      systemdAvailable: true,
+      journaldAvailable: true,
+      dockerAvailable: false,
+      passwordlessSudo: false,
+    });
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole("button", { name: "Test structured access" }));
+
+    const result = await screen.findByRole("status");
+    expect(result.querySelector(".connection-test-title")?.textContent).toBe(
+      "Noninteractive SSH works",
+    );
+    expect([...result.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "systemd available",
+      "journald available",
+      "Docker not detected",
+      "sudo asks for a password",
+    ]);
+  });
+
+  it("names the failure and its reason, and clears it on the next attempt", async () => {
+    api.testConnection.mockRejectedValueOnce(new Error("Permission denied (publickey)"));
+    api.testConnection.mockReturnValueOnce(new Promise(() => {}));
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole("button", { name: "Test structured access" }));
+
+    const failure = await screen.findByRole("alert");
+    expect(failure.textContent).toContain("Structured access failed");
+    expect(failure.textContent).toContain("Permission denied (publickey)");
+
+    await user.click(screen.getByRole("button", { name: "Test structured access" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});

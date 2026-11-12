@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileKey, FolderCog, Stethoscope } from "lucide-react";
+import { Check, CircleCheck, FileKey, FolderCog, Minus, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { MAX_TAGS_PER_CONNECTION, validateConnectionDraft } from "../lib/connection-validation";
@@ -43,6 +43,7 @@ export function ConnectionDialog({
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<HostCapabilities | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   function input(): SavedConnectionInput {
     return {
@@ -85,6 +86,7 @@ export function ConnectionDialog({
     event.preventDefault();
     setSaving(true);
     setError(null);
+    setTestError(null);
     const draft = input();
     const validationError = validateConnectionDraft(draft);
     if (validationError) {
@@ -113,13 +115,12 @@ export function ConnectionDialog({
     }
     setTesting(true);
     setError(null);
+    setTestError(null);
     setTestResult(null);
     try {
       setTestResult(await api.testConnection(draft));
     } catch (caught) {
-      setError(
-        `Structured access failed: ${errorMessage(caught)}. An interactive terminal may still work with a password.`,
-      );
+      setTestError(errorMessage(caught));
     } finally {
       setTesting(false);
     }
@@ -262,13 +263,33 @@ export function ConnectionDialog({
           {capabilityNote && <small>{capabilityNote}</small>}
         </div>
         {testResult && (
-          <p className="inline-message" role="status">
-            Noninteractive SSH works. systemd:{" "}
-            {testResult.systemdAvailable ? "available" : "not detected"}; journald:{" "}
-            {testResult.journaldAvailable ? "available" : "not detected"}; Docker:{" "}
-            {testResult.dockerAvailable ? "available" : "not detected"}; sudo:{" "}
-            {testResult.passwordlessSudo ? "passwordless" : "password required"}.
-          </p>
+          <div className="connection-test-result" role="status" ref={revealTestOutcome}>
+            <CircleCheck className="connection-test-icon" size={14} aria-hidden="true" />
+            <div className="connection-test-body">
+              <p className="connection-test-title">Noninteractive SSH works</p>
+              <ul className="connection-test-capabilities">
+                {testCapabilities(testResult).map(({ name, state, available }) => (
+                  <li key={name} data-available={available}>
+                    {available ? (
+                      <Check size={12} aria-hidden="true" />
+                    ) : (
+                      <Minus size={12} aria-hidden="true" />
+                    )}
+                    <span>{name}</span> <span>{state}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {testError && (
+          <div className="inline-error connection-test-error" role="alert" ref={revealTestOutcome}>
+            <span>
+              <strong>Structured access failed</strong>
+              <span>{testError}</span>
+              <span>An interactive terminal may still work with a password.</span>
+            </span>
+          </div>
         )}
         {error && <p className="inline-error">{error}</p>}
         <footer className="modal-actions">
@@ -290,4 +311,34 @@ export function ConnectionDialog({
       </form>
     </Modal>
   );
+}
+
+/// What the test found, one entry per Structured Operations dependency. A
+/// missing one is neutral: the host still works, that screen has nothing to read.
+function testCapabilities(result: HostCapabilities) {
+  const detected = (available: boolean) => (available ? "available" : "not detected");
+  return [
+    {
+      name: "systemd",
+      available: result.systemdAvailable,
+      state: detected(result.systemdAvailable),
+    },
+    {
+      name: "journald",
+      available: result.journaldAvailable,
+      state: detected(result.journaldAvailable),
+    },
+    { name: "Docker", available: result.dockerAvailable, state: detected(result.dockerAvailable) },
+    {
+      name: "sudo",
+      available: result.passwordlessSudo,
+      state: result.passwordlessSudo ? "passwordless" : "asks for a password",
+    },
+  ];
+}
+
+/// Short windows scroll the form, which leaves the test outcome below the fold
+/// right after the button at the bottom is pressed.
+function revealTestOutcome(element: HTMLElement | null) {
+  element?.scrollIntoView?.({ block: "nearest" });
 }

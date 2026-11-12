@@ -53,6 +53,12 @@ it("fails every Ports read the way an unreachable host does", async () => {
   await expect(native.invoke("list_containers")).rejects.toThrow("Connection timed out");
   await expect(native.invoke("inspect_connections")).rejects.toThrow("queue was busy");
   await expect(native.invoke("inspect_firewall")).rejects.toThrow("queue was busy");
+  await expect(
+    (await fixture("connection-test-error", "dialogs")).invoke("test_connection"),
+  ).rejects.toThrow("Permission denied");
+  expect(
+    await (await fixture("connection-test", "dialogs")).invoke("test_connection"),
+  ).toMatchObject({ systemdAvailable: true, dockerAvailable: false, passwordlessSudo: false });
   expect(await (await fixture("groups-no-tags", "dialogs")).invoke("list_connection_tags")).toEqual(
     [],
   );

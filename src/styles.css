@@ -6594,7 +6594,7 @@ dd {
 .connection-key-field,
 .connection-organization-fields,
 .connection-form > .elevation-field,
-.connection-form > .inline-message,
+.connection-form > .connection-test-result,
 .connection-form > .inline-error,
 .connection-form > .modal-actions {
   grid-column: 1 / -1;
@@ -7091,8 +7091,7 @@ dd {
 }
 
 .inline-error,
-.inline-warning,
-.inline-message {
+.inline-warning {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -7112,8 +7111,7 @@ dd {
    its own growing item keeps it centred whether or not an action follows;
    without this it is an anonymous flex item and space-between pushes it to
    whichever edge is free. */
-.inline-warning > .inline-warning-text,
-.inline-message > .inline-warning-text {
+.inline-warning > .inline-warning-text {
   flex: 1;
   text-align: center;
 }
@@ -7122,12 +7120,6 @@ dd {
   border-color: var(--warning);
   background: #131313;
   color: var(--warning);
-}
-
-.inline-message {
-  border-color: var(--success);
-  background: #111;
-  color: var(--success);
 }
 
 /* Errors read as one calm line: an alert icon and the message on a faint red
@@ -7158,6 +7150,86 @@ dd {
 .inline-error > span {
   flex: 1;
   min-width: 0;
+}
+
+/* Structured access test: the same calm shape as an inline error, in green.
+   The title says SSH works; each dependency follows with a small mark, and a
+   missing one stays neutral because the host still works without it. */
+.connection-test-result {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 10px;
+  margin: 11px 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-raised));
+  padding: 9px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* Revealing the outcome must clear the sticky modal footer. */
+.connection-test-result,
+.connection-test-error {
+  scroll-margin-bottom: 72px;
+}
+
+.connection-test-icon {
+  margin-top: 2.5px;
+  color: var(--success);
+}
+
+.connection-test-body {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.connection-test-title {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.connection-test-capabilities {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.connection-test-capabilities li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.connection-test-capabilities li > span:first-of-type {
+  color: var(--text);
+}
+
+.connection-test-capabilities svg {
+  color: var(--text-muted);
+}
+
+.connection-test-capabilities [data-available="true"] svg {
+  color: var(--success);
+}
+
+.connection-test-error > span {
+  display: grid;
+  gap: 2px;
+}
+
+.connection-test-error strong {
+  font-weight: 600;
+}
+
+.connection-test-error > span > span:last-child {
+  color: var(--text-muted);
 }
 
 .inline-action {

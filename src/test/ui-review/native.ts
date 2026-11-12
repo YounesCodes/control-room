@@ -117,6 +117,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "list_connection_groups":
       result = groups;
       break;
+    case "test_connection":
+      if (state === "connection-test-error")
+        throw new Error("Permission denied (publickey,password)");
+      result = { ...capabilities(host.id), dockerAvailable: false, passwordlessSudo: false };
+      break;
     case "list_connection_tags":
       result = tags;
       break;

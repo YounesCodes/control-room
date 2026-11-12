@@ -52,7 +52,16 @@
       }
     },
     "dialogs": {
-      "states": ["connection", "connection-error", "groups", "groups-no-tags", "rename", "metrics"],
+      "states": [
+        "connection",
+        "connection-error",
+        "connection-test",
+        "connection-test-error",
+        "groups",
+        "groups-no-tags",
+        "rename",
+        "metrics"
+      ],
       "ready": ".app-shell",
       "prepare": {
         "connection": [
@@ -63,6 +72,20 @@
           { "selector": ".compact-navigation-toggle", "optional": true },
           { "role": "button", "name": "Add connection" },
           { "selector": ".connection-form button[type='submit']" }
+        ],
+        "connection-test": [
+          { "selector": ".compact-navigation-toggle", "optional": true },
+          { "selector": ".host-row", "hover": true },
+          { "role": "button", "name": "Open actions for Example host" },
+          { "role": "menuitem", "name": "Edit connection" },
+          { "role": "button", "name": "Test structured access" }
+        ],
+        "connection-test-error": [
+          { "selector": ".compact-navigation-toggle", "optional": true },
+          { "selector": ".host-row", "hover": true },
+          { "role": "button", "name": "Open actions for Example host" },
+          { "role": "menuitem", "name": "Edit connection" },
+          { "role": "button", "name": "Test structured access" }
         ],
         "groups": [
           { "selector": ".compact-navigation-toggle", "optional": true },
@@ -81,6 +104,8 @@
       "settled": {
         "connection": ".modal.connection-dialog",
         "connection-error": ".connection-form .inline-error",
+        "connection-test": ".connection-form [role='status']",
+        "connection-test-error": ".connection-form .inline-error",
         "groups-no-tags": ".connection-groups-dialog .connection-tag-create",
         "groups": ".connection-groups-dialog .connection-tag-manage-list:not(:empty)",
         "rename": ".modal.prompt-dialog",

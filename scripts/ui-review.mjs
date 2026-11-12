@@ -212,7 +212,10 @@ ${JSON.stringify(registry, null, 2)}`);
           // Optional steps cover layout-only controls, such as the compact
           // navigation toggle that other viewports never render.
           if (action.optional && !(await locator.isVisible())) continue;
-          await locator.click();
+          // Hover steps reveal controls that only appear under the pointer,
+          // such as a Saved Connection's actions button.
+          if (action.hover) await locator.hover();
+          else await locator.click();
         }
         if (definition.settled?.[options.state])
           await page.locator(definition.settled[options.state]).waitFor();
