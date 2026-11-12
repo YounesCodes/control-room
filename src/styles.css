@@ -931,14 +931,6 @@ code,
   padding: 0;
   margin-bottom: 10px;
 }
-.settings-form .host-metrics-options .host-metrics-refresh {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
 
 /* Stepped slider for settings with a few fixed choices. The native range
    input sits over a drawn track so keyboard, pointer, and screen-reader
@@ -950,8 +942,8 @@ code,
   max-width: 640px;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 20px;
+  justify-content: flex-start;
+  gap: 8px 16px;
 }
 
 /* The unit belongs to the label but stays quieter than the setting's name. */
@@ -4621,9 +4613,11 @@ dd {
 .systemd-filter-fields label:last-child {
   grid-column: 1 / -1;
 }
+/* A full-width strip under the Systemd header, so it drops the rounding. */
 .systemd-page > .inline-warning {
   flex: none;
   margin: 0;
+  border-radius: 0;
   padding: 8px 14px;
 }
 .systemd-explorer-stage {
@@ -4660,6 +4654,11 @@ dd {
   flex: 1;
   border-top: 0;
   overflow-x: hidden;
+}
+/* With no rows, the empty state fills the list and centres like the loading
+   and error states do. */
+.systemd-inventory-rows:has(> .panel-state) {
+  height: 100%;
 }
 .systemd-inventory .dense-row {
   height: 44px;
@@ -5717,20 +5716,19 @@ dd {
   font-weight: 650;
 }
 
-/* Header: the page identity plus one compact, honest capture-state signal.
-   Pause/Resume and Refresh stay reachable; infrequent management lives behind
-   the More menu instead of a wall of equal-weight buttons. */
-.history-heading-copy {
+/* Page title with one compact state beside it, as Logs and History show
+   their stream and capture state: a dot and a short label. */
+.page-heading-title {
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
-.history-heading-copy h2 {
+.page-heading-title h2 {
   margin: 0;
 }
 
-.history-capture {
+.page-heading .page-status {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -5739,18 +5737,19 @@ dd {
   font-size: 11.5px;
 }
 
-.history-capture-dot {
+.page-status-dot {
   width: 7px;
   height: 7px;
+  flex: none;
   border-radius: 50%;
   background: #737370;
 }
 
-.history-capture[data-state="recording"] .history-capture-dot {
+.page-status[data-state="active"] .page-status-dot {
   background: var(--success);
 }
 
-.history-capture[data-state="paused"] .history-capture-dot {
+.page-status[data-state="paused"] .page-status-dot {
   background: var(--warning);
 }
 
@@ -7122,19 +7121,38 @@ dd {
   line-height: 1.5;
 }
 
-/* The banner lays out as icon, message, optional action. Giving the message
-   its own growing item keeps it centred whether or not an action follows;
-   without this it is an anonymous flex item and space-between pushes it to
-   whichever edge is free. */
-.inline-warning > .inline-warning-text {
-  flex: 1;
-  text-align: center;
+/* Warnings share the inline error's calm shape in amber: a triangle icon and
+   the message on a faint tint, with any action after the message. */
+.inline-warning {
+  justify-content: flex-start;
+  align-items: flex-start;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface-raised));
+  padding: 9px 12px;
+  color: color-mix(in srgb, var(--warning) 45%, var(--text));
 }
 
-.inline-warning {
-  border-color: var(--warning);
-  background: #131313;
-  color: var(--warning);
+.inline-warning::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2.5px;
+  background: var(--warning);
+  /* lucide triangle-alert */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.inline-warning > p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.inline-warning > button {
+  flex: none;
 }
 
 /* Errors read as one calm line: an alert icon and the message on a faint red
@@ -8990,7 +9008,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     padding: 20px;
   }
 
-  .history-heading-copy {
+  .page-heading-title {
     flex-wrap: wrap;
   }
 

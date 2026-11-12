@@ -550,11 +550,17 @@ export function HistoryPane({
   return (
     <section className="feature-page history-page">
       <header className="page-heading compact-heading">
-        <div className="history-heading-copy">
+        <div className="page-heading-title">
           <h2>Command History</h2>
           {capture && (
-            <p className="history-capture" data-state={capture} aria-live="polite">
-              <span className="history-capture-dot" aria-hidden="true" />
+            <p
+              className="page-status"
+              data-state={
+                capture === "recording" ? "active" : capture === "paused" ? "paused" : capture
+              }
+              aria-live="polite"
+            >
+              <span className="page-status-dot" aria-hidden="true" />
               {CAPTURE_LABELS[capture]}
             </p>
           )}

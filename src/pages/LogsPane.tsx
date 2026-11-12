@@ -439,9 +439,15 @@ export function LogsPane({
   return (
     <section className="feature-page logs-page">
       <header className="page-heading compact-heading">
-        <div>
+        <div className="page-heading-title">
           <h2>Logs</h2>
-          <p role="status" aria-live="polite">
+          <p
+            className="page-status"
+            data-state={streamStatus === "running" ? (paused ? "paused" : "active") : streamStatus}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="page-status-dot" aria-hidden="true" />
             {statusLabel}
           </p>
         </div>

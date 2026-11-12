@@ -104,3 +104,18 @@ it("emits synthetic session state/output so App settles without a native session
   expect(output.onmessage).toHaveBeenCalledOnce();
   stop();
 });
+
+it("shows Docker, Logs, and History with ordinary readings on Pages", async () => {
+  const docker = await fixture("docker", "pages");
+  expect(await docker.invoke("get_workspace_state")).toMatchObject({
+    workspaces: [expect.objectContaining({ view: "docker" })],
+  });
+  expect(await docker.invoke("list_containers")).toHaveLength(3);
+  const history = await fixture("history", "pages");
+  expect(await history.invoke("list_connections")).toMatchObject([{ historyEnabled: true }]);
+  expect(await history.invoke("get_history")).toHaveLength(5);
+  // Other scenarios still fail Docker the way an unreachable host does.
+  await expect((await fixture("warnings", "ports")).invoke("list_containers")).rejects.toThrow(
+    "Connection timed out",
+  );
+});

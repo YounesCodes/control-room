@@ -64,7 +64,10 @@ Compact covers the smaller window target from PR #188, even before that change
 lands. Captures show the current branch's layout without scaling or hiding its
 clipping. Settings starts on General & Monitoring; `monitoring` turns host
 metrics on, `logs` opens Logs & History where the window shows that
-category, and `diagnostics` opens App & Diagnostics at SSH environment. Systemd supports
+category, and `diagnostics` opens App & Diagnostics at SSH environment. Terminal
+opens Find in terminal empty in `find`, with matches in `find-matches`, and
+with no match in `find-none`. Pages shows Docker, Logs, and History with
+ordinary readings in `docker`, `logs`, and `history`. Systemd supports
 `populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it
@@ -116,8 +119,8 @@ To add a scenario, register its states and ready selector in
 state-specific settled selectors. Mark a preparation click `"optional": true`
 when only some viewports render its target, such as the compact navigation
 toggle. Use `"hover": true` to hover instead of click, for controls that only
-appear under the pointer, `"option"` to choose that value in a select, and `"scroll": true` to bring a
-target below the fold into view. Configure synthetic native responses in
+appear under the pointer, `"option"` to choose that value in a select, `"fill"` to type that text into a
+field, and `"scroll": true` to bring a target below the fold into view. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
 server aliases Tauri imports to that browser-only module; the product build does
 not. Prefer the real App layout over duplicated shell markup. Keep ready

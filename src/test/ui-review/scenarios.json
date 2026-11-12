@@ -13,7 +13,8 @@
         "monitoring": [{ "role": "button", "name": "Open Settings" }],
         "logs": [
           { "role": "button", "name": "Open Settings" },
-          { "role": "button", "name": "Logs & History", "optional": true }
+          { "role": "button", "name": "Logs & History", "optional": true },
+          { "role": "combobox", "name": "Settings category", "option": "logs", "optional": true }
         ],
         "diagnostics": [
           { "role": "button", "name": "Open Settings" },
@@ -137,6 +138,15 @@
         "find": ".terminal-search",
         "find-matches": ".terminal-search",
         "find-none": ".terminal-search"
+      }
+    },
+    "pages": {
+      "states": ["docker", "logs", "history"],
+      "ready": ".app-shell",
+      "settled": {
+        "docker": ".docker-page",
+        "logs": ".log-output",
+        "history": ".history-list"
       }
     },
     "ports": {

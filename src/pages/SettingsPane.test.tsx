@@ -122,7 +122,7 @@ describe("Settings actions", () => {
     expect(screen.getByRole("status").textContent).toContain("No settings match");
     expect(screen.queryByRole("group")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Logs & History" }));
-    expect(screen.getByRole("group", { name: "Logs and History" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Logs & History" })).toBeTruthy();
     expect((search as HTMLInputElement).value).toBe("");
     fireEvent.change(screen.getByRole("combobox", { name: "Settings category" }), {
       target: { value: "terminal" },

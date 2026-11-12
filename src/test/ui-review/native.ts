@@ -1,4 +1,12 @@
-import { capabilities, connection, failedService, service, settings } from "../app-fixtures";
+import {
+  capabilities,
+  connection,
+  container,
+  containerDetails,
+  failedService,
+  service,
+  settings,
+} from "../app-fixtures";
 import { systemdInspection } from "../systemd-fixtures";
 import type { PersistedWorkspaceState } from "../../types";
 import registry from "./scenarios.json";
@@ -12,7 +20,12 @@ if (
 )
   throw new Error("Unknown UI review scenario/state");
 
-const host = { ...connection(), displayName: "Example host", historyEnabled: false };
+const host = {
+  ...connection(),
+  displayName: "Example host",
+  // History needs capture on for its populated list.
+  historyEnabled: scenario === "pages" && state === "history",
+};
 const units = [
   { ...service, id: "worker.service", description: "Example queue worker" },
   { ...failedService, id: "backup.service", description: "Example backup" },
@@ -32,7 +45,47 @@ const workspaceView = {
   dialogs: "terminal",
   terminal: "terminal",
   ports: "ports",
-}[scenario] as "services" | "terminal" | "ports" | undefined;
+  pages: state,
+}[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
+// Pages show the Docker, Logs, and History screens with ordinary readings.
+const containers = [
+  { ...container, name: "example-web", composeProject: "example", composeService: "web" },
+  {
+    ...container,
+    id: "b".repeat(64),
+    name: "example-worker",
+    image: "example/worker:2.4",
+    ports: "",
+    composeProject: "example",
+    composeService: "worker",
+  },
+  {
+    ...container,
+    id: "c".repeat(64),
+    name: "example-cache",
+    image: "redis:7",
+    state: "exited",
+    status: "Exited (0) 2 hours ago",
+    ports: "",
+  },
+];
+const historyEntries = [
+  ["systemctl status worker.service", 0, "/srv/example"],
+  ["journalctl -u worker.service -n 200", 0, "/srv/example"],
+  ["docker compose up -d", 0, "/srv/example"],
+  ["curl -fsS http://localhost:8080/health", 7, "/srv/example"],
+  ["ls -la /var/log", 0, "/home/fixture"],
+].map(([command, exitCode, cwd], index) => ({
+  id: `history-${index}`,
+  connectionId: "host-a",
+  sessionId: "example-session",
+  command: command as string,
+  cwd: cwd as string,
+  startedAt: `2026-11-01T09:${String(40 + index * 4).padStart(2, "0")}:00Z`,
+  finishedAt: `2026-11-01T09:${String(40 + index * 4).padStart(2, "0")}:02Z`,
+  exitCode: exitCode as number,
+  shell: "bash",
+}));
 // An unreachable host fails each Ports read: two with the SSH timeout, two
 // behind it in the busy remote queue.
 const portsTimeout =
@@ -126,8 +179,38 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "list_connection_tags":
       result = tags;
       break;
-    case "list_ports":
     case "list_containers":
+      if (scenario === "pages") {
+        result = containers;
+        break;
+      }
+      throw new Error(portsTimeout);
+    case "inspect_container":
+      result = { ...containerDetails, id: args.container ?? containerDetails.id };
+      break;
+    case "start_journal_stream":
+    case "start_docker_log_stream":
+      result = { streamId: "example-stream" };
+      setTimeout(() => {
+        const lines = [
+          "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
+          "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
+          "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
+          "Nov 01 09:59:44 example worker[1234]: job 41 finished",
+          "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+        ];
+        args.output.onmessage(new TextEncoder().encode(lines.join("\n") + "\n").buffer);
+      }, 0);
+      break;
+    case "stop_log_stream":
+      break;
+    case "get_history_integration_status":
+      result = "installed";
+      break;
+    case "get_history":
+      result = historyEntries;
+      break;
+    case "list_ports":
       throw new Error(portsTimeout);
     case "inspect_connections":
     case "inspect_firewall":

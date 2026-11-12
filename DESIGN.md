@@ -509,6 +509,9 @@ wrap or truncate deliberately so they do not force a pane wider.
 
 Search fields use compact type and height, an inset icon with a clear gutter,
 a quiet surface border, and one visible focus border without an extra glow.
+Buttons inside a search field share one small size. Find in terminal is the
+same field floating over the output, with its match count, Previous, Next, and
+Close inside it.
 Use the same compact proportions for ordinary form inputs and selectors across
 the app. Keep dropdown chevrons smaller than the values beside them.
 Round both the dropdown field and its opened option list. Keep option rows inset
@@ -567,12 +570,19 @@ shells, including before the first tab opens. Keep administrator shells in their
 own group. When setup is needed, put instructions in a collapsed disclosure
 below the targets so ordinary launches stay compact.
 
+Tooltips name icon-only controls, explain shape-only status marks, show values
+that can be cut off, and say what a button does when its text does not. Do not
+add one that repeats the visible label or sits on a universally understood
+control such as a close or clear cross.
+
 Reading warnings list one quiet row per affected read: a small amber icon, the
 source and its state (Unavailable, or saved results shown) on one line, the
 reported reason in muted text beneath, and a compact action. Visible actions
 say Retry; each one's accessible name says which read it repeats. Offer sudo
 only for a permission error. Inline form and action errors use an alert icon
-and the message on a faint red tint, without a bordered red box. A successful
+and the message on a faint red tint, without a bordered red box; inline
+warnings, such as saved results shown after a failed refresh, use the same
+shape in amber. A successful
 check, such as Test structured access, uses the same shape in green: a check
 icon, a short title, and what was found beneath, with missing optional parts
 marked neutrally rather than as failures.

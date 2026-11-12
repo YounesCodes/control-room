@@ -51,7 +51,7 @@ const sections = {
     "Local terminal",
     "shell startup default offered powershell cmd git bash administrator elevated focus mode",
   ],
-  logs: ["logs", "Logs and History", "default log tail enhanced command history ssh"],
+  logs: ["logs", "Logs & History", "default log tail enhanced command history ssh"],
   permissions: [
     "connections",
     "Elevated commands",
