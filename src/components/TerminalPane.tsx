@@ -25,6 +25,8 @@ export interface TerminalPaneHandle {
   focus: () => void;
   copySelection: () => void;
   pasteClipboard: () => void;
+  /** Opens Find in terminal, or closes it when it is already open. */
+  toggleSearch: () => void;
 }
 
 interface TerminalPaneProps {
@@ -39,6 +41,7 @@ interface TerminalPaneProps {
   onSelectionChange?: (hasSelection: boolean) => void;
   onActivity?: (kind: "output" | "bell") => void;
   onProcessing?: (busy: boolean) => void;
+  onSearchOpenChange?: (open: boolean) => void;
   onTitle?: (title: string | null) => void;
   findRequest?: number;
   onReconnect?: () => void;
@@ -67,6 +70,7 @@ export function TerminalPane({
   onSelectionChange,
   onActivity = () => undefined,
   onProcessing = () => undefined,
+  onSearchOpenChange,
   onTitle = () => undefined,
   findRequest = 0,
   onReconnect,
@@ -119,6 +123,7 @@ export function TerminalPane({
     focus: () => terminalRef.current?.focus(),
     copySelection,
     pasteClipboard,
+    toggleSearch: () => (searchOpen ? closeSearch() : openSearch()),
   }));
 
   historyPausedRef.current = remote?.historyPaused ?? false;
@@ -628,10 +633,14 @@ export function TerminalPane({
   }, [settings, visible, active]);
 
   useEffect(() => {
-    if (findRequest <= 0) return;
-    setSearchOpen(true);
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    if (findRequest > 0) openSearch();
   }, [findRequest]);
+
+  const onSearchOpenChangeRef = useRef(onSearchOpenChange);
+  onSearchOpenChangeRef.current = onSearchOpenChange;
+  useEffect(() => {
+    onSearchOpenChangeRef.current?.(searchOpen);
+  }, [searchOpen]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -665,6 +674,11 @@ export function TerminalPane({
     };
     if (next) search.findNext(searchTerm, options);
     else search.findPrevious(searchTerm, options);
+  }
+
+  function openSearch() {
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
 
   function closeSearch() {

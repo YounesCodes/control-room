@@ -389,6 +389,7 @@ export function App() {
   const [terminalTitles, setTerminalTitles] = useState<Record<string, string>>({});
   const hostOperations = useSyncExternalStore(hostProcessing.subscribe, hostProcessing.getSnapshot);
   const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
+  const [terminalSearchOpen, setTerminalSearchOpen] = useState<Record<string, boolean>>({});
   const [terminalHasSelection, setTerminalHasSelection] = useState<Record<string, boolean>>({});
   const terminalHandlesRef = useRef(new Map<string, TerminalPaneHandle>());
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
@@ -2521,12 +2522,17 @@ export function App() {
                   <button
                     className="session-strip-button"
                     type="button"
-                    onClick={() =>
-                      setTerminalFindRequests((current) => ({
-                        ...current,
-                        [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
-                      }))
-                    }
+                    onClick={() => {
+                      const terminal = terminalHandlesRef.current.get(activeWorkspace.id);
+                      // Before the terminal mounts, queue an open request like Ctrl+Shift+F.
+                      if (terminal) terminal.toggleSearch();
+                      else
+                        setTerminalFindRequests((current) => ({
+                          ...current,
+                          [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
+                        }));
+                    }}
+                    aria-expanded={!!terminalSearchOpen[activeWorkspace.id]}
                     aria-label="Find in terminal"
                     title="Find in terminal"
                   >
@@ -2785,6 +2791,15 @@ export function App() {
                             })
                           }
                           findRequest={terminalFindRequests[workspace.id] ?? 0}
+                          onSearchOpenChange={(open) =>
+                            setTerminalSearchOpen((current) => {
+                              if (!!current[workspace.id] === open) return current;
+                              const next = { ...current };
+                              if (open) next[workspace.id] = true;
+                              else delete next[workspace.id];
+                              return next;
+                            })
+                          }
                           onReconnect={() =>
                             updateWorkspace(workspace.id, {
                               connectRequested: true,

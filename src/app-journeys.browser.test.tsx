@@ -2804,6 +2804,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
   });
 
+  it("opens and closes Find in terminal from the same toolbar button", async () => {
+    await mount();
+    const find = page.getByRole("button", { name: "Find in terminal" });
+    const input = page.getByRole("textbox", { name: "Find in terminal output" });
+    await find.click();
+    await expect.element(input).toHaveFocus();
+    await expect.element(find).toHaveAttribute("aria-expanded", "true");
+    await find.click();
+    await expect.element(input).not.toBeInTheDocument();
+    await expect.element(find).toHaveAttribute("aria-expanded", "false");
+    await userEvent.keyboard("{Control>}{Shift>}f{/Shift}{/Control}");
+    await expect.element(input).toHaveFocus();
+  });
+
   it("restores legacy Scratchpad pages to Terminal and opens notes from the palette", async () => {
     persisted.workspaces = [
       {
