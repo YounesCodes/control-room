@@ -149,7 +149,7 @@ try {
   await click("Focus terminal");
   await click("New terminal");
   await click("Split right, side by side");
-  await click("Local terminals: Bash");
+  await click("New local terminal: Bash");
   await waitFor("two visible terminal panes", () =>
     execute(
       "return document.querySelectorAll('.terminal-workspace-pane-visible .xterm').length === 2",
@@ -181,6 +181,10 @@ try {
   await waitFor("minimized window", () => !windowId());
   xdo("windowactivate", "--sync", id);
   await waitFor("restored window after minimize", () => windowId() === id);
+  const terminalPoint = await execute(
+    "const box = document.querySelector('.terminal-workspace-pane.active .terminal-content').getBoundingClientRect(); return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)];",
+  );
+  xdo("mousemove", "--window", id, ...terminalPoint.map(String), "click", "1");
   await waitFor("active terminal focus", () =>
     execute("return document.activeElement?.classList.contains('xterm-helper-textarea')"),
   );
@@ -196,10 +200,10 @@ try {
   const screenshot = await request("GET", "/session/" + session + "/screenshot");
   writeFileSync("test-results/linux-desktop/terminal.png", Buffer.from(screenshot, "base64"));
 
-  await click("Close window").catch((error) => {
-    // Closing the only WebView can end the session before the click is acknowledged.
-    if (!/window|session|disconnect/i.test(String(error))) throw error;
-  });
+  const closePoint = await execute(
+    "const box = document.querySelector('.window-close-button').getBoundingClientRect(); return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)];",
+  );
+  xdo("mousemove", "--window", id, ...closePoint.map(String), "click", "1");
   await waitFor("closed window", () => !windowId());
   assert.ok(existsSync(join(env.XDG_DATA_HOME, "app.controlroom.desktop", "control-room.db")));
   console.log(
