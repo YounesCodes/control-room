@@ -3,21 +3,7 @@
   "app": {
     "security": {
       "capabilities": ["default", "linux-window"]
-    },
-    "windows": [
-      {
-        "title": "Control Room",
-        "width": 1180,
-        "height": 700,
-        "minWidth": 520,
-        "minHeight": 480,
-        "resizable": true,
-        "decorations": false,
-        "fullscreen": false,
-        "center": true,
-        "create": false
-      }
-    ]
+    }
   },
   "bundle": {
     "targets": ["deb", "appimage"],

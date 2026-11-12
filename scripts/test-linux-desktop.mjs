@@ -94,6 +94,9 @@ try {
     },
   }));
 
+  await waitFor("Linux desktop capabilities", () =>
+    execute("return !!document.querySelector('.window-resize-handle')"),
+  );
   await click("New terminal");
   assert.equal(
     await execute(
@@ -105,15 +108,18 @@ try {
   await waitFor("focused terminal", () =>
     execute("return document.activeElement?.classList.contains('xterm-helper-textarea')"),
   );
+  const id = windowId();
+  assert.ok(id);
+  xdo("windowactivate", "--sync", id);
   execFileSync("xclip", ["-selection", "clipboard"], {
     input: "printf 'LINUX_%s\n' CLIPBOARD",
     stdio: ["pipe", "ignore", "inherit"],
   });
-  xdo("key", "--clearmodifiers", "ctrl+shift+v", "Return");
+  xdo("key", "--clearmodifiers", "ctrl+shift+v");
+  await terminalText("CLIPBOARD");
+  xdo("key", "Return");
   await terminalText("LINUX_CLIPBOARD");
 
-  const id = windowId();
-  assert.ok(id);
   const geometry = () =>
     Object.fromEntries(
       xdo("getwindowgeometry", "--shell", id)
@@ -199,6 +205,17 @@ try {
   console.log(
     "Installed .deb opened, used the clipboard and split Bash panes, and exercised window controls under X11.",
   );
+} catch (error) {
+  if (session) {
+    mkdirSync("test-results/linux-desktop", { recursive: true });
+    const screenshot = await request("GET", "/session/" + session + "/screenshot").catch(
+      () => null,
+    );
+    if (screenshot) {
+      writeFileSync("test-results/linux-desktop/failure.png", Buffer.from(screenshot, "base64"));
+    }
+  }
+  throw error;
 } finally {
   if (session) await request("DELETE", "/session/" + session).catch(() => {});
   driver.kill();

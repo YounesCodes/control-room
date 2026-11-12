@@ -228,6 +228,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   settings,
   visible,
   active,
+  nativeClipboard,
   findRequest,
   handlers,
 }: {
@@ -235,6 +236,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   settings: AppSettings;
   visible: boolean;
   active: boolean;
+  nativeClipboard: boolean;
   findRequest: number;
   handlers: TerminalHandlers;
 }) {
@@ -252,6 +254,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
       settings={settings}
       visible={visible}
       active={active}
+      nativeClipboard={nativeClipboard}
       onActivate={() => handlers.activate(workspace)}
       onSession={(sessionId) => handlers.session(workspace, sessionId)}
       onState={(state, reason) => handlers.state(workspace, state, reason)}
@@ -3032,6 +3035,7 @@ export function App() {
                           active={terminalVisible && workspace.id === activeWorkspace.id}
                           findRequest={terminalFindRequests[workspace.id] ?? 0}
                           handlers={terminalHandlers}
+                          nativeClipboard={environment?.desktopOs === "linux"}
                         />
                       </div>
                     );

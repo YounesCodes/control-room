@@ -94,6 +94,7 @@ jobs:
           workspaces: "./src-tauri -> target"
           cache-bin: false
           shared-key: tauri-linux-build
+          cache-on-failure: true
       - run: npm ci
       - run: npm run check:rust
       - run: npm run tauri build

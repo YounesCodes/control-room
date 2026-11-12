@@ -1,5 +1,7 @@
 #[cfg(target_os = "linux")]
 mod appimage;
+#[cfg(target_os = "linux")]
+mod clipboard;
 mod commands;
 mod database;
 mod documentation;
@@ -68,6 +70,11 @@ pub fn run() {
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
         .setup(|app| {
+            #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_title(&dev_window_title(env!("CONTROL_ROOM_BRANCH")))?;
+            }
+
             #[cfg(feature = "desktop-e2e")]
             let data_directory = e2e::data_directory()?;
             #[cfg(feature = "desktop-e2e")]
@@ -84,15 +91,6 @@ pub fn run() {
                 database.save_settings(&settings)?;
             }
             app.manage(database);
-            #[cfg(all(target_os = "linux", not(feature = "desktop-e2e")))]
-            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
-                .enable_clipboard_access()
-                .build()?;
-
-            #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
-            if let Some(window) = app.get_webview_window("main") {
-                window.set_title(&dev_window_title(env!("CONTROL_ROOM_BRANCH")))?;
-            }
             #[cfg(feature = "desktop-e2e")]
             {
                 // Elevated WebView2 ignores environment overrides. Pass the driver's
@@ -118,6 +116,10 @@ pub fn run() {
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
             commands::get_environment_info,
+            #[cfg(target_os = "linux")]
+            clipboard::read_clipboard,
+            #[cfg(target_os = "linux")]
+            clipboard::write_clipboard,
             documentation::open_documentation,
             documentation::open_releases,
             fonts::list_catalog_fonts,
