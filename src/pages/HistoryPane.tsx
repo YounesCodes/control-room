@@ -730,7 +730,7 @@ export function HistoryPane({
           />
           {search && (
             <button
-              className="icon-button search-clear"
+              className="icon-button"
               type="button"
               onClick={() => setSearch("")}
               aria-label="Clear search"

@@ -730,42 +730,66 @@ export function TerminalPane({
         <div className="terminal-container" ref={containerRef} />
         {searchOpen && (
           <form
-            className="terminal-search"
+            className="search-field terminal-search"
             role="search"
             onSubmit={(event) => {
               event.preventDefault();
               find(true);
             }}
           >
-            <Search size={14} aria-hidden="true" />
+            <Search size={15} aria-hidden="true" />
             <input
               ref={searchInputRef}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") closeSearch();
+                if (event.key === "Enter" && event.shiftKey) {
+                  event.preventDefault();
+                  find(false);
+                }
               }}
               aria-label="Find in terminal output"
               placeholder="Find in terminal"
             />
-            <span className="terminal-search-count" aria-live="polite">
+            <span
+              className="terminal-search-count"
+              data-none={searchTerm && !searchResult.count ? "" : undefined}
+              aria-live="polite"
+            >
               {searchResult.count
                 ? `${searchResult.index + 1} of ${searchResult.count}`
                 : searchTerm
                   ? "No matches"
                   : ""}
             </span>
-            <span className="terminal-search-controls">
-              <button type="button" onClick={() => find(false)} aria-label="Previous match">
-                <ChevronUp size={14} />
-              </button>
-              <button type="button" onClick={() => find(true)} aria-label="Next match">
-                <ChevronDown size={14} />
-              </button>
-              <button type="button" onClick={closeSearch} aria-label="Close terminal search">
-                <X size={14} />
-              </button>
-            </span>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => find(false)}
+              disabled={!searchResult.count}
+              aria-label="Previous match"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => find(true)}
+              disabled={!searchResult.count}
+              aria-label="Next match"
+            >
+              <ChevronDown size={14} />
+            </button>
+            <span className="terminal-search-divider" aria-hidden="true" />
+            <button
+              className="icon-button"
+              type="button"
+              onClick={closeSearch}
+              aria-label="Close terminal search"
+            >
+              <X size={14} />
+            </button>
           </form>
         )}
       </div>

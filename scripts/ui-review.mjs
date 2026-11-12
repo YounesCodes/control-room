@@ -217,6 +217,7 @@ ${JSON.stringify(registry, null, 2)}`);
           if (action.hover) await locator.hover();
           else if (action.scroll) await locator.scrollIntoViewIfNeeded();
           else if (action.option) await locator.selectOption(action.option);
+          else if (action.fill !== undefined) await locator.fill(action.fill);
           else await locator.click();
         }
         if (definition.settled?.[options.state])

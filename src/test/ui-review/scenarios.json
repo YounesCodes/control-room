@@ -119,6 +119,26 @@
         "metrics": ".host-metrics-panel"
       }
     },
+    "terminal": {
+      "states": ["find", "find-matches", "find-none"],
+      "ready": ".app-shell",
+      "prepare": {
+        "find": [{ "role": "button", "name": "Find in terminal" }],
+        "find-matches": [
+          { "role": "button", "name": "Find in terminal" },
+          { "role": "textbox", "name": "Find in terminal output", "fill": "worker" }
+        ],
+        "find-none": [
+          { "role": "button", "name": "Find in terminal" },
+          { "role": "textbox", "name": "Find in terminal output", "fill": "panic" }
+        ]
+      },
+      "settled": {
+        "find": ".terminal-search",
+        "find-matches": ".terminal-search",
+        "find-none": ".terminal-search"
+      }
+    },
     "ports": {
       "states": ["warnings"],
       "ready": ".app-shell",

@@ -1475,6 +1475,29 @@ code,
   box-shadow: none;
 }
 
+/* Buttons inside a search field (clear, previous, next, close) share one
+   size, and the field tightens its right padding so they sit evenly. */
+.search-field:has(> button) {
+  padding-right: 4px;
+}
+
+.search-field > button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.search-field > button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.search-field > button:disabled {
+  opacity: 0.4;
+}
+
 /* ==========================================================================
    Sidebar
    ========================================================================== */
@@ -3562,73 +3585,47 @@ code,
   flex: 1;
 }
 
+/* Find in terminal is the shared search field floating over the output. It
+   keeps the field's metrics and adds only the overlay surface, clearing the
+   overview ruler on the right. */
 .terminal-search {
   position: absolute;
-  z-index: 2;
+  /* Above xterm's match decorations (6-7), overview ruler (8) and
+     scrollbar (11), which share this stacking context. */
+  z-index: 12;
   top: 8px;
-  right: 8px;
-  display: flex;
-  width: min(420px, calc(100% - 16px));
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  right: 16px;
+  width: min(400px, calc(100% - 24px));
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 3px;
-  color: var(--text-muted);
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-.terminal-search input {
-  min-height: 0;
-  height: auto;
-  min-width: 80px;
-  flex: 1 1 120px;
-  border: 0;
-  background: transparent;
-  padding: 4px 8px;
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.terminal-search:focus-within {
-  border-color: var(--text-muted);
-}
-
-.terminal-search input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
+/* The count holds its width so stepping through results never moves the
+   buttons, and it disappears while nothing has been typed. */
 .terminal-search-count {
-  min-width: 54px;
-  color: var(--text-faint);
-  font-size: 10px;
-  text-align: right;
-}
-
-.terminal-search-controls {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.terminal-search button {
-  display: grid;
-  width: 28px;
-  height: 28px;
+  min-width: 48px;
   flex: none;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  background: transparent;
   color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.terminal-search button:hover {
-  background: var(--fill-active);
-  color: var(--text-strong);
+.terminal-search-count:empty {
+  display: none;
+}
+
+.terminal-search-count[data-none] {
+  color: var(--text-faint);
+}
+
+.terminal-search-divider {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  background: var(--border-subtle);
 }
 
 .terminal-container {
@@ -5823,17 +5820,6 @@ dd {
   margin-top: 16px;
 }
 
-.search-clear {
-  width: 24px;
-  height: 24px;
-  flex: none;
-  color: var(--text-faint);
-}
-
-.search-clear:hover:not(:disabled) {
-  color: var(--text);
-}
-
 .history-list {
   max-width: 980px;
 }
@@ -7989,33 +7975,9 @@ kbd {
   min-width: 0;
 }
 
-.ports-search-field {
-  padding: 0 6px 0 12px;
-  gap: 10px;
-  background: var(--surface-sunken);
-}
-
-.ports-search-field > svg {
-  flex: none;
-}
-
-.ports-search-field:focus-within {
-  border-color: var(--text-muted);
-  box-shadow: none;
-}
-
-.ports-search-field input {
-  padding-block: 6px;
-  font-size: 12px;
-}
-
-.ports-search-field .icon-button {
-  flex: none;
-  width: 26px;
-  height: 26px;
-}
-
-.ports-search-field .icon-button:disabled {
+/* The clear button keeps its place while hidden so typing never shifts the
+   field. */
+.ports-search-field > button:disabled {
   visibility: hidden;
 }
 

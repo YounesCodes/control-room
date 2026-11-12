@@ -30,6 +30,7 @@ const workspaceView = {
   systemd: "services",
   scratchpad: "terminal",
   dialogs: "terminal",
+  terminal: "terminal",
   ports: "ports",
 }[scenario] as "services" | "terminal" | "ports" | undefined;
 // An unreachable host fails each Ports read: two with the SSH timeout, two
@@ -184,7 +185,21 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
             payload: { sessionId: "example-session", state: "connected", reason: null },
           }),
         );
-        args.output.onmessage(new TextEncoder().encode("example$ ").buffer);
+        // The terminal scenario prints a short service log so Find has
+        // several matches to step through.
+        const output =
+          scenario === "terminal"
+            ? [
+                "example$ journalctl -u worker.service -n 6 --no-pager",
+                "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
+                "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
+                "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
+                "Nov 01 09:59:44 example worker[1234]: job 41 finished",
+                "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+                "example$ ",
+              ].join("\r\n")
+            : "example$ ";
+        args.output.onmessage(new TextEncoder().encode(output).buffer);
       }, 0);
       break;
     case "save_workspace_state":

@@ -375,7 +375,7 @@ export function DockerPane({
                 )}
                 {tools === "search" && (
                   <label className="search-field ports-search-field">
-                    <Search size={16} />
+                    <Search size={15} />
                     <input
                       aria-label="Search containers"
                       placeholder="Search projects, services, or containers"
