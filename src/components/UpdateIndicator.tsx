@@ -123,7 +123,7 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
           </header>
 
           {state.status === "failed" ? (
-            <p className="update-panel-error" role="status">
+            <p className="inline-error update-panel-error" role="status">
               {state.failure.kind === "signature"
                 ? "The update signature did not verify, so it was not installed."
                 : state.failure.message}

@@ -1,33 +1,115 @@
 {
   "viewports": {
-    "normal": { "width": 1440, "height": 900 },
-    "narrow": { "width": 960, "height": 640 },
-    "compact": { "width": 520, "height": 480 }
+    "normal": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrow": {
+      "width": 960,
+      "height": 640
+    },
+    "compact": {
+      "width": 520,
+      "height": 480
+    }
   },
   "scenarios": {
     "settings": {
-      "states": ["populated", "monitoring", "logs", "diagnostics"],
+      "states": ["populated", "monitoring", "logs", "diagnostics", "update-failed", "save-failed"],
       "ready": ".app-shell",
       "prepare": {
-        "populated": [{ "role": "button", "name": "Open Settings" }],
-        "monitoring": [{ "role": "button", "name": "Open Settings" }],
+        "populated": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          }
+        ],
+        "monitoring": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          }
+        ],
         "logs": [
-          { "role": "button", "name": "Open Settings" },
-          { "role": "button", "name": "Logs & History", "optional": true },
-          { "role": "combobox", "name": "Settings category", "option": "logs", "optional": true }
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "button",
+            "name": "Logs & History",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "logs",
+            "optional": true
+          }
         ],
         "diagnostics": [
-          { "role": "button", "name": "Open Settings" },
-          { "role": "button", "name": "App & Diagnostics", "optional": true },
-          { "role": "combobox", "name": "Settings category", "option": "app", "optional": true },
-          { "selector": ".settings-ssh", "scroll": true }
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "button",
+            "name": "App & Diagnostics",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "app",
+            "optional": true
+          },
+          {
+            "selector": ".settings-ssh",
+            "scroll": true
+          }
+        ],
+        "update-failed": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "button",
+            "name": "App & Diagnostics",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "app",
+            "optional": true
+          },
+          {
+            "role": "button",
+            "name": "Check for updates"
+          }
+        ],
+        "save-failed": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "checkbox",
+            "name": "Show host metrics in header"
+          },
+          {
+            "selector": ".settings-save"
+          }
         ]
       },
       "settled": {
         "populated": ".settings-page",
         "monitoring": ".settings-page",
         "logs": ".settings-page",
-        "diagnostics": ".settings-ssh"
+        "diagnostics": ".settings-ssh",
+        "update-failed": ".settings-update-error",
+        "save-failed": ".settings-status.failed"
       },
       "motion": {
         "description": "Settings category reveal, General to Terminal",
@@ -38,18 +120,38 @@
       }
     },
     "scratchpad": {
-      "states": ["populated", "global"],
+      "states": ["populated", "global", "save-error"],
       "ready": ".app-shell",
       "prepare": {
-        "populated": [{ "selector": "[data-scratchpad-trigger]" }],
+        "populated": [
+          {
+            "selector": "[data-scratchpad-trigger]"
+          }
+        ],
         "global": [
-          { "selector": "[data-scratchpad-trigger]" },
-          { "role": "button", "name": "Global note for all connections" }
+          {
+            "selector": "[data-scratchpad-trigger]"
+          },
+          {
+            "role": "button",
+            "name": "Global note for all connections"
+          }
+        ],
+        "save-error": [
+          {
+            "selector": "[data-scratchpad-trigger]"
+          },
+          {
+            "role": "textbox",
+            "name": "Connection note",
+            "fill": "systemctl restart worker.service"
+          }
         ]
       },
       "settled": {
         "populated": ".scratchpad-popover textarea[aria-label='Connection note']",
-        "global": ".scratchpad-popover textarea[aria-label='Global note']"
+        "global": ".scratchpad-popover textarea[aria-label='Global note']",
+        "save-error": ".scratchpad-save-error"
       },
       "motion": {
         "description": "Scratchpad note switch, Connection to Global",
@@ -73,41 +175,106 @@
       "ready": ".app-shell",
       "prepare": {
         "connection": [
-          { "selector": ".compact-navigation-toggle", "optional": true },
-          { "role": "button", "name": "Add connection" }
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "role": "button",
+            "name": "Add connection"
+          }
         ],
         "connection-error": [
-          { "selector": ".compact-navigation-toggle", "optional": true },
-          { "role": "button", "name": "Add connection" },
-          { "selector": ".connection-form button[type='submit']" }
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "role": "button",
+            "name": "Add connection"
+          },
+          {
+            "selector": ".connection-form button[type='submit']"
+          }
         ],
         "connection-test": [
-          { "selector": ".compact-navigation-toggle", "optional": true },
-          { "selector": ".host-row", "hover": true },
-          { "role": "button", "name": "Open actions for Example host" },
-          { "role": "menuitem", "name": "Edit connection" },
-          { "role": "button", "name": "Test structured access" }
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-row",
+            "hover": true
+          },
+          {
+            "role": "button",
+            "name": "Open actions for Example host"
+          },
+          {
+            "role": "menuitem",
+            "name": "Edit connection"
+          },
+          {
+            "role": "button",
+            "name": "Test structured access"
+          }
         ],
         "connection-test-error": [
-          { "selector": ".compact-navigation-toggle", "optional": true },
-          { "selector": ".host-row", "hover": true },
-          { "role": "button", "name": "Open actions for Example host" },
-          { "role": "menuitem", "name": "Edit connection" },
-          { "role": "button", "name": "Test structured access" }
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-row",
+            "hover": true
+          },
+          {
+            "role": "button",
+            "name": "Open actions for Example host"
+          },
+          {
+            "role": "menuitem",
+            "name": "Edit connection"
+          },
+          {
+            "role": "button",
+            "name": "Test structured access"
+          }
         ],
         "groups": [
-          { "selector": ".compact-navigation-toggle", "optional": true },
-          { "role": "button", "name": "Manage groups and tags" }
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "role": "button",
+            "name": "Manage groups and tags"
+          }
         ],
         "groups-no-tags": [
-          { "selector": ".compact-navigation-toggle", "optional": true },
-          { "role": "button", "name": "Manage groups and tags" }
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "role": "button",
+            "name": "Manage groups and tags"
+          }
         ],
         "rename": [
-          { "selector": ".session-tab-main" },
-          { "role": "button", "name": "Rename Example host Workspace" }
+          {
+            "selector": ".session-tab-main"
+          },
+          {
+            "role": "button",
+            "name": "Rename Example host Workspace"
+          }
         ],
-        "metrics": [{ "selector": ".host-metrics-trigger" }]
+        "metrics": [
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ]
       },
       "settled": {
         "connection": ".modal.connection-dialog",
@@ -121,23 +288,50 @@
       }
     },
     "terminal": {
-      "states": ["find", "find-matches", "find-none"],
+      "states": ["find", "find-matches", "find-none", "notice-error", "notice-ended"],
       "ready": ".app-shell",
       "prepare": {
-        "find": [{ "role": "button", "name": "Find in terminal" }],
+        "find": [
+          {
+            "role": "button",
+            "name": "Find in terminal"
+          }
+        ],
         "find-matches": [
-          { "role": "button", "name": "Find in terminal" },
-          { "role": "textbox", "name": "Find in terminal output", "fill": "worker" }
+          {
+            "role": "button",
+            "name": "Find in terminal"
+          },
+          {
+            "role": "textbox",
+            "name": "Find in terminal output",
+            "fill": "worker"
+          }
+        ],
+        "notice-error": [
+          {
+            "role": "button",
+            "name": "Paste into terminal"
+          }
         ],
         "find-none": [
-          { "role": "button", "name": "Find in terminal" },
-          { "role": "textbox", "name": "Find in terminal output", "fill": "panic" }
+          {
+            "role": "button",
+            "name": "Find in terminal"
+          },
+          {
+            "role": "textbox",
+            "name": "Find in terminal output",
+            "fill": "panic"
+          }
         ]
       },
       "settled": {
         "find": ".terminal-search",
         "find-matches": ".terminal-search",
-        "find-none": ".terminal-search"
+        "find-none": ".terminal-search",
+        "notice-error": ".terminal-notice",
+        "notice-ended": ".terminal-notice"
       }
     },
     "pages": {
@@ -160,12 +354,28 @@
       "states": ["populated", "empty", "loading", "error", "stale", "overflow"],
       "ready": ".app-shell",
       "prepare": {
-        "populated": [{ "selector": ".systemd-inventory .dense-row", "last": true }],
-        "stale": [
-          { "selector": ".systemd-inventory .dense-row", "last": true },
-          { "role": "button", "name": "Refresh systemd units" }
+        "populated": [
+          {
+            "selector": ".systemd-inventory .dense-row",
+            "last": true
+          }
         ],
-        "overflow": [{ "selector": ".systemd-inventory .dense-row", "last": true }]
+        "stale": [
+          {
+            "selector": ".systemd-inventory .dense-row",
+            "last": true
+          },
+          {
+            "role": "button",
+            "name": "Refresh systemd units"
+          }
+        ],
+        "overflow": [
+          {
+            "selector": ".systemd-inventory .dense-row",
+            "last": true
+          }
+        ]
       },
       "settled": {
         "populated": ".systemd-memory-value > [aria-hidden]",

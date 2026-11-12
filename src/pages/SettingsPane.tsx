@@ -847,27 +847,23 @@ export function SettingsPane({
                   >
                     <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
                   </button>
-                  {checkResult && (
-                    <p
-                      className={
-                        checkResult.outcome === "failed"
-                          ? "settings-update-status failed"
-                          : "settings-update-status"
-                      }
-                      role="status"
-                    >
-                      {checkResult.outcome === "current" && "You're up to date."}
-                      {checkResult.outcome === "available" &&
-                        `Version ${checkResult.version} is available.`}
-                      {checkResult.outcome === "failed" && (
-                        <>
-                          Could not check for updates.
-                          <span className="settings-update-reason">
-                            {checkResult.failure.message}
-                          </span>
-                        </>
-                      )}
+                  {checkResult?.outcome === "failed" ? (
+                    <p className="inline-error settings-update-error" role="status">
+                      <span>
+                        Could not check for updates.
+                        <span className="settings-update-reason">
+                          {checkResult.failure.message}
+                        </span>
+                      </span>
                     </p>
+                  ) : (
+                    checkResult && (
+                      <p className="settings-update-status" role="status">
+                        {checkResult.outcome === "current"
+                          ? "You're up to date."
+                          : `Version ${checkResult.version} is available.`}
+                      </p>
+                    )
                   )}
                 </div>
               </SettingsSection>

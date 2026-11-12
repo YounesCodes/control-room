@@ -590,7 +590,9 @@ marked neutrally rather than as failures.
 Show asynchronous panels with distinct loading, empty, stale, unavailable, and
 error states. When cached data is visible, mark it stale instead of presenting
 it as current. Give errors a recovery action when one exists, and preserve the
-specific cause when it helps the user recover. Terminal failure banners use a
+specific cause when it helps the user recover. Terminal notices are the same inline error or warning as a strip above the
+output, with a dismiss cross when no recovery action applies; say what failed
+in plain words rather than the browser's API message. Terminal failure banners use a
 full-height recovery action at the right edge, separated by a quiet divider.
 Center its icon and label together and let the message wrap independently.
 

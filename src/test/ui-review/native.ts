@@ -253,7 +253,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       result = "0.0.0-example";
       break;
     case "pending_update_notice":
+      result = null;
+      break;
     case "check_for_update":
+      if (state === "update-failed")
+        throw new Error("Could not reach the update server: connection timed out");
       result = null;
       break;
     case "get_cached_capabilities":
@@ -265,7 +269,14 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       setTimeout(() => {
         listeners.get("session-state-changed")?.forEach((callback) =>
           callback({
-            payload: { sessionId: "example-session", state: "connected", reason: null },
+            payload:
+              state === "notice-ended"
+                ? {
+                    sessionId: "example-session",
+                    state: "disconnected",
+                    reason: "Connection to example.invalid closed by remote host.",
+                  }
+                : { sessionId: "example-session", state: "connected", reason: null },
           }),
         );
         // The terminal scenario prints a short service log so Find has
@@ -285,8 +296,14 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
         args.output.onmessage(new TextEncoder().encode(output).buffer);
       }, 0);
       break;
-    case "save_workspace_state":
     case "save_settings":
+      if (state === "save-failed") throw new Error("Settings file is read-only");
+      break;
+    case "save_scratchpad_note":
+      if (state === "save-error") throw new Error("Note storage is unavailable");
+      result = { ...args.input, id: "example-note", createdAt: "", updatedAt: "" };
+      break;
+    case "save_workspace_state":
     case "resize_session":
     case "acknowledge_session_output":
     case "close_session":

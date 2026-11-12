@@ -114,7 +114,15 @@ export function TerminalPane({
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
-  const [localError, setLocalError] = useState<string | null>(null);
+  // A notice from this pane: a failed action, or a warning about input that
+  // could not be sent yet. Session failures arrive as workspace.reason.
+  const [localNotice, setLocalNotice] = useState<{
+    message: string;
+    tone: "error" | "warning";
+  } | null>(null);
+  const setLocalError = (message: string | null) =>
+    setLocalNotice(message === null ? null : { message, tone: "error" });
+  const setLocalWarning = (message: string) => setLocalNotice({ message, tone: "warning" });
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
@@ -168,14 +176,14 @@ export function TerminalPane({
     }
     if (!acceptingInputRef.current) {
       if (workspace.kind === "local") {
-        setLocalError("Restart the shell before sending terminal input.");
+        setLocalWarning("Restart the shell before sending terminal input.");
       } else if (!workspaceReasonRef.current) {
-        setLocalError("Reconnect before sending terminal input.");
+        setLocalWarning("Reconnect before sending terminal input.");
       }
       return;
     }
     if (!pendingInputRef.current.enqueue(bytes)) {
-      setLocalError("Terminal input is paused while the session catches up.");
+      setLocalWarning("Terminal input is paused while the session catches up.");
     }
   };
 
@@ -234,7 +242,7 @@ export function TerminalPane({
         .then((text) => {
           if (text) terminal.paste(text);
         })
-        .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+        .catch((error) => setLocalError(clipboardFailure("paste", error)));
     };
     const dataDisposable = terminal.onData((data) => send(new TextEncoder().encode(data)));
     const binaryDisposable = terminal.onBinary((data) =>
@@ -246,7 +254,7 @@ export function TerminalPane({
       if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
         void navigator.clipboard
           .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+          .catch((error) => setLocalError(clipboardFailure("copy", error)));
         return false;
       }
       // xterm owns keyboard paste through its textarea's native paste event.
@@ -293,7 +301,7 @@ export function TerminalPane({
       if (action === "copy") {
         void navigator.clipboard
           .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+          .catch((error) => setLocalError(clipboardFailure("copy", error)));
         return;
       }
       if (action === "paste") pasteClipboard();
@@ -693,7 +701,7 @@ export function TerminalPane({
     if (!terminal?.hasSelection()) return;
     void navigator.clipboard
       .writeText(terminal.getSelection())
-      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+      .catch((error) => setLocalError(clipboardFailure("copy", error)));
   }
 
   function pasteClipboard() {
@@ -704,7 +712,7 @@ export function TerminalPane({
       .then((text) => {
         if (text) terminal.paste(text);
       })
-      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+      .catch((error) => setLocalError(clipboardFailure("paste", error)));
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
@@ -713,16 +721,36 @@ export function TerminalPane({
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
       onPointerDown={onActivate}
     >
-      {(localError || workspace.reason) && (
-        <div className="terminal-notice" role="status">
-          <span className="terminal-notice-message">{localError ?? workspace.reason}</span>
+      {(localNotice || workspace.reason) && (
+        <div
+          className="terminal-notice"
+          data-tone={localNotice?.tone ?? "error"}
+          role={localNotice?.tone === "warning" ? "status" : "alert"}
+        >
+          <span className="terminal-notice-message">
+            {localNotice?.message ?? workspace.reason}
+          </span>
           {/* The recovery action rides the notice that names the failure, so
               an ended session is reconnectable where it died. */}
-          {terminalEnded && onReconnect && (
+          {terminalEnded && onReconnect ? (
             <button type="button" className="terminal-notice-action" onClick={onReconnect}>
               <RotateCw size={13} aria-hidden="true" />
               <span>{isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}</span>
             </button>
+          ) : (
+            localNotice && (
+              <button
+                type="button"
+                className="terminal-notice-dismiss"
+                aria-label="Dismiss terminal notice"
+                onClick={() => {
+                  setLocalNotice(null);
+                  terminalRef.current?.focus();
+                }}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            )
           )}
         </div>
       )}
@@ -795,4 +823,15 @@ export function TerminalPane({
       </div>
     </section>
   );
+}
+
+/// Clipboard refusals surface as a DOMException naming the API call; say what
+/// the user tried and why it did not happen instead.
+function clipboardFailure(action: "copy" | "paste", error: unknown) {
+  const denied =
+    (error instanceof DOMException && error.name === "NotAllowedError") ||
+    /permission denied/i.test(errorMessage(error));
+  return denied
+    ? `Could not ${action}: clipboard access was denied.`
+    : `Could not ${action}: ${errorMessage(error)}`;
 }

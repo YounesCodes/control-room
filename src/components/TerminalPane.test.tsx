@@ -643,6 +643,24 @@ describe("TerminalPane sessions", () => {
       expect(menu.defaultPrevented).toBe(true);
     });
 
+    it("says a refused paste was denied and lets the notice be dismissed", async () => {
+      clipboard.readText.mockRejectedValue(
+        new DOMException(
+          "Failed to execute 'readText' on 'Clipboard': Read permission denied.",
+          "NotAllowedError",
+        ),
+      );
+      const container = await openTerminal();
+
+      rightClick(container);
+
+      const notice = await screen.findByRole("alert");
+      expect(notice.textContent).toBe("Could not paste: clipboard access was denied.");
+      expect(notice.dataset.tone).toBe("error");
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss terminal notice" }));
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
     it("leaves the click to a program that reads the mouse", async () => {
       xterm.mouseTrackingMode = "any";
       const container = await openTerminal();

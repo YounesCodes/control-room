@@ -64,14 +64,16 @@ Compact covers the smaller window target from PR #188, even before that change
 lands. Captures show the current branch's layout without scaling or hiding its
 clipping. Settings starts on General & Monitoring; `monitoring` turns host
 metrics on, `logs` opens Logs & History where the window shows that
-category, and `diagnostics` opens App & Diagnostics at SSH environment. Terminal
+category, `diagnostics` opens App & Diagnostics at SSH environment,
+`update-failed` fails Check for updates, and `save-failed` fails Save. Terminal
 opens Find in terminal empty in `find`, with matches in `find-matches`, and
-with no match in `find-none`. Pages shows Docker, Logs, and History with
+with no match in `find-none`; `notice-error` shows a refused paste and
+`notice-ended` a closed session with Reconnect. Pages shows Docker, Logs, and History with
 ordinary readings in `docker`, `logs`, and `history`. Systemd supports
 `populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it
-to the global note in `global`. Dialogs opens Add connection in `connection`
+to the global note in `global`, and fails a save in `save-error`. Dialogs opens Add connection in `connection`
 and after an empty submit in `connection-error`, Edit connection after Test
 structured access succeeds in `connection-test` and fails in
 `connection-test-error`, groups and tags with existing
