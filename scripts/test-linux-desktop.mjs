@@ -112,16 +112,6 @@ try {
   xdo("key", "--clearmodifiers", "ctrl+shift+v", "Return");
   await terminalText("LINUX_CLIPBOARD");
 
-  await click("Focus terminal");
-  await click("New terminal");
-  await click("Split right, side by side");
-  await click("Local terminals: Bash");
-  await waitFor("two visible terminal panes", () =>
-    execute(
-      "return document.querySelectorAll('.terminal-workspace-pane-visible .xterm').length === 2",
-    ),
-  );
-
   const id = windowId();
   assert.ok(id);
   const geometry = () =>
@@ -132,6 +122,34 @@ try {
         .map(([key, value]) => [key, Number(value)]),
     );
   const width = () => geometry().WIDTH;
+  const outputPoint = await execute(
+    "const row = Array.from(document.querySelectorAll('.terminal-workspace-pane.active .xterm-rows > div')).find(el => el.textContent.includes('LINUX_CLIPBOARD')); const box = row.getBoundingClientRect(); return [Math.round(box.x + 6), Math.round(box.y + box.height / 2)];",
+  );
+  xdo("mousemove", "--window", id, ...outputPoint.map(String), "click", "--repeat", "2", "1");
+  xdo("key", "--clearmodifiers", "ctrl+shift+c");
+  await waitFor("terminal selection copied to clipboard", () =>
+    execFileSync("xclip", ["-selection", "clipboard", "-o"], {
+      encoding: "utf8",
+      timeout: 5000,
+    }).includes("LINUX_CLIPBOARD"),
+  );
+
+  const beforeDrag = geometry();
+  xdo("mousemove", "--window", id, "350", "20", "mousedown", "1");
+  await pause(250);
+  xdo("mousemove_relative", "--", "35", "20", "mouseup", "1");
+  await waitFor("window moved by the titlebar", () => geometry().X > beforeDrag.X);
+
+  await click("Focus terminal");
+  await click("New terminal");
+  await click("Split right, side by side");
+  await click("Local terminals: Bash");
+  await waitFor("two visible terminal panes", () =>
+    execute(
+      "return document.querySelectorAll('.terminal-workspace-pane-visible .xterm').length === 2",
+    ),
+  );
+
   const initial = width();
   await click("Maximize or restore window");
   await waitFor("maximized window", () => width() > initial);
@@ -179,7 +197,7 @@ try {
   await waitFor("closed window", () => !windowId());
   assert.ok(existsSync(join(env.XDG_DATA_HOME, "app.controlroom.desktop", "control-room.db")));
   console.log(
-    "Installed .deb opened, pasted into Bash, split, maximized, resized, and closed under X11.",
+    "Installed .deb opened, used the clipboard and split Bash panes, and exercised window controls under X11.",
   );
 } finally {
   if (session) await request("DELETE", "/session/" + session).catch(() => {});

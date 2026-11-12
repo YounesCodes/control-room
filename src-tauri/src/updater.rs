@@ -250,8 +250,7 @@ fn describe_update(update: &Update) -> AppUpdateInfo {
 pub(crate) fn in_app_updates() -> bool {
     #[cfg(target_os = "linux")]
     {
-        use tauri::utils::{config::BundleType, platform::bundle_type};
-        bundle_type() == Some(BundleType::AppImage)
+        crate::appimage::running()
     }
     #[cfg(not(target_os = "linux"))]
     cfg!(windows)

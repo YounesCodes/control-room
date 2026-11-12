@@ -212,6 +212,8 @@ impl SessionManager {
     ) -> Result<SessionStarted, String> {
         let ssh_path = detect_ssh_path().ok_or(MISSING_SSH)?;
         let mut command = CommandBuilder::new(ssh_path);
+        #[cfg(target_os = "linux")]
+        crate::appimage::configure_pty(&mut command);
         command.env("TERM", TERMINAL_TYPE);
         command.args(connection_arguments(connection, true));
         command.arg(

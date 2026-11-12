@@ -51,8 +51,9 @@ sshd_pid="$(cat "$fixture_dir/sshd.pid")"
 ssh -F "$CONTROL_ROOM_TEST_SSH_CONFIG" -p "$CONTROL_ROOM_TEST_PORT" "$CONTROL_ROOM_TEST_USER@$CONTROL_ROOM_TEST_HOST" true
 
 tests=(
-  history::tests::live_history_install_is_reversible_in_an_isolated_home \
-  remote::tests::live_fixture_supports_structured_features \n  session::linux::tests::linux_pty_runs_a_live_ssh_session
+  history::tests::live_history_install_is_reversible_in_an_isolated_home
+  remote::tests::live_fixture_supports_structured_features
+  session::linux::tests::linux_pty_runs_a_live_ssh_session
 )
 listed="$(cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --ignored --list)"
 for test in "${tests[@]}"; do

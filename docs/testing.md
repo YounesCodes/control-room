@@ -119,7 +119,7 @@ included in the packaged app. Vitest browser tests stay independent.
 
 The Ubuntu 24.04 CI job runs Clippy and Rust tests, builds the `.deb` and AppImage, then installs the `.deb` on the runner. WebKitWebDriver and Openbox exercise the installed app in Xvfb with a temporary XDG data directory. The separate hosted SSH job uses the system OpenSSH client and a loopback server to verify a Linux PTY and read-only inspection.
 
-To build on Ubuntu 24.04, install the Tauri development packages (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`, and build tools), then run `npm ci` and `npm run tauri build`. Use a separate Linux desktop session for interactive verification.
+To build on Ubuntu 24.04, install the Tauri development packages (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`, `file`, and build tools), then run `npm ci` and `npm run tauri build`. Use a separate Linux desktop session for interactive verification.
 
 ## Windows desktop E2E
 

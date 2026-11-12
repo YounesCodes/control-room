@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+mod appimage;
 mod commands;
 mod database;
 mod documentation;

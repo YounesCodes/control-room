@@ -24,6 +24,18 @@ pub fn background_command<S: AsRef<OsStr>>(program: S) -> Command {
         command.creation_flags(CREATE_NO_WINDOW);
         command
     };
+    #[cfg(target_os = "linux")]
+    let command = {
+        let mut command = command;
+        for (name, value) in crate::appimage::host_environment() {
+            if let Some(value) = value {
+                command.env(name, value);
+            } else {
+                command.env_remove(name);
+            }
+        }
+        command
+    };
     command
 }
 

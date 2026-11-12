@@ -112,6 +112,7 @@ pub fn resolve_installed(id: &str) -> Result<ResolvedLocalShell, String> {
 
 pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
     let mut command = CommandBuilder::new(&shell.program);
+    crate::appimage::configure_pty(&mut command);
     if shell.kind != LocalShellKind::LoginShell {
         command.arg("-l");
     }
