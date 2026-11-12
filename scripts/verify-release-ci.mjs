@@ -8,7 +8,14 @@ export function verifyReleaseCI(sha, runs, jobs) {
   if (!run || run.status !== "completed" || run.conclusion !== "success") {
     throw new Error("The tagged commit has no successful main-branch CI run.");
   }
-  for (const name of ["frontend", "validate", "installer", "desktop / desktop", "hosted-ssh"]) {
+  for (const name of [
+    "frontend",
+    "validate",
+    "installer",
+    "desktop / desktop",
+    "hosted-ssh",
+    "linux-desktop",
+  ]) {
     const job = jobs.find((item) => item.name === name);
     if (!job || job.status !== "completed" || job.conclusion !== "success") {
       throw new Error(`The tagged commit has no successful ${name} job.`);

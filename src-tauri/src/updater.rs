@@ -2,7 +2,7 @@
 //!
 //! This is the application replacing its own installer. It never touches a
 //! Remote Host, never runs a package manager, and never reaches SSH. The name
-//! "update" in this module always means Control Room on this Windows machine.
+//! "update" in this module always means Control Room on this machine.
 //!
 //! Rust owns the whole native side, following the same rule as sessions and SSH
 //! arguments: React names an intent and nothing else. It cannot choose a URL,
@@ -247,6 +247,16 @@ fn describe_update(update: &Update) -> AppUpdateInfo {
 
 /// Asks the configured endpoint whether a newer version exists.
 ///
+pub(crate) fn in_app_updates() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        use tauri::utils::{config::BundleType, platform::bundle_type};
+        bundle_type() == Some(BundleType::AppImage)
+    }
+    #[cfg(not(target_os = "linux"))]
+    cfg!(windows)
+}
+
 /// Returns `Ok(None)` when this build is current. The plugin's default
 /// comparison accepts a release only when its semver is strictly greater than
 /// the running version, which is what keeps this from ever offering a
@@ -256,6 +266,12 @@ pub async fn check_for_update(
     app: AppHandle,
     state: State<'_, UpdaterState>,
 ) -> Result<Option<AppUpdateInfo>, UpdateFailure> {
+    if !in_app_updates() {
+        return Err(UpdateFailure::new(
+            UpdateFailureKind::Check,
+            "Get the latest installer from Control Room releases.",
+        ));
+    }
     if !state.begin_check() {
         return Err(UpdateFailure::new(
             UpdateFailureKind::Check,

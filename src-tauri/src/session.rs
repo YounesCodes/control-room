@@ -17,8 +17,12 @@ use crate::{
     database::Database,
     local_shell::{self, ResolvedLocalShell},
     models::{LocalSessionStarted, SavedConnection, SessionStarted, SessionStateEvent},
-    ssh::{connection_arguments, detect_ssh_path},
+    ssh::{MISSING_SSH, connection_arguments, detect_ssh_path},
 };
+
+#[cfg(target_os = "linux")]
+#[path = "session_linux.rs"]
+mod linux;
 
 struct ManagedSession {
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
@@ -206,10 +210,7 @@ impl SessionManager {
         rows: u16,
         output: Channel<Response>,
     ) -> Result<SessionStarted, String> {
-        let ssh_path = detect_ssh_path().ok_or_else(|| {
-            "Windows OpenSSH client was not found. Install the OpenSSH Client optional feature."
-                .to_string()
-        })?;
+        let ssh_path = detect_ssh_path().ok_or(MISSING_SSH)?;
         let mut command = CommandBuilder::new(ssh_path);
         command.env("TERM", TERMINAL_TYPE);
         command.args(connection_arguments(connection, true));
@@ -232,7 +233,7 @@ impl SessionManager {
         })
     }
 
-    /// Starts a local Windows shell through the same pty lifecycle as an SSH
+    /// Starts a local shell through the same pty lifecycle as an SSH
     /// session. The profile was validated and resolved by `local_shell`, so
     /// nothing here picks an executable or an argument.
     pub fn start_local(
@@ -288,6 +289,25 @@ impl SessionManager {
             .map_err(|error| mode.spawn_error(error))?;
         drop(pair.slave);
 
+        #[cfg(target_os = "linux")]
+        let (mut reader, writer, exit_signal, killer) = match linux::open_io(pair.master.as_ref())
+            .and_then(|(reader, writer, signal)| {
+                let killer = linux::Killer::new(child.as_ref())?;
+                Ok((
+                    reader,
+                    Box::new(writer),
+                    signal,
+                    Box::new(killer) as Box<dyn ChildKiller + Send + Sync>,
+                ))
+            }) {
+            Ok(io) => io,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("PTY could not be attached: {error}"));
+            }
+        };
+        #[cfg(not(target_os = "linux"))]
         let mut reader = match pair.master.try_clone_reader() {
             Ok(reader) => reader,
             Err(error) => {
@@ -296,6 +316,7 @@ impl SessionManager {
                 return Err(format!("PTY output could not be opened: {error}"));
             }
         };
+        #[cfg(not(target_os = "linux"))]
         let writer = match pair.master.take_writer() {
             Ok(writer) => writer,
             Err(error) => {
@@ -304,6 +325,7 @@ impl SessionManager {
                 return Err(format!("PTY input could not be opened: {error}"));
             }
         };
+        #[cfg(not(target_os = "linux"))]
         let killer = child.clone_killer();
         let session_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedSession {
@@ -387,6 +409,8 @@ impl SessionManager {
             if result.is_err() {
                 let _ = wait_managed.killer.lock().kill();
             }
+            #[cfg(target_os = "linux")]
+            drop(exit_signal);
             // ConPTY keeps the output pipe open until its master is dropped.
             // Keep the reader and acknowledgements alive while it drains, then
             // report the exit. Closing flow control first discards queued bytes.
@@ -668,19 +692,28 @@ fn classify_local_exit(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use std::{
         io::{Read, Write},
+        time::Instant,
+    };
+    use std::{
         sync::{Arc, mpsc},
-        time::{Duration, Instant},
+        time::Duration,
     };
 
-    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+    use portable_pty::CommandBuilder;
+    #[cfg(windows)]
+    use portable_pty::{PtySize, native_pty_system};
 
     use super::{
         CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OUTPUT_READ_BUFFER_BYTES, OutputFlow,
         SessionManager, SessionMode, TERMINAL_TYPE, TerminalFailureDetector, TerminalFailureHint,
-        classify_local_exit, classify_session_exit, interactive_shell_command, map_pty_kill_result,
+        classify_local_exit, classify_session_exit, interactive_shell_command,
     };
+
+    #[cfg(windows)]
+    use super::map_pty_kill_result;
 
     /// What the detector concluded about one logical stream: the failure hint
     /// and whether the session counts as established.
@@ -1406,6 +1439,7 @@ mod tests {
         assert_eq!(receiver.recv_timeout(Duration::from_secs(5)), Ok(true));
     }
 
+    #[cfg(windows)]
     #[test]
     fn conpty_runs_a_console_process() {
         let pair = native_pty_system().openpty(PtySize::default()).unwrap();
@@ -1430,6 +1464,7 @@ mod tests {
             writer.write_all(b"\x1b[1;1R").unwrap();
             writer.flush().unwrap();
         }
+        #[cfg(not(target_os = "linux"))]
         let killer = child.clone_killer();
         let (status_sender, status_receiver) = mpsc::channel();
         std::thread::spawn(move || {
@@ -1679,6 +1714,7 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     #[ignore = "requires an explicitly configured Linux SSH fixture"]
     fn conpty_hosts_windows_ssh_against_live_fixture() {

@@ -46,6 +46,10 @@ function calledWindowMethods(): string[] {
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
 ) as { permissions: string[] };
+const linuxWindowCapabilities = JSON.parse(code("../src-tauri/capabilities/linux-window.json")) as {
+  platforms: string[];
+  permissions: string[];
+};
 const apiSource = code("./lib/api.ts");
 const tauriSource = code("../src-tauri/src/lib.rs");
 
@@ -269,11 +273,16 @@ describe("application hierarchy", () => {
     // binding rather than naming the methods means a fourth control fails here
     // instead of doing nothing when a user clicks it.
     const called = calledWindowMethods();
-    expect(called).toEqual(["close", "minimize", "toggleMaximize"]);
+    expect(called).toEqual(["close", "minimize", "startResizeDragging", "toggleMaximize"]);
+    expect(linuxWindowCapabilities.platforms).toEqual(["linux"]);
+    expect(
+      JSON.parse(code("../src-tauri/tauri.linux.conf.json")).app.security.capabilities,
+    ).toContain("linux-window");
     for (const method of called) {
       const permission = `core:window:allow-${method.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
       expect(
-        windowCapabilities.permissions,
+        (method === "startResizeDragging" ? linuxWindowCapabilities : windowCapabilities)
+          .permissions,
         `window.${method} is called but not permitted`,
       ).toContain(permission);
     }

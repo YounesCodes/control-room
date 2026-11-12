@@ -4,6 +4,7 @@ mod documentation;
 mod fonts;
 mod header_metrics;
 mod history;
+#[cfg_attr(target_os = "linux", path = "local_shell_linux.rs")]
 mod local_shell;
 mod models;
 mod remote;
@@ -49,9 +50,12 @@ fn dev_window_title(branch: &str) -> String {
 }
 
 pub fn run() {
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build());
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = if updater::in_app_updates() {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    } else {
+        builder
+    };
     #[cfg(feature = "desktop-e2e")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
     builder
@@ -62,11 +66,6 @@ pub fn run() {
         .manage(StreamManager::default())
         .manage(RemoteOperationLimiter::default())
         .setup(|app| {
-            #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
-            if let Some(window) = app.get_webview_window("main") {
-                window.set_title(&dev_window_title(env!("CONTROL_ROOM_BRANCH")))?;
-            }
-
             #[cfg(feature = "desktop-e2e")]
             let data_directory = e2e::data_directory()?;
             #[cfg(feature = "desktop-e2e")]
@@ -83,6 +82,15 @@ pub fn run() {
                 database.save_settings(&settings)?;
             }
             app.manage(database);
+            #[cfg(all(target_os = "linux", not(feature = "desktop-e2e")))]
+            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+                .enable_clipboard_access()
+                .build()?;
+
+            #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_title(&dev_window_title(env!("CONTROL_ROOM_BRANCH")))?;
+            }
             #[cfg(feature = "desktop-e2e")]
             {
                 // Elevated WebView2 ignores environment overrides. Pass the driver's
@@ -109,6 +117,7 @@ pub fn run() {
             e2e::e2e_runtime_status,
             commands::get_environment_info,
             documentation::open_documentation,
+            documentation::open_releases,
             fonts::list_catalog_fonts,
             fonts::preview_catalog_font,
             fonts::install_catalog_font,

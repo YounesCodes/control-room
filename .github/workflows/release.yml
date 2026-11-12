@@ -9,7 +9,9 @@ permissions:
   actions: read
 
 jobs:
-  release:
+  windows:
+    outputs:
+      release-id: ${{ steps.release-notes.outputs.id }}
     runs-on: windows-latest
     # Warm-cache releases take about five minutes. The timeout leaves room for
     # a release whose Rust caches miss and compiles everything from scratch.
@@ -132,24 +134,7 @@ jobs:
           gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
           if ($LASTEXITCODE -ne 0) { throw "Could not upload the checksum" }
 
-      # Keep the updater feed in sync with the published release body. These
-      # are the notes the app shows before and after an update.
-      - name: Put the release notes into the updater feed
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir . --clobber
-          if ($LASTEXITCODE -ne 0) { throw "Could not download the updater feed" }
-          node scripts/generate-release-notes.mjs --sync-feed latest.json
-          if ($LASTEXITCODE -ne 0) { throw "Could not copy the GitHub release body into the updater feed" }
-          gh release upload $env:GITHUB_REF_NAME latest.json --clobber
-          if ($LASTEXITCODE -ne 0) { throw "Could not upload the updater feed" }
-
-      # A release that looks successful but cannot be consumed by the updater is
-      # the failure worth catching here, because it only shows up later as
-      # installed copies quietly never updating.
-      - name: Verify the release can actually be updated from
+      - name: Verify the Windows installer signature
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -160,41 +145,52 @@ jobs:
           node scripts/verify-updater-signature.mjs $installer $signature.FullName
           if ($LASTEXITCODE -ne 0) { throw "The installer signature or its signed version was rejected" }
 
-          $assets = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[].name'
-          if ($LASTEXITCODE -ne 0) { throw "Could not read release assets" }
-          Write-Host "Published assets:`n$assets"
+  linux:
+    needs: windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          sudo apt-get -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::Retries=2 install -y --no-install-recommends             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+          shared-key: tauri-linux-build
+      - run: npm ci
 
-          $required = @(
-            @{ Pattern = '-setup\.exe$';        Name = "NSIS installer" },
-            @{ Pattern = '-setup\.exe\.sig$';   Name = "updater signature" },
-            @{ Pattern = '-setup\.exe\.sha256$';Name = "SHA-256 checksum" },
-            @{ Pattern = '^latest\.json$';      Name = "updater feed (latest.json)" }
-          )
-          $missing = $required | Where-Object { -not ($assets -match $_.Pattern) } | ForEach-Object { $_.Name }
-          if ($missing) {
-            throw "The release is missing: $($missing -join ', ')"
-          }
+      # Run after Windows so the action merges Linux into the existing feed.
+      - name: Attach Linux packages and the signed AppImage update
+        uses: tauri-apps/tauri-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.windows.outputs.release-id }}
+          generateReleaseNotes: false
+          args: --config src-tauri/tauri.release.conf.json
 
-          # The feed must name this tag's version, or installed copies would be
-          # offered something other than what was just built.
-          $expected = $env:GITHUB_REF_NAME.TrimStart("v")
-          gh release download $env:GITHUB_REF_NAME --pattern latest.json --dir verified-feed --clobber
-          if ($LASTEXITCODE -ne 0) { throw "Could not verify the uploaded updater feed" }
-          $feed = (Get-Content -LiteralPath verified-feed/latest.json -Raw | ConvertFrom-Json)
-          if ($feed.version -ne $expected) {
-            throw "latest.json announces $($feed.version) but this tag is $expected"
-          }
-          node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json
-          if ($LASTEXITCODE -ne 0) { throw "Uploaded updater notes do not match the GitHub release body" }
-          Write-Host "latest.json announces $($feed.version) with $($feed.platforms.PSObject.Properties.Name -join ', ')"
-          Write-Host "notes: $($feed.notes.Length) characters"
-
-      - name: Publish verified release
-        shell: pwsh
+      - name: Verify and publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit $env:GITHUB_REF_NAME --draft=false
-          if ($LASTEXITCODE -ne 0) { throw "Could not publish the verified release" }
+          node scripts/verify-release-assets.mjs
+          node scripts/generate-release-notes.mjs --sync-feed latest.json
+          gh release upload "$GITHUB_REF_NAME" latest.json --clobber
+          gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir verified-feed
           node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json
-          if ($LASTEXITCODE -ne 0) { throw "Published release body and updater notes are out of sync" }
+          cmp latest.json verified-feed/latest.json
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+          node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json

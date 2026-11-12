@@ -528,8 +528,7 @@ fn run_ssh(
     remote_command: &str,
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
-    let ssh_path =
-        detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
+    let ssh_path = detect_ssh_path().ok_or(crate::ssh::MISSING_SSH)?;
     let mut arguments = connection_arguments(connection, false);
     arguments.push(remote_command.into());
     let mut command = background_command(ssh_path);
@@ -1809,8 +1808,7 @@ impl StreamManager {
         elevation: Elevation,
         output: Channel<Response>,
     ) -> Result<StreamStarted, String> {
-        let ssh_path =
-            detect_ssh_path().ok_or_else(|| "Windows OpenSSH client was not found".to_string())?;
+        let ssh_path = detect_ssh_path().ok_or(crate::ssh::MISSING_SSH)?;
         let mut arguments = connection_arguments(connection, false);
         arguments.push(elevated_command(&command, &elevation));
         let mut child = background_command(ssh_path)

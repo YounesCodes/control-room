@@ -365,6 +365,7 @@ name = "control-room"
 version = "0.9.5"
 dependencies = [
  "chrono",
+ "libc",
  "parking_lot",
  "portable-pty",
  "regex",
