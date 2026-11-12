@@ -2015,7 +2015,6 @@ export function App() {
           type="button"
           onClick={() => void closeWorkspace(workspace.id)}
           aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
-          title={`Close terminal: ${duplicateLabel(workspace)}`}
         >
           <X size={14} />
         </button>
@@ -2429,11 +2428,7 @@ export function App() {
                 aria-haspopup="dialog"
                 aria-label="New terminal"
                 aria-expanded={newTerminalMenuOpen}
-                title={
-                  splitAvailable
-                    ? "Open a terminal in a new tab or split this view"
-                    : "Open a terminal for a Saved Connection or a local shell"
-                }
+                title={splitAvailable ? "New terminal or split" : "New terminal"}
               >
                 <Plus size={16} />
                 {!workspaces.length && <span>New terminal</span>}

@@ -588,7 +588,6 @@ export function HistoryPane({
               type="button"
               onClick={toggleMoreMenu}
               aria-label="More actions"
-              title="More actions"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -734,7 +733,6 @@ export function HistoryPane({
               type="button"
               onClick={() => setSearch("")}
               aria-label="Clear search"
-              title="Clear search"
             >
               <X size={14} />
             </button>

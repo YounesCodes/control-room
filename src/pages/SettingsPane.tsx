@@ -372,7 +372,6 @@ export function SettingsPane({
             disabled={fontBusy || saving}
             onClick={() => onClose()}
             aria-label="Close Settings"
-            title="Close Settings"
           >
             <ArrowLeft size={17} />
           </button>

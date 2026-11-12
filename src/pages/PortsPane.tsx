@@ -549,7 +549,6 @@ export function PortsPane({
                       type="button"
                       className="icon-button"
                       aria-label="Clear search"
-                      title="Clear search"
                       disabled={!search}
                       onClick={() => {
                         setSearch("");
