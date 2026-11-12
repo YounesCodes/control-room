@@ -1486,10 +1486,12 @@ code,
   text-align: center;
 }
 
+/* Same insets as the filter row below: the title starts on the search
+   field's edge, and Reset layout sits in the groups-and-tags button's column. */
 .sidebar-top-heading {
   min-height: 42px;
   flex: none;
-  padding: 0 18px;
+  padding: 0 10px 0 14px;
 }
 
 .sidebar-top-heading > * {
@@ -8705,9 +8707,9 @@ details[open] > .inspector-disclosure-body {
 }
 
 .sidebar-top-heading .layout-reset {
-  width: 26px;
-  height: 26px;
-  margin-left: 8px;
+  width: 32px;
+  height: 32px;
+  margin-left: 5px;
   pointer-events: auto;
 }
 
