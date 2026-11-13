@@ -232,6 +232,15 @@ Production macOS WKWebViews additionally need an accessibility adapter; the debu
 embedded driver cannot stand in for a published application. Installed macOS
 lifecycle automation remains incomplete. ARM macOS is outside this lab.
 
+To check Linux clean uninstall/reinstall before a previous published .deb exists,
+run `node scripts/test-linux-install-clean.mjs --candidate /path/to/branch.deb
+--restore /path/to/original.deb --version 0.9.5` on the private X11 display. The
+restore package must contain the exact currently installed executable. The test
+uses private XDG data/config/cache directories, seeds real data through the app,
+uninstalls the candidate, removes its data, and checks clean reinstall defaults.
+It restores the original package and verifies its binary hash even after failure.
+This is clean-install coverage and does not claim a published-release upgrade.
+
 Successful runs remove their fixture and user data. A failed run preserves its
 owned temporary directory and reports the data path for diagnosis; it refuses to
 overwrite an existing user database on the next run. After inspecting a failure,
