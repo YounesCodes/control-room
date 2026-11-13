@@ -242,6 +242,13 @@ export async function selectTerminalWord(word: string) {
 export function windowsScale(percent?: number) {
   return Number(powershell("scale", percent ? String(percent) : ""));
 }
+export function windowsResolution(size?: { width: number; height: number }) {
+  return JSON.parse(
+    size
+      ? powershell("resolution-set", `${size.width}x${size.height}`)
+      : powershell("resolution-read"),
+  ) as { width: number; height: number };
+}
 
 let italianSelected = false;
 let macSourceTool: string | undefined;

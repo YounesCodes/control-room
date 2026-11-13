@@ -1,12 +1,30 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { ipc, runtime } from "./helpers";
-import { focusNativeApp, openNativeShell, typeNativeCommand, windowsScale } from "./native-input";
+import {
+  focusNativeApp,
+  openNativeShell,
+  typeNativeCommand,
+  windowsResolution,
+  windowsScale,
+} from "./native-input";
 
 // OS display scaling is Windows-only. This never substitutes CSS zoom for DPI.
 const windowsCase = process.platform === "win32" ? it : it.skip;
 describe("Windows native display scale and window restore", function () {
   this.timeout(180000);
+  let originalResolution: { width: number; height: number } | undefined;
+  before(() => {
+    if (process.platform !== "win32") return;
+    originalResolution = windowsResolution();
+    // Small VM modes hide the 150% option in Windows Display Settings.
+    // This is a tested session-only mode change, without a registry update.
+    if (originalResolution.width < 1920 || originalResolution.height < 1080)
+      windowsResolution({ width: 1920, height: 1080 });
+  });
+  after(() => {
+    if (originalResolution) windowsResolution(originalResolution);
+  });
   for (const scale of [125, 150])
     windowsCase(
       `restores native geometry and keeps its session at ${scale}% OS scale`,
