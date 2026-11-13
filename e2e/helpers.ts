@@ -213,7 +213,7 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   const dialog = $(".modal-backdrop [role=dialog]");
   if (await dialog.isExisting()) {
     await expect(dialog.$("h2")).toHaveText(`Connect to ${name}`);
-    const fallback = dialog.$("button=Open default SSH shell");
+    const fallback = dialog.$(".//button[normalize-space()='Open default SSH shell' or normalize-space()='Connect as Linux host']");
     await fallback.waitForDisplayed({ timeout: 30_000 });
     await fallback.click();
     await dialog.waitForExist({ reverse: true });
@@ -367,7 +367,9 @@ export async function scratchpadNote() {
 
 /** Splitting starts from New terminal: open it and choose a split mode card. */
 export async function openSplitMenu(direction: "vertically" | "horizontally" = "vertically") {
+  await browser.waitUntil(() => browser.execute(() => !document.documentElement.dataset.focusTransition));
   await $("aria/New terminal").click();
+  await $(".new-terminal-menu").waitForDisplayed();
   await $(".new-terminal-menu")
     .$(`button*=${direction === "vertically" ? "Split right" : "Split down"}`)
     .click();
