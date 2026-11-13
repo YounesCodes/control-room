@@ -64,8 +64,7 @@ int main(int argc, char **argv) {
     if (owner == pid && layer == 0) count++;
   }
   if (list) CFRelease(list);
-  printf("%d
-", count);
+  printf("%d\n", count);
   return 0;
 }
 C
