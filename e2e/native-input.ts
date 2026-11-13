@@ -6,6 +6,22 @@ import { ipc, runtime, terminalContains } from "./helpers";
 
 const mac = process.platform === "darwin";
 const windows = process.platform === "win32";
+function requireUnlockedMacDesktop() {
+  if (!mac) return;
+  const locked = execFileSync(
+    "/usr/bin/swift",
+    [
+      "-e",
+      'import CoreGraphics; let session = CGSessionCopyCurrentDictionary() as? [String: Any]; print((session?["CGSSessionScreenIsLocked"] as? Bool) == true ? "locked" : "unlocked")',
+    ],
+    { encoding: "utf8", timeout: 30000 },
+  ).trim();
+  if (locked !== "unlocked") {
+    throw new Error(
+      "Native macOS input requires an unlocked lab desktop. CGSession reports the screen is locked; the fixture must provide its configured logged-in desktop before testing.",
+    );
+  }
+}
 function powershell(action: string, value = "", extra: string[] = []) {
   return execFileSync(
     "powershell.exe",
@@ -139,6 +155,7 @@ export async function nativeKey(shortcut: string) {
     );
 }
 export async function focusNativeApp() {
+  requireUnlockedMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
   else if (mac)
