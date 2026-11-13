@@ -38,15 +38,6 @@ const executable = windows ? "control-room.exe" : "control-room.AppImage";
 const extension = windows ? ".exe" : ".AppImage";
 const bundleType = windows ? "nsis" : "appimage";
 if (process.argv.includes("--cleanup")) {
-  assert.ok(
-    !existsSync(data) || existsSync(join(data, ".updater-lifecycle-fixture")),
-    "Refusing cleanup of unmarked updater data",
-  );
-  if (windows) await cleanupRedirectedFixture();
-  if (!existsSync(join(data, ".updater-lifecycle-fixture"))) {
-    console.log("No marked updater installation remains");
-    process.exit(0);
-  }
   const owned = resolve(readFileSync(join(data, ".updater-lifecycle-fixture"), "utf8"));
   assert.equal(dirname(owned), resolve(tmpdir()));
   assert.match(owned.split(/[\\/]/).at(-1), /^control-room-updater-lifecycle-[A-Za-z0-9]+$/);
@@ -164,7 +155,10 @@ try {
               dangerousInsecureTransportProtocol: true,
               // The fixture installs outside the ordinary application folder.
               // Keep the actual updater installer in that owned directory too.
-              windows: { installMode: "quiet", installerArgs: [`/D=${installRoot}`] },
+              windows: {
+                ...originalConfig.plugins.updater.windows,
+                installerArgs: [`/D=${installRoot}`],
+              },
             },
           },
         },
@@ -290,6 +284,8 @@ try {
       await session.$("button=Try again").click();
       await session.$("button=Restart to update").waitForDisplayed({ timeout: 60000 });
       await session.$("button=Restart to update").click();
+      const originalProcesses = ownedProcesses().map((process) => process.Id);
+      assert.ok(originalProcesses.length, "The original installed application must be running");
       await session.$("button=Restart and update").click();
       // Keep the driver alive until installation and automatic launch finish.
       // Deleting the old session immediately can close the app before its
@@ -300,7 +296,10 @@ try {
         120000,
       );
       await until(
-        () => ownedProcesses().some((process) => process.MainWindowHandle !== 0),
+        () =>
+          ownedProcesses().some(
+            (process) => !originalProcesses.includes(process.Id) && process.MainWindowHandle !== 0,
+          ),
         "Installer did not automatically launch a window for the updated application",
         60000,
       );
@@ -365,58 +364,8 @@ function hash(file) {
 async function uninstallNsis(directory) {
   const uninstallers = readdirSync(directory).filter((name) => /^uninstall.*\.exe$/i.test(name));
   assert.equal(uninstallers.length, 1);
-  // NSIS's final _?= parameter consumes the unquoted remainder, including spaces.
-  await run(join(directory, uninstallers[0]), ["/S", `_?=${directory}`], {
-    windowsVerbatimArguments: true,
-  });
+  await run(join(directory, uninstallers[0]), ["/S", `_?=${directory}`]);
   assert.ok(!existsSync(join(directory, executable)), "Owned NSIS executable was not removed");
-}
-async function cleanupRedirectedFixture() {
-  for (const parent of [process.env.LOCALAPPDATA, join(process.env.LOCALAPPDATA, "Programs")]) {
-    for (const name of ["Control Room Updater Fixture", "Control Room", "control-room"]) {
-      const destination = join(parent, name);
-      console.log(`Auditing earlier fixture path: ${destination}`);
-      await cleanupRedirectedPath(destination);
-    }
-  }
-}
-async function cleanupRedirectedPath(destination) {
-  const file = join(destination, executable);
-  if (!existsSync(file)) return false;
-  const bytes = readFileSync(file);
-  let receipt;
-  for (const entry of readdirSync(tmpdir(), { withFileTypes: true })) {
-    if (!entry.isDirectory() || !/^control-room-updater-lifecycle-[A-Za-z0-9]+$/.test(entry.name))
-      continue;
-    const owned = join(tmpdir(), entry.name);
-    const config = join(owned, "source/src-tauri/tauri.conf.json");
-    if (!existsSync(config)) continue;
-    const fixture = JSON.parse(readFileSync(config, "utf8"));
-    const key = fixture.plugins?.updater?.pubkey;
-    if (
-      fixture.identifier === identifier &&
-      fixture.productName === "Control Room Updater Fixture" &&
-      typeof key === "string" &&
-      Buffer.from(key, "base64").toString().includes("disposable updater lifecycle key") &&
-      bytes.includes(Buffer.from(key))
-    ) {
-      receipt = owned;
-      break;
-    }
-  }
-  if (!receipt) {
-    console.log(`Preserved installation without a compiled disposable-key receipt: ${destination}`);
-    return false;
-  }
-  await stopOwnedApplication(file);
-  await uninstallNsis(destination);
-  const remaining = readdirSync(destination, { withFileTypes: true });
-  if (remaining.every((entry) => entry.isFile() && /^uninstall.*\.exe$/i.test(entry.name)))
-    rmSync(destination, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
-  console.log(
-    `Removed redirected updater installation matched to its disposable key in ${receipt}`,
-  );
-  return true;
 }
 function run(command, args, options = {}) {
   return new Promise((done, reject) => {
