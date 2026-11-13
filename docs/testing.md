@@ -171,6 +171,55 @@ Run focused tests while implementing changes. Required PR checks run the full fr
 
 This fixture proves behavior against this one Ubuntu VM at the time it runs. It cannot prove that every Linux distribution, permission state, network failure, or production desktop environment behaves the same way. Existing deterministic tests cover those branches; add a disposable fixture when a new host-specific behavior needs live proof.
 
+## Native input and keyboard layouts
+
+`native-clipboard.spec.ts` reads and writes the real OS clipboard. It double-clicks
+terminal output with the OS pointer, copies with the platform shortcut, and checks
+the actual clipboard contents. A raw Node PTY collector verifies multiline Unicode
+and the exact bracketed-paste delimiters. Separate raw-input cases verify shell
+Ctrl+C and Ctrl+W. The clipboard is restored after each case.
+
+`native-shortcuts.spec.ts` sends native keys for the command palette, workspace
+reordering, restart, terminal search and close confirmation, Settings categories,
+and Settings tabs. It also checks that arrows in a text field still edit the
+caret. `native-inspection-shortcuts.live.ts` covers Logs search, returning to
+Terminal, Systemd inventory and dependency navigation, Ports and Docker graph
+navigation, refocusing, and Escape dismissal against a real SSH host. Select that
+file explicitly with `--spec` and configure `CONTROL_ROOM_TEST_HOST`,
+`CONTROL_ROOM_TEST_USER`, and optionally `CONTROL_ROOM_TEST_PORT`. Missing access,
+journald, Docker, or usable graph data fails the fixture instead of skipping it.
+History integration stays disabled for this account. Debug `desktop-e2e` builds
+accept `CONTROL_ROOM_TEST_SSH_CONFIG` for an isolated pinned SSH configuration;
+ordinary application builds ignore it.
+
+`italian-keyboard.spec.ts` selects an actual Italian input source and restores it
+in `finally`. Linux uses XKB with a dead acute followed by e; macOS discovers the
+Italian source's dead-key mapping through Carbon. Windows uses the standard
+Italian layout's direct è/é keys; Windows dead-key composition is not covered.
+The assertions check both a text field and the UTF-8 bytes received by the PTY.
+Linux requires `xdotool`, `xclip`, and the XKB utilities on the private Xvfb
+display. macOS requires the command-line tools plus Accessibility and Automation
+permission for `osascript` to control System Events. Missing permission fails the
+test and must be reported as unvalidated, not a successful native-input check.
+
+`windows-scaling.spec.ts` changes the real Windows Display Scale control through
+UI Automation to 125% and 150%, verifies the WebView's devicePixelRatio, and checks
+maximize/restore geometry and a live shell. It restores the original OS scale in
+`finally`. Its two cases skip on Linux/macOS because they exercise Windows display
+settings. Run them only on a disposable desktop with no concurrent test run.
+
+The native suites use Cmd on macOS and Ctrl elsewhere for application shortcuts;
+shell Ctrl+C and Ctrl+W always retain Ctrl. macOS execution depends on the native
+support branch. Compact workspace and focus-motion specs have no blanket macOS
+skip. macOS minimum-width checks start at its native 960-pixel minimum and use
+fullscreen/restore in place of the Windows maximize control. The lab currently
+cannot validate these cases: its automated window reports a hidden document, and
+System Events automation is not permitted. ARM macOS is not in the lab.
+
+Linux lab validation: four clipboard/control-key cases, two Italian-layout cases,
+and four application-shortcut cases passed on the Linux integration build. These
+are native X11/WebKit results; the existing Chromium fixtures do not replace them.
+
 ## Feature-to-test matrix
 
 Browser fixtures prove user interactions against controlled results; they do not prove SSH, SQLite, or Windows process behavior. Native and live columns identify where those boundaries are exercised. Component and Rust tests cover branches that are difficult to trigger safely in a live journey.

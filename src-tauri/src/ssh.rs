@@ -125,7 +125,7 @@ pub fn ssh_config_path() -> String {
 
 pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec<String> {
     let mut arguments = Vec::new();
-    #[cfg(test)]
+    #[cfg(any(test, feature = "desktop-e2e"))]
     if let Ok(config) = env::var("CONTROL_ROOM_TEST_SSH_CONFIG")
         && !config.is_empty()
     {
