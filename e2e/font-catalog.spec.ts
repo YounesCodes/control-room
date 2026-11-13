@@ -1,3 +1,4 @@
+import { savedSettings } from "./helpers";
 import { homedir } from "node:os";
 import { isMac, isLinux } from "./platform";
 import "./isolation";
@@ -7,10 +8,10 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 // Explicit local check only. Normal desktop tests need no public font service.
-const liveFonts = process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : describe.skip;
+const liveFonts = isLinux || process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : describe.skip;
 
 liveFonts("public font catalog in the native WebView", () => {
-  it("renders a downloaded preview without installing or changing the current font", async () => {
+  it("renders a font preview without installing or changing the saved font", async () => {
     const localData = process.env.LOCALAPPDATA;
     if (!isMac && !isLinux && !localData)
       throw new Error("LOCALAPPDATA is required to inspect user-installed fonts.");
@@ -29,6 +30,23 @@ liveFonts("public font catalog in the native WebView", () => {
     const before = snapshot();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
+    if (isLinux) {
+      // Linux offers installed desktop fonts rather than the online font catalog.
+      const settings = await savedSettings();
+      const current = $('input[aria-describedby="linux-font-help"]');
+      await current.setValue("monospace");
+      await browser.waitUntil(() =>
+        browser.execute(
+          () =>
+            document.querySelector<HTMLElement>(".ansi-preview")?.style.fontFamily === "monospace",
+        ),
+      );
+      expect((await savedSettings()).terminalFontFamily).toBe(settings.terminalFontFamily);
+      expect(snapshot()).toEqual(before);
+      await $("aria/Close Settings").click();
+      await $("button=Discard").click();
+      return;
+    }
     const current = $("[role=combobox][aria-controls=font-suggestions]");
     const original = await current.getValue();
     await current.click();

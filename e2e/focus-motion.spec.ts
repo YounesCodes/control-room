@@ -81,7 +81,7 @@ describe("Focus Mode live layout in the native WebView", () => {
       browser.execute(() => !document.documentElement.dataset.focusTransition),
     );
     await openSplitMenu();
-    await $(`.new-terminal-menu").$("aria/New local terminal: ${localShellLabel}`).click();
+    await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     const splitSessions = (await runtime()).sessionIds;
     await browser.execute(() => {

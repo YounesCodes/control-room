@@ -172,6 +172,8 @@ describe("Compact native windows and live terminal arrangements", () => {
     await terminalCommand("echo ARRANGEMENT_INPUT", "ARRANGEMENT_INPUT");
     await terminalContains("ARRANGEMENT_SCROLLBACK");
     await restartApp();
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === sessions.length);
+    await terminalCommand("echo RESTORED_ARRANGEMENT_INPUT", "RESTORED_ARRANGEMENT_INPUT");
     expect((await saved()).terminalGroups![0].layout).toEqual(layout);
   });
 });

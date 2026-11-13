@@ -18,11 +18,11 @@ describe("Shell-reported terminal titles", () => {
       `node -e "${report}process.stdin.once('data',function(){process.stdout.write(String.fromCharCode(27)+']133;D;0'+String.fromCharCode(7));process.exit(0)})" ${isWindows ? "&" : ";"} echo TITLE_FINISHED`,
     );
     await browser.keys("Enter");
-    await expect(tab).toHaveText(`python · ${localShellLabel}`);
+    await expect(tab.$(".session-tab-label")).toHaveText(`python · ${localShellLabel}`);
     await expect(tab).toHaveAttribute("title", `python · ${localShellLabel}`);
     await browser.keys("Enter");
     await terminalContains("TITLE_FINISHED");
-    await expect(tab).toHaveText(localShellLabel);
+    await expect(tab.$(".session-tab-label")).toHaveText(localShellLabel);
     await tab.moveTo();
     await $(".session-tab-wrap.active .session-tab-rename").click();
     await $("[role=dialog] input").setValue("Build");
@@ -33,7 +33,7 @@ describe("Shell-reported terminal titles", () => {
         : `printf '\\033]0;npm --token private-title-argument\\007'; echo MANUAL_TITLE_OK`,
       "MANUAL_TITLE_OK",
     );
-    await expect(tab).toHaveText("Build");
+    await expect(tab.$(".session-tab-label")).toHaveText("Build");
     expect((await runtime()).sessionIds).toEqual(sessions);
   });
 });
