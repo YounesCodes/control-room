@@ -499,7 +499,29 @@ fn local_disk_io() -> Option<(f64, f64)> {
     Some((rates[0], rates[1]))
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
+    if metrics.is_empty() {
+        return Ok(empty_sample());
+    }
+    // The same fixed, read-only probes work against Linux procfs and sysfs
+    // locally. Use the system tools and the shared parser without an SSH hop.
+    let output = crate::ssh::background_command("/bin/sh")
+        .args(["-c", &remote_command(metrics)])
+        .env("PATH", "/usr/bin:/bin")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|error| format!("Could not read local host metrics: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Local host metrics exited with {}", output.status));
+    }
+    Ok(parse_remote(
+        &String::from_utf8_lossy(&output.stdout),
+        metrics,
+    ))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
     Err("Local host metrics require Windows".into())
 }
@@ -507,6 +529,17 @@ pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn reads_selected_local_linux_counters() {
+        let sample =
+            collect_local(&[HeaderMetric::Cpu, HeaderMetric::Ram, HeaderMetric::Uptime]).unwrap();
+        assert!(sample.cpu_percent.is_some());
+        assert!(sample.memory_total_kib.is_some_and(|total| total > 0));
+        assert!(sample.uptime_seconds.is_some());
+        assert!(sample.disk_total_kib.is_none());
+    }
+
     #[test]
     fn disk_io_uses_elapsed_host_time_and_whole_device_sector_deltas() {
         let text = "io_time_1=100\nio_disk_1=sda 100 200\nio_disk_1=nvme0n1 1000 500\nio_time_2=102\nio_disk_2=nvme0n1 1010 540\nio_disk_2=sda 110 220";

@@ -3,7 +3,7 @@ title: Security
 description: What host reads can do and what the app saves.
 ---
 
-Control Room uses your Windows OpenSSH client. Commands you type in the terminal run with your SSH account's permissions. The inspection views run separate, limited reads for the information they show.
+Control Room uses your system OpenSSH client. Commands you type in the terminal run with your SSH account's permissions. The inspection views run separate, limited reads for the information they show.
 
 ## Host inspection
 
