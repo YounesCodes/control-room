@@ -160,7 +160,10 @@ export async function focusNativeApp() {
       .split("\n")[0];
     execFileSync("xdotool", ["windowactivate", "--sync", id], { timeout: 5000 });
   }
-  await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
+  // On Windows the WebView child can own focus while the Tauri window reports
+  // false. The helper verifies the OS foreground root instead.
+  if (!windows)
+    await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
 }
 export async function openNativeShell() {
   const catalog = await ipc<{ profiles: { id: string; label: string; elevated: boolean }[] }>(

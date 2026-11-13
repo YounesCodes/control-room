@@ -14,6 +14,8 @@ using System.Runtime.InteropServices;
 public static class ControlRoomNativeInput {
   [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point point);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
@@ -44,7 +46,17 @@ switch ($Action) {
   'clipboard-read' { [Console]::Write([Windows.Forms.Clipboard]::GetText()) }
   'clipboard-write' { if ($Value) { [Windows.Forms.Clipboard]::SetText([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Value))) } else { [Windows.Forms.Clipboard]::Clear() } }
   'key' { [Windows.Forms.SendKeys]::SendWait($Value) }
-  'focus' { $application = Get-Process -Id ([int]$Value); if (![ControlRoomNativeInput]::SetForegroundWindow($application.MainWindowHandle)) { throw 'Could not focus the native application' } }
+  'focus' {
+    $application = Get-Process -Id ([int]$Value)
+    if (![ControlRoomNativeInput]::SetForegroundWindow($application.MainWindowHandle)) { throw 'Could not focus the native application' }
+    $deadline = [DateTime]::UtcNow.AddSeconds(3)
+    do {
+      $foreground = [ControlRoomNativeInput]::GetAncestor([ControlRoomNativeInput]::GetForegroundWindow(), 2)
+      if ($foreground -eq $application.MainWindowHandle) { break }
+      Start-Sleep -Milliseconds 20
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($foreground -ne $application.MainWindowHandle) { throw 'The OS foreground window does not belong to the native application' }
+  }
   'double-click' {
     [void][ControlRoomNativeInput]::SetThreadDpiAwarenessContext([IntPtr](-4))
     $application = Get-Process -Id ([int]$Value)
