@@ -67,13 +67,15 @@ function powershell(action: string, value = "", extra: string[] = []) {
     },
   );
 }
+// Without a UTF-8 locale, as in an SSH session, pbcopy and pbpaste treat text as MacRoman.
+const clipboardEnv = mac ? { ...process.env, LC_CTYPE: "UTF-8" } : process.env;
 export function readClipboard() {
   if (windows) return powershell("clipboard-read");
   try {
     return execFileSync(
       mac ? "/usr/bin/pbpaste" : "xclip",
       mac ? [] : ["-selection", "clipboard", "-o"],
-      { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] },
+      { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"], env: clipboardEnv },
     );
   } catch (error) {
     if (!mac && /target STRING not available/.test(String((error as { stderr?: unknown }).stderr)))
@@ -91,6 +93,7 @@ export function writeClipboard(text: string) {
     encoding: "utf8",
     stdio: ["pipe", "ignore", "inherit"],
     timeout: 5000,
+    env: clipboardEnv,
   });
 }
 export async function nativeKey(shortcut: string) {
