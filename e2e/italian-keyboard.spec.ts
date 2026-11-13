@@ -26,14 +26,19 @@ describe("Italian native keyboard layout", () => {
       await nativeKey("escape");
     },
   );
-  it("delivers Italian accents and composed text to the real PTY", async () => {
-    await openNativeShell();
-    await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue("echo ITALIAN_");
-    await withItalianLayout(async () => {
-      typeItalianAccents();
-      await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue("_OK");
-      await nativeKey("enter");
-      await terminalContains("ITALIAN_èé_OK");
-    });
-  });
+  it(
+    process.platform === "win32"
+      ? "delivers standard Italian accents to the real PTY"
+      : "delivers Italian accents and composed text to the real PTY",
+    async () => {
+      await openNativeShell();
+      await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue("echo ITALIAN_");
+      await withItalianLayout(async () => {
+        typeItalianAccents();
+        await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue("_OK");
+        await nativeKey("enter");
+        await terminalContains("ITALIAN_èé_OK");
+      });
+    },
+  );
 });

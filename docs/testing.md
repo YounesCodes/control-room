@@ -188,7 +188,8 @@ ordinary application builds ignore it.
 `italian-keyboard.spec.ts` selects an actual Italian input source and restores it
 in `finally`. Linux uses XKB with a dead acute followed by e; macOS discovers the
 Italian source's dead-key mapping through Carbon. Windows uses the standard
-Italian layout's direct è/é keys; Windows dead-key composition is not covered.
+[Italian layout's direct è/é keys](https://learn.microsoft.com/en-us/globalization/keyboards/kbdit.html).
+That layout defines no dead-key states, so its cases exercise the direct accent keys.
 The assertions check both a text field and the UTF-8 bytes received by the PTY.
 Linux requires `xdotool`, `xclip`, and the XKB utilities on the private Xvfb
 display. macOS requires the command-line tools plus Accessibility and Automation
