@@ -159,11 +159,13 @@ describe("Compact native windows and live terminal arrangements", () => {
     }
     await browser.saveScreenshot("test-results/desktop/terminal-arrangement-native.png");
     // Focus that pane's terminal body; its corner handle now opens Arrange on click.
-    const commandPromptPane = await browser.execute(() =>
-      document
-        .querySelector(`[aria-label='Arrange ${localShellLabel}']`)!
-        .closest<HTMLElement>(".terminal-pane-heading")!
-        .dataset.terminalMotionId!.replace(/-heading$/, ""),
+    const commandPromptPane = await browser.execute(
+      (shellLabel) =>
+        document
+          .querySelector(`[aria-label='Arrange ${shellLabel}']`)!
+          .closest<HTMLElement>(".terminal-pane-heading")!
+          .dataset.terminalMotionId!.replace(/-heading$/, ""),
+      localShellLabel,
     );
     await $(`[data-workspace-id='${commandPromptPane}'] .xterm`).click();
     await terminalCommand("echo ARRANGEMENT_INPUT", "ARRANGEMENT_INPUT");
