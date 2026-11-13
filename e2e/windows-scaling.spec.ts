@@ -6,6 +6,7 @@ import {
   openNativeShell,
   typeNativeCommand,
   windowsResolution,
+  windowsDisplayModes,
   windowsScale,
 } from "./native-input";
 
@@ -17,10 +18,6 @@ describe("Windows native display scale and window restore", function () {
   before(() => {
     if (process.platform !== "win32") return;
     originalResolution = windowsResolution();
-    // Small VM modes hide the 150% option in Windows Display Settings.
-    // This is a tested session-only mode change, without a registry update.
-    if (originalResolution.width < 1920 || originalResolution.height < 1080)
-      windowsResolution({ width: 1920, height: 1080 });
   });
   after(() => {
     if (originalResolution) windowsResolution(originalResolution);
@@ -29,6 +26,22 @@ describe("Windows native display scale and window restore", function () {
     windowsCase(
       `restores native geometry and keeps its session at ${scale}% OS scale`,
       async () => {
+        if (
+          scale === 150 &&
+          originalResolution &&
+          (originalResolution.width < 1600 || originalResolution.height < 900)
+        ) {
+          const modes = windowsDisplayModes();
+          const mode = modes
+            .filter((mode) => mode.width >= 1600 && mode.height >= 900)
+            .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+          if (!mode)
+            throw new Error(
+              `The 150% fixture needs a larger native display mode; advertised modes: ${JSON.stringify(modes)}`,
+            );
+          // Use a tested session-only mode, without changing the registry.
+          windowsResolution(mode);
+        }
         await openNativeShell();
         const sessions = (await runtime()).sessionIds;
         const originalScale = windowsScale();

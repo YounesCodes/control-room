@@ -249,6 +249,9 @@ export function windowsResolution(size?: { width: number; height: number }) {
       : powershell("resolution-read"),
   ) as { width: number; height: number };
 }
+export function windowsDisplayModes() {
+  return JSON.parse(powershell("resolution-modes")) as { width: number; height: number }[];
+}
 
 let italianSelected = false;
 let macSourceTool: string | undefined;

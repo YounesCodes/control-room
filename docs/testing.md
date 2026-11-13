@@ -199,9 +199,10 @@ test and must be reported as unvalidated, not a successful native-input check.
 UI Automation to 125% and 150%, verifies the WebView's devicePixelRatio, and checks
 maximize/restore geometry and a live shell. It restores the original OS scale in
 `finally`. Its two cases skip on Linux/macOS because they exercise Windows display
-settings. Small VM display modes hide the 150% option, so the suite temporarily
-uses a supported 1920×1080 mode and restores the original resolution afterward.
-It tests the mode before applying it and does not update the display registry.
+settings. Small VM display modes hide the 150% option, so that case selects the
+largest advertised mode of at least 1600×900 and restores the original resolution
+afterward. It tests the mode before applying it and does not update the display
+registry. A missing suitable mode fails only the 150% fixture; 125% still runs.
 Run it only on a disposable desktop with no concurrent test run.
 
 The native suites use Cmd on macOS and Ctrl elsewhere for application shortcuts;
