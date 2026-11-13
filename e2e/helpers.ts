@@ -380,3 +380,16 @@ export async function openSplitMenu(direction: "vertically" | "horizontally" = "
     .$(`button*=${direction === "vertically" ? "Split right" : "Split down"}`)
     .click();
 }
+
+// WebKitWebDriver returns empty getText for these visible flex tab labels.
+// Keep visibility proof and read the rendered node's text through the DOM property.
+export async function expectNativeText(element: WebdriverIO.Element, text: string) {
+  await expect(element).toBeDisplayed();
+  if (!isLinux) return expect(element).toHaveText(text);
+  await browser.waitUntil(
+    async () => String((await element.getProperty("textContent")) ?? "").trim() === text,
+    {
+      timeoutMsg: `Native label did not become ${text}`,
+    },
+  );
+}

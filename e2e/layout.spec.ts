@@ -3,6 +3,7 @@ import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import {
   addConnection,
+  connectionMenu,
   feature,
   ipc,
   openOfflineConnection,
@@ -151,10 +152,7 @@ describe("Resizable panels in the native app", () => {
     await $("aria/Reset layout").click();
     await browser.waitUntil(async () => Object.keys((await saved()).panelSizes).length === 0);
     for (const name of ["Layout host A", "Layout host B"]) {
-      const menu = $("aria/Open actions for " + name);
-      await menu.moveTo();
-      if (!isMac) await menu.waitForClickable();
-      await menu.click();
+      await connectionMenu(name);
       await $("aria/Delete connection").click();
       await $("button=Delete connection").click();
     }
