@@ -2,7 +2,8 @@
 # Build the release .deb and AppImage and exercise them on a private X11 display:
 # installed-package smoke test, clean uninstall/reinstall, AppImage launch, and
 # the signed AppImage updater. Needs native Linux support (PR #227) and
-# passwordless sudo for apt. The original installed package is restored.
+# passwordless sudo for apt. The package installed before the run is restored;
+# without one, the candidate stays installed.
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 export GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1
@@ -36,8 +37,9 @@ if [[ -x /usr/bin/control-room ]]; then
     fi
   done
   shopt -u nullglob
-  [[ -n $restore ]] || {
-    echo 'No package matches the installed Control Room; set CONTROL_ROOM_RESTORE_DEB' >&2
+  # A disposable lab VM may hold a build no package reproduces. Replace it only on request.
+  [[ -n $restore || ${CONTROL_ROOM_REPLACE_INSTALLED:-0} == 1 ]] || {
+    echo 'No package matches the installed Control Room; set CONTROL_ROOM_RESTORE_DEB or CONTROL_ROOM_REPLACE_INSTALLED=1' >&2
     exit 1
   }
 fi
@@ -48,8 +50,7 @@ appimage=(src-tauri/target/release/bundle/appimage/*_"$version"_amd64.AppImage)
 [[ -f ${deb[0]} && -f ${appimage[0]} ]] || { echo 'Release bundles are missing' >&2; exit 1; }
 cp "${deb[0]}" "$work/candidate.deb"
 if [[ -z $restore ]]; then
-  # A VM without Control Room keeps the candidate installed afterwards.
-  sudo -n apt-get install -y "$work/candidate.deb"
+  sudo -n apt-get install -y --reinstall "$work/candidate.deb"
   restore=$work/candidate.deb
 fi
 
