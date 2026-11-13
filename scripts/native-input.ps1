@@ -138,7 +138,7 @@ switch ($Action) {
           $scales = @($candidates | Where-Object {
             $pattern = $null
             if ($_.TryGetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern, [ref]$pattern)) {
-              $chosen = $pattern.GetCurrentSelection()
+              $chosen = $pattern.Current.GetSelection()
               $chosen.Count -eq 1 -and $chosen[0].Current.Name -match '^\d+%'
             } else { $false }
           })
@@ -152,7 +152,7 @@ switch ($Action) {
       $available = @($combos | ForEach-Object { @{ name=$_.Current.Name; id=$_.Current.AutomationId } }) | ConvertTo-Json -Compress
       throw "The Windows Display Scale control is unavailable to UI Automation; available combos=$available"
     }
-    $selection = $combo.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).GetCurrentSelection()
+    $selection = $combo.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
     $original = [int]([regex]::Match($selection[0].Current.Name, '^\d+').Value)
     if ($Value) {
       $combo.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
