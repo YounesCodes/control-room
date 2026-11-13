@@ -5,7 +5,8 @@ import { focusNativeApp, openNativeShell, typeNativeCommand, windowsScale } from
 
 // OS display scaling is Windows-only. This never substitutes CSS zoom for DPI.
 const windowsCase = process.platform === "win32" ? it : it.skip;
-describe("Windows native display scale and window restore", () => {
+describe("Windows native display scale and window restore", function () {
+  this.timeout(180000);
   for (const scale of [125, 150])
     windowsCase(
       `restores native geometry and keeps its session at ${scale}% OS scale`,
@@ -41,6 +42,12 @@ describe("Windows native display scale and window restore", () => {
         } finally {
           windowsScale(originalScale);
           await focusNativeApp();
+          await browser.waitUntil(
+            async () =>
+              Math.abs((await browser.execute(() => devicePixelRatio)) - originalScale / 100) <
+              0.01,
+            { timeout: 20000, timeoutMsg: "The OS did not restore the original display scale" },
+          );
         }
       },
     );
