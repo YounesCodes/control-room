@@ -6,21 +6,43 @@ import { ipc, runtime, terminalContains } from "./helpers";
 
 const mac = process.platform === "darwin";
 const windows = process.platform === "win32";
-function requireUnlockedMacDesktop() {
-  if (!mac) return;
-  const locked = execFileSync(
-    "/usr/bin/swift",
-    [
-      "-e",
-      'import CoreGraphics; let session = CGSessionCopyCurrentDictionary() as? [String: Any]; print((session?["CGSSessionScreenIsLocked"] as? Bool) == true ? "locked" : "unlocked")',
-    ],
-    { encoding: "utf8", timeout: 30000 },
-  ).trim();
-  if (locked !== "unlocked") {
-    throw new Error(
-      "Native macOS input requires an unlocked lab desktop. CGSession reports the screen is locked; the fixture must provide its configured logged-in desktop before testing.",
+let macTool: string | undefined;
+function macNative(...args: string[]) {
+  if (!macTool) {
+    mkdirSync("test-results/native-input", { recursive: true });
+    macTool = resolve("test-results/native-input/macos-input-source");
+    execFileSync(
+      "clang",
+      [
+        "-Wno-deprecated-declarations",
+        resolve("scripts/macos-input-source.c"),
+        "-framework",
+        "Carbon",
+        "-o",
+        macTool,
+      ],
+      { timeout: 60000 },
     );
   }
+  return execFileSync(macTool, args, { encoding: "utf8", timeout: 10000 }).trim();
+}
+let macDesktopReady = false;
+function requireMacDesktop() {
+  if (!mac || macDesktopReady) return;
+  const desktop = JSON.parse(macNative("desktop")) as {
+    session: boolean;
+    locked: boolean;
+    accessibility: boolean;
+  };
+  if (!desktop.session || desktop.locked)
+    throw new Error(
+      "Native macOS input requires an unlocked lab desktop. The console session is missing or locked; the fixture must provide its configured logged-in desktop before testing.",
+    );
+  if (!desktop.accessibility)
+    throw new Error(
+      "Native macOS input requires Accessibility approval for the process that starts the tests (for SSH runs, sshd-keygen-wrapper) in System Settings > Privacy & Security > Accessibility, plus Automation approval for System Events.",
+    );
+  macDesktopReady = true;
 }
 function powershell(action: string, value = "", extra: string[] = []) {
   return execFileSync(
@@ -155,7 +177,7 @@ export async function nativeKey(shortcut: string) {
     );
 }
 export async function focusNativeApp() {
-  requireUnlockedMacDesktop();
+  requireMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
   else if (mac)
@@ -271,32 +293,13 @@ export function windowsDisplayModes() {
 }
 
 let italianSelected = false;
-let macSourceTool: string | undefined;
 let macItalianKeys:
   | {
       grave: { key: number; shift: boolean; option: boolean };
       acute: { key: number; shift: boolean; option: boolean };
     }
   | undefined;
-function inputSource(...args: string[]) {
-  if (!macSourceTool) {
-    mkdirSync("test-results/native-input", { recursive: true });
-    macSourceTool = resolve("test-results/native-input/macos-input-source");
-    execFileSync(
-      "clang",
-      [
-        "-Wno-deprecated-declarations",
-        resolve("scripts/macos-input-source.c"),
-        "-framework",
-        "Carbon",
-        "-o",
-        macSourceTool,
-      ],
-      { timeout: 30000 },
-    );
-  }
-  return execFileSync(macSourceTool, args, { encoding: "utf8", timeout: 10000 }).trim();
-}
+const inputSource = macNative;
 export async function withItalianLayout(exercise: () => Promise<void>) {
   const pid = String((await runtime()).appPid);
   if (windows) {
