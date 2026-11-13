@@ -116,6 +116,9 @@ function invokeHostOperation<T>(
 
 export const api = {
   openDocumentation: () => invoke<void>("open_documentation"),
+  openReleases: () => invoke<void>("open_releases"),
+  readClipboard: () => invoke<string | null>("read_clipboard"),
+  writeClipboard: (text: string) => invoke<void>("write_clipboard", { text }),
   environment: () => invoke<EnvironmentInfo>("get_environment_info"),
   listConnections: () => invoke<SavedConnection[]>("list_connections"),
   createConnection: (input: SavedConnectionInput) =>

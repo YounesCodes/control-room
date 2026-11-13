@@ -57,7 +57,7 @@ const sections = {
     "sudo permissions root passwordless structured operations",
   ],
   updates: ["app", "Control Room updates", "version automatic check download restart"],
-  ssh: ["app", "SSH environment", "ssh.exe openssh config agent paths diagnostics"],
+  ssh: ["app", "SSH environment", "ssh openssh config agent paths diagnostics"],
 } satisfies Record<string, [Category, string, string]>;
 
 const terminalTabs = [
@@ -209,6 +209,9 @@ export function SettingsPane({
   savedSettings.current = settings;
   const [saving, setSaving] = useState(false);
   const [fontBusy, setFontBusy] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+  const linux = environment?.desktopOs === "linux";
+  const manualUpdates = environment?.inAppUpdates === false;
   const [previewFont, setPreviewFont] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -601,27 +604,44 @@ export function SettingsPane({
               <SettingsSection id="appearance" {...sectionProps}>
                 <div className="terminal-appearance-layout">
                   <div className="terminal-appearance-controls">
-                    <FontCatalogPicker
-                      value={draft.terminalFontFamily}
-                      onChange={(terminalFontFamily) =>
-                        setDraft((current) => ({ ...current, terminalFontFamily }))
-                      }
-                      disabled={saving}
-                      onBusyChange={setFontBusy}
-                      onPreview={setPreviewFont}
-                      onUse={async (family) => {
-                        const updated = {
-                          ...savedSettings.current,
-                          terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
-                        };
-                        await api.saveSettings(updated);
-                        onSaved(updated);
-                        setDraft((current) => ({
-                          ...current,
-                          terminalFontFamily: updated.terminalFontFamily,
-                        }));
-                      }}
-                    />
+                    {linux ? (
+                      <div className="font-family-control">
+                        <label>
+                          <span>Font family</span>
+                          <input
+                            aria-describedby="linux-font-help"
+                            value={draft.terminalFontFamily}
+                            disabled={saving}
+                            onChange={(event) =>
+                              setDraft({ ...draft, terminalFontFamily: event.target.value })
+                            }
+                          />
+                        </label>
+                        <small id="linux-font-help">Enter a font installed on your desktop.</small>
+                      </div>
+                    ) : (
+                      <FontCatalogPicker
+                        value={draft.terminalFontFamily}
+                        onChange={(terminalFontFamily) =>
+                          setDraft((current) => ({ ...current, terminalFontFamily }))
+                        }
+                        disabled={saving}
+                        onBusyChange={setFontBusy}
+                        onPreview={setPreviewFont}
+                        onUse={async (family) => {
+                          const updated = {
+                            ...savedSettings.current,
+                            terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
+                          };
+                          await api.saveSettings(updated);
+                          onSaved(updated);
+                          setDraft((current) => ({
+                            ...current,
+                            terminalFontFamily: updated.terminalFontFamily,
+                          }));
+                        }}
+                      />
+                    )}
                     <label>
                       <span>Font size</span>
                       <input
@@ -841,53 +861,80 @@ export function SettingsPane({
                     <dd>{appVersion ? `v${appVersion}` : "Unknown"}</dd>
                   </div>
                 </dl>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={draft.automaticUpdateChecks}
-                    onChange={(event) =>
-                      setDraft({ ...draft, automaticUpdateChecks: event.target.checked })
-                    }
-                  />{" "}
-                  Automatically check for updates
-                </label>
-                <div className="settings-update-actions">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => void runManualCheck()}
-                    disabled={checking}
-                  >
-                    <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
-                  </button>
-                  {checkResult && (
-                    <p
-                      className={
-                        checkResult.outcome === "failed"
-                          ? "settings-update-status failed"
-                          : "settings-update-status"
-                      }
-                      role="status"
-                    >
-                      {checkResult.outcome === "current" && "You're up to date."}
-                      {checkResult.outcome === "available" &&
-                        `Version ${checkResult.version} is available.`}
-                      {checkResult.outcome === "failed" && (
-                        <>
-                          Could not check for updates.
-                          <span className="settings-update-reason">
-                            {checkResult.failure.message}
-                          </span>
-                        </>
+                {manualUpdates ? (
+                  <>
+                    <small>Install the latest Debian package to update Control Room.</small>
+                    <div className="settings-update-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          setReleaseError(null);
+                          void api
+                            .openReleases()
+                            .catch((error: unknown) => setReleaseError(errorMessage(error)));
+                        }}
+                      >
+                        Open releases
+                      </button>
+                      {releaseError && (
+                        <p className="settings-update-status failed" role="alert">
+                          {releaseError}
+                        </p>
                       )}
-                    </p>
-                  )}
-                </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={draft.automaticUpdateChecks}
+                        onChange={(event) =>
+                          setDraft({ ...draft, automaticUpdateChecks: event.target.checked })
+                        }
+                      />{" "}
+                      Automatically check for updates
+                    </label>
+                    <div className="settings-update-actions">
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => void runManualCheck()}
+                        disabled={checking}
+                      >
+                        <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
+                      </button>
+                      {checkResult && (
+                        <p
+                          className={
+                            checkResult.outcome === "failed"
+                              ? "settings-update-status failed"
+                              : "settings-update-status"
+                          }
+                          role="status"
+                        >
+                          {checkResult.outcome === "current" && "You're up to date."}
+                          {checkResult.outcome === "available" &&
+                            `Version ${checkResult.version} is available.`}
+                          {checkResult.outcome === "failed" && (
+                            <>
+                              Could not check for updates.
+                              <span className="settings-update-reason">
+                                {checkResult.failure.message}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </SettingsSection>
               <SettingsSection id="ssh" {...sectionProps}>
                 <dl className="detail-list">
                   <div>
-                    <dt>ssh.exe</dt>
+                    <dt>{linux ? "ssh" : "ssh.exe"}</dt>
                     <dd className="technical">
                       {environment ? (environment.sshPath ?? "Not detected") : "Checking…"}
                     </dd>

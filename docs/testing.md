@@ -116,6 +116,12 @@ and register a motion trigger and animated target only when that transition can
 run headlessly. The harness lives outside the product entry point; it is not
 included in the packaged app. Vitest browser tests stay independent.
 
+## Linux desktop smoke test
+
+The Ubuntu 24.04 CI job runs Clippy and Rust tests, builds the `.deb` and AppImage, then installs the `.deb` on the runner. WebKitWebDriver and Openbox exercise the installed app in Xvfb with a temporary XDG data directory. The separate hosted SSH job uses the system OpenSSH client and a loopback server to verify a Linux PTY and read-only inspection.
+
+To build on Ubuntu 24.04, install the Tauri development packages (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`, `file`, and build tools), then run `npm ci` and `npm run tauri build`. Use a separate Linux desktop session for interactive verification.
+
 ## Windows desktop E2E
 
 On Windows 11 with WebView2 and the Rust/Tauri build prerequisites, run:
@@ -161,7 +167,7 @@ Run `npm run test:local-gate` explicitly for the ordinary checks, Chromium tests
 
 Run `npm run install:dev-hooks` to install the fast pre-commit check. It checks whitespace and formatting of the staged content, including partially staged files, without rewriting files. The installer backs up the old managed Control Room hooks and removes their duplicate pre-push gate. It refuses to replace unrelated hooks or a custom `core.hooksPath`. The old `install:local-lab-hooks` command now installs the same fast hooks. Hooks remain in this checkout across branch switches.
 
-Run focused tests while implementing changes. Required PR checks run the full frontend, Rust, Chromium, Windows desktop, hosted SSH, and installer checks on GitHub. The release workflow verifies that the tagged commit belongs to main and has a successful main CI run with all those jobs. It builds a draft release, verifies its signature and updater assets, then publishes it. An incomplete or failed validation leaves the release unpublished.
+Run focused tests while implementing changes. Required PR checks run the full frontend, Rust, Chromium, Windows desktop, hosted SSH, and installer checks on GitHub. The release workflow also requires the Linux desktop job. It attaches the Windows and Linux packages to the existing draft, verifies the signed NSIS and AppImage assets against the updater feed, and then publishes it. An incomplete or failed validation leaves the release unpublished.
 
 This fixture proves behavior against this one Ubuntu VM at the time it runs. It cannot prove that every Linux distribution, permission state, network failure, or production desktop environment behaves the same way. Existing deterministic tests cover those branches; add a disposable fixture when a new host-specific behavior needs live proof.
 
