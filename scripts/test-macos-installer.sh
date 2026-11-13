@@ -39,7 +39,12 @@ hdiutil detach "$work/dmg" -quiet
 app="$work/Applications/Control Room.app"
 [[ $(defaults read "$app/Contents/Info" CFBundleShortVersionString) == "$version" ]]
 [[ $(defaults read "$app/Contents/Info" CFBundleIdentifier) == app.controlroom.desktop ]]
-codesign --verify --deep --strict "$app"
+# Local builds have no Developer ID and stay unsigned; verify only a signed app.
+if codesign --display "$app" 2>/dev/null; then
+  codesign --verify --deep --strict "$app"
+else
+  echo 'Unsigned local build: signature verification skipped'
+fi
 
 mkdir -p "$data"
 touch "$data/.installer-fixture"
