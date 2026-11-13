@@ -132,7 +132,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await closeLogs.click();
     await $("button=Stop & close").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
-    await expect($(".session-tab-group-main small")).toHaveText("2");
+    await expectNativeText(await $(".session-tab-group-main small"), "2");
     await expectNativeText(
       await $(".session-pane-tabs .session-tab-wrap.active .session-tab-label"),
       "Build pane",
