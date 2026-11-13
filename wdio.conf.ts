@@ -12,6 +12,10 @@ if (process.platform !== "win32") {
   throw new Error("Control Room desktop E2E tests require Windows.");
 }
 
+// Installed package tests are explicit because they replace a per-user installation.
+const installLifecycle = process.argv.some((argument) =>
+  argument.replaceAll("\\", "/").endsWith("e2e/install-upgrade.spec.ts"),
+);
 const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
@@ -31,7 +35,10 @@ export const config: WebdriverIO.Config = {
     process.env.CONTROL_ROOM_LIVE_DESKTOP === "1"
       ? ["./e2e/live-ssh.spec.ts"]
       : ["./e2e/**/*.spec.ts"],
-  exclude: process.env.CONTROL_ROOM_LIVE_DESKTOP === "1" ? [] : ["./e2e/live-ssh.spec.ts"],
+  exclude: [
+    ...(process.env.CONTROL_ROOM_LIVE_DESKTOP === "1" ? [] : ["./e2e/live-ssh.spec.ts"]),
+    ...(installLifecycle ? [] : ["./e2e/install-upgrade.spec.ts"]),
+  ],
   maxInstances: 1,
   outputDir: resolve("test-results/desktop/driver"),
   services: [

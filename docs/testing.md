@@ -183,3 +183,44 @@ Browser fixtures prove user interactions against controlled results; they do not
 | Updates and accessibility | Real App manual check/download retry/progress; updater fixtures; release-note safety, palette/keyboard, dialog focus, axe, minimum-size layout                                    | Settings and native window journey                                                                                                 | Updater endpoint, signature, installer and restart safeguards; E2E feature rejected in release builds |
 
 Coverage reports support this matrix; there is no arbitrary percentage target. PR checks run unit, Chromium, desktop, and hosted SSH tests. Local Ubuntu and Windows SSH journeys remain explicit.
+
+## Installed package lifecycle
+
+Run `npm run test:install-lifecycle` in a disposable desktop account with no existing
+Control Room installation or app data. The command selects the preceding stable
+published version, downloads its native installer, and builds the branch installer.
+Use `-- --candidate /absolute/path/to/installer` to supply an already-built package.
+`-- --preflight` checks release availability without installing anything.
+
+The fixture creates real SQLite data through registered production IPC commands.
+It creates the local split layout through the UI and exercises real shell input.
+After an installer upgrade it checks connections, groups, tag colors, global,
+connection and local notes, settings, history, and the complete saved layout. It
+checks SQLite integrity and the removal of the retired Baselines table. It then
+runs the native uninstaller, removes only its own data, reinstalls the candidate,
+and checks launch, empty collections and default settings.
+
+The runner also exercises the updater against a loopback `latest.json`. The Rust
+`modified_installer_cannot_reach_installation` test calls download-and-install with
+tampered bytes and requires a signature rejection. On Windows the existing signed
+NSIS fixture verifies the real installer handoff. That updater fixture uses a mock
+Tauri runtime and an isolated payload; it does not replace the running app through
+the updater UI.
+
+For the Windows lab helper, explicitly select `e2e/install-upgrade.spec.ts`. Ordinary
+desktop runs exclude that spec. It closes the debug app before installing packages
+and reuses the matching native WebView2 driver. A standalone Windows invocation can
+set `CONTROL_ROOM_LIFECYCLE_NATIVE_DRIVER` to the matching msedgedriver executable.
+The external installed-app driver does not require the debug WDIO plugin.
+
+The current preceding release, v0.9.4, publishes only a Windows installer. Linux
+and macOS preflight fail with the missing-package reason. Linux requires native
+support from PR #227 and an earlier published .deb before its upgrade can run.
+Production macOS WKWebViews additionally need an accessibility adapter; the debug
+embedded driver cannot stand in for a published application. Installed macOS
+lifecycle automation remains incomplete. ARM macOS is outside this lab.
+
+Successful runs remove their fixture and user data. A failed run preserves its
+owned temporary directory and reports the data path for diagnosis; it refuses to
+overwrite an existing user database on the next run. It does not create or restore
+Proxmox snapshots.
