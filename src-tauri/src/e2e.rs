@@ -193,32 +193,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(target_os = "macos")]
-#[tauri::command]
-pub fn e2e_window_state(
-    window: tauri::Window,
-    activate: bool,
-) -> Result<serde_json::Value, String> {
-    use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send};
-    use objc2_app_kit::NSWindow;
-    let _thread = objc2::MainThreadMarker::new().ok_or("Not main thread")?;
-    let pointer = window.ns_window().map_err(|e| e.to_string())?;
-    // SAFETY: All receivers belong to the running test application's main thread.
-    unsafe {
-        let native = &*pointer.cast::<NSWindow>();
-        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
-        if activate {
-            let _: () = msg_send![app, activateIgnoringOtherApps: true];
-            native.makeKeyAndOrderFront(None);
-            native.orderFrontRegardless();
-        }
-        let active: bool = msg_send![app, isActive];
-        let policy: isize = msg_send![app, activationPolicy];
-        let occlusion: u64 = msg_send![native, occlusionState];
-        Ok(
-            serde_json::json!({"active":active,"policy":policy,"occlusion":occlusion,"key":native.isKeyWindow(),"visible":native.isVisible(),"mini":native.isMiniaturized()}),
-        )
-    }
-}
