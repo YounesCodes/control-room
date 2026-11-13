@@ -25,7 +25,7 @@ function powershell(action: string, value = "", extra: string[] = []) {
     {
       encoding: "utf8",
       windowsHide: true,
-      timeout: 20000,
+      timeout: action === "scale" ? 45000 : 20000,
     },
   );
 }

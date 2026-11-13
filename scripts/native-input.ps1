@@ -156,16 +156,19 @@ switch ($Action) {
     $original = [int]([regex]::Match($selection[0].Current.Name, '^\d+').Value)
     if ($Value) {
       $combo.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
-      $items = $root.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::ListItem))
-      $item = $items | Where-Object { $_.Current.Name -match "^$([regex]::Escape($Value))%" } | Select-Object -First 1
+      $choiceDeadline = [DateTime]::UtcNow.AddSeconds(5)
+      do {
+        $items = $root.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::ListItem))
+        $item = $items | Where-Object { $_.Current.Name -match "^$([regex]::Escape($Value))%" } | Select-Object -First 1
+        if (!$item) { Start-Sleep -Milliseconds 50 }
+      } until ($item -or [DateTime]::UtcNow -gt $choiceDeadline)
       if (!$item) { throw "The display does not offer $Value% scale" }
       $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     }
-    # Close the Settings window we opened, leaving Control Room available.
-    $walker = [Windows.Automation.TreeWalker]::ControlViewWalker
-    $window = $combo
-    while ($window -and $window.Current.ControlType -ne [Windows.Automation.ControlType]::Window) { $window = $walker.GetParent($window) }
-    if ($window) { $window.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern).Close() }
+    # Settings' XAML window does not expose WindowPattern on every build.
+    # CloseMainWindow sends its ordinary WM_CLOSE without killing the process.
+    $settings = Get-Process -Name SystemSettings -ErrorAction Stop | Select-Object -First 1
+    if (!$settings.CloseMainWindow()) { throw 'Could not close the Display Settings window' }
     [Console]::Write($original)
   }
 }
