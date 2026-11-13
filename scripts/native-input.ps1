@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('clipboard-read','clipboard-write','key','focus','double-click','scale','resolution-read','resolution-set','layout-read','layout-load','layout-set','layout-unload','italian-text')][string]$Action,
+  [ValidateSet('clipboard-read','clipboard-write','key','focus','double-click','scale','resolution-read','resolution-modes','resolution-set','layout-read','layout-load','layout-set','layout-unload','italian-text')][string]$Action,
   [string]$Value,
   [int]$X,
   [int]$Y,
@@ -34,6 +34,7 @@ public static class ControlRoomNativeInput {
   }
   public static void SetResolution(uint width, uint height) {
     var mode = Resolution();
+    if (mode.PelsWidth == width && mode.PelsHeight == height) return;
     mode.Fields=0x180000; // DM_PELSWIDTH | DM_PELSHEIGHT
     mode.PelsWidth=width; mode.PelsHeight=height;
     int test=ChangeDisplaySettingsEx(null, ref mode, IntPtr.Zero, 2, IntPtr.Zero); // CDS_TEST
@@ -42,6 +43,16 @@ public static class ControlRoomNativeInput {
     if (applied != 0) throw new InvalidOperationException("Could not apply the session display resolution: " + applied);
     var actual=Resolution();
     if (actual.PelsWidth != width || actual.PelsHeight != height) throw new InvalidOperationException("The requested display resolution was not applied");
+  }
+  public static DisplayMode[] Resolutions() {
+    var modes = new System.Collections.Generic.List<DisplayMode>();
+    var current = Resolution();
+    for (int index=0; ; index++) {
+      var mode = new DisplayMode { Size=(ushort)Marshal.SizeOf(typeof(DisplayMode)) };
+      if (!EnumDisplaySettings(null, index, ref mode)) break;
+      if (mode.BitsPerPel == current.BitsPerPel && (mode.DisplayFlags & 2) == 0 && !modes.Exists(found => found.PelsWidth == mode.PelsWidth && found.PelsHeight == mode.PelsHeight)) modes.Add(mode);
+    }
+    return modes.ToArray();
   }
   [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
@@ -87,6 +98,10 @@ public static class ControlRoomNativeInput {
 }
 '@
 switch ($Action) {
+  'resolution-modes' {
+    $modes = @([ControlRoomNativeInput]::Resolutions() | ForEach-Object { @{ width=$_.PelsWidth; height=$_.PelsHeight } })
+    [Console]::Write((ConvertTo-Json -InputObject $modes -Compress))
+  }
   { $_ -in 'resolution-read','resolution-set' } {
     if ($Action -eq 'resolution-set') {
       if ($Value -notmatch '^(\d+)x(\d+)$') { throw 'Expected a physical display resolution' }
