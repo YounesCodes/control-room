@@ -38,9 +38,13 @@ const executable = windows ? "control-room.exe" : "control-room.AppImage";
 const extension = windows ? ".exe" : ".AppImage";
 const bundleType = windows ? "nsis" : "appimage";
 if (process.argv.includes("--cleanup")) {
-  const redirected = windows && (await cleanupRedirectedFixture());
+  assert.ok(
+    !existsSync(data) || existsSync(join(data, ".updater-lifecycle-fixture")),
+    "Refusing cleanup of unmarked updater data",
+  );
+  if (windows) await cleanupRedirectedFixture();
   if (!existsSync(join(data, ".updater-lifecycle-fixture"))) {
-    assert.ok(redirected, "Refusing cleanup without an owned updater fixture");
+    console.log("No marked updater installation remains");
     process.exit(0);
   }
   const owned = resolve(readFileSync(join(data, ".updater-lifecycle-fixture"), "utf8"));
@@ -368,7 +372,15 @@ async function uninstallNsis(directory) {
   assert.ok(!existsSync(join(directory, executable)), "Owned NSIS executable was not removed");
 }
 async function cleanupRedirectedFixture() {
-  const destination = join(process.env.LOCALAPPDATA, "Control Room Updater Fixture");
+  for (const parent of [process.env.LOCALAPPDATA, join(process.env.LOCALAPPDATA, "Programs")]) {
+    for (const name of ["Control Room Updater Fixture", "Control Room", "control-room"]) {
+      const destination = join(parent, name);
+      console.log(`Auditing earlier fixture path: ${destination}`);
+      await cleanupRedirectedPath(destination);
+    }
+  }
+}
+async function cleanupRedirectedPath(destination) {
   const file = join(destination, executable);
   if (!existsSync(file)) return false;
   const bytes = readFileSync(file);
@@ -392,10 +404,10 @@ async function cleanupRedirectedFixture() {
       break;
     }
   }
-  assert.ok(
-    receipt,
-    "Refusing to remove a default-folder installation without its compiled disposable key receipt",
-  );
+  if (!receipt) {
+    console.log(`Preserved installation without a compiled disposable-key receipt: ${destination}`);
+    return false;
+  }
   await stopOwnedApplication(file);
   await uninstallNsis(destination);
   const remaining = readdirSync(destination, { withFileTypes: true });
