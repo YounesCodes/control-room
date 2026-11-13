@@ -74,6 +74,8 @@ const pubkey = Buffer.from(
 ).toString("base64");
 let payload,
   signature,
+  oldHash,
+  candidateHash,
   modified = true,
   installed = false,
   passed = false;
@@ -151,7 +153,12 @@ try {
               pubkey,
               endpoints: [`${endpoint}/latest.json`],
               dangerousInsecureTransportProtocol: true,
-              windows: { installMode: "quiet" },
+              // The fixture installs outside the ordinary application folder.
+              // Keep the actual updater installer in that owned directory too.
+              windows: {
+                ...originalConfig.plugins.updater.windows,
+                installerArgs: [`/D=${installRoot}`],
+              },
             },
           },
         },
@@ -200,6 +207,20 @@ try {
       "",
     ].join("\n"),
   ).toString("base64");
+  if (windows) {
+    // Compare with the executable actually shipped by NSIS, including any
+    // bundler metadata, rather than assuming it matches Cargo's raw output.
+    const reference = join(directory, "reference-installation");
+    await run(installers[1], ["/S", `/D=${reference}`]);
+    candidateHash = hash(join(reference, executable));
+    await uninstallNsis(reference);
+    const redirected = join(process.env.LOCALAPPDATA, "Control Room Updater Fixture", executable);
+    if (existsSync(redirected)) {
+      console.log(
+        `Earlier fixture exists at the default product directory: ${redirected}; sha256=${hash(redirected)}`,
+      );
+    }
+  } else candidateHash = hash(installers[1]);
   if (windows) await run(installers[0], ["/S", `/D=${installRoot}`]);
   else {
     mkdirSync(installRoot);
@@ -210,9 +231,8 @@ try {
   assert.ok(existsSync(application));
   mkdirSync(data, { recursive: true });
   writeFileSync(marker, directory);
-  const oldHash = hash(application);
-  const candidateExe = windows ? join(target, "debug/control-room.exe") : installers[1];
-  const candidateHash = hash(candidateExe);
+  oldHash = hash(application);
+  writeFileSync(join(directory, "candidate.sha256"), candidateHash);
   assert.notEqual(candidateHash, oldHash, "The updater must install a different native version");
   let expected;
   await withInstalledApp(
@@ -264,6 +284,8 @@ try {
       await session.$("button=Try again").click();
       await session.$("button=Restart to update").waitForDisplayed({ timeout: 60000 });
       await session.$("button=Restart to update").click();
+      const originalProcesses = ownedProcesses().map((process) => process.Id);
+      assert.ok(originalProcesses.length, "The original installed application must be running");
       await session.$("button=Restart and update").click();
       // Keep the driver alive until installation and automatic launch finish.
       // Deleting the old session immediately can close the app before its
@@ -274,7 +296,10 @@ try {
         120000,
       );
       await until(
-        () => ownedProcesses().some((process) => process.MainWindowHandle !== 0),
+        () =>
+          ownedProcesses().some(
+            (process) => !originalProcesses.includes(process.Id) && process.MainWindowHandle !== 0,
+          ),
         "Installer did not automatically launch a window for the updated application",
         60000,
       );
@@ -304,6 +329,14 @@ try {
   );
 } catch (error) {
   console.error(`Updater lifecycle failed: ${error.stack ?? error}`);
+  console.error(
+    JSON.stringify({
+      originalHash: oldHash,
+      candidateHash,
+      installedHash: existsSync(application) ? hash(application) : null,
+      ownedProcesses: ownedProcesses(),
+    }),
+  );
   writeFileSync(join(directory, "failure.txt"), String(error.stack ?? error));
   throw error;
 } finally {
@@ -311,11 +344,7 @@ try {
   if (installed) {
     await stopOwnedApplication();
     if (windows) {
-      const uninstallers = readdirSync(installRoot).filter((name) =>
-        /^uninstall.*\.exe$/i.test(name),
-      );
-      assert.equal(uninstallers.length, 1);
-      await run(join(installRoot, uninstallers[0]), ["/S", `_?=${installRoot}`]);
+      await uninstallNsis(installRoot);
       assert.ok(!existsSync(application), "Owned updater fixture was not uninstalled");
     }
   }
@@ -331,6 +360,12 @@ try {
 
 function hash(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
+}
+async function uninstallNsis(directory) {
+  const uninstallers = readdirSync(directory).filter((name) => /^uninstall.*\.exe$/i.test(name));
+  assert.equal(uninstallers.length, 1);
+  await run(join(directory, uninstallers[0]), ["/S", `_?=${directory}`]);
+  assert.ok(!existsSync(join(directory, executable)), "Owned NSIS executable was not removed");
 }
 function run(command, args, options = {}) {
   return new Promise((done, reject) => {
