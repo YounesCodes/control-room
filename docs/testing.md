@@ -243,6 +243,8 @@ uses private XDG data/config/cache directories, seeds real data through the app,
 uninstalls the candidate, removes its data, and checks clean reinstall defaults.
 It restores the original package and verifies its binary hash even after failure.
 This is clean-install coverage and does not claim a published-release upgrade.
+The Linux x86_64 lab passed this installed release-package check on integration
+46bc2e1, including clean defaults and the original-package hash verification.
 
 Successful runs remove their fixture and user data. A failed run preserves its
 owned temporary directory and reports the data path for diagnosis; it refuses to

@@ -187,9 +187,19 @@ try {
     async (invoke, session) => {
       assert.equal(await invoke("current_app_version"), previous);
       expected = await seedLifecycleData(invoke, session);
+      await session.$('button[aria-label="Exit terminal focus"]').click();
+      await session.waitUntil(() =>
+        session.execute(() => !globalThis.document.documentElement.dataset.focusTransition),
+      );
       await session.$('button[aria-label="Open Settings"]').click();
       await session.$("button=App & Diagnostics").click();
       await session.$("button=Check for updates").click();
+      await session.$(".settings-update-status").waitForDisplayed({ timeout: 30000 });
+      assert.equal(
+        await session.$(".settings-update-status").getText(),
+        `Version ${version} is available.`,
+      );
+      await session.$('button[aria-label="Close Settings"]').click();
       await session
         .$(`button[aria-label="Update available: Control Room ${version}"]`)
         .waitForDisplayed();
