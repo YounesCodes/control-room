@@ -275,16 +275,23 @@ export async function withItalianLayout(exercise: () => Promise<void>) {
   if (windows) {
     const original = JSON.parse(powershell("layout-read", "", ["-ApplicationId", pid])) as {
       current: string;
+      parent: string;
       loaded: string[];
     };
     let selected: string | undefined;
     try {
-      selected = powershell("layout-set", "it", ["-ApplicationId", pid]);
+      selected = powershell("layout-load");
+      powershell("layout-set", selected, ["-ApplicationId", pid]);
       italianSelected = true;
       await exercise();
     } finally {
       italianSelected = false;
-      powershell("layout-set", original.current, ["-ApplicationId", pid]);
+      powershell("layout-set", original.current, [
+        "-ApplicationId",
+        pid,
+        "-ParentLayout",
+        original.parent,
+      ]);
       if (selected && !original.loaded.includes(selected)) powershell("layout-unload", selected);
     }
   } else if (mac) {
