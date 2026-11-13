@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static void fail(const char *message) { fprintf(stderr, "%s\n", message); exit(1); }
 static TISInputSourceRef source(const char *identifier) {
@@ -41,13 +42,50 @@ static int key_for(const UCKeyboardLayout *layout, UniChar expected, int dead) {
   return 0;
 }
 int main(int argc, char **argv) {
-  if (argc < 2) fail("Expected desktop, current, enabled, select, disable, or keys");
+  if (argc < 2) fail("Expected desktop, key, doubleclick, current, enabled, select, disable, or keys");
   if (!strcmp(argv[1], "desktop")) {
     // Synthetic keys and clicks need an unlocked console session and Accessibility approval.
     CFDictionaryRef session = CGSessionCopyCurrentDictionary();
     CFBooleanRef locked = session ? (CFBooleanRef)CFDictionaryGetValue(session, CFSTR("CGSSessionScreenIsLocked")) : NULL;
     printf("{\"session\":%s,\"locked\":%s,\"accessibility\":%s}\n", session ? "true" : "false", locked && CFBooleanGetValue(locked) ? "true" : "false", AXIsProcessTrusted() ? "true" : "false");
     if (session) CFRelease(session);
+    return 0;
+  }
+  // Keys and clicks are posted as HID events, which need Accessibility approval
+  // only. Scripting System Events would also need a separate Automation approval.
+  if (!strcmp(argv[1], "key")) {
+    if (argc < 3) fail("Expected a virtual key code and optional modifier names");
+    CGEventFlags flags = 0;
+    for (int index = 3; index < argc; index++) {
+      if (!strcmp(argv[index], "command")) flags |= kCGEventFlagMaskCommand;
+      else if (!strcmp(argv[index], "shift")) flags |= kCGEventFlagMaskShift;
+      else if (!strcmp(argv[index], "control")) flags |= kCGEventFlagMaskControl;
+      else if (!strcmp(argv[index], "option")) flags |= kCGEventFlagMaskAlternate;
+      else fail("Unknown modifier name");
+    }
+    CGEventSourceRef origin = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    for (int down = 1; down >= 0; down--) {
+      CGEventRef event = CGEventCreateKeyboardEvent(origin, (CGKeyCode)atoi(argv[2]), down);
+      if (!event) fail("Could not create the native key event");
+      CGEventSetFlags(event, flags);
+      CGEventPost(kCGHIDEventTap, event);
+      CFRelease(event);
+      usleep(30000);
+    }
+    if (origin) CFRelease(origin);
+    return 0;
+  }
+  if (!strcmp(argv[1], "doubleclick")) {
+    if (argc != 4) fail("Expected global x and y coordinates");
+    CGPoint point = CGPointMake(atof(argv[2]), atof(argv[3]));
+    for (int click = 1; click <= 2; click++) for (int down = 1; down >= 0; down--) {
+      CGEventRef event = CGEventCreateMouseEvent(NULL, down ? kCGEventLeftMouseDown : kCGEventLeftMouseUp, point, kCGMouseButtonLeft);
+      if (!event) fail("Could not create the native mouse event");
+      CGEventSetIntegerValueField(event, kCGMouseEventClickState, click);
+      CGEventPost(kCGHIDEventTap, event);
+      CFRelease(event);
+      usleep(30000);
+    }
     return 0;
   }
   if (!strcmp(argv[1], "current")) {
