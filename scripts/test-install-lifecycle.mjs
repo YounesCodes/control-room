@@ -83,9 +83,15 @@ const response = await fetch(
   },
 );
 assert.ok(response.ok, `GitHub release lookup failed: ${response.status}`);
-const previous = previousRelease(await response.json(), version);
+const fromFlag = process.argv.indexOf("--from");
+if (fromFlag !== -1) assert.ok(process.argv[fromFlag + 1], "--from requires a release version");
+const previous = previousRelease(
+  await response.json(),
+  version,
+  fromFlag === -1 ? process.env.CONTROL_ROOM_LIFECYCLE_FROM : process.argv[fromFlag + 1],
+);
 const asset = releaseAsset(previous, process.platform);
-console.log(`Previous published package: ${previous.tag_name} / ${asset.name}`);
+console.log(`Published upgrade source: ${previous.tag_name} / ${asset.name}`);
 if (process.argv.includes("--preflight")) process.exit(0);
 assert.notEqual(
   process.platform,
@@ -168,14 +174,20 @@ try {
     });
   mkdirSync(dataRoot, { recursive: true });
   writeFileSync(join(dataRoot, ".lifecycle-fixture"), directory);
-  install(oldPackage);
+  const publishedHash = install(oldPackage);
   installed = true;
   const expected = await withInstalledApp(application, async (invoke, session) => {
     assert.equal(await invoke("current_app_version"), previous.tag_name.replace(/^v/, ""));
     return seedLifecycleData(invoke, session);
   });
   const oldSchema = inspectDatabase();
-  install(candidate);
+  // The version alone cannot prove replacement when the branch still carries
+  // the published version number.
+  assert.notEqual(
+    install(candidate),
+    publishedHash,
+    "The candidate installer left the published executable in place",
+  );
   await withInstalledApp(application, async (invoke, session) => {
     assert.equal(await invoke("current_app_version"), version);
     await session.waitUntil(() =>
@@ -250,10 +262,9 @@ function install(file) {
       timeout: 180000,
     });
   assert.ok(existsSync(application), "Installer did not produce the application binary");
-  writeFileSync(
-    join(directory, "installed.json"),
-    JSON.stringify({ sha256: binaryHash(application) }),
-  );
+  const sha256 = binaryHash(application);
+  writeFileSync(join(directory, "installed.json"), JSON.stringify({ sha256 }));
+  return sha256;
 }
 function binaryHash(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
