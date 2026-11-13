@@ -174,7 +174,7 @@ try {
         "--debug",
         "--bundles",
         bundleType,
-        ...(!windows ? ["--config", "src-tauri/tauri.linux.conf.json"] : []),
+        ...(!windows ? ["--config", "src-tauri/tauri.linux.conf.json", "--verbose"] : []),
       ],
       {
         cwd: source,
@@ -298,7 +298,7 @@ try {
       await until(
         () =>
           ownedProcesses().some(
-            (process) => !originalProcesses.includes(process.Id) && process.MainWindowHandle !== 0,
+            (process) => !originalProcesses.includes(process.Id) && process.MainWindowHandle > 0,
           ),
         "Installer did not automatically launch a window for the updated application",
         60000,
@@ -426,7 +426,7 @@ function ownedProcesses(file = application, requireWindow = true) {
     [
       "-NoProfile",
       "-Command",
-      `@((Get-Process -Name control-room -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${escaped}' }) | Select-Object Id,MainWindowHandle) | ConvertTo-Json -Compress`,
+      `@((Get-Process -Name control-room -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${escaped}' }) | Select-Object Id,@{Name='MainWindowHandle';Expression={$_.MainWindowHandle.ToInt64()}}) | ConvertTo-Json -Compress; exit 0`,
     ],
     { encoding: "utf8" },
   ).trim();
