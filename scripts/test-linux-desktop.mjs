@@ -85,6 +85,16 @@ function terminalText(marker) {
 }
 
 try {
+  // A window mapped while Openbox is still starting can stay unmanaged and
+  // invisible to the window lookup. Start the app only under a ready WM.
+  await waitFor("window manager", () => {
+    try {
+      xdo("get_num_desktops");
+      return true;
+    } catch {
+      return false;
+    }
+  });
   await waitFor("WebKitWebDriver", () => request("GET", "/status").catch(() => false));
   ({ sessionId: session } = await request("POST", "/session", {
     capabilities: {
@@ -211,6 +221,12 @@ try {
     "Installed .deb opened, used the clipboard and split Bash panes, and exercised window controls under X11.",
   );
 } catch (error) {
+  try {
+    // Tells an unmapped window apart from a missing or retitled one.
+    console.error("Windows named Control Room:", xdo("search", "--name", "Control Room") || "none");
+  } catch {
+    console.error("No window is named Control Room");
+  }
   if (session) {
     mkdirSync("test-results/linux-desktop", { recursive: true });
     const screenshot = await request("GET", "/session/" + session + "/screenshot").catch(
