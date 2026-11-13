@@ -1,7 +1,7 @@
 import { isWindows, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { openLocal, runtime, terminalCommand, terminalContains } from "./helpers";
+import { openLocal, runtime, terminalCommand, terminalContains, typeTerminalText } from "./helpers";
 
 describe("Shell-reported terminal titles", () => {
   it("shows only the program, restores identity on prompt return and preserves manual names", async () => {
@@ -14,8 +14,8 @@ describe("Shell-reported terminal titles", () => {
     // forward cmd.exe's SetConsoleTitle updates.
     const report =
       "process.stdout.write(String.fromCharCode(27)+']0;python --token private-title-argument'+String.fromCharCode(7));";
-    await browser.keys(
-      `node -e "${report}process.stdin.once('data',function(){process.exit(0)})" ${isWindows ? "&" : ";"} echo TITLE_FINISHED`,
+    await typeTerminalText(
+      `node -e "${report}process.stdin.once('data',function(){process.stdout.write(String.fromCharCode(27)+']133;D;0'+String.fromCharCode(7));process.exit(0)})" ${isWindows ? "&" : ";"} echo TITLE_FINISHED`,
     );
     await browser.keys("Enter");
     await expect(tab).toHaveText(`python · ${localShellLabel}`);

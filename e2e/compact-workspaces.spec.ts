@@ -3,6 +3,7 @@ import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import {
   openSplitMenu,
+  focusElement,
   addConnection,
   ipc,
   openLocal,
@@ -134,7 +135,7 @@ describe("Compact native windows and live terminal arrangements", () => {
     await arrange(`Dock below ${localShellLabel} 2`);
     await arrange("Side by side");
     const divider = $("aria/Resize terminal split 2");
-    await divider.click();
+    await focusElement(await divider);
     await browser.keys("ArrowRight");
     await browser.waitUntil(async () => {
       const layout = (await saved()).terminalGroups?.[0].layout;

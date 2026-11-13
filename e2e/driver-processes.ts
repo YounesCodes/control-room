@@ -75,10 +75,19 @@ export async function stopOwnedDrivers(directory: string) {
   const deadline = Date.now() + 20_000;
   for (const driver of remaining) {
     while (true) {
-      try {
-        process.kill(driver.id, 0);
-      } catch {
-        break;
+      if (process.platform === "linux") {
+        if (
+          !linuxProcesses().some(
+            (current) => current.id === driver.id && current.created === driver.created,
+          )
+        )
+          break;
+      } else {
+        try {
+          process.kill(driver.id, 0);
+        } catch {
+          break;
+        }
       }
       if (Date.now() > deadline) throw new Error(`Owned driver ${driver.id} did not exit`);
       await new Promise((resolve) => setTimeout(resolve, 100));
