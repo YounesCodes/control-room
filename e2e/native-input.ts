@@ -6,6 +6,22 @@ import { ipc, runtime, terminalContains } from "./helpers";
 
 const mac = process.platform === "darwin";
 const windows = process.platform === "win32";
+function requireUnlockedMacDesktop() {
+  if (!mac) return;
+  const locked = execFileSync(
+    "/usr/bin/swift",
+    [
+      "-e",
+      'import CoreGraphics; let session = CGSessionCopyCurrentDictionary() as? [String: Any]; print((session?["CGSSessionScreenIsLocked"] as? Bool) == true ? "locked" : "unlocked")',
+    ],
+    { encoding: "utf8", timeout: 30000 },
+  ).trim();
+  if (locked !== "unlocked") {
+    throw new Error(
+      "Native macOS input requires an unlocked lab desktop. CGSession reports the screen is locked; the fixture must provide its configured logged-in desktop before testing.",
+    );
+  }
+}
 function powershell(action: string, value = "", extra: string[] = []) {
   return execFileSync(
     "powershell.exe",
@@ -25,7 +41,7 @@ function powershell(action: string, value = "", extra: string[] = []) {
     {
       encoding: "utf8",
       windowsHide: true,
-      timeout: 20000,
+      timeout: action === "scale" ? 45000 : 20000,
     },
   );
 }
@@ -139,6 +155,7 @@ export async function nativeKey(shortcut: string) {
     );
 }
 export async function focusNativeApp() {
+  requireUnlockedMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
   else if (mac)
@@ -160,7 +177,10 @@ export async function focusNativeApp() {
       .split("\n")[0];
     execFileSync("xdotool", ["windowactivate", "--sync", id], { timeout: 5000 });
   }
-  await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
+  // On Windows the WebView child can own focus while the Tauri window reports
+  // false. The helper verifies the OS foreground root instead.
+  if (!windows)
+    await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
 }
 export async function openNativeShell() {
   const catalog = await ipc<{ profiles: { id: string; label: string; elevated: boolean }[] }>(
@@ -239,6 +259,16 @@ export async function selectTerminalWord(word: string) {
 export function windowsScale(percent?: number) {
   return Number(powershell("scale", percent ? String(percent) : ""));
 }
+export function windowsResolution(size?: { width: number; height: number }) {
+  return JSON.parse(
+    size
+      ? powershell("resolution-set", `${size.width}x${size.height}`)
+      : powershell("resolution-read"),
+  ) as { width: number; height: number };
+}
+export function windowsDisplayModes() {
+  return JSON.parse(powershell("resolution-modes")) as { width: number; height: number }[];
+}
 
 let italianSelected = false;
 let macSourceTool: string | undefined;
@@ -272,16 +302,23 @@ export async function withItalianLayout(exercise: () => Promise<void>) {
   if (windows) {
     const original = JSON.parse(powershell("layout-read", "", ["-ApplicationId", pid])) as {
       current: string;
+      parent: string;
       loaded: string[];
     };
     let selected: string | undefined;
     try {
-      selected = powershell("layout-set", "it", ["-ApplicationId", pid]);
+      selected = powershell("layout-load");
+      powershell("layout-set", selected, ["-ApplicationId", pid]);
       italianSelected = true;
       await exercise();
     } finally {
       italianSelected = false;
-      powershell("layout-set", original.current, ["-ApplicationId", pid]);
+      powershell("layout-set", original.current, [
+        "-ApplicationId",
+        pid,
+        "-ParentLayout",
+        original.parent,
+      ]);
       if (selected && !original.loaded.includes(selected)) powershell("layout-unload", selected);
     }
   } else if (mac) {

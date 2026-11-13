@@ -1,3 +1,7 @@
+#[cfg(target_os = "linux")]
+#[path = "url_launcher_linux.rs"]
+mod linux;
+
 #[cfg(any(windows, target_os = "linux"))]
 const DOCUMENTATION_URL: &str = "https://younescodes.github.io/control-room/";
 
@@ -41,16 +45,9 @@ pub fn open_releases() -> Result<(), String> {
 
 #[cfg(target_os = "linux")]
 fn open_url(url: &'static str) -> Result<(), String> {
-    let status = crate::ssh::background_command("xdg-open")
-        .arg(url)
-        .stdin(std::process::Stdio::null())
-        .status()
-        .map_err(|error| format!("Could not start xdg-open: {error}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err("Could not open the default web browser. Check your desktop's browser settings.".into())
-    }
+    let mut command = crate::ssh::background_command("xdg-open");
+    command.arg(url);
+    linux::launch(command)
 }
 
 #[cfg(any(windows, test))]
