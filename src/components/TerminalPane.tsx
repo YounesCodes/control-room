@@ -275,13 +275,6 @@ export function TerminalPane({
           .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
         return false;
       }
-      // WKWebView raises a native paste event for Cmd+V only. Paste the shifted
-      // shortcut here; nothing else delivers it, so the text arrives once.
-      if (useMetaKey && event.key.toLowerCase() === "v") {
-        event.preventDefault();
-        pasteClipboard();
-        return false;
-      }
       // xterm owns keyboard paste through its textarea's native paste event.
       // Reading the clipboard here as well sends the same text twice: once
       // from this keydown handler and once when xterm emits the paste through
