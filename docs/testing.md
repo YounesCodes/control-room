@@ -279,8 +279,12 @@ then verifies that the button and Settings remain available after dispatch.
 ## Installed package lifecycle
 
 Run `npm run test:install-lifecycle` in a disposable desktop account with no existing
-Control Room installation or app data. The command selects the preceding stable
-published version, downloads its native installer, and builds the branch installer.
+Control Room installation or app data. The command selects the newest stable
+published version that is not newer than the branch, downloads its native installer,
+and builds the branch installer. A branch that still carries the published version
+upgrades from that release, and the runner requires the installed executable to change.
+Use `-- --from v0.9.4` (or `CONTROL_ROOM_LIFECYCLE_FROM`) to upgrade from an older
+release and exercise its migrations.
 Use `-- --candidate /absolute/path/to/installer` to supply an already-built package.
 `-- --preflight` checks release availability without installing anything.
 
@@ -332,7 +336,7 @@ and reuses the matching native WebView2 driver. A standalone Windows invocation 
 set `CONTROL_ROOM_LIFECYCLE_NATIVE_DRIVER` to the matching msedgedriver executable.
 The external installed-app driver does not require the debug WDIO plugin.
 
-The current preceding release, v0.9.4, publishes only a Windows installer. Linux
+Published releases through v0.9.5 include only a Windows installer. Linux
 and macOS preflight fail with the missing-package reason. Linux requires native
 support from PR #227 and an earlier published .deb before its upgrade can run.
 Production macOS WKWebViews additionally need an accessibility adapter; the debug
