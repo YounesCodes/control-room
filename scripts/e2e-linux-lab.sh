@@ -13,7 +13,8 @@ echo "Testing $branch at $(git rev-parse HEAD)"
 npm ci --no-audit --no-fund
 if [[ ${2:-} == --installers ]]; then
   # Release .deb and AppImage: install, reinstall, launch and signed update.
-  bash scripts/test-linux-installers.sh
+  # The lab VM is disposable, so a build no package reproduces may be replaced.
+  CONTROL_ROOM_REPLACE_INSTALLED=1 bash scripts/test-linux-installers.sh
   exit
 fi
 npm run test:desktop:build
