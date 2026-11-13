@@ -213,3 +213,86 @@ returns while a long-lived browser remains open. A real child-process regression
 holds the browser fixture alive until the test releases its input pipe and checks
 that the native request has already completed. The native documentation journey
 then verifies that the button and Settings remain available after dispatch.
+
+## Installed package lifecycle
+
+Run `npm run test:install-lifecycle` in a disposable desktop account with no existing
+Control Room installation or app data. The command selects the preceding stable
+published version, downloads its native installer, and builds the branch installer.
+Use `-- --candidate /absolute/path/to/installer` to supply an already-built package.
+`-- --preflight` checks release availability without installing anything.
+
+The fixture creates real SQLite data through registered production IPC commands.
+It creates the local split layout through the UI and exercises real shell input.
+After an installer upgrade it checks connections, groups, tag colors, global,
+connection and local notes, settings, history, and the complete saved layout. It
+checks SQLite integrity and the removal of the retired Baselines table. It then
+runs the native uninstaller, removes only its own data, reinstalls the candidate,
+and checks launch, empty collections and default settings.
+
+The runner also exercises the updater against a loopback `latest.json`. The Rust
+`modified_installer_cannot_reach_installation` test calls download-and-install with
+tampered bytes and requires a signature rejection. On Windows the existing signed
+NSIS fixture verifies the real installer handoff. That updater fixture uses a mock
+Tauri runtime and an isolated payload; it does not replace the running app through
+the updater UI.
+
+Select `e2e/updater-lifecycle.spec.ts` explicitly on Windows to exercise the actual
+application updater UI. On Linux, run `node scripts/test-updater-lifecycle.mjs` on
+the private X11 display with native support from PR #227. It builds two native
+NSIS or AppImage versions from disposable source
+with a separate product identifier and signing key. A loopback `latest.json` first
+serves modified bytes. The UI must report signature rejection and the installed
+executable must remain unchanged. A retry serves correctly signed bytes, installs
+the candidate, and must automatically launch its window. A fresh native session
+then checks the new version and all seeded user data. The runner uninstalls this
+separate fixture and removes only marked fixture data. Linux AppImages live in
+the owned temporary installation directory and do not replace the system .deb.
+These builds use the debug
+profile without the desktop automation plugin; production commands, UI, signature
+verification and installer code run unchanged. This supplements the published
+release upgrade test, whose previous installer comes from GitHub.
+The Linux x86_64 AppImage journey passed on integration e03d62e, including bad
+signature rejection, exact candidate bytes, automatic visible relaunch and every
+seeded data field. The Windows x86_64 NSIS journey passed on 9a8869b with the same signature,
+installation, relaunch and data checks. The fixture explicitly passes its owned
+installation directory to NSIS and compares against the actual NSIS payload.
+Relaunch checks require a different application PID and a visible native window
+before the original driver is closed. Windows inherits the configured installer
+mode; Linux keeps verbose bundler output for packaging failures.
+If a failed updater run leaves its marked installation, explicitly select
+`e2e/updater-lifecycle-cleanup.spec.ts` before retrying. Cleanup verifies the marker
+and temporary-directory boundary and never removes the ordinary app's data.
+
+For the Windows lab helper, explicitly select `e2e/install-upgrade.spec.ts`. Ordinary
+desktop runs exclude that spec. It closes the debug app before installing packages
+and reuses the matching native WebView2 driver. A standalone Windows invocation can
+set `CONTROL_ROOM_LIFECYCLE_NATIVE_DRIVER` to the matching msedgedriver executable.
+The external installed-app driver does not require the debug WDIO plugin.
+
+The current preceding release, v0.9.4, publishes only a Windows installer. Linux
+and macOS preflight fail with the missing-package reason. Linux requires native
+support from PR #227 and an earlier published .deb before its upgrade can run.
+Production macOS WKWebViews additionally need an accessibility adapter; the debug
+embedded driver cannot stand in for a published application. Installed macOS
+lifecycle automation remains incomplete. ARM macOS is outside this lab.
+
+To check Linux clean uninstall/reinstall before a previous published .deb exists,
+run `node scripts/test-linux-install-clean.mjs --candidate /path/to/branch.deb
+--restore /path/to/original.deb --version 0.9.5` on the private X11 display. The
+restore package must contain the exact currently installed executable. The test
+uses private XDG data/config/cache directories, seeds real data through the app,
+uninstalls the candidate, removes its data, and checks clean reinstall defaults.
+It restores the original package and verifies its binary hash even after failure.
+This is clean-install coverage and does not claim a published-release upgrade.
+The Linux x86_64 lab passed this installed release-package check on integration
+46bc2e1, including clean defaults and the original-package hash verification.
+
+Successful runs remove their fixture and user data. A failed run preserves its
+owned temporary directory and reports the data path for diagnosis; it refuses to
+overwrite an existing user database on the next run. After inspecting a failure,
+run `npm run test:install-lifecycle -- --cleanup` to uninstall and remove only the
+fixture with this runner's ownership marker. Cleanup refuses unmarked user data.
+The Windows lab helper can run `e2e/install-lifecycle-cleanup.spec.ts` explicitly for
+the same cleanup without exposing arbitrary shell access.
+It does not create or restore Proxmox snapshots.

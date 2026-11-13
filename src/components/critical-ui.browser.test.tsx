@@ -1042,7 +1042,8 @@ describe("critical UI in Chromium", () => {
     const search = page.getByRole("searchbox", { name: "Search settings" });
     await expect.element(search).toBeVisible();
     const refresh = page.getByRole("combobox", { name: "Refresh host metrics" }).element();
-    expect(refresh.getBoundingClientRect().height).toBe(32);
+    // Transformed controls can differ by a floating-point fraction of a pixel.
+    expect(refresh.getBoundingClientRect().height).toBeCloseTo(32, 2);
     expect(refresh.getBoundingClientRect().width).toBeLessThanOrEqual(200);
     const refreshLabel = refresh.closest("label")!.querySelector("span")!.getBoundingClientRect();
     const refreshBounds = refresh.getBoundingClientRect();
@@ -1081,7 +1082,7 @@ describe("critical UI in Chromium", () => {
         })
         .click();
       const input = page.getByRole("spinbutton", { name, exact: true }).element();
-      expect(input.getBoundingClientRect().height).toBe(32);
+      expect(input.getBoundingClientRect().height).toBeCloseTo(32, 2);
       expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(13);
     }
     await page.getByRole("tab", { name: "Local shells", exact: true }).click();
@@ -1112,7 +1113,7 @@ describe("critical UI in Chromium", () => {
       await page.getByRole("button", { name: "Logs & History", exact: true }).click();
     else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("logs");
     const tail = page.getByRole("combobox", { name: "Default log tail" }).element();
-    expect(tail.getBoundingClientRect().height).toBe(32);
+    expect(tail.getBoundingClientRect().height).toBeCloseTo(32, 2);
     expect(parseFloat(getComputedStyle(tail).fontSize)).toBeGreaterThanOrEqual(13);
     await page.screenshot({ path: `../../test-results/settings-controls-logs-${width}.png` });
   });

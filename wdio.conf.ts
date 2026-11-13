@@ -15,6 +15,15 @@ if (!["win32", "darwin", "linux"].includes(process.platform)) {
   throw new Error("Control Room desktop E2E tests require Windows, macOS, or Linux.");
 }
 
+// Installed package tests are explicit because they replace a per-user installation.
+const installLifecycle = process.argv.some((argument) =>
+  [
+    "e2e/install-upgrade.spec.ts",
+    "e2e/install-lifecycle-cleanup.spec.ts",
+    "e2e/updater-lifecycle.spec.ts",
+    "e2e/updater-lifecycle-cleanup.spec.ts",
+  ].some((spec) => argument.replaceAll("\\", "/").endsWith(spec)),
+);
 const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
@@ -32,11 +41,20 @@ export const config: WebdriverIO.Config = {
       : process.env.CONTROL_ROOM_LIVE_DESKTOP === "1"
         ? ["./e2e/live-ssh.spec.ts"]
         : ["./e2e/**/*.spec.ts"],
-  exclude:
-    process.env.CONTROL_ROOM_LIVE_MACOS_DESKTOP === "1" ||
+  exclude: [
+    ...(process.env.CONTROL_ROOM_LIVE_MACOS_DESKTOP === "1" ||
     process.env.CONTROL_ROOM_LIVE_DESKTOP === "1"
       ? []
-      : ["./e2e/live-ssh.spec.ts", "./e2e/live-macos-host.spec.ts"],
+      : ["./e2e/live-ssh.spec.ts", "./e2e/live-macos-host.spec.ts"]),
+    ...(installLifecycle
+      ? []
+      : [
+          "./e2e/install-upgrade.spec.ts",
+          "./e2e/install-lifecycle-cleanup.spec.ts",
+          "./e2e/updater-lifecycle.spec.ts",
+          "./e2e/updater-lifecycle-cleanup.spec.ts",
+        ]),
+  ],
   maxInstances: 1,
   outputDir: resolve("test-results/desktop/driver"),
   services: [
