@@ -1,8 +1,13 @@
-#[cfg(windows)]
+#[cfg(target_os = "linux")]
+#[path = "url_launcher_linux.rs"]
+mod linux;
+
+#[cfg(any(windows, target_os = "linux"))]
 const DOCUMENTATION_URL: &str = "https://younescodes.github.io/control-room/";
 
 /// Open only the published documentation. Callers cannot supply URLs or paths.
-#[tauri::command]
+#[cfg_attr(target_os = "linux", tauri::command(async))]
+#[cfg_attr(not(target_os = "linux"), tauri::command)]
 pub fn open_documentation() -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -24,7 +29,13 @@ pub fn open_documentation() -> Result<(), String> {
         };
         browser_launch_result(result as isize)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(DOCUMENTATION_URL);
+        linux::launch(command)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     Err("Opening documentation is supported on Windows.".into())
 }
 

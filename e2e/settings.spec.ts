@@ -1,14 +1,29 @@
+import { isMac, isLinux, localShellId, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { ipc, openLocal, restartApp, runtime, savedSettings, terminalCommand } from "./helpers";
+import {
+  ipc,
+  openLocal,
+  restartApp,
+  runtime,
+  savedSettings,
+  terminalCommand,
+  expectNativeText,
+} from "./helpers";
 
-const font = () => $('[role="combobox"][aria-controls="font-suggestions"]');
+const font = () =>
+  $(
+    isLinux
+      ? 'input[aria-describedby="linux-font-help"]'
+      : '[role="combobox"][aria-controls="font-suggestions"]',
+  );
 
 async function enterFont(value: string) {
   await font().click();
-  await browser.keys(value);
+  if (isMac || isLinux) await font().setValue(value);
+  else await browser.keys(value);
   await expect(font()).toHaveValue(value);
-  await browser.keys("Enter");
+  if (!isLinux) await browser.keys("Enter");
 }
 
 describe("Settings and native window", () => {
@@ -33,7 +48,7 @@ describe("Settings and native window", () => {
     ).click();
     await $("//label[input[@type='checkbox']][normalize-space(.)='GPU']/input").click();
     await $("button=Save settings").click();
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await openLocal();
     await expect(
       $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
@@ -61,7 +76,7 @@ describe("Settings and native window", () => {
       "//label[input[@type='checkbox']][contains(.,'Show host metrics in header')]/input",
     ).click();
     await $("button=Save settings").click();
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await expect($(".host-metrics")).not.toExist();
   });
 
@@ -145,13 +160,13 @@ describe("Settings and native window", () => {
       "//label[contains(.,'Show current command/process in terminal tab titles')]/input",
     ).click();
     await $("button=Save settings").click();
-    await expect($(".settings-heading [role=status]")).toHaveText("Settings saved.");
+    await expectNativeText(await $(".settings-heading [role=status]"), "Settings saved.");
     await restartApp();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     await expect(font()).toHaveValue("Courier New");
     expect((await savedSettings()).automaticTerminalTitles).toBe(false);
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await openLocal();
     await terminalCommand("echo SETTINGS_TERMINAL_OK", "SETTINGS_TERMINAL_OK");
   });
@@ -161,64 +176,80 @@ describe("Settings and native window", () => {
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     await enterFont("Discard this draft");
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await expect($("h2=Discard changes?")).toBeDisplayed();
     await $("button=Cancel").click();
     await expect(font()).toHaveValue("Discard this draft");
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await $("button=Discard").click();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     await expect(font()).toHaveValue(original);
   });
 
-  it("hides and restores Command Prompt in the launcher without uninstalling it", async () => {
+  it("hides and restores the local shell in the launcher without uninstalling it", async () => {
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     await $('[role="tab"]=Local shells').click();
-    await $('input[aria-label="Offer Command Prompt"]').click();
+    await $(`input[aria-label="Offer ${localShellLabel}"]`).click();
     await $("button=Save settings").click();
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await $('button[aria-label="New terminal"]').click();
-    await expect($(".new-terminal-menu").$("aria/Local terminals: Command Prompt")).not.toExist();
+    await expect(
+      $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`),
+    ).not.toExist();
     await browser.keys("Escape");
     await restartApp();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     await $('[role="tab"]=Local shells').click();
-    await $('input[aria-label="Offer Command Prompt"]').click();
+    await $(`input[aria-label="Offer ${localShellLabel}"]`).click();
     await $("button=Save settings").click();
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
     await openLocal();
     await terminalCommand("echo RESTORED_SHELL_OK", "RESTORED_SHELL_OK");
   });
 
-  it("maximizes and restores actual native dimensions", async () => {
+  it(`${isMac ? "enters full screen" : "maximizes"} and restores actual native dimensions`, async () => {
     const maximized = () =>
-      browser.tauri.execute(({ core }) =>
-        core.invoke("plugin:window|is_maximized", { label: "main" }),
-      );
+      ipc<boolean>(isMac ? "plugin:window|is_fullscreen" : "plugin:window|is_maximized", {
+        label: "main",
+      });
     const dimensions = () =>
-      ipc<{ width: number; height: number }>("plugin:window|inner_size", { label: "main" });
-    const monitor = await ipc<{ workArea: { size: { width: number; height: number } } } | null>(
-      "plugin:window|current_monitor",
-    );
+      ipc<{ width: number; height: number }>(
+        isMac ? "plugin:window|outer_size" : "plugin:window|inner_size",
+        { label: "main" },
+      );
+    const monitor = await ipc<{
+      size: { width: number; height: number };
+      workArea: { size: { width: number; height: number } };
+    } | null>("plugin:window|current_monitor");
     expect(monitor).not.toBeNull();
     const before = await dimensions();
-    await $("aria/Maximize or restore window").click();
+    const originalWindow = await browser.getWindowRect();
+    if (isMac) await browser.fullscreenWindow();
+    else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === true);
-    // Maximizing fills the work area, even if the initial window exceeds a small CI display.
+    // Mac full screen covers the display; Windows maximize fills its work area.
+    const expected = isMac ? monitor!.size : monitor!.workArea.size;
     await browser.waitUntil(
       async () => {
         const expanded = await dimensions();
         return (
-          Math.abs(expanded.width - monitor!.workArea.size.width) <= 2 &&
-          Math.abs(expanded.height - monitor!.workArea.size.height) <= 2
+          Math.abs(expanded.width - expected.width) <= 2 &&
+          Math.abs(expanded.height - expected.height) <= 2
         );
       },
-      { timeoutMsg: "Maximized native window did not fill the monitor work area" },
+      { timeoutMsg: "Expanded native window did not fill the expected monitor area" },
     );
-    await $("aria/Maximize or restore window").click();
+    if (isMac)
+      await browser.setWindowRect(
+        originalWindow.x,
+        originalWindow.y,
+        originalWindow.width,
+        originalWindow.height,
+      );
+    else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(async () => (await maximized()) === false);
     await browser.waitUntil(
       async () => {
@@ -241,9 +272,9 @@ describe("Local Terminal Mode desktop", () => {
       settings: {
         ...settings,
         localTerminalMode: true,
-        defaultLocalShellId: "command-prompt",
+        defaultLocalShellId: localShellId,
         hiddenLocalShells: catalog.profiles
-          .filter((shell) => shell.id !== "command-prompt")
+          .filter((shell) => shell.id !== localShellId)
           .map((shell) => shell.id),
       },
     });
@@ -257,7 +288,7 @@ describe("Local Terminal Mode desktop", () => {
     await expect($("aria/Saved connections")).toBeDisplayed();
     await $('button[aria-label="New terminal"]').click();
     await expect($(".new-terminal-menu")).toBeDisplayed();
-    await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
+    await $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`).click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await $("button=Add connection").click();
     await expect($("[role=dialog]")).toBeDisplayed();
