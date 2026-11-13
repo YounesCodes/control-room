@@ -224,7 +224,9 @@ verification and installer code run unchanged. This supplements the published
 release upgrade test, whose previous installer comes from GitHub.
 The Linux x86_64 AppImage journey passed on integration e03d62e, including bad
 signature rejection, exact candidate bytes, automatic visible relaunch and every
-seeded data field. The Windows positive-update retry remains under validation.
+seeded data field. The Windows x86_64 NSIS journey passed on 9a8869b with the same signature,
+installation, relaunch and data checks. The fixture explicitly passes its owned
+installation directory to NSIS and compares against the actual NSIS payload.
 If a failed updater run leaves its marked installation, explicitly select
 `e2e/updater-lifecycle-cleanup.spec.ts` before retrying. Cleanup verifies the marker
 and temporary-directory boundary and never removes the ordinary app's data.
