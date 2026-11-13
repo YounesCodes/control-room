@@ -2,7 +2,7 @@ import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
-import { application, isMac, localShellLabel } from "./platform";
+import { application, isMac, isLinux, isWindows, localShellLabel } from "./platform";
 import { recordMacApplication } from "./macos-processes";
 import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
 import type { AppSettings, SavedConnection } from "../src/types";
@@ -197,7 +197,8 @@ export async function addConnection(
 
 export async function connectionMenu(name: string) {
   const button = $(`aria/Open actions for ${name}`);
-  await button.moveTo();
+  if (isLinux) await browser.execute((node: HTMLElement) => node.focus(), await button);
+  else await button.moveTo();
   await button.click();
 }
 
@@ -221,9 +222,9 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   await $("nav[aria-label='Workspace features']").waitForDisplayed();
 }
 
-export async function openLocal() {
+export async function openLocal(shellLabel = localShellLabel) {
   await $('button[aria-label="New terminal"]').click();
-  await $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`).click();
+  await $(".new-terminal-menu").$(`aria/Local terminals: ${shellLabel}`).click();
   await expect($(".terminal-workspace-pane.active .xterm-screen")).toBeDisplayed();
   await browser.waitUntil(async () => (await runtime()).sessionIds.length > 0);
 }
@@ -240,10 +241,11 @@ export async function terminalCommand(
 }
 
 export async function typeTerminalText(text: string, scope = ".terminal-workspace-pane.active") {
-  // Embedded driver 1.5 dispatches both keydown and input for printable keys,
+  // WebKit action keys drop repeated characters; the embedded driver dispatches
+  // both keydown and input for printable keys,
   // even when xterm prevents keydown's default. That types lowercase twice.
   // Element send-keys delivers one input event through the real xterm textarea.
-  if (isMac) await $(`${scope} .xterm-helper-textarea`).addValue(text);
+  if (!isWindows) await $(`${scope} .xterm-helper-textarea`).addValue(text);
   else await browser.keys(text);
 }
 
@@ -251,7 +253,7 @@ export async function focusElement(element: WebdriverIO.Element) {
   await element.click();
   // Embedded pointer actions emit mouse events without the browser's default
   // focus action. Explicit focus lets native keyboard resize tests use the handle.
-  if (isMac) await browser.execute((node: HTMLElement) => node.focus(), element);
+  if (!isWindows) await browser.execute((node: HTMLElement) => node.focus(), element);
 }
 
 export async function pointerClick(element: WebdriverIO.Element) {
@@ -367,7 +369,11 @@ export async function scratchpadNote() {
 
 /** Splitting starts from New terminal: open it and choose a split mode card. */
 export async function openSplitMenu(direction: "vertically" | "horizontally" = "vertically") {
+  await browser.waitUntil(() =>
+    browser.execute(() => !document.documentElement.dataset.focusTransition),
+  );
   await $("aria/New terminal").click();
+  await $(".new-terminal-menu").waitForDisplayed();
   await $(".new-terminal-menu")
     .$(`button*=${direction === "vertically" ? "Split right" : "Split down"}`)
     .click();
