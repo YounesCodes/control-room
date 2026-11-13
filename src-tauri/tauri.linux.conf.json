@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "security": {
+      "capabilities": ["default", "linux-window"]
+    }
+  },
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "linux": {
+      "deb": {
+        "depends": ["openssh-client", "xdg-utils"]
+      }
+    }
+  }
+}

@@ -14,6 +14,8 @@ import "../styles.css";
 const session = vi.hoisted(() => ({
   output: null as { onmessage: ((message: ArrayBuffer) => void) | null } | null,
   acknowledgeSessionOutput: vi.fn(() => Promise.resolve()),
+  readClipboard: vi.fn<() => Promise<string | null>>(),
+  writeClipboard: vi.fn<(text: string) => Promise<void>>(),
   writeSession: vi.fn<(id: string, data: Uint8Array) => Promise<void>>(() => Promise.resolve()),
   resizeSession: vi.fn<(id: string, cols: number, rows: number) => Promise<void>>(() =>
     Promise.resolve(),
@@ -48,6 +50,8 @@ vi.mock("../lib/api", () => ({
     resizeSession: session.resizeSession,
     closeSession: vi.fn(() => Promise.resolve()),
     writeSession: session.writeSession,
+    readClipboard: session.readClipboard,
+    writeClipboard: session.writeClipboard,
   },
   errorMessage: (error: unknown) => String(error),
 }));
@@ -83,6 +87,8 @@ afterEach(() => {
   session.output = null;
   session.acknowledgeSessionOutput.mockClear();
   session.writeSession.mockClear();
+  session.readClipboard.mockReset();
+  session.writeClipboard.mockReset();
   session.resizeSession.mockClear();
   vi.restoreAllMocks();
 });
@@ -302,47 +308,65 @@ function paintedPixels(canvas: HTMLCanvasElement) {
   return count;
 }
 
-it("pastes Unicode and multiple lines once and copies the actual terminal selection", async () => {
-  const text = "日本語-é\nsecond line";
-  const read = vi.spyOn(navigator.clipboard, "readText").mockResolvedValue(text);
-  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
-  container = document.createElement("div");
-  container.style.height = "400px";
-  document.body.append(container);
-  root = createRoot(container);
-  const handle = createRef<TerminalPaneHandle>();
-  root.render(
-    <TerminalPane
-      ref={handle}
-      workspace={createLocalWorkspace({
-        id: "test-shell",
-        label: "Test shell",
-        kind: "command-prompt",
-        elevated: false,
-      })}
-      settings={settings}
-      visible
-      active
-      onActivate={() => undefined}
-      onSession={() => undefined}
-      onState={() => undefined}
-    />,
-  );
-  await vi.waitFor(() => expect(session.output).not.toBeNull());
-  handle.current!.pasteClipboard();
-  await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(1));
-  expect(read).toHaveBeenCalledTimes(1);
-  expect(new TextDecoder().decode(session.writeSession.mock.calls[0][1])).toBe(
-    text.replaceAll("\n", "\r"),
-  );
-  session.output!.onmessage!(new TextEncoder().encode("COPY_NEEDLE\r\n").buffer);
-  await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
-  await userEvent.dblClick(container.querySelector(".xterm-screen")!, {
-    position: { x: 15, y: 5 },
-  });
-  handle.current!.copySelection();
-  await vi.waitFor(() => expect(write).toHaveBeenCalledWith("COPY_NEEDLE"));
-});
+it.each(["webview", "GTK"])(
+  "pastes Unicode and multiple lines once and copies a selection using the %s clipboard",
+  async (clipboard) => {
+    const nativeClipboard = clipboard === "GTK";
+    const text = "日本語-é\nsecond line";
+    const read = (
+      nativeClipboard ? session.readClipboard : vi.spyOn(navigator.clipboard, "readText")
+    ).mockResolvedValue(text);
+    const write = (
+      nativeClipboard ? session.writeClipboard : vi.spyOn(navigator.clipboard, "writeText")
+    ).mockResolvedValue();
+    container = document.createElement("div");
+    container.style.height = "400px";
+    document.body.append(container);
+    root = createRoot(container);
+    const handle = createRef<TerminalPaneHandle>();
+    root.render(
+      <TerminalPane
+        ref={handle}
+        workspace={createLocalWorkspace({
+          id: "test-shell",
+          label: "Test shell",
+          kind: "command-prompt",
+          elevated: false,
+        })}
+        settings={settings}
+        visible
+        active
+        nativeClipboard={nativeClipboard}
+        onActivate={() => undefined}
+        onSession={() => undefined}
+        onState={() => undefined}
+      />,
+    );
+    await vi.waitFor(() => expect(session.output).not.toBeNull());
+    if (nativeClipboard) {
+      handle.current!.focus();
+      await userEvent.keyboard("{Control>}{Shift>}v{/Shift}{/Control}");
+    } else {
+      handle.current!.pasteClipboard();
+    }
+    await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(1));
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(new TextDecoder().decode(session.writeSession.mock.calls[0][1])).toBe(
+      text.replaceAll("\n", "\r"),
+    );
+    session.output!.onmessage!(new TextEncoder().encode("COPY_NEEDLE\r\n").buffer);
+    await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
+    await userEvent.dblClick(container.querySelector(".xterm-screen")!, {
+      position: { x: 15, y: 5 },
+    });
+    if (nativeClipboard) {
+      await userEvent.keyboard("{Control>}{Shift>}c{/Shift}{/Control}");
+    } else {
+      handle.current!.copySelection();
+    }
+    await vi.waitFor(() => expect(write).toHaveBeenCalledWith("COPY_NEEDLE"));
+  },
+);
 
 it("keeps the terminal edge empty until search has matches", async () => {
   await page.viewport(960, 640);

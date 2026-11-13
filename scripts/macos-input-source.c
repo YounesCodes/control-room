@@ -46,8 +46,7 @@ int main(int argc, char **argv) {
     // Synthetic keys and clicks need an unlocked console session and Accessibility approval.
     CFDictionaryRef session = CGSessionCopyCurrentDictionary();
     CFBooleanRef locked = session ? (CFBooleanRef)CFDictionaryGetValue(session, CFSTR("CGSSessionScreenIsLocked")) : NULL;
-    printf("{\"session\":%s,\"locked\":%s,\"accessibility\":%s}
-", session ? "true" : "false", locked && CFBooleanGetValue(locked) ? "true" : "false", AXIsProcessTrusted() ? "true" : "false");
+    printf("{\"session\":%s,\"locked\":%s,\"accessibility\":%s}\n", session ? "true" : "false", locked && CFBooleanGetValue(locked) ? "true" : "false", AXIsProcessTrusted() ? "true" : "false");
     if (session) CFRelease(session);
     return 0;
   }

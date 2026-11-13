@@ -19,8 +19,9 @@ values. Do not copy token tables or per-feature specifications here.
   color signals success, warning, or failure. Tag colors, brand marks, terminal
   ANSI colors, and code syntax colors identify things. They never signal health.
 - **Keyboard-first and desktop-native.** Keep important actions available by
-  keyboard and discoverable in the interface. Use native window controls and
-  app-owned dialogs, menus, and terminal panes. Do not rely on hover alone.
+  keyboard and discoverable in the interface. Let the window manager handle
+  titlebar and edge drags. Use app-owned dialogs, menus, and terminal panes.
+  Do not rely on hover alone.
 - **Honest feedback.** Make loading, empty, stale, unavailable, and failed states
   distinct. Present the fact the host returned, not a stronger conclusion. A
   missing value must look missing, not like zero. Destructive actions name their
@@ -362,8 +363,8 @@ status slot. Back and Save stay visible while the body scrolls. Drafts and
 category scroll positions survive navigation.
 
 Terminal font, size, and color controls share one live preview that stays
-visible while they scroll. Font previews stay in the webview and do not install
-fonts. Installation is explicit and reports progress and errors. The current
+visible while they scroll. Linux accepts a font installed through the desktop.
+Windows catalog previews stay in the webview and do not install fonts. Installation is explicit and reports progress and errors. The current
 terminal font stays until the install and the settings save both succeed.
 
 ### Header metrics

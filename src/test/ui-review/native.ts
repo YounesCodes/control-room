@@ -6,6 +6,7 @@ import registry from "./scenarios.json";
 const params = new URLSearchParams(location.search);
 const scenario = params.get("scenario") ?? "settings";
 const state = params.get("state") ?? "populated";
+const linux = scenario === "settings" && state.startsWith("linux-");
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -96,10 +97,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
   switch (command) {
     case "get_environment_info":
       result = {
-        sshPath: "example-ssh",
-        sshConfigPath: "example-config",
+        sshPath: linux ? "/usr/bin/ssh" : "example-ssh",
+        sshConfigPath: linux ? "/home/example/.ssh/config" : "example-config",
         sshAgentAvailable: false,
         platformSupported: true,
+        ...(linux && { desktopOs: "linux", inAppUpdates: false }),
       };
       break;
     case "list_connections":
@@ -111,15 +113,21 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_local_shells":
       result = {
-        profiles: [
-          { id: "powershell-7", kind: "powershell-7", label: "PowerShell 7", elevated: false },
-        ],
-        administratorStatus: "disabled",
+        profiles: linux
+          ? [{ id: "bash", kind: "bash", label: "Bash", elevated: false }]
+          : [{ id: "powershell-7", kind: "powershell-7", label: "PowerShell 7", elevated: false }],
+        administratorStatus: linux ? "unsupportedPlatform" : "disabled",
       };
       break;
-    case "get_settings_contract":
-      result = { current: settings, defaults: settings, logTailOptions: [50, 100, 200, 500, 1000] };
+    case "get_settings_contract": {
+      const desktopSettings = linux ? { ...settings, terminalFontFamily: "monospace" } : settings;
+      result = {
+        current: desktopSettings,
+        defaults: desktopSettings,
+        logTailOptions: [50, 100, 200, 500, 1000],
+      };
       break;
+    }
     case "get_workspace_state":
       result = workspace;
       break;
