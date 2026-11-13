@@ -218,6 +218,9 @@ separate fixture and removes only marked fixture data. These builds use the debu
 profile without the desktop automation plugin; production commands, UI, signature
 verification and installer code run unchanged. This supplements the published
 release upgrade test, whose previous installer comes from GitHub.
+If a failed updater run leaves its marked installation, explicitly select
+`e2e/updater-lifecycle-cleanup.spec.ts` before retrying. Cleanup verifies the marker
+and temporary-directory boundary and never removes the ordinary app's data.
 
 For the Windows lab helper, explicitly select `e2e/install-upgrade.spec.ts`. Ordinary
 desktop runs exclude that spec. It closes the debug app before installing packages

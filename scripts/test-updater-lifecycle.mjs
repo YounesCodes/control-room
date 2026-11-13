@@ -25,6 +25,25 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const identifier = "app.controlroom.updater-fixture";
 assert.ok(process.env.APPDATA, "APPDATA is required");
 const data = join(process.env.APPDATA, identifier);
+if (process.argv.includes("--cleanup")) {
+  const owned = resolve(readFileSync(join(data, ".updater-lifecycle-fixture"), "utf8"));
+  assert.equal(dirname(owned), resolve(tmpdir()));
+  assert.match(owned.split(/[\\/]/).at(-1), /^control-room-updater-lifecycle-[A-Za-z0-9]+$/);
+  const application = join(owned, "application");
+  stopOwnedApplication(join(application, "control-room.exe"));
+  if (existsSync(join(application, "control-room.exe"))) {
+    const uninstallers = readdirSync(application).filter((name) =>
+      /^uninstall.*\.exe$/i.test(name),
+    );
+    assert.equal(uninstallers.length, 1);
+    await run(join(application, uninstallers[0]), ["/S", `_?=${application}`]);
+    assert.ok(!existsSync(join(application, "control-room.exe")));
+  }
+  rmSync(data, { recursive: true });
+  rmSync(owned, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  console.log("Removed only the marked updater fixture and its native installation");
+  process.exit(0);
+}
 assert.ok(!existsSync(data), `Refusing to replace existing fixture data: ${data}`);
 const directory = mkdtempSync(join(tmpdir(), "control-room-updater-lifecycle-"));
 const source = join(directory, "source");
@@ -244,6 +263,10 @@ try {
   console.log(
     `Real app updater ${previous} -> ${version}: bad signature refused, signed install/restart and all user data passed`,
   );
+} catch (error) {
+  console.error(`Updater lifecycle failed: ${error.stack ?? error}`);
+  writeFileSync(join(directory, "failure.txt"), String(error.stack ?? error));
+  throw error;
 } finally {
   await new Promise((done) => server.close(done));
   if (installed) {
@@ -298,14 +321,14 @@ function ownedProcesses() {
   const parsed = result ? JSON.parse(result) : [];
   return Array.isArray(parsed) ? parsed : [parsed];
 }
-function stopOwnedApplication() {
-  const escaped = application.replaceAll("'", "''");
+function stopOwnedApplication(file = application) {
+  const escaped = file.replaceAll("'", "''");
   execFileSync(
     "powershell.exe",
     [
       "-NoProfile",
       "-Command",
-      `Get-Process -Name control-room -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${escaped}' } | ForEach-Object { Stop-Process -Id $_.Id -Force; $_.WaitForExit(10000) | Out-Null }`,
+      `$ErrorActionPreference = 'Stop'; Get-Process -Name control-room -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${escaped}' } | ForEach-Object { Stop-Process -Id $_.Id -Force; $_.WaitForExit(10000) | Out-Null }; exit 0`,
     ],
     { stdio: "inherit" },
   );

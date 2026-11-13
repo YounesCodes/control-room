@@ -18,6 +18,7 @@ const installLifecycle = process.argv.some((argument) =>
     "e2e/install-upgrade.spec.ts",
     "e2e/install-lifecycle-cleanup.spec.ts",
     "e2e/updater-lifecycle.spec.ts",
+    "e2e/updater-lifecycle-cleanup.spec.ts",
   ].some((spec) => argument.replaceAll("\\", "/").endsWith(spec)),
 );
 const dataDirectory =
@@ -47,6 +48,7 @@ export const config: WebdriverIO.Config = {
           "./e2e/install-upgrade.spec.ts",
           "./e2e/install-lifecycle-cleanup.spec.ts",
           "./e2e/updater-lifecycle.spec.ts",
+          "./e2e/updater-lifecycle-cleanup.spec.ts",
         ]),
   ],
   maxInstances: 1,
