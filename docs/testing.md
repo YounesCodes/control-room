@@ -222,6 +222,9 @@ These builds use the debug
 profile without the desktop automation plugin; production commands, UI, signature
 verification and installer code run unchanged. This supplements the published
 release upgrade test, whose previous installer comes from GitHub.
+The Linux x86_64 AppImage journey passed on integration e03d62e, including bad
+signature rejection, exact candidate bytes, automatic visible relaunch and every
+seeded data field. The Windows positive-update retry remains under validation.
 If a failed updater run leaves its marked installation, explicitly select
 `e2e/updater-lifecycle-cleanup.spec.ts` before retrying. Cleanup verifies the marker
 and temporary-directory boundary and never removes the ordinary app's data.
