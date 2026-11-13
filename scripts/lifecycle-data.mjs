@@ -102,9 +102,19 @@ async function seedLifecycleLayout(invoke, session) {
   await session.waitUntil(() =>
     session.execute(() => !globalThis.document.documentElement.dataset.focusTransition),
   );
-  await session.$('button[aria-label="New terminal"]').click();
-  await session.$(".new-terminal-menu").$("button*=Split right").click();
-  await session.$(`.new-terminal-menu [aria-label="New local terminal: ${shell.label}"]`).click();
+  const legacySplit = await session.$('[aria-label="Split terminal"]');
+  if (await legacySplit.isExisting()) {
+    // Published v0.9.4 predates the shared New terminal split launcher.
+    await legacySplit.click();
+    await session.$(".terminal-split-menu").$("button*=Split vertically").click();
+    await session
+      .$(`.terminal-split-menu [aria-label="New local terminal: ${shell.label}"]`)
+      .click();
+  } else {
+    await session.$('button[aria-label="New terminal"]').click();
+    await session.$(".new-terminal-menu").$("button*=Split right").click();
+    await session.$(`.new-terminal-menu [aria-label="New local terminal: ${shell.label}"]`).click();
+  }
   await session
     .$(".terminal-workspace-pane.active .xterm-helper-textarea")
     .addValue("echo LIFECYCLE_NATIVE_INPUT");
