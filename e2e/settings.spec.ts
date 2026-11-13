@@ -1,7 +1,15 @@
 import { isMac, isLinux, localShellId, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { ipc, openLocal, restartApp, runtime, savedSettings, terminalCommand } from "./helpers";
+import {
+  ipc,
+  openLocal,
+  restartApp,
+  runtime,
+  savedSettings,
+  terminalCommand,
+  expectNativeText,
+} from "./helpers";
 
 const font = () =>
   $(
@@ -152,7 +160,7 @@ describe("Settings and native window", () => {
       "//label[contains(.,'Show current command/process in terminal tab titles')]/input",
     ).click();
     await $("button=Save settings").click();
-    await expect($(".settings-heading [role=status]")).toHaveText("Settings saved.");
+    await expectNativeText(await $(".settings-heading [role=status]"), "Settings saved.");
     await restartApp();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();

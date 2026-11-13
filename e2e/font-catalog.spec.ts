@@ -34,11 +34,13 @@ liveFonts("public font catalog in the native WebView", () => {
       // Linux offers installed desktop fonts rather than the online font catalog.
       const settings = await savedSettings();
       const current = $('input[aria-describedby="linux-font-help"]');
-      await current.setValue("monospace");
+      const family = settings.terminalFontFamily === "monospace" ? "serif" : "monospace";
+      await current.setValue(family);
       await browser.waitUntil(() =>
         browser.execute(
-          () =>
-            document.querySelector<HTMLElement>(".ansi-preview")?.style.fontFamily === "monospace",
+          (expected) =>
+            document.querySelector<HTMLElement>(".ansi-preview")?.style.fontFamily === expected,
+          family,
         ),
       );
       expect((await savedSettings()).terminalFontFamily).toBe(settings.terminalFontFamily);
