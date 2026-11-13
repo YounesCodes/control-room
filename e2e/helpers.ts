@@ -250,37 +250,6 @@ export async function typeTerminalText(text: string, scope = ".terminal-workspac
   else await browser.keys(text);
 }
 
-export async function focusElement(element: WebdriverIO.Element) {
-  await element.click();
-  // Embedded pointer actions emit mouse events without the browser's default
-  // focus action. Explicit focus lets native keyboard resize tests use the handle.
-  if (isMac) await browser.execute((node: HTMLElement) => node.focus(), element);
-}
-
-export async function pointerClick(element: WebdriverIO.Element) {
-  if (isMac) {
-    // Embedded driver 1.5 emits MouseEvents, but no PointerEvents. Exercise the
-    // actual pane activation handler before the driver's ordinary click.
-    await browser.execute((node: HTMLElement) => {
-      const bounds = node.getBoundingClientRect();
-      for (const type of ["pointerdown", "pointerup"])
-        node.dispatchEvent(
-          new PointerEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            pointerId: 1,
-            pointerType: "mouse",
-            isPrimary: true,
-            button: 0,
-            clientX: bounds.left + bounds.width / 2,
-            clientY: bounds.top + bounds.height / 2,
-          }),
-        );
-    }, element);
-  }
-  await element.click();
-}
-
 export async function pressBoundaryKey(
   key: "Home" | "End" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown",
   shift = false,
