@@ -1,9 +1,10 @@
-import { localShellLabel } from "./platform";
+import { isMac, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import {
   openSplitMenu,
   focusElement,
+  pointerClick,
   addConnection,
   ipc,
   openLocal,
@@ -57,7 +58,7 @@ describe("Compact native windows and live terminal arrangements", () => {
     await terminalCommand("echo COMPACT_SESSION_SURVIVES", "COMPACT_SESSION_SURVIVES");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 1);
     const sessions = (await runtime()).sessionIds;
-    for (const width of [520, 600, 683, 768, 960, 1180]) {
+    for (const width of isMac ? [960, 1180] : [520, 600, 683, 768, 960, 1180]) {
       await browser.setWindowSize(width, width <= 768 ? 480 : 600);
       await browser.waitUntil(async () =>
         browser.execute((expected) => Math.abs(innerWidth - expected) < 20, width),
@@ -78,18 +79,23 @@ describe("Compact native windows and live terminal arrangements", () => {
       expect((await runtime()).sessionIds).toEqual(sessions);
       await browser.saveScreenshot(`test-results/desktop/compact-native-${width}.png`);
     }
-    await $("aria/Maximize or restore window").click();
-    await browser.waitUntil(() => ipc<boolean>("plugin:window|is_maximized", { label: "main" }));
-    await $("aria/Maximize or restore window").click();
-    await browser.waitUntil(
-      async () => !(await ipc<boolean>("plugin:window|is_maximized", { label: "main" })),
-    );
+    const original = await browser.getWindowRect();
+    const expanded = () =>
+      ipc<boolean>(isMac ? "plugin:window|is_fullscreen" : "plugin:window|is_maximized", {
+        label: "main",
+      });
+    if (isMac) await browser.fullscreenWindow();
+    else await $("aria/Maximize or restore window").click();
+    await browser.waitUntil(expanded);
+    if (isMac) await browser.setWindowRect(original.x, original.y, original.width, original.height);
+    else await $("aria/Maximize or restore window").click();
+    await browser.waitUntil(async () => !(await expanded()));
     await terminalContains("COMPACT_SESSION_SURVIVES");
-    await browser.setWindowSize(600, 480);
-    await $("aria/Open navigation").click();
+    await browser.setWindowSize(isMac ? 960 : 600, isMac ? 640 : 480);
+    if (!isMac) await $("aria/Open navigation").click();
     await $(".host-main").click();
     for (const view of ["Systemd", "Ports", "Docker", "Logs", "History"]) {
-      await $("aria/Open navigation").click();
+      if (!isMac) await $("aria/Open navigation").click();
       await $("nav[aria-label='Workspace features']")
         .$("button=" + view)
         .click();
@@ -146,7 +152,7 @@ describe("Compact native windows and live terminal arrangements", () => {
       );
     });
     const layout = (await saved()).terminalGroups![0].layout;
-    for (const width of [600, 1180]) {
+    for (const width of isMac ? [960, 1180] : [600, 1180]) {
       await browser.setWindowSize(width, 600);
       await browser.waitUntil(async () =>
         browser.execute(() =>
@@ -168,7 +174,7 @@ describe("Compact native windows and live terminal arrangements", () => {
           .dataset.terminalMotionId!.replace(/-heading$/, ""),
       localShellLabel,
     );
-    await $(`[data-workspace-id='${commandPromptPane}'] .xterm`).click();
+    await pointerClick(await $(`[data-workspace-id='${commandPromptPane}'] .xterm`));
     await terminalCommand("echo ARRANGEMENT_INPUT", "ARRANGEMENT_INPUT");
     await terminalContains("ARRANGEMENT_SCROLLBACK");
     await restartApp();

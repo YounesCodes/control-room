@@ -1,3 +1,4 @@
+import { isMac } from "./platform";
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -214,7 +215,9 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   const dialog = $(".modal-backdrop [role=dialog]");
   if (await dialog.isExisting()) {
     await expect(dialog.$("h2")).toHaveText(`Connect to ${name}`);
-    const fallback = dialog.$("button=Connect as Linux host");
+    const fallback = dialog.$(
+      ".//button[normalize-space()='Open default SSH shell' or normalize-space()='Connect as Linux host']",
+    );
     await fallback.waitForDisplayed({ timeout: 30_000 });
     await fallback.click();
     await dialog.waitForExist({ reverse: true });
