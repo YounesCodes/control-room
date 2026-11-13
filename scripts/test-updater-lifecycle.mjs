@@ -1,4 +1,4 @@
-// Real app, UI, HTTP feed, signature verification, NSIS replacement and restart.
+// Real app, UI, HTTP feed, signature verification, package replacement and restart.
 // Only this disposable product's installation and data may be removed.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -6,38 +6,50 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { createServer } from "node:http";
 import {
   existsSync,
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withInstalledApp } from "./lifecycle-driver.mjs";
 import { seedLifecycleData, readLifecycleData, assertLifecycleData } from "./lifecycle-data.mjs";
 
-assert.equal(process.platform, "win32", "The installed updater fixture currently requires NSIS");
+const windows = process.platform === "win32";
+assert.ok(
+  windows || process.platform === "linux",
+  "The updater fixture needs NSIS or AppImage support",
+);
 const root = fileURLToPath(new URL("../", import.meta.url));
 const identifier = "app.controlroom.updater-fixture";
-assert.ok(process.env.APPDATA, "APPDATA is required");
-const data = join(process.env.APPDATA, identifier);
+if (windows) assert.ok(process.env.APPDATA, "APPDATA is required");
+const data = join(
+  windows ? process.env.APPDATA : process.env.XDG_DATA_HOME || join(homedir(), ".local/share"),
+  identifier,
+);
+const executable = windows ? "control-room.exe" : "control-room.AppImage";
+const extension = windows ? ".exe" : ".AppImage";
+const bundleType = windows ? "nsis" : "appimage";
 if (process.argv.includes("--cleanup")) {
   const owned = resolve(readFileSync(join(data, ".updater-lifecycle-fixture"), "utf8"));
   assert.equal(dirname(owned), resolve(tmpdir()));
   assert.match(owned.split(/[\\/]/).at(-1), /^control-room-updater-lifecycle-[A-Za-z0-9]+$/);
   const application = join(owned, "application");
-  stopOwnedApplication(join(application, "control-room.exe"));
-  if (existsSync(join(application, "control-room.exe"))) {
+  await stopOwnedApplication(join(application, executable));
+  if (windows && existsSync(join(application, executable))) {
     const uninstallers = readdirSync(application).filter((name) =>
       /^uninstall.*\.exe$/i.test(name),
     );
     assert.equal(uninstallers.length, 1);
     await run(join(application, uninstallers[0]), ["/S", `_?=${application}`]);
-    assert.ok(!existsSync(join(application, "control-room.exe")));
+    assert.ok(!existsSync(join(application, executable)));
   }
   rmSync(data, { recursive: true });
   rmSync(owned, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
@@ -48,7 +60,7 @@ assert.ok(!existsSync(data), `Refusing to replace existing fixture data: ${data}
 const directory = mkdtempSync(join(tmpdir(), "control-room-updater-lifecycle-"));
 const source = join(directory, "source");
 const installRoot = join(directory, "application");
-const application = join(installRoot, "control-room.exe");
+const application = join(installRoot, executable);
 const marker = join(data, ".updater-lifecycle-fixture");
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 const [major, minor, patch] = version.split(".").map(Number);
@@ -76,10 +88,15 @@ const server = createServer((request, response) => {
         version,
         notes: "Local native updater lifecycle fixture",
         pub_date: "2026-01-01T00:00:00Z",
-        platforms: { "windows-x86_64": { url: `${endpoint}/candidate.exe`, signature } },
+        platforms: {
+          [`${windows ? "windows" : "linux"}-x86_64`]: {
+            url: `${endpoint}/candidate${extension}`,
+            signature,
+          },
+        },
       }),
     );
-  } else if (request.url === "/candidate.exe" && payload) {
+  } else if (request.url === `/candidate${extension}` && payload) {
     packageRequests++;
     const bytes = Buffer.from(payload);
     if (modified) bytes[bytes.length - 1] ^= 1;
@@ -101,7 +118,11 @@ try {
   const archive = join(directory, "source.tar");
   execFileSync("git", ["archive", "HEAD", "--format=tar", "-o", archive], { cwd: root });
   execFileSync("tar", ["-xf", archive, "-C", source]);
-  symlinkSync(join(root, "node_modules"), join(source, "node_modules"), "junction");
+  symlinkSync(
+    join(root, "node_modules"),
+    join(source, "node_modules"),
+    windows ? "junction" : "dir",
+  );
   // Build from disposable source; the lab checkout and production updater key
   // stay unchanged. The two binaries have genuinely different package versions.
   const originalCargo = readFileSync(join(source, "src-tauri/Cargo.toml"), "utf8");
@@ -145,27 +166,31 @@ try {
         "build",
         "--debug",
         "--bundles",
-        "nsis",
+        bundleType,
+        ...(!windows ? ["--config", "src-tauri/tauri.linux.conf.json"] : []),
       ],
       {
         cwd: source,
         env: { ...process.env, CARGO_TARGET_DIR: target },
       },
     );
-    const bundle = join(target, "debug/bundle/nsis");
+    const bundle = join(target, "debug/bundle", bundleType);
     const matches = readdirSync(bundle).filter(
       (name) =>
-        name.startsWith("Control Room Updater Fixture_") &&
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+          .startsWith("controlroomupdaterfixture") &&
         name.includes(`_${current}_`) &&
-        name.endsWith(".exe"),
+        name.endsWith(extension),
     );
     assert.equal(matches.length, 1, "Expected one isolated updater fixture installer");
-    installers.push(join(directory, `${current}.exe`));
+    installers.push(join(directory, `${current}${extension}`));
     writeFileSync(installers.at(-1), readFileSync(join(bundle, matches[0])));
   }
   payload = readFileSync(installers[1]);
   const signed = sign(null, createHash("blake2b512").update(payload).digest(), privateKey);
-  const comment = `timestamp:123456\tfile:candidate.exe\tversion:${version}`;
+  const comment = `timestamp:123456\tfile:candidate${extension}\tversion:${version}`;
   signature = Buffer.from(
     [
       "untrusted comment: disposable updater lifecycle signature",
@@ -175,7 +200,12 @@ try {
       "",
     ].join("\n"),
   ).toString("base64");
-  await run(installers[0], ["/S", `/D=${installRoot}`]);
+  if (windows) await run(installers[0], ["/S", `/D=${installRoot}`]);
+  else {
+    mkdirSync(installRoot);
+    writeFileSync(application, readFileSync(installers[0]));
+    chmodSync(application, 0o755);
+  }
   installed = true;
   assert.ok(existsSync(application));
   mkdirSync(data, { recursive: true });
@@ -241,7 +271,7 @@ try {
     "Signed updater did not replace the executable",
     120000,
   );
-  const candidateExe = join(target, "debug/control-room.exe");
+  const candidateExe = windows ? join(target, "debug/control-room.exe") : installers[1];
   assert.equal(
     hash(application),
     hash(candidateExe),
@@ -255,7 +285,7 @@ try {
   console.log(
     "Signed update replaced the native installation and automatically launched its window",
   );
-  stopOwnedApplication();
+  await stopOwnedApplication();
   await withInstalledApp(application, async (invoke, session) => {
     assert.equal(await invoke("current_app_version"), version);
     await session.waitUntil(
@@ -280,13 +310,15 @@ try {
 } finally {
   await new Promise((done) => server.close(done));
   if (installed) {
-    stopOwnedApplication();
-    const uninstallers = readdirSync(installRoot).filter((name) =>
-      /^uninstall.*\.exe$/i.test(name),
-    );
-    assert.equal(uninstallers.length, 1);
-    await run(join(installRoot, uninstallers[0]), ["/S", `_?=${installRoot}`]);
-    assert.ok(!existsSync(application), "Owned updater fixture was not uninstalled");
+    await stopOwnedApplication();
+    if (windows) {
+      const uninstallers = readdirSync(installRoot).filter((name) =>
+        /^uninstall.*\.exe$/i.test(name),
+      );
+      assert.equal(uninstallers.length, 1);
+      await run(join(installRoot, uninstallers[0]), ["/S", `_?=${installRoot}`]);
+      assert.ok(!existsSync(application), "Owned updater fixture was not uninstalled");
+    }
   }
   if (existsSync(data)) {
     assert.equal(readFileSync(marker, "utf8"), directory, "Refusing unowned fixture cleanup");
@@ -317,8 +349,44 @@ async function until(check, message, timeout) {
     await new Promise((done) => setTimeout(done, 250));
   }
 }
-function ownedProcesses() {
-  const escaped = application.replaceAll("'", "''");
+function ownedProcesses(file = application, requireWindow = true) {
+  if (!windows) {
+    const found = [];
+    for (const name of readdirSync("/proc")) {
+      if (!/^\d+$/.test(name)) continue;
+      try {
+        if (
+          basename(readlinkSync(`/proc/${name}/exe`).replace(/ \(deleted\)$/, "")) !==
+          "control-room"
+        )
+          continue;
+        if (!readFileSync(`/proc/${name}/environ`, "utf8").split("\0").includes(`APPIMAGE=${file}`))
+          continue;
+        const start = readFileSync(`/proc/${name}/stat`, "utf8").split(") ").at(-1).split(" ")[19];
+        let window = 0;
+        if (requireWindow) {
+          try {
+            window = Number(
+              execFileSync("xdotool", ["search", "--onlyvisible", "--pid", name], {
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "pipe"],
+                timeout: 5000,
+              })
+                .trim()
+                .split("\n")[0],
+            );
+          } catch (error) {
+            if (error.status !== 1) throw error;
+          }
+        }
+        found.push({ Id: Number(name), start, MainWindowHandle: window });
+      } catch (error) {
+        if (!["ENOENT", "ESRCH", "EACCES"].includes(error.code)) throw error;
+      }
+    }
+    return found;
+  }
+  const escaped = file.replaceAll("'", "''");
   const result = execFileSync(
     "powershell.exe",
     [
@@ -331,7 +399,28 @@ function ownedProcesses() {
   const parsed = result ? JSON.parse(result) : [];
   return Array.isArray(parsed) ? parsed : [parsed];
 }
-function stopOwnedApplication(file = application) {
+async function stopOwnedApplication(file = application) {
+  if (!windows) {
+    for (const owned of ownedProcesses(file, false)) {
+      if (
+        ownedProcesses(file, false).some(
+          (current) => current.Id === owned.Id && current.start === owned.start,
+        )
+      ) {
+        try {
+          process.kill(owned.Id, "SIGTERM");
+        } catch (error) {
+          if (error.code !== "ESRCH") throw error;
+        }
+      }
+    }
+    await until(
+      () => ownedProcesses(file, false).length === 0,
+      "Owned AppImage process did not exit",
+      10000,
+    );
+    return;
+  }
   const escaped = file.replaceAll("'", "''");
   execFileSync(
     "powershell.exe",
