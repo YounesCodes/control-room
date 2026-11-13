@@ -6,8 +6,7 @@ mod linux;
 const DOCUMENTATION_URL: &str = "https://younescodes.github.io/control-room/";
 
 /// Open only the published documentation. Callers cannot supply URLs or paths.
-#[cfg_attr(target_os = "linux", tauri::command(async))]
-#[cfg_attr(not(target_os = "linux"), tauri::command)]
+#[tauri::command(async)]
 pub fn open_documentation() -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -30,13 +29,25 @@ pub fn open_documentation() -> Result<(), String> {
         browser_launch_result(result as isize)
     }
     #[cfg(target_os = "linux")]
-    {
-        let mut command = std::process::Command::new("xdg-open");
-        command.arg(DOCUMENTATION_URL);
-        linux::launch(command)
-    }
+    return open_url(DOCUMENTATION_URL);
     #[cfg(not(any(windows, target_os = "linux")))]
-    Err("Opening documentation is supported on Windows.".into())
+    Err("Could not open the default web browser.".into())
+}
+
+/// Opens the manual package update page. The URL is owned by the app.
+#[tauri::command(async)]
+pub fn open_releases() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    return open_url("https://github.com/YounesCodes/control-room/releases/latest");
+    #[cfg(not(target_os = "linux"))]
+    Err("Use Check for updates in Settings.".into())
+}
+
+#[cfg(target_os = "linux")]
+fn open_url(url: &'static str) -> Result<(), String> {
+    let mut command = crate::ssh::background_command("xdg-open");
+    command.arg(url);
+    linux::launch(command)
 }
 
 #[cfg(any(windows, test))]

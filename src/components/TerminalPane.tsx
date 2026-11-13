@@ -1,5 +1,5 @@
 import { Search } from "./MagnifierIcon";
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
@@ -34,6 +34,7 @@ interface TerminalPaneProps {
   settings: AppSettings;
   visible: boolean;
   active: boolean;
+  nativeClipboard?: boolean;
   onActivate: () => void;
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
@@ -62,6 +63,7 @@ export function TerminalPane({
   settings,
   visible,
   active,
+  nativeClipboard = false,
   onActivate,
   onSession,
   onState,
@@ -116,6 +118,28 @@ export function TerminalPane({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
+
+  const nativeClipboardRef = useRef(nativeClipboard);
+  nativeClipboardRef.current = nativeClipboard;
+  const copySelection = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal?.hasSelection()) return;
+    const text = terminal.getSelection();
+    const write = nativeClipboardRef.current
+      ? api.writeClipboard(text)
+      : navigator.clipboard.writeText(text);
+    void write.catch((error) => setLocalError("Copy failed: " + errorMessage(error)));
+  }, []);
+  const pasteClipboard = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const read = nativeClipboardRef.current ? api.readClipboard() : navigator.clipboard.readText();
+    void read
+      .then((text) => {
+        if (text && terminalRef.current === terminal) terminal.paste(text);
+      })
+      .catch((error) => setLocalError("Paste failed: " + errorMessage(error)));
+  }, []);
 
   useImperativeHandle(ref, () => ({
     focus: () => terminalRef.current?.focus(),
@@ -226,14 +250,6 @@ export function TerminalPane({
     );
 
     const send = (bytes: Uint8Array) => sendInputRef.current(bytes);
-    const pasteClipboard = () => {
-      void navigator.clipboard
-        .readText()
-        .then((text) => {
-          if (text) terminal.paste(text);
-        })
-        .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
-    };
     const dataDisposable = terminal.onData((data) => send(new TextEncoder().encode(data)));
     const binaryDisposable = terminal.onBinary((data) =>
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
@@ -241,17 +257,18 @@ export function TerminalPane({
     terminal.attachCustomKeyEventHandler((event) => {
       if (isControlRoomShortcut(event)) return false;
       if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey) return true;
-      if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
-        void navigator.clipboard
-          .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+      const key = event.key.toLowerCase();
+      if (key === "c" && terminal.hasSelection()) {
+        copySelection();
         return false;
       }
-      // xterm owns keyboard paste through its textarea's native paste event.
-      // Reading the clipboard here as well sends the same text twice: once
-      // from this keydown handler and once when xterm emits the paste through
-      // `onData`. Right-click paste still uses `pasteClipboard` below because
-      // that pointer gesture never reaches xterm's textarea.
+      if (key === "v" && nativeClipboardRef.current) {
+        // WebKitGTK does not map Ctrl+Shift+V to a native paste.
+        event.preventDefault();
+        pasteClipboard();
+        return false;
+      }
+      // WebView2 delivers paste to xterm's textarea on its own.
       return true;
     });
 
@@ -289,9 +306,7 @@ export function TerminalPane({
 
       event.preventDefault();
       if (action === "copy") {
-        void navigator.clipboard
-          .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+        copySelection();
         return;
       }
       if (action === "paste") pasteClipboard();
@@ -683,25 +698,6 @@ export function TerminalPane({
     setSearchOpen(false);
     setSearchResult({ index: -1, count: 0 });
     terminalRef.current?.focus();
-  }
-
-  function copySelection() {
-    const terminal = terminalRef.current;
-    if (!terminal?.hasSelection()) return;
-    void navigator.clipboard
-      .writeText(terminal.getSelection())
-      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
-  }
-
-  function pasteClipboard() {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    void navigator.clipboard
-      .readText()
-      .then((text) => {
-        if (text) terminal.paste(text);
-      })
-      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";

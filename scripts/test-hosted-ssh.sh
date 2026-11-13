@@ -18,9 +18,6 @@ ssh-keygen -q -t ed25519 -N '' -f "$fixture_dir/host_key"
 ssh-keygen -q -t ed25519 -N '' -f "$fixture_dir/client_key"
 cp "$fixture_dir/client_key.pub" "$fixture_dir/authorized_keys"
 chmod 600 "$fixture_dir/authorized_keys"
-mkdir -p "$fixture_dir/bin"
-ln -s "$(command -v ssh)" "$fixture_dir/bin/ssh.exe"
-export PATH="$fixture_dir/bin:$PATH"
 export CONTROL_ROOM_TEST_HOST=127.0.0.1
 export CONTROL_ROOM_TEST_USER="$(id -un)"
 export CONTROL_ROOM_TEST_PORT=22345
@@ -54,8 +51,9 @@ sshd_pid="$(cat "$fixture_dir/sshd.pid")"
 ssh -F "$CONTROL_ROOM_TEST_SSH_CONFIG" -p "$CONTROL_ROOM_TEST_PORT" "$CONTROL_ROOM_TEST_USER@$CONTROL_ROOM_TEST_HOST" true
 
 tests=(
-  history::tests::live_history_install_is_reversible_in_an_isolated_home \
+  history::tests::live_history_install_is_reversible_in_an_isolated_home
   remote::tests::live_fixture_supports_structured_features
+  session::linux::tests::linux_pty_runs_a_live_ssh_session
 )
 listed="$(cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --ignored --list)"
 for test in "${tests[@]}"; do
