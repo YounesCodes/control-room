@@ -138,6 +138,7 @@ import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
 import { LogsPane } from "./pages/LogsPane";
 import { PortsPane } from "./pages/PortsPane";
+import { LaunchdServicesPane } from "./pages/LaunchdServicesPane";
 import { ServicesPane } from "./pages/ServicesPane";
 import { navigateSystemdExplorer } from "./lib/systemd-units";
 import { SettingsPane } from "./pages/SettingsPane";
@@ -166,9 +167,16 @@ import type {
   WorkspaceView,
 } from "./types";
 
+/// The compiled client platform arrives with the SSH environment, which can take
+/// seconds while ssh-add answers. Until then the WebView's own platform decides
+/// window chrome and shortcuts, so a Mac window never starts in the Windows layout.
+const provisionalPlatform: EnvironmentInfo["platform"] =
+  typeof navigator !== "undefined" && navigator.platform.startsWith("Mac") ? "macos" : "windows";
+
 const emptyEnvironment: EnvironmentInfo = {
+  platform: provisionalPlatform,
   sshPath: null,
-  sshConfigPath: "%USERPROFILE%\\.ssh\\config",
+  sshConfigPath: "~/.ssh/config",
   sshAgentAvailable: false,
   platformSupported: true,
 };
@@ -223,6 +231,7 @@ type TerminalHandlers = {
 /// terminal used to repeat that work each time.
 const WorkspaceTerminal = memo(function WorkspaceTerminal({
   workspace,
+  platform,
   settings,
   visible,
   active,
@@ -230,6 +239,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   handlers,
 }: {
   workspace: Workspace;
+  platform: EnvironmentInfo["platform"];
   settings: AppSettings;
   visible: boolean;
   active: boolean;
@@ -247,6 +257,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
     <TerminalPane
       ref={ref}
       workspace={workspace}
+      platform={platform}
       settings={settings}
       visible={visible}
       active={active}
@@ -287,6 +298,7 @@ type InspectionHandlers = {
 const WorkspaceInspection = memo(function WorkspaceInspection({
   workspace,
   windowsHost,
+  macosHost,
   capabilities,
   settings,
   logTailOptions,
@@ -296,6 +308,7 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
 }: {
   workspace: RemoteWorkspace;
   windowsHost: boolean;
+  macosHost: boolean;
   capabilities: HostCapabilities | null;
   settings: AppSettings;
   logTailOptions: number[];
@@ -312,6 +325,15 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
           <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
             <WindowsServicesPane key={id} connection={connection} />
           </Suspense>
+        ) : macosHost ? (
+          <LaunchdServicesPane
+            key={id}
+            connection={connection}
+            cache={workspace.servicesCache}
+            onCacheChange={(cache) => handlers.servicesCache(id, cache)}
+            onViewLogs={(source) => handlers.viewLogs(id, source)}
+            focusId={workspace.systemdSelectionId}
+          />
         ) : (
           <ServicesPane
             key={id}
@@ -350,6 +372,7 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
       {workspace.view === "docker" && (
         <DockerPane
           onOpenPort={(endpoint) => handlers.openPort(id, endpoint)}
+          macosHost={macosHost}
           key={id}
           connection={connection}
           windowsHost={windowsHost}
@@ -366,6 +389,7 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
       )}
       {workspace.view === "logs" && (
         <LogsPane
+          macosHost={macosHost}
           key={id}
           connection={connection}
           windowsHost={windowsHost}
@@ -381,6 +405,7 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
       )}
       {workspace.view === "history" && (
         <HistoryPane
+          macosHost={macosHost}
           key={id}
           connection={connection}
           paused={workspace.historyPaused}
@@ -504,6 +529,7 @@ export function App() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
+  const clientPlatform = environment?.platform ?? provisionalPlatform;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -757,8 +783,13 @@ export function App() {
   const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
   const windowsWorkspace =
     !!activeRemoteWorkspace &&
-    (!!activeRemoteWorkspace.remoteShell ||
+    ((!!activeRemoteWorkspace.remoteShell &&
+      !activeRemoteWorkspace.remoteShell.id.startsWith("macos:")) ||
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "windows");
+  const macosWorkspace =
+    !!activeRemoteWorkspace &&
+    (activeRemoteWorkspace.remoteShell?.id.startsWith("macos:") ||
+      hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "macos");
   // Local workspaces offer Terminal only; notes live in the terminal toolbar.
   const offeredNavigation =
     activeWorkspace && isLocalWorkspace(activeWorkspace)
@@ -767,7 +798,11 @@ export function App() {
         ? navigation
             .filter((item) => ["terminal", "services", "ports", "docker", "logs"].includes(item.id))
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
-        : navigation;
+        : macosWorkspace
+          ? navigation.map((item) =>
+              item.id === "services" ? { ...item, label: "Services" } : item,
+            )
+          : navigation;
   const activeSavedConnection = activeRemoteWorkspace
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
@@ -949,15 +984,16 @@ export function App() {
       ) {
         return;
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
+      const appModifier = clientPlatform === "macos" ? event.metaKey : event.ctrlKey;
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, { view: "terminal" });
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
         event.preventDefault();
         void closeWorkspace(activeWorkspace.id);
       }
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
+      if (appModifier && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
         event.preventDefault();
         updateWorkspace(activeWorkspace.id, {
           connectRequested: true,
@@ -966,7 +1002,7 @@ export function App() {
         });
       }
       if (
-        event.ctrlKey &&
+        appModifier &&
         event.shiftKey &&
         event.key.toLowerCase() === "f" &&
         activeWorkspace?.view === "terminal"
@@ -980,11 +1016,16 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [activeWorkspace, dialogConnection, hostMenuConnectionId, settingsOpen]);
+  }, [activeWorkspace, dialogConnection, clientPlatform, hostMenuConnectionId, settingsOpen]);
 
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p" && !event.repeat) {
+      if (
+        (clientPlatform === "macos" ? event.metaKey : event.ctrlKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "p" &&
+        !event.repeat
+      ) {
         if (paletteOpen) {
           event.preventDefault();
           setPaletteOpen(false);
@@ -999,7 +1040,7 @@ export function App() {
     }
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [paletteOpen, dialogConnection]);
+  }, [dialogConnection, clientPlatform, paletteOpen]);
 
   useEffect(() => {
     if (!hostMenuConnectionId) return;
@@ -1463,7 +1504,8 @@ export function App() {
       }
       if (
         hostCapabilities[connection.id]?.osId &&
-        hostCapabilities[connection.id]?.osId !== "windows"
+        hostCapabilities[connection.id]?.osId !== "windows" &&
+        hostCapabilities[connection.id]?.osId !== "macos"
       ) {
         const workspace = createRemoteWorkspace(connection);
         if (split) splitWithNewWorkspace(workspace);
@@ -1483,7 +1525,7 @@ export function App() {
     setRemoteShellRequest(null);
   }
 
-  /// Opens a local Windows shell as its own Workspace. Each launch is a new
+  /// Opens a local shell as its own Workspace. Each launch is a new
   /// shell, so there is nothing to reuse, and no Saved Connection is involved.
   function openLocalShell(shell: LocalShellProfile) {
     closeSettings(() => openWorkspace(createLocalWorkspace(shell)));
@@ -2393,11 +2435,38 @@ export function App() {
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
   const focusToggleAvailable = !settingsOpen && activeWorkspace?.view === "terminal";
+  // macOS overlays native window controls on one toolbar row, so the
+  // Connections heading moves there unless compact navigation owns it.
+  const macToolbarHeading = clientPlatform === "macos" && !compactShell;
+  const connectionsHeading = (
+    <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
+      <span data-tauri-drag-region>Connections</span>
+      <span data-tauri-drag-region>{connections.length}</span>
+      <button
+        type="button"
+        className="icon-button layout-reset"
+        aria-label="Reset layout"
+        title="Reset all panel sizes"
+        onClick={() => setPanelSizes({})}
+      >
+        <RotateCcw size={14} />
+      </button>
+    </div>
+  );
+
   return (
     <div
       ref={shellSize.ref}
+      data-platform={clientPlatform}
       data-focus-toggle={focusToggleAvailable ? "visible" : "hidden"}
       data-compact={compactShell || undefined}
+      onClickCapture={(event) => {
+        // Safari does not focus buttons on mouse clicks. Keep keyboard return
+        // targets and subsequent shortcuts consistent across desktop webviews.
+        if (event.button === 0 && event.target instanceof Element) {
+          event.target.closest("button")?.focus({ preventScroll: true });
+        }
+      }}
       className={
         settingsOpen
           ? "app-shell settings-mode"
@@ -2412,6 +2481,7 @@ export function App() {
       }
     >
       <header className="app-bar" data-tauri-drag-region>
+        {macToolbarHeading && !settingsOpen && connectionsHeading}
         {!terminalFocusMode && !settingsOpen && (
           <button
             ref={navigationButtonRef}
@@ -2485,7 +2555,7 @@ export function App() {
         >
           {terminalFocusMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
-        <WindowControls />
+        <WindowControls platform={clientPlatform} />
       </div>
 
       {compactShell && navigationOpen && !settingsOpen && !terminalFocusMode && (
@@ -2505,19 +2575,7 @@ export function App() {
         inert={compactShell && !navigationOpen}
         className={`${activeRemoteWorkspace ? "sidebar workspace-open" : "sidebar"}${navigationOpen ? " navigation-open" : ""}`}
       >
-        <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
-          <span data-tauri-drag-region>Connections</span>
-          <span data-tauri-drag-region>{connections.length}</span>
-          <button
-            type="button"
-            className="icon-button layout-reset"
-            aria-label="Reset layout"
-            title="Reset all panel sizes"
-            onClick={() => setPanelSizes({})}
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
+        {!macToolbarHeading && connectionsHeading}
         <div className="sidebar-filter-row">
           <label className="search-field sidebar-search">
             <Search size={14} />
@@ -3020,6 +3078,7 @@ export function App() {
                       >
                         <WorkspaceTerminal
                           workspace={workspace}
+                          platform={clientPlatform}
                           settings={settings}
                           visible={terminalVisible}
                           active={terminalVisible && workspace.id === activeWorkspace.id}
@@ -3124,6 +3183,7 @@ export function App() {
                   <WorkspaceInspection
                     workspace={activeRemoteWorkspace}
                     windowsHost={windowsWorkspace}
+                    macosHost={!!macosWorkspace}
                     capabilities={hostCapabilities[activeConnection.id] ?? null}
                     settings={settings}
                     logTailOptions={settingsContract.logTailOptions}
@@ -3187,14 +3247,18 @@ export function App() {
             )}
             <div className="empty-shortcuts">
               <span className="empty-shortcut">
-                <kbd>Ctrl</kbd>
+                <kbd>{clientPlatform === "macos" ? "Cmd" : "Ctrl"}</kbd>
                 <kbd>Shift</kbd>
                 <kbd>P</kbd> Command palette
               </span>
             </div>
             {environment && !environment.sshPath && (
               <p className="inline-warning">
-                Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
+                {clientPlatform === "windows"
+                  ? "Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first."
+                  : clientPlatform === "macos"
+                    ? "The macOS OpenSSH client was not found at /usr/bin/ssh or on PATH."
+                    : "Control Room supports Windows and macOS clients."}
               </p>
             )}
           </section>
@@ -3292,6 +3356,7 @@ export function App() {
 
       {paletteOpen && (
         <CommandPalette
+          shortcutModifier={clientPlatform === "macos" ? "Cmd" : "Ctrl"}
           connections={connections}
           localShells={offeredShells}
           workspaces={workspaces}

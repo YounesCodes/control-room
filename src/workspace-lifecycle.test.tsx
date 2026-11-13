@@ -328,6 +328,7 @@ describe("App Workspace behavior", () => {
       logTailOptions: [50, 100, 200, 500, 1000],
     });
     api.environment.mockResolvedValue({
+      platform: "windows",
       sshPath: "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
       sshConfigPath: "C:\\Users\\test\\.ssh\\config",
       sshAgentAvailable: true,
@@ -751,9 +752,11 @@ describe("App Workspace behavior", () => {
     expect(screen.queryByText(/OpenSSH was not detected/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Open Settings" }));
     await user.click(screen.getByRole("button", { name: "App & Diagnostics" }));
-    expect(screen.getAllByText("Checking…")).toHaveLength(3);
+    // Platform, SSH executable, SSH config, and SSH agent.
+    expect(screen.getAllByText("Checking…")).toHaveLength(4);
 
     answer({
+      platform: "windows",
       sshPath: null,
       sshConfigPath: "example-config",
       sshAgentAvailable: false,

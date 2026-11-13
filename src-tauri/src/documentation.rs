@@ -1,13 +1,9 @@
-#[cfg(target_os = "linux")]
-#[path = "url_launcher_linux.rs"]
-mod linux;
-
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "macos", test))]
 const DOCUMENTATION_URL: &str = "https://younescodes.github.io/control-room/";
 
 /// Open only the published documentation. Callers cannot supply URLs or paths.
-#[cfg_attr(target_os = "linux", tauri::command(async))]
-#[cfg_attr(not(target_os = "linux"), tauri::command)]
+#[cfg_attr(target_os = "macos", tauri::command(async))]
+#[cfg_attr(not(target_os = "macos"), tauri::command)]
 pub fn open_documentation() -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -29,14 +25,26 @@ pub fn open_documentation() -> Result<(), String> {
         };
         browser_launch_result(result as isize)
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(target_os = "macos")]
     {
-        let mut command = std::process::Command::new("xdg-open");
-        command.arg(DOCUMENTATION_URL);
-        linux::launch(command)
+        let status = macos_browser_command()
+            .status()
+            .map_err(|e| format!("Could not open documentation: {e}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("macOS could not open your default browser. Check the default browser in System Settings and retry.".into())
+        }
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
-    Err("Opening documentation is supported on Windows.".into())
+    #[cfg(not(any(windows, target_os = "macos")))]
+    Err("Opening documentation requires Windows or macOS.".into())
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_browser_command() -> std::process::Command {
+    let mut command = std::process::Command::new("/usr/bin/open");
+    command.arg(DOCUMENTATION_URL);
+    command
 }
 
 #[cfg(any(windows, test))]
@@ -60,6 +68,13 @@ fn browser_launch_result(code: isize) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn macos_opens_only_the_fixed_documentation_url_without_a_shell() {
+        let command = macos_browser_command();
+        assert_eq!(command.get_program(), "/usr/bin/open");
+        assert_eq!(command.get_args().collect::<Vec<_>>(), [DOCUMENTATION_URL]);
+    }
 
     #[test]
     fn reports_windows_browser_launch_failures() {

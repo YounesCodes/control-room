@@ -4,6 +4,7 @@ import {
   exposureLabel,
   firewallForSocket,
   socketExposure,
+  serviceOwnerLabels,
   socketScope,
   type SocketContainerOwner,
 } from "../../lib/port-inspector";
@@ -24,6 +25,7 @@ export function SocketDetail({
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
   const disposition = firewallForSocket(firewall, socket);
+  const ownerLabels = serviceOwnerLabels(socket.systemdUnit, firewall?.backend === "macos");
   const firewallLabel =
     firewall?.backend === "firewalld"
       ? "firewalld"
@@ -31,7 +33,9 @@ export function SocketDetail({
         ? "UFW"
         : firewall?.backend === "windows"
           ? "Windows Firewall"
-          : "Firewall";
+          : firewall?.backend === "macos"
+            ? "macOS Application Firewall"
+            : "Firewall";
   return (
     <>
       <header>
@@ -75,13 +79,40 @@ export function SocketDetail({
             <dt>{firewallLabel}</dt>
             <dd>{disposition.label}</dd>
           </div>
-          {firewall?.backend === "windows" && (
+          {(firewall?.backend === "windows" || firewall?.backend === "macos") && (
             <div>
-              <dt>Profile policies</dt>
+              <dt>{firewall.backend === "macos" ? "Incoming policy" : "Profile policies"}</dt>
               <dd>{firewall.defaultIncoming ?? "Unavailable"}</dd>
             </div>
           )}
         </dl>
+        {firewall?.backend === "macos" && (
+          <>
+            <h3 className="detail-section-heading">Application rules</h3>
+            <dl className="detail-list">
+              {firewall.rules.map((rule) => (
+                <div key={rule.to}>
+                  <dt>{rule.action}</dt>
+                  <dd className="technical">{rule.to}</dd>
+                </div>
+              ))}
+            </dl>
+            <h3 className="detail-section-heading">Packet Filter</h3>
+            <p>
+              {firewall.packetFilter?.error ??
+                (firewall.packetFilter?.active === true
+                  ? "Enabled"
+                  : firewall.packetFilter?.active === false
+                    ? "Disabled"
+                    : "Unavailable")}
+            </p>
+            {firewall.packetFilter?.rules.length ? (
+              <pre className="firewall-rules technical">
+                {firewall.packetFilter.rules.join("\n")}
+              </pre>
+            ) : null}
+          </>
+        )}
         <p className="unit-scope-note">
           Binding and firewall policy are independent of Internet reachability.
         </p>
@@ -100,7 +131,7 @@ export function SocketDetail({
           </div>
           {firewall?.backend !== "windows" && (
             <div>
-              <dt>Systemd unit</dt>
+              <dt>{ownerLabels.kind}</dt>
               <dd>{socket.systemdUnit ?? "Not established"}</dd>
             </div>
           )}
@@ -124,14 +155,14 @@ export function SocketDetail({
               type="button"
               onClick={() => onOpenSystemd(socket.systemdUnit!)}
             >
-              <Server size={15} /> Open unit
+              <Server size={15} /> {ownerLabels.open}
             </button>
             <button
               className="secondary-button"
               type="button"
               onClick={() => onViewLogs({ type: "systemd", id: socket.systemdUnit! })}
             >
-              <FileClock size={15} /> View journal
+              <FileClock size={15} /> {ownerLabels.logs}
             </button>
           </>
         )}

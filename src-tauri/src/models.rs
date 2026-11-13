@@ -74,6 +74,8 @@ pub struct HostCapabilities {
     pub default_shell: Option<String>,
     pub systemd_available: bool,
     pub journald_available: bool,
+    pub launchd_available: bool,
+    pub unified_log_available: bool,
     pub docker_available: bool,
     pub docker_accessible: bool,
     /// True when the daemon answered under sudo after refusing the connecting
@@ -85,6 +87,9 @@ pub struct HostCapabilities {
     /// separate choice the user makes per connection or in Settings.
     pub passwordless_sudo: bool,
     pub docker_version: Option<String>,
+    pub docker_context: Option<String>,
+    pub docker_endpoint: Option<String>,
+    pub docker_remote: bool,
     pub running_service_count: Option<u32>,
     pub running_container_count: Option<u32>,
     pub total_container_count: Option<u32>,
@@ -220,7 +225,18 @@ pub struct FirewallStatus {
     pub active: Option<bool>,
     pub default_incoming: Option<String>,
     pub rules: Vec<FirewallRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packet_filter: Option<PacketFilterStatus>,
     pub collected_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PacketFilterStatus {
+    pub active: Option<bool>,
+    pub rules: Vec<String>,
+    pub error: Option<String>,
+    pub permission_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -400,7 +416,12 @@ impl Default for AppSettings {
                 HeaderMetric::Uptime,
             ],
             host_metrics_interval_seconds: 5,
-            terminal_font_family: "Cascadia Mono, Consolas, monospace".into(),
+            terminal_font_family: if cfg!(target_os = "macos") {
+                "Menlo, Monaco, monospace"
+            } else {
+                "Cascadia Mono, Consolas, monospace"
+            }
+            .into(),
             terminal_font_size: 14,
             terminal_scrollback: 10_000,
             terminal_foreground: "#dddddd".into(),
@@ -428,9 +449,9 @@ pub struct SessionStarted {
     pub connection_id: String,
 }
 
-/// One local Windows shell Control Room is allowed to run. The frontend names a
-/// profile by `id` and never by executable path, so `LocalShellKind` is the
-/// whole vocabulary of what may be started locally.
+/// One local shell Control Room is allowed to run. The frontend names a profile
+/// by `id` and never by executable path, so `LocalShellKind` is the whole
+/// vocabulary of what may be started locally on supported client platforms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LocalShellKind {
     #[serde(rename = "powershell-7")]
@@ -441,14 +462,23 @@ pub enum LocalShellKind {
     CommandPrompt,
     #[serde(rename = "git-bash")]
     GitBash,
+    #[serde(rename = "zsh")]
+    Zsh,
+    #[serde(rename = "bash")]
+    Bash,
+    #[serde(rename = "fish")]
+    Fish,
 }
 
 impl LocalShellKind {
-    pub const ALL: [LocalShellKind; 4] = [
+    pub const ALL: [LocalShellKind; 7] = [
         LocalShellKind::PowerShell7,
         LocalShellKind::WindowsPowerShell,
         LocalShellKind::CommandPrompt,
         LocalShellKind::GitBash,
+        LocalShellKind::Zsh,
+        LocalShellKind::Bash,
+        LocalShellKind::Fish,
     ];
 
     pub fn id(self) -> &'static str {
@@ -457,6 +487,9 @@ impl LocalShellKind {
             LocalShellKind::WindowsPowerShell => "windows-powershell",
             LocalShellKind::CommandPrompt => "command-prompt",
             LocalShellKind::GitBash => "git-bash",
+            LocalShellKind::Zsh => "zsh",
+            LocalShellKind::Bash => "bash",
+            LocalShellKind::Fish => "fish",
         }
     }
 
@@ -466,7 +499,20 @@ impl LocalShellKind {
             LocalShellKind::WindowsPowerShell => "Windows PowerShell",
             LocalShellKind::CommandPrompt => "Command Prompt",
             LocalShellKind::GitBash => "Git Bash",
+            LocalShellKind::Zsh => "zsh",
+            LocalShellKind::Bash => "Bash",
+            LocalShellKind::Fish => "fish",
         }
+    }
+
+    pub(crate) fn uses_terminal_type(self) -> bool {
+        matches!(
+            self,
+            LocalShellKind::GitBash
+                | LocalShellKind::Zsh
+                | LocalShellKind::Bash
+                | LocalShellKind::Fish
+        )
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
@@ -478,7 +524,10 @@ impl LocalShellKind {
             LocalShellKind::PowerShell7 => Some("powershell-7-administrator"),
             LocalShellKind::WindowsPowerShell => Some("windows-powershell-administrator"),
             LocalShellKind::CommandPrompt => Some("command-prompt-administrator"),
-            LocalShellKind::GitBash => None,
+            LocalShellKind::GitBash
+            | LocalShellKind::Zsh
+            | LocalShellKind::Bash
+            | LocalShellKind::Fish => None,
         }
     }
 
@@ -561,6 +610,7 @@ pub struct StreamNoticeEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentInfo {
+    pub platform: String,
     pub ssh_path: Option<String>,
     pub ssh_config_path: String,
     pub ssh_agent_available: bool,

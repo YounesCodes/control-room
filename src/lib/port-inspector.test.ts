@@ -46,6 +46,24 @@ function container(overrides: Partial<DockerContainer> = {}): DockerContainer {
 }
 
 describe("port inspector", () => {
+  it("keeps Mac application and packet-filter evidence separate from port reachability", () => {
+    const policy: FirewallStatus = {
+      backend: "macos",
+      available: true,
+      active: false,
+      defaultIncoming: "Application rules",
+      rules: [],
+      collectedAt: "now",
+      packetFilter: {
+        active: true,
+        rules: ["block in all"],
+        error: null,
+        permissionRequired: false,
+      },
+    };
+    expect(firewallForSocket(policy, socket()).state).toBe("unknown");
+    expect(firewallForSocket(policy, socket()).label).toContain("inactive");
+  });
   it("keeps Windows firewall profile evidence separate from per-port disposition", () => {
     const policy: FirewallStatus = {
       backend: "windows",
