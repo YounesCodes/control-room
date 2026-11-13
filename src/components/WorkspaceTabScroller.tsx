@@ -33,6 +33,8 @@ interface WorkspaceTabScrollerProps {
   /// Moves tab `id` to `targetIndex`, expressed in whole-strip positions.
   /// Absent rejects reordering: group rows and the pane strip pass none.
   onReorder?: (id: string, targetIndex: number) => void;
+  /// The application modifier for keyboard reordering: Cmd on macOS, Ctrl elsewhere.
+  reorderModifier?: "control" | "meta";
   /// Carrying a lifted tab below the strip hands it here instead of reordering, so
   /// the terminal view can take it (a Focus Mode split). `accepts` says which tabs may
   /// leave; `move` and `drop` get pointer positions; `cancel` ends a carry.
@@ -106,6 +108,7 @@ export function WorkspaceTabScroller({
   arrangementKey,
   menuLabel = "All terminals",
   onReorder,
+  reorderModifier = "control",
   onDragOut,
 }: WorkspaceTabScrollerProps) {
   const dragOutRef = useRef(onDragOut);
@@ -487,11 +490,12 @@ export function WorkspaceTabScroller({
     if (target !== active.fromIndex) onReorder(active.id, target);
   }
 
-  /// Ctrl+Shift with an arrow key moves the focused tab one slot, the keyboard
+  /// The application modifier plus Shift with an arrow key moves the focused tab one slot, the keyboard
   /// path to the same reorder a drag performs.
   function reorderWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (!onReorder || count < 2 || activeDragRef.current) return;
-    if (!event.ctrlKey || !event.shiftKey) return;
+    const modifier = reorderModifier === "meta" ? event.metaKey : event.ctrlKey;
+    if (!modifier || !event.shiftKey) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     const hit = tabFromEvent(event.target);
     if (!hit) return;

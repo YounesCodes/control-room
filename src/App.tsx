@@ -2682,6 +2682,7 @@ export function App() {
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
               onReorder={moveTabTo}
+              reorderModifier={clientPlatform === "macos" ? "meta" : "control"}
               onDragOut={splitAvailable ? tabDragOut : undefined}
             >
               {terminalFocusMode
