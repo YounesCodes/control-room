@@ -41,7 +41,16 @@ static int key_for(const UCKeyboardLayout *layout, UniChar expected, int dead) {
   return 0;
 }
 int main(int argc, char **argv) {
-  if (argc < 2) fail("Expected current, enabled, select, disable, or keys");
+  if (argc < 2) fail("Expected desktop, current, enabled, select, disable, or keys");
+  if (!strcmp(argv[1], "desktop")) {
+    // Synthetic keys and clicks need an unlocked console session and Accessibility approval.
+    CFDictionaryRef session = CGSessionCopyCurrentDictionary();
+    CFBooleanRef locked = session ? (CFBooleanRef)CFDictionaryGetValue(session, CFSTR("CGSSessionScreenIsLocked")) : NULL;
+    printf("{\"session\":%s,\"locked\":%s,\"accessibility\":%s}
+", session ? "true" : "false", locked && CFBooleanGetValue(locked) ? "true" : "false", AXIsProcessTrusted() ? "true" : "false");
+    if (session) CFRelease(session);
+    return 0;
+  }
   if (!strcmp(argv[1], "current")) {
     TISInputSourceRef item = TISCopyCurrentKeyboardInputSource();
     char text[1024];
