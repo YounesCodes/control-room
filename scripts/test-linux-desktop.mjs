@@ -108,8 +108,9 @@ try {
   await waitFor("focused terminal", () =>
     execute("return document.activeElement?.classList.contains('xterm-helper-textarea')"),
   );
-  const id = windowId();
-  assert.ok(id);
+  // The window manager can map and title the window after the webview is ready.
+  let id;
+  await waitFor("native window", () => (id = windowId()));
   xdo("windowactivate", "--sync", id);
   execFileSync("xclip", ["-selection", "clipboard"], {
     input: "printf 'LINUX_%s\n' CLIPBOARD",
