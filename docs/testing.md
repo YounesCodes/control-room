@@ -203,7 +203,7 @@ All deterministic specs run on Linux, including compact workspaces, focus motion
 and shell-reported titles. Linux uses Bash and PTYs, Windows uses Command Prompt
 and ConPTY, and macOS uses zsh. Process cleanup on Linux checks executable paths and
 `/proc` start times before removing temporary app data or stopping owned drivers.
-The live font catalog requires `CONTROL_ROOM_LIVE_FONTS=1` and network access.
+Linux checks installed-font preview without network access. The Windows/macOS online font catalog requires `CONTROL_ROOM_LIVE_FONTS=1` and network access.
 Live Linux and Windows SSH suites still require their explicit fixture variables.
 The Linux lab fixture must provide readable journald and accessible Docker with a
 container; missing fixture capabilities fail the live tests.
