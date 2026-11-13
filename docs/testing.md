@@ -207,6 +207,18 @@ NSIS fixture verifies the real installer handoff. That updater fixture uses a mo
 Tauri runtime and an isolated payload; it does not replace the running app through
 the updater UI.
 
+Select `e2e/updater-lifecycle.spec.ts` explicitly on Windows to exercise the actual
+application updater UI. It builds two native NSIS versions from disposable source
+with a separate product identifier and signing key. A loopback `latest.json` first
+serves modified bytes. The UI must report signature rejection and the installed
+executable must remain unchanged. A retry serves correctly signed bytes, installs
+the candidate, and must automatically launch its window. A fresh native session
+then checks the new version and all seeded user data. The runner uninstalls this
+separate fixture and removes only marked fixture data. These builds use the debug
+profile without the desktop automation plugin; production commands, UI, signature
+verification and installer code run unchanged. This supplements the published
+release upgrade test, whose previous installer comes from GitHub.
+
 For the Windows lab helper, explicitly select `e2e/install-upgrade.spec.ts`. Ordinary
 desktop runs exclude that spec. It closes the debug app before installing packages
 and reuses the matching native WebView2 driver. A standalone Windows invocation can

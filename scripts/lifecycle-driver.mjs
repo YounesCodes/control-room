@@ -18,7 +18,7 @@ async function freePort() {
 
 // Published builds have no WDIO plugin or debug diagnostics. Use only the native
 // driver's protocol and the production Tauri bridge already present in the app.
-export async function withInstalledApp(application, use) {
+export async function withInstalledApp(application, use, { applicationExits = false } = {}) {
   const port = await freePort(),
     nativePort = await freePort();
   const args = ["--port", String(port), "--native-port", String(nativePort)];
@@ -81,7 +81,7 @@ export async function withInstalledApp(application, use) {
     return await use(invoke, session);
   } finally {
     try {
-      if (session) await session.deleteSession();
+      if (session) await closeSession(session, applicationExits);
     } finally {
       if (driver.pid && driver.exitCode === null) {
         const stopped = new Promise((resolve) => driver.once("exit", resolve));
@@ -97,5 +97,16 @@ export async function withInstalledApp(application, use) {
         ]);
       }
     }
+  }
+}
+
+async function closeSession(session, applicationExits) {
+  try {
+    await session.deleteSession();
+  } catch (error) {
+    if (!applicationExits) throw error;
+    // The updater deliberately exits the attached app. The caller must
+    // independently prove replacement and the newly launched process.
+    console.log(`Updated app closed its original WebDriver session: ${error.message}`);
   }
 }
