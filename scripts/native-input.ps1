@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('clipboard-read','clipboard-write','key','focus','double-click','scale','layout-read','layout-load','layout-set','layout-unload','italian-text')][string]$Action,
+  [ValidateSet('clipboard-read','clipboard-write','key','focus','double-click','scale','resolution-read','resolution-set','layout-read','layout-load','layout-set','layout-unload','italian-text')][string]$Action,
   [string]$Value,
   [int]$X,
   [int]$Y,
@@ -13,6 +13,36 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public static class ControlRoomNativeInput {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct DisplayMode {
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string DeviceName;
+    public ushort SpecVersion, DriverVersion, Size, DriverExtra;
+    public uint Fields;
+    public int PositionX, PositionY;
+    public uint Orientation, FixedOutput;
+    public short Color, Duplex, YResolution, TTOption, Collate;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string FormName;
+    public ushort LogPixels;
+    public uint BitsPerPel, PelsWidth, PelsHeight, DisplayFlags, Frequency;
+    public uint ICMMethod, ICMIntent, MediaType, DitherType, Reserved1, Reserved2, PanningWidth, PanningHeight;
+  }
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern bool EnumDisplaySettings(string device, int mode, ref DisplayMode settings);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int ChangeDisplaySettingsEx(string device, ref DisplayMode settings, IntPtr window, uint flags, IntPtr extra);
+  public static DisplayMode Resolution() {
+    var mode = new DisplayMode { Size=(ushort)Marshal.SizeOf(typeof(DisplayMode)) };
+    if (mode.Size != 220 || !EnumDisplaySettings(null, -1, ref mode)) throw new InvalidOperationException("Could not read the native display mode");
+    return mode;
+  }
+  public static void SetResolution(uint width, uint height) {
+    var mode = Resolution();
+    mode.Fields=0x180000; // DM_PELSWIDTH | DM_PELSHEIGHT
+    mode.PelsWidth=width; mode.PelsHeight=height;
+    int test=ChangeDisplaySettingsEx(null, ref mode, IntPtr.Zero, 2, IntPtr.Zero); // CDS_TEST
+    if (test != 0) throw new InvalidOperationException("Display does not support the required resolution: " + test);
+    int applied=ChangeDisplaySettingsEx(null, ref mode, IntPtr.Zero, 0, IntPtr.Zero);
+    if (applied != 0) throw new InvalidOperationException("Could not apply the session display resolution: " + applied);
+    var actual=Resolution();
+    if (actual.PelsWidth != width || actual.PelsHeight != height) throw new InvalidOperationException("The requested display resolution was not applied");
+  }
   [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -57,6 +87,14 @@ public static class ControlRoomNativeInput {
 }
 '@
 switch ($Action) {
+  { $_ -in 'resolution-read','resolution-set' } {
+    if ($Action -eq 'resolution-set') {
+      if ($Value -notmatch '^(\d+)x(\d+)$') { throw 'Expected a physical display resolution' }
+      [ControlRoomNativeInput]::SetResolution([uint32]$Matches[1], [uint32]$Matches[2])
+    }
+    $mode = [ControlRoomNativeInput]::Resolution()
+    [Console]::Write((@{ width=$mode.PelsWidth; height=$mode.PelsHeight } | ConvertTo-Json -Compress))
+  }
   'clipboard-read' { [Console]::Write([Windows.Forms.Clipboard]::GetText()) }
   'clipboard-write' { if ($Value) { [Windows.Forms.Clipboard]::SetText([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Value))) } else { [Windows.Forms.Clipboard]::Clear() } }
   'key' { [Windows.Forms.SendKeys]::SendWait($Value) }
