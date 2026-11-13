@@ -14,7 +14,9 @@ if (process.platform !== "win32") {
 
 // Installed package tests are explicit because they replace a per-user installation.
 const installLifecycle = process.argv.some((argument) =>
-  argument.replaceAll("\\", "/").endsWith("e2e/install-upgrade.spec.ts"),
+  ["e2e/install-upgrade.spec.ts", "e2e/install-lifecycle-cleanup.spec.ts"].some((spec) =>
+    argument.replaceAll("\\", "/").endsWith(spec),
+  ),
 );
 const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
