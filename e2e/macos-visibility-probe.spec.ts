@@ -2,6 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { ipc, restartApp } from "./helpers";
 async function state() {
   return {
+    native: await ipc("e2e_window_state", { activate: false }),
     document: await browser.execute(() => ({
       hidden: document.hidden,
       focused: document.hasFocus(),
@@ -19,6 +20,11 @@ describe("macOS native visibility reproduction", () => {
     console.log("[VISIBILITY-PROBE] initial", JSON.stringify(await state()));
     await restartApp(false);
     console.log("[VISIBILITY-PROBE] restarted", JSON.stringify(await state()));
+    console.log(
+      "[VISIBILITY-PROBE] activate",
+      JSON.stringify(await ipc("e2e_window_state", { activate: true })),
+    );
+    console.log("[VISIBILITY-PROBE] activated", JSON.stringify(await state()));
     expect(await browser.execute(() => document.visibilityState)).toBe("visible");
   });
 });

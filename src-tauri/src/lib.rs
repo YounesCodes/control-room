@@ -118,6 +118,8 @@ pub fn run() {
             #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
             e2e::e2e_window_buttons,
             #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            e2e::e2e_window_state,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
             e2e::e2e_window_chrome_lifecycle,
             commands::get_environment_info,
             documentation::open_documentation,
