@@ -2,16 +2,17 @@
 
 Control Room uses Rust and Vitest component tests for contracts and failure paths. Chromium journeys mount the real app with typed fixtures at the Tauri boundary and exercise navigation, keyboard input, layout, and accessibility. Native desktop tests cross React, real IPC, Rust, SQLite, and Windows processes. Ignored SSH tests and the local Ubuntu journeys provide read-only proof against a configured host.
 
-| Layer                       | Command                           | Runs in pull request CI           |
-| --------------------------- | --------------------------------- | --------------------------------- |
-| Frontend and tooling        | `npm test`                        | Yes                               |
-| Chromium components and axe | `npm run test:browser`            | Yes                               |
-| Rust unit tests             | `npm run check:rust`              | Yes, with fmt and Clippy          |
-| Frontend coverage           | `npm run test:coverage`           | Manual coverage workflow          |
-| Rust coverage               | `npm run test:rust-coverage`      | Manual coverage workflow          |
-| Windows desktop E2E         | `npm run test:desktop`            | Yes, on a hosted Windows runner   |
-| Debian SSH fixture          | `npm run test:live-ssh`           | Manual live fixture workflow      |
-| Hosted Ubuntu SSH fixture   | `bash scripts/test-hosted-ssh.sh` | Yes, on a disposable Linux runner |
+| Layer                       | Command                           | Runs in pull request CI             |
+| --------------------------- | --------------------------------- | ----------------------------------- |
+| Frontend and tooling        | `npm test`                        | Yes                                 |
+| Chromium components and axe | `npm run test:browser`            | Yes                                 |
+| Rust unit tests             | `npm run check:rust`              | Yes, with fmt and Clippy            |
+| Frontend coverage           | `npm run test:coverage`           | Manual coverage workflow            |
+| Rust coverage               | `npm run test:rust-coverage`      | Manual coverage workflow            |
+| Linux desktop E2E           | `bash scripts/test-linux-wdio.sh` | Yes, Ubuntu 24.04 with Xvfb/Openbox |
+| Windows desktop E2E         | `npm run test:desktop`            | Yes, on a hosted Windows runner     |
+| Debian SSH fixture          | `npm run test:live-ssh`           | Manual live fixture workflow        |
+| Hosted Ubuntu SSH fixture   | `bash scripts/test-hosted-ssh.sh` | Yes, on a disposable Linux runner   |
 
 Start with `npm ci`. The normal Windows CI still runs Prettier, ESLint, TypeScript and Vite builds, `cargo audit`, and the NSIS installer build. `src/ui-hierarchy.test.ts` keeps architecture and permission contracts; browser and desktop tests check user behavior. Neither normal test command needs an SSH host.
 
@@ -189,3 +190,26 @@ Browser fixtures prove user interactions against controlled results; they do not
 | Updates and accessibility | Real App manual check/download retry/progress; updater fixtures; release-note safety, palette/keyboard, dialog focus, axe, minimum-size layout                                    | Settings and native window journey                                                                                                 | Updater endpoint, signature, installer and restart safeguards; E2E feature rejected in release builds |
 
 Coverage reports support this matrix; there is no arbitrary percentage target. PR checks run unit, Chromium, desktop, and hosted SSH tests. Local Ubuntu and Windows SSH journeys remain explicit.
+
+## Linux native WebDriver
+
+The Linux suite requires native Linux support from PR #227. The shared platform helper
+is adapted from macOS PR #65. Build with `npm run test:desktop:build`, then run
+`bash scripts/test-linux-wdio.sh`. Install `webkit2gtk-driver`, Xvfb, Openbox,
+`x11-utils`, `dbus-x11`, and the Tauri GTK development libraries first. The service
+starts tauri-driver and WebKitWebDriver. The runner owns its X11 display and window
+manager and waits for the WM before exercising maximize and restore.
+
+Install `scripts/e2e-linux-lab.sh` as `~/e2e-linux.sh` on the Linux lab VM. It builds
+the debug automation binary and runs the full suite, with an optional spec argument.
+A lock prevents concurrent runs. This replaces the installed-package smoke runner;
+installed-package behavior needs separate lifecycle checks.
+
+All deterministic specs run on Linux, including compact workspaces, focus motion,
+and shell-reported titles. Linux uses Bash and PTYs, Windows uses Command Prompt
+and ConPTY, and macOS uses zsh. Process cleanup on Linux checks executable paths and
+`/proc` start times before removing temporary app data or stopping owned drivers.
+The live font catalog requires `CONTROL_ROOM_LIVE_FONTS=1` and network access.
+Live Linux and Windows SSH suites still require their explicit fixture variables.
+The Linux lab fixture must provide readable journald and accessible Docker with a
+container; missing fixture capabilities fail the live tests.

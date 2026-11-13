@@ -1,3 +1,4 @@
+import { isWindows, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { openLocal, runtime, terminalCommand, terminalContains } from "./helpers";
@@ -14,20 +15,22 @@ describe("Shell-reported terminal titles", () => {
     const report =
       "process.stdout.write(String.fromCharCode(27)+']0;python --token private-title-argument'+String.fromCharCode(7));";
     await browser.keys(
-      `node -e "${report}process.stdin.once('data',function(){process.exit(0)})" & echo TITLE_FINISHED`,
+      `node -e "${report}process.stdin.once('data',function(){process.exit(0)})" ${isWindows ? "&" : ";"} echo TITLE_FINISHED`,
     );
     await browser.keys("Enter");
-    await expect(tab).toHaveText("python · Command Prompt");
-    await expect(tab).toHaveAttribute("title", "python · Command Prompt");
+    await expect(tab).toHaveText(`python · ${localShellLabel}`);
+    await expect(tab).toHaveAttribute("title", `python · ${localShellLabel}`);
     await browser.keys("Enter");
     await terminalContains("TITLE_FINISHED");
-    await expect(tab).toHaveText("Command Prompt");
+    await expect(tab).toHaveText(localShellLabel);
     await tab.moveTo();
     await $(".session-tab-wrap.active .session-tab-rename").click();
     await $("[role=dialog] input").setValue("Build");
     await $("button=Rename").click();
     await terminalCommand(
-      "title npm --token private-title-argument & echo MANUAL_TITLE_OK",
+      isWindows
+        ? "title npm --token private-title-argument & echo MANUAL_TITLE_OK"
+        : `printf '\\033]0;npm --token private-title-argument\\007'; echo MANUAL_TITLE_OK`,
       "MANUAL_TITLE_OK",
     );
     await expect(tab).toHaveText("Build");
