@@ -45,11 +45,32 @@ mkdir -p "$data"
 touch "$data/.installer-fixture"
 "$app/Contents/MacOS/control-room" > "$work/app.log" 2>&1 &
 pid=$!
-windows() {
-  /usr/bin/swift -e "import CoreGraphics
-let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-print(list.filter { (\$0[kCGWindowOwnerPID as String] as? Int) == $pid && (\$0[kCGWindowLayer as String] as? Int) == 0 }.count)"
+# Count the app's ordinary on-screen windows. A compiled probe starts instantly;
+# the Swift interpreter can take longer than the whole check.
+cat > "$work/windows.c" <<'C'
+#include <CoreGraphics/CoreGraphics.h>
+#include <stdio.h>
+#include <stdlib.h>
+int main(int argc, char **argv) {
+  long pid = argc > 1 ? atol(argv[1]) : -1;
+  int count = 0;
+  CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
+  for (CFIndex index = 0; list && index < CFArrayGetCount(list); index++) {
+    CFDictionaryRef window = CFArrayGetValueAtIndex(list, index);
+    long owner = -1, layer = -1;
+    CFNumberRef value;
+    if ((value = CFDictionaryGetValue(window, kCGWindowOwnerPID))) CFNumberGetValue(value, kCFNumberLongType, &owner);
+    if ((value = CFDictionaryGetValue(window, kCGWindowLayer))) CFNumberGetValue(value, kCFNumberLongType, &layer);
+    if (owner == pid && layer == 0) count++;
+  }
+  if (list) CFRelease(list);
+  printf("%d
+", count);
+  return 0;
 }
+C
+clang "$work/windows.c" -framework CoreGraphics -framework CoreFoundation -o "$work/windows"
+windows() { "$work/windows" "$pid"; }
 shown=0
 for _ in {1..30}; do
   kill -0 "$pid" 2>/dev/null || { cat "$work/app.log" >&2; echo 'The installed app exited during startup' >&2; exit 1; }
