@@ -155,7 +155,10 @@ try {
               dangerousInsecureTransportProtocol: true,
               // The fixture installs outside the ordinary application folder.
               // Keep the actual updater installer in that owned directory too.
-              windows: { installMode: "quiet", installerArgs: [`/D=${installRoot}`] },
+              windows: {
+                ...originalConfig.plugins.updater.windows,
+                installerArgs: [`/D=${installRoot}`],
+              },
             },
           },
         },
@@ -171,7 +174,7 @@ try {
         "--debug",
         "--bundles",
         bundleType,
-        ...(!windows ? ["--config", "src-tauri/tauri.linux.conf.json"] : []),
+        ...(!windows ? ["--config", "src-tauri/tauri.linux.conf.json", "--verbose"] : []),
       ],
       {
         cwd: source,
@@ -281,6 +284,8 @@ try {
       await session.$("button=Try again").click();
       await session.$("button=Restart to update").waitForDisplayed({ timeout: 60000 });
       await session.$("button=Restart to update").click();
+      const originalProcesses = ownedProcesses().map((process) => process.Id);
+      assert.ok(originalProcesses.length, "The original installed application must be running");
       await session.$("button=Restart and update").click();
       // Keep the driver alive until installation and automatic launch finish.
       // Deleting the old session immediately can close the app before its
@@ -291,7 +296,10 @@ try {
         120000,
       );
       await until(
-        () => ownedProcesses().some((process) => process.MainWindowHandle !== 0),
+        () =>
+          ownedProcesses().some(
+            (process) => !originalProcesses.includes(process.Id) && process.MainWindowHandle > 0,
+          ),
         "Installer did not automatically launch a window for the updated application",
         60000,
       );
@@ -418,7 +426,7 @@ function ownedProcesses(file = application, requireWindow = true) {
     [
       "-NoProfile",
       "-Command",
-      `@((Get-Process -Name control-room -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${escaped}' }) | Select-Object Id,MainWindowHandle) | ConvertTo-Json -Compress`,
+      `@((Get-Process -Name control-room -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${escaped}' }) | Select-Object Id,@{Name='MainWindowHandle';Expression={$_.MainWindowHandle.ToInt64()}}) | ConvertTo-Json -Compress; exit 0`,
     ],
     { encoding: "utf8" },
   ).trim();

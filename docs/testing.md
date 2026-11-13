@@ -227,6 +227,9 @@ signature rejection, exact candidate bytes, automatic visible relaunch and every
 seeded data field. The Windows x86_64 NSIS journey passed on 9a8869b with the same signature,
 installation, relaunch and data checks. The fixture explicitly passes its owned
 installation directory to NSIS and compares against the actual NSIS payload.
+Relaunch checks require a different application PID and a visible native window
+before the original driver is closed. Windows inherits the configured installer
+mode; Linux keeps verbose bundler output for packaging failures.
 If a failed updater run leaves its marked installation, explicitly select
 `e2e/updater-lifecycle-cleanup.spec.ts` before retrying. Cleanup verifies the marker
 and temporary-directory boundary and never removes the ordinary app's data.
