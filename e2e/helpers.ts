@@ -1,4 +1,3 @@
-import { isMac } from "./platform";
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
