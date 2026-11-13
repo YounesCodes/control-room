@@ -40,7 +40,7 @@ function requireMacDesktop() {
     );
   if (!desktop.accessibility)
     throw new Error(
-      "Native macOS input requires Accessibility approval for the process that starts the tests (for SSH runs, sshd-keygen-wrapper) in System Settings > Privacy & Security > Accessibility, plus Automation approval for System Events.",
+      "Native macOS input requires Accessibility approval for the process that starts the tests (for SSH runs, sshd-keygen-wrapper) in System Settings > Privacy & Security > Accessibility.",
     );
   macDesktopReady = true;
 }
@@ -67,13 +67,15 @@ function powershell(action: string, value = "", extra: string[] = []) {
     },
   );
 }
+// Without a UTF-8 locale, as in an SSH session, pbcopy and pbpaste treat text as MacRoman.
+const clipboardEnv = mac ? { ...process.env, LC_CTYPE: "UTF-8" } : process.env;
 export function readClipboard() {
   if (windows) return powershell("clipboard-read");
   try {
     return execFileSync(
       mac ? "/usr/bin/pbpaste" : "xclip",
       mac ? [] : ["-selection", "clipboard", "-o"],
-      { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] },
+      { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"], env: clipboardEnv },
     );
   } catch (error) {
     if (!mac && /target STRING not available/.test(String((error as { stderr?: unknown }).stderr)))
@@ -91,6 +93,7 @@ export function writeClipboard(text: string) {
     encoding: "utf8",
     stdio: ["pipe", "ignore", "inherit"],
     timeout: 5000,
+    env: clipboardEnv,
   });
 }
 export async function nativeKey(shortcut: string) {
@@ -136,19 +139,13 @@ export async function nativeKey(shortcut: string) {
       tab: 48,
     };
     if (codes[key] === undefined) throw new Error(`No native macOS key code for ${key}`);
-    const modifierNames: Record<string, string> = {
-      command: "command down",
-      ctrl: "control down",
-      shift: "shift down",
-      alt: "option down",
-    };
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        `tell application "System Events" to key code ${codes[key]}${modifiers.length ? " using {" + modifiers.map((modifier) => modifierNames[modifier]).join(", ") + "}" : ""}`,
-      ],
-      { timeout: 10000 },
+    macNative(
+      "key",
+      String(codes[key]),
+      ...modifiers.map(
+        (modifier) =>
+          ({ command: "command", ctrl: "control", shift: "shift", alt: "option" })[modifier]!,
+      ),
     );
   } else
     execFileSync(
@@ -180,15 +177,8 @@ export async function focusNativeApp() {
   requireMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
-  else if (mac)
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        `tell application "System Events" to set frontmost of (first process whose unix id is ${pid}) to true`,
-      ],
-      { timeout: 10000 },
-    );
+  // The app activates itself; no other process needs permission to raise it.
+  else if (mac) await ipc("plugin:window|set_focus", { label: "main" });
   else {
     const id = execFileSync(
       "xdotool",
@@ -246,15 +236,10 @@ export async function selectTerminalWord(word: string) {
     ]);
   else if (mac) {
     const window = await browser.getWindowRect();
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        `tell application "System Events" to click at {${Math.round(window.x + point.x)}, ${Math.round(window.y + point.y)}}`,
-        "-e",
-        `tell application "System Events" to click at {${Math.round(window.x + point.x)}, ${Math.round(window.y + point.y)}}`,
-      ],
-      { timeout: 10000 },
+    macNative(
+      "doubleclick",
+      String(Math.round(window.x + point.x)),
+      String(Math.round(window.y + point.y)),
     );
   } else {
     const id = execFileSync("xdotool", ["getactivewindow"], { encoding: "utf8" }).trim();
@@ -396,16 +381,11 @@ export function typeItalianAccents() {
       macItalianKeys!.acute,
       { key: 14, shift: false, option: false },
     ]) {
-      const modifiers = [key.shift ? "shift down" : "", key.option ? "option down" : ""].filter(
-        Boolean,
-      );
-      execFileSync(
-        "osascript",
-        [
-          "-e",
-          `tell application "System Events" to key code ${key.key}${modifiers.length ? " using {" + modifiers.join(", ") + "}" : ""}`,
-        ],
-        { timeout: 10000 },
+      macNative(
+        "key",
+        String(key.key),
+        ...(key.shift ? ["shift"] : []),
+        ...(key.option ? ["option"] : []),
       );
     }
   } else

@@ -1,6 +1,6 @@
 import "./isolation";
 import { $, $$, browser, expect } from "@wdio/globals";
-import { ipc, runtime } from "./helpers";
+import { focusElement, ipc, runtime } from "./helpers";
 import { focusNativeApp, nativeKey, openNativeShell, typeNativeCommand } from "./native-input";
 import { isMac } from "./platform";
 
@@ -61,7 +61,8 @@ describe("Native application shortcuts and command palette", () => {
     await browser.waitUntil(async () => (await saved()).workspaces.length === 2);
     const order = (await saved()).workspaces.map((workspace) => workspace.id);
     const sessions = (await runtime()).sessionIds;
-    await $(".session-tab-wrap.active .session-tab-main").click();
+    // The Mac driver's click does not move focus; the reorder keys act on the focused tab.
+    await focusElement(await $(".session-tab-wrap.active .session-tab-main"));
     await nativeKey("primary+shift+left");
     await browser.waitUntil(async () => (await saved()).workspaces[0].id === order[1]);
     await nativeKey("primary+shift+right");
