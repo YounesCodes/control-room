@@ -1,3 +1,4 @@
+import { isMac } from "./platform";
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -213,7 +214,9 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   const dialog = $(".modal-backdrop [role=dialog]");
   if (await dialog.isExisting()) {
     await expect(dialog.$("h2")).toHaveText(`Connect to ${name}`);
-    const fallback = dialog.$(".//button[normalize-space()='Open default SSH shell' or normalize-space()='Connect as Linux host']");
+    const fallback = dialog.$(
+      ".//button[normalize-space()='Open default SSH shell' or normalize-space()='Connect as Linux host']",
+    );
     await fallback.waitForDisplayed({ timeout: 30_000 });
     await fallback.click();
     await dialog.waitForExist({ reverse: true });
@@ -367,10 +370,45 @@ export async function scratchpadNote() {
 
 /** Splitting starts from New terminal: open it and choose a split mode card. */
 export async function openSplitMenu(direction: "vertically" | "horizontally" = "vertically") {
-  await browser.waitUntil(() => browser.execute(() => !document.documentElement.dataset.focusTransition));
+  await browser.waitUntil(() =>
+    browser.execute(() => !document.documentElement.dataset.focusTransition),
+  );
   await $("aria/New terminal").click();
   await $(".new-terminal-menu").waitForDisplayed();
   await $(".new-terminal-menu")
     .$(`button*=${direction === "vertically" ? "Split right" : "Split down"}`)
     .click();
+}
+
+export async function focusElement(element: WebdriverIO.Element) {
+  // Frameless Linux resize edges can cover a divider at its maximum width.
+  // Keyboard resize tests focus the handle without starting a window edge drag.
+  await element.click();
+  // Embedded pointer actions emit mouse events without the browser's default
+  // focus action. Explicit focus lets native keyboard resize tests use the handle.
+  if (isMac) await browser.execute((node: HTMLElement) => node.focus(), element);
+}
+
+export async function pointerClick(element: WebdriverIO.Element) {
+  if (isMac) {
+    // Embedded driver 1.5 emits MouseEvents, but no PointerEvents. Exercise the
+    // actual pane activation handler before the driver's ordinary click.
+    await browser.execute((node: HTMLElement) => {
+      const bounds = node.getBoundingClientRect();
+      for (const type of ["pointerdown", "pointerup"])
+        node.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+            button: 0,
+            clientX: bounds.left + bounds.width / 2,
+            clientY: bounds.top + bounds.height / 2,
+          }),
+        );
+    }, element);
+  }
+  await element.click();
 }

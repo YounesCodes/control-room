@@ -95,6 +95,8 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const pointerPosition = useRef<{ x: number; y: number } | null>(null);
+  const keyboardNavigation = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -321,6 +323,7 @@ export function CommandPalette({
   }, [activeIndex, filtered]);
 
   function keydown(event: React.KeyboardEvent) {
+    keyboardNavigation.current = true;
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -400,7 +403,18 @@ export function CommandPalette({
                   aria-selected={index === activeIndex}
                   className={index === activeIndex ? "command-item active" : "command-item"}
                   onClick={item.run}
-                  onMouseMove={() => setActiveIndex(index)}
+                  onMouseMove={(event) => {
+                    const previous = pointerPosition.current;
+                    const moved = previous
+                      ? previous.x !== event.clientX || previous.y !== event.clientY
+                      : Boolean(event.movementX || event.movementY);
+                    pointerPosition.current = { x: event.clientX, y: event.clientY };
+                    // Scrolling an option under a stationary pointer must not
+                    // replace the user's keyboard selection.
+                    if (keyboardNavigation.current && !moved) return;
+                    keyboardNavigation.current = false;
+                    setActiveIndex(index);
+                  }}
                 >
                   {item.shell ? (
                     <LocalShellIcon kind={item.shell.kind} elevated={item.shell.elevated} />

@@ -1,10 +1,27 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import { $, browser, expect } from "@wdio/globals";
 import { ipc, runtime, terminalContains } from "./helpers";
 
 const mac = process.platform === "darwin";
 const windows = process.platform === "win32";
+function requireUnlockedMacDesktop() {
+  if (!mac) return;
+  const locked = execFileSync(
+    "/usr/bin/swift",
+    [
+      "-e",
+      'import CoreGraphics; let session = CGSessionCopyCurrentDictionary() as? [String: Any]; print((session?["CGSSessionScreenIsLocked"] as? Bool) == true ? "locked" : "unlocked")',
+    ],
+    { encoding: "utf8", timeout: 30000 },
+  ).trim();
+  if (locked !== "unlocked") {
+    throw new Error(
+      "Native macOS input requires an unlocked lab desktop. CGSession reports the screen is locked; the fixture must provide its configured logged-in desktop before testing.",
+    );
+  }
+}
 function powershell(action: string, value = "", extra: string[] = []) {
   return execFileSync(
     "powershell.exe",
@@ -18,14 +35,13 @@ function powershell(action: string, value = "", extra: string[] = []) {
       resolve("scripts/native-input.ps1"),
       "-Action",
       action,
-      "-Value",
-      value,
+      ...(value ? ["-Value", value] : []),
       ...extra,
     ],
     {
       encoding: "utf8",
       windowsHide: true,
-      timeout: 20000,
+      timeout: action === "scale" ? 45000 : 20000,
     },
   );
 }
@@ -139,6 +155,7 @@ export async function nativeKey(shortcut: string) {
     );
 }
 export async function focusNativeApp() {
+  requireUnlockedMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
   else if (mac)
@@ -160,7 +177,10 @@ export async function focusNativeApp() {
       .split("\n")[0];
     execFileSync("xdotool", ["windowactivate", "--sync", id], { timeout: 5000 });
   }
-  await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
+  // On Windows the WebView child can own focus while the Tauri window reports
+  // false. The helper verifies the OS foreground root instead.
+  if (!windows)
+    await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
 }
 export async function openNativeShell() {
   const catalog = await ipc<{ profiles: { id: string; label: string; elevated: boolean }[] }>(
@@ -238,4 +258,155 @@ export async function selectTerminalWord(word: string) {
 }
 export function windowsScale(percent?: number) {
   return Number(powershell("scale", percent ? String(percent) : ""));
+}
+export function windowsResolution(size?: { width: number; height: number }) {
+  return JSON.parse(
+    size
+      ? powershell("resolution-set", `${size.width}x${size.height}`)
+      : powershell("resolution-read"),
+  ) as { width: number; height: number };
+}
+export function windowsDisplayModes() {
+  return JSON.parse(powershell("resolution-modes")) as { width: number; height: number }[];
+}
+
+let italianSelected = false;
+let macSourceTool: string | undefined;
+let macItalianKeys:
+  | {
+      grave: { key: number; shift: boolean; option: boolean };
+      acute: { key: number; shift: boolean; option: boolean };
+    }
+  | undefined;
+function inputSource(...args: string[]) {
+  if (!macSourceTool) {
+    mkdirSync("test-results/native-input", { recursive: true });
+    macSourceTool = resolve("test-results/native-input/macos-input-source");
+    execFileSync(
+      "clang",
+      [
+        "-Wno-deprecated-declarations",
+        resolve("scripts/macos-input-source.c"),
+        "-framework",
+        "Carbon",
+        "-o",
+        macSourceTool,
+      ],
+      { timeout: 30000 },
+    );
+  }
+  return execFileSync(macSourceTool, args, { encoding: "utf8", timeout: 10000 }).trim();
+}
+export async function withItalianLayout(exercise: () => Promise<void>) {
+  const pid = String((await runtime()).appPid);
+  if (windows) {
+    const original = JSON.parse(powershell("layout-read", "", ["-ApplicationId", pid])) as {
+      current: string;
+      parent: string;
+      loaded: string[];
+    };
+    let selected: string | undefined;
+    try {
+      selected = powershell("layout-load");
+      powershell("layout-set", selected, ["-ApplicationId", pid]);
+      italianSelected = true;
+      await exercise();
+    } finally {
+      italianSelected = false;
+      powershell("layout-set", original.current, [
+        "-ApplicationId",
+        pid,
+        "-ParentLayout",
+        original.parent,
+      ]);
+      if (selected && !original.loaded.includes(selected)) powershell("layout-unload", selected);
+    }
+  } else if (mac) {
+    const original = inputSource("current");
+    const italian = original.startsWith("com.apple.keylayout.Italian")
+      ? original
+      : "com.apple.keylayout.Italian-Pro";
+    const enabled = inputSource("enabled", italian) === "1";
+    try {
+      inputSource("select", italian);
+      macItalianKeys = JSON.parse(inputSource("keys"));
+      italianSelected = true;
+      await exercise();
+    } finally {
+      italianSelected = false;
+      inputSource("select", original);
+      if (!enabled) inputSource("disable", italian);
+    }
+  } else {
+    const query = execFileSync("setxkbmap", ["-query"], { encoding: "utf8" });
+    const config = Object.fromEntries(
+      query
+        .trim()
+        .split("\n")
+        .map((line) => line.trim().split(/:\s*/, 2)),
+    );
+    const original = execFileSync("xkbcomp", ["-xkb", process.env.DISPLAY!, "-"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    try {
+      execFileSync("setxkbmap", ["-layout", "it", "-variant", "", "-option", ""], {
+        timeout: 5000,
+      });
+      const selected = execFileSync("setxkbmap", ["-query"], { encoding: "utf8" });
+      if (!/layout:\s*it\s/.test(selected + "\n"))
+        throw new Error("The X11 Italian keyboard layout was not selected");
+      italianSelected = true;
+      await exercise();
+    } finally {
+      italianSelected = false;
+      execFileSync("setxkbmap", [
+        "-rules",
+        config.rules || "evdev",
+        "-model",
+        config.model || "pc105",
+        "-layout",
+        config.layout,
+        "-variant",
+        config.variant || "",
+        "-option",
+        "",
+        "-option",
+        config.options || "",
+      ]);
+      execFileSync("xkbcomp", ["-", process.env.DISPLAY!], {
+        input: original,
+        stdio: ["pipe", "ignore", "pipe"],
+      });
+    }
+  }
+}
+export function typeItalianAccents() {
+  if (!italianSelected) throw new Error("Select the Italian layout before typing native accents");
+  if (windows) {
+    powershell("italian-text");
+    return;
+  }
+  if (mac) {
+    for (const key of [
+      macItalianKeys!.grave,
+      macItalianKeys!.acute,
+      { key: 14, shift: false, option: false },
+    ]) {
+      const modifiers = [key.shift ? "shift down" : "", key.option ? "option down" : ""].filter(
+        Boolean,
+      );
+      execFileSync(
+        "osascript",
+        [
+          "-e",
+          `tell application "System Events" to key code ${key.key}${modifiers.length ? " using {" + modifiers.join(", ") + "}" : ""}`,
+        ],
+        { timeout: 10000 },
+      );
+    }
+  } else
+    execFileSync("xdotool", ["key", "--clearmodifiers", "egrave", "dead_acute", "e"], {
+      timeout: 5000,
+    });
 }
