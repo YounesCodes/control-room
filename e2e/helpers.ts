@@ -1,6 +1,9 @@
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { spawn, type ChildProcess } from "node:child_process";
+import { application, isMac, isLinux, isWindows, localShellLabel } from "./platform";
+import { recordMacApplication } from "./macos-processes";
 import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
 import type { AppSettings, SavedConnection } from "../src/types";
 import { recordApplication } from "./app-processes";
@@ -11,6 +14,21 @@ export interface RuntimeStatus {
   streamIds: string[];
 }
 let directory: string;
+let macApplication: ChildProcess | undefined;
+
+export async function stopMacApplication() {
+  if (!macApplication || macApplication.exitCode !== null) return;
+  const child = macApplication;
+  const stopped = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+  child.kill();
+  await Promise.race([
+    stopped,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("The owned macOS test app did not exit")), 20_000).unref(),
+    ),
+  ]);
+  macApplication = undefined;
+}
 
 export async function ipc<T>(command: string, args: object = {}): Promise<T> {
   // A WebDriver session can exist while its initial WebView document is still empty.
@@ -49,13 +67,46 @@ export const runtime = () => ipc<RuntimeStatus>("e2e_runtime_status");
 
 export async function restartApp(preserve = true) {
   const previous = await runtime();
-  const application = resolve(
-    process.env.CARGO_TARGET_DIR ?? "src-tauri/target",
-    "debug/control-room.exe",
-  );
-  recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid, application);
+  if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid);
+  else recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid, application);
   if (!preserve || !directory)
     directory = mkdtempSync(join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "case-"));
+  if (isMac) {
+    // The embedded server creates WebDriver sessions inside one app process;
+    // reloadSession alone cannot prove native restart or database restoration.
+    await browser.deleteSession();
+    if (macApplication) await stopMacApplication();
+    else process.kill(previous.appPid, "SIGTERM");
+    await browser.waitUntil(
+      async () => {
+        try {
+          process.kill(previous.appPid, 0);
+          return false;
+        } catch {
+          return true;
+        }
+      },
+      { timeout: 20_000 },
+    );
+    const port = Number(browser.options.port || 4445);
+    macApplication = spawn(application, [`--e2e-data-dir=${directory}`], {
+      env: { ...process.env, TAURI_WEBDRIVER_PORT: String(port) },
+      stdio: "ignore",
+    });
+    macApplication.unref();
+    await browser.waitUntil(
+      async () => {
+        if (macApplication?.exitCode !== null)
+          throw new Error("macOS test app exited during startup");
+        try {
+          return (await fetch(`http://127.0.0.1:${port}/status`)).ok;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 30_000 },
+    );
+  }
   await browser.reloadSession({
     ...browser.requestedCapabilities,
     "tauri:options": {
@@ -63,6 +114,7 @@ export async function restartApp(preserve = true) {
       args: [`--e2e-data-dir=${directory}`],
     },
   } as unknown as WebdriverIO.Capabilities);
+  if (isMac) await ipc("plugin:window|set_focus", { label: "main" });
   await browser.waitUntil(
     async () => {
       try {
@@ -78,8 +130,9 @@ export async function restartApp(preserve = true) {
   // First launch offers connection creation automatically. Tests set up their own data.
   if (await $("[role=dialog]").isExisting()) await $("[role=dialog]").$("button=Cancel").click();
   const current = await runtime();
+  if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid);
+  else recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid, application);
   expect(current.appPid).not.toBe(previous.appPid);
-  recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid, application);
 }
 
 export async function cleanRuntime() {
@@ -111,10 +164,15 @@ export async function captureFailure(title: string) {
       "\n\n" +
       document.body.outerHTML.slice(0, 256_000),
   );
+  const documentState = await browser.execute(() => ({
+    visibility: document.visibilityState,
+    focused: document.hasFocus(),
+    fonts: document.fonts?.status,
+  }));
   writeFileSync(
     join(folder, "state.txt"),
     sanitize(
-      `${title}\n${dom}\n${JSON.stringify(await runtime().catch(() => ({ unavailable: true })))}`,
+      `${title}\n${JSON.stringify(documentState)}\n${dom}\n${JSON.stringify(await runtime().catch(() => ({ unavailable: true })))}`,
     ),
   );
 }
@@ -139,12 +197,13 @@ export async function addConnection(
 
 export async function connectionMenu(name: string) {
   const button = $(`aria/Open actions for ${name}`);
-  await button.moveTo();
+  if (isLinux) await browser.execute((node: HTMLElement) => node.focus(), await button);
+  else await button.moveTo();
   await button.click();
 }
 
-// Offline fixtures cannot discover a platform. Complete the explicit Linux
-// fallback before testing local workspace data or layout.
+// Offline fixtures cannot discover a platform. Open the default SSH shell
+// before testing workspace data or layout.
 export async function openOfflineConnection(name: string, forceNew = false) {
   if (forceNew) {
     await $('button[aria-label="New terminal"]').click();
@@ -163,9 +222,9 @@ export async function openOfflineConnection(name: string, forceNew = false) {
   await $("nav[aria-label='Workspace features']").waitForDisplayed();
 }
 
-export async function openLocal() {
+export async function openLocal(shellLabel = localShellLabel) {
   await $('button[aria-label="New terminal"]').click();
-  await $(".new-terminal-menu").$("aria/Local terminals: Command Prompt").click();
+  await $(".new-terminal-menu").$(`aria/Local terminals: ${shellLabel}`).click();
   await expect($(".terminal-workspace-pane.active .xterm-screen")).toBeDisplayed();
   await browser.waitUntil(async () => (await runtime()).sessionIds.length > 0);
 }
@@ -176,9 +235,86 @@ export async function terminalCommand(
   scope = ".terminal-workspace-pane.active",
 ) {
   await $(`${scope} .xterm-screen`).click();
-  await browser.keys(command);
+  await typeTerminalText(command, scope);
   await browser.keys("Enter");
   await terminalContains(marker, scope);
+}
+
+export async function typeTerminalText(text: string, scope = ".terminal-workspace-pane.active") {
+  // WebKit action keys drop repeated characters; the embedded driver dispatches
+  // both keydown and input for printable keys,
+  // even when xterm prevents keydown's default. That types lowercase twice.
+  // Element send-keys delivers one input event through the real xterm textarea.
+  if (!isWindows) await $(`${scope} .xterm-helper-textarea`).addValue(text);
+  else await browser.keys(text);
+}
+
+export async function focusElement(element: WebdriverIO.Element) {
+  // Frameless Linux resize edges can cover a divider at its maximum width.
+  // Keyboard resize tests focus the handle without starting a window edge drag.
+  if (!isLinux) await element.click();
+  // Embedded pointer actions emit mouse events without the browser's default
+  // focus action. Explicit focus lets native keyboard resize tests use the handle.
+  if (!isWindows) await browser.execute((node: HTMLElement) => node.focus(), element);
+}
+
+export async function pointerClick(element: WebdriverIO.Element) {
+  if (isMac) {
+    // Embedded driver 1.5 emits MouseEvents, but no PointerEvents. Exercise the
+    // actual pane activation handler before the driver's ordinary click.
+    await browser.execute((node: HTMLElement) => {
+      const bounds = node.getBoundingClientRect();
+      for (const type of ["pointerdown", "pointerup"])
+        node.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+            button: 0,
+            clientX: bounds.left + bounds.width / 2,
+            clientY: bounds.top + bounds.height / 2,
+          }),
+        );
+    }, element);
+  }
+  await element.click();
+}
+
+export async function pressBoundaryKey(
+  key: "Home" | "End" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown",
+  shift = false,
+) {
+  if (!isMac) return browser.keys(shift ? ["Shift", key, "NULL"] : key);
+  // Embedded driver 1.5 omits Home/End and drops modifiers on special keys.
+  await browser.execute(
+    (name, shifted) => {
+      const target = document.activeElement ?? document.body;
+      const codes = {
+        Home: 36,
+        End: 35,
+        ArrowLeft: 37,
+        ArrowRight: 39,
+        ArrowUp: 38,
+        ArrowDown: 40,
+      };
+      for (const type of ["keydown", "keyup"])
+        target.dispatchEvent(
+          new KeyboardEvent(type, {
+            key: name,
+            code: name,
+            keyCode: codes[name],
+            which: codes[name],
+            shiftKey: shifted,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+    },
+    key,
+    shift,
+  );
 }
 
 export async function terminalContains(marker: string, scope = ".terminal-workspace-pane.active") {
@@ -212,6 +348,11 @@ export async function feature(label: string) {
   await $("nav[aria-label='Workspace features']").$(`button=${label}`).click();
 }
 
+export async function activateFocusedButton() {
+  if (isMac) await browser.execute(() => (document.activeElement as HTMLButtonElement).click());
+  else await browser.keys("Enter");
+}
+
 export async function openScratchpad() {
   await feature("Terminal");
   const trigger = $("[data-scratchpad-trigger]");
@@ -230,8 +371,25 @@ export async function scratchpadNote() {
 
 /** Splitting starts from New terminal: open it and choose a split mode card. */
 export async function openSplitMenu(direction: "vertically" | "horizontally" = "vertically") {
+  await browser.waitUntil(() =>
+    browser.execute(() => !document.documentElement.dataset.focusTransition),
+  );
   await $("aria/New terminal").click();
+  await $(".new-terminal-menu").waitForDisplayed();
   await $(".new-terminal-menu")
     .$(`button*=${direction === "vertically" ? "Split right" : "Split down"}`)
     .click();
+}
+
+// WebKitWebDriver returns empty getText for these visible flex tab labels.
+// Keep visibility proof and read the rendered node's text through the DOM property.
+export async function expectNativeText(element: WebdriverIO.Element, text: string) {
+  await expect(element).toBeDisplayed();
+  if (!isLinux) return expect(element).toHaveText(text);
+  await browser.waitUntil(
+    async () => String((await element.getProperty("textContent")) ?? "").trim() === text,
+    {
+      timeoutMsg: `Native label did not become ${text}`,
+    },
+  );
 }
