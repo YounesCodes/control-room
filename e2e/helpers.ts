@@ -250,7 +250,9 @@ export async function typeTerminalText(text: string, scope = ".terminal-workspac
 }
 
 export async function focusElement(element: WebdriverIO.Element) {
-  await element.click();
+  // Frameless Linux resize edges can cover a divider at its maximum width.
+  // Keyboard resize tests focus the handle without starting a window edge drag.
+  if (!isLinux) await element.click();
   // Embedded pointer actions emit mouse events without the browser's default
   // focus action. Explicit focus lets native keyboard resize tests use the handle.
   if (!isWindows) await browser.execute((node: HTMLElement) => node.focus(), element);

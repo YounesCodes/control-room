@@ -1,16 +1,21 @@
-import { isMac, localShellId, localShellLabel } from "./platform";
+import { isMac, isLinux, localShellId, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { ipc, openLocal, restartApp, runtime, savedSettings, terminalCommand } from "./helpers";
 
-const font = () => $('[role="combobox"][aria-controls="font-suggestions"]');
+const font = () =>
+  $(
+    isLinux
+      ? 'input[aria-describedby="linux-font-help"]'
+      : '[role="combobox"][aria-controls="font-suggestions"]',
+  );
 
 async function enterFont(value: string) {
   await font().click();
-  if (isMac) await font().setValue(value);
+  if (isMac || isLinux) await font().setValue(value);
   else await browser.keys(value);
   await expect(font()).toHaveValue(value);
-  await browser.keys("Enter");
+  if (!isLinux) await browser.keys("Enter");
 }
 
 describe("Settings and native window", () => {

@@ -66,17 +66,17 @@ describe("Native PTY and Workspace lifecycle", () => {
     const sessions = (await runtime()).sessionIds;
     await $('button[aria-label="All terminals"]').click();
     await $("[role=menu]").$("button*=Shell 1").click();
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
+    await expect($(".session-tab-wrap.active .session-tab-label")).toHaveText("Shell 1");
     await terminalCommand("echo OVERFLOW_FIRST", "OVERFLOW_FIRST");
     await $("[aria-label='Scroll terminals right']").click();
     await $('button[aria-label="All terminals"]').click();
     await pressBoundaryKey("Home");
     await activateFocusedButton();
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
+    await expect($(".session-tab-wrap.active .session-tab-label")).toHaveText("Shell 1");
     await $('button[aria-label="All terminals"]').click();
     await pressBoundaryKey("End");
     await activateFocusedButton();
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 8");
+    await expect($(".session-tab-wrap.active .session-tab-label")).toHaveText("Shell 8");
     await terminalCommand("echo OVERFLOW_LAST", "OVERFLOW_LAST");
     const clipped = await browser.execute(() =>
       Array.from(document.querySelectorAll<HTMLElement>(".session-tab-list")).flatMap((list) => {
@@ -94,7 +94,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     expect(clipped).toEqual([]);
     expect((await runtime()).sessionIds).toEqual(sessions);
     await closeWorkspace("Shell 8");
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 7");
+    await expect($(".session-tab-wrap.active .session-tab-label")).toHaveText("Shell 7");
     expect((await runtime()).sessionIds).toHaveLength(7);
   });
 
@@ -115,7 +115,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await $("[role=dialog] input").setValue("Renamed logs");
     await $("button=Rename").click();
     await expect($("[aria-label='Close Renamed logs Workspace']")).toExist();
-    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
+    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-label")).toHaveText(
       "Build pane",
     );
     await groupTool("[aria-label^='Ungroup ']");
@@ -131,7 +131,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await $("button=Stop & close").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await expect($(".session-tab-group-main small")).toHaveText("2");
-    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
+    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-label")).toHaveText(
       "Build pane",
     );
     await terminalCommand("echo BUILD_SURVIVES", "BUILD_SURVIVES");
@@ -148,7 +148,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await expect($("[aria-label='Close Build pane Workspace']")).toExist();
     await closeWorkspace("Build pane");
     await expect($(".session-pane-tabs")).not.toExist();
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Original pane");
+    await expect($(".session-tab-wrap.active .session-tab-label")).toHaveText("Original pane");
     await terminalCommand("echo ORIGINAL_SURVIVES", "ORIGINAL_SURVIVES");
     await closeWorkspace("Original pane");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
