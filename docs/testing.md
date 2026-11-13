@@ -207,3 +207,9 @@ Linux checks installed-font preview without network access. The Windows/macOS on
 Live Linux and Windows SSH suites still require their explicit fixture variables.
 The Linux lab fixture must provide readable journald and accessible Docker with a
 container; missing fixture capabilities fail the live tests.
+
+The Linux documentation launcher reports immediate browser-start failures and
+returns while a long-lived browser remains open. A real child-process regression
+holds the browser fixture alive until the test releases its input pipe and checks
+that the native request has already completed. The native documentation journey
+then verifies that the button and Settings remain available after dispatch.

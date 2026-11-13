@@ -87,7 +87,7 @@ jobs:
       - name: Install native desktop prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb openbox x11-utils dbus-x11 xclip xdotool xclip x11-xkb-utils
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb openbox x11-utils dbus-x11 xclip xdotool x11-xkb-utils
           node scripts/extract-png-icon.mjs src-tauri/icons/icon.ico src-tauri/icons/icon.png
       - uses: Swatinem/rust-cache@v2.9.3
         with:
