@@ -1038,6 +1038,27 @@ describe("TerminalPane sessions", () => {
     expect(clipboard.readText).not.toHaveBeenCalled();
   });
 
+  it("pastes once with Cmd+Shift+V on macOS, where no native paste event follows", async () => {
+    clipboard.readText.mockResolvedValue("echo mac");
+    api.startSession.mockResolvedValue({ sessionId: "session-mac" });
+    renderPane(createRemoteWorkspace(connection), vi.fn(), { platform: "macos" });
+    await vi.waitFor(() => expect(xterm.customKeyHandler).toBeTruthy());
+
+    expect(
+      xterm.customKeyHandler?.(
+        new KeyboardEvent("keydown", { key: "v", metaKey: true, shiftKey: true }),
+      ),
+    ).toBe(false);
+    await vi.waitFor(() => expect(clipboard.readText).toHaveBeenCalledTimes(1));
+    // Control stays with the shell: Ctrl+Shift+V is not an application shortcut here.
+    expect(
+      xterm.customKeyHandler?.(
+        new KeyboardEvent("keydown", { key: "v", ctrlKey: true, shiftKey: true }),
+      ),
+    ).toBe(true);
+    expect(clipboard.readText).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the original connection failure when input is attempted", () => {
     renderPane({
       ...createRemoteWorkspace(connection),
