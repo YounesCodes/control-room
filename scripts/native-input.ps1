@@ -16,6 +16,7 @@ public static class ControlRoomNativeInput {
   [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern IntPtr GetDesktopWindow();
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point point);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
@@ -165,10 +166,20 @@ switch ($Action) {
       if (!$item) { throw "The display does not offer $Value% scale" }
       $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     }
-    # Settings' XAML window does not expose WindowPattern on every build.
-    # CloseMainWindow sends its ordinary WM_CLOSE without killing the process.
-    $settings = Get-Process -Name SystemSettings -ErrorAction Stop | Select-Object -First 1
-    if (!$settings.CloseMainWindow()) { throw 'Could not close the Display Settings window' }
+    # XAML islands and ApplicationFrameHost do not consistently expose
+    # WindowPattern or Process.MainWindowHandle. Find the control's real HWND
+    # ancestor and request its ordinary close; never target the desktop.
+    $walker = [Windows.Automation.TreeWalker]::ControlViewWalker
+    $window = $combo
+    $closeHandle = [IntPtr]::Zero
+    while ($window) {
+      if ($window.Current.NativeWindowHandle) {
+        $candidate = [ControlRoomNativeInput]::GetAncestor([IntPtr]$window.Current.NativeWindowHandle, 2)
+        if ($candidate -ne [IntPtr]::Zero -and $candidate -ne [ControlRoomNativeInput]::GetDesktopWindow()) { $closeHandle = $candidate; break }
+      }
+      $window = $walker.GetParent($window)
+    }
+    if ($closeHandle -eq [IntPtr]::Zero -or ![ControlRoomNativeInput]::PostMessage($closeHandle, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)) { throw 'Could not close the Display Settings window' }
     [Console]::Write($original)
   }
 }
