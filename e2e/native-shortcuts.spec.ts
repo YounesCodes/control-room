@@ -2,6 +2,7 @@ import "./isolation";
 import { $, $$, browser, expect } from "@wdio/globals";
 import { ipc, runtime } from "./helpers";
 import { focusNativeApp, nativeKey, openNativeShell, typeNativeCommand } from "./native-input";
+import { isMac } from "./platform";
 
 async function palette(action?: string) {
   await focusNativeApp();
@@ -119,10 +120,11 @@ describe("Native application shortcuts and command palette", () => {
       "input[aria-describedby='linux-font-help'], [role=combobox][aria-controls=font-suggestions]",
     );
     await font.setValue("abcd");
-    await nativeKey("home");
+    // macOS uses Cmd+arrows to position the caret; Home/End scroll documents.
+    await nativeKey(isMac ? "primary+left" : "home");
     await nativeKey("right");
     expect(await font.getProperty("selectionStart")).toBe(1);
-    await nativeKey("end");
+    await nativeKey(isMac ? "primary+right" : "end");
     await nativeKey("left");
     expect(await font.getProperty("selectionStart")).toBe(3);
     await expect($('[role="tab"]=Appearance')).toHaveAttribute("aria-selected", "true");
