@@ -1,3 +1,4 @@
+import { localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import {
@@ -19,7 +20,7 @@ describe("Compact native windows and live terminal arrangements", () => {
     await openLocal();
     await $("aria/Focus terminal").click();
     await openSplitMenu();
-    await $(".new-terminal-menu [aria-label='New local terminal: Command Prompt']").click();
+    await $(`.new-terminal-menu [aria-label='New local terminal: ${localShellLabel}']`).click();
     await terminalCommand("echo STABLE_SPLIT_INPUT", "STABLE_SPLIT_INPUT");
     const sessions = (await runtime()).sessionIds;
     expect(sessions).toHaveLength(2);
@@ -105,14 +106,14 @@ describe("Compact native windows and live terminal arrangements", () => {
     }
   });
 
-  it("swaps, docks, flips, resizes and restores nested panes through SQLite with live ConPTYs", async () => {
+  it("swaps, docks, flips, resizes and restores nested panes through SQLite with live PTYs", async () => {
     await browser.setWindowSize(1180, 700);
     await openLocal();
     await terminalCommand("echo ARRANGEMENT_SCROLLBACK", "ARRANGEMENT_SCROLLBACK");
     await $("aria/Focus terminal").click();
     for (let index = 0; index < 2; index++) {
       await openSplitMenu();
-      await $(".new-terminal-menu [aria-label='New local terminal: Command Prompt']").click();
+      await $(`.new-terminal-menu [aria-label='New local terminal: ${localShellLabel}']`).click();
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
     const sessions = (await runtime()).sessionIds;
@@ -125,12 +126,12 @@ describe("Compact native windows and live terminal arrangements", () => {
           ),
         ),
       );
-      await $("[aria-label='Arrange Command Prompt']").click();
+      await $(`[aria-label='Arrange ${localShellLabel}']`).click();
       await $(".terminal-arrange-menu").waitForDisplayed();
       await $(".terminal-arrange-menu").$(`aria/${action}`).click();
     };
-    await arrange("Swap with Command Prompt 2");
-    await arrange("Dock below Command Prompt 2");
+    await arrange(`Swap with ${localShellLabel} 2`);
+    await arrange(`Dock below ${localShellLabel} 2`);
     await arrange("Side by side");
     const divider = $("aria/Resize terminal split 2");
     await divider.click();
@@ -160,7 +161,7 @@ describe("Compact native windows and live terminal arrangements", () => {
     // Focus that pane's terminal body; its corner handle now opens Arrange on click.
     const commandPromptPane = await browser.execute(() =>
       document
-        .querySelector("[aria-label='Arrange Command Prompt']")!
+        .querySelector(`[aria-label='Arrange ${localShellLabel}']`)!
         .closest<HTMLElement>(".terminal-pane-heading")!
         .dataset.terminalMotionId!.replace(/-heading$/, ""),
     );

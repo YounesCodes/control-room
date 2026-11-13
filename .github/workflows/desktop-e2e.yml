@@ -72,3 +72,44 @@ jobs:
           name: desktop-failure-diagnostics
           path: test-results/desktop-sanitized/
           if-no-files-found: ignore
+
+  linux:
+    if: github.event_name == 'workflow_dispatch' || inputs.run-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native desktop prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb openbox x11-utils dbus-x11 xclip
+          node scripts/extract-png-icon.mjs src-tauri/icons/icon.ico src-tauri/icons/icon.png
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - run: npm ci
+      - run: cargo install tauri-driver --locked
+      - run: npm run test:desktop:build
+      - name: Run Linux desktop tests
+        env:
+          DESKTOP_SPEC: ${{ inputs.spec }}
+        run: |
+          args=()
+          if [[ -n "$DESKTOP_SPEC" ]]; then args=(--spec "$DESKTOP_SPEC"); fi
+          bash scripts/test-linux-wdio.sh "${args[@]}"
+      - name: Sanitize failure diagnostics
+        id: sanitize
+        if: failure()
+        run: node scripts/sanitize-e2e-results.mjs
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.sanitize.outcome == 'success'
+        with:
+          name: linux-desktop-failure-diagnostics
+          path: test-results/desktop-sanitized/
+          if-no-files-found: ignore
