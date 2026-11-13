@@ -1,6 +1,7 @@
 // Explicit native package test. Run only in a disposable desktop account.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { releaseAsset, previousRelease } from "./lifecycle-releases.mjs";
@@ -19,6 +20,58 @@ import { withInstalledApp } from "./lifecycle-driver.mjs";
 import { seedLifecycleData, readLifecycleData, assertLifecycleData } from "./lifecycle-data.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const dataRoot =
+  process.platform === "win32"
+    ? join(required("APPDATA"), "app.controlroom.desktop")
+    : join(
+        process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
+        "app.controlroom.desktop",
+      );
+if (process.argv.includes("--cleanup")) {
+  const marker = join(dataRoot, ".lifecycle-fixture");
+  assert.ok(existsSync(marker), "Refusing cleanup without this runner's ownership marker");
+  const owned = resolve(readFileSync(marker, "utf8"));
+  assert.equal(
+    dirname(owned),
+    resolve(tmpdir()),
+    "Fixture must be in the current user's temp directory",
+  );
+  assert.match(basename(owned), /^control-room-install-lifecycle-[A-Za-z0-9]+$/);
+  if (process.platform === "win32") {
+    const application = join(owned, "application");
+    if (existsSync(join(application, "control-room.exe"))) {
+      const uninstallers = readdirSync(application).filter((name) =>
+        /^uninstall.*\.exe$/i.test(name),
+      );
+      assert.equal(uninstallers.length, 1);
+      execFileSync(join(application, uninstallers[0]), ["/S", `_?=${application}`], {
+        stdio: "inherit",
+        timeout: 180000,
+      });
+      assert.ok(
+        !existsSync(join(application, "control-room.exe")),
+        "Owned application is still installed",
+      );
+    }
+  } else if (process.platform === "linux") {
+    if (existsSync("/usr/bin/control-room")) {
+      const receipt = JSON.parse(readFileSync(join(owned, "installed.json"), "utf8"));
+      assert.equal(
+        receipt.sha256,
+        binaryHash("/usr/bin/control-room"),
+        "Refusing to uninstall a binary changed since the fixture installed it",
+      );
+      execFileSync("sudo", ["apt-get", "remove", "-y", "control-room"], {
+        stdio: "inherit",
+        timeout: 180000,
+      });
+    }
+  } else assert.fail("Installed macOS cleanup needs the native lifecycle adapter");
+  rmSync(dataRoot, { recursive: true });
+  rmSync(owned, { recursive: true, force: true });
+  console.log("Removed only the marked lifecycle fixture and its installation");
+  process.exit(0);
+}
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 const response = await fetch(
   "https://api.github.com/repos/YounesCodes/control-room/releases?per_page=100",
@@ -38,13 +91,6 @@ assert.notEqual(
   "Published macOS WKWebViews need an accessibility adapter; external tauri-driver cannot automate them",
 );
 
-const dataRoot =
-  process.platform === "win32"
-    ? join(required("APPDATA"), "app.controlroom.desktop")
-    : join(
-        process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
-        "app.controlroom.desktop",
-      );
 assert.ok(
   !existsSync(dataRoot),
   `Refusing to overwrite existing user data: ${dataRoot}. Use a clean lab account.`,
@@ -56,7 +102,11 @@ if (process.platform === "win32") {
   ]) {
     assert.ok(!existsSync(folder), `Refusing to replace an existing installation: ${folder}`);
   }
-}
+} else if (process.platform === "linux")
+  assert.ok(
+    !existsSync("/usr/bin/control-room"),
+    "Refusing to replace an existing Linux installation",
+  );
 const directory = mkdtempSync(join(tmpdir(), "control-room-install-lifecycle-"));
 const installRoot = join(directory, "application");
 const application =
@@ -198,12 +248,23 @@ function install(file) {
       timeout: 180000,
     });
   assert.ok(existsSync(application), "Installer did not produce the application binary");
+  writeFileSync(
+    join(directory, "installed.json"),
+    JSON.stringify({ sha256: binaryHash(application) }),
+  );
+}
+function binaryHash(file) {
+  return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 function uninstall() {
   if (process.platform === "win32") {
     const matches = readdirSync(installRoot).filter((name) => /^uninstall.*\.exe$/i.test(name));
     assert.equal(matches.length, 1, "Expected the installed NSIS uninstaller");
-    execFileSync(join(installRoot, matches[0]), ["/S"], { stdio: "inherit", timeout: 180000 });
+    // Disable NSIS's temporary self-copy so the process we wait for owns removal.
+    execFileSync(join(installRoot, matches[0]), ["/S", `_?=${installRoot}`], {
+      stdio: "inherit",
+      timeout: 180000,
+    });
   } else
     execFileSync("sudo", ["apt-get", "remove", "-y", "control-room"], {
       stdio: "inherit",

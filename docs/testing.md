@@ -222,5 +222,7 @@ lifecycle automation remains incomplete. ARM macOS is outside this lab.
 
 Successful runs remove their fixture and user data. A failed run preserves its
 owned temporary directory and reports the data path for diagnosis; it refuses to
-overwrite an existing user database on the next run. It does not create or restore
-Proxmox snapshots.
+overwrite an existing user database on the next run. After inspecting a failure,
+run `npm run test:install-lifecycle -- --cleanup` to uninstall and remove only the
+fixture with this runner's ownership marker. Cleanup refuses unmarked user data.
+It does not create or restore Proxmox snapshots.
