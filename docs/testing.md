@@ -210,12 +210,14 @@ The native suites use Cmd on macOS and Ctrl elsewhere for application shortcuts;
 shell Ctrl+C and Ctrl+W always retain Ctrl. macOS execution depends on the native
 support branch. Compact workspace and focus-motion specs have no blanket macOS
 skip. macOS minimum-width checks start at its native 960-pixel minimum and use
-fullscreen/restore in place of the Windows maximize control. The lab currently
-cannot validate these cases: CGSession reports a locked screen immediately after
-boot, and the automated document remains hidden/unfocused. Starting a temporary
-display wake assertion as soon as SSH becomes available did not prevent the lock.
-Native input fails explicitly on this fixture prerequisite. System Events also
-lacks the required automation permission. ARM macOS is not in the lab.
+fullscreen/restore in place of the Windows maximize control. The macOS lab now
+uses a dedicated `tester` account and `~/Developer/control-room-e2e`; the devbox
+`control-room-mac` SSH alias selects that account. Cold boots reach its unlocked
+console, with Finder active and CGSession reporting an on-console session.
+Accessibility and Automation permissions for System Events remain unvalidated.
+Account-authenticated Screen Sharing caused the guest to lose its GUI session;
+do not connect it during automated runs. Native input must still report missing
+permissions as a fixture failure. ARM macOS is not in the lab.
 
 Linux lab validation: four clipboard/control-key cases, two Italian-layout cases,
 and four application-shortcut cases passed on the Linux integration build. These
