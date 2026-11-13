@@ -37,7 +37,9 @@ export const config: WebdriverIO.Config = {
       : ["./e2e/**/*.spec.ts"],
   exclude: [
     ...(process.env.CONTROL_ROOM_LIVE_DESKTOP === "1" ? [] : ["./e2e/live-ssh.spec.ts"]),
-    ...(installLifecycle ? [] : ["./e2e/install-upgrade.spec.ts"]),
+    ...(installLifecycle
+      ? []
+      : ["./e2e/install-upgrade.spec.ts", "./e2e/install-lifecycle-cleanup.spec.ts"]),
   ],
   maxInstances: 1,
   outputDir: resolve("test-results/desktop/driver"),

@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
 // Explicit maintenance entry point for the lab's spec-only Windows helper.
-// The .cleanup.ts suffix keeps it outside the ordinary *.spec.ts suite.
+// wdio.conf.ts excludes this from ordinary desktop runs.
 describe("Remove a failed owned installer fixture", function () {
   this.timeout(240000);
   it("refuses unmarked data and removes only the recorded lifecycle installation", async () => {
