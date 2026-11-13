@@ -211,6 +211,9 @@ try {
   mkdirSync(data, { recursive: true });
   writeFileSync(marker, directory);
   const oldHash = hash(application);
+  const candidateExe = windows ? join(target, "debug/control-room.exe") : installers[1];
+  const candidateHash = hash(candidateExe);
+  assert.notEqual(candidateHash, oldHash, "The updater must install a different native version");
   let expected;
   await withInstalledApp(
     application,
@@ -262,28 +265,24 @@ try {
       await session.$("button=Restart to update").waitForDisplayed({ timeout: 60000 });
       await session.$("button=Restart to update").click();
       await session.$("button=Restart and update").click();
-      // The original process exits; replacement and launch are verified below.
+      // Keep the driver alive until installation and automatic launch finish.
+      // Deleting the old session immediately can close the app before its
+      // asynchronous install command has reached the native updater.
+      await until(
+        () => existsSync(application) && hash(application) === candidateHash,
+        "Signed updater did not replace the executable with the candidate bytes",
+        120000,
+      );
+      await until(
+        () => ownedProcesses().some((process) => process.MainWindowHandle !== 0),
+        "Installer did not automatically launch a window for the updated application",
+        60000,
+      );
+      console.log(
+        "Signed update replaced the native installation and automatically launched its window",
+      );
     },
     { applicationExits: true },
-  );
-  await until(
-    () => existsSync(application) && hash(application) !== oldHash,
-    "Signed updater did not replace the executable",
-    120000,
-  );
-  const candidateExe = windows ? join(target, "debug/control-room.exe") : installers[1];
-  assert.equal(
-    hash(application),
-    hash(candidateExe),
-    "Installed bytes must match the signed candidate build",
-  );
-  await until(
-    () => ownedProcesses().some((process) => process.MainWindowHandle !== 0),
-    "Installer did not automatically launch a window for the updated application",
-    60000,
-  );
-  console.log(
-    "Signed update replaced the native installation and automatically launched its window",
   );
   await stopOwnedApplication();
   await withInstalledApp(application, async (invoke, session) => {
