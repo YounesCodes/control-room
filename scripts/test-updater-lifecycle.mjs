@@ -208,7 +208,7 @@ try {
     { applicationExits: true },
   );
   await until(
-    () => hash(application) !== oldHash,
+    () => existsSync(application) && hash(application) !== oldHash,
     "Signed updater did not replace the executable",
     120000,
   );

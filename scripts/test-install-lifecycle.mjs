@@ -23,10 +23,12 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const dataRoot =
   process.platform === "win32"
     ? join(required("APPDATA"), "app.controlroom.desktop")
-    : join(
-        process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
-        "app.controlroom.desktop",
-      );
+    : process.platform === "darwin"
+      ? join(homedir(), "Library", "Application Support", "app.controlroom.desktop")
+      : join(
+          process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
+          "app.controlroom.desktop",
+        );
 if (process.argv.includes("--cleanup")) {
   const marker = join(dataRoot, ".lifecycle-fixture");
   assert.ok(existsSync(marker), "Refusing cleanup without this runner's ownership marker");
