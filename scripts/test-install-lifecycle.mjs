@@ -260,10 +260,14 @@ function install(file) {
     assert.ok(!/\s/.test(installRoot), "NSIS fixture installation path must not contain spaces");
     execFileSync(file, ["/S", `/D=${installRoot}`], { stdio: "inherit", timeout: 180000 });
   } else
-    execFileSync("sudo", ["apt-get", "install", "-y", "--reinstall", resolve(file)], {
-      stdio: "inherit",
-      timeout: 180000,
-    });
+    execFileSync(
+      "sudo",
+      ["apt-get", "install", "-y", "--reinstall", "--allow-downgrades", resolve(file)],
+      {
+        stdio: "inherit",
+        timeout: 180000,
+      },
+    );
   assert.ok(existsSync(application), "Installer did not produce the application binary");
   const sha256 = binaryHash(application);
   writeFileSync(join(directory, "installed.json"), JSON.stringify({ sha256 }));

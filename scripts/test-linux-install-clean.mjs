@@ -97,8 +97,12 @@ function hash(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 function install(file) {
-  execFileSync("sudo", ["-n", "apt-get", "install", "-y", "--reinstall", file], {
-    stdio: "inherit",
-    timeout: 180000,
-  });
+  execFileSync(
+    "sudo",
+    ["-n", "apt-get", "install", "-y", "--reinstall", "--allow-downgrades", file],
+    {
+      stdio: "inherit",
+      timeout: 180000,
+    },
+  );
 }
