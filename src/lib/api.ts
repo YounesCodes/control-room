@@ -119,6 +119,7 @@ export const api = {
   openReleases: () => invoke<void>("open_releases"),
   readClipboard: () => invoke<string | null>("read_clipboard"),
   writeClipboard: (text: string) => invoke<void>("write_clipboard", { text }),
+  windowCompositing: () => invoke<boolean>("window_compositing"),
   environment: () => invoke<EnvironmentInfo>("get_environment_info"),
   listConnections: () => invoke<SavedConnection[]>("list_connections"),
   createConnection: (input: SavedConnectionInput) =>
