@@ -11,6 +11,7 @@ import { connection } from "../test/app-fixtures";
 import type { AppSettings } from "../types";
 import "@xterm/xterm/css/xterm.css";
 import "../styles.css";
+import { forceSelectionModifier } from "../test/keyboard";
 
 const session = vi.hoisted(() => ({
   output: null as { onmessage: ((message: ArrayBuffer) => void) | null } | null,
@@ -556,7 +557,10 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
   expect(
     session.writeSession.mock.calls.map(([, data]) => new TextDecoder().decode(data)).join(""),
   ).toContain("\x1b[<32;");
-  await userEvent.dblClick(screen, { modifiers: ["Shift"], position: { x: 15, y: 5 } });
+  await userEvent.dblClick(screen, {
+    modifiers: [forceSelectionModifier],
+    position: { x: 15, y: 5 },
+  });
   expect(onSelectionChange).toHaveBeenLastCalledWith(true);
   session.writeSession.mockClear();
 

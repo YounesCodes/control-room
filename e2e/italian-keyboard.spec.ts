@@ -17,11 +17,11 @@ describe("Italian native keyboard layout", () => {
     async () => {
       await openNativeShell();
       await $(".sidebar-primary").click();
-      await $("aria/Display name").click();
+      await $("input[aria-label='Display name']").click();
       await focusNativeApp();
       await withItalianLayout(async () => {
         typeItalianAccents();
-        await expect($("aria/Display name")).toHaveValue("èé");
+        await expect($("input[aria-label='Display name']")).toHaveValue("èé");
       });
       await nativeKey("escape");
     },

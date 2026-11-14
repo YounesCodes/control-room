@@ -778,6 +778,13 @@ export function TerminalPane({
     if (findRequest > 0) openSearch();
   }, [findRequest]);
 
+  // Focus once the field has rendered: a shortcut opens Find from an effect,
+  // whose render can land after a timer set alongside it.
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  useEffect(() => {
+    if (searchFocusRequest > 0) searchInputRef.current?.focus();
+  }, [searchFocusRequest]);
+
   const onSearchOpenChangeRef = useRef(onSearchOpenChange);
   onSearchOpenChangeRef.current = onSearchOpenChange;
   useEffect(() => {
@@ -820,7 +827,7 @@ export function TerminalPane({
 
   function openSearch() {
     setSearchOpen(true);
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    setSearchFocusRequest((current) => current + 1);
   }
 
   function closeSearch() {
