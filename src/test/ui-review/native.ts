@@ -325,22 +325,29 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
                 : { sessionId, state: "connected", reason: null },
           }),
         );
-        // The terminal scenario prints a short service log so Find has
-        // several matches to step through.
+        // A running command names the tab; the local ssh.exe window title
+        // that ConPTY reports first must never appear. The terminal scenario
+        // prints a short service log so Find has several matches to step through.
         const output =
-          scenario === "terminal"
+          state === "running-command"
             ? [
-                "example$ journalctl -u worker.service -n 6 --no-pager",
-                "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
-                "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
-                "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
-                "Nov 01 09:59:44 example worker[1234]: job 41 finished",
-                "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
-                "example$ ",
+                "\x1b]0;C:\\Windows\\System32\\OpenSSH\\ssh.exe\x07example$ htop -d 5",
+                "\x1b]633;E;htop -d 5\x07\x1b]133;C\x07  PID USER      PRI  NI  VIRT   RES S CPU% MEM%",
+                " 1234 example    20   0  412M 38.2M S  2.1  0.9 worker",
               ].join("\r\n")
-            : args.containerId
-              ? `root@${args.containerId.slice(0, 12)}:/# `
-              : "example$ ";
+            : scenario === "terminal"
+              ? [
+                  "example$ journalctl -u worker.service -n 6 --no-pager",
+                  "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
+                  "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
+                  "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
+                  "Nov 01 09:59:44 example worker[1234]: job 41 finished",
+                  "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+                  "example$ ",
+                ].join("\r\n")
+              : args.containerId
+                ? `root@${args.containerId.slice(0, 12)}:/# `
+                : "example$ ";
         args.output.onmessage(new TextEncoder().encode(output).buffer);
       }, 0);
       break;

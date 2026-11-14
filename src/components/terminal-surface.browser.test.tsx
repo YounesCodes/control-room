@@ -6,6 +6,7 @@ import { Terminal } from "@xterm/xterm";
 import type { TerminalPaneHandle } from "./TerminalPane";
 import { TerminalPane } from "./TerminalPane";
 import { createLocalWorkspace, createRemoteWorkspace } from "../lib/workspace-target";
+import { TERMINAL_TITLE_DELAY_MS } from "../lib/terminal-title";
 import { connection } from "../test/app-fixtures";
 import type { AppSettings } from "../types";
 import "@xterm/xterm/css/xterm.css";
@@ -88,7 +89,7 @@ afterEach(() => {
 });
 
 it.each(["local", "remote"])(
-  "tracks %s titles through real OSC parsing without retaining arguments",
+  "names %s commands through real OSC parsing, ignoring window titles and arguments",
   async (kind) => {
     container = document.createElement("div");
     Object.assign(container.style, { width: "900px", height: "500px" });
@@ -124,16 +125,24 @@ it.each(["local", "remote"])(
         expect(session.acknowledgeSessionOutput.mock.calls.length).toBeGreaterThan(count),
       );
     };
-    await output("\x1b]133;C\x07\x1b]2;python --token private\x07");
-    expect(onTitle).toHaveBeenLastCalledWith("python");
-    await output("\x1b[?1049hEditor output\r\nMore output");
+    const settle = () =>
+      new Promise((resolve) => setTimeout(resolve, TERMINAL_TITLE_DELAY_MS + 50));
+    // Window titles name the host process or a document, never the program:
+    // ConPTY reports ssh.exe before the remote shell starts.
+    await output("\x1b]0;C:\\Windows\\System32\\OpenSSH\\ssh.exe\x07\x1b]2;notes.txt - VIM\x07");
+    await settle();
+    expect(onTitle).not.toHaveBeenCalled();
+    await output("\x1b]633;E;python --token private;nonce\x07\x1b]133;C\x07");
+    await vi.waitFor(() => expect(onTitle).toHaveBeenLastCalledWith("python"));
+    await output("\x1b[?1049hEditor output\r\nMore output\x1b]2;vim title\x07");
+    await settle();
     expect(onTitle).toHaveBeenLastCalledWith("python");
     await output("\x1b[?1049l\x1b]133;D;0\x07");
     expect(onTitle).toHaveBeenLastCalledWith(null);
     const count = onTitle.mock.calls.length;
     await output("\x1b]2;python stale title\x07\x1b]133;A\x07$ ");
-    expect(onTitle).toHaveBeenCalledTimes(count);
     await output("\x1b]133;C\x07ordinary output with no title");
+    await settle();
     expect(onTitle).toHaveBeenCalledTimes(count);
     root.unmount();
     root = null;
