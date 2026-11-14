@@ -385,6 +385,14 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
   );
   await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
   const screen = container.querySelector<HTMLElement>(".xterm-screen")!;
+  await userEvent.dragAndDrop(screen, screen, {
+    sourcePosition: { x: 1, y: 5 },
+    targetPosition: { x: 120, y: 5 },
+  });
+  expect(onSelectionChange).toHaveBeenLastCalledWith(false);
+  expect(
+    session.writeSession.mock.calls.map(([, data]) => new TextDecoder().decode(data)).join(""),
+  ).toContain("\x1b[<32;");
   await userEvent.dblClick(screen, { modifiers: ["Shift"], position: { x: 15, y: 5 } });
   expect(onSelectionChange).toHaveBeenLastCalledWith(true);
   session.writeSession.mockClear();
@@ -423,6 +431,69 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
   );
   await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(3));
   expect(new TextDecoder().decode(session.writeSession.mock.calls[2][1])).toContain("\x1b[<35;");
+});
+
+it("selects Codex output with a plain drag and forwards clicks and wheel input", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  container = document.createElement("div");
+  container.style.height = "400px";
+  document.body.append(container);
+  root = createRoot(container);
+  const handle = createRef<TerminalPaneHandle>();
+  const onSelectionChange = vi.fn();
+  root.render(
+    <TerminalPane
+      ref={handle}
+      workspace={createRemoteWorkspace(connection())}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onSelectionChange={onSelectionChange}
+    />,
+  );
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  session.output!.onmessage!(
+    new TextEncoder().encode(
+      "\x1b[?1049h\x1b[?1003h\x1b[?1006h╭─\r\n│ >_ OpenAI Codex (v0.167.2)\r\nCOPY_NEEDLE",
+    ).buffer,
+  );
+  await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
+  const screen = container.querySelector<HTMLElement>(".xterm-screen")!;
+  const row = page.getByText("COPY_NEEDLE", { exact: true }).element();
+  const y = row.getBoundingClientRect().top - screen.getBoundingClientRect().top + 5;
+  await userEvent.dragAndDrop(screen, screen, {
+    sourcePosition: { x: 1, y },
+    targetPosition: { x: 120, y },
+  });
+  expect(onSelectionChange).toHaveBeenLastCalledWith(true);
+  handle.current!.copySelection();
+  expect(write).toHaveBeenCalledWith("COPY_NEEDLE");
+  await page.screenshot({ path: "../../test-results/codex-drag-selection.png" });
+  const mouseReports = () =>
+    session.writeSession.mock.calls.map(([, data]) => new TextDecoder().decode(data)).join("");
+  expect(mouseReports()).not.toContain("\x1b[<0;");
+  expect(mouseReports()).not.toContain("\x1b[<32;");
+
+  session.writeSession.mockClear();
+  await userEvent.click(screen, { position: { x: 20, y } });
+  expect(mouseReports()).toMatch(/<0;\d+;\d+M.*<0;\d+;\d+m/);
+  expect(onSelectionChange).toHaveBeenLastCalledWith(false);
+
+  session.writeSession.mockClear();
+  const bounds = screen.getBoundingClientRect();
+  screen.dispatchEvent(
+    new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      clientX: bounds.left + 20,
+      clientY: bounds.top + y,
+      deltaY: 100,
+    }),
+  );
+  expect(mouseReports()).toContain("\x1b[<65;");
 });
 
 it("keeps the terminal edge empty until search has matches", async () => {

@@ -342,6 +342,9 @@ Automatic tab titles use only shell-reported metadata, reduced to a bare
 executable name. Manual names win. Titles stay in memory and never change saved
 workspace names.
 
+In Codex CLI, a plain left drag selects terminal text. Clicks and scrolling
+still go to Codex. Other mouse-tracking programs keep their own drag gestures.
+
 Terminal search opens as a compact overlay that does not reduce terminal
 height. Keep matches distinguishable without washing out ANSI colors, and make
 the active match the most prominent.

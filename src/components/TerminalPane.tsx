@@ -14,6 +14,7 @@ import {
   isControlRoomShortcut,
   terminalRightClickAction,
 } from "../lib/terminal-flow";
+import { enableCodexDragSelection } from "../lib/terminal-mouse";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { TerminalTitle } from "../lib/terminal-title";
@@ -234,6 +235,7 @@ export function TerminalPane({
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
     terminal.open(container);
+    const disposeCodexDragSelection = enableCodexDragSelection(container, terminal);
     fit.fit();
     terminalRef.current = terminal;
     fitRef.current = fit;
@@ -436,6 +438,7 @@ export function TerminalPane({
       listenerDisposed = true;
       unlisten?.();
       observer.disconnect();
+      disposeCodexDragSelection();
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
       container.removeEventListener("mousemove", handleMouseMove, { capture: true });
       container.removeEventListener("contextmenu", handleContextMenu, { capture: true });
