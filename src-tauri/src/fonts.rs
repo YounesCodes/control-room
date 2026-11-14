@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 use std::path::Path;
 
 use parking_lot::Mutex;
@@ -20,7 +20,7 @@ use tauri::{
     ipc::{Channel, Response},
 };
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use tauri::Manager;
 
 const CATALOG: &str = "https://api.fontsource.org/v1/fonts?category=monospace&type=google&weights=400&styles=normal&subsets=latin";
@@ -35,7 +35,7 @@ mod macos;
 pub struct FontState {
     catalog: Arc<Mutex<Vec<CatalogFont>>>,
     previews: Arc<Mutex<HashMap<String, Vec<u8>>>>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     installation: Arc<Mutex<()>>,
 }
 
@@ -321,7 +321,7 @@ fn preview_font(state: &FontState, id: String) -> Result<Response, String> {
     Ok(Response::new(bytes))
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 struct InstalledFile {
     path: std::path::PathBuf,
     created: bool,
@@ -329,7 +329,7 @@ struct InstalledFile {
     key: String,
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 trait FontRegistration {
     // Returns true only when this call created a registry entry and resource.
     fn register(&self, path: &Path, key: &str) -> Result<bool, String>;
@@ -337,7 +337,7 @@ trait FontRegistration {
 }
 
 // Publish a fully synced staging file without replacing an existing font.
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     use std::io::Write;
     let staging = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
@@ -374,7 +374,7 @@ fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     result
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 fn install_files(
     directory: &Path,
     font: &CatalogFont,
