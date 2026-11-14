@@ -9,6 +9,7 @@ import {
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { LocalShellIcon } from "../components/LocalShellIcon";
+import { StepSlider } from "../components/StepSlider";
 import { api, errorMessage } from "../lib/api";
 import {
   DEFAULT_HEADER_METRICS,
@@ -50,7 +51,7 @@ const sections = {
     "Local terminal",
     "shell startup default offered powershell cmd git bash administrator elevated focus mode",
   ],
-  logs: ["logs", "Logs and History", "default log tail enhanced command history ssh"],
+  logs: ["logs", "Logs & History", "default log tail enhanced command history ssh"],
   permissions: [
     "connections",
     "Elevated commands",
@@ -372,7 +373,6 @@ export function SettingsPane({
             disabled={fontBusy || saving}
             onClick={() => onClose()}
             aria-label="Close Settings"
-            title="Close Settings"
           >
             <ArrowLeft size={17} />
           </button>
@@ -573,24 +573,17 @@ export function SettingsPane({
                       </label>
                     ))}
                   </div>
-                  <label className="host-metrics-refresh">
-                    <span>Refresh host metrics</span>
-                    <select
-                      value={draft.hostMetricsIntervalSeconds ?? 5}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          hostMetricsIntervalSeconds: Number(event.target.value),
-                        })
-                      }
-                    >
-                      {[2, 5, 10, 30].map((seconds) => (
-                        <option value={seconds} key={seconds}>
-                          Every {seconds} seconds
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <StepSlider
+                    className="host-metrics-refresh"
+                    label="Host metrics refresh interval"
+                    unit="seconds"
+                    options={[2, 5, 10, 30]}
+                    value={draft.hostMetricsIntervalSeconds ?? 5}
+                    format={(seconds) => `Every ${seconds} seconds`}
+                    onChange={(seconds) =>
+                      setDraft({ ...draft, hostMetricsIntervalSeconds: seconds })
+                    }
+                  />
                 </fieldset>
                 <small>Monitoring pauses while Settings is open or the window is hidden.</small>
                 {draft.hostMetricsEnabled &&
@@ -789,19 +782,14 @@ export function SettingsPane({
                 )}
               </SettingsSection>
               <SettingsSection id="logs" {...sectionProps}>
-                <label>
-                  <span>Default log tail</span>
-                  <select
-                    value={draft.defaultLogTail}
-                    onChange={(event) =>
-                      setDraft({ ...draft, defaultLogTail: Number(event.target.value) })
-                    }
-                  >
-                    {logTailOptions.map((count) => (
-                      <option key={count}>{count}</option>
-                    ))}
-                  </select>
-                </label>
+                <StepSlider
+                  label="Default log tail"
+                  unit="lines"
+                  options={logTailOptions}
+                  value={draft.defaultLogTail}
+                  format={(count) => `${count} lines`}
+                  onChange={(count) => setDraft({ ...draft, defaultLogTail: count })}
+                />
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -860,37 +848,42 @@ export function SettingsPane({
                   >
                     <RefreshCw size={14} /> {checking ? "Checking…" : "Check for updates"}
                   </button>
-                  {checkResult && (
-                    <p
-                      className={
-                        checkResult.outcome === "failed"
-                          ? "settings-update-status failed"
-                          : "settings-update-status"
-                      }
-                      role="status"
-                    >
-                      {checkResult.outcome === "current" && "You're up to date."}
-                      {checkResult.outcome === "available" &&
-                        `Version ${checkResult.version} is available.`}
-                      {checkResult.outcome === "failed" && (
-                        <>
-                          Could not check for updates.
-                          <span className="settings-update-reason">
-                            {checkResult.failure.message}
-                          </span>
-                        </>
-                      )}
+                  {checkResult?.outcome === "failed" ? (
+                    <p className="inline-error settings-update-error" role="status">
+                      <span>
+                        Could not check for updates.
+                        <span className="settings-update-reason">
+                          {checkResult.failure.message}
+                        </span>
+                      </span>
                     </p>
+                  ) : (
+                    checkResult && (
+                      <p className="settings-update-status" role="status">
+                        {checkResult.outcome === "current"
+                          ? "You're up to date."
+                          : `Version ${checkResult.version} is available.`}
+                      </p>
+                    )
                   )}
                 </div>
               </SettingsSection>
               <SettingsSection id="ssh" {...sectionProps}>
-                <dl className="detail-list">
+                <dl className="detail-list settings-ssh">
                   <div>
                     <dt>ssh.exe</dt>
-                    <dd className="technical">
-                      {environment ? (environment.sshPath ?? "Not detected") : "Checking…"}
-                    </dd>
+                    {!environment ? (
+                      <dd>Checking…</dd>
+                    ) : environment.sshPath ? (
+                      <dd className="technical">{environment.sshPath}</dd>
+                    ) : (
+                      <dd>
+                        <span className="settings-ssh-state">
+                          <span className="status-dot status-error" aria-hidden="true" />
+                          Not detected
+                        </span>
+                      </dd>
+                    )}
                   </div>
                   <div>
                     <dt>OpenSSH config</dt>
@@ -899,11 +892,27 @@ export function SettingsPane({
                   <div>
                     <dt>ssh-agent</dt>
                     <dd>
-                      {!environment
-                        ? "Checking…"
-                        : environment.sshAgentAvailable
-                          ? "Available, identity loaded"
-                          : "No identity available. ssh-agent may be stopped or have no loaded identities; run ssh-add -l outside Control Room to check."}
+                      {!environment ? (
+                        "Checking…"
+                      ) : (
+                        <>
+                          <span className="settings-ssh-state">
+                            <span
+                              className={`status-dot${environment.sshAgentAvailable ? " status-connected" : ""}`}
+                              aria-hidden="true"
+                            />
+                            {environment.sshAgentAvailable
+                              ? "Identity loaded"
+                              : "No identity loaded"}
+                          </span>
+                          {!environment.sshAgentAvailable && (
+                            <span className="settings-ssh-hint">
+                              The agent may be stopped or holding no keys. Check with{" "}
+                              <code>ssh-add -l</code> in a terminal.
+                            </span>
+                          )}
+                        </>
+                      )}
                     </dd>
                   </div>
                 </dl>

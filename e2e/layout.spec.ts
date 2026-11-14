@@ -76,10 +76,10 @@ describe("Resizable panels in the native app", () => {
   it("saves content widths, shares them across hosts, restores and resets through SQLite", async () => {
     const create = async (name: string) => {
       await $(".sidebar-primary").click();
-      await $("aria/Display name").setValue(name);
-      await $("aria/SSH destination").setValue("127.0.0.1");
-      await $("aria/Username").setValue("tester");
-      await $(".port-field input").setValue("1");
+      await $("input[aria-label='Display name']").setValue(name);
+      await $("input[aria-label='SSH destination']").setValue("127.0.0.1");
+      await $("input[aria-label='Username']").setValue("tester");
+      await $("//label[span[normalize-space()='Port']]/input").setValue("1");
       await $(".modal-actions button[type=submit]").click();
     };
     await create("Layout host A");

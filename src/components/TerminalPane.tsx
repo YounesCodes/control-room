@@ -27,6 +27,8 @@ export interface TerminalPaneHandle {
   focus: () => void;
   copySelection: () => void;
   pasteClipboard: () => void;
+  /** Opens Find in terminal, or closes it when it is already open. */
+  toggleSearch: () => void;
 }
 
 interface TerminalPaneProps {
@@ -41,6 +43,7 @@ interface TerminalPaneProps {
   onSelectionChange?: (hasSelection: boolean) => void;
   onActivity?: (kind: "output" | "bell") => void;
   onProcessing?: (busy: boolean) => void;
+  onSearchOpenChange?: (open: boolean) => void;
   onTitle?: (title: string | null) => void;
   findRequest?: number;
   onReconnect?: () => void;
@@ -69,6 +72,7 @@ export function TerminalPane({
   onSelectionChange,
   onActivity = () => undefined,
   onProcessing = () => undefined,
+  onSearchOpenChange,
   onTitle = () => undefined,
   findRequest = 0,
   onReconnect,
@@ -113,7 +117,15 @@ export function TerminalPane({
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
-  const [localError, setLocalError] = useState<string | null>(null);
+  // A notice from this pane: a failed action, or a warning about input that
+  // could not be sent yet. Session failures arrive as workspace.reason.
+  const [localNotice, setLocalNotice] = useState<{
+    message: string;
+    tone: "error" | "warning";
+  } | null>(null);
+  const setLocalError = (message: string | null) =>
+    setLocalNotice(message === null ? null : { message, tone: "error" });
+  const setLocalWarning = (message: string) => setLocalNotice({ message, tone: "warning" });
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
@@ -123,7 +135,7 @@ export function TerminalPane({
     if (!text) return;
     void navigator.clipboard
       .writeText(text)
-      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+      .catch((error) => setLocalError(clipboardFailure("copy", error)));
   }, []);
 
   const pasteClipboard = useCallback(() => {
@@ -142,13 +154,14 @@ export function TerminalPane({
           terminal.paste(text);
         }
       })
-      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+      .catch((error) => setLocalError(clipboardFailure("paste", error)));
   }, []);
 
   useImperativeHandle(ref, () => ({
     focus: () => terminalRef.current?.focus(),
     copySelection,
     pasteClipboard,
+    toggleSearch: () => (searchOpen ? closeSearch() : openSearch()),
   }));
 
   historyPausedRef.current = remote?.historyPaused ?? false;
@@ -193,14 +206,14 @@ export function TerminalPane({
     }
     if (!acceptingInputRef.current) {
       if (workspace.kind === "local") {
-        setLocalError("Restart the shell before sending terminal input.");
+        setLocalWarning("Restart the shell before sending terminal input.");
       } else if (!workspaceReasonRef.current) {
-        setLocalError("Reconnect before sending terminal input.");
+        setLocalWarning("Reconnect before sending terminal input.");
       }
       return;
     }
     if (!pendingInputRef.current.enqueue(bytes)) {
-      setLocalError("Terminal input is paused while the session catches up.");
+      setLocalWarning("Terminal input is paused while the session catches up.");
     }
   };
 
@@ -663,10 +676,14 @@ export function TerminalPane({
   }, [settings, visible, active]);
 
   useEffect(() => {
-    if (findRequest <= 0) return;
-    setSearchOpen(true);
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    if (findRequest > 0) openSearch();
   }, [findRequest]);
+
+  const onSearchOpenChangeRef = useRef(onSearchOpenChange);
+  onSearchOpenChangeRef.current = onSearchOpenChange;
+  useEffect(() => {
+    onSearchOpenChangeRef.current?.(searchOpen);
+  }, [searchOpen]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -702,6 +719,11 @@ export function TerminalPane({
     else search.findPrevious(searchTerm, options);
   }
 
+  function openSearch() {
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
+
   function closeSearch() {
     searchRef.current?.clearDecorations();
     setSearchOpen(false);
@@ -715,16 +737,36 @@ export function TerminalPane({
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
       onPointerDown={onActivate}
     >
-      {(localError || workspace.reason) && (
-        <div className="terminal-notice" role="status">
-          <span className="terminal-notice-message">{localError ?? workspace.reason}</span>
+      {(localNotice || workspace.reason) && (
+        <div
+          className="terminal-notice"
+          data-tone={localNotice?.tone ?? "error"}
+          role={localNotice?.tone === "warning" ? "status" : "alert"}
+        >
+          <span className="terminal-notice-message">
+            {localNotice?.message ?? workspace.reason}
+          </span>
           {/* The recovery action rides the notice that names the failure, so
               an ended session is reconnectable where it died. */}
-          {terminalEnded && onReconnect && (
+          {terminalEnded && onReconnect ? (
             <button type="button" className="terminal-notice-action" onClick={onReconnect}>
               <RotateCw size={13} aria-hidden="true" />
               <span>{isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}</span>
             </button>
+          ) : (
+            localNotice && (
+              <button
+                type="button"
+                className="terminal-notice-dismiss"
+                aria-label="Dismiss terminal notice"
+                onClick={() => {
+                  setLocalNotice(null);
+                  terminalRef.current?.focus();
+                }}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            )
           )}
         </div>
       )}
@@ -732,45 +774,80 @@ export function TerminalPane({
         <div className="terminal-container" ref={containerRef} />
         {searchOpen && (
           <form
-            className="terminal-search"
+            className="search-field terminal-search"
             role="search"
             onSubmit={(event) => {
               event.preventDefault();
               find(true);
             }}
           >
-            <Search size={14} aria-hidden="true" />
+            <Search size={15} aria-hidden="true" />
             <input
               ref={searchInputRef}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") closeSearch();
+                if (event.key === "Enter" && event.shiftKey) {
+                  event.preventDefault();
+                  find(false);
+                }
               }}
               aria-label="Find in terminal output"
               placeholder="Find in terminal"
             />
-            <span className="terminal-search-count" aria-live="polite">
+            <span
+              className="terminal-search-count"
+              data-none={searchTerm && !searchResult.count ? "" : undefined}
+              aria-live="polite"
+            >
               {searchResult.count
                 ? `${searchResult.index + 1} of ${searchResult.count}`
                 : searchTerm
                   ? "No matches"
                   : ""}
             </span>
-            <span className="terminal-search-controls">
-              <button type="button" onClick={() => find(false)} aria-label="Previous match">
-                <ChevronUp size={14} />
-              </button>
-              <button type="button" onClick={() => find(true)} aria-label="Next match">
-                <ChevronDown size={14} />
-              </button>
-              <button type="button" onClick={closeSearch} aria-label="Close terminal search">
-                <X size={14} />
-              </button>
-            </span>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => find(false)}
+              disabled={!searchResult.count}
+              aria-label="Previous match"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => find(true)}
+              disabled={!searchResult.count}
+              aria-label="Next match"
+            >
+              <ChevronDown size={14} />
+            </button>
+            <span className="terminal-search-divider" aria-hidden="true" />
+            <button
+              className="icon-button"
+              type="button"
+              onClick={closeSearch}
+              aria-label="Close terminal search"
+            >
+              <X size={14} />
+            </button>
           </form>
         )}
       </div>
     </section>
   );
+}
+
+/// Clipboard refusals surface as a DOMException naming the API call; say what
+/// the user tried and why it did not happen instead.
+function clipboardFailure(action: "copy" | "paste", error: unknown) {
+  const denied =
+    (error instanceof DOMException && error.name === "NotAllowedError") ||
+    /permission denied/i.test(errorMessage(error));
+  return denied
+    ? `Could not ${action}: clipboard access was denied.`
+    : `Could not ${action}: ${errorMessage(error)}`;
 }

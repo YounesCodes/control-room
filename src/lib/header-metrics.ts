@@ -126,10 +126,14 @@ export function headerMetricValue(metric: HeaderMetric, sample: HeaderMetrics | 
       return formatUptime(sample?.uptimeSeconds);
   }
 }
-export function headerMetricDetail(metric: HeaderMetric, sample: HeaderMetrics | null): string {
-  if (!sample) return "Waiting for a reading";
-  const value = headerMetricValue(metric, sample);
-  if (value === "Unavailable") return "This host did not report a reading";
+/// Extra facts that a reading's value cannot show on its own: used and total
+/// capacity. Other metrics are clear from their label and value, so they have
+/// no caption.
+export function headerMetricDetail(
+  metric: HeaderMetric,
+  sample: HeaderMetrics | null,
+): string | null {
+  if (!sample || headerMetricValue(metric, sample) === "Unavailable") return null;
   if (metric === "ram" && sample.memoryTotalKib !== null && sample.memoryAvailableKib !== null) {
     return `${formatKib(sample.memoryTotalKib - sample.memoryAvailableKib)} of ${formatKib(sample.memoryTotalKib)}`;
   }
@@ -137,9 +141,7 @@ export function headerMetricDetail(metric: HeaderMetric, sample: HeaderMetrics |
     const label = sample.diskLabel?.replace(/:+$/, "") || "Filesystem";
     return `${label}: ${formatKib(sample.diskTotalKib - sample.diskFreeKib)} of ${formatKib(sample.diskTotalKib)}`;
   }
-  if (metric === "gpu") return "Busiest reported GPU engine or device";
-  if (metric === "diskIo") return "All disks · Read and write transfer rates";
-  return metric === "cpu" ? "All processors combined" : "Time since this host started";
+  return null;
 }
 
 export function formatReadingTime(sampledAt: string): string {

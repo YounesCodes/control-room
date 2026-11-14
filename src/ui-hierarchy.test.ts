@@ -76,6 +76,24 @@ function importedDialogFunctions(): string[] {
 }
 
 describe("application hierarchy", () => {
+  it("uses one Copy icon for every copy action and keeps Clipboard for paste", () => {
+    for (const file of productionSources()) {
+      const source = readFileSync(file, "utf8");
+      const icons = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"lucide-react"/g)]
+        .flatMap(([, clause]) => clause.split(","))
+        .map((specifier) => specifier.split(/\bas\b/)[0].trim());
+      expect(
+        icons.filter((name) => /^(Clipboard|Copy)./.test(name)),
+        file.pathname,
+      ).toEqual([]);
+      for (const match of source.matchAll(/<Clipboard\b/g)) {
+        expect(source.slice(Math.max(0, match.index - 400), match.index), file.pathname).toMatch(
+          /Paste/,
+        );
+      }
+    }
+  });
+
   it("opens the same documentation URL that the docs site publishes", () => {
     const config = code("../docs/astro.config.mjs");
     const site = config.match(/site:\s*"([^"]+)"/)?.[1];

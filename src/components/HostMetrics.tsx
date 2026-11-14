@@ -1,5 +1,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { Circle, CircleAlert, CircleDashed, Clock3, ChevronDown, Pause, X } from "lucide-react";
+import {
+  Circle,
+  CircleAlert,
+  CircleDashed,
+  Clock3,
+  ChevronDown,
+  Pause,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { useHeaderMetrics } from "../hooks/use-header-metrics";
 import { usePopoverExit } from "../hooks/use-popover-exit";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -43,7 +52,7 @@ function MetricValue({
           format={formatByteRate}
         />{" "}
         <span className="host-metric-direction" data-tauri-drag-region={compact || undefined}>
-          {compact ? "W" : "· Write"}
+          {compact ? "W" : "Write"}
         </span>{" "}
         <AnimatedNumber
           {...shared}
@@ -151,6 +160,7 @@ export function HostMetrics({
         : reading.sample
           ? "Live"
           : "Reading";
+  const readingTime = reading.sample ? formatReadingTime(reading.sample.sampledAt) : null;
   const StatusIcon = {
     Live: Circle,
     Reading: CircleDashed,
@@ -159,7 +169,7 @@ export function HostMetrics({
     Unavailable: CircleAlert,
   }[status];
   const statusDescription = {
-    Live: "Automatic refresh is active. The latest host reading is current.",
+    Live: "Readings refresh automatically.",
     Reading: "Waiting for the first host reading.",
     Stale: "The last host reading is out of date. Open host details to refresh or check errors.",
     Paused: "Automatic refresh is paused while the window is hidden.",
@@ -264,6 +274,16 @@ export function HostMetrics({
           <header>
             <h3>{name}</h3>
             <button
+              className="icon-button"
+              type="button"
+              aria-label="Refresh readings"
+              title="Refresh readings"
+              onClick={reading.refresh}
+              disabled={reading.sampling || !reading.visible}
+            >
+              <RefreshCw size={14} />
+            </button>
+            <button
               ref={close}
               className="icon-button"
               type="button"
@@ -278,40 +298,39 @@ export function HostMetrics({
           </header>
           <p>
             {status}
-            {reading.sample
-              ? ` · Last reading time ${formatReadingTime(reading.sample.sampledAt)}`
-              : " · Waiting for a reading"}
+            {readingTime === null
+              ? " · Waiting for a reading"
+              : readingTime === "Unavailable"
+                ? " · Update time unknown"
+                : ` · Updated ${readingTime}`}
           </p>
           <dl>
-            {metrics.map((metric) => (
-              <div key={`${target}:${metric}`}>
-                <dt>{HEADER_METRIC_LABELS[metric]}</dt>
-                <dd>
-                  <div className="host-metric-detail-value">
-                    <strong>
-                      <MetricValue
-                        metric={metric}
-                        sample={reading.sample}
-                        animate={status === "Live"}
-                      />
-                    </strong>
-                    <MetricTrace metric={metric} history={reading.history} />
-                  </div>
-                  <small>{headerMetricDetail(metric, reading.sample)}</small>
-                </dd>
-              </div>
-            ))}
+            {metrics.map((metric) => {
+              const detail = headerMetricDetail(metric, reading.sample);
+              const unavailable =
+                !reading.sample || headerMetricValue(metric, reading.sample) === "Unavailable";
+              return (
+                <div key={`${target}:${metric}`}>
+                  <dt>{HEADER_METRIC_LABELS[metric]}</dt>
+                  <dd>
+                    <div className="host-metric-detail-value">
+                      <strong data-unavailable={unavailable || undefined}>
+                        <MetricValue
+                          metric={metric}
+                          sample={reading.sample}
+                          animate={status === "Live"}
+                        />
+                      </strong>
+                      <MetricTrace metric={metric} history={reading.history} />
+                    </div>
+                    {detail && <small>{detail}</small>}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
           {reading.error && <p className="host-metrics-error">{reading.error}</p>}
           <footer>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={reading.refresh}
-              disabled={reading.sampling || !reading.visible}
-            >
-              Refresh
-            </button>
             <button className="secondary-button" type="button" onClick={onSettings}>
               Customize in Settings
             </button>

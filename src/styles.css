@@ -109,6 +109,7 @@
   --fill-selected: #2a2a2a;
   --fill-control: #171717;
   --fill-control-hover: #242424;
+  --fill-text-selection: #474747;
 
   /* Text roles. */
   --text-strong: #fff;
@@ -149,6 +150,12 @@ h3 {
 
 * {
   box-sizing: border-box;
+}
+
+/* Selected text keeps the neutral palette instead of the system blue. */
+::selection {
+  background: var(--fill-text-selection);
+  color: var(--text-strong);
 }
 
 .sr-only {
@@ -706,9 +713,11 @@ code,
 .host-metric[data-metric="diskIo"] {
   min-width: 166px;
 }
+/* Fixed slots keep changing rates from moving W or the next reading. Each value
+   starts beside its own letter so "R 0 B/s" and "W 0 B/s" read as pairs. */
 .host-metric[data-metric="diskIo"] .host-metric-value {
   display: inline-grid;
-  grid-template-columns: 1ch 9ch 1ch 9ch;
+  grid-template-columns: max-content 9ch max-content 9ch;
   column-gap: 4px;
   align-items: baseline;
 }
@@ -719,21 +728,22 @@ code,
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: right;
+  text-align: left;
 }
+/* Details stack Read over Write with right-aligned values, a two-row table. */
 .host-metric-detail-value > strong:has(.host-metric-direction) {
   display: inline-grid;
-  grid-template-columns: 4ch 9ch 7ch 9ch;
-  column-gap: 4px;
+  grid-template-columns: auto auto;
+  column-gap: 12px;
+  row-gap: 3px;
   align-items: baseline;
 }
 .host-metric-detail-value .host-metric-direction {
   margin-left: 0;
+  font-size: 11px;
 }
 .host-metric-detail-value > strong:has(.host-metric-direction) .animated-number {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-align: right;
 }
 .host-metric[data-metric="uptime"] {
@@ -823,13 +833,21 @@ code,
 .host-metrics-panel footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+}
+.host-metrics-panel footer {
+  justify-content: flex-end;
 }
 .host-metrics-panel h3 {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   margin: 0;
   overflow-wrap: anywhere;
+}
+.host-metrics-panel strong[data-unavailable] {
+  color: var(--text-faint);
+  font-weight: 500;
 }
 .host-metrics-panel p {
   color: var(--text-muted);
@@ -881,18 +899,192 @@ code,
   padding: 0;
   margin-bottom: 10px;
 }
-.settings-form .host-metrics-options .host-metrics-refresh {
+
+/* Stepped slider for settings with a few fixed choices. The native range
+   input sits over a drawn track so keyboard, pointer, and screen-reader
+   behaviour stay native. Stops, fill, and ticks share one
+   position formula so the thumb always lands exactly on a stop. */
+.step-slider {
+  --step-thumb: 16px;
   display: flex;
-  flex-direction: row;
+  max-width: 640px;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: wrap;
   gap: 8px 16px;
 }
 
-.host-metrics-refresh select {
-  width: 176px;
-  min-width: 0;
+/* The unit belongs to the label but stays quieter than the setting's name. */
+.step-slider-label > .step-slider-label-unit {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+/* Line the label up with the track, not with the track and ticks together. */
+/* Settings labels are flex columns; this one keeps its name and unit on one line. */
+.settings-form .step-slider > .step-slider-label,
+.step-slider-label {
+  display: block;
+  flex: none;
+  align-self: flex-start;
+  white-space: nowrap;
+  margin-top: -1px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.step-slider-control {
+  position: relative;
+  flex: none;
+  width: 260px;
+  max-width: calc(100% - 12px);
+  height: 36px;
+  margin-inline: 6px;
+}
+
+/* The track ends just past the first and last stops, rather than reaching
+   out to the thumb's full travel. The cap leaves the end dot an even margin
+   inside the rounded end instead of crowding its edge. */
+.step-slider {
+  --step-track-cap: 5px;
+}
+
+.step-slider-track {
+  position: absolute;
+  top: 5px;
+  right: calc(var(--step-thumb) / 2 - var(--step-track-cap));
+  left: calc(var(--step-thumb) / 2 - var(--step-track-cap));
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+/* Inside the track, positions count from its caps; under it, from the
+   thumb's travel. Both land on the same pixels. */
+.step-slider-fill,
+.step-slider-stop {
+  --step-at: calc(var(--step-track-cap) + (100% - var(--step-track-cap) * 2) * var(--step));
+}
+
+.step-slider-ticks > span {
+  --step-at: calc(var(--step-thumb) / 2 + (100% - var(--step-thumb)) * var(--step));
+}
+
+.step-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--step-at);
+  border-radius: inherit;
+  background: var(--text-muted);
+  transition: width var(--motion-fast) var(--ease);
+}
+
+.step-slider-stop {
+  position: absolute;
+  top: 50%;
+  left: var(--step-at);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transform: translate(-50%, -50%);
+}
+
+.step-slider-stop[data-reached] {
+  background: var(--app-bg);
+}
+
+.step-slider input[type="range"] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  width: 100%;
+  height: var(--step-thumb);
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.step-slider input[type="range"]:focus-visible {
+  outline: none;
+}
+
+.step-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--step-thumb);
+  background: transparent;
+}
+
+.step-slider input[type="range"]::-webkit-slider-thumb {
+  width: var(--step-thumb);
+  height: var(--step-thumb);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--app-bg);
+  appearance: none;
+  transition:
+    transform var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
+}
+
+.step-slider input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb,
+.step-slider[data-dragging] input[type="range"]::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+/* Keyboard focus rings the thumb, not the whole slider box. */
+.step-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px var(--app-bg),
+    0 0 0 5px var(--accent);
+}
+
+.step-slider input[type="range"]:disabled {
+  cursor: not-allowed;
+}
+
+.step-slider-ticks {
+  position: absolute;
+  top: 22px;
+  right: 0;
+  left: 0;
+  height: 14px;
+}
+
+.step-slider-ticks > span {
+  position: absolute;
+  left: var(--step-at);
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.step-slider-ticks > span[data-selected] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.step-slider:has(input:disabled) .step-slider-ticks > span {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-slider-fill,
+  .step-slider input[type="range"]::-webkit-slider-thumb {
+    transition: none;
+  }
 }
 .host-metrics-options:disabled {
   opacity: 0.6;
@@ -1056,10 +1248,8 @@ code,
   line-height: 1.5;
 }
 
-.update-panel-error {
-  border-left: 2px solid var(--failure);
-  padding-left: 9px;
-  color: var(--failure);
+.update-panel-error.inline-error {
+  margin: 0;
 }
 
 .update-panel-actions {
@@ -1112,6 +1302,7 @@ code,
 
 .settings-update-actions {
   display: flex;
+  max-width: 800px;
   min-height: 33px;
   flex-wrap: wrap;
   align-items: center;
@@ -1124,15 +1315,46 @@ code,
   font-size: 11.5px;
 }
 
-.settings-update-status.failed {
-  color: var(--failure);
+/* A failed check is an inline error beside the button. The technical reason
+   sits under the plain sentence rather than replacing it, so a network
+   failure stays readable. */
+.settings-update-error.inline-error {
+  flex: 1 1 260px;
+  margin: 0;
 }
 
-/* The technical reason sits under the plain sentence rather than replacing it,
-   so a network failure stays readable. */
 .settings-update-reason {
   display: block;
-  color: var(--text-faint);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* SSH environment: paths stay plain selectable text; the agent row leads with
+   its state and keeps the troubleshooting hint quiet beneath it. */
+.settings-ssh dd.technical {
+  font-size: 12px;
+}
+
+.settings-ssh-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-ssh-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.settings-ssh-hint code {
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  padding: 1px 5px;
+  color: var(--text);
+  font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 11px;
 }
 
@@ -1214,6 +1436,29 @@ code,
   box-shadow: none;
 }
 
+/* Buttons inside a search field (clear, previous, next, close) share one
+   size, and the field tightens its right padding so they sit evenly. */
+.search-field:has(> button) {
+  padding-right: 4px;
+}
+
+.search-field > button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.search-field > button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.search-field > button:disabled {
+  opacity: 0.4;
+}
+
 /* ==========================================================================
    Sidebar
    ========================================================================== */
@@ -1254,10 +1499,12 @@ code,
   text-align: center;
 }
 
+/* Same insets as the filter row below: the title starts on the search
+   field's edge, and Reset layout sits in the groups-and-tags button's column. */
 .sidebar-top-heading {
   min-height: 42px;
   flex: none;
-  padding: 0 18px;
+  padding: 0 10px 0 14px;
 }
 
 .sidebar-top-heading > * {
@@ -1445,10 +1692,12 @@ code,
   white-space: nowrap;
 }
 
+/* Tags start under the host name, in the text column, so the row reads as one
+   block instead of a second row hanging under the OS mark. */
 .host-tag-summary {
   display: flex;
   min-width: 0;
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
@@ -1470,11 +1719,14 @@ code,
   white-space: nowrap;
 }
 
+/* Secondary to the host name and no louder than its address line, but large
+   enough to read at a glance. */
 .host-tag-summary .connection-tag-badge {
-  min-height: 21px;
+  min-height: 17px;
   max-width: 92px;
-  padding: 2px 8px;
-  font-size: 11px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .host-menu {
@@ -3237,22 +3489,67 @@ code,
   height: 31px;
 }
 
+/* Terminal notices are the inline error and warning stretched into a strip
+   above the output: an icon and the message on a faint tint, divided from the
+   terminal by a quiet rule rather than a coloured one. */
 .terminal-notice {
+  --notice-tone: var(--failure);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   min-height: 40px;
-  border-bottom: 1px solid var(--failure);
-  background: var(--surface-raised);
-  color: var(--failure);
+  padding-left: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--notice-tone) 9%, var(--surface-raised));
+  color: color-mix(in srgb, var(--notice-tone) 55%, var(--text));
   font-size: 11.5px;
+}
+
+.terminal-notice[data-tone="warning"] {
+  --notice-tone: var(--warning);
+  background: color-mix(in srgb, var(--notice-tone) 8%, var(--surface-raised));
+  color: color-mix(in srgb, var(--notice-tone) 45%, var(--text));
+}
+
+.terminal-notice::before {
+  content: "";
+  align-self: center;
+  margin-right: 10px;
+  width: 14px;
+  height: 14px;
+  background: var(--notice-tone);
+  /* lucide circle-alert */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.terminal-notice[data-tone="warning"]::before {
+  /* lucide triangle-alert */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
 }
 
 .terminal-notice-message {
   align-self: center;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 0;
   overflow-wrap: anywhere;
   line-height: 18px;
+}
+
+.terminal-notice-dismiss {
+  align-self: center;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+}
+
+.terminal-notice-dismiss:hover {
+  background: var(--fill-active);
+  color: var(--text);
 }
 
 .terminal-notice-action {
@@ -3294,73 +3591,47 @@ code,
   flex: 1;
 }
 
+/* Find in terminal is the shared search field floating over the output. It
+   keeps the field's metrics and adds only the overlay surface, clearing the
+   overview ruler on the right. */
 .terminal-search {
   position: absolute;
-  z-index: 2;
+  /* Above xterm's match decorations (6-7), overview ruler (8) and
+     scrollbar (11), which share this stacking context. */
+  z-index: 12;
   top: 8px;
-  right: 8px;
-  display: flex;
-  width: min(420px, calc(100% - 16px));
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  right: 16px;
+  width: min(400px, calc(100% - 24px));
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
-  padding: 3px;
-  color: var(--text-muted);
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-.terminal-search input {
-  min-height: 0;
-  height: auto;
-  min-width: 80px;
-  flex: 1 1 120px;
-  border: 0;
-  background: transparent;
-  padding: 4px 8px;
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.terminal-search:focus-within {
-  border-color: var(--text-muted);
-}
-
-.terminal-search input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
+/* The count holds its width so stepping through results never moves the
+   buttons, and it disappears while nothing has been typed. */
 .terminal-search-count {
-  min-width: 54px;
-  color: var(--text-faint);
-  font-size: 10px;
-  text-align: right;
-}
-
-.terminal-search-controls {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.terminal-search button {
-  display: grid;
-  width: 28px;
-  height: 28px;
+  min-width: 48px;
   flex: none;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  background: transparent;
   color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.terminal-search button:hover {
-  background: var(--fill-active);
-  color: var(--text-strong);
+.terminal-search-count:empty {
+  display: none;
+}
+
+.terminal-search-count[data-none] {
+  color: var(--text-faint);
+}
+
+.terminal-search-divider {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  background: var(--border-subtle);
 }
 
 .terminal-container {
@@ -3422,8 +3693,25 @@ code,
   flex: none;
 }
 
-.scratchpad-save-error {
-  color: var(--failure);
+/* One-line failure statuses in a reserved slot (Settings Save, Scratchpad
+   save) keep their size but take the inline error's tone and icon. */
+.scratchpad-save-error,
+.settings-status.failed {
+  color: color-mix(in srgb, var(--failure) 55%, var(--text));
+}
+
+.scratchpad-save-error::before,
+.settings-status.failed::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -2px;
+  background: var(--failure);
+  /* lucide circle-alert */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 .scratchpad-editor textarea {
@@ -3605,6 +3893,12 @@ code,
   font-size: 12.5px;
 }
 
+/* In a dialog the message is the content the reader must answer, not a caption. */
+.modal-copy {
+  color: var(--text);
+  line-height: 1.5;
+}
+
 .compact-heading {
   align-items: center;
   margin-bottom: 15px;
@@ -3780,6 +4074,15 @@ dd {
   color: var(--on-accent);
 }
 
+/* A faded light fill reads as a heavy grey slab that outweighs the enabled
+   buttons beside it. An unavailable primary action recedes to an outline. */
+.primary-button:disabled {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  opacity: 1;
+}
+
 .secondary-button {
   background: var(--fill-control);
   color: var(--text);
@@ -3802,6 +4105,12 @@ dd {
 
 .danger-text {
   color: var(--failure);
+}
+
+/* A delete icon in every row would repeat a column of red. Icon-only delete
+   buttons stay neutral until they are pointed at or focused. */
+.icon-button.danger-text:not(:hover, :focus-visible) {
+  color: var(--text-muted);
 }
 
 /* ==========================================================================
@@ -4335,9 +4644,11 @@ dd {
 .systemd-filter-fields label:last-child {
   grid-column: 1 / -1;
 }
+/* A full-width strip under the Systemd header, so it drops the rounding. */
 .systemd-page > .inline-warning {
   flex: none;
   margin: 0;
+  border-radius: 0;
   padding: 8px 14px;
 }
 .systemd-explorer-stage {
@@ -4374,6 +4685,11 @@ dd {
   flex: 1;
   border-top: 0;
   overflow-x: hidden;
+}
+/* With no rows, the empty state fills the list and centres like the loading
+   and error states do. */
+.systemd-inventory-rows:has(> .panel-state) {
+  height: 100%;
 }
 .systemd-inventory .dense-row {
   height: 44px;
@@ -5298,20 +5614,10 @@ dd {
   flex-direction: column;
 }
 
-.log-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
 .log-status-detail::before {
   content: "·";
   margin-right: 7px;
   color: var(--text-faint);
-}
-
-.status-paused {
-  background: var(--warning);
 }
 
 .log-controls {
@@ -5722,20 +6028,19 @@ dd {
   font-weight: 650;
 }
 
-/* Header: the page identity plus one compact, honest capture-state signal.
-   Pause/Resume and Refresh stay reachable; infrequent management lives behind
-   the More menu instead of a wall of equal-weight buttons. */
-.history-heading-copy {
+/* Page title with one compact state beside it, as Logs and History show
+   their stream and capture state: a dot and a short label. */
+.page-heading-title {
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
-.history-heading-copy h2 {
+.page-heading-title h2 {
   margin: 0;
 }
 
-.history-capture {
+.page-heading .page-status {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -5744,18 +6049,19 @@ dd {
   font-size: 11.5px;
 }
 
-.history-capture-dot {
+.page-status-dot {
   width: 7px;
   height: 7px;
+  flex: none;
   border-radius: 50%;
   background: #737370;
 }
 
-.history-capture[data-state="recording"] .history-capture-dot {
+.page-status[data-state="active"] .page-status-dot {
   background: var(--success);
 }
 
-.history-capture[data-state="paused"] .history-capture-dot {
+.page-status[data-state="paused"] .page-status-dot {
   background: var(--warning);
 }
 
@@ -5823,17 +6129,6 @@ dd {
 
 .history-opt-in + .history-search-row {
   margin-top: 16px;
-}
-
-.search-clear {
-  width: 24px;
-  height: 24px;
-  flex: none;
-  color: var(--text-faint);
-}
-
-.search-clear:hover:not(:disabled) {
-  color: var(--text);
 }
 
 .history-list {
@@ -6226,10 +6521,6 @@ dd {
   color: var(--success);
 }
 
-.settings-status.failed {
-  color: var(--failure);
-}
-
 .settings-back {
   flex: none;
 }
@@ -6290,7 +6581,7 @@ dd {
   width: 72px;
 }
 
-.settings-form input:not([type="checkbox"], [type="color"]),
+.settings-form input:not([type="checkbox"], [type="color"], [type="range"]),
 .settings-form select,
 .settings-category-select select {
   min-height: 32px;
@@ -6303,13 +6594,13 @@ dd {
   line-height: 20px;
 }
 
-.settings-form input:not([type="checkbox"], [type="color"]):hover:not(:disabled),
+.settings-form input:not([type="checkbox"], [type="color"], [type="range"]):hover:not(:disabled),
 .settings-form select:hover:not(:disabled),
 .settings-category-select select:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
 
-.settings-form input:not([type="checkbox"], [type="color"]):focus-visible,
+.settings-form input:not([type="checkbox"], [type="color"], [type="range"]):focus-visible,
 .settings-form select:focus-visible,
 .settings-category-select select:focus-visible {
   border-color: var(--text-muted);
@@ -6589,7 +6880,7 @@ dd {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 13px;
+  gap: 12px;
 }
 
 .modal.connection-dialog {
@@ -6612,15 +6903,20 @@ dd {
 .connection-form input:not([type="checkbox"]),
 .connection-form select {
   min-width: 0;
+}
+
+/* Text inputs centre their line on their own. The styled select lays its
+   20px line from the top of its content box, so extra padding pushed
+   "Ungrouped" toward the bottom edge; it keeps the shared select padding. */
+.connection-form input:not([type="checkbox"]) {
   padding-top: 7px;
   padding-bottom: 7px;
 }
 
-.connection-form > .form-row,
 .connection-key-field,
 .connection-organization-fields,
 .connection-form > .elevation-field,
-.connection-form > .inline-message,
+.connection-form > .connection-test-result,
 .connection-form > .inline-error,
 .connection-form > .modal-actions {
   grid-column: 1 / -1;
@@ -6631,9 +6927,28 @@ dd {
   gap: 5px;
 }
 
+.connection-form .elevation-field {
+  margin-top: 4px;
+}
+
+.connection-form .elevation-field .checkbox-label {
+  min-height: 24px;
+}
+
+/* Indent the explanation to the checkbox text so it reads as part of it. */
+.connection-form .elevation-field > small {
+  padding-left: 24px;
+}
+
 .connection-form .modal-actions {
   margin: 0 -16px -16px;
   padding: 12px 16px;
+}
+
+/* Testing access is a check, not a way to finish the dialog. Keep it apart
+   from Cancel and Save. */
+.connection-form .connection-test-button {
+  margin-right: auto;
 }
 
 @media (max-width: 640px) {
@@ -6663,13 +6978,25 @@ dd {
   text-transform: uppercase;
 }
 
+/* Names a control elsewhere in the app with the icon it shows, so the reader
+   can recognize the button the hint points to. */
+.control-reference {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.control-reference svg {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
 .connection-tag-selector .connection-tag-badge {
   max-width: 160px;
   cursor: pointer;
 }
 
 .connection-tag-selector .connection-tag-badge[aria-pressed="true"] {
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
   opacity: 1;
 }
 
@@ -6718,6 +7045,16 @@ dd {
   font-size: 12.5px;
 }
 
+.connection-organization-heading:first-child {
+  margin-top: 0;
+}
+
+/* With no tags listed, the create row is the last content; keep it clear of
+   the footer divider. */
+.connection-groups-dialog > .modal-actions {
+  margin-top: 20px;
+}
+
 .connection-group-create {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6733,17 +7070,9 @@ dd {
   gap: 7px;
 }
 
-.connection-group-create label > span {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
 .connection-tag-create {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px auto;
+  grid-template-columns: minmax(0, 1fr) 32px auto;
   align-items: end;
   gap: 9px;
   margin-top: 10px;
@@ -6756,29 +7085,38 @@ dd {
   gap: 7px;
 }
 
-.connection-tag-create label > span {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
+/* Same height as the name field beside it, with the round swatch used by the
+   tag rows below so the new color reads as the same control. */
 .connection-tag-create .connection-tag-color-field input {
-  width: 48px;
-  height: 36px;
-  padding: 3px;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
   cursor: pointer;
 }
 
+.connection-tag-create .connection-tag-color-field input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.connection-tag-create .connection-tag-color-field input::-webkit-color-swatch {
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+}
+
 .connection-group-list {
-  margin-top: 18px;
+  margin-top: 14px;
   border-top: 1px solid var(--border);
 }
 
 .connection-tag-manage-list {
-  margin-top: 18px;
+  margin-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+/* With nothing listed, the create field alone says the section is empty. */
+.connection-group-list:empty,
+.connection-tag-manage-list:empty {
+  display: none;
 }
 
 .connection-group-manage-row {
@@ -6847,25 +7185,6 @@ dd {
   font-size: 11.5px;
 }
 
-.connection-groups-empty {
-  margin: 18px 0 0;
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-.form-row {
-  display: flex;
-  gap: 13px;
-}
-
-.form-row > * {
-  flex: 1;
-}
-
-.port-field {
-  max-width: 170px;
-}
-
 .input-action {
   display: flex;
   gap: 8px;
@@ -6896,6 +7215,11 @@ dd {
   background: var(--surface-overlay);
   box-shadow: var(--shadow-modal);
   animation: dialog-in var(--motion-med) var(--ease);
+}
+
+/* One field needs less width than a form. */
+.modal.prompt-dialog {
+  width: min(420px, calc(100vw - 40px));
 }
 
 .modal-header {
@@ -7063,22 +7387,25 @@ dd {
   position: sticky;
   bottom: 0;
 }
-.remote-shell-actions > span {
-  flex: 1;
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* The inline error's tint, holding a title, the reason, a hint, and retry
+   actions. */
 .remote-shell-error {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--failure) 9%, var(--surface-raised));
+  padding: 10px 12px;
   font-size: 12px;
 }
+
+.remote-shell-error strong {
+  color: color-mix(in srgb, var(--failure) 55%, var(--text));
+}
 .remote-shell-error > svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
   color: var(--failure);
   flex: none;
 }
@@ -7098,8 +7425,7 @@ dd {
 }
 
 .inline-error,
-.inline-warning,
-.inline-message {
+.inline-warning {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -7115,26 +7441,148 @@ dd {
   line-height: 1.5;
 }
 
-/* The banner lays out as icon, message, optional action. Giving the message
-   its own growing item keeps it centred whether or not an action follows;
-   without this it is an anonymous flex item and space-between pushes it to
-   whichever edge is free. */
-.inline-warning > .inline-warning-text,
-.inline-message > .inline-warning-text {
-  flex: 1;
-  text-align: center;
-}
-
+/* Warnings share the inline error's calm shape in amber: a triangle icon and
+   the message on a faint tint, with any action after the message. */
 .inline-warning {
-  border-color: var(--warning);
-  background: #131313;
-  color: var(--warning);
+  justify-content: flex-start;
+  align-items: flex-start;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface-raised));
+  padding: 9px 12px;
+  color: color-mix(in srgb, var(--warning) 45%, var(--text));
 }
 
-.inline-message {
-  border-color: var(--success);
-  background: #111;
+.inline-warning::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2.5px;
+  background: var(--warning);
+  /* lucide triangle-alert */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.inline-warning > p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.inline-warning > button {
+  flex: none;
+}
+
+/* Errors read as one calm line: an alert icon and the message on a faint red
+   tint, without a red box and heavy left rule competing with the form. The
+   tint is mixed into a surface so floating errors stay opaque. */
+.inline-error {
+  justify-content: flex-start;
+  align-items: flex-start;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--failure) 9%, var(--surface-raised));
+  padding: 9px 12px;
+  color: color-mix(in srgb, var(--failure) 55%, var(--text));
+}
+
+.inline-error::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2.5px;
+  background: var(--failure);
+  /* lucide circle-alert */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.inline-error > span {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Structured access test: the same calm shape as an inline error, in green.
+   The title says SSH works; each dependency follows with a small mark, and a
+   missing one stays neutral because the host still works without it. */
+.connection-test-result {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 10px;
+  margin: 11px 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-raised));
+  padding: 9px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* Revealing the outcome must clear the sticky modal footer. */
+.connection-test-result,
+.connection-test-error {
+  scroll-margin-bottom: 72px;
+}
+
+.connection-test-icon {
+  margin-top: 2.5px;
   color: var(--success);
+}
+
+.connection-test-body {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.connection-test-title {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.connection-test-capabilities {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.connection-test-capabilities li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.connection-test-capabilities li > span:first-of-type {
+  color: var(--text);
+}
+
+.connection-test-capabilities svg {
+  color: var(--text-muted);
+}
+
+.connection-test-capabilities [data-available="true"] svg {
+  color: var(--success);
+}
+
+.connection-test-error > span {
+  display: grid;
+  gap: 2px;
+}
+
+.connection-test-error strong {
+  font-weight: 600;
+}
+
+.connection-test-error > span > span:last-child {
+  color: var(--text-muted);
 }
 
 .inline-action {
@@ -7824,7 +8272,9 @@ kbd {
   top: calc(100% + 8px);
   left: 0;
   width: min(340px, calc(100cqw - 24px));
-  max-height: calc(100cqh - 100px);
+  /* The window bound matters in compact windows, where the pane is taller
+     than what is on screen and the panel would run past the bottom edge. */
+  max-height: min(calc(100cqh - 100px), calc(100dvh - 160px));
   overflow-y: auto;
   padding: 12px;
   border: 1px solid var(--border);
@@ -7863,33 +8313,9 @@ kbd {
   min-width: 0;
 }
 
-.ports-search-field {
-  padding: 0 6px 0 12px;
-  gap: 10px;
-  background: var(--surface-sunken);
-}
-
-.ports-search-field > svg {
-  flex: none;
-}
-
-.ports-search-field:focus-within {
-  border-color: var(--text-muted);
-  box-shadow: none;
-}
-
-.ports-search-field input {
-  padding-block: 6px;
-  font-size: 12px;
-}
-
-.ports-search-field .icon-button {
-  flex: none;
-  width: 26px;
-  height: 26px;
-}
-
-.ports-search-field .icon-button:disabled {
+/* The clear button keeps its place while hidden so typing never shifts the
+   field. */
+.ports-search-field > button:disabled {
   visibility: hidden;
 }
 
@@ -7916,29 +8342,82 @@ kbd {
   min-width: 0;
 }
 
-.ports-tools-panel .link-button {
-  margin-top: 10px;
+/* The panel receives focus so keyboard users land in it, not to show a ring
+   around the whole popover. Its controls keep their own focus rings. */
+.ports-tools-panel:focus {
+  outline: none;
 }
 
-.ports-reading-body {
-  font-size: 12px;
+/* Reading warnings: one quiet row per affected read, divided like the other
+   lists. Amber is the icon only; the reason stays readable in muted text. */
+.reading-warnings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reading-warning {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 10px;
+  padding: 11px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.reading-warning:first-child {
+  padding-top: 2px;
+  border-top: 0;
+}
+
+.reading-warning:last-child {
+  padding-bottom: 0;
+}
+
+.reading-warning-icon {
+  margin-top: 2px;
+  color: var(--warning);
+}
+
+.reading-warning-body {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  gap: 4px;
+}
+
+.reading-warning-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.reading-warning-title strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.reading-warning-title span {
+  color: var(--warning);
+  font-size: 11px;
+}
+
+.reading-warning-detail {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.ports-reading-body p {
-  margin: 0 0 12px;
-}
-
-.ports-reading-body .inline-warning {
-  display: block;
-}
-
-.ports-reading-body .link-button {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  overflow-wrap: normal;
-  text-align: left;
+.reading-warning-action.secondary-button {
+  min-height: 26px;
+  margin-top: 4px;
+  padding: 0 10px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .firewall-warning {
@@ -8635,9 +9114,9 @@ details[open] > .inspector-disclosure-body {
 }
 
 .sidebar-top-heading .layout-reset {
-  width: 26px;
-  height: 26px;
-  margin-left: 8px;
+  width: 32px;
+  height: 32px;
+  margin-left: 5px;
   pointer-events: auto;
 }
 
@@ -8849,7 +9328,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     padding: 20px;
   }
 
-  .history-heading-copy {
+  .page-heading-title {
     flex-wrap: wrap;
   }
 

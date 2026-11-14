@@ -215,6 +215,7 @@ type TerminalHandlers = {
   activity: (workspace: Workspace, kind: "output" | "bell") => void;
   title: (workspace: Workspace, title: string | null) => void;
   processing: (workspace: Workspace, busy: boolean) => void;
+  searchOpen: (workspace: Workspace, open: boolean) => void;
   reconnect: (workspace: Workspace) => void;
 };
 
@@ -258,6 +259,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
       onTitle={(title) => handlers.title(workspace, title)}
       onProcessing={(busy) => handlers.processing(workspace, busy)}
       findRequest={findRequest}
+      onSearchOpenChange={(open) => handlers.searchOpen(workspace, open)}
       onReconnect={() => handlers.reconnect(workspace)}
     />
   );
@@ -581,6 +583,7 @@ export function App() {
   const [terminalTitles, setTerminalTitles] = useState<Record<string, string>>({});
   const hostOperations = useSyncExternalStore(hostProcessing.subscribe, hostProcessing.getSnapshot);
   const [terminalFindRequests, setTerminalFindRequests] = useState<Record<string, number>>({});
+  const [terminalSearchOpen, setTerminalSearchOpen] = useState<Record<string, boolean>>({});
   const [terminalHasSelection, setTerminalHasSelection] = useState<Record<string, boolean>>({});
   const terminalHandlesRef = useRef(new Map<string, TerminalPaneHandle>());
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
@@ -1758,7 +1761,7 @@ export function App() {
   function deleteConnection(connection: SavedConnection) {
     setConfirmState({
       title: "Delete connection",
-      message: `Delete the Saved Connection “${connection.displayName}” and its History? This cannot be undone.`,
+      message: `Delete “${connection.displayName}” and its saved command history? This cannot be undone.`,
       confirmLabel: "Delete connection",
       danger: true,
       onConfirm: () => void performDeleteConnection(connection),
@@ -2205,7 +2208,7 @@ export function App() {
           type="button"
           onClick={() => renameWorkspace(workspace)}
           aria-label={`Rename ${duplicateLabel(workspace)} Workspace`}
-          title={grouped ? `Rename terminal: ${duplicateLabel(workspace)}` : "Rename Workspace"}
+          title={grouped ? `Rename terminal: ${duplicateLabel(workspace)}` : "Rename workspace"}
         >
           <Pencil size={12} />
         </button>
@@ -2214,7 +2217,6 @@ export function App() {
           type="button"
           onClick={() => void closeWorkspace(workspace.id)}
           aria-label={`Close ${duplicateLabel(workspace)} Workspace`}
-          title={`Close terminal: ${duplicateLabel(workspace)}`}
         >
           <X size={14} />
         </button>
@@ -2312,6 +2314,15 @@ export function App() {
         if (!!current[workspace.id] === busy) return current;
         const next = { ...current };
         if (busy) next[workspace.id] = true;
+        else delete next[workspace.id];
+        return next;
+      });
+    },
+    searchOpen(workspace, open) {
+      setTerminalSearchOpen((current) => {
+        if (!!current[workspace.id] === open) return current;
+        const next = { ...current };
+        if (open) next[workspace.id] = true;
         else delete next[workspace.id];
         return next;
       });
@@ -2515,7 +2526,8 @@ export function App() {
             title="Reset all panel sizes"
             onClick={() => setPanelSizes({})}
           >
-            <RotateCcw size={14} />
+            {/* Sized to read as the same icon set as groups-and-tags below it. */}
+            <RotateCcw size={16} />
           </button>
         </div>
         <div className="sidebar-filter-row">
@@ -2729,11 +2741,7 @@ export function App() {
                 aria-haspopup="dialog"
                 aria-label="New terminal"
                 aria-expanded={newTerminalMenuOpen}
-                title={
-                  splitAvailable
-                    ? "Open a terminal in a new tab or split this view"
-                    : "Open a terminal for a Saved Connection or a local shell"
-                }
+                title={splitAvailable ? "New terminal or split" : "New terminal"}
               >
                 <Plus size={16} />
                 {!workspaces.length && <span>New terminal</span>}
@@ -2822,12 +2830,17 @@ export function App() {
                   <button
                     className="session-strip-button"
                     type="button"
-                    onClick={() =>
-                      setTerminalFindRequests((current) => ({
-                        ...current,
-                        [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
-                      }))
-                    }
+                    onClick={() => {
+                      const terminal = terminalHandlesRef.current.get(activeWorkspace.id);
+                      // Before the terminal mounts, queue an open request like Ctrl+Shift+F.
+                      if (terminal) terminal.toggleSearch();
+                      else
+                        setTerminalFindRequests((current) => ({
+                          ...current,
+                          [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
+                        }));
+                    }}
+                    aria-expanded={!!terminalSearchOpen[activeWorkspace.id]}
                     aria-label="Find in terminal"
                     title="Find in terminal"
                   >
@@ -3235,7 +3248,7 @@ export function App() {
 
       {renameTarget && (
         <PromptDialog
-          title="Rename Workspace"
+          title="Rename workspace"
           label="Workspace label"
           description={
             isLocalWorkspace(renameTarget)

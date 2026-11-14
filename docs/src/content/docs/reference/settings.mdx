@@ -64,11 +64,11 @@ remain available during the current app session.
 
 ## Host metrics
 
-Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and set **Refresh host metrics** to every 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
+Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and set **Host metrics refresh interval** to every 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
 
 **Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**.
 
-Click the reading status, such as **Live**, to see all selected metrics, the last reading time, **Refresh**, and **Customize in Settings**. The title bar gives CPU and RAM priority when space is tight. The CPU, RAM, and GPU charts show up to twenty recent readings on a 0–100% scale and reset when you change hosts or monitoring pauses. These short trends stay in memory and are not saved. Disk I/O shows separate read and write speeds without a graph.
+Click the reading status, such as **Live**, to see all selected metrics and when they were last updated. The refresh button beside the close button reads them again, and **Customize in Settings** opens these options. The title bar gives CPU and RAM priority when space is tight. The CPU, RAM, and GPU charts show up to twenty recent readings on a 0–100% scale and reset when you change hosts or monitoring pauses. These short trends stay in memory and are not saved. Disk I/O shows separate read and write speeds without a graph.
 
 <figure class="docs-screenshot">
   <a href={metricsScreenshot.src} target="_blank" rel="noreferrer">
@@ -90,7 +90,7 @@ Enable **Local Terminal Mode** to start **Default local terminal** in Focus Mode
 
 Choose which installed shells appear in **New terminal**, for new tabs and splits. Hiding one does not uninstall it or close a running tab.
 
-## Logs and History
+## Logs & History
 
 Choose the default log length: 50, 100, 200, 500, or 1000 lines. The global History switch allows command capture on connections where you have enabled Bash integration. Turning it off stops capture and keeps saved entries. See [Command history](/control-room/tools/history/) to enable it for a host.
 

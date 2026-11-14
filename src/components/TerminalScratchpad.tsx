@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { ClipboardCopy, Globe2, SquareTerminal, TerminalSquare } from "lucide-react";
+import { Copy, Globe2, SquareTerminal, TerminalSquare } from "lucide-react";
 import { ScratchpadEditor } from "./ScratchpadEditor";
 import type { ScratchpadScope } from "../types";
 
@@ -193,7 +193,7 @@ export function TerminalScratchpad({
           disabled={!text}
           onClick={() => void copyNote()}
         >
-          <ClipboardCopy size={14} /> Copy
+          <Copy size={14} /> Copy
         </button>
         <button
           className="secondary-button"

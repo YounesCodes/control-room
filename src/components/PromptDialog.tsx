@@ -41,10 +41,11 @@ export function PromptDialog({
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} className="prompt-dialog">
       <form className="form-stack" onSubmit={submit}>
         <label>
-          <span>{label}</span>
+          {/* The dialog title already names the field; keep the label for assistive tech. */}
+          <span className="sr-only">{label}</span>
           <input
             ref={inputRef}
             value={value}
