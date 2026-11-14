@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-if (process.platform !== "win32") {
-  console.error("Live SSH tests require Windows for the ConPTY fixture test.");
+if (!["win32", "darwin"].includes(process.platform)) {
+  console.error("Live SSH tests require a Windows or macOS client.");
   process.exit(1);
 }
 
@@ -18,7 +18,10 @@ if (!host || !user || !Number.isInteger(port) || port < 1 || port > 65535) {
   process.exit(1);
 }
 
-const ssh = join(process.env.WINDIR || "C:\\Windows", "System32", "OpenSSH", "ssh.exe");
+const ssh =
+  process.platform === "darwin"
+    ? "/usr/bin/ssh"
+    : join(process.env.WINDIR || "C:\\Windows", "System32", "OpenSSH", "ssh.exe");
 const sshConfig = process.env.CONTROL_ROOM_TEST_SSH_CONFIG?.trim();
 const preflight = spawnSync(
   ssh,
@@ -47,7 +50,7 @@ if (preflight.error || preflight.status !== 0) {
 const tests = [
   "history::tests::live_history_install_is_reversible_in_an_isolated_home",
   "remote::tests::live_fixture_supports_structured_features",
-  "session::tests::conpty_hosts_windows_ssh_against_live_fixture",
+  "session::tests::native_pty_hosts_ssh_against_live_fixture",
 ];
 const listed = spawnSync(
   "cargo",

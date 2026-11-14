@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { hostOsKind, hostOsLabel, windowsVersion } from "./HostOsIcon";
 
 describe("hostOsKind", () => {
+  it("recognizes macOS and Darwin with the same accessible name", () => {
+    expect(hostOsKind("macos")).toBe("macos");
+    expect(hostOsKind(" Darwin ")).toBe("macos");
+    expect(hostOsLabel("darwin")).toBe("macOS host");
+  });
   it("uses the detected product name for Windows versions without guessing from NT 10", () => {
     expect(windowsVersion("Microsoft Windows 10 Pro")).toBe("10");
     expect(windowsVersion("Microsoft Windows 11 Enterprise")).toBe("11");

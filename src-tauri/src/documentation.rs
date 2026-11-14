@@ -2,7 +2,7 @@
 #[path = "url_launcher_linux.rs"]
 mod linux;
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos", test))]
 const DOCUMENTATION_URL: &str = "https://younescodes.github.io/control-room/";
 
 /// Open only the published documentation. Callers cannot supply URLs or paths.
@@ -30,7 +30,18 @@ pub fn open_documentation() -> Result<(), String> {
     }
     #[cfg(target_os = "linux")]
     return open_url(DOCUMENTATION_URL);
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        let status = macos_browser_command()
+            .status()
+            .map_err(|e| format!("Could not open documentation: {e}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("macOS could not open your default browser. Check the default browser in System Settings and retry.".into())
+        }
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     Err("Could not open the default web browser.".into())
 }
 
@@ -48,6 +59,13 @@ fn open_url(url: &'static str) -> Result<(), String> {
     let mut command = crate::ssh::background_command("xdg-open");
     command.arg(url);
     linux::launch(command)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_browser_command() -> std::process::Command {
+    let mut command = std::process::Command::new("/usr/bin/open");
+    command.arg(DOCUMENTATION_URL);
+    command
 }
 
 #[cfg(any(windows, test))]
@@ -71,6 +89,13 @@ fn browser_launch_result(code: isize) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn macos_opens_only_the_fixed_documentation_url_without_a_shell() {
+        let command = macos_browser_command();
+        assert_eq!(command.get_program(), "/usr/bin/open");
+        assert_eq!(command.get_args().collect::<Vec<_>>(), [DOCUMENTATION_URL]);
+    }
 
     #[test]
     fn reports_windows_browser_launch_failures() {

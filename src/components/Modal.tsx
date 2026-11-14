@@ -21,7 +21,30 @@ export function Modal({ title, children, onClose, className }: ModalProps) {
       [
         ...(dialog?.querySelectorAll<HTMLElement>("button, input, select, textarea, [tabindex]") ??
           []),
-      ].filter((element) => !element.hasAttribute("disabled") && element.tabIndex >= 0);
+      ].filter((element) => {
+        if (
+          element.matches(":disabled") ||
+          element.tabIndex < 0 ||
+          element.closest("[hidden], [inert]")
+        )
+          return false;
+        if (element instanceof HTMLInputElement && element.type === "hidden") return false;
+        for (
+          let ancestor: HTMLElement | null = element;
+          ancestor && ancestor !== dialog;
+          ancestor = ancestor.parentElement
+        ) {
+          const style = getComputedStyle(ancestor);
+          if (style.display === "none" || style.visibility === "hidden") return false;
+        }
+        if (element instanceof HTMLInputElement && element.type === "radio" && element.name) {
+          const group = [
+            ...(dialog?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? []),
+          ].filter((radio) => radio.name === element.name && !radio.matches(":disabled"));
+          return element === (group.find((radio) => radio.checked) ?? group[0]);
+        }
+        return true;
+      });
     if (!dialog?.querySelector("[autofocus]")) {
       const preferred = focusable().find((element) => !element.hasAttribute("data-modal-close"));
       (preferred ?? dialog)?.focus();
@@ -36,15 +59,17 @@ export function Modal({ title, children, onClose, className }: ModalProps) {
       if (event.key !== "Tab") return;
       const items = focusable();
       if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      // WebKit can skip buttons depending on macOS keyboard-navigation
+      // preferences. Own the whole cycle so every dialog action stays reachable.
+      event.preventDefault();
+      const current = items.indexOf(document.activeElement as HTMLElement);
+      const next =
+        current < 0
+          ? event.shiftKey
+            ? items.length - 1
+            : 0
+          : (current + (event.shiftKey ? -1 : 1) + items.length) % items.length;
+      items[next].focus();
     }
 
     document.addEventListener("keydown", keydown);

@@ -13,6 +13,7 @@ import type {
 import { api } from "../lib/api";
 import axe from "axe-core";
 import { PortsPane } from "./PortsPane";
+import { tabKey, shiftTabKey } from "../test/keyboard";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -195,7 +196,7 @@ it("selects the requested container binding without confusing the same port on a
   const inspector = await screen.findByRole("complementary");
   inspector.focus();
   expect(getComputedStyle(inspector).outlineStyle).toBe("none");
-  await userEvent.keyboard("{Tab}");
+  await userEvent.keyboard(tabKey);
   const close = within(inspector).getByRole("button", { name: "Close details" });
   expect(document.activeElement).toBe(close);
   expect(getComputedStyle(close).outlineStyle).toBe("solid");
@@ -746,7 +747,7 @@ it("reveals chips for keyboard focus without selecting them", async () => {
 
   let focusedChips = 0;
   for (let step = 0; step < 9; step += 1) {
-    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    await userEvent.keyboard(shiftTabKey);
     const focused = document.activeElement;
     if (!(focused instanceof HTMLElement) || !focused.classList.contains("arch-chip")) break;
     focusedChips += 1;

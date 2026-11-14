@@ -43,6 +43,7 @@ const settings: AppSettings = {
 };
 
 const environment: EnvironmentInfo = {
+  platform: "windows",
   sshPath: "C:/Windows/System32/OpenSSH/ssh.exe",
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: true,

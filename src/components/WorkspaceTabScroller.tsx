@@ -134,6 +134,7 @@ export function WorkspaceTabScroller({
   const activeIndex = items.findIndex((item) => item.active);
   const pendingDragRef = useRef<PendingDrag | null>(null);
   const activeDragRef = useRef<ActiveDrag | null>(null);
+  const grabbedHandleRef = useRef<HTMLElement | null>(null);
   const [dragging, setDragging] = useState<ActiveDrag | null>(null);
   const frameRef = useRef<number | null>(null);
   const pointerXRef = useRef<number | null>(null);
@@ -384,6 +385,9 @@ export function WorkspaceTabScroller({
     const fromIndex = visibleStart + hit.index;
     const id = items[fromIndex]?.id;
     if (!id) return;
+    grabbedHandleRef.current = (event.target as Element).closest<HTMLElement>(
+      ".session-tab-main, .session-tab-group-main",
+    );
     // Capture is taken when the drag activates, not here: a pointerdown
     // capture would retarget the plain click that selects a tab.
     followPendingPress(event.pointerId);
@@ -456,6 +460,15 @@ export function WorkspaceTabScroller({
     if (!active || active.pointerId !== event.pointerId) return;
     const out = carriedOut(active, event.clientY);
     finishDrag();
+    // macOS WebKit never focuses a pressed button, and a drag produces no
+    // click for the app shell to focus. Hand focus to the grabbed tab once the
+    // reorder renders, as Chromium already does on press.
+    const handle = grabbedHandleRef.current;
+    grabbedHandleRef.current = null;
+    if (!out)
+      requestAnimationFrame(() => {
+        if (handle?.isConnected) handle.focus({ preventScroll: true });
+      });
     if (out) {
       dragOutRef.current?.drop(active.id, event.clientX, event.clientY);
       return;
