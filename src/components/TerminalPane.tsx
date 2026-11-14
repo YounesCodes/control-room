@@ -300,17 +300,8 @@ export function TerminalPane({
     };
     container.addEventListener("mousemove", handleMouseMove, { capture: true });
 
-    /* Suppressing the webview menu is decided here, separately from who owns
-       the clipboard. Every pointer right click inside the terminal prevents it,
-       including the one handed to a mouse-reporting program: leaving the menu
-       to appear whenever Control Room declined the gesture was the original
-       bug. A context-menu key press arrives as the same event with no button
-       behind it, reports "ignore", and is left alone so the keyboard route to
-       the menu survives.
-
-       By the time this fires, xterm has already seen the mousedown and sent any
-       mouse report the program asked for. Preventing the default here removes
-       the menu without taking the click away from the program. */
+    // Handle pointer right clicks before xterm moves its textarea for the
+    // browser context menu. xterm already reported any app-owned mousedown.
     const handleContextMenu = (event: MouseEvent) => {
       const action = terminalRightClickAction({
         button: event.button,

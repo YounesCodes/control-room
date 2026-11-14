@@ -422,7 +422,7 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
     }),
   );
   await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(3));
-  expect(new TextDecoder().decode(session.writeSession.mock.calls[2][1])).toMatch(/^\[<35;/);
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[2][1])).toContain("\x1b[<35;");
 });
 
 it("keeps the terminal edge empty until search has matches", async () => {
