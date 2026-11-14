@@ -88,6 +88,15 @@ describe("Focus Mode live layout in the native WebView", () => {
       for (let i = 0; i < 8; i++)
         document.querySelector<HTMLButtonElement>(".app-focus-toggle")!.click();
     });
+    // A hosted runner's window may not be frontmost, where WebKit can stop
+    // advancing animations. Finish the last slide as the earlier step does so
+    // the cleanup after it still runs.
+    await browser.execute(() =>
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .forEach((animation) => animation.finish()),
+    );
     await browser.waitUntil(() =>
       browser.execute(() => !document.documentElement.dataset.focusTransition),
     );
