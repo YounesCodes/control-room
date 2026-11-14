@@ -8,7 +8,7 @@ import {
   restartApp,
   terminalCommand,
 } from "./helpers";
-import { isMac, localShellId } from "./platform";
+import { isLinux, isMac, localShellId } from "./platform";
 import type { EnvironmentInfo, LocalShellCatalog } from "../src/types";
 
 describe("Native client platform", () => {
@@ -41,7 +41,7 @@ describe("Native client platform", () => {
 
   it("uses native platform tools, window chrome, and application shortcuts", async () => {
     const environment = await ipc<EnvironmentInfo>("get_environment_info");
-    expect(environment.platform).toBe(isMac ? "macos" : "windows");
+    expect(environment.platform).toBe(isMac ? "macos" : isLinux ? "linux" : "windows");
     expect(environment.platformSupported).toBe(true);
     expect(environment.sshPath).toBeTruthy();
     expect(await ipc<boolean>("plugin:window|is_decorated", { label: "main" })).toBe(isMac);

@@ -26,6 +26,12 @@ describe("WindowControls", () => {
     expect(actions.close).toHaveBeenCalledOnce();
   });
 
+  it("draws the controls for the undecorated Linux window too", () => {
+    const actions = { close: vi.fn(), minimize: vi.fn(), toggleMaximize: vi.fn() };
+    render(<WindowControls platform="linux" windowActions={actions} />);
+    expect(screen.getByRole("button", { name: "Maximize or restore window" })).toBeTruthy();
+  });
+
   it("leaves window chrome to native macOS traffic lights", () => {
     const { container } = render(<WindowControls platform="macos" />);
     expect(container.childElementCount).toBe(0);
