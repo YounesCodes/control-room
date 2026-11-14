@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleMotion } from "./test/motion";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import axe from "axe-core";
@@ -3537,11 +3538,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
     async function checkInspectorLayout() {
       const inspector = element.querySelector<HTMLElement>(".arch-detail")!;
-      await expect
-        .poll(() =>
-          inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
-        )
-        .toBe(false);
+      await settleMotion(inspector);
       const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
       const header = inspector.querySelector("header")!;
       const actions = inspector.querySelector(".detail-actions")!;

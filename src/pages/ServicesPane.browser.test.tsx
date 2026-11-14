@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { settleMotion } from "../test/motion";
 import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import axe from "axe-core";
@@ -137,23 +138,6 @@ function renderPane(items = units) {
         onOpenPorts={vi.fn()}
       />
     </ConnectionSection>,
-  );
-}
-async function settleMotion() {
-  // Slower WebKit runners can still be finishing a transition after a second,
-  // and a camera refit can start a frame or two after the layout that caused
-  // it. Motion has settled once nothing runs across several frames.
-  const running = () =>
-    document.getAnimations().filter((animation) => animation.playState === "running");
-  await waitFor(
-    async () => {
-      for (let frame = 0; frame < 4; frame += 1) {
-        expect(running()).toHaveLength(0);
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
-      expect(running()).toHaveLength(0);
-    },
-    { timeout: 5000 },
   );
 }
 async function audit() {
