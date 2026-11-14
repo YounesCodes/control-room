@@ -126,10 +126,10 @@ export async function addConnection(
   port = "1",
 ) {
   await $(".sidebar-primary").click();
-  await $("aria/Display name").setValue(name);
-  await $("aria/SSH destination").setValue(destination);
-  await $("aria/Username").setValue(username);
-  await $(".port-field input").setValue(port);
+  await $("input[aria-label='Display name']").setValue(name);
+  await $("input[aria-label='SSH destination']").setValue(destination);
+  await $("input[aria-label='Username']").setValue(username);
+  await $("//label[span[normalize-space()='Port']]/input").setValue(port);
   await $(".modal-actions button[type=submit]").click();
   await expect($(`.host-main*=${name}`)).toBeDisplayed();
   return (await ipc<SavedConnection[]>("list_connections")).find(

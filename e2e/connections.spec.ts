@@ -18,12 +18,12 @@ describe("Saved Connections through real SQLite", () => {
     const saved = await addConnection("Desktop fixture");
     await connectionMenu("Desktop fixture");
     await $("aria/Edit connection").click();
-    await $("aria/Display name").setValue("Discarded name");
+    await $("input[aria-label='Display name']").setValue("Discarded name");
     await $("button=Cancel").click();
     await expect($(".host-main*=Desktop fixture")).toBeDisplayed();
     await connectionMenu("Desktop fixture");
     await $("aria/Edit connection").click();
-    await $("aria/Display name").setValue("Renamed fixture");
+    await $("input[aria-label='Display name']").setValue("Renamed fixture");
     await $("button=Save changes").click();
     await restartApp();
     await expect($(".host-main*=Renamed fixture")).toBeDisplayed();
