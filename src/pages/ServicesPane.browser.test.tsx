@@ -190,19 +190,28 @@ it.each([360, 1280])("slides the relationship category selection fill at %ipx", 
   expect(pose().width).toBeCloseTo(previous.offsetWidth, 2);
   for (const name of ["Ordering", "Activation", "Dependencies"]) {
     const next = within(group).getByRole("button", { name });
-    next.click();
-    await waitFor(() => expect(next.getAttribute("aria-pressed")).toBe("true"));
-    const animations = await waitFor(() => {
-      const active = group
+    const slides = () =>
+      group
         .getAnimations({ subtree: true })
         .filter(
           (animation) =>
             animation instanceof CSSTransition &&
             (animation.effect as KeyframeEffect).target === group,
         );
+    // Pause each slide as it starts: a slow runner can otherwise finish it
+    // before the test samples the midpoint.
+    const hold = () => {
+      for (const animation of slides()) animation.pause();
+    };
+    group.addEventListener("transitionrun", hold);
+    next.click();
+    await waitFor(() => expect(next.getAttribute("aria-pressed")).toBe("true"));
+    const animations = await waitFor(() => {
+      const active = slides();
       expect(active).toHaveLength(2);
       return active;
     });
+    group.removeEventListener("transitionrun", hold);
     for (const animation of animations) {
       animation.pause();
       animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
@@ -1254,7 +1263,9 @@ it("refits and zooms in both directions on show more and show less, including in
     );
     await settleMotion();
   };
-  await page.getByRole("button", { name: /Show more/ }).click();
+  // A direct click renders the expansion before the refit camera can move,
+  // which a driver round trip on a slow runner cannot guarantee.
+  screen.getByRole("button", { name: /Show more/ }).click();
   const firstFrame = focused.getBoundingClientRect();
   expect(
     Math.abs(
