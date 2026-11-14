@@ -2,8 +2,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-if (!["win32", "darwin"].includes(process.platform)) {
-  throw new Error("Desktop tests require Windows or macOS.");
+if (!["win32", "darwin", "linux"].includes(process.platform)) {
+  throw new Error("Desktop tests require Windows, Linux, or macOS.");
 }
 const configuration = JSON.parse(
   readFileSync(new URL("../src-tauri/tauri.e2e.conf.json", import.meta.url), "utf8"),
