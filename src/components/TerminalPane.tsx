@@ -1,5 +1,5 @@
 import { Search } from "./MagnifierIcon";
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
@@ -14,6 +14,7 @@ import {
   isControlRoomShortcut,
   terminalRightClickAction,
 } from "../lib/terminal-flow";
+import { trackCodexMouse } from "../lib/terminal-mouse";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { TerminalTitle } from "../lib/terminal-title";
@@ -117,6 +118,33 @@ export function TerminalPane({
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
 
+  const copySelection = useCallback(() => {
+    const text = terminalRef.current?.getSelection();
+    if (!text) return;
+    void navigator.clipboard
+      .writeText(text)
+      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+  }, []);
+
+  const pasteClipboard = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const generation = sessionGenerationRef.current;
+    terminal.focus();
+    void navigator.clipboard
+      .readText()
+      .then((text) => {
+        if (
+          text &&
+          terminalRef.current === terminal &&
+          sessionGenerationRef.current === generation
+        ) {
+          terminal.paste(text);
+        }
+      })
+      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+  }, []);
+
   useImperativeHandle(ref, () => ({
     focus: () => terminalRef.current?.focus(),
     copySelection,
@@ -189,6 +217,7 @@ export function TerminalPane({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
+      macOptionClickForcesSelection: true,
       // Keep shell prompts and directory names at regular weight, including
       // ANSI bold sequences, while retaining the configured ANSI colors.
       fontWeightBold: "normal",
@@ -206,6 +235,7 @@ export function TerminalPane({
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
     terminal.open(container);
+    const codexMouse = trackCodexMouse(container, terminal);
     fit.fit();
     terminalRef.current = terminal;
     fitRef.current = fit;
@@ -226,25 +256,16 @@ export function TerminalPane({
     );
 
     const send = (bytes: Uint8Array) => sendInputRef.current(bytes);
-    const pasteClipboard = () => {
-      void navigator.clipboard
-        .readText()
-        .then((text) => {
-          if (text) terminal.paste(text);
-        })
-        .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
-    };
     const dataDisposable = terminal.onData((data) => send(new TextEncoder().encode(data)));
     const binaryDisposable = terminal.onBinary((data) =>
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
     );
     terminal.attachCustomKeyEventHandler((event) => {
       if (isControlRoomShortcut(event)) return false;
-      if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey) return true;
+      if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
       if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
-        void navigator.clipboard
-          .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+        event.preventDefault();
+        copySelection();
         return false;
       }
       // xterm owns keyboard paste through its textarea's native paste event.
@@ -255,48 +276,49 @@ export function TerminalPane({
       return true;
     });
 
-    /* A selection is copied rather than reported to the program running in the
-       pty, so the click that copies it cannot also become a right click inside
-       Vim or tmux. Stopping propagation in the capture phase is what keeps it
-       from reaching xterm's own mousedown listener, which sits deeper in the
-       tree. With no selection nothing is intercepted here, which is what leaves
-       a mouse-reporting program its click. */
+    const rightClickAction = (event: MouseEvent) =>
+      terminalRightClickAction({
+        button: event.button,
+        hasSelection: terminal.hasSelection(),
+        mouseTrackingMode: terminal.modes.mouseTrackingMode,
+        isCodex: codexMouse.isCodex(),
+      });
+
+    // Reserve clipboard clicks before xterm can report a button press to the program.
     const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 2 || !terminal.hasSelection()) return;
+      if (event.button !== 2) return;
+      const action = rightClickAction(event);
+      if (action !== "copy" && action !== "paste") return;
       event.preventDefault();
       event.stopPropagation();
     };
     container.addEventListener("mousedown", handleMouseDown, { capture: true });
 
-    /* Suppressing the webview menu is decided here, separately from who owns
-       the clipboard. Every pointer right click inside the terminal prevents it,
-       including the one handed to a mouse-reporting program: leaving the menu
-       to appear whenever Control Room declined the gesture was the original
-       bug. A context-menu key press arrives as the same event with no button
-       behind it, reports "ignore", and is left alone so the keyboard route to
-       the menu survives.
+    const handleMouseMove = (event: MouseEvent) => {
+      // xterm treats hover reports as terminal input, which clears its selection.
+      // Leave button-down moves alone so xterm can finish a drag selection.
+      if (
+        event.buttons === 0 &&
+        terminal.modes.mouseTrackingMode === "any" &&
+        terminal.hasSelection()
+      ) {
+        event.stopPropagation();
+      }
+    };
+    container.addEventListener("mousemove", handleMouseMove, { capture: true });
 
-       By the time this fires, xterm has already seen the mousedown and sent any
-       mouse report the program asked for. Preventing the default here removes
-       the menu without taking the click away from the program. */
+    // Handle pointer right clicks before xterm moves its textarea for the
+    // browser context menu. xterm already reported any app-owned mousedown.
     const handleContextMenu = (event: MouseEvent) => {
-      const action = terminalRightClickAction({
-        button: event.button,
-        hasSelection: terminal.hasSelection(),
-        mouseTrackingMode: terminal.modes.mouseTrackingMode,
-      });
+      const action = rightClickAction(event);
       if (action === "ignore") return;
 
       event.preventDefault();
-      if (action === "copy") {
-        void navigator.clipboard
-          .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
-        return;
-      }
+      event.stopPropagation();
+      if (action === "copy") copySelection();
       if (action === "paste") pasteClipboard();
     };
-    container.addEventListener("contextmenu", handleContextMenu);
+    container.addEventListener("contextmenu", handleContextMenu, { capture: true });
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
       if (!sessionIdRef.current) return false;
@@ -417,8 +439,10 @@ export function TerminalPane({
       listenerDisposed = true;
       unlisten?.();
       observer.disconnect();
+      codexMouse.dispose();
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
-      container.removeEventListener("contextmenu", handleContextMenu);
+      container.removeEventListener("mousemove", handleMouseMove, { capture: true });
+      container.removeEventListener("contextmenu", handleContextMenu, { capture: true });
       window.clearTimeout(resizeTimer);
       window.clearTimeout(bellTimer);
       dataDisposable.dispose();
@@ -439,7 +463,7 @@ export function TerminalPane({
       searchRef.current = null;
       selectionRepaintRef.current = null;
     };
-  }, []);
+  }, [copySelection, pasteClipboard]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -683,25 +707,6 @@ export function TerminalPane({
     setSearchOpen(false);
     setSearchResult({ index: -1, count: 0 });
     terminalRef.current?.focus();
-  }
-
-  function copySelection() {
-    const terminal = terminalRef.current;
-    if (!terminal?.hasSelection()) return;
-    void navigator.clipboard
-      .writeText(terminal.getSelection())
-      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
-  }
-
-  function pasteClipboard() {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    void navigator.clipboard
-      .readText()
-      .then((text) => {
-        if (text) terminal.paste(text);
-      })
-      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
