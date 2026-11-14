@@ -181,6 +181,7 @@ pub fn start_session(
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
     remote_shell_id: Option<String>,
+    container_id: Option<String>,
     cols: u16,
     rows: u16,
     output: Channel<Response>,
@@ -203,6 +204,21 @@ pub fn start_session(
     let windows = database
         .get_capabilities(&connection_id)?
         .is_some_and(|caps| caps.os_id.as_deref() == Some("windows"));
+    // A container terminal runs `docker exec` on the host. Its command is built
+    // entirely in Rust from a validated full container ID, so nothing about the
+    // process comes from the frontend, and it needs no shell discovery.
+    if let Some(container_id) = container_id {
+        if remote_shell_id.is_some() {
+            return Err("A container terminal cannot also choose a remote shell".into());
+        }
+        let command = if windows {
+            windows_inspection::docker_exec_command(&container_id)?
+        } else {
+            let sudo_allowed = elevation_allowed(&database, &connection)?;
+            remote::docker_exec_command(&container_id, sudo_allowed)?
+        };
+        return sessions.start(app, &connection, Some(command), cols, rows, output);
+    }
     let _permit = if remote_shell_id.is_some() || windows {
         Some(limiter.acquire(&connection_id)?)
     } else {
@@ -427,8 +443,14 @@ fn elevation_for(
     connection: &SavedConnection,
     sudo_password: Option<String>,
 ) -> Result<Elevation, String> {
-    let allowed = database.get_settings()?.global_sudo_enabled || connection.sudo_enabled;
-    Ok(Elevation::resolve(allowed, sudo_password))
+    Ok(Elevation::resolve(
+        elevation_allowed(database, connection)?,
+        sudo_password,
+    ))
+}
+
+fn elevation_allowed(database: &Database, connection: &SavedConnection) -> Result<bool, String> {
+    Ok(database.get_settings()?.global_sudo_enabled || connection.sudo_enabled)
 }
 
 #[tauri::command(async)]

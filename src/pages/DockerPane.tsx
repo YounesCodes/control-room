@@ -41,6 +41,7 @@ export function DockerPane({
   onCacheChange,
   onDetailsCacheChange,
   onViewLogs,
+  onOpenTerminal,
   focusId = null,
   onOpenPort,
 }: {
@@ -53,6 +54,7 @@ export function DockerPane({
   onCacheChange: (cache: CachedList<DockerContainer>) => void;
   onDetailsCacheChange: (containerId: string, cache: CachedValue<DockerContainerDetails>) => void;
   onViewLogs: (source: LogSourceSelection) => void;
+  onOpenTerminal?: (container: DockerContainer) => void;
   focusId?: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(focusId);
@@ -264,6 +266,7 @@ export function DockerPane({
               onRefresh={() => loadDetails(selected.id, null, true)}
               onRetryWithSudo={() => setSudoPurpose("details")}
               onViewLogs={() => onViewLogs({ type: "docker", id: selected.id })}
+              onOpenTerminal={onOpenTerminal && (() => onOpenTerminal(selected))}
             />
           )
         }

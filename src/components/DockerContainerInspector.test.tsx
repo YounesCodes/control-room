@@ -97,6 +97,47 @@ describe("DockerContainerInspector", () => {
     });
   });
 
+  it("opens a terminal in a running container", async () => {
+    const onOpenTerminal = vi.fn();
+    render(
+      <DockerContainerInspector
+        summary={summary}
+        cache={{ value: details, fetchedAt: Date.now(), loading: false, error: null }}
+        onRefresh={vi.fn()}
+        onRetryWithSudo={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenTerminal={onOpenTerminal}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole("button", { name: "Open terminal" }));
+    expect(onOpenTerminal).toHaveBeenCalledOnce();
+  });
+
+  it("explains why a stopped container offers no terminal", () => {
+    const onOpenTerminal = vi.fn();
+    render(
+      <DockerContainerInspector
+        // The listing still says running; the fresher inspection decides.
+        summary={summary}
+        cache={{
+          value: { ...details, state: "exited", running: false },
+          fetchedAt: Date.now(),
+          loading: false,
+          error: null,
+        }}
+        onRefresh={vi.fn()}
+        onRetryWithSudo={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenTerminal={onOpenTerminal}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Open terminal" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.closest("[title]")?.getAttribute("title")).toBe(
+      "Start the container to open a terminal",
+    );
+  });
+
   it("shows typed sections and never renders sensitive Docker fields", async () => {
     const user = userEvent.setup();
     render(

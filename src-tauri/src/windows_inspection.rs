@@ -137,12 +137,26 @@ pub fn container(connection: &SavedConnection, id: &str) -> Result<DockerContain
     }
     Ok(details)
 }
+const DOCKER_CLI_PATH: &str = r"$docker=(Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source; if (!$docker) { $docker=Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe' }; if (!(Test-Path -LiteralPath $docker -PathType Leaf)) { throw 'Docker CLI was not found on this Windows host.' };";
+
 pub fn docker_log_command(container: &str, lines: u16, follow: bool) -> Result<String, String> {
     let container = validate_container_id(container)?;
-    let path = r"$docker=(Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source; if (!$docker) { $docker=Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe' }; if (!(Test-Path -LiteralPath $docker -PathType Leaf)) { throw 'Docker CLI was not found on this Windows host.' };";
     Ok(powershell_command(&format!(
-        "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false); {path} $ErrorActionPreference='Continue'; & $docker logs --tail {lines} {} '{container}' 2>&1 | ForEach-Object {{ [Console]::WriteLine($_.ToString()) }}; exit $LASTEXITCODE",
+        "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false); {DOCKER_CLI_PATH} $ErrorActionPreference='Continue'; & $docker logs --tail {lines} {} '{container}' 2>&1 | ForEach-Object {{ [Console]::WriteLine($_.ToString()) }}; exit $LASTEXITCODE",
         if follow { "--follow" } else { "" }
+    )))
+}
+
+/// An interactive shell inside one container on a Windows Docker host. The
+/// connected marker comes first, so a missing Docker CLI or a stopped container
+/// is reported in the terminal as the remote command's own exit. The shell
+/// script is the same one Linux hosts run, for the Linux containers Docker
+/// Desktop hosts.
+pub fn docker_exec_command(container: &str) -> Result<String, String> {
+    let container = remote::validate_stable_container_id(container)?;
+    let shell = remote::CONTAINER_SHELL_SCRIPT;
+    Ok(powershell_command(&format!(
+        "$ErrorActionPreference='Stop'; [Console]::Write([char]27 + ']633;ControlRoom;connected' + [char]7); {DOCKER_CLI_PATH} $ErrorActionPreference='Continue'; & $docker exec -it -e TERM=xterm-256color '{container}' sh -c '{shell}'; exit $LASTEXITCODE"
     )))
 }
 
@@ -186,6 +200,18 @@ mod tests {
             created_at: String::new(),
             updated_at: String::new(),
             last_connected_at: None,
+        }
+    }
+    #[test]
+    fn a_windows_container_terminal_accepts_only_a_full_container_id() {
+        let id = "f".repeat(64);
+        assert!(
+            docker_exec_command(&id)
+                .unwrap()
+                .starts_with("powershell.exe -NoLogo -NoProfile -EncodedCommand ")
+        );
+        for rejected in ["abc123", "web", "id'; Start-Process calc; '"] {
+            assert!(docker_exec_command(rejected).is_err(), "{rejected}");
         }
     }
     #[test]

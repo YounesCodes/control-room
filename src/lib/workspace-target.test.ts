@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  createContainerWorkspace,
   createLocalWorkspace,
   createRemoteWorkspace,
+  isContainerWorkspace,
   isLocalWorkspace,
   isRemoteWorkspace,
   terminalStateLabel,
+  workspaceHostContext,
   workspaceTargetKey,
   workspaceTargetName,
 } from "./workspace-target";
+import { workspaceDisplayLabel } from "./workspace-lifecycle";
 import type { LocalShellProfile, SavedConnection } from "../types";
 
 const shell: LocalShellProfile = {
@@ -80,6 +84,35 @@ describe("Workspace targets", () => {
     expect(workspaceTargetKey(remote)).not.toBe(workspaceTargetKey(local));
     expect(workspaceTargetName(local)).toBe("PowerShell 7");
     expect(workspaceTargetName(remote)).toBe("prod-web");
+  });
+
+  it("names a Container Terminal after its container and keeps its host as context", () => {
+    const host = createRemoteWorkspace(connection);
+    const web = createContainerWorkspace(connection, {
+      id: "a".repeat(64),
+      name: "web",
+      image: "nginx:1.27",
+    });
+    const cache = createContainerWorkspace(connection, {
+      id: "b".repeat(64),
+      name: "cache",
+      image: "redis:7",
+    });
+
+    expect(isContainerWorkspace(web)).toBe(true);
+    expect(isContainerWorkspace(host)).toBe(false);
+    expect(web.connectionId).toBe(connection.id);
+    expect(web.view).toBe("terminal");
+    expect(workspaceTargetName(web)).toBe("web");
+    expect(workspaceHostContext(web)).toBe("prod-web");
+    expect(workspaceHostContext(host)).toBeNull();
+    // Each container is its own target, so neither the host's terminal nor
+    // another container's shifts its number.
+    expect(workspaceTargetKey(web)).toBe(`container:${connection.id}:${"a".repeat(64)}`);
+    const all = [host, web, cache];
+    expect(workspaceDisplayLabel(host, all)).toBe("prod-web");
+    expect(workspaceDisplayLabel(web, all)).toBe("web");
+    expect(workspaceDisplayLabel(cache, all)).toBe("cache");
   });
 
   it("marks an elevated local Workspace as Administrator", () => {

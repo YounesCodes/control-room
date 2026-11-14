@@ -1,5 +1,6 @@
 import { emptyCachedList } from "./workspace-cache";
 import type {
+  ContainerTerminalTarget,
   LocalShellProfile,
   LocalWorkspace,
   RemoteWorkspace,
@@ -16,16 +17,34 @@ export function isLocalWorkspace(workspace: Workspace): workspace is LocalWorksp
   return workspace.kind === "local";
 }
 
+export type ContainerWorkspace = RemoteWorkspace & { container: ContainerTerminalTarget };
+
+/// A Container Terminal: a shell inside one container on a Remote Host. It
+/// belongs to its host's Saved Connection but is terminal-only.
+export function isContainerWorkspace(workspace: Workspace): workspace is ContainerWorkspace {
+  return isRemoteWorkspace(workspace) && !!workspace.container;
+}
+
 /// What a Workspace is attached to. Tabs on the same target are numbered
 /// against each other, so a second PowerShell 7 reads as "PowerShell 7 2"
-/// exactly as a second Workspace on one Saved Connection does.
+/// exactly as a second Workspace on one Saved Connection does. A container is
+/// its own target, so its terminal is never numbered against the host's.
 export function workspaceTargetKey(workspace: Workspace): string {
+  if (isContainerWorkspace(workspace))
+    return `container:${workspace.connectionId}:${workspace.container.id}`;
   return isRemoteWorkspace(workspace)
     ? `connection:${workspace.connectionId}`
     : `local:${workspace.shell.id}`;
 }
 
+/// The host a Container Terminal runs on, shown beside the container's name
+/// wherever the name alone would not say which host it is.
+export function workspaceHostContext(workspace: Workspace): string | null {
+  return isContainerWorkspace(workspace) ? workspace.connectionSnapshot.displayName : null;
+}
+
 export function workspaceTargetName(workspace: Workspace): string {
+  if (isContainerWorkspace(workspace)) return workspace.container.name;
   return isRemoteWorkspace(workspace)
     ? workspace.remoteShell
       ? `${workspace.connectionSnapshot.displayName} · ${workspace.remoteShell.label}`
@@ -81,6 +100,18 @@ export function createRemoteWorkspace(
     containerSelectionId: null,
     containerDetailsCache: {},
     logSource: null,
+  };
+}
+
+/// A new Container Terminal on a Remote Host, asked to connect. It starts in
+/// its terminal and has no inspection pages of its own.
+export function createContainerWorkspace(
+  connection: SavedConnection,
+  container: ContainerTerminalTarget,
+): ContainerWorkspace {
+  return {
+    ...createRemoteWorkspace(connection),
+    container: { id: container.id, name: container.name, image: container.image },
   };
 }
 
