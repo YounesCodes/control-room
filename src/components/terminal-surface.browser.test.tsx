@@ -411,7 +411,7 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
 
   await userEvent.keyboard("{Escape}{Control>}c{/Control}");
   await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(2));
-  expect(new TextDecoder().decode(session.writeSession.mock.calls[1][1])).toBe("");
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[1][1])).toBe("\x03");
   expect(write).toHaveBeenCalledTimes(4);
 
   screen.dispatchEvent(
