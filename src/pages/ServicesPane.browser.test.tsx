@@ -140,13 +140,20 @@ function renderPane(items = units) {
   );
 }
 async function settleMotion() {
-  // Slower WebKit runners can still be finishing a transition after a second.
+  // Slower WebKit runners can still be finishing a transition after a second,
+  // and a camera refit can start a frame or two after the layout that caused
+  // it. Motion has settled once nothing runs across several frames.
+  const running = () =>
+    document.getAnimations().filter((animation) => animation.playState === "running");
   await waitFor(
-    () =>
-      expect(
-        document.getAnimations().filter((animation) => animation.playState === "running"),
-      ).toHaveLength(0),
-    { timeout: 3000 },
+    async () => {
+      for (let frame = 0; frame < 4; frame += 1) {
+        expect(running()).toHaveLength(0);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      expect(running()).toHaveLength(0);
+    },
+    { timeout: 5000 },
   );
 }
 async function audit() {
@@ -1473,20 +1480,28 @@ it.each(["After", "Before"])(
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
     await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     await settleMotion();
-    const plot = screen
-      .getByRole("region", { name: "Systemd dependency graph" })
-      .getBoundingClientRect();
-    const nodes = [...document.querySelectorAll(".systemd-graph-node")].map((node) =>
-      node.getBoundingClientRect(),
+    // The recentering camera can start after the settle check on slow runners.
+    await waitFor(
+      () => {
+        const plot = screen
+          .getByRole("region", { name: "Systemd dependency graph" })
+          .getBoundingClientRect();
+        const nodes = [...document.querySelectorAll(".systemd-graph-node")].map((node) =>
+          node.getBoundingClientRect(),
+        );
+        expect(
+          (Math.min(...nodes.map((node) => node.left)) +
+            Math.max(...nodes.map((node) => node.right))) /
+            2,
+        ).toBeCloseTo(plot.left + plot.width / 2, 0);
+        expect(
+          (Math.min(...nodes.map((node) => node.top)) +
+            Math.max(...nodes.map((node) => node.bottom))) /
+            2,
+        ).toBeCloseTo(plot.top + plot.height / 2 - 6, 0);
+      },
+      { timeout: 3000 },
     );
-    expect(
-      (Math.min(...nodes.map((node) => node.left)) + Math.max(...nodes.map((node) => node.right))) /
-        2,
-    ).toBeCloseTo(plot.left + plot.width / 2, 0);
-    expect(
-      (Math.min(...nodes.map((node) => node.top)) + Math.max(...nodes.map((node) => node.bottom))) /
-        2,
-    ).toBeCloseTo(plot.top + plot.height / 2 - 6, 0);
   },
 );
 
