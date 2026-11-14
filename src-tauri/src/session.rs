@@ -705,7 +705,7 @@ mod tests {
     };
 
     use portable_pty::CommandBuilder;
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     use portable_pty::{PtySize, native_pty_system};
 
     use super::{
@@ -714,7 +714,7 @@ mod tests {
         classify_local_exit, classify_session_exit, interactive_shell_command,
     };
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     use super::map_pty_kill_result;
 
     /// What the detector concluded about one logical stream: the failure hint

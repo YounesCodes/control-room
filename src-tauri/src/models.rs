@@ -478,7 +478,7 @@ pub enum LocalShellKind {
 
 impl LocalShellKind {
     // Windows discovery walks the whole vocabulary; the others list their own shells.
-    #[cfg(any(windows, test))]
+    #[cfg(windows)]
     pub const ALL: [LocalShellKind; 9] = [
         LocalShellKind::PowerShell7,
         LocalShellKind::WindowsPowerShell,

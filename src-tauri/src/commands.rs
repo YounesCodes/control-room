@@ -752,15 +752,17 @@ mod tests {
     use crate::models::SavedConnectionInput;
 
     #[test]
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     fn environment_reports_the_compiled_client_platform() {
         let environment = get_environment_info();
         assert_eq!(
             environment.platform,
             if cfg!(target_os = "windows") {
                 "windows"
-            } else {
+            } else if cfg!(target_os = "macos") {
                 "macos"
+            } else {
+                "linux"
             }
         );
         assert!(environment.platform_supported);

@@ -1,5 +1,5 @@
 //! Read-only diagnostics and isolated startup for debug desktop tests.
-#[cfg(any(windows, test))]
+#[cfg(any(not(target_os = "macos"), test))]
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
@@ -131,7 +131,7 @@ pub fn e2e_window_chrome_lifecycle(
     crate::platform::macos_window::lifecycle_probe(&window)
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(not(target_os = "macos"), test))]
 pub fn automation_browser_args(arguments: &str) -> Option<String> {
     let port = arguments
         .split_ascii_whitespace()
@@ -144,7 +144,7 @@ pub fn automation_browser_args(arguments: &str) -> Option<String> {
     ))
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(not(target_os = "macos"), test))]
 pub fn webview_data_directory(folder: Option<&OsStr>, fallback: PathBuf) -> PathBuf {
     folder
         .map(PathBuf::from)
