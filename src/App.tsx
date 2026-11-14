@@ -121,6 +121,7 @@ import {
   offeredLocalShells,
 } from "./lib/offered-local-shells";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
+import { useRoundedWindowCorners } from "./lib/window-corners";
 import {
   removeConnectionWorkspaces,
   updateWorkspaceConnectionSnapshots,
@@ -541,6 +542,7 @@ export function App() {
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
   const clientPlatform = environment?.platform ?? provisionalPlatform;
+  useRoundedWindowCorners();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);

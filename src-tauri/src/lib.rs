@@ -18,6 +18,8 @@ mod session;
 mod ssh;
 mod systemd;
 mod updater;
+#[cfg(target_os = "linux")]
+mod window_corners;
 mod windows_inspection;
 mod windows_ssh;
 
@@ -113,12 +115,20 @@ pub fn run() {
                 {
                     window = window.additional_browser_args(&arguments);
                 }
+                // The test configuration replaces the Linux window, which is
+                // transparent so its corners can be rounded.
+                #[cfg(target_os = "linux")]
+                {
+                    window = window.transparent(true);
+                }
                 window.build()?;
             }
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
                 platform::macos_window::watch(&window.as_ref().window());
             }
+            #[cfg(target_os = "linux")]
+            window_corners::watch(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -133,6 +143,8 @@ pub fn run() {
             clipboard::read_clipboard,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             clipboard::write_clipboard,
+            #[cfg(target_os = "linux")]
+            window_corners::window_compositing,
             documentation::open_documentation,
             documentation::open_releases,
             fonts::list_catalog_fonts,
