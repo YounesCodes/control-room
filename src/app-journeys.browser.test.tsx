@@ -253,6 +253,9 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 describe("complete app journeys with typed IPC fixtures", () => {
   it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
     await mount();
+    // The terminal takes focus when it first mounts; on a slow runner that can
+    // land after Escape has returned focus to the navigation button.
+    await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeInTheDocument();
     for (const width of [858, 859, 860, 861, 862, 864]) {
       await page.viewport(width, 600);
       await expect
