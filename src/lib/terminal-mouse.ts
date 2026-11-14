@@ -3,11 +3,11 @@ import type { Terminal } from "@xterm/xterm";
 const DRAG_THRESHOLD = 4;
 const CODEX_BANNER = /^\s*│?\s*>_\s+OpenAI Codex\s+\(v\d/;
 
-export function enableCodexDragSelection(container: HTMLElement, terminal: Terminal): () => void {
+export function trackCodexMouse(container: HTMLElement, terminal: Terminal) {
   const screen = container.querySelector(".xterm-screen");
   const document = container.ownerDocument;
   const window = document.defaultView;
-  if (!screen || !window) return () => undefined;
+  if (!screen || !window) return { isCodex: () => false, dispose: () => undefined };
   const mac = window.navigator.platform.startsWith("Mac");
   let codex = false;
   let pendingPress: AbortController | undefined;
@@ -107,10 +107,13 @@ export function enableCodexDragSelection(container: HTMLElement, terminal: Termi
 
   container.addEventListener("mousedown", holdPress, { capture: true });
 
-  return () => {
-    cancelPress();
-    bufferChange.dispose();
-    output.dispose();
-    container.removeEventListener("mousedown", holdPress, { capture: true });
+  return {
+    isCodex: () => codex && terminal.modes.mouseTrackingMode !== "none",
+    dispose: () => {
+      cancelPress();
+      bufferChange.dispose();
+      output.dispose();
+      container.removeEventListener("mousedown", holdPress, { capture: true });
+    },
   };
 }

@@ -433,7 +433,8 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
   expect(new TextDecoder().decode(session.writeSession.mock.calls[2][1])).toContain("\x1b[<35;");
 });
 
-it("selects Codex output with a plain drag and forwards clicks and wheel input", async () => {
+it("selects and pastes in Codex while preserving left clicks and wheel input", async () => {
+  const read = vi.spyOn(navigator.clipboard, "readText").mockResolvedValue("first\nsecond");
   const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
   container = document.createElement("div");
   container.style.height = "400px";
@@ -457,7 +458,7 @@ it("selects Codex output with a plain drag and forwards clicks and wheel input",
   await vi.waitFor(() => expect(session.output).not.toBeNull());
   session.output!.onmessage!(
     new TextEncoder().encode(
-      "\x1b[?1049h\x1b[?1003h\x1b[?1006h╭─\r\n  >_ OpenAI Codex (v0.167.2)\r\nCOPY_NEEDLE",
+      "\x1b[?1049h\x1b[?1003h\x1b[?1006h\x1b[?2004h╭─\r\n  >_ OpenAI Codex (v0.167.2)\r\nCOPY_NEEDLE",
     ).buffer,
   );
   await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
@@ -494,6 +495,26 @@ it("selects Codex output with a plain drag and forwards clicks and wheel input",
     }),
   );
   expect(mouseReports()).toContain("\x1b[<65;");
+
+  session.writeSession.mockClear();
+  await userEvent.click(screen, { button: "right", position: { x: 20, y } });
+  expect(read).toHaveBeenCalledTimes(1);
+  const paste = "\x1b[200~first\rsecond\x1b[201~";
+  expect(
+    session.writeSession.mock.calls
+      .map(([, data]) => new TextDecoder().decode(data))
+      .filter((data) => !data.startsWith("\x1b[<35;")),
+  ).toEqual([paste]);
+
+  await userEvent.dragAndDrop(screen, screen, {
+    sourcePosition: { x: 1, y },
+    targetPosition: { x: 120, y },
+  });
+  session.writeSession.mockClear();
+  await userEvent.click(screen, { button: "right", position: { x: 20, y } });
+  expect(write).toHaveBeenNthCalledWith(2, "COPY_NEEDLE");
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(session.writeSession).not.toHaveBeenCalled();
 });
 
 it("keeps the terminal edge empty until search has matches", async () => {

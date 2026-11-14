@@ -14,7 +14,7 @@ import {
   isControlRoomShortcut,
   terminalRightClickAction,
 } from "../lib/terminal-flow";
-import { enableCodexDragSelection } from "../lib/terminal-mouse";
+import { trackCodexMouse } from "../lib/terminal-mouse";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { TerminalTitle } from "../lib/terminal-title";
@@ -235,7 +235,7 @@ export function TerminalPane({
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
     terminal.open(container);
-    const disposeCodexDragSelection = enableCodexDragSelection(container, terminal);
+    const codexMouse = trackCodexMouse(container, terminal);
     fit.fit();
     terminalRef.current = terminal;
     fitRef.current = fit;
@@ -276,14 +276,19 @@ export function TerminalPane({
       return true;
     });
 
-    /* A selection is copied rather than reported to the program running in the
-       pty, so the click that copies it cannot also become a right click inside
-       Vim or tmux. Stopping propagation in the capture phase is what keeps it
-       from reaching xterm's own mousedown listener, which sits deeper in the
-       tree. With no selection nothing is intercepted here, which is what leaves
-       a mouse-reporting program its click. */
+    const rightClickAction = (event: MouseEvent) =>
+      terminalRightClickAction({
+        button: event.button,
+        hasSelection: terminal.hasSelection(),
+        mouseTrackingMode: terminal.modes.mouseTrackingMode,
+        isCodex: codexMouse.isCodex(),
+      });
+
+    // Reserve clipboard clicks before xterm can report a button press to the program.
     const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 2 || !terminal.hasSelection()) return;
+      if (event.button !== 2) return;
+      const action = rightClickAction(event);
+      if (action !== "copy" && action !== "paste") return;
       event.preventDefault();
       event.stopPropagation();
     };
@@ -305,11 +310,7 @@ export function TerminalPane({
     // Handle pointer right clicks before xterm moves its textarea for the
     // browser context menu. xterm already reported any app-owned mousedown.
     const handleContextMenu = (event: MouseEvent) => {
-      const action = terminalRightClickAction({
-        button: event.button,
-        hasSelection: terminal.hasSelection(),
-        mouseTrackingMode: terminal.modes.mouseTrackingMode,
-      });
+      const action = rightClickAction(event);
       if (action === "ignore") return;
 
       event.preventDefault();
@@ -438,7 +439,7 @@ export function TerminalPane({
       listenerDisposed = true;
       unlisten?.();
       observer.disconnect();
-      disposeCodexDragSelection();
+      codexMouse.dispose();
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
       container.removeEventListener("mousemove", handleMouseMove, { capture: true });
       container.removeEventListener("contextmenu", handleContextMenu, { capture: true });
