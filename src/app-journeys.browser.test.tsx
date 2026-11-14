@@ -2805,14 +2805,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(graph.bottom).toBeLessThanOrEqual(viewport.bottom - 48);
       };
       await vi.waitFor(expectEntireGraph);
-      await vi.waitFor(() =>
-        expect(
-          element
-            .querySelector(".arch-content")!
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.playState === "running"),
-        ).toHaveLength(0),
-      );
+      await settleMotion(element.querySelector(".arch-content")!);
       const fittedHeight = element.querySelector(".arch-content")!.getBoundingClientRect().height;
       await page.getByRole("button", { name: "Zoom in", exact: true }).click();
       await vi.waitFor(() =>
@@ -2822,14 +2815,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       );
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(expectEntireGraph);
-      await vi.waitFor(() =>
-        expect(
-          element
-            .querySelector(".arch-content")!
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.playState === "running"),
-        ).toHaveLength(0),
-      );
+      await settleMotion(element.querySelector(".arch-content")!);
       // WebKit on macOS can settle the first fit a few pixels from a later one
       // as chip text finishes laying out.
       expect(
@@ -3079,14 +3065,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         "example-99.service",
       );
       await expect.element(page.getByRole("button", { name: "View journal" })).toBeVisible();
-      await vi.waitFor(() =>
-        expect(
-          element
-            .querySelector(".systemd-inspector")!
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.playState === "running"),
-        ).toHaveLength(0),
-      );
+      await settleMotion(element.querySelector(".systemd-inspector")!);
       expect(
         (await axe.run(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
       ).toEqual([]);

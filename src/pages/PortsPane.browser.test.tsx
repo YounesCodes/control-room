@@ -14,6 +14,7 @@ import { api } from "../lib/api";
 import axe from "axe-core";
 import { PortsPane } from "./PortsPane";
 import { tabKey, shiftTabKey } from "../test/keyboard";
+import { settleMotion } from "../test/motion";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -589,11 +590,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(chips()).toHaveLength(2);
   expect(screen.queryByRole("button", { name: /6379/ })).toBeNull();
   const filtersRegion = screen.getByRole("region", { name: "Port filters" });
-  await waitFor(() =>
-    expect(
-      filtersRegion.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
-    ).toBe(false),
-  );
+  await settleMotion(filtersRegion);
   expect((await axe.run(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   await page.getByRole("button", { name: "Close port tools" }).click();
@@ -607,11 +604,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(diagnostic.closest("details")?.open).toBe(false);
   await page.getByText("Host firewall policy", { exact: true }).click();
   expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
-  await waitFor(() =>
-    expect(inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running")).toBe(
-      false,
-    ),
-  );
+  await settleMotion(inspector);
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
   await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
