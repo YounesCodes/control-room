@@ -118,9 +118,9 @@ Capture failures fail the step; absent artifacts do not fail uploads.
 
 To add a scenario, register its states and ready selector in
 `src/test/ui-review/scenarios.json`, including focused preparation actions and
-state-specific settled selectors. Mark a preparation click `"optional": true`
+state-specific settled selectors. Actions click by default. Mark a preparation click `"optional": true`
 when only some viewports render its target, such as the compact navigation
-toggle. Use `"hover": true` to hover instead of click, for controls that only
+toggle. Use `"wait": true` to wait for the target, `"hover": true` to hover instead of click, for controls that only
 appear under the pointer, `"option"` to choose that value in a select, `"fill"` to type that text into a
 field, and `"scroll": true` to bring a target below the fold into view. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture

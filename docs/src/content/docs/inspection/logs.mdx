@@ -11,14 +11,22 @@ In **Logs**, choose a systemd unit or Docker container, choose the last 50, 100,
   <a href={logsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={logsScreenshot.src}
-      alt="Logs showing the selected nginx service, line count, Receive new lines option, and stream controls."
+      alt="Logs streaming a service, with line numbers, highlighted warning and error lines, and the All, Warnings, and Errors filters."
     />
   </a>
   <figcaption>A service log stream. Example data shown.</figcaption>
 </figure>
 
-**Receive new lines** keeps reading after the initial lines load. **Pause** freezes the display while the stream continues; **Stop** ends the stream. Search filters the lines already loaded. You can clear the view or turn line wrapping off. Scrolling up keeps your reading position; **Jump to latest** returns to new lines.
+**Receive new lines** keeps reading after the initial lines load. **Stop** ends the stream. The view shows one source at a time: choosing another unit or container clears it. While a stream runs, changing the source, line count, or **Receive new lines** restarts it with the new choice in a fresh view. Starting the same source again keeps earlier lines above a divider. **Pause** holds new lines while you read; the stream keeps running, and the status shows how many lines are waiting. **Resume** shows them.
 
-Systemd logs come from `journalctl`; container logs come from `docker logs`. Closing the view stops the stream. Fetched logs stay in memory and are not saved. For a different journal query, use the terminal.
+Lines that mention warnings or errors are marked in the margin. **Warnings** and **Errors** show only those lines, with a count for each. A level the line states itself, such as `level=info`, `"log.level": "WARN"`, `[error]`, or `FATAL:`, decides. Otherwise the app looks for words such as `warning`, `error`, `failed`, or `fatal` in the message. It does not read the journal priority.
+
+Search shows the loaded lines that contain your text and highlights each match. Press `Ctrl+F` to search and `Escape` to clear it. Timestamps and host names are dimmed so messages stand out. Line numbers are not copied with the text. You can turn line wrapping off or clear the view.
+
+Scrolling up keeps your reading position. **Jump to latest** returns to new lines and shows how many arrived. Focus the log to scroll it with the arrow keys, `Page Up`, `Page Down`, `Home`, and `End`.
+
+If the SSH account can’t read the system journal, Logs says so instead of showing an empty stream. Select **Retry with sudo**, turn on **Elevated commands** in Settings, or add the account to the `adm` or `systemd-journal` group.
+
+Systemd logs come from `journalctl`; container logs come from `docker logs`. Terminal color codes are removed. Closing the view stops the stream. Fetched logs stay in memory and are not saved. The view keeps up to the newest 10,000 lines. For a different journal query, use the terminal.
 
 On Windows hosts, Logs offers Docker containers only. It reads both standard output and error output through the Windows Docker CLI. Windows service event logs are not included.

@@ -144,6 +144,10 @@ ${JSON.stringify(registry, null, 2)}`);
           ].map((name) => [name, path.join(root, "src/test/ui-review/native.ts")]),
         ),
       },
+      // Scan only the fixture page. Vite otherwise crawls every HTML file under
+      // the checkout, and local coverage, build, and worktree output can hold
+      // the first page load past its timeout.
+      optimizeDeps: { entries: ["ui-review/index.html"] },
       logLevel: "error",
       server: { host: "127.0.0.1", port: 0, open: false, hmr: false },
     });
@@ -212,9 +216,10 @@ ${JSON.stringify(registry, null, 2)}`);
           // Optional steps cover layout-only controls, such as the compact
           // navigation toggle that other viewports never render.
           if (action.optional && !(await locator.isVisible())) continue;
+          if (action.wait) await locator.first().waitFor();
           // Hover steps reveal controls that only appear under the pointer,
           // such as a Saved Connection's actions button.
-          if (action.hover) await locator.hover();
+          else if (action.hover) await locator.hover();
           else if (action.scroll) await locator.scrollIntoViewIfNeeded();
           else if (action.option) await locator.selectOption(action.option);
           else if (action.fill !== undefined) await locator.fill(action.fill);

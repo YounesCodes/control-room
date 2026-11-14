@@ -549,6 +549,15 @@ pub struct StreamStateEvent {
     pub reason: Option<String>,
 }
 
+/// Something a running stream reported on stderr that changes what its output
+/// means, sent while the stream continues.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamNoticeEvent {
+    pub stream_id: String,
+    pub notice: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentInfo {

@@ -2385,7 +2385,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await navigate("Logs");
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect.element(page.getByText("Stream active", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Streaming", { exact: true })).toBeVisible();
     streamOutput!.onmessage(
       new TextEncoder().encode(
         Array.from({ length: 120 }, (_, index) => `line ${index}`).join("\n") + "\n",
@@ -2420,7 +2420,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await navigate("Logs");
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect.element(page.getByText("Stream active", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Streaming", { exact: true })).toBeVisible();
     const old = streamOutput!;
     const start = native.invoke.mock.calls.find(([command]) => command === "start_journal_stream")!;
     expect(start[1].lines).toBe(fixtures.settings.defaultLogTail);
@@ -2433,7 +2433,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByText("fixture stream disconnected", { exact: true }))
       .toBeVisible();
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect.element(page.getByText("Stream active", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Streaming", { exact: true })).toBeVisible();
     old.onmessage(new TextEncoder().encode("OLD_STREAM_OUTPUT\n").buffer);
     streamOutput!.onmessage(new TextEncoder().encode("RECOVERED_STREAM_OUTPUT\n").buffer);
     await expect.element(page.getByText(/RECOVERED_STREAM_OUTPUT/)).toBeVisible();
@@ -2792,7 +2792,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       new TextEncoder().encode(records.map((index) => `Example log ${index}`).join("\n")).buffer,
     );
     await expect.element(page.getByText(/Example log 99/)).toBeInTheDocument();
-    const output = element.querySelector<HTMLElement>("pre.log-output")!;
+    const output = element.querySelector<HTMLElement>(".log-output")!;
     expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
     output.scrollTop = output.scrollHeight;
     expect(output.scrollTop).toBeGreaterThan(0);
@@ -3063,7 +3063,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("combobox", { name: "Unit", exact: true }))
       .toHaveValue("failed.service");
     await page.getByRole("button", { name: "Start", exact: true }).click();
-    await expect.element(page.getByText("Stream active", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Streaming", { exact: true })).toBeVisible();
     streamOutput!.onmessage(new TextEncoder().encode("journal fixture line\n").buffer);
     await expect.element(page.getByText(/journal fixture line/)).toBeVisible();
     await navigate("Docker");

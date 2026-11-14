@@ -385,6 +385,31 @@
         "empty": ".systemd-inventory .panel-state",
         "error": ".connection-section .panel-state-error"
       }
+    },
+    "logs": {
+      "states": ["stopped", "populated", "errors", "search", "restricted"],
+      "ready": ".app-shell",
+      "prepare": {
+        "populated": [{ "role": "button", "name": "Start" }],
+        "restricted": [{ "role": "button", "name": "Start" }],
+        "errors": [
+          { "role": "button", "name": "Start" },
+          { "selector": ".log-line[data-level='error']", "wait": true },
+          { "selector": ".log-level-filter [data-level='error']" }
+        ],
+        "search": [
+          { "role": "button", "name": "Start" },
+          { "selector": ".log-line[data-level='error']", "wait": true },
+          { "role": "textbox", "name": "Search loaded lines", "fill": "batch 4813" }
+        ]
+      },
+      "settled": {
+        "stopped": ".logs-page .log-empty",
+        "populated": ".logs-page .log-line:nth-child(49)",
+        "errors": ".log-level-filter [data-level='error'][aria-pressed='true']",
+        "search": ".logs-page .log-match-count",
+        "restricted": ".logs-page .inline-warning[role='status']"
+      }
     }
   }
 }

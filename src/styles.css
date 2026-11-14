@@ -423,38 +423,6 @@ code,
   font-family: "Cascadia Mono", Consolas, monospace;
 }
 
-.log-output-shell {
-  position: relative;
-  height: calc(100% - 122px);
-  min-height: 260px;
-}
-
-.log-output-shell .log-output {
-  height: 100%;
-  min-height: 0;
-}
-
-.log-output.log-output-wrapped {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.log-jump-latest {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface-overlay);
-  padding: 0 12px;
-  color: var(--text);
-  box-shadow: var(--shadow-popover);
-}
-
 /* Chromium cannot transition ::-webkit-scrollbar pseudo-elements, so the thumb
    inherits this property while the hovered section transitions it. The
    explicit transparent keeps unhovered descendants from chasing the animation
@@ -5641,12 +5609,23 @@ dd {
    Logs
    ========================================================================== */
 
+.logs-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.log-status-detail::before {
+  content: "·";
+  margin-right: 7px;
+  color: var(--text-faint);
+}
+
 .log-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .log-controls label:not(.search-field, .checkbox-label) {
@@ -5664,8 +5643,9 @@ dd {
 }
 
 .source-select {
-  min-width: 240px;
+  min-width: 180px;
   flex: 1;
+  max-width: 520px;
 }
 
 .checkbox-label {
@@ -5682,34 +5662,303 @@ dd {
   height: 16px;
 }
 
-.log-search {
-  min-width: 210px;
-  min-height: 32px;
-  padding: 0 9px;
+.log-transport {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 4px;
 }
 
-.log-output {
-  height: calc(100% - 122px);
+/* Start and Stop share one footprint so the button never moves under the pointer. */
+.log-start {
+  min-width: 78px;
+  min-height: 32px;
+}
+
+.logs-page .inline-error,
+.logs-page .inline-warning {
+  margin-bottom: 12px;
+}
+
+.log-panel {
+  display: flex;
   min-height: 260px;
-  overflow: auto;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--terminal-bg);
-  margin: 0;
-  padding: 13px 14px;
-  color: #dededa;
+}
+
+.log-view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-chrome);
+  padding: 7px 8px;
+}
+
+.log-search {
+  min-width: 180px;
+  max-width: 420px;
+  min-height: 31px;
+  flex: 1 1 240px;
+  padding: 0 4px 0 9px;
+}
+
+.log-match-count {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.log-search-clear {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.log-search-clear:hover {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+.log-level-filter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-right: 6px;
+  padding: 2px;
+}
+
+.log-level-filter button {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 8px;
+  color: var(--text-muted);
   font-size: 11.5px;
-  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.log-level-filter button:hover {
+  background: var(--fill-hover);
+}
+
+.log-level-filter button[aria-pressed="true"] {
+  background: var(--fill-active);
+  color: var(--text);
+}
+
+.log-count {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-level-filter [data-level="warning"][data-found] .log-count {
+  color: var(--warning);
+}
+
+.log-level-filter [data-level="error"][data-found] .log-count {
+  color: var(--failure);
+}
+
+.log-view-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.log-view-tools .icon-button {
+  width: 29px;
+  height: 29px;
+}
+
+.log-view-tools .icon-button[aria-pressed="true"] {
+  background: var(--fill-active);
+  color: var(--text);
+}
+
+.log-output-shell {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+
+.log-output {
+  height: 100%;
+  overflow: auto;
+  outline: none;
+  padding: 8px 0;
+  color: var(--text);
+  line-height: 1.55;
   user-select: text;
+}
+
+.log-output:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--text-muted);
+}
+
+.log-lines {
+  min-width: 100%;
+  width: max-content;
+}
+
+.log-output-wrapped .log-lines {
+  width: auto;
+}
+
+/* Off-screen blocks skip layout and paint; their last measured height is kept. */
+.log-output-wrapped .log-chunk {
+  content-visibility: auto;
+}
+
+/* A hanging indent keeps wrapped text clear of the line-number gutter. */
+.log-line {
+  --log-gutter-width: calc(var(--log-gutter, 3ch) + 24px);
+  min-height: 1lh;
+  padding: 0 14px 0 var(--log-gutter-width);
+  text-indent: calc(-1 * var(--log-gutter-width));
   white-space: pre;
+}
+
+.log-output-wrapped .log-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Line numbers are generated content: never copied and hidden from assistive technology. */
+.log-line::before {
+  content: attr(data-line);
+  content: attr(data-line) / "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--log-gutter-width);
+  padding-right: 14px;
+  color: var(--text-faint);
+  text-align: right;
+  text-indent: 0;
+  user-select: none;
+}
+
+.log-line:hover {
+  background: var(--surface-raised);
+}
+
+.log-date,
+.log-zone,
+.log-source {
+  color: var(--text-faint);
+}
+
+.log-time {
+  color: var(--text-muted);
+}
+
+.log-line[data-level="warning"] {
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+  box-shadow: inset 2px 0 var(--warning);
+}
+
+.log-line[data-level="error"] {
+  background: color-mix(in srgb, var(--failure) 9%, transparent);
+  box-shadow: inset 2px 0 var(--failure);
+  color: color-mix(in srgb, var(--failure) 30%, var(--text-strong));
+}
+
+.log-line[data-level="warning"]::before {
+  color: var(--warning);
+}
+
+.log-line[data-level="error"]::before {
+  color: var(--failure);
+}
+
+.log-line[data-marker] {
+  display: flex;
+  align-items: center;
+  margin: 6px 0;
+  padding-left: 0;
+  color: var(--text-faint);
+  text-indent: 0;
+}
+
+.log-line[data-marker]::before {
+  flex: none;
+}
+
+.log-marker {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.log-marker::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--border-subtle);
+}
+
+.log-line mark {
+  border-radius: 2px;
+  background: var(--border-strong);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 1px var(--text-faint);
+}
+
+.log-jump-latest {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-overlay);
+  padding: 0 13px;
+  color: var(--text);
+  font-size: 11.5px;
+  box-shadow: var(--shadow-popover);
+}
+
+.log-jump-latest:hover {
+  background: var(--fill-active);
 }
 
 .log-empty {
   display: flex;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
+  padding: 24px;
   user-select: none;
 }
 
@@ -5718,13 +5967,13 @@ dd {
 }
 
 .log-empty p {
-  max-width: 340px;
+  max-width: 360px;
   margin: 0;
   color: var(--text-muted);
   font-size: 12.5px;
   line-height: 1.55;
   text-align: center;
-  font-family: var(--font-ui);
+  overflow-wrap: anywhere;
 }
 
 /* ==========================================================================
@@ -9260,7 +9509,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     gap: 12px;
   }
   .log-controls .source-select,
-  .log-controls .log-search {
+  .log-view-bar .log-search {
     min-width: 0;
     flex: 1 1 200px;
   }

@@ -258,7 +258,7 @@ export function PortsPane({
     !!firewallError &&
     capabilities?.osId !== "windows" &&
     firewallError.toLowerCase().includes("permission denied");
-  const readingWarnings: ReadingWarning[] = [
+  const warningCandidates: (ReadingWarning | false | null | undefined | "")[] = [
     cache.error && {
       id: "ports",
       source: "Listening ports",
@@ -320,7 +320,8 @@ export function PortsPane({
           }
         : undefined,
     },
-  ].filter((warning): warning is ReadingWarning => !!warning);
+  ];
+  const readingWarnings = warningCandidates.filter((warning) => !!warning);
   const hasWarnings = readingWarnings.length > 0;
   const snapshotDescription = [
     collectedAt ? "Last collected at " + collectedAt : null,

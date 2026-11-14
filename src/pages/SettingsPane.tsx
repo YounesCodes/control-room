@@ -185,7 +185,8 @@ export function SettingsPane({
   /** Every local shell this machine has, the hidden ones included: Settings is
    *  where they are turned back on, so it cannot be handed a filtered list. */
   localShells: LocalShellProfile[];
-  environment: EnvironmentInfo;
+  /** Null until the SSH environment has been read. */
+  environment: EnvironmentInfo | null;
   /** The running version, read from Tauri package metadata rather than any
    *  constant in this file. */
   appVersion: string | null;
@@ -871,7 +872,9 @@ export function SettingsPane({
                 <dl className="detail-list settings-ssh">
                   <div>
                     <dt>ssh.exe</dt>
-                    {environment.sshPath ? (
+                    {!environment ? (
+                      <dd>Checking…</dd>
+                    ) : environment.sshPath ? (
                       <dd className="technical">{environment.sshPath}</dd>
                     ) : (
                       <dd>
@@ -884,23 +887,31 @@ export function SettingsPane({
                   </div>
                   <div>
                     <dt>OpenSSH config</dt>
-                    <dd className="technical">{environment.sshConfigPath}</dd>
+                    <dd className="technical">{environment?.sshConfigPath ?? "Checking…"}</dd>
                   </div>
                   <div>
                     <dt>ssh-agent</dt>
                     <dd>
-                      <span className="settings-ssh-state">
-                        <span
-                          className={`status-dot${environment.sshAgentAvailable ? " status-connected" : ""}`}
-                          aria-hidden="true"
-                        />
-                        {environment.sshAgentAvailable ? "Identity loaded" : "No identity loaded"}
-                      </span>
-                      {!environment.sshAgentAvailable && (
-                        <span className="settings-ssh-hint">
-                          The agent may be stopped or holding no keys. Check with{" "}
-                          <code>ssh-add -l</code> in a terminal.
-                        </span>
+                      {!environment ? (
+                        "Checking…"
+                      ) : (
+                        <>
+                          <span className="settings-ssh-state">
+                            <span
+                              className={`status-dot${environment.sshAgentAvailable ? " status-connected" : ""}`}
+                              aria-hidden="true"
+                            />
+                            {environment.sshAgentAvailable
+                              ? "Identity loaded"
+                              : "No identity loaded"}
+                          </span>
+                          {!environment.sshAgentAvailable && (
+                            <span className="settings-ssh-hint">
+                              The agent may be stopped or holding no keys. Check with{" "}
+                              <code>ssh-add -l</code> in a terminal.
+                            </span>
+                          )}
+                        </>
                       )}
                     </dd>
                   </div>
