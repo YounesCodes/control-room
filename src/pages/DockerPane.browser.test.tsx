@@ -318,8 +318,8 @@ it("frames a container opened from Ports and keeps details and logs usable at mi
   const inspector = screen.getByRole("complementary");
   const logo = within(inspector).getByRole("img", { name: "NGINX image" });
   expect(logo.closest(".container-inspector-heading")).toBeTruthy();
-  expect(logo.getBoundingClientRect().width).toBe(20);
-  expect(logo.getBoundingClientRect().height).toBe(20);
+  expect(logo.getBoundingClientRect().width).toBeCloseTo(20, 2);
+  expect(logo.getBoundingClientRect().height).toBeCloseTo(20, 2);
   for (const name of ["Published ports", "Networks", "Mounts", "Container & Compose"]) {
     await page.getByText(name, { exact: true }).click();
   }

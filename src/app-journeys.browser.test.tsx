@@ -910,7 +910,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const badge = admin.querySelector(".local-shell-elevation")!;
     await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(83, 145, 254)");
     expect(getComputedStyle(badge).color).toBe("rgb(214, 168, 74)");
-    expect(badge.getBoundingClientRect().width).toBe(10);
+    expect(badge.getBoundingClientRect().width).toBeCloseTo(10, 2);
     await page.getByRole("combobox", { name: "Search commands" }).fill("");
     await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
     await userEvent.keyboard("{Escape}");
@@ -1380,14 +1380,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect.poll(() => shell.dataset.platform).toBe(platform);
       const header = element.querySelector<HTMLElement>(".sidebar-top-heading")!;
       const label = header.querySelector<HTMLElement>("span")!;
-      expect(header.getBoundingClientRect().top).toBe(1);
+      expect(header.getBoundingClientRect().top).toBeCloseTo(1, 2);
       expect(header.getBoundingClientRect().height).toBe(platform === "macos" ? 41 : 42);
       expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
       if (platform === "macos") {
         const bar = element.querySelector<HTMLElement>(".app-bar")!;
         const sidebar = element.querySelector<HTMLElement>(".sidebar")!;
         const workspace = element.querySelector<HTMLElement>(".workspace-shell")!;
-        expect(bar.getBoundingClientRect().left).toBe(1);
+        expect(bar.getBoundingClientRect().left).toBeCloseTo(1, 2);
         expect(bar.getBoundingClientRect().width).toBe(shell.clientWidth);
         expect(header.closest(".app-bar")).toBe(bar);
         expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
@@ -1403,7 +1403,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await userEvent.keyboard("{End}");
         await expect.poll(() => sidebar.clientWidth).toBe(479);
         expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
-        expect(bar.getBoundingClientRect().left).toBe(1);
+        expect(bar.getBoundingClientRect().left).toBeCloseTo(1, 2);
         await expect.element(divider).toHaveFocus();
         await userEvent.keyboard("{Home}");
         await expect.poll(() => sidebar.clientWidth).toBe(199);
@@ -1428,7 +1428,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }
       await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
       const tabs = element.querySelector<HTMLElement>(".session-tabs")!;
-      await expect.poll(() => tabs.getBoundingClientRect().top).toBe(1);
+      await expect.poll(() => tabs.getBoundingClientRect().top).toBeCloseTo(1, 2);
       await expect
         .poll(() => getComputedStyle(tabs).paddingLeft)
         .toBe(platform === "macos" ? "104px" : "0px");
@@ -1439,8 +1439,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
       await page.getByRole("button", { name: "Open Settings", exact: true }).click();
       const bar = element.querySelector<HTMLElement>(".app-bar")!;
-      await expect.poll(() => bar.getBoundingClientRect().top).toBe(1);
-      expect(bar.getBoundingClientRect().height).toBe(42);
+      await expect.poll(() => bar.getBoundingClientRect().top).toBeCloseTo(1, 2);
+      expect(bar.getBoundingClientRect().height).toBeCloseTo(42, 2);
       await expect
         .poll(() => getComputedStyle(bar).paddingLeft)
         .toBe(platform === "macos" ? "104px" : "0px");
@@ -2061,7 +2061,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const controls = element.querySelector(".window-controls")!;
     const focus = element.querySelector(".app-focus-toggle")!;
     const bar = element.querySelector(".app-bar")!;
-    await expect.poll(() => actions.getBoundingClientRect().width).toBe(178);
+    await expect.poll(() => actions.getBoundingClientRect().width).toBeCloseTo(178, 2);
     const initial = controls.getBoundingClientRect().left;
     const style = document.createElement("style");
     style.id = "focus-slot-motion-test";

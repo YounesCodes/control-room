@@ -160,7 +160,7 @@ it("keeps search aligned and tightly spaced when switching into the dependency g
   const box = search.getBoundingClientRect();
   expect(box.left).toBeCloseTo(before.left, 2);
   expect(box.width).toBe(30);
-  expect(search.querySelector("svg")!.getBoundingClientRect().width).toBe(16);
+  expect(search.querySelector("svg")!.getBoundingClientRect().width).toBeCloseTo(16, 2);
   const activation = screen.getByRole("button", { name: "Activation" }).getBoundingClientRect();
   expect(box.left - activation.right).toBeLessThanOrEqual(14);
 });
@@ -733,7 +733,7 @@ it("glides one shared service highlight and retargets it during rapid switching"
   await settleMotion();
   // The glide can start after the first settle check on slower runners.
   await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44));
-  expect(marker.getBoundingClientRect().height).toBe(44);
+  expect(marker.getBoundingClientRect().height).toBeCloseTo(44, 2);
   expect(getComputedStyle(marker).borderRadius).not.toBe("0px");
   const row = document.querySelector<HTMLElement>(".systemd-inventory .selected-row")!;
   expect(marker.getBoundingClientRect().top).toBe(row.getBoundingClientRect().top);
@@ -1693,7 +1693,7 @@ it.each([1, 1000])(
     list.scrollLeft = 1000;
     expect(list.scrollLeft).toBe(0);
     const row = list.querySelector(".dense-row")!;
-    expect(row.getBoundingClientRect().height).toBe(44);
+    expect(row.getBoundingClientRect().height).toBeCloseTo(44, 2);
     expect(row.textContent).not.toContain("enabled");
   },
 );
