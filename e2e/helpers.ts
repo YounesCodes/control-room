@@ -319,7 +319,11 @@ export async function pressBoundaryKey(
   );
 }
 
-export async function terminalContains(marker: string, scope = ".terminal-workspace-pane.active") {
+export async function terminalContains(
+  marker: string,
+  scope = ".terminal-workspace-pane.active",
+  timeout = 15_000,
+) {
   await browser.waitUntil(
     async () =>
       browser.execute(
@@ -330,7 +334,7 @@ export async function terminalContains(marker: string, scope = ".terminal-worksp
         scope,
         marker,
       ),
-    { timeout: 15_000, timeoutMsg: `Terminal did not print ${marker}` },
+    { timeout, timeoutMsg: `Terminal did not print ${marker}` },
   );
 }
 

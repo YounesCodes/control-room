@@ -207,11 +207,11 @@ export async function openNativeShell() {
   await $(".terminal-workspace-pane.active .xterm-screen").waitForDisplayed();
   await focusNativeApp();
 }
-export async function typeNativeCommand(command: string, marker: string) {
+export async function typeNativeCommand(command: string, marker: string, timeout?: number) {
   await $(".terminal-workspace-pane.active .xterm-screen").click();
   await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue(command);
   await nativeKey("enter");
-  await terminalContains(marker);
+  await terminalContains(marker, undefined, timeout);
 }
 export async function selectTerminalWord(word: string) {
   const point = await browser.execute((expected) => {
