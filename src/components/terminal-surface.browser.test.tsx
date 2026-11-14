@@ -457,7 +457,7 @@ it("selects Codex output with a plain drag and forwards clicks and wheel input",
   await vi.waitFor(() => expect(session.output).not.toBeNull());
   session.output!.onmessage!(
     new TextEncoder().encode(
-      "\x1b[?1049h\x1b[?1003h\x1b[?1006h╭─\r\n│ >_ OpenAI Codex (v0.167.2)\r\nCOPY_NEEDLE",
+      "\x1b[?1049h\x1b[?1003h\x1b[?1006h╭─\r\n  >_ OpenAI Codex (v0.167.2)\r\nCOPY_NEEDLE",
     ).buffer,
   );
   await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();

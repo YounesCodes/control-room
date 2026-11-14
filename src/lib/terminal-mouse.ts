@@ -1,7 +1,7 @@
 import type { Terminal } from "@xterm/xterm";
 
 const DRAG_THRESHOLD = 4;
-const CODEX_BANNER = /^\s*│\s*>_\s+OpenAI Codex\s+\(v\d/;
+const CODEX_BANNER = /^\s*│?\s*>_\s+OpenAI Codex\s+\(v\d/;
 
 export function enableCodexDragSelection(container: HTMLElement, terminal: Terminal): () => void {
   const screen = container.querySelector(".xterm-screen");
