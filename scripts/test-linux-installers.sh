@@ -50,7 +50,7 @@ appimage=(src-tauri/target/release/bundle/appimage/*_"$version"_amd64.AppImage)
 [[ -f ${deb[0]} && -f ${appimage[0]} ]] || { echo 'Release bundles are missing' >&2; exit 1; }
 cp "${deb[0]}" "$work/candidate.deb"
 if [[ -z $restore ]]; then
-  sudo -n apt-get install -y --reinstall "$work/candidate.deb"
+  sudo -n apt-get install -y --reinstall --allow-downgrades "$work/candidate.deb"
   restore=$work/candidate.deb
 fi
 
@@ -75,10 +75,10 @@ echo '== Installed .deb window, terminal and clipboard smoke test'
 # The smoke test starts its own window manager.
 kill "$wm"
 wait "$wm" 2>/dev/null || true
-sudo -n apt-get install -y --reinstall "$work/candidate.deb"
+sudo -n apt-get install -y --reinstall --allow-downgrades "$work/candidate.deb"
 status=0
 node scripts/test-linux-desktop.mjs || status=$?
-sudo -n apt-get install -y --reinstall "$restore"
+sudo -n apt-get install -y --reinstall --allow-downgrades "$restore"
 [[ $(binary_hash /usr/bin/control-room) == $(packaged_hash "$restore") ]]
 [[ $status == 0 ]] || exit "$status"
 echo 'Linux installer checks passed'
