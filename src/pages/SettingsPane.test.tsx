@@ -147,7 +147,7 @@ describe("Settings actions", () => {
     expect(screen.getByRole("status").textContent).toContain("No settings match");
     expect(screen.queryByRole("group")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Logs & History" }));
-    expect(screen.getByRole("group", { name: "Logs and History" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Logs & History" })).toBeTruthy();
     expect((search as HTMLInputElement).value).toBe("");
     fireEvent.change(screen.getByRole("combobox", { name: "Settings category" }), {
       target: { value: "terminal" },
@@ -215,9 +215,12 @@ describe("Settings actions", () => {
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
-    fireEvent.change(screen.getByLabelText("Refresh host metrics"), {
-      target: { value: "10" },
-    });
+    // The slider steps over 2, 5, 10, and 30 seconds; the third stop is 10.
+    // The label names the unit, so the stops can show bare numbers.
+    const refresh = screen.getByRole("slider", { name: "Host metrics refresh interval (seconds)" });
+    expect(refresh.getAttribute("aria-valuetext")).toBe("Every 5 seconds");
+    fireEvent.change(refresh, { target: { value: "2" } });
+    expect(refresh.getAttribute("aria-valuetext")).toBe("Every 10 seconds");
     await userEvent.click(saveButton());
     expect(api.saveSettings).toHaveBeenCalledWith({
       ...settings,
@@ -619,5 +622,31 @@ describe("Settings actions", () => {
     expect(api.saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ hiddenLocalShells: [] }),
     );
+  });
+});
+
+describe("Settings SSH environment", () => {
+  afterEach(cleanup);
+
+  function agentRow(sshAgentAvailable: boolean) {
+    renderPane({ environment: { ...environment, sshAgentAvailable } });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    return screen.getByText("SSH agent").parentElement!;
+  }
+
+  it("leads with the agent state and offers a check only when no identity is loaded", () => {
+    expect(agentRow(true).querySelector("dd")?.textContent).toBe("Identity loaded");
+    cleanup();
+    const missing = agentRow(false);
+    expect(missing.textContent).toContain("No identity loaded");
+    expect(missing.querySelector("code")?.textContent).toBe("ssh-add -l");
+  });
+
+  it("marks a missing SSH executable instead of printing it as a path", () => {
+    renderPane({ environment: { ...environment, sshPath: null } });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    const row = screen.getByText("SSH executable").parentElement!;
+    expect(row.querySelector("dd")?.textContent).toBe("Not detected");
+    expect(row.querySelector(".technical")).toBeNull();
   });
 });

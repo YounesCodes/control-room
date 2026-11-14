@@ -118,6 +118,7 @@ describe("terminalRightClickAction", () => {
     button: 2,
     hasSelection: false,
     mouseTrackingMode: "none",
+    isCodex: false,
     ...overrides,
   });
 
@@ -127,6 +128,12 @@ describe("terminalRightClickAction", () => {
 
   it("pastes at an ordinary prompt", () => {
     expect(terminalRightClickAction(click())).toBe("paste");
+  });
+
+  it("pastes in Codex with no selection and copies when there is one", () => {
+    const codex = { isCodex: true, mouseTrackingMode: "any" };
+    expect(terminalRightClickAction(click(codex))).toBe("paste");
+    expect(terminalRightClickAction(click({ ...codex, hasSelection: true }))).toBe("copy");
   });
 
   it("hands the click to a program that reads the mouse", () => {

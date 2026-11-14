@@ -30,35 +30,19 @@ export function isControlRoomShortcut(
   return key === "t" || key === "w" || key === "r" || key === "p" || key === "f";
 }
 
-/// Who owns a right click inside the terminal.
-///
-/// `terminal` means the program running in the pty asked for the mouse and
-/// should receive the click. `ignore` means the gesture was not a pointer right
-/// click at all, which is how the context-menu key reaches this: it raises the
-/// same event with no button behind it, and taking that over would remove a
-/// keyboard route to the menu for no reason.
-export type TerminalRightClickAction = "copy" | "paste" | "terminal" | "ignore";
+type TerminalRightClickAction = "copy" | "paste" | "terminal" | "ignore";
 
 type TerminalRightClick = {
   button: number;
   hasSelection: boolean;
   mouseTrackingMode: string;
+  isCodex: boolean;
 };
 
-/// Decides what a right click means, and nothing else.
-///
-/// This answers only the clipboard question. Whether the webview's own menu is
-/// suppressed is a separate decision made at the event, because tying the two
-/// together is what let the menu appear whenever Control Room declined the
-/// gesture.
-///
-/// A selection wins over everything: it is the one case where the user has
-/// already said which text they mean, and a program that reads the mouse has
-/// not asked for that selection to be thrown away.
 export function terminalRightClickAction(click: TerminalRightClick): TerminalRightClickAction {
   if (click.button !== 2) return "ignore";
   if (click.hasSelection) return "copy";
-  if (click.mouseTrackingMode === "none") return "paste";
+  if (click.isCodex || click.mouseTrackingMode === "none") return "paste";
   return "terminal";
 }
 

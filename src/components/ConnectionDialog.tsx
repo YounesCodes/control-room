@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileKey, Stethoscope } from "lucide-react";
+import { Check, CircleCheck, FileKey, FolderCog, Minus, Stethoscope } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { tagBadgeStyle } from "../lib/connection-tag-color";
 import { MAX_TAGS_PER_CONNECTION, validateConnectionDraft } from "../lib/connection-validation";
@@ -43,6 +43,7 @@ export function ConnectionDialog({
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<HostCapabilities | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   function input(): SavedConnectionInput {
     return {
@@ -85,6 +86,7 @@ export function ConnectionDialog({
     event.preventDefault();
     setSaving(true);
     setError(null);
+    setTestError(null);
     const draft = input();
     const validationError = validateConnectionDraft(draft);
     if (validationError) {
@@ -113,13 +115,12 @@ export function ConnectionDialog({
     }
     setTesting(true);
     setError(null);
+    setTestError(null);
     setTestResult(null);
     try {
       setTestResult(await api.testConnection(draft));
     } catch (caught) {
-      setError(
-        `Structured access failed: ${errorMessage(caught)}. An interactive terminal may still work with a password.`,
-      );
+      setTestError(errorMessage(caught));
     } finally {
       setTesting(false);
     }
@@ -129,13 +130,13 @@ export function ConnectionDialog({
 
   return (
     <Modal
-      title={connection ? "Edit Saved Connection" : "Add Saved Connection"}
+      title={connection ? "Edit connection" : "Add connection"}
       onClose={onClose}
       className="connection-dialog"
     >
       <form className="form-stack connection-form" onSubmit={submit} noValidate>
         <label>
-          <span>Display name (required)</span>
+          <span>Display name</span>
           <input
             autoFocus
             aria-label="Display name"
@@ -147,7 +148,7 @@ export function ConnectionDialog({
           />
         </label>
         <label>
-          <span>SSH destination (required)</span>
+          <span>SSH destination</span>
           <input
             aria-label="SSH destination"
             value={destination}
@@ -159,33 +160,31 @@ export function ConnectionDialog({
           />
           <small>Uses your OpenSSH configuration.</small>
         </label>
-        <div className="form-row">
-          <label>
-            <span>Username (required)</span>
-            <input
-              aria-label="Username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="e.g. root"
-              maxLength={64}
-              required
-              spellCheck={false}
-            />
-          </label>
-          <label className="port-field">
-            <span>Port override</span>
-            <input
-              value={port}
-              onChange={(event) => setPort(event.target.value)}
-              type="number"
-              min="1"
-              max="65535"
-              placeholder="SSH default"
-            />
-          </label>
-        </div>
+        <label>
+          <span>Username</span>
+          <input
+            aria-label="Username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="e.g. root"
+            maxLength={64}
+            required
+            spellCheck={false}
+          />
+        </label>
+        <label>
+          <span>Port</span>
+          <input
+            value={port}
+            onChange={(event) => setPort(event.target.value)}
+            type="number"
+            min="1"
+            max="65535"
+            placeholder="SSH default"
+          />
+        </label>
         <label className="connection-key-field">
-          <span>Existing private key override</span>
+          <span>Private key</span>
           <div className="input-action">
             <input
               value={identityFile}
@@ -197,9 +196,6 @@ export function ConnectionDialog({
               <FileKey size={15} /> Browse
             </button>
           </div>
-          <small>
-            The key stays in its existing location and is never copied into Control Room.
-          </small>
         </label>
         <div className="connection-organization-fields">
           <label>
@@ -235,7 +231,14 @@ export function ConnectionDialog({
                 ))}
               </div>
             ) : (
-              <small>Create tags from Manage groups and tags, then assign them here.</small>
+              <small>
+                Create tags from{" "}
+                <span className="control-reference">
+                  <FolderCog size={13} aria-hidden="true" />
+                  Manage groups and tags
+                </span>
+                , then assign them here.
+              </small>
             )}
             {!!knownTags.length && (
               <small>
@@ -260,18 +263,38 @@ export function ConnectionDialog({
           {capabilityNote && <small>{capabilityNote}</small>}
         </div>
         {testResult && (
-          <p className="inline-message" role="status">
-            Noninteractive SSH works. systemd:{" "}
-            {testResult.systemdAvailable ? "available" : "not detected"}; journald:{" "}
-            {testResult.journaldAvailable ? "available" : "not detected"}; Docker:{" "}
-            {testResult.dockerAvailable ? "available" : "not detected"}; sudo:{" "}
-            {testResult.passwordlessSudo ? "passwordless" : "password required"}.
-          </p>
+          <div className="connection-test-result" role="status" ref={revealTestOutcome}>
+            <CircleCheck className="connection-test-icon" size={14} aria-hidden="true" />
+            <div className="connection-test-body">
+              <p className="connection-test-title">Noninteractive SSH works</p>
+              <ul className="connection-test-capabilities">
+                {testCapabilities(testResult).map(({ name, state, available }) => (
+                  <li key={name} data-available={available}>
+                    {available ? (
+                      <Check size={12} aria-hidden="true" />
+                    ) : (
+                      <Minus size={12} aria-hidden="true" />
+                    )}
+                    <span>{name}</span> <span>{state}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {testError && (
+          <div className="inline-error connection-test-error" role="alert" ref={revealTestOutcome}>
+            <span>
+              <strong>Structured access failed</strong>
+              <span>{testError}</span>
+              <span>An interactive terminal may still work with a password.</span>
+            </span>
+          </div>
         )}
         {error && <p className="inline-error">{error}</p>}
         <footer className="modal-actions">
           <button
-            className="secondary-button"
+            className="secondary-button connection-test-button"
             type="button"
             onClick={testStructuredAccess}
             disabled={saving || testing}
@@ -288,4 +311,34 @@ export function ConnectionDialog({
       </form>
     </Modal>
   );
+}
+
+/// What the test found, one entry per Structured Operations dependency. A
+/// missing one is neutral: the host still works, that screen has nothing to read.
+function testCapabilities(result: HostCapabilities) {
+  const detected = (available: boolean) => (available ? "available" : "not detected");
+  return [
+    {
+      name: "systemd",
+      available: result.systemdAvailable,
+      state: detected(result.systemdAvailable),
+    },
+    {
+      name: "journald",
+      available: result.journaldAvailable,
+      state: detected(result.journaldAvailable),
+    },
+    { name: "Docker", available: result.dockerAvailable, state: detected(result.dockerAvailable) },
+    {
+      name: "sudo",
+      available: result.passwordlessSudo,
+      state: result.passwordlessSudo ? "passwordless" : "asks for a password",
+    },
+  ];
+}
+
+/// Short windows scroll the form, which leaves the test outcome below the fold
+/// right after the button at the bottom is pressed.
+function revealTestOutcome(element: HTMLElement | null) {
+  element?.scrollIntoView?.({ block: "nearest" });
 }

@@ -192,7 +192,6 @@ export function RemoteShellDialog({
         )}
       </div>
       <footer className="remote-shell-actions">
-        <span>{selectedShell && !loading ? selectedShell.label : "SSH session"}</span>
         <button className="secondary-button" type="button" onClick={onClose}>
           Cancel
         </button>

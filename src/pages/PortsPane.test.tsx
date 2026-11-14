@@ -203,6 +203,17 @@ describe("PortsPane", () => {
     expect(screen.getByText("No ports match the current filters")).toBeTruthy();
     expect(element.querySelector(".panel-state .spinner")).toBeNull();
   });
+
+  it("says ports could not be read, not that filters hid them, when nothing loaded", () => {
+    renderPane(
+      null,
+      { ...sockets, items: [], error: "Connection timed out" },
+      { ...containers, items: [] },
+    );
+    const graph = screen.getByRole("region", { name: "Ports graph" });
+    expect(within(graph).getByText("Listening ports unavailable")).toBeTruthy();
+    expect(screen.queryByText("No ports match the current filters")).toBeNull();
+  });
   it("shows a spinner before the first listener read has returned", () => {
     const { container: element } = renderPane(
       null,
@@ -365,6 +376,30 @@ describe("PortsPane", () => {
     expect(onViewLogs).not.toHaveBeenCalled();
   });
 
+  it("retries a busy firewall read without asking for sudo", async () => {
+    const user = userEvent.setup();
+    const inspectFirewall = vi.mocked(api.inspectFirewall);
+    inspectFirewall.mockClear();
+    inspectFirewall.mockRejectedValueOnce("Remote operation queue was busy for 4 seconds");
+    inspectFirewall.mockResolvedValueOnce({
+      backend: "firewalld",
+      available: true,
+      active: true,
+      defaultIncoming: null,
+      rules: [],
+      collectedAt: "",
+    });
+    renderPane();
+
+    const retry = await screen.findByRole("button", { name: "Retry firewall" });
+    expect(screen.queryByRole("button", { name: "Retry with sudo" })).toBeNull();
+    await user.click(retry);
+    await waitFor(() => expect(screen.queryByText(/queue was busy/)).toBeNull());
+    expect(inspectFirewall).toHaveBeenLastCalledWith(connection.id, null);
+    expect(inspectFirewall).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("offers a one-shot sudo retry after firewalld denies authorization", async () => {
     const user = userEvent.setup();
     const inspectFirewall = vi.mocked(api.inspectFirewall);
@@ -421,9 +456,10 @@ describe("PortsPane", () => {
     await screen.findByRole("button", { name: /12 established/ });
     vi.mocked(api.inspectConnections).mockRejectedValueOnce("SSH disconnected");
     await user.click(screen.getByRole("button", { name: "Refresh ports" }));
-    expect(
-      await screen.findByText(/Showing saved connections. Refresh failed: SSH disconnected/),
-    ).toBeTruthy();
+    const warnings = await screen.findByRole("region", { name: "Ports reading warnings" });
+    const row = within(warnings).getByText("Connections").closest("li")!;
+    expect(within(row).getByText("Saved connections shown")).toBeTruthy();
+    expect(within(row).getByText("SSH disconnected")).toBeTruthy();
     expect(screen.getByRole("button", { name: /12 established/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry connections" })).toBeTruthy();
   });
@@ -436,10 +472,11 @@ describe("PortsPane", () => {
       .setup()
       .click(screen.getByRole("button", { name: "Show established connections" }));
     await screen.findByRole("button", { name: /12 established/ });
-    expect(
-      screen.getByText(/Listening ports unavailable: Listener permission denied/),
-    ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry ports" })).toBeTruthy();
+    const row = screen.getByText("Listening ports").closest("li")!;
+    expect(within(row).getByText("Unavailable")).toBeTruthy();
+    expect(within(row).getByText("Listener permission denied")).toBeTruthy();
+    // Every action reads "Retry"; its accessible name says which read it repeats.
+    expect(within(row).getByRole("button", { name: "Retry ports" }).textContent).toBe("Retry");
   });
 
   it("reads Docker independently when the initial listener request fails", async () => {

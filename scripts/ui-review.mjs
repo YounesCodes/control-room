@@ -213,7 +213,15 @@ ${JSON.stringify(registry, null, 2)}`);
             ? page.locator(action.selector)
             : page.getByRole(action.role, { name: action.name, exact: true });
           if (action.last) locator = locator.last();
+          // Optional steps cover layout-only controls, such as the compact
+          // navigation toggle that other viewports never render.
+          if (action.optional && !(await locator.isVisible())) continue;
           if (action.wait) await locator.first().waitFor();
+          // Hover steps reveal controls that only appear under the pointer,
+          // such as a Saved Connection's actions button.
+          else if (action.hover) await locator.hover();
+          else if (action.scroll) await locator.scrollIntoViewIfNeeded();
+          else if (action.option) await locator.selectOption(action.option);
           else if (action.fill !== undefined) await locator.fill(action.fill);
           else await locator.click();
         }

@@ -35,6 +35,9 @@ const xterm = vi.hoisted(() => ({
   pastes: [] as string[],
   searchNext: vi.fn(),
   searchPrevious: vi.fn(),
+  // How many matches the next search reports, through onDidChangeResults.
+  searchCount: 0,
+  searchResults: null as ((event: { resultIndex: number; resultCount: number }) => void) | null,
   terminalOptions: null as Record<string, unknown> | null,
   // Drives the right-click policy: what is selected, and whether the program in
   // the pty asked for the mouse.
@@ -68,6 +71,8 @@ const xterm = vi.hoisted(() => ({
     this.pastes = [];
     this.searchNext.mockReset();
     this.searchPrevious.mockReset();
+    this.searchCount = 0;
+    this.searchResults = null;
     this.terminalOptions = null;
     this.selection = "";
     this.mouseTrackingMode = "none";
@@ -108,16 +113,19 @@ vi.mock("@xterm/addon-fit", () => ({
 
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class {
-    onDidChangeResults() {
+    onDidChangeResults(listener: (event: { resultIndex: number; resultCount: number }) => void) {
+      xterm.searchResults = listener;
       return { dispose: () => undefined };
     }
     findNext(term: string, options: unknown) {
       xterm.searchNext(term, options);
-      return false;
+      xterm.searchResults?.({ resultIndex: 0, resultCount: xterm.searchCount });
+      return xterm.searchCount > 0;
     }
     findPrevious(term: string, options: unknown) {
       xterm.searchPrevious(term, options);
-      return false;
+      xterm.searchResults?.({ resultIndex: 0, resultCount: xterm.searchCount });
+      return xterm.searchCount > 0;
     }
     clearDecorations() {}
     dispose() {}
@@ -803,6 +811,24 @@ describe("TerminalPane sessions", () => {
       expect(menu.defaultPrevented).toBe(true);
     });
 
+    it("says a refused paste was denied and lets the notice be dismissed", async () => {
+      clipboard.readText.mockRejectedValue(
+        new DOMException(
+          "Failed to execute 'readText' on 'Clipboard': Read permission denied.",
+          "NotAllowedError",
+        ),
+      );
+      const container = await openTerminal();
+
+      rightClick(container);
+
+      const notice = await screen.findByRole("alert");
+      expect(notice.textContent).toBe("Could not paste: clipboard access was denied.");
+      expect(notice.dataset.tone).toBe("error");
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss terminal notice" }));
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
     it("leaves the click to a program that reads the mouse", async () => {
       xterm.mouseTrackingMode = "any";
       const container = await openTerminal();
@@ -1076,6 +1102,29 @@ describe("TerminalPane sessions", () => {
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
     expect(xterm.pastes).toEqual(["echo ready"]);
     expect(document.querySelector(".terminal-toolbar")).toBeNull();
+  });
+
+  it("steps back with Shift+Enter and disables stepping when nothing matches", async () => {
+    renderPane(
+      { ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" },
+      vi.fn(),
+      { findRequest: 1 },
+    );
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+    const input = screen.getByRole("textbox", { name: "Find in terminal output" });
+    const previous = () => screen.getByRole("button", { name: "Previous match" });
+
+    fireEvent.change(input, { target: { value: "panic" } });
+    await vi.waitFor(() => expect(screen.getByText("No matches")).toBeTruthy());
+    expect(previous()).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Next match" })).toHaveProperty("disabled", true);
+
+    xterm.searchCount = 3;
+    fireEvent.change(input, { target: { value: "worker" } });
+    await vi.waitFor(() => expect(screen.getByText("1 of 3")).toBeTruthy());
+    expect(previous()).toHaveProperty("disabled", false);
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(xterm.searchPrevious).toHaveBeenLastCalledWith("worker", expect.anything());
   });
 
   it("keeps search results legible without covering terminal colors", async () => {

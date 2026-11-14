@@ -26,6 +26,44 @@ it("restores a Systemd workspace in the real App with synthetic data", async () 
   });
 });
 
+it("opens dialogs over existing organization and live host readings", async () => {
+  const native = await fixture("metrics", "dialogs");
+  expect(await native.invoke("get_workspace_state")).toMatchObject({
+    workspaces: [expect.objectContaining({ view: "terminal" })],
+  });
+  expect(await native.invoke("list_connection_groups")).toHaveLength(2);
+  expect(await native.invoke("list_connection_tags")).toHaveLength(2);
+  expect(await native.invoke("get_settings_contract")).toMatchObject({
+    current: { hostMetricsEnabled: true },
+  });
+  expect(await native.invoke("sample_header_metrics")).toMatchObject({ gpuPercent: null });
+  const groups = await fixture("groups", "dialogs");
+  expect(await groups.invoke("get_settings_contract")).not.toMatchObject({
+    current: { hostMetricsEnabled: true },
+  });
+  expect(await (await fixture("populated")).invoke("list_connection_groups")).toEqual([]);
+});
+
+it("fails every Ports read the way an unreachable host does", async () => {
+  const native = await fixture("warnings", "ports");
+  expect(await native.invoke("get_workspace_state")).toMatchObject({
+    workspaces: [expect.objectContaining({ view: "ports" })],
+  });
+  await expect(native.invoke("list_ports")).rejects.toThrow("Connection timed out");
+  await expect(native.invoke("list_containers")).rejects.toThrow("Connection timed out");
+  await expect(native.invoke("inspect_connections")).rejects.toThrow("queue was busy");
+  await expect(native.invoke("inspect_firewall")).rejects.toThrow("queue was busy");
+  await expect(
+    (await fixture("connection-test-error", "dialogs")).invoke("test_connection"),
+  ).rejects.toThrow("Permission denied");
+  expect(
+    await (await fixture("connection-test", "dialogs")).invoke("test_connection"),
+  ).toMatchObject({ systemdAvailable: true, dockerAvailable: false, passwordlessSudo: false });
+  expect(await (await fixture("groups-no-tags", "dialogs")).invoke("list_connection_tags")).toEqual(
+    [],
+  );
+});
+
 it("keeps empty, failed, and stale inventories distinct", async () => {
   expect(await (await fixture("empty")).invoke("list_services")).toEqual([]);
   await expect((await fixture("error")).invoke("list_services")).rejects.toThrow(
@@ -65,4 +103,19 @@ it("emits synthetic session state/output so App settles without a native session
   });
   expect(output.onmessage).toHaveBeenCalledOnce();
   stop();
+});
+
+it("shows Docker, Logs, and History with ordinary readings on Pages", async () => {
+  const docker = await fixture("docker", "pages");
+  expect(await docker.invoke("get_workspace_state")).toMatchObject({
+    workspaces: [expect.objectContaining({ view: "docker" })],
+  });
+  expect(await docker.invoke("list_containers")).toHaveLength(3);
+  const history = await fixture("history", "pages");
+  expect(await history.invoke("list_connections")).toMatchObject([{ historyEnabled: true }]);
+  expect(await history.invoke("get_history")).toHaveLength(5);
+  // Other scenarios still fail Docker the way an unreachable host does.
+  await expect((await fixture("warnings", "ports")).invoke("list_containers")).rejects.toThrow(
+    "Connection timed out",
+  );
 });

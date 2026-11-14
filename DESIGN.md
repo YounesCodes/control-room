@@ -75,7 +75,8 @@ keyboard-operable dividers. Saved sizes stay within limits that leave the
 neighboring pane usable. A small window may constrain a displayed size without
 overwriting the saved one. Double-click or Enter resets a divider, and Reset
 layout restores every panel size. Stack list/detail views when two columns no
-longer fit.
+longer fit. By default the capability navigation takes only the height its
+items need, and the host list takes the rest.
 
 Scrollbar thumbs fade in only while their own section is hovered, terminal
 panes included. Keep the gutter reserved so a thumb never shifts content.
@@ -307,6 +308,8 @@ value in a tooltip or inspector.
 Use the existing spacing, radius, and motion tokens. Prefer layout gaps over
 one-off margins. Search fields, form inputs, and selectors share one compact
 height, a quiet border, and a single focus border without an extra glow.
+Buttons inside a search field share one small size. Selected text uses a
+neutral gray highlight, never the system blue.
 
 Transitions clarify a state change without delaying work. Compact controls dip
 slightly when pressed. Dense rows, tabs, and list items deepen their fill
@@ -329,13 +332,37 @@ disabled states. Use one primary action for the main decision, secondary
 actions for alternatives, danger styling for confirmed destructive work, and
 labelled icon buttons for compact controls. Filled accent is reserved for the
 main decision inside a dialog or flow, so persistent actions such as Add
-connection stay quiet.
+connection stay quiet. An unavailable primary action recedes to an outline
+with faint text, so it never outweighs the enabled buttons beside it. Icon-only
+delete buttons in lists stay neutral until hovered or focused, then turn red.
+
+A setting with a few ordered numeric choices uses the stepped slider: a native
+range input with a bare-number label under each stop and the unit named once
+in a muted suffix on the setting's label. The emphasized label is the visible
+value, so no popup repeats it.
+
+Tooltips name icon-only controls, explain shape-only status marks, show values
+that can be cut off, and say what a button does when its text does not. Do not
+add one that repeats the visible label or sits on a universally understood
+control such as a close or clear cross. A trigger's tooltip stays hidden while
+the menu or panel it opened is showing.
 
 When cached data is visible, mark it stale. Give errors a recovery action when
-one exists and keep the specific cause when it helps the user recover.
+one exists and keep the specific cause when it helps the user recover. Inline
+errors use an alert icon and the message on a faint red tint, without a
+bordered box. Warnings use the same shape in amber, and a successful check,
+such as Test structured access, uses it in green. Reading warnings list one
+quiet row per failed read with its source, state, reason, and a Retry whose
+accessible name says which read it repeats. Offer sudo only for a permission
+error.
 
 Use app dialogs for confirmation and editing. Give them an accessible title,
-move keyboard focus in, keep it there, and return it on close.
+move keyboard focus in, keep it there, and return it on close. Write titles in
+sentence case, naming the action the way the button that opened it does. Let
+the title, placeholders, and defaults explain a form instead of an intro
+paragraph or required markers, and lay its fields on one grid. Size a dialog
+to its content. When a hint points to a control elsewhere, show that control's
+icon beside its exact name.
 
 ### Sessions and terminal work
 
@@ -361,8 +388,14 @@ Automatic tab titles use only shell-reported metadata, reduced to a bare
 executable name. Manual names win. Titles stay in memory and never change saved
 workspace names.
 
+In Codex CLI, a plain left drag selects terminal text. Left clicks and scrolling
+still go to Codex. Right-click copies selected text or pastes when there is no
+selection. Other mouse-tracking programs keep their own drag gestures.
+
 Terminal search opens as a compact overlay that does not reduce terminal
-height. Keep matches distinguishable without washing out ANSI colors, and make
+height. It is the shared search field, with its match count, Previous, Next,
+and Close inside it. Terminal notices are inline errors or warnings in a strip
+above the output, with a dismiss cross when no recovery action applies. Keep matches distinguishable without washing out ANSI colors, and make
 the active match the most prominent.
 
 Keep the command palette searchable and keyboard-operable, and make shortcuts
@@ -395,6 +428,8 @@ numbers, so changing digits never push a label or neighbor. Fit whole readings
 into the available width, CPU and RAM first, and keep every selected reading in
 the status dropdown. One status button opens reading details. It uses green for
 Live, amber for Stale, and red for Unavailable, each with text and an icon.
+Reading details put Refresh beside Close and caption only what a value cannot
+show, such as used and total memory.
 
 Trends plot measured samples only, on a fixed 0 to 100 range. Never invent
 points for missing readings and never treat an unavailable reading as zero.

@@ -83,12 +83,46 @@ function usePanelDimension(dimension: "width" | "height") {
     observer.observe(element);
     return () => observer.disconnect();
   }, [element, dimension]);
-  return { ref, size };
+  return { element, ref, size };
 }
 
 export function usePanelWidth() {
   const { ref, size } = usePanelDimension("width");
   return { ref, width: size };
+}
+
+/// The height the capabilities section needs to show every item without
+/// scrolling: its padding and borders plus its children's own heights, which
+/// do not depend on the height of the grid row around them.
+function naturalSectionHeight(section: HTMLElement) {
+  const style = getComputedStyle(section);
+  const chrome = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"] as const;
+  let height = chrome.reduce((total, name) => total + (parseFloat(style[name]) || 0), 0);
+  for (const child of section.children) height += child.getBoundingClientRect().height;
+  return Math.ceil(height);
+}
+
+/// Tracks the natural height of the sidebar's capabilities section (the last
+/// child of the sections grid), so the default split fits it exactly.
+function useCapabilitiesHeight(container: HTMLDivElement | null, present: boolean) {
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    const section = present ? container?.lastElementChild : null;
+    if (!(section instanceof HTMLElement)) {
+      setHeight(0);
+      return;
+    }
+    const measure = () => setHeight(naturalSectionHeight(section));
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      const content = section.firstElementChild;
+      return observeLayoutFallback(content instanceof HTMLElement ? content : section, measure);
+    }
+    const observer = new ResizeObserver(measure);
+    for (const child of section.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [container, present]);
+  return height;
 }
 
 export function SidebarSections({
@@ -101,14 +135,18 @@ export function SidebarSections({
   layout: ContextType<typeof PanelLayoutContext>;
 }) {
   const { sizes, setSize } = layout;
-  const { ref, size: height } = usePanelDimension("height");
+  const { element, ref, size: height } = usePanelDimension("height");
+  const capabilitiesHeight = useCapabilitiesHeight(element, !!capabilities);
   const key = "sidebar:hosts";
   const max = Math.max(
     0,
     Math.min(PANEL_LIMITS.sidebarHosts.max, height - 6 - PANEL_LIMITS.sidebarHosts.min),
   );
   const min = Math.min(PANEL_LIMITS.sidebarHosts.min, max);
-  const size = clampPanelSize(sizes[key] ?? height * 0.45, min, max);
+  // By default the capabilities take only the height their items need, so the
+  // host list gets the rest and neither shows empty space or a scrollbar.
+  const fitted = capabilitiesHeight ? height - 6 - capabilitiesHeight : height * 0.45;
+  const size = clampPanelSize(sizes[key] ?? fitted, min, max);
   return (
     <div
       ref={ref}

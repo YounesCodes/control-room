@@ -2,7 +2,7 @@ import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
-  Clipboard,
+  Copy,
   Eraser,
   Info,
   MoreHorizontal,
@@ -143,7 +143,7 @@ function HistoryEntryRow({
             {copied ? (
               <Check size={15} aria-hidden="true" />
             ) : (
-              <Clipboard size={15} aria-hidden="true" />
+              <Copy size={15} aria-hidden="true" />
             )}
           </button>
           <button
@@ -551,11 +551,17 @@ export function HistoryPane({
   return (
     <section className="feature-page history-page">
       <header className="page-heading compact-heading">
-        <div className="history-heading-copy">
+        <div className="page-heading-title">
           <h2>Command History</h2>
           {capture && (
-            <p className="history-capture" data-state={capture} aria-live="polite">
-              <span className="history-capture-dot" aria-hidden="true" />
+            <p
+              className="page-status"
+              data-state={
+                capture === "recording" ? "active" : capture === "paused" ? "paused" : capture
+              }
+              aria-live="polite"
+            >
+              <span className="page-status-dot" aria-hidden="true" />
               {CAPTURE_LABELS[capture]}
             </p>
           )}
@@ -589,7 +595,6 @@ export function HistoryPane({
               type="button"
               onClick={toggleMoreMenu}
               aria-label="More actions"
-              title="More actions"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -738,11 +743,10 @@ export function HistoryPane({
           />
           {search && (
             <button
-              className="icon-button search-clear"
+              className="icon-button"
               type="button"
               onClick={() => setSearch("")}
               aria-label="Clear search"
-              title="Clear search"
             >
               <X size={14} />
             </button>

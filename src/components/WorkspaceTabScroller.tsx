@@ -567,7 +567,6 @@ export function WorkspaceTabScroller({
           disabled={visibleStart === 0}
           onClick={() => move(-1)}
           aria-label="Scroll terminals left"
-          title="Previous terminals"
         >
           <ChevronLeft size={15} />
         </button>
@@ -637,7 +636,6 @@ export function WorkspaceTabScroller({
           disabled={visibleStart === lastStart}
           onClick={() => move(1)}
           aria-label="Scroll terminals right"
-          title="Next terminals"
         >
           <ChevronRight size={15} />
         </button>

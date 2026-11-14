@@ -711,22 +711,17 @@ export function LogsPane({
             ? "Paused"
             : "Streaming"
           : "Stopped";
-  const statusTone =
-    streamStatus === "running"
-      ? paused
-        ? "status-paused"
-        : "status-connected"
-      : streamStatus === "stopped"
-        ? "status-disconnected"
-        : "status-connecting";
 
   return (
     <section className="feature-page logs-page">
       <header className="page-heading compact-heading">
-        <div>
+        <div className="page-heading-title">
           <h2>Logs</h2>
-          <p className="log-status">
-            <span className={`status-dot ${statusTone}`} aria-hidden="true" />
+          <p
+            className="page-status"
+            data-state={streamStatus === "running" ? (paused ? "paused" : "active") : streamStatus}
+          >
+            <span className="page-status-dot" aria-hidden="true" />
             <span role="status" aria-live="polite">
               {statusLabel}
             </span>
