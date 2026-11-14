@@ -41,6 +41,10 @@ and a main content area. Keep the rail useful without letting it dominate the
 active work. Bound dense lists and detail pages so wide windows do not stretch
 their contents across the screen.
 
+Restored windows have rounded corners. Windows 11 draws them natively; Linux
+clips the page to the same radius while a compositor runs, and keeps square
+corners when maximized or fullscreen.
+
 The rail holds Saved Connections, search, grouping, and remote feature
 navigation. Order capabilities by expected frequency of use: Terminal, Docker,
 Systemd, Logs, Ports, then History. Local Workspaces are terminal-only, so hide
