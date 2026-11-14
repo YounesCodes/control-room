@@ -214,6 +214,9 @@ try {
   // This directory was absent before the run and contains only this fixture's data.
   assert.equal(readFileSync(join(dataRoot, ".lifecycle-fixture"), "utf8"), directory);
   rmSync(dataRoot, { recursive: true });
+  // Keep the fixture claimable: a later failure must still be cleanable.
+  mkdirSync(dataRoot, { recursive: true });
+  writeFileSync(join(dataRoot, ".lifecycle-fixture"), directory);
   install(candidate);
   installed = true;
   await withInstalledApp(application, async (invoke) => {
