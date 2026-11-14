@@ -4896,6 +4896,7 @@ dd {
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   color: var(--text);
+  user-select: text;
 }
 .systemd-code code {
   font: inherit;
@@ -5540,6 +5541,11 @@ dd {
   align-items: baseline;
   border-bottom: 1px solid var(--border-subtle);
   padding: 11px 0;
+}
+
+/* Values stay copyable; labels keep the app-wide non-selectable chrome. */
+.detail-list dd {
+  user-select: text;
 }
 
 /* ==========================================================================
