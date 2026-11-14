@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { basename } from "node:path";
 import { remote } from "webdriverio";
 
 async function freePort() {
@@ -111,11 +112,17 @@ function applicationRunning(application) {
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        "@(Get-Process | Where-Object { $_.Path -eq $env:CONTROL_ROOM_LIFECYCLE_APPLICATION }).Count",
+        // Match by name, as the NSIS installer does. A process that has ended
+        // but is still held by its driver has no readable path, yet NSIS
+        // still counts it as running.
+        "@(Get-Process -Name $env:CONTROL_ROOM_LIFECYCLE_PROCESS -ErrorAction SilentlyContinue).Count",
       ],
       {
         encoding: "utf8",
-        env: { ...process.env, CONTROL_ROOM_LIFECYCLE_APPLICATION: application },
+        env: {
+          ...process.env,
+          CONTROL_ROOM_LIFECYCLE_PROCESS: basename(application).replace(/\.exe$/i, ""),
+        },
         windowsHide: true,
       },
     );
