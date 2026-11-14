@@ -13,6 +13,9 @@ const env = {
   XDG_DATA_HOME: join(home, "data"),
   SHELL: "/bin/bash",
   TAURI_WEBVIEW_AUTOMATION: "true",
+  // WebKit's helper processes outlive the closed window and would still be
+  // writing a shader cache into this home while the cleanup removes it.
+  MESA_SHADER_CACHE_DISABLE: "true",
 };
 const wm = spawn("openbox", [], { env, stdio: "inherit" });
 const driver = spawn("WebKitWebDriver", ["--port=4444"], { env, stdio: "inherit" });
