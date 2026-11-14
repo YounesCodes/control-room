@@ -121,7 +121,15 @@ try {
   // The window manager can map and title the window after the webview is ready.
   let id;
   await waitFor("native window", () => (id = windowId()));
-  xdo("windowactivate", "--sync", id);
+  // Activation can be refused while the window manager is still settling.
+  await waitFor("active native window", () => {
+    try {
+      xdo("windowactivate", id);
+      return xdo("getactivewindow") === id;
+    } catch {
+      return false;
+    }
+  });
   execFileSync("xclip", ["-selection", "clipboard"], {
     input: "printf 'LINUX_%s\n' CLIPBOARD",
     stdio: ["pipe", "ignore", "inherit"],
@@ -221,6 +229,8 @@ try {
     "Installed .deb opened, used the clipboard and split Bash panes, and exercised window controls under X11.",
   );
 } catch (error) {
+  // Report the cause here: a cleanup failure below must not replace it.
+  console.error(error);
   try {
     // Tells an unmapped window apart from a missing or retitled one.
     console.error("Windows named Control Room:", xdo("search", "--name", "Control Room") || "none");
@@ -241,5 +251,6 @@ try {
   if (session) await request("DELETE", "/session/" + session).catch(() => {});
   driver.kill();
   wm.kill();
-  rmSync(home, { recursive: true, force: true });
+  // The app can still be writing its data while it exits.
+  rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }
