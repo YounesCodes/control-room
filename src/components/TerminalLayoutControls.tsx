@@ -518,7 +518,6 @@ function ArrangePopover({
               type="button"
               key={option}
               aria-pressed={direction === option}
-              title="Saved split orientation; compact windows may temporarily rotate it"
               onClick={() => {
                 if (direction !== option) onApply(orientTerminalLayout(layout, split, option));
                 else onClose(true);

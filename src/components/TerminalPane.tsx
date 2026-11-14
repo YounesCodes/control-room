@@ -14,6 +14,7 @@ import {
   isControlRoomShortcut,
   terminalRightClickAction,
 } from "../lib/terminal-flow";
+import { trackCodexMouse } from "../lib/terminal-mouse";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { TerminalTitle } from "../lib/terminal-title";
@@ -26,6 +27,8 @@ export interface TerminalPaneHandle {
   focus: () => void;
   copySelection: () => void;
   pasteClipboard: () => void;
+  /** Opens Find in terminal, or closes it when it is already open. */
+  toggleSearch: () => void;
 }
 
 interface TerminalPaneProps {
@@ -41,6 +44,7 @@ interface TerminalPaneProps {
   onSelectionChange?: (hasSelection: boolean) => void;
   onActivity?: (kind: "output" | "bell") => void;
   onProcessing?: (busy: boolean) => void;
+  onSearchOpenChange?: (open: boolean) => void;
   onTitle?: (title: string | null) => void;
   findRequest?: number;
   onReconnect?: () => void;
@@ -70,6 +74,7 @@ export function TerminalPane({
   onSelectionChange,
   onActivity = () => undefined,
   onProcessing = () => undefined,
+  onSearchOpenChange,
   onTitle = () => undefined,
   findRequest = 0,
   onReconnect,
@@ -114,7 +119,15 @@ export function TerminalPane({
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
-  const [localError, setLocalError] = useState<string | null>(null);
+  // A notice from this pane: a failed action, or a warning about input that
+  // could not be sent yet. Session failures arrive as workspace.reason.
+  const [localNotice, setLocalNotice] = useState<{
+    message: string;
+    tone: "error" | "warning";
+  } | null>(null);
+  const setLocalError = (message: string | null) =>
+    setLocalNotice(message === null ? null : { message, tone: "error" });
+  const setLocalWarning = (message: string) => setLocalNotice({ message, tone: "warning" });
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
@@ -122,29 +135,38 @@ export function TerminalPane({
   const nativeClipboardRef = useRef(nativeClipboard);
   nativeClipboardRef.current = nativeClipboard;
   const copySelection = useCallback(() => {
-    const terminal = terminalRef.current;
-    if (!terminal?.hasSelection()) return;
-    const text = terminal.getSelection();
+    const text = terminalRef.current?.getSelection();
+    if (!text) return;
     const write = nativeClipboardRef.current
       ? api.writeClipboard(text)
       : navigator.clipboard.writeText(text);
-    void write.catch((error) => setLocalError("Copy failed: " + errorMessage(error)));
+    void write.catch((error) => setLocalError(clipboardFailure("copy", error)));
   }, []);
+
   const pasteClipboard = useCallback(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
+    const generation = sessionGenerationRef.current;
+    terminal.focus();
     const read = nativeClipboardRef.current ? api.readClipboard() : navigator.clipboard.readText();
     void read
       .then((text) => {
-        if (text && terminalRef.current === terminal) terminal.paste(text);
+        if (
+          text &&
+          terminalRef.current === terminal &&
+          sessionGenerationRef.current === generation
+        ) {
+          terminal.paste(text);
+        }
       })
-      .catch((error) => setLocalError("Paste failed: " + errorMessage(error)));
+      .catch((error) => setLocalError(clipboardFailure("paste", error)));
   }, []);
 
   useImperativeHandle(ref, () => ({
     focus: () => terminalRef.current?.focus(),
     copySelection,
     pasteClipboard,
+    toggleSearch: () => (searchOpen ? closeSearch() : openSearch()),
   }));
 
   historyPausedRef.current = remote?.historyPaused ?? false;
@@ -189,14 +211,14 @@ export function TerminalPane({
     }
     if (!acceptingInputRef.current) {
       if (workspace.kind === "local") {
-        setLocalError("Restart the shell before sending terminal input.");
+        setLocalWarning("Restart the shell before sending terminal input.");
       } else if (!workspaceReasonRef.current) {
-        setLocalError("Reconnect before sending terminal input.");
+        setLocalWarning("Reconnect before sending terminal input.");
       }
       return;
     }
     if (!pendingInputRef.current.enqueue(bytes)) {
-      setLocalError("Terminal input is paused while the session catches up.");
+      setLocalWarning("Terminal input is paused while the session catches up.");
     }
   };
 
@@ -213,6 +235,7 @@ export function TerminalPane({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
+      macOptionClickForcesSelection: true,
       // Keep shell prompts and directory names at regular weight, including
       // ANSI bold sequences, while retaining the configured ANSI colors.
       fontWeightBold: "normal",
@@ -230,6 +253,7 @@ export function TerminalPane({
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
     terminal.open(container);
+    const codexMouse = trackCodexMouse(container, terminal);
     fit.fit();
     terminalRef.current = terminal;
     fitRef.current = fit;
@@ -256,62 +280,70 @@ export function TerminalPane({
     );
     terminal.attachCustomKeyEventHandler((event) => {
       if (isControlRoomShortcut(event)) return false;
-      if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey) return true;
+      if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
       const key = event.key.toLowerCase();
       if (key === "c" && terminal.hasSelection()) {
+        event.preventDefault();
         copySelection();
         return false;
       }
-      if (key === "v" && nativeClipboardRef.current) {
-        // WebKitGTK does not map Ctrl+Shift+V to a native paste.
+      if (key === "v" && event.shiftKey && nativeClipboardRef.current) {
+        // WebKitGTK does not map Ctrl+Shift+V to a native paste, so this is the
+        // only paste xterm sees and nothing is sent twice.
         event.preventDefault();
         pasteClipboard();
         return false;
       }
-      // WebView2 delivers paste to xterm's textarea on its own.
+      // Elsewhere xterm owns keyboard paste through its textarea's native paste
+      // event. Reading the clipboard here as well would send the same text twice.
+      // Right-click paste still uses `pasteClipboard` because that pointer
+      // gesture never reaches xterm's textarea.
       return true;
     });
 
-    /* A selection is copied rather than reported to the program running in the
-       pty, so the click that copies it cannot also become a right click inside
-       Vim or tmux. Stopping propagation in the capture phase is what keeps it
-       from reaching xterm's own mousedown listener, which sits deeper in the
-       tree. With no selection nothing is intercepted here, which is what leaves
-       a mouse-reporting program its click. */
+    const rightClickAction = (event: MouseEvent) =>
+      terminalRightClickAction({
+        button: event.button,
+        hasSelection: terminal.hasSelection(),
+        mouseTrackingMode: terminal.modes.mouseTrackingMode,
+        isCodex: codexMouse.isCodex(),
+      });
+
+    // Reserve clipboard clicks before xterm can report a button press to the program.
     const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 2 || !terminal.hasSelection()) return;
+      if (event.button !== 2) return;
+      const action = rightClickAction(event);
+      if (action !== "copy" && action !== "paste") return;
       event.preventDefault();
       event.stopPropagation();
     };
     container.addEventListener("mousedown", handleMouseDown, { capture: true });
 
-    /* Suppressing the webview menu is decided here, separately from who owns
-       the clipboard. Every pointer right click inside the terminal prevents it,
-       including the one handed to a mouse-reporting program: leaving the menu
-       to appear whenever Control Room declined the gesture was the original
-       bug. A context-menu key press arrives as the same event with no button
-       behind it, reports "ignore", and is left alone so the keyboard route to
-       the menu survives.
+    const handleMouseMove = (event: MouseEvent) => {
+      // xterm treats hover reports as terminal input, which clears its selection.
+      // Leave button-down moves alone so xterm can finish a drag selection.
+      if (
+        event.buttons === 0 &&
+        terminal.modes.mouseTrackingMode === "any" &&
+        terminal.hasSelection()
+      ) {
+        event.stopPropagation();
+      }
+    };
+    container.addEventListener("mousemove", handleMouseMove, { capture: true });
 
-       By the time this fires, xterm has already seen the mousedown and sent any
-       mouse report the program asked for. Preventing the default here removes
-       the menu without taking the click away from the program. */
+    // Handle pointer right clicks before xterm moves its textarea for the
+    // browser context menu. xterm already reported any app-owned mousedown.
     const handleContextMenu = (event: MouseEvent) => {
-      const action = terminalRightClickAction({
-        button: event.button,
-        hasSelection: terminal.hasSelection(),
-        mouseTrackingMode: terminal.modes.mouseTrackingMode,
-      });
+      const action = rightClickAction(event);
       if (action === "ignore") return;
 
       event.preventDefault();
-      if (action === "copy") {
-        copySelection();
-        return;
-      }
+      event.stopPropagation();
+      if (action === "copy") copySelection();
       if (action === "paste") pasteClipboard();
     };
-    container.addEventListener("contextmenu", handleContextMenu);
+    container.addEventListener("contextmenu", handleContextMenu, { capture: true });
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
       if (!sessionIdRef.current) return false;
@@ -432,8 +464,10 @@ export function TerminalPane({
       listenerDisposed = true;
       unlisten?.();
       observer.disconnect();
+      codexMouse.dispose();
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
-      container.removeEventListener("contextmenu", handleContextMenu);
+      container.removeEventListener("mousemove", handleMouseMove, { capture: true });
+      container.removeEventListener("contextmenu", handleContextMenu, { capture: true });
       window.clearTimeout(resizeTimer);
       window.clearTimeout(bellTimer);
       dataDisposable.dispose();
@@ -454,7 +488,7 @@ export function TerminalPane({
       searchRef.current = null;
       selectionRepaintRef.current = null;
     };
-  }, []);
+  }, [copySelection, pasteClipboard]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -654,10 +688,14 @@ export function TerminalPane({
   }, [settings, visible, active]);
 
   useEffect(() => {
-    if (findRequest <= 0) return;
-    setSearchOpen(true);
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    if (findRequest > 0) openSearch();
   }, [findRequest]);
+
+  const onSearchOpenChangeRef = useRef(onSearchOpenChange);
+  onSearchOpenChangeRef.current = onSearchOpenChange;
+  useEffect(() => {
+    onSearchOpenChangeRef.current?.(searchOpen);
+  }, [searchOpen]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -693,6 +731,11 @@ export function TerminalPane({
     else search.findPrevious(searchTerm, options);
   }
 
+  function openSearch() {
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
+
   function closeSearch() {
     searchRef.current?.clearDecorations();
     setSearchOpen(false);
@@ -706,16 +749,36 @@ export function TerminalPane({
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
       onPointerDown={onActivate}
     >
-      {(localError || workspace.reason) && (
-        <div className="terminal-notice" role="status">
-          <span className="terminal-notice-message">{localError ?? workspace.reason}</span>
+      {(localNotice || workspace.reason) && (
+        <div
+          className="terminal-notice"
+          data-tone={localNotice?.tone ?? "error"}
+          role={localNotice?.tone === "warning" ? "status" : "alert"}
+        >
+          <span className="terminal-notice-message">
+            {localNotice?.message ?? workspace.reason}
+          </span>
           {/* The recovery action rides the notice that names the failure, so
               an ended session is reconnectable where it died. */}
-          {terminalEnded && onReconnect && (
+          {terminalEnded && onReconnect ? (
             <button type="button" className="terminal-notice-action" onClick={onReconnect}>
               <RotateCw size={13} aria-hidden="true" />
               <span>{isRemoteWorkspace(workspace) ? "Reconnect" : "Restart"}</span>
             </button>
+          ) : (
+            localNotice && (
+              <button
+                type="button"
+                className="terminal-notice-dismiss"
+                aria-label="Dismiss terminal notice"
+                onClick={() => {
+                  setLocalNotice(null);
+                  terminalRef.current?.focus();
+                }}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            )
           )}
         </div>
       )}
@@ -723,45 +786,80 @@ export function TerminalPane({
         <div className="terminal-container" ref={containerRef} />
         {searchOpen && (
           <form
-            className="terminal-search"
+            className="search-field terminal-search"
             role="search"
             onSubmit={(event) => {
               event.preventDefault();
               find(true);
             }}
           >
-            <Search size={14} aria-hidden="true" />
+            <Search size={15} aria-hidden="true" />
             <input
               ref={searchInputRef}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") closeSearch();
+                if (event.key === "Enter" && event.shiftKey) {
+                  event.preventDefault();
+                  find(false);
+                }
               }}
               aria-label="Find in terminal output"
               placeholder="Find in terminal"
             />
-            <span className="terminal-search-count" aria-live="polite">
+            <span
+              className="terminal-search-count"
+              data-none={searchTerm && !searchResult.count ? "" : undefined}
+              aria-live="polite"
+            >
               {searchResult.count
                 ? `${searchResult.index + 1} of ${searchResult.count}`
                 : searchTerm
                   ? "No matches"
                   : ""}
             </span>
-            <span className="terminal-search-controls">
-              <button type="button" onClick={() => find(false)} aria-label="Previous match">
-                <ChevronUp size={14} />
-              </button>
-              <button type="button" onClick={() => find(true)} aria-label="Next match">
-                <ChevronDown size={14} />
-              </button>
-              <button type="button" onClick={closeSearch} aria-label="Close terminal search">
-                <X size={14} />
-              </button>
-            </span>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => find(false)}
+              disabled={!searchResult.count}
+              aria-label="Previous match"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => find(true)}
+              disabled={!searchResult.count}
+              aria-label="Next match"
+            >
+              <ChevronDown size={14} />
+            </button>
+            <span className="terminal-search-divider" aria-hidden="true" />
+            <button
+              className="icon-button"
+              type="button"
+              onClick={closeSearch}
+              aria-label="Close terminal search"
+            >
+              <X size={14} />
+            </button>
           </form>
         )}
       </div>
     </section>
   );
+}
+
+/// Clipboard refusals surface as a DOMException naming the API call; say what
+/// the user tried and why it did not happen instead.
+function clipboardFailure(action: "copy" | "paste", error: unknown) {
+  const denied =
+    (error instanceof DOMException && error.name === "NotAllowedError") ||
+    /permission denied/i.test(errorMessage(error));
+  return denied
+    ? `Could not ${action}: clipboard access was denied.`
+    : `Could not ${action}: ${errorMessage(error)}`;
 }

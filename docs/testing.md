@@ -63,11 +63,24 @@ Normal 1440×900, narrow 960×640, and compact 520×480 viewports run by default
 Use `--viewport normal`, `--viewport narrow`, or `--viewport compact` for one size.
 Compact covers the smaller window target from PR #188, even before that change
 lands. Captures show the current branch's layout without scaling or hiding its
-clipping. Settings starts on General & Monitoring. Systemd supports
+clipping. Settings starts on General & Monitoring; `monitoring` turns host
+metrics on, `logs` opens Logs & History where the window shows that
+category, `diagnostics` opens App & Diagnostics at SSH environment,
+`update-failed` fails Check for updates, and `save-failed` fails Save. Terminal
+opens Find in terminal empty in `find`, with matches in `find-matches`, and
+with no match in `find-none`; `notice-error` shows a refused paste and
+`notice-ended` a closed session with Reconnect. Pages shows Docker, Logs, and History with
+ordinary readings in `docker`, `logs`, and `history`. Systemd supports
 `populated`, `empty`, `loading`, `error`,
 `stale`, and `overflow`; populated states open the real unit inspector.
 Scratchpad opens the popover on a remote terminal in `populated` and switches it
-to the global note in `global`. Data is
+to the global note in `global`, and fails a save in `save-error`. Dialogs opens Add connection in `connection`
+and after an empty submit in `connection-error`, Edit connection after Test
+structured access succeeds in `connection-test` and fails in
+`connection-test-error`, groups and tags with existing
+entries in `groups` and without tags in `groups-no-tags`, Rename workspace in
+`rename`, and the host readings panel, with an unreported GPU, in `metrics`.
+Ports `warnings` fails every Ports read as an unreachable host does. Data is
 synthetic and network requests outside the fixture server are blocked. No local
 environment files are loaded. Every scenario renders the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the
@@ -106,8 +119,11 @@ Capture failures fail the step; absent artifacts do not fail uploads.
 
 To add a scenario, register its states and ready selector in
 `src/test/ui-review/scenarios.json`, including focused preparation actions and
-state-specific settled selectors. Actions click by default; `"wait": true` waits for
-the target and `"fill"` types text into it. Configure synthetic native responses in
+state-specific settled selectors. Actions click by default. Mark a preparation click `"optional": true`
+when only some viewports render its target, such as the compact navigation
+toggle. Use `"wait": true` to wait for the target, `"hover": true` to hover instead of click, for controls that only
+appear under the pointer, `"option"` to choose that value in a select, `"fill"` to type that text into a
+field, and `"scroll": true` to bring a target below the fold into view. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
 server aliases Tauri imports to that browser-only module; the product build does
 not. Prefer the real App layout over duplicated shell markup. Keep ready

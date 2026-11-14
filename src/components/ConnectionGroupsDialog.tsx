@@ -157,19 +157,15 @@ export function ConnectionGroupsDialog({
   return (
     <Modal title="Connection groups and tags" onClose={onClose}>
       <div className="connection-groups-dialog">
-        <p className="modal-copy">
-          Groups and tags organize Saved Connections locally. Deleting a group returns its
-          connections to Ungrouped. Deleting a tag removes it from every connection.
-        </p>
         <h3 className="connection-organization-heading">Groups</h3>
         <form className="connection-group-create" onSubmit={create}>
           <label>
-            <span>New group</span>
+            <span className="sr-only">New group</span>
             <input
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
               maxLength={60}
-              placeholder="Homelab"
+              placeholder="e.g. Homelab"
             />
           </label>
           <button className="primary-button" type="submit" disabled={busy || !newName.trim()}>
@@ -210,7 +206,7 @@ export function ConnectionGroupsDialog({
                 </form>
               ) : deleteId === group.id ? (
                 <div className="connection-group-delete-confirm">
-                  <span>Delete {group.name}?</span>
+                  <span>Delete {group.name}? Its connections move to Ungrouped.</span>
                   <button
                     className="danger-button"
                     type="button"
@@ -273,23 +269,20 @@ export function ConnectionGroupsDialog({
               )}
             </div>
           ))}
-          {!groups.length && (
-            <p className="connection-groups-empty">No groups yet. Ungrouped is always available.</p>
-          )}
         </div>
         <h3 className="connection-organization-heading">Tags</h3>
         <form className="connection-tag-create" onSubmit={createTag}>
           <label>
-            <span>New tag</span>
+            <span className="sr-only">New tag</span>
             <input
               value={newTagName}
               onChange={(event) => setNewTagName(event.target.value)}
               maxLength={32}
-              placeholder="critical"
+              placeholder="e.g. critical"
             />
           </label>
-          <label className="connection-tag-color-field">
-            <span>Color</span>
+          <label className="connection-tag-color-field" title="Tag color">
+            <span className="sr-only">Color</span>
             <input
               type="color"
               value={newTagColor}
@@ -385,9 +378,6 @@ export function ConnectionGroupsDialog({
               )}
             </div>
           ))}
-          {!tags.length && (
-            <p className="connection-groups-empty">No tags yet. Add one before assigning it.</p>
-          )}
         </div>
         <footer className="modal-actions">
           <button className="secondary-button" type="button" onClick={onClose}>

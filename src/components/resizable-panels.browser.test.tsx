@@ -354,6 +354,11 @@ describe("resizable connection panels in Chromium", () => {
         .element(page.getByRole("separator", { name: "Resize Connections panel" }))
         .toBeVisible();
       const section = document.querySelector<HTMLElement>(selector)!;
+      if (selector === ".workspace-navigation") {
+        // The default split fits every capability, so shrink it to overflow.
+        await page.getByRole("separator", { name: "Resize Hosts and Capabilities" }).click();
+        await userEvent.keyboard("{End}");
+      }
       await vi.waitFor(() => expect(section.scrollHeight).toBeGreaterThan(section.clientHeight));
       const bounds = section.getBoundingClientRect();
       for (const y of [bounds.top + 5, bounds.top + bounds.height / 2, bounds.bottom - 5]) {
@@ -425,6 +430,38 @@ describe("resizable connection panels in Chromium", () => {
     await divider.click();
     expect(getComputedStyle(divider.element()).outlineStyle).toBe("none");
     expect(getComputedStyle(divider.element(), "::after").width).toBe("2px");
+  });
+
+  it("sizes Capabilities to fit its items by default and keeps that fit on reset", async () => {
+    await page.viewport(960, 900);
+    mount();
+    const divider = page.getByRole("separator", { name: "Resize Hosts and Capabilities" });
+    await expect.element(divider).toBeVisible();
+    const features = document.querySelector<HTMLElement>(".workspace-navigation")!;
+    const items = features.querySelectorAll<HTMLElement>(".feature-nav button");
+    const fits = () => {
+      expect(features.scrollHeight).toBe(features.clientHeight);
+      const last = items[items.length - 1].getBoundingClientRect();
+      const padding = parseFloat(getComputedStyle(features).paddingBottom);
+      expect(
+        Math.abs(features.getBoundingClientRect().bottom - padding - last.bottom),
+      ).toBeLessThan(1);
+    };
+    await vi.waitFor(fits);
+    const fitted = divider.element().getAttribute("aria-valuenow");
+    await divider.click();
+    await userEvent.keyboard("{Home}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", "96");
+    await userEvent.keyboard("{Enter}");
+    await expect.element(divider).toHaveAttribute("aria-valuenow", fitted!);
+    await vi.waitFor(fits);
+    await page.viewport(960, 1000);
+    await vi.waitFor(() =>
+      expect(Number(divider.element().getAttribute("aria-valuenow"))).toBeGreaterThan(
+        Number(fitted),
+      ),
+    );
+    await vi.waitFor(fits);
   });
 
   it("resizes Hosts and Capabilities vertically and scrolls each bounded section", async () => {

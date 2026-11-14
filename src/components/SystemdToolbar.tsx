@@ -167,7 +167,6 @@ export function SystemdToolbar({
           <button
             type="button"
             className="systemd-failures"
-            title="Show failed units"
             onClick={() => {
               onChange({ state: "failed", unitType: "all", search: "" });
               onMode("inventory");
@@ -327,7 +326,6 @@ export function SystemdToolbar({
                     type="button"
                     className="icon-button"
                     aria-label={search ? "Clear search" : "Hide search"}
-                    title={search ? "Clear search" : "Hide search"}
                     onClick={() => {
                       if (search) {
                         onChange(graph ? { dependencySearch: "" } : { search: "" });

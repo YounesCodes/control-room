@@ -325,7 +325,8 @@ describe("DockerPane container inspection", () => {
       />,
     );
     expect(screen.getByRole("button", { name: /gateway-1.*running/ })).toBeTruthy();
-    expect(screen.getByText(/Showing saved results. Refresh failed/)).toBeTruthy();
+    expect(screen.getByText("Saved results shown")).toBeTruthy();
+    expect(screen.getByText("permission denied")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry with sudo" })).toBeTruthy();
     expect(screen.queryByRole("complementary")).toBeNull();
   });
