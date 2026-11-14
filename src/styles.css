@@ -201,8 +201,12 @@ body {
 
 /* Linux draws the window corners Windows 11 draws natively. The window is
    transparent, so the page clips itself, including fixed dialogs and menus. */
+html[data-window-corners="rounded"],
 html[data-window-corners="rounded"] body {
   background: transparent;
+}
+
+html[data-window-corners="rounded"] body {
   clip-path: inset(0 round var(--radius-lg));
 }
 
