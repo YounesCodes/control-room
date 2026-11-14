@@ -1,5 +1,5 @@
 import { Search } from "./MagnifierIcon";
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
@@ -117,6 +117,33 @@ export function TerminalPane({
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
 
+  const copySelection = useCallback(() => {
+    const text = terminalRef.current?.getSelection();
+    if (!text) return;
+    void navigator.clipboard
+      .writeText(text)
+      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+  }, []);
+
+  const pasteClipboard = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const generation = sessionGenerationRef.current;
+    terminal.focus();
+    void navigator.clipboard
+      .readText()
+      .then((text) => {
+        if (
+          text &&
+          terminalRef.current === terminal &&
+          sessionGenerationRef.current === generation
+        ) {
+          terminal.paste(text);
+        }
+      })
+      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
+  }, []);
+
   useImperativeHandle(ref, () => ({
     focus: () => terminalRef.current?.focus(),
     copySelection,
@@ -189,6 +216,7 @@ export function TerminalPane({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
+      macOptionClickForcesSelection: true,
       // Keep shell prompts and directory names at regular weight, including
       // ANSI bold sequences, while retaining the configured ANSI colors.
       fontWeightBold: "normal",
@@ -226,25 +254,16 @@ export function TerminalPane({
     );
 
     const send = (bytes: Uint8Array) => sendInputRef.current(bytes);
-    const pasteClipboard = () => {
-      void navigator.clipboard
-        .readText()
-        .then((text) => {
-          if (text) terminal.paste(text);
-        })
-        .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
-    };
     const dataDisposable = terminal.onData((data) => send(new TextEncoder().encode(data)));
     const binaryDisposable = terminal.onBinary((data) =>
       send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
     );
     terminal.attachCustomKeyEventHandler((event) => {
       if (isControlRoomShortcut(event)) return false;
-      if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey) return true;
+      if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
       if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
-        void navigator.clipboard
-          .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
+        event.preventDefault();
+        copySelection();
         return false;
       }
       // xterm owns keyboard paste through its textarea's native paste event.
@@ -268,6 +287,19 @@ export function TerminalPane({
     };
     container.addEventListener("mousedown", handleMouseDown, { capture: true });
 
+    const handleMouseMove = (event: MouseEvent) => {
+      // xterm treats hover reports as terminal input, which clears its selection.
+      // Leave button-down moves alone so xterm can finish a drag selection.
+      if (
+        event.buttons === 0 &&
+        terminal.modes.mouseTrackingMode === "any" &&
+        terminal.hasSelection()
+      ) {
+        event.stopPropagation();
+      }
+    };
+    container.addEventListener("mousemove", handleMouseMove, { capture: true });
+
     /* Suppressing the webview menu is decided here, separately from who owns
        the clipboard. Every pointer right click inside the terminal prevents it,
        including the one handed to a mouse-reporting program: leaving the menu
@@ -288,15 +320,11 @@ export function TerminalPane({
       if (action === "ignore") return;
 
       event.preventDefault();
-      if (action === "copy") {
-        void navigator.clipboard
-          .writeText(terminal.getSelection())
-          .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
-        return;
-      }
+      event.stopPropagation();
+      if (action === "copy") copySelection();
       if (action === "paste") pasteClipboard();
     };
-    container.addEventListener("contextmenu", handleContextMenu);
+    container.addEventListener("contextmenu", handleContextMenu, { capture: true });
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
       if (!sessionIdRef.current) return false;
@@ -418,7 +446,8 @@ export function TerminalPane({
       unlisten?.();
       observer.disconnect();
       container.removeEventListener("mousedown", handleMouseDown, { capture: true });
-      container.removeEventListener("contextmenu", handleContextMenu);
+      container.removeEventListener("mousemove", handleMouseMove, { capture: true });
+      container.removeEventListener("contextmenu", handleContextMenu, { capture: true });
       window.clearTimeout(resizeTimer);
       window.clearTimeout(bellTimer);
       dataDisposable.dispose();
@@ -439,7 +468,7 @@ export function TerminalPane({
       searchRef.current = null;
       selectionRepaintRef.current = null;
     };
-  }, []);
+  }, [copySelection, pasteClipboard]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -683,25 +712,6 @@ export function TerminalPane({
     setSearchOpen(false);
     setSearchResult({ index: -1, count: 0 });
     terminalRef.current?.focus();
-  }
-
-  function copySelection() {
-    const terminal = terminalRef.current;
-    if (!terminal?.hasSelection()) return;
-    void navigator.clipboard
-      .writeText(terminal.getSelection())
-      .catch((error) => setLocalError(`Copy failed: ${errorMessage(error)}`));
-  }
-
-  function pasteClipboard() {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    void navigator.clipboard
-      .readText()
-      .then((text) => {
-        if (text) terminal.paste(text);
-      })
-      .catch((error) => setLocalError(`Paste failed: ${errorMessage(error)}`));
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";

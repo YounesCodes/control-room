@@ -329,19 +329,100 @@ it("pastes Unicode and multiple lines once and copies the actual terminal select
     />,
   );
   await vi.waitFor(() => expect(session.output).not.toBeNull());
-  handle.current!.pasteClipboard();
-  await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(1));
+  const pasteButton = document.createElement("button");
+  pasteButton.textContent = "Paste into terminal";
+  Object.assign(pasteButton.style, { position: "fixed", top: "0", right: "0", zIndex: "100" });
+  pasteButton.addEventListener("click", () => handle.current!.pasteClipboard());
+  container.after(pasteButton);
+  try {
+    session.output!.onmessage!(new TextEncoder().encode("\x1b[?2004hPASTE_READY\r\n").buffer);
+    await expect.element(page.getByText("PASTE_READY", { exact: true })).toBeVisible();
+    await userEvent.click(pasteButton);
+    await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(1));
+    await userEvent.keyboard("{Enter}");
+    await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(2));
+  } finally {
+    pasteButton.remove();
+  }
   expect(read).toHaveBeenCalledTimes(1);
   expect(new TextDecoder().decode(session.writeSession.mock.calls[0][1])).toBe(
-    text.replaceAll("\n", "\r"),
+    "\x1b[200~" + text.replaceAll("\n", "\r") + "\x1b[201~",
   );
-  session.output!.onmessage!(new TextEncoder().encode("COPY_NEEDLE\r\n").buffer);
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[1][1])).toBe("\r");
+  session.output!.onmessage!(new TextEncoder().encode("\x1b[HCOPY_NEEDLE\r\n").buffer);
   await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
   await userEvent.dblClick(container.querySelector(".xterm-screen")!, {
     position: { x: 15, y: 5 },
   });
   handle.current!.copySelection();
   await vi.waitFor(() => expect(write).toHaveBeenCalledWith("COPY_NEEDLE"));
+});
+
+it("keeps a mouse-tracking program's selection when moving to Copy", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  container = document.createElement("div");
+  container.style.height = "400px";
+  document.body.append(container);
+  root = createRoot(container);
+  const handle = createRef<TerminalPaneHandle>();
+  const onSelectionChange = vi.fn();
+  root.render(
+    <TerminalPane
+      ref={handle}
+      workspace={createRemoteWorkspace(connection())}
+      settings={settings}
+      visible
+      active
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+      onSelectionChange={onSelectionChange}
+    />,
+  );
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  session.output!.onmessage!(
+    new TextEncoder().encode("\x1b[?1049h\x1b[?1003h\x1b[?1006hCOPY_NEEDLE").buffer,
+  );
+  await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
+  const screen = container.querySelector<HTMLElement>(".xterm-screen")!;
+  await userEvent.dblClick(screen, { modifiers: ["Shift"], position: { x: 15, y: 5 } });
+  expect(onSelectionChange).toHaveBeenLastCalledWith(true);
+  session.writeSession.mockClear();
+
+  const bounds = screen.getBoundingClientRect();
+  screen.dispatchEvent(
+    new MouseEvent("mousemove", {
+      bubbles: true,
+      clientX: bounds.left + 40,
+      clientY: bounds.top + 5,
+    }),
+  );
+  expect(onSelectionChange).toHaveBeenLastCalledWith(true);
+  handle.current!.copySelection();
+  expect(write).toHaveBeenNthCalledWith(1, "COPY_NEEDLE");
+
+  await userEvent.keyboard("{Control>}c{/Control}");
+  expect(write).toHaveBeenNthCalledWith(2, "COPY_NEEDLE");
+  await userEvent.keyboard("{Control>}{Shift>}C{/Shift}{/Control}");
+  expect(write).toHaveBeenNthCalledWith(3, "COPY_NEEDLE");
+  await userEvent.click(screen, { button: "right", position: { x: 100, y: 5 } });
+  expect(write).toHaveBeenNthCalledWith(4, "COPY_NEEDLE");
+  expect(session.writeSession).not.toHaveBeenCalled();
+
+  await userEvent.keyboard("{Escape}{Control>}c{/Control}");
+  await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(2));
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[1][1])).toBe("");
+  expect(write).toHaveBeenCalledTimes(4);
+
+  screen.dispatchEvent(
+    new MouseEvent("mousemove", {
+      bubbles: true,
+      clientX: bounds.left + 55,
+      clientY: bounds.top + 5,
+    }),
+  );
+  await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(3));
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[2][1])).toMatch(/^\[<35;/);
 });
 
 it("keeps the terminal edge empty until search has matches", async () => {
