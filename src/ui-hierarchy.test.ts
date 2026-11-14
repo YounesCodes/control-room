@@ -267,7 +267,10 @@ describe("application hierarchy", () => {
     // and the tests here render the controls with a stub. Following the
     // binding rather than naming the methods means a fourth control fails here
     // instead of doing nothing when a user clicks it.
-    const called = calledWindowMethods();
+    // `core:default` already allows reading window state and listening for
+    // window events; only the controls need their own grants.
+    const called = calledWindowMethods().filter((method) => !/^(is|on)[A-Z]/.test(method));
+    expect(windowCapabilities.permissions).toContain("core:default");
     expect(called).toEqual(["close", "minimize", "startResizeDragging", "toggleMaximize"]);
     expect(linuxWindowCapabilities.platforms).toEqual(["linux"]);
     expect(
