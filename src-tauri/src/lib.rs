@@ -95,7 +95,8 @@ pub fn run() {
                 database.save_settings(&settings)?;
             }
             app.manage(database);
-            #[cfg(all(feature = "desktop-e2e", windows))]
+            // macOS creates its window from the test configuration instead.
+            #[cfg(all(feature = "desktop-e2e", not(target_os = "macos")))]
             {
                 // Elevated WebView2 ignores environment overrides. Pass the driver's
                 // port and profile through the API in this debug-only test build.
