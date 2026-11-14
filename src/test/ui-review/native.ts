@@ -131,6 +131,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "get_workspace_state":
       result = workspace;
       break;
+    case "window_compositing":
+      // Without a compositor the window keeps square corners, so captures
+      // match the native frame on every platform.
+      result = false;
+      break;
     case "current_app_version":
       result = "0.0.0-example";
       break;

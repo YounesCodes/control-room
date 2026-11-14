@@ -1813,14 +1813,21 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
     expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
   );
   await settleMotion();
-  const bounds = graph.getBoundingClientRect();
-  for (const card of graph.querySelectorAll(".systemd-graph-node")) {
-    const box = card.getBoundingClientRect();
-    expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
-    expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
-    expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
-    expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
-  }
+  // Slow runners can start the refit camera after the expansion settles.
+  await waitFor(
+    () => {
+      const bounds = graph.getBoundingClientRect();
+      for (const card of graph.querySelectorAll(".systemd-graph-node")) {
+        const box = card.getBoundingClientRect();
+        expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+        expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
+        expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+        expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+      }
+    },
+    { timeout: 3000 },
+  );
+  await settleMotion();
   const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
   const initial = camera();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
