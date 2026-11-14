@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { remote } from "webdriverio";
 
@@ -96,7 +96,46 @@ export async function withInstalledApp(application, use, { applicationExits = fa
           }),
         ]);
       }
+      // Closing the session only asks the app to quit. An installer or
+      // uninstaller that starts before it has exited refuses to run.
+      if (!applicationExits) await applicationExit(application);
     }
+  }
+}
+
+function applicationRunning(application) {
+  if (process.platform === "win32") {
+    const count = execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "@(Get-Process | Where-Object { $_.Path -eq $env:CONTROL_ROOM_LIFECYCLE_APPLICATION }).Count",
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, CONTROL_ROOM_LIFECYCLE_APPLICATION: application },
+        windowsHide: true,
+      },
+    );
+    return Number(count.trim()) > 0;
+  }
+  try {
+    // pgrep exits 1 when nothing matches.
+    const pattern = application.replace(/[^A-Za-z0-9/_-]/g, (character) => `[${character}]`);
+    execFileSync("pgrep", ["-f", "--", pattern], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function applicationExit(application) {
+  const deadline = Date.now() + 30000;
+  while (applicationRunning(application)) {
+    assert.ok(Date.now() < deadline, "The installed application did not exit");
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
 
