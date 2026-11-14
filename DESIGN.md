@@ -41,23 +41,32 @@ and a main content area. Keep the rail useful without letting it dominate the
 active work. Bound dense lists and detail pages so wide windows do not stretch
 their contents across the screen.
 
-Restored windows have rounded corners. Windows 11 draws them natively; Linux
-clips the page to the same radius while a compositor runs, and keeps square
-corners when maximized or fullscreen.
+Restored windows have rounded corners. Windows 11 and macOS draw them natively;
+Linux clips the page to the Windows radius while a compositor runs, and keeps
+square corners when maximized or fullscreen.
 
 The rail holds Saved Connections, search, grouping, and remote feature
 navigation. Order capabilities by expected frequency of use: Terminal, Docker,
 Systemd, Logs, Ports, then History. Local Workspaces are terminal-only, so hide
 the capability navigation and its divider for them. Windows hosts offer
-Terminal, Services, Ports, Docker, and container Logs. Keep Docker and Logs
-discoverable when Docker is missing and let their views report the failure.
-Do not repeat a connection's identity in a second header or status rail.
+Terminal, Services, Ports, Docker, and container Logs. Mac hosts keep the Linux
+order but name launchd jobs Services and list them without the systemd
+dependency explorer, because launchd reports no dependency graph. Keep Docker
+and Logs discoverable when Docker is missing and let their views report the
+failure. Do not repeat a connection's identity in a second header or status
+rail.
 
 Compact windows replace the rail with a titlebar navigation drawer. The drawer
 holds host selection and every inspection view, and contains keyboard focus
 until it closes. Reflow forms, toolbars, and Settings instead of shrinking type
 or scaling the app. Keep native window controls fixed and dialogs inside the
 viewport. Content stays usable at the supported minimum window size.
+
+On macOS, the native traffic lights overlay one continuous app bar with no
+system titlebar or visible app name. The Connections heading sits in that bar,
+independent of sidebar width, and the same leading space is reserved in
+Settings and the Focus Mode tab strip. Use Command for app shortcuts so Control
+combinations reach terminal programs. Windows keeps its custom window controls.
 
 ### Resizable panes
 
@@ -177,6 +186,11 @@ Cards stay compact: port, protocol, binding scope, Docker target, and peer
 count. Reachability reads Not tested. Host firewall policy is separate evidence
 and never labels a card reachable or blocked. Link to Docker for container
 details instead of repeating them.
+
+On Mac hosts, Application Firewall rules and Packet Filter state are separate
+evidence, and neither implies that a port is reachable. When Docker reaches
+another machine through its selected context, show that context and keep its
+published ports off the Mac's own listeners.
 
 ### Docker
 

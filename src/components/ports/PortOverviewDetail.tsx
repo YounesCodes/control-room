@@ -1,6 +1,11 @@
 import { InspectorDisclosure } from "../InspectorDisclosure";
 import { Container, FileClock, Server } from "lucide-react";
-import { exposureLabel, firewallForSocket, socketExposure } from "../../lib/port-inspector";
+import {
+  exposureLabel,
+  firewallForSocket,
+  serviceOwnerLabels,
+  socketExposure,
+} from "../../lib/port-inspector";
 import type { PortOverviewItem } from "../../lib/port-overview";
 import type { FirewallStatus, LogSourceSelection } from "../../types";
 
@@ -119,7 +124,7 @@ export function PortOverviewDetail({
                   )}
                   {connection.systemdUnit && (
                     <div>
-                      <dt>Systemd unit</dt>
+                      <dt>{serviceOwnerLabels(connection.systemdUnit).kind}</dt>
                       <dd>{connection.systemdUnit}</dd>
                     </div>
                   )}
@@ -150,7 +155,11 @@ export function PortOverviewDetail({
           <dl className="detail-list">
             <div>
               <dt>Backend</dt>
-              <dd>{firewall?.backend?.toUpperCase() ?? "Unavailable"}</dd>
+              <dd>
+                {firewall?.backend === "macos"
+                  ? "macOS Application Firewall"
+                  : (firewall?.backend?.toUpperCase() ?? "Unavailable")}
+              </dd>
             </div>
             <div>
               <dt>Incoming default</dt>
@@ -165,6 +174,33 @@ export function PortOverviewDetail({
               </div>
             ))}
           </dl>
+          {firewall?.backend === "macos" && (
+            <>
+              <h3 className="detail-section-heading">Application rules</h3>
+              <dl className="detail-list">
+                {firewall.rules.map((rule) => (
+                  <div key={rule.to}>
+                    <dt>{rule.action}</dt>
+                    <dd className="technical">{rule.to}</dd>
+                  </div>
+                ))}
+              </dl>
+              <h3 className="detail-section-heading">Packet Filter</h3>
+              <p>
+                {firewall.packetFilter?.error ??
+                  (firewall.packetFilter?.active === true
+                    ? "Enabled"
+                    : firewall.packetFilter?.active === false
+                      ? "Disabled"
+                      : "Unavailable")}
+              </p>
+              {firewall.packetFilter?.rules.length ? (
+                <pre className="firewall-rules technical">
+                  {firewall.packetFilter.rules.join("\n")}
+                </pre>
+              ) : null}
+            </>
+          )}
           <p className="unit-scope-note">
             Host policy is not a reachability test. Docker forwarding, routing and upstream
             firewalls can apply separately. A missing port rule does not prove that traffic is
@@ -193,7 +229,7 @@ export function PortOverviewDetail({
                 )}
                 {socket.systemdUnit && (
                   <div>
-                    <dt>Systemd unit</dt>
+                    <dt>{serviceOwnerLabels(socket.systemdUnit).kind}</dt>
                     <dd>{socket.systemdUnit}</dd>
                   </div>
                 )}
@@ -221,7 +257,7 @@ export function PortOverviewDetail({
               title={unit}
               onClick={() => onOpenSystemd(unit)}
             >
-              <Server size={14} /> Open unit
+              <Server size={14} /> {serviceOwnerLabels(unit).open}
             </button>
             <button
               type="button"
@@ -229,7 +265,7 @@ export function PortOverviewDetail({
               title={unit}
               onClick={() => onViewLogs({ type: "systemd", id: unit })}
             >
-              <FileClock size={14} /> View journal
+              <FileClock size={14} /> {serviceOwnerLabels(unit).logs}
             </button>
           </span>
         ))}

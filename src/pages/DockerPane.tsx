@@ -36,6 +36,7 @@ export function DockerPane({
   connection,
   windowsHost = false,
   capabilities = null,
+  macosHost = false,
   cache,
   detailsCache,
   onCacheChange,
@@ -48,6 +49,7 @@ export function DockerPane({
   connection: SavedConnection;
   windowsHost?: boolean;
   capabilities?: HostCapabilities | null;
+  macosHost?: boolean;
   cache: CachedList<DockerContainer>;
   detailsCache: Record<string, CachedValue<DockerContainerDetails>>;
   onCacheChange: (cache: CachedList<DockerContainer>) => void;
@@ -177,7 +179,8 @@ export function DockerPane({
     }));
   }, [cache.items, search, grouped, state]);
   const selected = cache.items.find((container) => container.id === selectedId) ?? null;
-  const permissionError = !windowsHost && cache.error?.toLowerCase().includes("permission denied");
+  const permissionError =
+    !windowsHost && !macosHost && cache.error?.toLowerCase().includes("permission denied");
   const filtersActive = !grouped || state !== "all";
   const states = [
     ...new Set([
@@ -186,6 +189,9 @@ export function DockerPane({
     ]),
   ].sort();
   const snapshotDescription = [
+    capabilities?.dockerContext
+      ? `Docker context ${capabilities.dockerContext}${capabilities.dockerEndpoint ? ` · ${capabilities.dockerEndpoint}` : ""}`
+      : null,
     cache.fetchedAt
       ? "Last collected at " +
         new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -260,6 +266,7 @@ export function DockerPane({
               onOpenPort={onOpenPort}
               summary={selected}
               windowsHost={windowsHost}
+              macosHost={macosHost}
               cache={detailsCache[selected.id]}
               onRefresh={() => loadDetails(selected.id, null, true)}
               onRetryWithSudo={() => setSudoPurpose("details")}

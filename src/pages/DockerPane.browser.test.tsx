@@ -11,6 +11,7 @@ import type {
   SavedConnection,
 } from "../types";
 import "../styles.css";
+import { settleMotion } from "../test/motion";
 
 const api = vi.hoisted(() => ({ listContainers: vi.fn(), inspectContainer: vi.fn() }));
 vi.mock("../lib/api", () => ({ api, errorMessage: String }));
@@ -300,11 +301,7 @@ it("filters projects and states, clears hidden selection, and restores the group
   await page.getByRole("combobox", { name: "Group by" }).selectOptions("none");
   expect(document.querySelectorAll(".arch-group")).toHaveLength(4);
   const filtersRegion = screen.getByRole("region", { name: "Container filters" });
-  await waitFor(() =>
-    expect(
-      filtersRegion.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
-    ).toBe(false),
-  );
+  await settleMotion(filtersRegion);
   expect((await axe.run(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   expect(document.querySelectorAll(".arch-chip")).toHaveLength(12);
@@ -342,11 +339,7 @@ it("frames a container opened from Ports and keeps details and logs usable at mi
     within(inspector).getByRole("button", { name: "View logs" }).getBoundingClientRect().top,
   ).toBe(footer.top);
   expect(body.scrollWidth).toBeLessThanOrEqual(body.clientWidth);
-  await waitFor(() =>
-    expect(inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running")).toBe(
-      false,
-    ),
-  );
+  await settleMotion(inspector);
   expect((await axe.run(document.querySelector(".docker-page")!)).violations).toEqual([]);
   await page.getByRole("button", { name: "View logs" }).click();
   expect(onViewLogs).toHaveBeenCalledWith({ type: "docker", id: containers[0].id });

@@ -20,6 +20,8 @@ description: Keys for the current tab and terminal.
 | `Shift+Enter`           | Refocus the Systemd graph on its focused unit.                                      |
 | `Escape`                | Close the inspector or toolbar panel.                                               |
 
+On macOS, replace `Ctrl` with `Cmd` for these application shortcuts. Native `Cmd+C` and `Cmd+V` also copy and paste in the terminal. Use `Ctrl+Shift+F` on Windows or `Cmd+Shift+F` on macOS to find terminal output.
+
 Closing a tab with a running terminal asks for confirmation.
 
 In Settings, focus the category list and use `Up` / `Down` to switch categories.

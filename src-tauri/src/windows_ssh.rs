@@ -160,6 +160,10 @@ pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShe
         )
         && !text.to_ascii_lowercase().contains("microsoft")
     {
+        if text.lines().next().unwrap_or("").trim() == "Darwin" {
+            crate::macos_remote::remember(connection, true);
+            return crate::macos_remote::shells(connection);
+        }
         return Ok(RemoteShellCatalog {
             platform: "linux".into(),
             shells: vec![],

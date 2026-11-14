@@ -51,7 +51,13 @@ function ModalFixture({ long = false }: { long?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          setOpen(true);
+        }}
+      >
         Open dialog
       </button>
       {open && (
@@ -78,7 +84,13 @@ function PaletteFixture({ onSettings }: { onSettings: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          setOpen(true);
+        }}
+      >
         Open palette
       </button>
       {open && (
@@ -138,6 +150,7 @@ const settings: AppSettings = {
 };
 
 const environment: EnvironmentInfo = {
+  platform: "windows",
   sshPath: null,
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: false,
@@ -641,6 +654,14 @@ describe("critical UI in Chromium", () => {
     const button = page
       .getByRole("button", { name: "Add connection" })
       .element() as HTMLButtonElement;
+    await userEvent.unhover(button);
+    // A pointer left over from an earlier test unwinds hover transitions here.
+    await expect.poll(() => getComputedStyle(button).backgroundColor).toBe("rgb(23, 23, 23)");
+    await Promise.all(
+      button
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     const atRest = getComputedStyle(button);
     const position = () => {
       const rect = button.getBoundingClientRect();
@@ -683,6 +704,7 @@ describe("critical UI in Chromium", () => {
           onSaved={() => undefined}
         />
         <WindowControls
+          platform="windows"
           windowActions={{
             close: async () => undefined,
             minimize: async () => undefined,
@@ -954,6 +976,12 @@ describe("critical UI in Chromium", () => {
     await expect
       .element(page.getByRole("group", { name: "Local terminal", exact: true }))
       .toBeVisible();
+    // Audit settled colors; a slower runner can still be fading the results in.
+    await Promise.all(
+      container!
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     expect(
       (await axe.run(container!, { rules: { region: { enabled: false } } })).violations,
     ).toEqual([]);
@@ -1252,4 +1280,38 @@ describe("critical UI in Chromium", () => {
       await page.screenshot({ path: "../../docs/src/assets/screenshots/settings.png" });
     }
   });
+});
+
+it("makes newly enabled Scratchpad actions fully readable without an opacity fade", async () => {
+  mount(
+    <div className="scratchpad-popover" role="dialog" aria-label="Scratchpad">
+      <style>
+        {
+          ".scratchpad-popover { animation: none !important; } .scratchpad-popover button { transition-duration: 10s !important; }"
+        }
+      </style>
+      <div className="scratchpad-popover-actions">
+        <button type="button" className="secondary-button" disabled>
+          Copy
+        </button>
+      </div>
+    </div>,
+  );
+  const button = page.getByRole("button", { name: "Copy", exact: true });
+  await expect.element(button).toBeDisabled();
+  const control = button.element() as HTMLButtonElement;
+  expect(getComputedStyle(control).opacity).toBe("0.4");
+  control.disabled = false;
+  // Freeze any real opacity transition at its first frame. A fast runner must
+  // catch the same unreadable enabled state as the hosted accessibility check.
+  void getComputedStyle(control).opacity;
+  for (const animation of control.getAnimations()) {
+    if (animation instanceof CSSTransition && animation.transitionProperty === "opacity") {
+      animation.pause();
+      animation.currentTime = 0;
+    }
+  }
+  expect(getComputedStyle(control).opacity).toBe("1");
+  const result = await axe.run(container!, { runOnly: ["color-contrast"] });
+  expect(result.violations).toEqual([]);
 });

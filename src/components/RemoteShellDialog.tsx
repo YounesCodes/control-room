@@ -73,7 +73,7 @@ export function RemoteShellDialog({
   const groups = catalog
     ? [
         {
-          label: "Windows shells",
+          label: catalog.platform === "macos" ? "Mac shells" : "Windows shells",
           shells: catalog.shells.filter(
             (shell) => !shell.id.startsWith("wsl:") && !shell.id.startsWith("terminal:"),
           ),
@@ -140,7 +140,7 @@ export function RemoteShellDialog({
                 </button>
                 {!catalog && (
                   <button className="secondary-button" type="button" onClick={() => onSelect(null)}>
-                    Connect as Linux host
+                    Open default SSH shell
                   </button>
                 )}
               </div>
@@ -163,6 +163,7 @@ export function RemoteShellDialog({
                       value={shell.id}
                       aria-label={shell.label}
                       checked={selected === shell.id}
+                      onClick={(event) => event.currentTarget.focus()}
                       onChange={() => setSelected(shell.id)}
                     />
                     <SquareTerminal size={18} className="remote-shell-mark" aria-hidden="true" />

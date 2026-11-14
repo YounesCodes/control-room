@@ -40,6 +40,7 @@ describe("isControlRoomShortcut", () => {
     type,
     key,
     ctrlKey: true,
+    metaKey: false,
     shiftKey,
   });
 
@@ -57,11 +58,39 @@ describe("isControlRoomShortcut", () => {
     expect(isControlRoomShortcut(event("k", false))).toBe(false);
     expect(isControlRoomShortcut(event("k", false, "keyup"))).toBe(false);
     expect(
-      isControlRoomShortcut({ type: "keydown", key: "F11", ctrlKey: false, shiftKey: false }),
+      isControlRoomShortcut({
+        type: "keydown",
+        key: "F11",
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+      }),
     ).toBe(false);
     expect(
-      isControlRoomShortcut({ type: "keydown", key: "t", ctrlKey: false, shiftKey: true }),
+      isControlRoomShortcut({
+        type: "keydown",
+        key: "t",
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: true,
+      }),
     ).toBe(false);
+  });
+
+  it("uses only the macOS Command modifier when requested", () => {
+    expect(
+      isControlRoomShortcut(
+        {
+          type: "keydown",
+          key: "p",
+          ctrlKey: false,
+          metaKey: true,
+          shiftKey: true,
+        },
+        "meta",
+      ),
+    ).toBe(true);
+    expect(isControlRoomShortcut(event("p", true), "meta")).toBe(false);
   });
 });
 

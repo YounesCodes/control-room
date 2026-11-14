@@ -52,11 +52,16 @@ export interface HostCapabilities {
   defaultShell: string | null;
   systemdAvailable: boolean;
   journaldAvailable: boolean;
+  launchdAvailable?: boolean;
+  unifiedLogAvailable?: boolean;
   dockerAvailable: boolean;
   dockerAccessible: boolean;
   dockerAccessibleWithSudo: boolean;
   passwordlessSudo: boolean;
   dockerVersion: string | null;
+  dockerContext?: string | null;
+  dockerEndpoint?: string | null;
+  dockerRemote?: boolean;
   runningServiceCount: number | null;
   runningContainerCount: number | null;
   totalContainerCount: number | null;
@@ -69,7 +74,7 @@ export interface RemoteShellProfile {
 }
 
 export interface RemoteShellCatalog {
-  platform: "linux" | "windows";
+  platform: "linux" | "windows" | "macos";
   shells: RemoteShellProfile[];
   windowsTerminalAvailable: boolean;
   wslError: string | null;
@@ -174,11 +179,17 @@ export interface FirewallRule {
 }
 
 export interface FirewallStatus {
-  backend?: "ufw" | "firewalld" | "windows" | null;
+  backend?: "ufw" | "firewalld" | "windows" | "macos" | null;
   available: boolean;
   active: boolean | null;
   defaultIncoming: string | null;
   rules: FirewallRule[];
+  packetFilter?: {
+    active: boolean | null;
+    rules: string[];
+    error: string | null;
+    permissionRequired: boolean;
+  } | null;
   collectedAt: string;
 }
 
@@ -366,6 +377,7 @@ export interface SettingsContract {
 }
 
 export interface EnvironmentInfo {
+  platform: "windows" | "macos" | "linux" | "unsupported";
   sshPath: string | null;
   sshConfigPath: string;
   sshAgentAvailable: boolean;
@@ -374,7 +386,7 @@ export interface EnvironmentInfo {
   inAppUpdates?: boolean;
 }
 
-/// The local Windows shells Control Room can host. The id, including its fixed
+/// The allowlisted local shells Control Room can host. The id, including its fixed
 /// administrator variant, is the whole vocabulary the frontend may send back
 /// to Rust: there is no executable path, argument, or command string on this
 /// side of the boundary.
@@ -459,8 +471,8 @@ export interface RemoteWorkspace extends WorkspaceBase {
   logSource: LogSourceSelection | null;
 }
 
-/// A Workspace on a local Windows shell. It is terminal-only: there is no
-/// Saved Connection, no remote inspection pages, and no History. Optional header metrics read Windows usage.
+/// A Workspace on a local shell. It is terminal-only: there is no
+/// Saved Connection, no remote inspection pages, and no History. Optional header metrics read local system usage.
 export interface LocalWorkspace extends WorkspaceBase {
   kind: "local";
   shell: LocalShellProfile;

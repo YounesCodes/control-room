@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { settleMotion } from "../test/motion";
 import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import axe from "axe-core";
@@ -13,6 +14,7 @@ import { systemdInspection } from "../test/systemd-fixtures";
 import { invalidateSystemdReads } from "../lib/systemd-inspection";
 import type { SystemdInspection, SystemdUnit } from "../types";
 import "../styles.css";
+import { tabKey } from "../test/keyboard";
 
 const api = vi.hoisted(() => ({
   listServices: vi.fn(),
@@ -138,13 +140,6 @@ function renderPane(items = units) {
     </ConnectionSection>,
   );
 }
-async function settleMotion() {
-  await waitFor(() =>
-    expect(
-      document.getAnimations().filter((animation) => animation.playState === "running"),
-    ).toHaveLength(0),
-  );
-}
 async function audit() {
   await settleMotion();
   return axe.run(document.querySelector(".systemd-page")!);
@@ -186,19 +181,28 @@ it.each([360, 1280])("slides the relationship category selection fill at %ipx", 
   expect(pose().width).toBeCloseTo(previous.offsetWidth, 2);
   for (const name of ["Ordering", "Activation", "Dependencies"]) {
     const next = within(group).getByRole("button", { name });
-    next.click();
-    await waitFor(() => expect(next.getAttribute("aria-pressed")).toBe("true"));
-    const animations = await waitFor(() => {
-      const active = group
+    const slides = () =>
+      group
         .getAnimations({ subtree: true })
         .filter(
           (animation) =>
             animation instanceof CSSTransition &&
             (animation.effect as KeyframeEffect).target === group,
         );
+    // Pause each slide as it starts: a slow runner can otherwise finish it
+    // before the test samples the midpoint.
+    const hold = () => {
+      for (const animation of slides()) animation.pause();
+    };
+    group.addEventListener("transitionrun", hold);
+    next.click();
+    await waitFor(() => expect(next.getAttribute("aria-pressed")).toBe("true"));
+    const animations = await waitFor(() => {
+      const active = slides();
       expect(active).toHaveLength(2);
       return active;
     });
+    group.removeEventListener("transitionrun", hold);
     for (const animation of animations) {
       animation.pause();
       animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
@@ -289,7 +293,8 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
   aligned(explorer);
   await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await settleMotion();
-  aligned(relationships);
+  // The slide can start after the settle check on a slow runner.
+  await waitFor(() => aligned(relationships));
   await page.viewport(width === 360 ? 1280 : 360, 800);
   await waitFor(() => aligned(relationships));
   expect((await audit()).violations).toEqual([]);
@@ -697,7 +702,7 @@ it("keeps the scope switch accessible at narrow widths and preserves complete gr
   await settleMotion();
   expect(new DOMMatrixReadOnly(getComputedStyle(scope, "::before").transform).m41).toBe(0);
   screen.getByRole("button", { name: "Focused" }).focus();
-  await userEvent.keyboard("{Tab}{Enter}");
+  await userEvent.keyboard(tabKey + "{Enter}");
   expect(screen.getByRole("button", { name: "All units", pressed: true })).toBeTruthy();
   expect((await audit()).violations).toEqual([]);
 });
@@ -726,7 +731,8 @@ it("glides one shared service highlight and retargets it during rapid switching"
   expect(Math.abs(new DOMMatrix(getComputedStyle(marker).transform).m42 - middle)).toBeLessThan(1);
   retargeted.finish();
   await settleMotion();
-  expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44);
+  // The glide can start after the first settle check on slower runners.
+  await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44));
   expect(marker.getBoundingClientRect().height).toBe(44);
   expect(getComputedStyle(marker).borderRadius).not.toBe("0px");
   const row = document.querySelector<HTMLElement>(".systemd-inventory .selected-row")!;
@@ -734,7 +740,8 @@ it("glides one shared service highlight and retargets it during rapid switching"
   row.focus();
   await userEvent.keyboard("{ArrowDown}");
   await settleMotion();
-  expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(88);
+  // The glide can start after the first settle check on slower runners.
+  await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(88));
   expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true");
   expect(getComputedStyle(document.activeElement!).outlineStyle).toBe("none");
   await page.getByRole("button", { name: "Find units", exact: true }).click();
@@ -903,13 +910,13 @@ it("removes the search field outline after clicking its magnifier to collapse", 
   await magnifier.click();
   await waitFor(() => expect(control.querySelector(".systemd-inline-search")).toBeNull());
   await settleMotion();
-  expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+  await waitFor(() => expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)"));
   expect(getComputedStyle(control).boxShadow).toBe("none");
   await magnifier.click();
   await userEvent.keyboard("{Escape}");
   await waitFor(() => expect(control.querySelector(".systemd-inline-search")).toBeNull());
   await settleMotion();
-  expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+  await waitFor(() => expect(getComputedStyle(control).borderTopColor).toBe("rgba(0, 0, 0, 0)"));
   const button = screen.getByRole("button", { name: "Find units" });
   expect(button.matches(":focus-visible")).toBe(true);
   expect(getComputedStyle(button).outlineStyle).not.toBe("none");
@@ -1230,17 +1237,27 @@ it("refits and zooms in both directions on show more and show less, including in
   const beforeExpansion = focused.getBoundingClientRect();
   const contained = async () => {
     await settleMotion();
-    const bounds = graph.getBoundingClientRect();
-    const right = screen.queryByRole("complementary")?.getBoundingClientRect().left ?? bounds.right;
-    for (const card of graph.querySelectorAll(".systemd-graph-node")) {
-      const box = card.getBoundingClientRect();
-      expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
-      expect(box.right).toBeLessThanOrEqual(right + 1);
-      expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
-      expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
-    }
+    // The refit can begin after the first settle check on slower runners.
+    await waitFor(
+      () => {
+        const bounds = graph.getBoundingClientRect();
+        const right =
+          screen.queryByRole("complementary")?.getBoundingClientRect().left ?? bounds.right;
+        for (const card of graph.querySelectorAll(".systemd-graph-node")) {
+          const box = card.getBoundingClientRect();
+          expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+          expect(box.right).toBeLessThanOrEqual(right + 1);
+          expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+          expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+        }
+      },
+      { timeout: 3000 },
+    );
+    await settleMotion();
   };
-  await page.getByRole("button", { name: /Show more/ }).click();
+  // A direct click renders the expansion before the refit camera can move,
+  // which a driver round trip on a slow runner cannot guarantee.
+  screen.getByRole("button", { name: /Show more/ }).click();
   const firstFrame = focused.getBoundingClientRect();
   expect(
     Math.abs(
@@ -1447,20 +1464,28 @@ it.each(["After", "Before"])(
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
     await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     await settleMotion();
-    const plot = screen
-      .getByRole("region", { name: "Systemd dependency graph" })
-      .getBoundingClientRect();
-    const nodes = [...document.querySelectorAll(".systemd-graph-node")].map((node) =>
-      node.getBoundingClientRect(),
+    // The recentering camera can start after the settle check on slow runners.
+    await waitFor(
+      () => {
+        const plot = screen
+          .getByRole("region", { name: "Systemd dependency graph" })
+          .getBoundingClientRect();
+        const nodes = [...document.querySelectorAll(".systemd-graph-node")].map((node) =>
+          node.getBoundingClientRect(),
+        );
+        expect(
+          (Math.min(...nodes.map((node) => node.left)) +
+            Math.max(...nodes.map((node) => node.right))) /
+            2,
+        ).toBeCloseTo(plot.left + plot.width / 2, 0);
+        expect(
+          (Math.min(...nodes.map((node) => node.top)) +
+            Math.max(...nodes.map((node) => node.bottom))) /
+            2,
+        ).toBeCloseTo(plot.top + plot.height / 2 - 6, 0);
+      },
+      { timeout: 3000 },
     );
-    expect(
-      (Math.min(...nodes.map((node) => node.left)) + Math.max(...nodes.map((node) => node.right))) /
-        2,
-    ).toBeCloseTo(plot.left + plot.width / 2, 0);
-    expect(
-      (Math.min(...nodes.map((node) => node.top)) + Math.max(...nodes.map((node) => node.bottom))) /
-        2,
-    ).toBeCloseTo(plot.top + plot.height / 2 - 6, 0);
   },
 );
 
@@ -1799,14 +1824,21 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
     expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
   );
   await settleMotion();
-  const bounds = graph.getBoundingClientRect();
-  for (const card of graph.querySelectorAll(".systemd-graph-node")) {
-    const box = card.getBoundingClientRect();
-    expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
-    expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
-    expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
-    expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
-  }
+  // Slow runners can start the refit camera after the expansion settles.
+  await waitFor(
+    () => {
+      const bounds = graph.getBoundingClientRect();
+      for (const card of graph.querySelectorAll(".systemd-graph-node")) {
+        const box = card.getBoundingClientRect();
+        expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+        expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
+        expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+        expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+      }
+    },
+    { timeout: 3000 },
+  );
+  await settleMotion();
   const viewport = page.getByRole("region", { name: "Systemd dependency graph" });
   const initial = camera();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
@@ -1953,7 +1985,7 @@ it.each([360, 960, 1400])(
     const marker = document.querySelector<HTMLElement>(".systemd-selection-indicator")!;
     expect(document.activeElement).toBe(inspector);
     expect(getComputedStyle(inspector).outlineStyle).toBe("none");
-    await userEvent.keyboard("{Tab}");
+    await userEvent.keyboard(tabKey);
     const close = within(inspector).getByRole("button", { name: "Close details" });
     expect(document.activeElement).toBe(close);
     expect(getComputedStyle(close).outlineStyle).toBe("solid");
@@ -1975,6 +2007,8 @@ it.each([360, 960, 1400])(
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
     expect(inspector.querySelectorAll("details[open]")).toHaveLength(0);
+    // Contrast is measured on the settled panel, not mid-fade.
+    await entrance.finished;
     expect((await audit()).violations).toEqual([]);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.getByText("Advanced", { exact: true }).click();

@@ -88,6 +88,7 @@ describe("Opening Settings", () => {
       sshConfigPath: "C:\\Users\\test\\.ssh\\config",
       sshAgentAvailable: true,
       platformSupported: true,
+      platform: "windows",
     });
     api.workspaceState.mockResolvedValue({
       workspaces: [],
@@ -267,6 +268,7 @@ describe("Opening Settings", () => {
       sshConfigPath: "C:\\Users\\X13\\.ssh\\config",
       sshAgentAvailable: false,
       platformSupported: true,
+      platform: "windows",
     });
     api.currentAppVersion.mockResolvedValue(null);
 

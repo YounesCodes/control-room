@@ -11,9 +11,11 @@ const STRIP = { left: 0, right: 700, top: 0, bottom: 34 };
 function Strip({
   labels,
   onReorder,
+  reorderModifier,
 }: {
   labels: string[];
   onReorder?: (id: string, targetIndex: number) => void;
+  reorderModifier?: "control" | "meta";
 }) {
   return (
     <WorkspaceTabScroller
@@ -28,6 +30,7 @@ function Strip({
       activeTabId="id-1"
       arrangementKey="test"
       onReorder={onReorder}
+      reorderModifier={reorderModifier}
     >
       {labels.map((label, index) => (
         <div className="session-tab-wrap" key={`id-${index + 1}`}>
@@ -276,6 +279,21 @@ describe("WorkspaceTabScroller reordering", () => {
 
     pointer(third, "pointerup", 40);
     expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  it("moves a focused tab with Cmd+Shift+arrow keys on macOS and leaves Ctrl to the shell", () => {
+    const onReorder = vi.fn();
+    const { container } = render(
+      <Strip labels={["A", "B", "C"]} onReorder={onReorder} reorderModifier="meta" />,
+    );
+    const second = mainButton(container, "B");
+
+    fireEvent.keyDown(second, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
+    expect(onReorder).not.toHaveBeenCalled();
+    fireEvent.keyDown(second, { key: "ArrowLeft", metaKey: true, shiftKey: true });
+    expect(onReorder).toHaveBeenCalledWith("id-2", 0);
+    fireEvent.keyDown(second, { key: "ArrowRight", metaKey: true, shiftKey: true });
+    expect(onReorder).toHaveBeenCalledWith("id-2", 2);
   });
 
   it("moves a focused tab with Ctrl+Shift+arrow keys and clamps at the ends", () => {

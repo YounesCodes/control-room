@@ -307,6 +307,19 @@ export function PortsPane({
             onClick: () => void loadFirewall(),
           },
     },
+    firewall?.packetFilter?.error && {
+      id: "packet-filter",
+      source: "Packet Filter",
+      state: "Unavailable",
+      detail: firewall.packetFilter.error,
+      action: firewall.packetFilter.permissionRequired
+        ? {
+            label: "Retry with sudo",
+            accessibleName: "Retry Packet Filter with sudo",
+            onClick: () => setFirewallSudo(true),
+          }
+        : undefined,
+    },
     ownerGap && {
       id: "owners",
       source: "Process owners",
@@ -325,6 +338,9 @@ export function PortsPane({
   const hasWarnings = readingWarnings.length > 0;
   const snapshotDescription = [
     collectedAt ? "Last collected at " + collectedAt : null,
+    capabilities?.dockerRemote
+      ? `Docker context ${capabilities.dockerContext}: ${capabilities.dockerEndpoint}`
+      : null,
     cache.items.length + " listening port" + (cache.items.length === 1 ? "" : "s"),
     connections
       ? connections.totalEstablished +
@@ -364,7 +380,9 @@ export function PortsPane({
                   : undefined
         }
         sockets={cache.items}
-        containers={containersCache.items}
+        // A remote Docker context publishes ports on another machine, so its
+        // mappings must not be attributed to this host's listeners.
+        containers={capabilities?.dockerRemote ? [] : containersCache.items}
         firewall={firewall}
         capabilities={capabilities}
         hostLabel={hostLabel}
