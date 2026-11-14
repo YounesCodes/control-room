@@ -202,9 +202,15 @@ export async function openNativeShell() {
     (profile) => profile.id === (windows ? "command-prompt" : mac ? "zsh" : "bash"),
   );
   if (!shell) throw new Error("The native input fixture's shell is unavailable");
+  const sessions = (await runtime()).sessionIds.length;
   await $('button[aria-label="New terminal"]').click();
   await $(`.new-terminal-menu [aria-label="Local terminals: ${shell.label}"]`).click();
   await $(".terminal-workspace-pane.active .xterm-screen").waitForDisplayed();
+  // The pane renders before its session registers, and specs compare the
+  // session list against one read right after this returns.
+  await browser.waitUntil(async () => (await runtime()).sessionIds.length > sessions, {
+    timeoutMsg: "The native shell's session did not start",
+  });
   await focusNativeApp();
 }
 export async function typeNativeCommand(command: string, marker: string, timeout?: number) {

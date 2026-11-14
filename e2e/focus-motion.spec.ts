@@ -24,7 +24,18 @@ describe("Focus Mode live layout in the native WebView", () => {
           const points = [read()];
           document.querySelector(".app-focus-toggle").click();
           const start = performance.now();
+          let sampledMidpoint = false;
           function frame() {
+            // Slow runners can paint less often than the 180ms slide lasts, so
+            // also measure the live box at the slide's midpoint directly.
+            const slide = workspace.getAnimations()[0];
+            if (!sampledMidpoint && slide) {
+              sampledMidpoint = true;
+              slide.pause();
+              slide.currentTime = slide.effect.getTiming().duration / 2;
+              points.push(read());
+              slide.play();
+            }
             points.push(read());
             if (document.documentElement.dataset.focusTransition && performance.now() - start < 1500) requestAnimationFrame(frame);
             else done({ points, sameTerminal: terminal === document.querySelector(".xterm-screen"), transform: getComputedStyle(workspace).transform });
@@ -88,9 +99,9 @@ describe("Focus Mode live layout in the native WebView", () => {
       for (let i = 0; i < 8; i++)
         document.querySelector<HTMLButtonElement>(".app-focus-toggle")!.click();
     });
-    // A hosted runner's window may not be frontmost, where WebKit can stop
-    // advancing animations. Finish the last slide as the earlier step does so
-    // the cleanup after it still runs.
+    // Hosted Mac runners paint only a few frames a second, and the last slide
+    // once outlasted the wait below. Finish it as the earlier step does; the
+    // cleanup that follows a finished slide still runs and is checked.
     await browser.execute(() =>
       document
         .getAnimations()
