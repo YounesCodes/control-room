@@ -302,7 +302,8 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
   aligned(explorer);
   await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await settleMotion();
-  aligned(relationships);
+  // The slide can start after the settle check on a slow runner.
+  await waitFor(() => aligned(relationships));
   await page.viewport(width === 360 ? 1280 : 360, 800);
   await waitFor(() => aligned(relationships));
   expect((await audit()).violations).toEqual([]);
@@ -2007,6 +2008,8 @@ it.each([360, 960, 1400])(
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
     expect(inspector.querySelectorAll("details[open]")).toHaveLength(0);
+    // Contrast is measured on the settled panel, not mid-fade.
+    await entrance.finished;
     expect((await audit()).violations).toEqual([]);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.getByText("Advanced", { exact: true }).click();

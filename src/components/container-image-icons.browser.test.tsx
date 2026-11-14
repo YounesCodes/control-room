@@ -40,9 +40,12 @@ it("keeps logos neutral at rest and reveals brand colors on hover, keyboard focu
   // WebKit does not focus buttons on click; start keyboard travel from there.
   screen.getByRole("button", { name: "Custom image" }).focus();
   await userEvent.keyboard(shiftTabKey);
-  await waitFor(() => expect(color()).toBe(branded));
+  const postgres = screen.getByRole("button", { name: /PostgreSQL/ });
+  await waitFor(() => expect(document.activeElement).toBe(postgres));
+  // Slow macOS runners can take longer than the default wait to start the fade.
+  await waitFor(() => expect(color()).toBe(branded), { timeout: 3000 });
   await userEvent.keyboard("{Enter}" + tabKey);
-  await waitFor(() => expect(color()).toBe(branded));
+  await waitFor(() => expect(color()).toBe(branded), { timeout: 3000 });
   const mask = getComputedStyle(icon).maskImage;
   const url = mask.slice(5, -2);
   const response = await fetch(url);
