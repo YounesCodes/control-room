@@ -400,3 +400,65 @@ describe("terminal processing with an interactive program", () => {
     expect(changed.mock.calls).toEqual([[true], [false]]);
   });
 });
+
+describe("commands submitted at the shell prompt", () => {
+  const track = () => {
+    const submitted = vi.fn();
+    return { submitted, tracker: new TerminalProcessing(vi.fn(), undefined, submitted) };
+  };
+
+  it("reports the typed command once the shell echoes it", () => {
+    const { submitted, tracker } = track();
+    tracker.input(bytes("n"), prompt);
+    tracker.input(bytes("pm run dev"), `${prompt}n`);
+    tracker.input(bytes("\r"), `${prompt}npm run dev`);
+    expect(submitted.mock.calls).toEqual([["npm run dev"]]);
+  });
+
+  it("keeps the typed word when the shell renders a suggestion after it", () => {
+    const { submitted, tracker } = track();
+    tracker.input(bytes("cl"), "PS C:\\> ");
+    tracker.input(bytes("\r"), "PS C:\\> claude --resume");
+    expect(submitted.mock.calls).toEqual([["cl"]]);
+  });
+
+  it("reads the rendered line after history recall or completion", () => {
+    const { submitted, tracker } = track();
+    tracker.input(bytes("\x1b[A"), prompt);
+    tracker.input(bytes("\r"), `${prompt}htop -d 5`);
+    tracker.output(prompt);
+    tracker.input(bytes("vi\t"), prompt);
+    tracker.input(bytes("\r"), `${prompt}vim notes.txt`);
+    expect(submitted.mock.calls).toEqual([["htop -d 5"], ["vim notes.txt"]]);
+  });
+
+  it("never reports input the shell did not echo", () => {
+    const { submitted, tracker } = track();
+    tracker.input(bytes("secret-password"), "Password: ");
+    tracker.input(bytes("\r"), "Password: ");
+    expect(submitted).not.toHaveBeenCalled();
+  });
+
+  it("ignores input to a running command or program, and blank or wrapped lines", () => {
+    const { submitted, tracker } = track();
+    tracker.input(bytes("python\r"), `${prompt}python`);
+    expect(submitted.mock.calls).toEqual([["python"]]);
+    tracker.output(">>> ");
+    tracker.input(bytes("print(1)\r"), ">>> print(1)");
+    tracker.output(prompt);
+    tracker.input(bytes("\r"), prompt);
+    tracker.input(bytes("\x1b[A"), prompt);
+    tracker.input(bytes("\r"), "wrapped continuation of a long line");
+    tracker.output(prompt);
+    tracker.input(bytes("vim"), prompt, true);
+    tracker.input(bytes("\r"), `${prompt}vim`, true);
+    expect(submitted.mock.calls).toEqual([["python"]]);
+  });
+
+  it("still reports commands when shell markers own the busy state", () => {
+    const { submitted, tracker } = track();
+    tracker.shellMarker("A");
+    tracker.input(bytes("make\r"), `${prompt}make`);
+    expect(submitted.mock.calls).toEqual([["make"]]);
+  });
+});

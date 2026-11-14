@@ -375,9 +375,15 @@ or OSC 9;4 progress reports. A pause in output never counts as completion.
 Typing, blank submissions, idle redraws, approval prompts, editors, pagers, and
 background header polling stay idle.
 
-Automatic tab titles use only shell-reported metadata, reduced to a bare
-executable name. Manual names win. Titles stay in memory and never change saved
-workspace names.
+Automatic tab titles name the program of the command submitted at the shell
+prompt, read from the line the shell echoed or from shell integration (OSC 633
+E, Enhanced History). Unechoed input such as a password never counts. Reduce it
+to a bare program name, skipping wrappers like `sudo` and variable assignments.
+Show it once the command has run for a moment, so quick commands never flash,
+and restore the shell's name when the prompt returns. Ignore OSC 0/2 window
+titles: they name documents, and a local `ssh` or `wsl` host reports its own
+title before the remote shell starts. Manual names win. Titles stay in memory
+and never change saved workspace names.
 
 In Codex CLI, a plain left drag selects terminal text. Left clicks and scrolling
 still go to Codex. Right-click copies selected text or pastes when there is no

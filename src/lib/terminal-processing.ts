@@ -7,6 +7,9 @@ export class TerminalProcessing {
   private prompt: string | null = null;
   private editing = false;
   private inputLine = "";
+  /** Cursor keys or completion changed the line, so `inputLine` may not be
+   *  what the shell will run. */
+  private lineEdited = false;
   private escape = "";
   private pasted = false;
   private marked = false;
@@ -19,12 +22,17 @@ export class TerminalProcessing {
   constructor(
     private readonly changed: (busy: boolean) => void,
     private readonly returnedToPrompt: () => void = () => undefined,
+    /** A command line submitted at the shell prompt, only as rendered on
+     *  screen: input the shell does not echo, such as a password, is never
+     *  reported. */
+    private readonly submitted: (command: string) => void = () => undefined,
   ) {}
 
   reset() {
     this.prompt = null;
     this.editing = false;
     this.inputLine = "";
+    this.lineEdited = false;
     this.escape = "";
     this.pasted = false;
     this.marked = false;
@@ -47,6 +55,7 @@ export class TerminalProcessing {
         this.prompt = prompt;
         this.editing = prompt !== null && prompt.trim() !== "";
         this.inputLine = "";
+        this.lineEdited = false;
       }
       if (this.escape) {
         this.escape += character;
@@ -57,6 +66,7 @@ export class TerminalProcessing {
           (this.escape.length > 2 && byte >= 0x40 && byte <= 0x7e) ||
           (this.escape.length === 2 && byte !== 0x5b)
         ) {
+          if (this.escape !== "\x1b[200~" && this.escape !== "\x1b[201~") this.lineEdited = true;
           this.escape = "";
         }
         continue;
@@ -77,6 +87,8 @@ export class TerminalProcessing {
                 ? ""
                 : prompt
             : "";
+        const atShellPrompt = !this.busy && !this.program && !alternate && !!this.prompt?.trim();
+        const command = atShellPrompt ? this.visibleCommand(prompt, renderedInput) : null;
         const launchingAgent =
           !this.program && isAgentCommand(this.inputLine.trim() || renderedInput.trim());
         if (launchingAgent) {
@@ -94,10 +106,14 @@ export class TerminalProcessing {
           this.setBusy(true);
         }
         this.inputLine = "";
+        this.lineEdited = false;
         if (!this.busy) this.editing = false;
+        if (command) this.submitted(command);
       } else if (byte === 3 && !this.busy) {
         this.editing = false;
         this.inputLine = "";
+      } else if (byte === 9) {
+        this.lineEdited = true;
       } else if (byte === 21) {
         this.inputLine = "";
       } else if (byte === 8 || byte === 127) {
@@ -106,6 +122,16 @@ export class TerminalProcessing {
         this.inputLine += character;
       }
     }
+  }
+
+  /** What was typed when the screen shows it, which keeps the word the user
+   *  typed when a shell renders a suggestion after it. Otherwise the rendered
+   *  line after the prompt, which also covers history recall and completion. */
+  private visibleCommand(row: string | null, rendered: string): string | null {
+    const typed = this.inputLine.trim();
+    if (typed && !this.lineEdited && row?.includes(typed.slice(-16))) return typed;
+    if (row === null || this.prompt === null || !row.startsWith(this.prompt)) return null;
+    return rendered.trim() || null;
   }
 
   /** The rendered screen after output. `prompt` is the line the cursor rests

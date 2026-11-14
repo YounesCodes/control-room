@@ -288,7 +288,14 @@
       }
     },
     "terminal": {
-      "states": ["find", "find-matches", "find-none", "notice-error", "notice-ended"],
+      "states": [
+        "find",
+        "find-matches",
+        "find-none",
+        "notice-error",
+        "notice-ended",
+        "running-command"
+      ],
       "ready": ".app-shell",
       "prepare": {
         "find": [
@@ -331,7 +338,8 @@
         "find-matches": ".terminal-search",
         "find-none": ".terminal-search",
         "notice-error": ".terminal-notice",
-        "notice-ended": ".terminal-notice"
+        "notice-ended": ".terminal-notice",
+        "running-command": ".session-tab-main[title^='htop · ']"
       }
     },
     "pages": {

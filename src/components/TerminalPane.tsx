@@ -108,11 +108,9 @@ export function TerminalPane({
   const processingRef = useRef<TerminalProcessing | null>(null);
   if (!processingRef.current) {
     processingRef.current = new TerminalProcessing(
-      (busy) => {
-        if (busy) titleRef.current?.marker("C");
-        onProcessingRef.current(busy);
-      },
+      (busy) => onProcessingRef.current(busy),
       () => titleRef.current?.idle(),
+      (command) => titleRef.current?.command(command),
     );
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
@@ -339,9 +337,6 @@ export function TerminalPane({
       processingRef.current?.shellMarker(data);
       return false;
     });
-    const titleDisposable = terminal.onTitleChange((title) => {
-      if (sessionIdRef.current) titleRef.current?.report(title);
-    });
     const progressDisposable = terminal.parser.registerOscHandler(9, (data) => {
       if (!sessionIdRef.current) return false;
       return processingRef.current?.progress(data) ?? false;
@@ -363,10 +358,8 @@ export function TerminalPane({
           return true;
         }
         processingRef.current?.command(event.kind === "start");
-        if (event.kind === "start") {
-          titleRef.current?.marker("C");
-          titleRef.current?.report(event.command);
-        } else titleRef.current?.idle();
+        if (event.kind === "start") titleRef.current?.command(event.command);
+        else titleRef.current?.idle();
         if (!connectionIdRef.current) return true;
         if (event.kind === "start") {
           pendingHistoryRef.current = {
@@ -464,7 +457,6 @@ export function TerminalPane({
       bellDisposable.dispose();
       searchDisposable.dispose();
       promptDisposable.dispose();
-      titleDisposable.dispose();
       progressDisposable.dispose();
       oscDisposable.dispose();
       processingRef.current?.reset();
