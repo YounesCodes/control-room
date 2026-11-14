@@ -466,6 +466,15 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
       .toHaveAttribute("aria-orientation", "vertical");
+    // Panes glide to their wide bounds; aim the drop once that motion settles.
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
     const dock = begin("bottom");
     await expect
       .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
