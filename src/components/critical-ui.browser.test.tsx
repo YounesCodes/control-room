@@ -1028,7 +1028,7 @@ describe("critical UI in Chromium", () => {
     await expect.element(enabled).toBeChecked();
     const input = enabled.element() as HTMLInputElement;
     expect(getComputedStyle(input).backgroundImage).not.toBe("none");
-    expect(input.getBoundingClientRect().width).toBe(16);
+    expect(input.getBoundingClientRect().width).toBeCloseTo(16, 2);
     input.focus();
     await userEvent.keyboard(" ");
     await expect.element(enabled).not.toBeChecked();
@@ -1145,7 +1145,8 @@ describe("critical UI in Chromium", () => {
     else await page.getByRole("combobox", { name: "Settings category" }).selectOptions("logs");
     const tail = page.getByRole("slider", { name: "Default log tail (lines)" }).element();
     const tailSlider = tail.closest(".step-slider")!;
-    expect(tail.getBoundingClientRect().height).toBe(16);
+    // WebKit can report the slider a few millionths of a pixel off.
+    expect(tail.getBoundingClientRect().height).toBeCloseTo(16, 2);
     expect(
       parseFloat(getComputedStyle(tailSlider.querySelector(".step-slider-label")!).fontSize),
     ).toBeGreaterThanOrEqual(13);
