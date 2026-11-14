@@ -1236,15 +1236,23 @@ it("refits and zooms in both directions on show more and show less, including in
   const beforeExpansion = focused.getBoundingClientRect();
   const contained = async () => {
     await settleMotion();
-    const bounds = graph.getBoundingClientRect();
-    const right = screen.queryByRole("complementary")?.getBoundingClientRect().left ?? bounds.right;
-    for (const card of graph.querySelectorAll(".systemd-graph-node")) {
-      const box = card.getBoundingClientRect();
-      expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
-      expect(box.right).toBeLessThanOrEqual(right + 1);
-      expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
-      expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
-    }
+    // The refit can begin after the first settle check on slower runners.
+    await waitFor(
+      () => {
+        const bounds = graph.getBoundingClientRect();
+        const right =
+          screen.queryByRole("complementary")?.getBoundingClientRect().left ?? bounds.right;
+        for (const card of graph.querySelectorAll(".systemd-graph-node")) {
+          const box = card.getBoundingClientRect();
+          expect(box.left).toBeGreaterThanOrEqual(bounds.left - 1);
+          expect(box.right).toBeLessThanOrEqual(right + 1);
+          expect(box.top).toBeGreaterThanOrEqual(bounds.top - 1);
+          expect(box.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+        }
+      },
+      { timeout: 3000 },
+    );
+    await settleMotion();
   };
   await page.getByRole("button", { name: /Show more/ }).click();
   const firstFrame = focused.getBoundingClientRect();
